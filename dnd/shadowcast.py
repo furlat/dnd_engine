@@ -1,15 +1,17 @@
 import math
 from fractions import Fraction
 
-def compute_fov(origin, is_blocking, mark_visible):
-    mark_visible(*origin)
+def compute_fov(origin, is_blocking, mark_visible, max_distance=None):
+    ox, oy = origin
+    mark_visible(ox, oy)
 
     for i in range(4):
         quadrant = Quadrant(i, origin)
 
         def reveal(tile):
             x, y = quadrant.transform(tile)
-            mark_visible(x, y)
+            if max_distance is None or math.sqrt((x-ox)**2 + (y-oy)**2) <= max_distance:
+                mark_visible(x, y)
 
         def is_wall(tile):
             if tile is None:

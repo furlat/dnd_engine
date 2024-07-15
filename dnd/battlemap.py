@@ -145,19 +145,35 @@ class BattleMap(BaseModel, RegistryHolder):
         self.tiles[(x, y)] = tile_type
 
     def get_tile(self, x: int, y: int) -> Optional[str]:
+        # print(f"Getting tile at {x}, {y}")
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            print(f"Tile at {x}, {y} is out of bounds")
+            return None
         return self.tiles.get((x, y))
 
     def is_blocking(self, x: int, y: int) -> bool:
-        tile = self.get_tile(x, y)
-        return tile == "WALL"
+        # Check if the coordinates are within the battlemap bounds
+        if 0 <= x < self.width and 0 <= y < self.height:
+            tile = self.get_tile(x, y)
+            return tile == "WALL"
+        else:
+            # Treat out-of-bounds tiles as blocking
+            return True
+
 
     def compute_line_of_sight(self, entity: 'Entity') -> Set[Tuple[int, int]]:
         los_tiles = set()
+        position = entity.get_position()
+        
         def mark_visible(x, y):
             los_tiles.add((x, y))
-        compute_fov(entity.get_position(), self.is_blocking, mark_visible)
+        
+        # Use the maximum dimension of the battlemap as the max_distance
+        max_distance = max(self.width, self.height)
+        
+        compute_fov(position, self.is_blocking, mark_visible, max_distance)
         return los_tiles
-    
+            
     def compute_dijkstra(
         self, start: Tuple[int, int], diagonal: bool = True, max_distance: Optional[int] = None
     ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
@@ -170,6 +186,7 @@ class BattleMap(BaseModel, RegistryHolder):
         entity.set_battlemap(self.id)
         self.entities[entity_id] = position
         self.positions[position].add(entity_id)
+        print(f"Added entity {entity_id} at position {position}")
         self.update_entity_senses(entity)
 
     def remove_entity(self, entity: 'Entity'):
@@ -198,12 +215,15 @@ class BattleMap(BaseModel, RegistryHolder):
     def update_entity_senses(self, entity: 'Entity'):
         entity.sensory.update_battlemap(self.id)
         position = self.get_entity_position(entity.id)
+        print(f"Current position for entity {entity.name}: {position}")
         if position:
             entity.sensory.update_origin(position)
             self.update_entity_fov(entity)
             self.update_entity_distance_matrix(entity)
             self.update_entity_paths(entity)
             entity.update_available_actions()
+        else:
+            print(f"Warning: Entity {entity.name} has no position on the battlemap.")
 
     def update_entity_fov(self, entity: 'Entity'):
         los_tiles = self.compute_line_of_sight(entity)
