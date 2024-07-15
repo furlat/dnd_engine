@@ -617,10 +617,8 @@ class ActionEconomy(BaseModel):
     actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
     bonus_actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
     reactions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
-    movement: ModifiableValue
+    movement: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=30))
 
-    def __init__(self, speed: int):
-        super().__init__(movement=ModifiableValue(base_value=speed))
 
     def reset(self):
         for attr in ['actions', 'bonus_actions', 'reactions', 'movement']:

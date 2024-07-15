@@ -32,7 +32,7 @@ class StatsBlock(BaseModel):
     hit_dice: Dice = Field(default_factory=lambda: Dice(dice_count=1, dice_value=8, modifier=0))
     hit_point_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
     current_hit_points: int = Field(default=0)
-    action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy(speed=30))
+    action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy())
     active_conditions: Dict[str, Condition] = Field(default_factory=dict)
     sensory: Sensory = Field(default_factory=Sensory)
 
