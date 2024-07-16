@@ -10,16 +10,16 @@ from dnd.core import Dice
 def create_battlemap_with_entities():
     # Define the map as a string
     map_str = '''
-    ####################
-    #........#.........#
-    #...###..#....#....#
-    #...###..#....#....#
-    #...###..#....#....#
-    #........#....#....#
-    #........#....#....#
-    #........#....#....#
-    ####################
-    '''[1:]  # Use [1:] to remove the first newline
+####################
+#........#.........#
+#...###..#....#....#
+#...###..#....#....#
+#...###..#....#....#
+#........#....#....#
+#........#....#....#
+#........#....#....#
+####################
+    '''.strip()  # Use strip() to remove the first and last newlines
 
     width = 20
     height = 9
@@ -41,11 +41,12 @@ def create_battlemap_with_entities():
 
     # Print the initial state of the battle map
     print("Initial Battle Map:")
-
     print(map_drawer.print_ascii_map())
+
     # Create entities
     goblin = create_goblin()
     skeleton = create_skeleton()
+
     # Define weapons
     sword = Weapon(
         name="Longsword",
@@ -57,28 +58,14 @@ def create_battlemap_with_entities():
 
     bow = Weapon(
         name="Shortbow",
-        damage=Damage(dice=Dice(dice_count=1, dice_value=6, modifier=0),type=DamageType.PIERCING),
+        damage=Damage(dice=Dice(dice_count=1, dice_value=6, modifier=0), type=DamageType.PIERCING),
         attack_type=AttackType.RANGED_WEAPON,
         properties=[],
         range=Range(type=RangeType.REACH, normal=80, long=320)
     )
 
-    # Define entities
-    warrior = Entity(id="warrior", name="Warrior", weapons=[sword])
-    archer = Entity(id="archer", name="Archer", weapons=[bow])
     # Add entities to the battle map
-    # battle_map.add_entity(warrior, (1, 1))
-    # battle_map.add_entity(archer, (18, 7))
-
-    # # Add entities to the battle map
     battle_map.add_entity(goblin, (1, 1))
     battle_map.add_entity(skeleton, (18, 7))
-    return battle_map, goblin,skeleton
-    # return battle_map, goblin, skeleton
-battle_map, goblin, skeleton = create_battlemap_with_entities()
-# def main():
-#     
-    
 
-# if __name__ == "__main__":
-#     main()
+    return battle_map, goblin, skeleton
