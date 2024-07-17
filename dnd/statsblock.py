@@ -1,12 +1,15 @@
-from typing import List, Dict, Optional, Set, Tuple, Any
+from typing import List, Dict, Optional, Set, Tuple, Any, Callable, Union
 from pydantic import BaseModel, Field, computed_field
 import uuid
-from dnd.core import Ability, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Dice, Skills, ActionEconomy, Sensory
+from dnd.core import Ability, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Dice, Skills, ActionEconomy, Sensory, Health
 from dnd.contextual import ModifiableValue
-from dnd.conditions import Condition
-from dnd.actions import Action, Attack,MovementAction
+from dnd.conditions import Condition, ConditionLog
+from dnd.actions import Action, Attack, MovementAction
 from dnd.equipment import Armor, Shield, Weapon, ArmorClass
 from dnd.dnd_enums import Size, MonsterType, Alignment, Language
+from dnd.logger import Logger, SkillCheckLog, SavingThrowLog
+
+ContextAwareImmunity = Callable[['StatsBlock', Optional['StatsBlock']], bool]
 
 class StatsBlock(BaseModel):
     name: str = Field(default="Unnamed")
@@ -18,9 +21,6 @@ class StatsBlock(BaseModel):
     ability_scores: AbilityScores = Field(default_factory=AbilityScores)
     saving_throws: SavingThrows = Field(default_factory=SavingThrows)
     skills: SkillSet = Field(default_factory=SkillSet)
-    vulnerabilities: List[DamageType] = Field(default_factory=list)
-    resistances: List[DamageType] = Field(default_factory=list)
-    immunities: List[DamageType] = Field(default_factory=list)
     languages: List[Language] = Field(default_factory=list)
     challenge: float = Field(default=0.0)
     experience_points: int = Field(default=0)
@@ -29,26 +29,20 @@ class StatsBlock(BaseModel):
     legendary_actions: List[Action] = Field(default_factory=list)
     armor_class: ArmorClass = Field(default_factory=lambda: ArmorClass(base_ac=ModifiableValue(base_value=10)))
     weapons: List[Weapon] = Field(default_factory=list)
-    hit_dice: Dice = Field(default_factory=lambda: Dice(dice_count=1, dice_value=8, modifier=0))
-    hit_point_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    current_hit_points: int = Field(default=0)
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy())
     active_conditions: Dict[str, Condition] = Field(default_factory=dict)
     sensory: Sensory = Field(default_factory=Sensory)
+    health: Health = Field(default_factory=lambda: Health(hit_dice=Dice(dice_count=1, dice_value=8, modifier=0)))
+    condition_immunities: Set[str] = Field(default_factory=set)
+    contextual_condition_immunities: Dict[str, List[Tuple[str, ContextAwareImmunity]]] = Field(default_factory=dict)
 
     def __init__(self, **data):
         super().__init__(**data)
-        if self.current_hit_points == 0:
-            self.current_hit_points = self.max_hit_points
         self._recompute_fields()
 
     @computed_field
-    def max_hit_points(self) -> int:
-        con_modifier = self.ability_scores.constitution.get_modifier(self)
-        average_hp = (self.hit_dice.expected_value()) + \
-                     (con_modifier * self.hit_dice.dice_count) + \
-                     self.hit_point_bonus.get_value(self)
-        return max(1, int(average_hp))
+    def hp(self) -> int:
+        return self.health.total_hit_points
 
     @computed_field
     def armor_class_value(self) -> int:
@@ -62,14 +56,23 @@ class StatsBlock(BaseModel):
     def initiative(self) -> int:
         return self.ability_scores.dexterity.get_modifier(self)
 
-    def apply_condition(self, condition: Condition):
-        self.active_conditions[condition.name] = condition
-        self._recompute_fields()
+    def apply_condition(self, condition: Condition, source: Optional['StatsBlock'] = None) -> Optional[ConditionLog]:
+        log = condition.apply(self, source)
+        if log.applied:
+            self.active_conditions[condition.name] = condition
+            self._recompute_fields()
+        Logger.log(log)
+        return log
 
-    def remove_condition(self, condition_name: str):
-        if condition_name in self.active_conditions:
+    def remove_condition(self, condition_name: str) -> Optional[ConditionLog]:
+        condition = self.active_conditions.get(condition_name)
+        if condition:
+            log = condition.remove(self)
             del self.active_conditions[condition_name]
-        self._recompute_fields()
+            self._recompute_fields()
+            Logger.log(log)
+            return log
+        return None
 
     def add_action(self, action: Action):
         if action.name not in [a.name for a in self.actions]:
@@ -92,11 +95,9 @@ class StatsBlock(BaseModel):
             if isinstance(action, Attack):
                 action.update_hit_bonus()
 
-    def take_damage(self, damage: int):
-        self.current_hit_points = max(0, self.current_hit_points - damage)
-
-    def heal(self, healing: int):
-        self.current_hit_points = min(self.max_hit_points, self.current_hit_points + healing)
+        # Update health's hit point bonus based on Constitution modifier
+        con_modifier = self.ability_scores.constitution.get_modifier(self)
+        self.health.hit_point_bonus.base_value = con_modifier * self.health.hit_dice.dice_count
 
     def update_sensory(self, battlemap_id: str, origin: Tuple[int, int]):
         self.sensory.battlemap_id = battlemap_id
@@ -119,13 +120,36 @@ class StatsBlock(BaseModel):
 
     def get_path_to(self, destination: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
         return self.sensory.get_path_to(destination)
-    
+
+    def add_condition_immunity(self, condition_name: str):
+        self.condition_immunities.add(condition_name)
+
+    def remove_condition_immunity(self, condition_name: str):
+        self.condition_immunities.discard(condition_name)
+
+    def add_contextual_condition_immunity(self, condition_name: str, immunity_name: str, immunity_check: ContextAwareImmunity):
+        if condition_name not in self.contextual_condition_immunities:
+            self.contextual_condition_immunities[condition_name] = []
+        self.contextual_condition_immunities[condition_name].append((immunity_name, immunity_check))
+
+    def remove_contextual_condition_immunity(self, condition_name: str, immunity_name: str):
+        if condition_name in self.contextual_condition_immunities:
+            self.contextual_condition_immunities[condition_name] = [
+                (name, check) for name, check in self.contextual_condition_immunities[condition_name]
+                if name != immunity_name
+            ]
+            if not self.contextual_condition_immunities[condition_name]:
+                del self.contextual_condition_immunities[condition_name]
+
+    def perform_ability_check(self, ability: Ability, dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
+        return self.ability_scores.perform_ability_check(ability, self, dc, target, context, return_log)
+
+    def perform_skill_check(self, skill: Skills, dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
+        return self.skills.perform_skill_check(skill, self, dc, target, context, return_log)
+
+    def perform_saving_throw(self, ability: Ability, dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SavingThrowLog]:
+        return self.saving_throws.perform_save(ability, self, dc, target, context, return_log)
+
 ModifiableValue.model_rebuild()
-# SelfCondition.model_rebuild()
-# Dodge.model_rebuild()
-# # # Disengage.model_rebuild()
-# Dash.model_rebuild()
-# Hide.model_rebuild()
-# Help.model_rebuild()
 Attack.model_rebuild()
 MovementAction.model_rebuild()

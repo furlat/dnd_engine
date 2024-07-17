@@ -31,6 +31,7 @@ class Entity(StatsBlock, RegistryHolder):
     def __init__(self, **data):
         super().__init__(**data)
         self.register(self)
+        self.update_weapon_attacks()
 
     @computed_field
     def is_on_battlemap(self) -> bool:
@@ -99,7 +100,9 @@ class Entity(StatsBlock, RegistryHolder):
         movement_actions = []
         if self.sensory and self.sensory.paths:
             movement_budget = self.action_economy.movement.get_value(self)
-            reachable_positions = self.sensory.paths.get_reachable_positions(movement_budget)
+            print(f"Movement budget for {self.name}: {movement_budget}")
+            reachable_positions = self.sensory.paths.get_reachable_positions(movement_budget/5)
+            print(f"Reachable positions for {self.name}: {reachable_positions}")
             
             for position in reachable_positions:
                 path = self.sensory.paths.get_shortest_path_to_position(position)
@@ -115,18 +118,24 @@ class Entity(StatsBlock, RegistryHolder):
                     ))
 
         return movement_actions
-
-    def update_available_actions(self):
-        # Clear existing movement actions
-        self.actions = [action for action in self.actions if not isinstance(action, MovementAction)]
-        
+    
+    def update_weapon_attacks(self):
+        self.actions = [action for action in self.actions if not isinstance(action, Attack)]
         # Add weapon attacks
         for weapon in self.weapons:
             self.add_weapon_attack(weapon)
-        
+    
+    def update_movement_actions(self):
+        # Clear existing movement actions
+        self.actions = [action for action in self.actions if not isinstance(action, MovementAction)]
         # Generate and add movement actions
         movement_actions = self.generate_movement_actions()
         self.actions.extend(movement_actions)
+
+    def update_available_actions(self):
+        self.update_weapon_attacks()
+        self.update_movement_actions()
+
 
 
 class BattleMap(BaseModel, RegistryHolder):

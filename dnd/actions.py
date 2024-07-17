@@ -2,12 +2,14 @@ from pydantic import BaseModel, Field, computed_field
 from typing import List, Optional, Union, Dict, Any, Tuple, Set, Callable, TYPE_CHECKING
 from enum import Enum
 from dnd.contextual import ModifiableValue, AdvantageStatus, ContextAwareCondition, ContextAwareBonus
-from dnd.core import (Dice, Ability,  AdvantageTracker, DurationType, RegistryHolder)
+from dnd.core import (Dice, Ability,  AdvantageTracker, DurationType, RegistryHolder, Damage)
 from dnd.equipment import Weapon, Armor, WeaponProperty, ArmorType
 from dnd.dnd_enums import (DamageType,  RangeType, ShapeType, TargetType,
                                TargetRequirementType, UsageType,
                                RechargeType, ActionType, AttackType)
 
+
+from dnd.logger import PrerequisiteLog,ActionLog, ActionResultDetails, Logger, DamageRollLog, DiceRollLog, PrerequisiteDetails
 
 
 if TYPE_CHECKING:
@@ -59,35 +61,77 @@ class Targeting(BaseModel):
             target_str += f", {self.requirement.value.lower()} targets only"
         return target_str
 
-def add_default_prerequisites(action:'Action'):
-    action.add_prerequisite("Line of Sight", check_line_of_sight)
-    action.add_prerequisite("Range", check_range)
+# def add_default_prerequisites(action:'Action'):
+#     action.add_prerequisite("Line of Sight", check_line_of_sight)
+#     action.add_prerequisite("Range", check_range)
 
-def check_line_of_sight(stats_block: 'StatsBlock', target: 'StatsBlock', context: Optional[Dict[str, Any]] = None) -> bool:
-    return stats_block.is_visible(target.sensory.origin)
 
-def check_range(stats_block: 'StatsBlock', target: 'StatsBlock', context: Optional[Dict[str, Any]] = None) -> bool:
+
+
+
+ContextAwarePrerequisite = Callable[['StatsBlock', 'StatsBlock', 'Action'], Tuple[bool, PrerequisiteDetails]]
+def check_valid_path(stats_block: 'StatsBlock', target: 'StatsBlock', action: 'Action') -> Tuple[bool, PrerequisiteDetails]:
+    details = PrerequisiteDetails()
+
+    context = action.context if hasattr(action, 'context') else None
     if not context:
-        return False
-    action : Union[Attack,DcAttack]= context.get('action')
-    if not action or not hasattr(action, 'range'):
-        return False
-    distance = stats_block.sensory.distance_matrix.get_distance(target.sensory.origin)
-    return distance is not None and distance <= action.range.normal
+        details.failure_reason = "Context is missing"
+        return False, details
 
-def check_valid_path(stats_block: 'StatsBlock', target=None, context=dict) -> bool:
-    path  = context.get('path', [])
+    path = context.get('path', [])
+    if not path:
+        details.failure_reason = "Path is missing"
+        return False, details
+
     movement_budget = stats_block.action_economy.movement.get_value(stats_block)
-    return (len(path) - 1 <= movement_budget and 
-            all(stats_block.sensory.fov.is_visible(pos) for pos in path) and
-            stats_block.sensory.paths.get_path_to(path[-1]) == path)
+    path_length = len(path) - 1  # assuming path includes start and end points
 
-class Damage(BaseModel):
-    dice: Dice
-    type: DamageType
+    details.distance = path_length
+    details.required_range = movement_budget
 
-    def average_damage(self):
-        return self.dice.expected_value()
+    all_visible = all(stats_block.sensory.fov.is_visible(pos) for pos in path)
+    details.is_visible = all_visible
+
+    if path_length > movement_budget:
+        details.failure_reason = f"Path length exceeds movement budget. Path length: {path_length}, Movement budget: {movement_budget}"
+        return False, details
+
+    if not all_visible:
+        details.failure_reason = "Not all positions in the path are visible"
+        return False, details
+
+    return True, details
+
+def check_line_of_sight(stats_block: 'StatsBlock', target: 'StatsBlock', action: 'Action') -> Tuple[bool, PrerequisiteDetails]:
+    is_visible = stats_block.is_visible(target.sensory.origin)
+    details = PrerequisiteDetails(is_visible=is_visible)
+    
+    if not is_visible:
+        details.failure_reason = "Target is not visible"
+    
+    return is_visible, details
+
+def check_range(stats_block: 'StatsBlock', target: 'StatsBlock', action: 'Action') -> Tuple[bool, PrerequisiteDetails]:
+    details = PrerequisiteDetails()
+
+    if not hasattr(action, 'range'):
+        details.failure_reason = "Action does not have range attribute"
+        return False, details
+
+    distance = stats_block.sensory.distance_matrix.get_distance(target.sensory.origin)
+    distance = distance * 5  # in feet
+    details.distance = distance
+    details.required_range = action.range.normal
+    
+    if distance is None:
+        details.failure_reason = "Distance could not be calculated"
+        return False, details
+    
+    if distance > action.range.normal:
+        details.failure_reason = f"Target is out of range. Distance: {distance}, Range: {action.range.normal}"
+        return False, details
+
+    return True, details
 
 class Action(BaseModel):
     name: str
@@ -96,39 +140,75 @@ class Action(BaseModel):
     limited_usage: Union[LimitedUsage, None]
     targeting: Targeting
     stats_block: 'StatsBlock'
-    prerequisite_conditions: Dict[str, ContextAwareCondition] = Field(default_factory=dict)
+    prerequisite_conditions: Dict[str, ContextAwarePrerequisite] = Field(default_factory=dict)
 
-    def add_prerequisite(self, name: str, condition: ContextAwareCondition):
+    def add_prerequisite(self, name: str, condition: ContextAwarePrerequisite):
         self.prerequisite_conditions[name] = condition
 
     def remove_prerequisite(self, name: str):
         self.prerequisite_conditions.pop(name, None)
 
-    def prerequisite(self, stats_block: 'StatsBlock', target: 'StatsBlock', context: Optional[Dict[str, Any]] = None) -> Tuple[bool, List[str]]:
-        failed_conditions = []
+    def prerequisite(self, stats_block: 'StatsBlock', target: 'StatsBlock') -> Tuple[bool, List[PrerequisiteLog]]:
+        prerequisite_logs = []
         for condition_name, condition_check in self.prerequisite_conditions.items():
-            if not condition_check(stats_block, target, context):
-                failed_conditions.append(f"Failed condition: {condition_name}")
-        return len(failed_conditions) == 0, failed_conditions
+            passed, details = condition_check(stats_block, target, self)
+            log = PrerequisiteLog(
+                condition_name=condition_name,
+                passed=passed,
+                source_id=stats_block.id,
+                target_id=target.id,
+                details=details
+                )
+            
+            prerequisite_logs.append(log)
 
-    def apply(self, targets: Union[List['StatsBlock'], 'StatsBlock'], context: Optional[Dict[str, Any]] = None) -> List[Tuple[bool, str]]:
+        all_passed = all(log.passed for log in prerequisite_logs)
+        return all_passed, prerequisite_logs
+
+    def apply(self, targets: Union[List['StatsBlock'], 'StatsBlock']) -> List[ActionLog]:
         if not isinstance(targets, list):
             targets = [targets]
-        else:
-            raise ValueError("Targets must be a list of StatsBlock objects or a single StatsBlock object")
         
-        results = []
+        action_logs = []
         for target in targets:
-            can_perform, failed_conditions = self.prerequisite(self.stats_block, target, context)
-            if not can_perform:
-                results.append((False, "; ".join(failed_conditions)))
+            prerequisites_passed, prerequisite_logs = self.prerequisite(self.stats_block, target)
+            
+            if not prerequisites_passed:
+                action_log = ActionLog(
+                    action_name=self.name,
+                    source_id=self.stats_block.id,
+                    target_id=target.id,
+                    success=False,
+                    prerequisite_logs=prerequisite_logs,
+                    details=PrerequisiteDetails(
+                        failure_reason="Prerequisites not met",
+                        auto_failure=True
+                    )
+                )
             else:
-                results.append(self._apply(target, context))
+                success, result_details, dice_rolls, damage_rolls = self._apply(target)
+                action_log = ActionLog(
+                    action_name=self.name,
+                    source_id=self.stats_block.id,
+                    target_id=target.id,
+                    success=success,
+                    prerequisite_logs=prerequisite_logs,
+                    dice_rolls=dice_rolls,
+                    damage_rolls=damage_rolls,
+                    details=result_details
+                )
+            
+            action_logs.append(action_log)
+            Logger.log(action_log)
         
-        return results
+        return action_logs
 
-    def _apply(self, target: 'StatsBlock', context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
+    def _apply(self, target: 'StatsBlock') -> Tuple[bool, ActionResultDetails, List[DiceRollLog], List[DamageRollLog]]:
         raise NotImplementedError("Subclasses must implement this method")
+
+def add_default_prerequisites(action: 'Action'):
+    action.add_prerequisite("Line of Sight", check_line_of_sight)
+    action.add_prerequisite("Range", check_range)
 
 
 
@@ -151,8 +231,8 @@ class Attack(Action):
         
         if hit:
             damage = self.roll_damage(context)
-            target.take_damage(damage)
-            return True, f"Hit! Dealt {damage} damage to {target.name}. {target.name} now has {target.current_hit_points}/{target.max_hit_points} HP."
+            target.health.take_damage(damage)
+            return True, f"Hit! Dealt {damage} damage to {target.name}. {target.name} now has {target.hp}/{target.health.max_hit_points} HP."
         else:
             return False, f"Miss! Attack roll ({details['roll']}) did not meet target AC ({details['armor_class']})."
 
@@ -306,6 +386,46 @@ class Attack(Action):
             )
             total_damage += dice.roll(is_critical=self.is_critical_hit)
         return total_damage
+    
+    def chance_to_hit(self, target: 'StatsBlock') -> Tuple[Optional[int], float, str]:
+        # Check for auto-resolution conditions
+        if self.hit_bonus.is_auto_fail(self.stats_block, target):
+            return None, 0.0, "Auto-fail"
+        if self.hit_bonus.is_auto_critical(self.stats_block, target) or self.hit_bonus.is_auto_success(self.stats_block, target):
+            return 1, 1.0, "Auto-hit"
+
+        # Calculate the total hit bonus
+        total_hit_bonus = self.hit_bonus.get_value(self.stats_block, target)
+
+        # Get the target's AC
+        target_ac = target.armor_class.get_value(target, self.stats_block)
+
+        # Calculate the minimum roll needed to hit
+        min_roll_to_hit = max(1, target_ac - total_hit_bonus)
+
+        # Handle cases where it's impossible to hit or always hits
+        if min_roll_to_hit > 20:
+            return None, 0.0, "Impossible to hit"
+        if min_roll_to_hit <= 1:
+            return 1, 1.0, "Always hits"
+
+        # Calculate the base probability of hitting
+        base_probability = (21 - min_roll_to_hit) / 20
+
+        # Adjust for advantage/disadvantage
+        advantage_status = self.hit_bonus.get_advantage_status(self.stats_block, target)
+        if advantage_status == AdvantageStatus.ADVANTAGE:
+            hit_probability = 1 - (1 - base_probability) ** 2
+            status = "Advantage"
+        elif advantage_status == AdvantageStatus.DISADVANTAGE:
+            hit_probability = base_probability ** 2
+            status = "Disadvantage"
+        else:
+            hit_probability = base_probability
+            status = "Normal"
+
+        return min_roll_to_hit, hit_probability, status
+
 
 
 class DcAttack(Action):
@@ -468,18 +588,19 @@ class MovementAction(Action):
 
         start_position = self.stats_block.get_position()
         end_position = self.path[-1]
-        movement_cost = len(self.path) - 1
+        movement_cost = (len(self.path) - 1)*5  # Each step is 5 feet
 
         if self.step_by_step:
             for step in self.path[1:]:  # Skip the first step as it's the starting position
                 battlemap.move_entity(self.stats_block, step)
-                battlemap.update_entity_los(self.stats_block)
+                battlemap.update_entity_fov(self.stats_block)
                 # Here you could add additional logic for each step if needed
         else:
             battlemap.move_entity(self.stats_block, end_position)
-            battlemap.update_entity_los(self.stats_block)
+            battlemap.update_entity_fov(self.stats_block)
 
         self.stats_block.action_economy.movement.base_value -= movement_cost
+        print(f"moved from {start_position} to {end_position} using {movement_cost} movement points")
 
         return True, f"Moved from {start_position} to {end_position}, using {movement_cost} movement points."
 

@@ -18,6 +18,14 @@ dnd.egg-info/PKG-INFO
 dnd.egg-info/SOURCES.txt
 dnd.egg-info/dependency_links.txt
 dnd.egg-info/top_level.txt
+dnd/maps/__init__.py
 dnd/monsters/__init__.py
 dnd/monsters/goblin.py
 dnd/monsters/skeleton.py
+dnd/tests/__init__.py
+dnd/tests/big_test.py
+dnd/tests/entiti_bm.py
+dnd/tests/example_bm.py
+dnd/tests/pathfinding.py
+dnd/tests/shadows.py
+dnd/tests/test_battlemap.py
