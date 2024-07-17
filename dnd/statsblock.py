@@ -61,16 +61,12 @@ class StatsBlock(BaseModel):
         if log.applied:
             self.active_conditions[condition.name] = condition
             self._recompute_fields()
-        Logger.log(log)
         return log
 
     def remove_condition(self, condition_name: str) -> Optional[ConditionLog]:
         condition = self.active_conditions.get(condition_name)
         if condition:
             log = condition.remove(self)
-            del self.active_conditions[condition_name]
-            self._recompute_fields()
-            Logger.log(log)
             return log
         return None
 

@@ -65,7 +65,7 @@ def create_battlemap_with_entities():
     )
 
     # Add entities to the battle map
-    battle_map.add_entity(goblin, (18, 1))
+    battle_map.add_entity(goblin, (18, 6))
     battle_map.add_entity(skeleton, (18, 7))
 
     return battle_map, goblin, skeleton

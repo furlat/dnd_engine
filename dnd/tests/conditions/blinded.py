@@ -4,6 +4,7 @@ from dnd.conditions import Blinded, Duration
 from dnd.logger import Logger, EffectTarget
 from dnd.dnd_enums import Skills, Ability, DurationType
 from dnd.actions import Attack
+from dnd.tests.example_bm import create_battlemap_with_entities
 
 def print_creature_details(creature):
     print(f"{creature.name} Details:")
@@ -12,7 +13,8 @@ def print_creature_details(creature):
     print(f"Active Conditions: {', '.join(creature.active_conditions.keys())}")
     print("Actions:")
     for attack in creature.actions:
-        print(attack.action_docstring())
+        if isinstance(attack, Attack):
+            print(attack.action_docstring())
     print()
 
 def print_log_details(log):
@@ -41,8 +43,8 @@ def print_log_details(log):
 def test_blinded_condition():
     print("=== Testing Blinded Condition and Logging ===\n")
 
-    goblin = create_goblin()
-    skeleton = create_skeleton()
+    # Create a battle map with entities
+    battle_map, goblin, skeleton = create_battlemap_with_entities()
 
     print("Initial State:")
     print_creature_details(goblin)
