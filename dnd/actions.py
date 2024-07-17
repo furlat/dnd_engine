@@ -226,16 +226,70 @@ class Attack(Action):
         self.update_hit_bonus()
         add_default_prerequisites(self)
 
-    def _apply(self, target: 'StatsBlock', context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
-        hit, details = self.roll_to_hit(target, context, verbose=True)
+    def _apply(self, target: 'StatsBlock') -> Tuple[bool, ActionResultDetails, List[DiceRollLog], List[DamageRollLog]]:
+        # Perform the hit roll and get detailed results along with the roll log
+        hit, details, roll_log = self.roll_to_hit(target, verbose=True)
         
-        if hit:
-            damage = self.roll_damage(context)
-            target.health.take_damage(damage)
-            return True, f"Hit! Dealt {damage} damage to {target.name}. {target.name} now has {target.hp}/{target.health.max_hit_points} HP."
-        else:
-            return False, f"Miss! Attack roll ({details['roll']}) did not meet target AC ({details['armor_class']})."
+        # Create a log for the hit roll
+        dice_roll_log = DiceRollLog(
+            dice_count=1,
+            dice_value=20,
+            modifier=details["total_hit_bonus"],
+            advantage_status=details["advantage_status"],
+            rolls=[details["roll"]],
+            total=details["roll"],
+            critical_status=details["roll_status"],
+            auto_critical=details.get("is_auto_critical", False),
+            auto_hit=details.get("auto_success", False)
+        )
+        dice_roll_logs = [dice_roll_log]
+        damage_roll_logs = []
 
+        if hit:
+            damage = self.roll_damage()
+            target_hp_before = target.hp
+            target.health.take_damage(damage, self.damage[-1].type,target, self.stats_block)
+            target_hp_after = target.hp
+            # Create a log for the damage roll
+            damage_roll_log = DamageRollLog(
+                damage_type=self.damage[-1].type,
+                dice_roll=dice_roll_log,
+                total_damage=damage
+            )
+            damage_roll_logs.append(damage_roll_log)
+
+            # Create the action result details
+            action_result_details = ActionResultDetails(
+                hit=True,
+                damage_dealt=damage,
+                target_hp_before=target_hp_before,
+                target_hp_after=target_hp_after,
+                attack_roll=details["roll"],
+                attack_bonus=details["total_hit_bonus"],
+                advantage_status=details["advantage_status"],
+                target_ac=details["armor_class"],
+                auto_success=details.get("auto_success", False),
+                auto_failure=details.get("auto_fail", False),
+                auto_critical=details.get("is_auto_critical", False)
+            )
+
+            result_message = f"Hit! Dealt {damage} damage to {target.name}. {target.name} now has {target_hp_after}/{target.health.max_hit_points} HP."
+            return True, action_result_details, dice_roll_logs, damage_roll_logs
+        else:
+            action_result_details = ActionResultDetails(
+                hit=False,
+                attack_roll=details["roll"],
+                attack_bonus=details["total_hit_bonus"],
+                advantage_status=details["advantage_status"],
+                target_ac=details["armor_class"],
+                auto_success=details.get("auto_success", False),
+                auto_failure=details.get("auto_fail", False),
+                auto_critical=details.get("is_auto_critical", False),
+                failure_reason=f"Miss! Attack roll ({details['roll']}) did not meet target AC ({details['armor_class']})."
+            )
+
+            result_message = action_result_details.failure_reason
+            return False, action_result_details, dice_roll_logs, damage_roll_logs
     def update_hit_bonus(self):
         ability_modifier = getattr(self.stats_block.ability_scores, self.ability.value.lower()).get_modifier(self.stats_block)
         self.hit_bonus.base_value = ability_modifier + self.stats_block.proficiency_bonus
@@ -273,7 +327,7 @@ class Attack(Action):
     def add_auto_critical_condition(self, source: str, condition: ContextAwareCondition):
         self.hit_bonus.add_auto_critical_self_condition(source, condition)
 
-    def roll_to_hit(self, target: 'StatsBlock', context: Optional[Dict[str, Any]] = None, verbose: bool = False) -> Union[bool, Tuple[bool, Dict[str, Any]]]:
+    def roll_to_hit(self, target: 'StatsBlock', context: Optional[Dict[str, Any]] = None, verbose: bool = False) -> Tuple[bool, Dict[str, Any], DiceRollLog]:
         details = {
             "auto_fail": False,
             "auto_success": False,
@@ -296,43 +350,108 @@ class Attack(Action):
             self.is_critical_hit = False
             details["auto_fail"] = True
             details["hit"] = False
-            return (False, details) if verbose else False
+            roll_log = DiceRollLog(
+                dice_count=1,
+                dice_value=20,
+                modifier=0,
+                advantage_status=AdvantageStatus.NONE,
+                rolls=[0],
+                total=0,
+                critical_status="normal",
+                auto_critical=False,
+                auto_hit=False
+            )
+            return (False, details, roll_log) if verbose else (False, details, roll_log)
         
         # Check if the target's armor class causes auto-fail or auto-success
         elif target.armor_class.gives_attacker_auto_fail(target, self.stats_block, context):
             self.is_critical_hit = False
             details["target_causes_auto_fail"] = True
             details["hit"] = False
-            return (False, details) if verbose else False
+            roll_log = DiceRollLog(
+                dice_count=1,
+                dice_value=20,
+                modifier=0,
+                advantage_status=AdvantageStatus.NONE,
+                rolls=[0],
+                total=0,
+                critical_status="normal",
+                auto_critical=False,
+                auto_hit=False
+            )
+            return (False, details, roll_log) if verbose else (False, details, roll_log)
         
-         # Check for auto-critical conditions
+        # Check for auto-critical conditions
         elif self.hit_bonus.is_auto_critical(self.stats_block, target, context):
             self.is_critical_hit = True
             details["is_auto_critical"] = True
             details["hit"] = True
-            return (True, details) if verbose else True
+            roll_log = DiceRollLog(
+                dice_count=1,
+                dice_value=20,
+                modifier=0,
+                advantage_status=AdvantageStatus.NONE,
+                rolls=[20],
+                total=20,
+                critical_status="critical_hit",
+                auto_critical=True,
+                auto_hit=False
+            )
+            return (True, details, roll_log) if verbose else (True, details, roll_log)
 
         # Check if the target's armor class causes auto-critical
         elif target.armor_class.gives_attacker_auto_critical(target, self.stats_block, context):
             self.is_critical_hit = True
             details["is_auto_critical"] = True
             details["hit"] = True
-            return (True, details) if verbose else True
+            roll_log = DiceRollLog(
+                dice_count=1,
+                dice_value=20,
+                modifier=0,
+                advantage_status=AdvantageStatus.NONE,
+                rolls=[20],
+                total=20,
+                critical_status="critical_hit",
+                auto_critical=True,
+                auto_hit=False
+            )
+            return (True, details, roll_log) if verbose else (True, details, roll_log)
 
         # Check for auto-success conditions
         elif self.hit_bonus.is_auto_success(self.stats_block, target, context):
             self.is_critical_hit = True
             details["auto_success"] = True
             details["hit"] = True
-            return (True, details) if verbose else True
+            roll_log = DiceRollLog(
+                dice_count=1,
+                dice_value=20,
+                modifier=0,
+                advantage_status=AdvantageStatus.NONE,
+                rolls=[20],
+                total=20,
+                critical_status="normal",
+                auto_critical=False,
+                auto_hit=True
+            )
+            return (True, details, roll_log) if verbose else (True, details, roll_log)
 
-     # Check if the target's armor class causes auto-success
-
+        # Check if the target's armor class causes auto-success
         elif target.armor_class.gives_attacker_auto_success(target, self.stats_block, context):
             self.is_critical_hit = True
             details["target_causes_auto_success"] = True
             details["hit"] = True
-            return (True, details) if verbose else True
+            roll_log = DiceRollLog(
+                dice_count=1,
+                dice_value=20,
+                modifier=0,
+                advantage_status=AdvantageStatus.NONE,
+                rolls=[20],
+                total=20,
+                critical_status="normal",
+                auto_critical=False,
+                auto_hit=True
+            )
+            return (True, details, roll_log) if verbose else (True, details, roll_log)
 
         total_hit_bonus = self.hit_bonus.get_value(self.stats_block, target, context)
         advantage_status = self.hit_bonus.get_advantage_status(self.stats_block, target, context)
@@ -351,7 +470,7 @@ class Attack(Action):
                 advantage_status = AdvantageStatus.DISADVANTAGE
 
         dice = Dice(dice_count=1, dice_value=20, modifier=total_hit_bonus, advantage_status=advantage_status)
-        roll, roll_status = dice.roll_with_advantage()
+        roll, roll_status, roll_log = dice.roll_with_advantage()
 
         self.is_critical_hit = roll_status == "critical_hit"
         hit = roll >= target.armor_class.get_value(target, self.stats_block, context)
@@ -369,7 +488,8 @@ class Attack(Action):
             "target_disadvantages": target.armor_class.base_ac.target_effects.disadvantage_conditions
         })
 
-        return (hit, details) if verbose else hit
+        return (hit, details, roll_log) if verbose else (hit, details, roll_log)
+
 
 
     def remove_effect(self, source: str):
@@ -384,7 +504,7 @@ class Attack(Action):
                 modifier=damage.dice.modifier,
                 advantage_status=self.hit_bonus.get_advantage_status(self.stats_block, context=context)
             )
-            total_damage += dice.roll(is_critical=self.is_critical_hit)
+            total_damage += dice.roll(is_critical=self.is_critical_hit)[0]
         return total_damage
     
     def chance_to_hit(self, target: 'StatsBlock') -> Tuple[Optional[int], float, str]:

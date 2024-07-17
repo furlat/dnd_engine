@@ -108,7 +108,6 @@ class ConditionLog(BaseLogEntry):
     applied: bool
     source_id: Optional[str]
     target_id: str
-    duration: Optional[int]
     effects: List[ConditionEffect] = Field(default_factory=list)
     immunity_reason: Optional[str] = None
 
