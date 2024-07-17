@@ -11,7 +11,7 @@ import uuid
 import random
 from dnd.contextual import ModifiableValue, AdvantageStatus, AdvantageTracker, ContextualEffects, ContextAwareBonus, ContextAwareCondition
 from dnd.dnd_enums import Ability, Skills, SensesType, ActionType, RechargeType, UsageType, DurationType, RangeType, TargetType, ShapeType, TargetRequirementType, DamageType
-
+from dnd.logger import DiceRollLog, DamageRollLog, HealthLog, SkillCheckLog, SavingThrowLog
 class RegistryHolder:
     _registry: Dict[str, 'RegistryHolder'] = {}
     _types: Set[type] = set()
@@ -58,7 +58,7 @@ class Dice(BaseModel):
             return self.dice_count * disadvantage_average + self.modifier
         return int(base_average)
 
-    def roll_with_advantage(self) -> Tuple[int, str]:
+    def roll_with_advantage(self, auto_critical: bool = False, auto_hit: bool = False) -> Tuple[int, str, DiceRollLog]:
         if self.advantage_status == AdvantageStatus.ADVANTAGE:
             rolls = [self.roll_single(), self.roll_single()]
             best_roll = max(rolls)
@@ -69,21 +69,195 @@ class Dice(BaseModel):
             rolls = [self.roll_single()]
             best_roll = rolls[0]
 
-        if self.allow_critical:
+        critical_status = "normal"
+        if auto_critical:
+            critical_status = "critical_hit"
+        elif auto_hit:
+            critical_status = "auto_hit"
+        elif self.allow_critical:
             if best_roll - self.modifier == 20:
-                return best_roll, "critical_hit"
+                critical_status = "critical_hit"
             elif best_roll - self.modifier == 1:
-                return best_roll, "critical_failure"
-        return best_roll, "normal"
+                critical_status = "critical_failure"
+
+        log = DiceRollLog(
+            dice_count=self.dice_count,
+            dice_value=self.dice_value,
+            modifier=self.modifier,
+            advantage_status=self.advantage_status,
+            rolls=rolls,
+            total=best_roll,
+            critical_status=critical_status,
+            auto_critical=auto_critical,
+            auto_hit=auto_hit
+        )
+
+        return best_roll, critical_status, log
 
     def roll_single(self) -> int:
         return sum(random.randint(1, self.dice_value) for _ in range(self.dice_count)) + self.modifier
 
-    def roll(self, is_critical: bool = False) -> int:
+    def roll(self, is_critical: bool = False) -> Tuple[int, DiceRollLog]:
         if is_critical:
-            return sum(random.randint(1, self.dice_value) for _ in range(self.dice_count * 2)) + self.modifier
-        return self.roll_single()
+            rolls = [random.randint(1, self.dice_value) for _ in range(self.dice_count * 2)]
+        else:
+            rolls = [random.randint(1, self.dice_value) for _ in range(self.dice_count)]
+        
+        total = sum(rolls) + self.modifier
+        
+        log = DiceRollLog(
+            dice_count=self.dice_count * (2 if is_critical else 1),
+            dice_value=self.dice_value,
+            modifier=self.modifier,
+            advantage_status=AdvantageStatus.NONE,
+            rolls=rolls,
+            total=total,
+            critical_status="critical_hit" if is_critical else "normal"
+        )
 
+        return total, log
+
+    def probability_of_success(self, difficulty: int) -> float:
+        success_range = max(0, self.dice_value - (difficulty - self.modifier - 1))
+        base_probability = success_range / self.dice_value
+
+        if self.advantage_status == AdvantageStatus.ADVANTAGE:
+            return 1 - (1 - base_probability) ** 2
+        elif self.advantage_status == AdvantageStatus.DISADVANTAGE:
+            return base_probability ** 2
+        else:
+            return base_probability
+
+class Damage(BaseModel):
+    dice: Dice
+    type: DamageType
+
+    def average_damage(self):
+        return self.dice.expected_value()
+
+    def roll(self, is_critical: bool = False) -> Tuple[int, DamageRollLog]:
+        total, dice_log = self.dice.roll(is_critical)
+        
+        log = DamageRollLog(
+            damage_type=self.type,
+            dice_roll=dice_log,
+            total_damage=total
+        )
+
+        return total, log
+
+class Health(BaseModel):
+    hit_dice: Dice
+    hit_point_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    temporary_hit_points: int = 0
+    bonus_hit_points_source: Optional[str] = None
+    bonus_hit_points: int = 0
+    healing_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    current_hit_points: int = 0
+    vulnerabilities: List[DamageType] = Field(default_factory=list)
+    resistances: List[DamageType] = Field(default_factory=list)
+    immunities: List[DamageType] = Field(default_factory=list)
+    on_damage_conditions: List[Tuple[str, ContextAwareCondition]] = Field(default_factory=list)
+    on_heal_conditions: List[Tuple[str, ContextAwareCondition]] = Field(default_factory=list)
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.current_hit_points == 0:
+            self.current_hit_points = self.max_hit_points
+    
+    @computed_field
+    def total_hit_points(self) -> int:
+        return self.current_hit_points + self.temporary_hit_points + self.bonus_hit_points
+
+
+    @computed_field
+    def max_hit_points(self) -> int:
+        return max(1, self.hit_dice.expected_value() + self.hit_point_bonus.get_value(None))
+
+    def take_damage(self, damage: int, damage_type: DamageType, owner: 'StatsBlock', attacker: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
+        if damage_type in self.immunities:
+            return 0
+
+        if damage_type in self.vulnerabilities:
+            damage *= 2
+        elif damage_type in self.resistances:
+            damage = max(1, damage // 2)
+
+        actual_damage = damage
+
+        # Apply damage to temporary hit points first
+        if self.temporary_hit_points > 0:
+            absorbed = min(self.temporary_hit_points, actual_damage)
+            self.temporary_hit_points -= absorbed
+            actual_damage -= absorbed
+
+        # Then apply to bonus hit points
+        if self.bonus_hit_points > 0:
+            absorbed = min(self.bonus_hit_points, actual_damage)
+            self.bonus_hit_points -= absorbed
+            actual_damage -= absorbed
+
+        # Finally, apply to current hit points
+        self.current_hit_points = max(0, self.current_hit_points - actual_damage)
+
+        # Trigger on-damage conditions
+        for _, condition in self.on_damage_conditions:
+            condition(owner, attacker, context)
+
+        # Log the damage taken
+        log = HealthLog(
+            entity_id=owner.id,
+            current_hp=self.current_hit_points,
+            max_hp=self.max_hit_points,
+            temporary_hp=self.temporary_hit_points,
+            damage_taken=damage,
+            source_id=attacker.id if attacker else None,
+            damage_type=damage_type
+        )
+
+        return damage
+
+    def heal(self, healing: int, owner: 'StatsBlock', healer: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
+        healing_bonus = self.healing_bonus.get_value(owner, healer, context)
+        total_healing = healing + healing_bonus
+
+        old_hp = self.current_hit_points
+        self.current_hit_points = min(self.max_hit_points, self.current_hit_points + total_healing)
+        actual_healing = self.current_hit_points - old_hp
+
+        # Trigger on-heal conditions
+        for _, condition in self.on_heal_conditions:
+            condition(owner, healer, context)
+
+        # Log the healing received
+        log = HealthLog(
+            entity_id=owner.id,
+            current_hp=self.current_hit_points,
+            max_hp=self.max_hit_points,
+            temporary_hp=self.temporary_hit_points,
+            healing_received=actual_healing,
+            source_id=healer.id if healer else None
+        )
+
+        return actual_healing
+
+    def add_temporary_hit_points(self, amount: int):
+        self.temporary_hit_points = max(self.temporary_hit_points, amount)
+
+    def set_bonus_hit_points(self, source: str, amount: int):
+        if self.bonus_hit_points_source != source:
+            self.bonus_hit_points = amount
+            self.bonus_hit_points_source = source
+
+    def add_on_damage_condition(self, source: str, condition: ContextAwareCondition):
+        self.on_damage_conditions.append((source, condition))
+
+    def add_on_heal_condition(self, source: str, condition: ContextAwareCondition):
+        self.on_heal_conditions.append((source, condition))
+
+    def remove_condition(self, source: str):
+        self.on_damage_conditions = [c for c in self.on_damage_conditions if c[0] != source]
+        self.on_heal_conditions = [c for c in self.on_heal_conditions if c[0] != source]
 
 class Speed(BaseModel):
     walk: ModifiableValue
@@ -216,24 +390,51 @@ class Skill(BaseModel):
     def get_advantage_status(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
         return self.bonus.get_advantage_status(stats_block, target, context)
 
-    def perform_check(self, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_roll: bool = False) -> Union[bool, Tuple[int, int]]:
+    def perform_check(self, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
         print(f"Performing {self.ability.value} skill check")
         
         if self.bonus.is_auto_fail(stats_block, target, context):
             print(f"Auto-fail condition met for {self.skill.value} check")
-            return (1, 1) if return_roll else False
+            log = SkillCheckLog(
+                skill=self.skill,
+                ability=self.ability,
+                dc=dc,
+                source_id=stats_block.id,
+                target_id=target.id if target else None,
+                roll_log=None,
+                roll=1,
+                total=1,
+                bonus=0,
+                advantage_status=AdvantageStatus.NONE,
+                success=False,
+                auto_fail=True,
+            )
+            return log if return_log else False
         
         if self.bonus.is_auto_success(stats_block, target, context):
             print(f"Auto-success condition met for {self.skill.value} check")
-            return (20, 20) if return_roll else True
+            log = SkillCheckLog(
+                skill=self.skill,
+                ability=self.ability,
+                source_id=stats_block.id,
+                target_id=target.id if target else None,
+                roll_log=None,
+                dc=dc,
+                roll=20,
+                total=20,
+                bonus=0,
+                advantage_status=AdvantageStatus.NONE,
+                success=True,
+                auto_success=True,
+
+            )
+            return log if return_log else True
 
         bonus = self.get_bonus(stats_block, target, context)
         
-        # Create a combined AdvantageTracker
         advantage_tracker = AdvantageTracker()
         self.bonus.self_effects.apply_advantage_disadvantage(stats_block, target, advantage_tracker, context)
         if target:
-            #get the skill of the target
             target_skill = target.skills.get_skill(self.skill)
             target_skill.bonus.target_effects.apply_advantage_disadvantage(target, stats_block, advantage_tracker, context)
         
@@ -241,12 +442,28 @@ class Skill(BaseModel):
         
         print(f"Bonus: {bonus}, Advantage status: {advantage_status}")
         dice = Dice(dice_count=1, dice_value=20, modifier=bonus, advantage_status=advantage_status)
-        roll, _ = dice.roll_with_advantage()
+        roll, _, roll_log = dice.roll_with_advantage()
         total = roll + bonus
+        success = total >= dc
         print(f"Roll: {roll}, Total: {total}, DC: {dc}")
-        if return_roll:
-            return roll, total
-        return total >= dc
+
+        log = SkillCheckLog(
+            skill=self.skill,
+            ability=self.ability,
+            dc=dc,
+            source_id=stats_block.id,
+            target_id=target.id if target else None,
+            roll_log=roll_log,
+            roll=roll,
+            
+            total=total,
+            bonus=bonus,
+            advantage_status=advantage_status,
+            success=success,
+
+        )
+        return log if return_log else success
+
     
     # Self effects
     def add_self_bonus(self, source: str, bonus: ContextAwareBonus):
@@ -340,8 +557,10 @@ class SkillSet(BaseModel):
             skill_obj = self.get_skill(skill)
             skill_obj.remove_all_effects(source)
 
-    def perform_skill_check(self, skill: Skills, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> bool:
-        return self.get_skill(skill).perform_check(stats_block, dc, target, context)
+    def perform_skill_check(self, skill: Skills, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
+        return self.get_skill(skill).perform_check(stats_block, dc, target, context, return_log)
+
+
 
 
 class SavingThrow(BaseModel):
@@ -357,31 +576,72 @@ class SavingThrow(BaseModel):
     def get_advantage_status(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
         return self.bonus.get_advantage_status(stats_block, target, context)
     
-    def perform_save(self, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> bool:
+    def perform_save(self, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SavingThrowLog]:
         if self.bonus.is_auto_fail(stats_block, target, context):
             print(f"Auto-fail condition met for {self.ability.value} saving throw")
-            return False
+            log = SavingThrowLog(
+                ability=self.ability,
+                dc=dc,
+                source_id=stats_block.id,
+                target_id=target.id if target else None,
+                roll_log=None,
+                roll=1,
+                total=1,
+                bonus=0,
+                advantage_status=AdvantageStatus.NONE,
+                success=False,
+                auto_fail=True,
+
+            )
+            return log if return_log else False
         
         if self.bonus.is_auto_success(stats_block, target, context):
             print(f"Auto-success condition met for {self.ability.value} saving throw")
-            return True
+            log = SavingThrowLog(
+                ability=self.ability,
+                dc=dc,
+                source_id=stats_block.id,
+                target_id=target.id if target else None,
+                roll_log=None,
+                roll=20,
+                total=20,
+                bonus=0,
+                advantage_status=AdvantageStatus.NONE,
+                success=True,
+                auto_success=True,
+
+            )
+            return log if return_log else True
 
         bonus = self.get_bonus(stats_block, target, context)
-        # Create a combined AdvantageTracker
         advantage_tracker = AdvantageTracker()
         self.bonus.self_effects.apply_advantage_disadvantage(stats_block, target, advantage_tracker, context)
         if target:
-            #get the skill of the target
-            target_skill = target.saving_throws.get_ability(self.ability)
-            target_skill.bonus.target_effects.apply_advantage_disadvantage(target, stats_block, advantage_tracker, context)
+            target_save = target.saving_throws.get_ability(self.ability)
+            target_save.bonus.target_effects.apply_advantage_disadvantage(target, stats_block, advantage_tracker, context)
         
         advantage_status = advantage_tracker.status
 
         dice = Dice(dice_count=1, dice_value=20, modifier=bonus, advantage_status=advantage_status)
-        roll, _ = dice.roll_with_advantage()
+        roll, _, roll_log = dice.roll_with_advantage()
         total = roll + bonus
+        success = total >= dc
         print(f"Saving Throw: {self.ability.value}, Roll: {roll}, Total: {total}, DC: {dc}")
-        return total >= dc
+
+        log = SavingThrowLog(
+            ability=self.ability,
+            dc=dc,
+            source_id=stats_block.id,
+            target_id=target.id if target else None,
+            roll_log=roll_log,
+            roll=roll,
+            total=total,
+            bonus=bonus,
+            advantage_status=advantage_status,
+            success=success,
+
+        )
+        return log if return_log else success
 
     def add_bonus(self, source: str, bonus: ContextAwareBonus):
         self.bonus.add_bonus(source, bonus)
@@ -429,10 +689,8 @@ class SavingThrows(BaseModel):
         saving_throw = self.get_ability(ability)
         saving_throw.remove_effect(source)
 
-    def perform_save(self, ability: Ability, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> bool:
-        return self.get_ability(ability).perform_save(stats_block, dc, target, context)
-
-
+    def perform_save(self, ability: Ability, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SavingThrowLog]:
+        return self.get_ability(ability).perform_save(stats_block, dc, target, context, return_log)
 
 class BaseSpatial(BaseModel):
     battlemap_id: str
@@ -451,6 +709,39 @@ class BaseSpatial(BaseModel):
     
 class FOV(BaseSpatial):
     visible_tiles: Set[Tuple[int, int]] = Field(default_factory=set)
+
+    @staticmethod
+    def bresenham(start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[int, int]]:
+        x0, y0 = start
+        x1, y1 = end
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+
+        ray = []
+        while True:
+            ray.append((x0, y0))
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x0 += sx
+            if e2 < dx:
+                err += dx
+                y0 += sy
+
+        return ray
+
+    def get_ray_to(self, position: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
+        if position in self.visible_tiles:
+            return self.bresenham(self.origin, position)
+        return None
+
+    def get_all_rays(self) -> Dict[Tuple[int, int], List[Tuple[int, int]]]:
+        return {pos: self.bresenham(self.origin, pos) for pos in self.visible_tiles}
 
     def is_visible(self, position: Tuple[int, int]) -> bool:
         return position in self.visible_tiles
@@ -538,6 +829,16 @@ class Sensory(BaseModel):
     distance_matrix: Optional[DistanceMatrix] = None
     fov: Optional[FOV] = None
     paths: Optional[Paths] = None
+
+    def get_ray_to(self, destination: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
+        if self.fov:
+            return self.fov.get_ray_to(destination)
+        return None
+
+    def get_all_rays(self) -> Dict[Tuple[int, int], List[Tuple[int, int]]]:
+        if self.fov:
+            return self.fov.get_all_rays()
+        return {}
     
     def update_battlemap(self, battlemap_id: str):
         self.battlemap_id = battlemap_id

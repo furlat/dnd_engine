@@ -16,7 +16,7 @@ def create_battlemap_with_entities():
 #...###..#....#....#
 #...###..#....#....#
 #........#....#....#
-#........#....#....#
+#.............#....#
 #........#....#....#
 ####################
     '''.strip()  # Use strip() to remove the first and last newlines
@@ -65,7 +65,8 @@ def create_battlemap_with_entities():
     )
 
     # Add entities to the battle map
-    battle_map.add_entity(goblin, (1, 1))
+    battle_map.add_entity(goblin, (18, 1))
     battle_map.add_entity(skeleton, (18, 7))
 
     return battle_map, goblin, skeleton
+bm, goblin, skeleton = create_battlemap_with_entities()

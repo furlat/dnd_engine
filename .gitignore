@@ -1,3 +1,5 @@
 
 dnd.egg-info/PKG-INFO
 *.pyc
+/build
+/dnd.egg-info
