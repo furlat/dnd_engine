@@ -1,5 +1,10 @@
 from enum import Enum
 
+class AdvantageStatus(str, Enum):
+    NONE = "None"
+    ADVANTAGE = "Advantage"
+    DISADVANTAGE = "Disadvantage"
+    
 class Size(str, Enum):
     TINY = "Tiny"
     SMALL = "Small"
