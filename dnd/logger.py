@@ -12,7 +12,8 @@ class BaseLogEntry(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     log_type: str
-    entity_id: Optional[str] = None
+    source_entity_id: Optional[str] = None
+    target_entity_id: Optional[str] = None
 
 class ContextualEffectLog(BaseLogEntry):
     log_type: str = Field(default="ContextualEffect")
@@ -45,7 +46,7 @@ class SimpleRollLog(BaseLogEntry):
     advantage_status: AdvantageStatus = AdvantageStatus.NONE
     critical_roll: bool = False
     total_dice_count: int
-    all_rolls: List[Union[int],Tuple[int,int]]
+    all_rolls: List[Union[int,Tuple[int,int]]]
     chosen_rolls: List[int]
 
     @computed_field
@@ -62,7 +63,7 @@ class DiceRollLog(BaseLogEntry):
     
     @computed_field
     def total_roll(self) -> int:
-        return self.base_roll.result + self.modifier.final_value
+        return int(self.base_roll.result + self.modifier.final_value)
     @computed_field
     def is_critical_hit(self, target:Optional[int]=None) -> bool:
         if self.modifier.advantage.critical_status == CritStatus.NOCRIT or self.base_roll.dice_value != 20 or self.base_roll.base_dice_count != 1:
@@ -89,20 +90,6 @@ class DiceRollLog(BaseLogEntry):
             raise ValueError("Invalid AutoHitStatus")
 
 
-# class DamageRollLog(BaseLogEntry):
-#     log_type: str = "DamageRoll"
-#     damage_type: DamageType
-#     dice_roll: DiceRollLog
-
-# class DamageLog(BaseLogEntry):
-#     log_type: str = "Damage"
-#     damage_rolls: List[DamageRollLog]
-#     total_damage_by_type: Dict[DamageType, int]
-#     final_damage: int
-
-# class DamageTypeEffect(BaseModel):
-#     damage_type: DamageType
-#     effect_source: EffectSource
 
 class DamageRollLog(BaseLogEntry):
     log_type: str = "DamageRoll"
@@ -143,7 +130,7 @@ class DamageResistanceCalculation(BaseLogEntry):
     
     @computed_field
     def resistance_delta(self) -> int:
-        return self.damage_roll.damage_rolled - self.total_damage_taken
+        return int(self.damage_roll.damage_rolled - self.total_damage_taken)
 
 class HealthSnapshot(BaseLogEntry):
     log_type: str = "HealthSnapshot"
@@ -156,10 +143,21 @@ class DamageTakenLog(BaseLogEntry):
     log_type: str = "HealthChange"
     health_before : HealthSnapshot
     health_after : HealthSnapshot
-    damage_calculations = List[DamageResistanceCalculation]
+    damage_calculations : List[DamageResistanceCalculation]
+    hp_damage: int
+    temp_hp_damage: int
+    bonus_hp_damage: int
+
+    @computed_field
+    def total_damage(self) -> int:
+        return self.hp_damage + self.temp_hp_damage + self.bonus_hp_damage
 
 
-
+class HealingTakenLog(BaseLogEntry):
+    log_type: str = "HealthChange"
+    health_before : HealthSnapshot
+    health_after : HealthSnapshot
+    healing_received: int
 
 
 class ContextualEffectsLog(BaseLogEntry):
