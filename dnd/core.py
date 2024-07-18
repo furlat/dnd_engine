@@ -10,7 +10,7 @@ from dnd.docstrings import *
 import uuid
 import random
 from dnd.contextual import ModifiableValue, AdvantageStatus, AdvantageTracker, ContextualEffects, ContextAwareBonus, ContextAwareCondition
-from dnd.dnd_enums import ResistanceStatus,Ability,AutoHitStatus,AutoCritStatus, Skills, SensesType, ActionType, RechargeType, UsageType, DurationType, RangeType, TargetType, ShapeType, TargetRequirementType, DamageType
+from dnd.dnd_enums import ResistanceStatus,Ability,AutoHitStatus,CritStatus, Skills, SensesType, ActionType, RechargeType, UsageType, DurationType, RangeType, TargetType, ShapeType, TargetRequirementType, DamageType
 from dnd.logger import HealingTakenLog,DamageTakenLog,HealthSnapshot,DamageResistanceCalculation,DamageLog,SimpleRollLog,AdvantageLog,DiceRollLog, DamageRollLog, HealthLog, SkillCheckLog, SavingThrowLog, ModifiableValueLog
 class RegistryHolder:
     _registry: Dict[str, 'RegistryHolder'] = {}
