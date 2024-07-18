@@ -12,6 +12,8 @@ dnd/dijkstra.py
 dnd/dnd_enums.py
 dnd/docstrings.py
 dnd/equipment.py
+dnd/logger.py
+dnd/newlogs.py
 dnd/shadowcast.py
 dnd/statsblock.py
 dnd.egg-info/PKG-INFO
@@ -25,7 +27,9 @@ dnd/monsters/skeleton.py
 dnd/tests/__init__.py
 dnd/tests/big_test.py
 dnd/tests/entiti_bm.py
+dnd/tests/ex_log.py
 dnd/tests/example_bm.py
+dnd/tests/new_logs.py
 dnd/tests/pathfinding.py
 dnd/tests/shadows.py
 dnd/tests/test_battlemap.py

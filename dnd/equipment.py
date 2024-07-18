@@ -1,4 +1,4 @@
-from typing import List, Optional, Callable, TYPE_CHECKING, Dict, Any
+from typing import List, Optional, Callable, TYPE_CHECKING, Dict, Any, Union
 from pydantic import BaseModel, Field
 from enum import Enum
 from dnd.contextual import ModifiableValue, ContextualEffects, ContextAwareBonus, ContextAwareCondition
@@ -27,7 +27,7 @@ class Shield(BaseModel):
 
 class Weapon(BaseModel):
     name: str
-    damage: 'Damage'
+    damage: Union['Damage',List['Damage']]
     attack_type: 'AttackType'
     properties: List[WeaponProperty]
     range: 'Range'

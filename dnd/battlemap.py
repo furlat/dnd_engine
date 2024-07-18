@@ -89,7 +89,7 @@ class Entity(StatsBlock, RegistryHolder):
             attack_type=weapon.attack_type,
             ability=ability,
             range=weapon.range,
-            damage=[weapon.damage],
+            damage=[damage for damage in weapon.damage],
             targeting=targeting,
             stats_block=self,
             weapon=weapon
@@ -249,99 +249,6 @@ class BattleMap(BaseModel, RegistryHolder):
     def __str__(self) -> str:
         return f"BattleMap(id={self.id}, width={self.width}, height={self.height}, entities={len(self.entities)})"
 
-class MapDrawer:
-    def __init__(self, battle_map: 'BattleMap'):
-        self.battle_map = battle_map
 
-    def get_tile_char(self, x: int, y: int) -> str:
-        tile = self.battle_map.get_tile(x, y)
-        if tile == "WALL":
-            return '#'
-        elif tile == "WATER":
-            return '~'
-        elif tile == "FLOOR":
-            return '.'
-        else:
-            return ' '
-
-    def print_ascii_map(self, highlight_los: Optional[Set[Tuple[int, int]]] = None) -> str:
-        ascii_map = []
-        for y in range(self.battle_map.height):
-            row = []
-            for x in range(self.battle_map.width):
-                char = self.get_tile_char(x, y)
-                if highlight_los and (x, y) in highlight_los:
-                    char = Back.YELLOW + char + Style.RESET_ALL
-                row.append(char)
-            ascii_map.append(''.join(row))
-        return '\n'.join(ascii_map)
-
-    def visualize_los(self, entity: Entity):
-        los_tiles = self.battle_map.compute_line_of_sight(entity)
-        position =  entity.get_position()
-        print(f"Map with line of sight from {position}:")
-        print(self.print_ascii_map(highlight_los=los_tiles))
-
-    def visualize_dijkstra_distances(self, start: Tuple[int, int], diagonal: bool = True, max_distance: Optional[int] = None):
-        distances, _ = self.battle_map.compute_dijkstra(start, diagonal, max_distance)
-        
-        ascii_map = []
-        for y in range(self.battle_map.height):
-            row = []
-            for x in range(self.battle_map.width):
-                if (x, y) == start:
-                    char = '@'
-                elif (x, y) in distances:
-                    char = str(distances[(x, y)] % 10)
-                else:
-                    char = Back.RED + 'X' + Style.RESET_ALL
-                row.append(char)
-            ascii_map.append(''.join(row))
-        return '\n'.join(ascii_map)
-
-    def visualize_dijkstra_path(self, start: Tuple[int, int], end: Tuple[int, int], diagonal: bool = True, max_distance: Optional[int] = None):
-        _, paths = self.battle_map.compute_dijkstra(start, diagonal, max_distance)
-        
-        if end not in paths:
-            return "No path found."
-
-        path_set = set(paths[end])
-        ascii_map = []
-        for y in range(self.battle_map.height):
-            row = []
-            for x in range(self.battle_map.width):
-                if (x, y) == start:
-                    char = '@'
-                elif (x, y) == end:
-                    char = Back.GREEN + 'E' + Style.RESET_ALL
-                elif (x, y) in path_set:
-                    char = Back.GREEN + '.' + Style.RESET_ALL
-                else:
-                    char = self.get_tile_char(x, y)
-                row.append(char)
-            ascii_map.append(''.join(row))
-        return '\n'.join(ascii_map)
-
-    @staticmethod
-    def compute_absolute_distance(start: Tuple[int, int], end: Tuple[int, int]) -> float:
-        return sqrt((start[0] - end[0]) ** 2 + (start[1] - end[1]) ** 2) * 5  # 5 feet per tile
-
-    def visualize_absolute_distances(self, start: Tuple[int, int]):
-        ascii_map = []
-        for y in range(self.battle_map.height):
-            row = []
-            for x in range(self.battle_map.width):
-                distance = self.compute_absolute_distance(start, (x, y))
-                if (x, y) == start:
-                    char = '@'
-                elif distance < 10:
-                    char = f'{int(distance):d}'
-                elif distance < 100:
-                    char = f'{int(distance):02d}'
-                else:
-                    char = 'XX'
-                row.append(char)
-            ascii_map.append(''.join(row))
-        return '\n'.join(ascii_map)
     
 

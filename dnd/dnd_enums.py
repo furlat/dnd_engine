@@ -1,9 +1,35 @@
 from enum import Enum
 
+
+class SourceType(str, Enum):
+    CONDITION = "Condition"
+    ABILITY = "Ability"
+    ITEM = "Item"
+    ENVIRONMENT = "Environment"
+    FEATURE = "Feature"
+    SPELL = "Spell"
+    OTHER = "Other"
+
 class AdvantageStatus(str, Enum):
     NONE = "None"
     ADVANTAGE = "Advantage"
     DISADVANTAGE = "Disadvantage"
+
+class AutoHitStatus(str, Enum):
+    NONE = "None"
+    AUTOHIT = "Autohit"
+    AUTOMISS = "Automiss"
+
+class CritStatus(str, Enum):
+    NONE = "None"
+    AUTOCRIT = "Autocrit"
+    NOCRIT = "Critical Immune"
+
+class ResistanceStatus(str,Enum):
+    NONE = "None"
+    RESISTANCE = "Resistance"
+    IMMUNITY = "Immunity"
+    VULNERABILITY = "Vulnerability"
     
 class Size(str, Enum):
     TINY = "Tiny"
