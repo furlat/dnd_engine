@@ -10,8 +10,8 @@ from dnd.docstrings import *
 import uuid
 import random
 from dnd.contextual import ModifiableValue, AdvantageStatus, AdvantageTracker, ContextualEffects, ContextAwareBonus, ContextAwareCondition
-from dnd.dnd_enums import Ability, Skills, SensesType, ActionType, RechargeType, UsageType, DurationType, RangeType, TargetType, ShapeType, TargetRequirementType, DamageType
-from dnd.logger import DiceRollLog, DamageRollLog, HealthLog, SkillCheckLog, SavingThrowLog
+from dnd.dnd_enums import ResistanceStatus,Ability,AutoHitStatus,AutoCritStatus, Skills, SensesType, ActionType, RechargeType, UsageType, DurationType, RangeType, TargetType, ShapeType, TargetRequirementType, DamageType
+from dnd.logger import HealingTakenLog,DamageTakenLog,HealthSnapshot,DamageResistanceCalculation,DamageLog,SimpleRollLog,AdvantageLog,DiceRollLog, DamageRollLog, HealthLog, SkillCheckLog, SavingThrowLog, ModifiableValueLog
 class RegistryHolder:
     _registry: Dict[str, 'RegistryHolder'] = {}
     _types: Set[type] = set()
@@ -44,107 +44,65 @@ class RegistryHolder:
 class Dice(BaseModel):
     dice_count: int
     dice_value: int
-    modifier: int
-    advantage_status: AdvantageStatus = AdvantageStatus.NONE
-    allow_critical: bool = True
-
-    def expected_value(self):
-        base_average = self.dice_count * (self.dice_value + 1) / 2 + self.modifier
-        if self.advantage_status == AdvantageStatus.ADVANTAGE:
-            advantage_average = (self.dice_value + 1) * (2 * self.dice_value + 1) / (3 * self.dice_value)
-            return self.dice_count * advantage_average + self.modifier
-        if self.advantage_status == AdvantageStatus.DISADVANTAGE:
-            disadvantage_average = self.dice_value * (self.dice_value + 1) / (3 * self.dice_value)
-            return self.dice_count * disadvantage_average + self.modifier
-        return int(base_average)
-
-    def roll_with_advantage(self, auto_critical: bool = False, auto_hit: bool = False) -> Tuple[int, str, DiceRollLog]:
-        if self.advantage_status == AdvantageStatus.ADVANTAGE:
-            rolls = [self.roll_single(), self.roll_single()]
-            best_roll = max(rolls)
-        elif self.advantage_status == AdvantageStatus.DISADVANTAGE:
-            rolls = [self.roll_single(), self.roll_single()]
-            best_roll = min(rolls)
-        else:
-            rolls = [self.roll_single()]
-            best_roll = rolls[0]
-
-        critical_status = "normal"
-        if auto_critical:
-            critical_status = "critical_hit"
-        elif auto_hit:
-            critical_status = "auto_hit"
-        elif self.allow_critical:
-            if best_roll - self.modifier == 20:
-                critical_status = "critical_hit"
-            elif best_roll - self.modifier == 1:
-                critical_status = "critical_failure"
-
-        log = DiceRollLog(
-            dice_count=self.dice_count,
-            dice_value=self.dice_value,
-            modifier=self.modifier,
-            advantage_status=self.advantage_status,
-            rolls=rolls,
-            total=best_roll,
-            critical_status=critical_status,
-            auto_critical=auto_critical,
-            auto_hit=auto_hit
-        )
-
-        return best_roll, critical_status, log
-
-    def roll_single(self) -> int:
-        return sum(random.randint(1, self.dice_value) for _ in range(self.dice_count)) + self.modifier
-
-    def roll(self, is_critical: bool = False) -> Tuple[int, DiceRollLog]:
+    modifier: ModifiableValueLog
+    
+    def _roll_with_advantage(self,advantage_status:AdvantageStatus,is_critical: bool = False) -> SimpleRollLog: 
         if is_critical:
-            rolls = [random.randint(1, self.dice_value) for _ in range(self.dice_count * 2)]
+            num_dices = self.dice_count * 2
         else:
-            rolls = [random.randint(1, self.dice_value) for _ in range(self.dice_count)]
+            num_dices = self.dice_count
+        all_rolls = []
+
+        if advantage_status == AdvantageStatus.NONE:
+            for i in range(num_dices):
+                all_rolls.append(random.randint(1,self.dice_value))
+            chosen_rolls = all_rolls
+        elif advantage_status == AdvantageStatus.ADVANTAGE:
+            for i in range(num_dices):
+                all_rolls.append(random.randint(1,self.dice_value),random.randint(1,self.dice_value))
+            chosen_rolls = [max(roll) for roll in all_rolls]
+        elif advantage_status == AdvantageStatus.DISADVANTAGE:
+            for i in range(num_dices):
+                all_rolls.append(random.randint(1,self.dice_value),random.randint(1,self.dice_value))
+            chosen_rolls = [min(roll) for roll in all_rolls]
         
-        total = sum(rolls) + self.modifier
-        
-        log = DiceRollLog(
-            dice_count=self.dice_count * (2 if is_critical else 1),
+        return SimpleRollLog(
+            base_dice_count=self.dice_count,
             dice_value=self.dice_value,
-            modifier=self.modifier,
-            advantage_status=AdvantageStatus.NONE,
-            rolls=rolls,
-            total=total,
-            critical_status="critical_hit" if is_critical else "normal"
+            advantage_status=advantage_status,
+            critical_roll=is_critical,
+            total_dice_count=num_dices,
+            all_rolls=all_rolls,
+            chosen_rolls=chosen_rolls,
         )
 
-        return total, log
+    def roll(self,is_critical: bool = False) -> Tuple[int, str, DiceRollLog]:
 
-    def probability_of_success(self, difficulty: int) -> float:
-        success_range = max(0, self.dice_value - (difficulty - self.modifier - 1))
-        base_probability = success_range / self.dice_value
+        base_roll_log= self._roll_with_advantage(self.modifier.advantage.advantage_status,is_critical)
+        log = DiceRollLog(
 
-        if self.advantage_status == AdvantageStatus.ADVANTAGE:
-            return 1 - (1 - base_probability) ** 2
-        elif self.advantage_status == AdvantageStatus.DISADVANTAGE:
-            return base_probability ** 2
-        else:
-            return base_probability
+            modifier=self.modifier,
+            base_roll=base_roll_log,
+            
+        )
+        return log
+    
+
+
 
 class Damage(BaseModel):
     dice: Dice
     type: DamageType
 
-    def average_damage(self):
-        return self.dice.expected_value()
-
     def roll(self, is_critical: bool = False) -> Tuple[int, DamageRollLog]:
-        total, dice_log = self.dice.roll(is_critical)
+        dice_log = self.dice.roll(is_critical)
         
-        log = DamageRollLog(
+        damage_roll_log = DamageRollLog(
             damage_type=self.type,
             dice_roll=dice_log,
-            total_damage=total
         )
 
-        return total, log
+        return damage_roll_log
 
 class Health(BaseModel):
     hit_dice: Dice
@@ -173,54 +131,69 @@ class Health(BaseModel):
     @computed_field
     def max_hit_points(self) -> int:
         return max(1, self.hit_dice.expected_value() + self.hit_point_bonus.get_value(None))
+    
+    def _get_damage(self, damage_roll:DamageRollLog, owner, attacker, context) -> DamageResistanceCalculation:
+        if damage_roll.damage_type in self.immunities:
+            resistance_status= ResistanceStatus.IMMUNITY
+        elif damage_roll.damage_type in self.vulnerabilities:
+            resistance_status= ResistanceStatus.VULNERABILITY
+        elif damage_roll.damage_type in self.resistances:
+            resistance_status= ResistanceStatus.RESISTANCE
+        else:
+            resistance_status= ResistanceStatus.NONE
+        
+        return DamageResistanceCalculation(damage_roll = damage_roll, resistance_status = resistance_status)
 
-    def take_damage(self, damage: int, damage_type: DamageType, owner: 'StatsBlock', attacker: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
-        if damage_type in self.immunities:
-            return 0
+    def get_health_snapshot(self) -> HealthSnapshot:
+        return HealthSnapshot(
+            current_hp=self.current_hit_points,
+            max_hp=self.max_hit_points,
+            temp_hp=self.temporary_hit_points,
+            bonus_hp=self.bonus_hit_points,
+        )
 
-        if damage_type in self.vulnerabilities:
-            damage *= 2
-        elif damage_type in self.resistances:
-            damage = max(1, damage // 2)
+    def take_damage(self, damage: DamageLog, owner: 'StatsBlock', attacker: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> DamageTakenLog:
+        if isinstance(damage,Damage):
+            damage = [damage]
 
-        actual_damage = damage
+        health_before = self.get_health_snapshot()
+        damage_calculations = []
+        for damage_roll in damage.damage_rolls:
+            damage_calculations.append(self._get_damage(damage_roll, owner, attacker, context))
 
-        # Apply damage to temporary hit points first
+        total_damage = sum([getattr(calculation,"total_damage_taken") for calculation in damage_calculations])
+
+
         if self.temporary_hit_points > 0:
-            absorbed = min(self.temporary_hit_points, actual_damage)
-            self.temporary_hit_points -= absorbed
-            actual_damage -= absorbed
+            absorbed_thp = min(self.temporary_hit_points, total_damage)
+            self.temporary_hit_points -= absorbed_thp
+            hp_damage = total_damage- absorbed_thp
 
         # Then apply to bonus hit points
         if self.bonus_hit_points > 0:
-            absorbed = min(self.bonus_hit_points, actual_damage)
-            self.bonus_hit_points -= absorbed
-            actual_damage -= absorbed
-
+            absorbed_bhp = min(self.bonus_hit_points, hp_damage)
+            self.bonus_hit_points -= absorbed_bhp
+            hp_damage -= absorbed_bhp
         # Finally, apply to current hit points
-        self.current_hit_points = max(0, self.current_hit_points - actual_damage)
-
-        # Trigger on-damage conditions
-        for _, condition in self.on_damage_conditions:
-            condition(owner, attacker, context)
+        self.current_hit_points = max(0, self.current_hit_points - hp_damage)
 
         # Log the damage taken
-        log = HealthLog(
-            entity_id=owner.id,
-            current_hp=self.current_hit_points,
-            max_hp=self.max_hit_points,
-            temporary_hp=self.temporary_hit_points,
-            damage_taken=damage,
-            source_id=attacker.id if attacker else None,
-            damage_type=damage_type
+        return  DamageTakenLog(
+            health_before=health_before,
+            health_after=self.get_health_snapshot(),
+            damage_calculations=damage_calculations,
+            hp_damage = hp_damage,
+            temp_hp_damage=absorbed_thp,
+            bonus_hp_damage=absorbed_bhp,
+            source_entity_id=attacker.id if attacker else None,
+            target_entity_id=owner.id if owner else None,
         )
 
-        return damage
 
-    def heal(self, healing: int, owner: 'StatsBlock', healer: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
+    def heal(self, healing: int, owner: 'StatsBlock', healer: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> HealingTakenLog:
         healing_bonus = self.healing_bonus.get_value(owner, healer, context)
         total_healing = healing + healing_bonus
-
+        health_before = self.get_health_snapshot()
         old_hp = self.current_hit_points
         self.current_hit_points = min(self.max_hit_points, self.current_hit_points + total_healing)
         actual_healing = self.current_hit_points - old_hp
@@ -230,16 +203,15 @@ class Health(BaseModel):
             condition(owner, healer, context)
 
         # Log the healing received
-        log = HealthLog(
-            entity_id=owner.id,
-            current_hp=self.current_hit_points,
-            max_hp=self.max_hit_points,
-            temporary_hp=self.temporary_hit_points,
-            healing_received=actual_healing,
-            source_id=healer.id if healer else None
+        return HealingTakenLog(
+            health_before=health_before,
+            health_after=self.get_health_snapshot(),
+            total_healing=actual_healing,
+            source_entity_id=healer.id if healer else None,
+            target_entity_id=owner.id if owner else None,
         )
 
-        return actual_healing
+
 
     def add_temporary_hit_points(self, amount: int):
         self.temporary_hit_points = max(self.temporary_hit_points, amount)

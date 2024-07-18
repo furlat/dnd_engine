@@ -1,6 +1,6 @@
 from dnd.monsters.goblin import create_goblin
 from dnd.monsters.skeleton import create_skeleton
-from dnd.battlemap import BattleMap, Entity, MapDrawer
+from dnd.battlemap import BattleMap, Entity
 from dnd.statsblock import StatsBlock
 from dnd.equipment import Weapon
 from dnd.actions import Attack, MovementAction, Range, Damage
@@ -36,12 +36,7 @@ def create_battlemap_with_entities():
             elif char == '.':
                 battle_map.set_tile(x, y, "FLOOR")
 
-    # Create a MapDrawer instance
-    map_drawer = MapDrawer(battle_map)
 
-    # Print the initial state of the battle map
-    print("Initial Battle Map:")
-    print(map_drawer.print_ascii_map())
 
     # Create entities
     goblin = create_goblin()

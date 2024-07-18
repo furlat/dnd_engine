@@ -36,6 +36,7 @@ class Condition(BaseModel):
     description: str = Field("A generic description of the condition.")
     duration: Duration = Field(default_factory=lambda: Duration(time=1, type=DurationType.ROUNDS))
     source_entity_id: Optional[str] = None
+    source_ability: Optional[str] = None
 
     def apply(self, stats_block: 'StatsBlock', source: Optional['StatsBlock'] = None) -> Optional[ConditionLog]:
         # Check for condition immunity

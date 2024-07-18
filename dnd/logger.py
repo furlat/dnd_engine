@@ -1,10 +1,10 @@
-from typing import Dict, Any, Type, List, Optional
-from pydantic import BaseModel, Field
+from typing import Dict, Any, Type, List, Optional, Union, Tuple
+from pydantic import BaseModel, Field, computed_field
 from datetime import datetime, timedelta
 from collections import OrderedDict
 import uuid
 from enum import Enum
-from dnd.dnd_enums import AdvantageStatus, DamageType,Ability, Skills, AdvantageStatus, ActionType, AttackType, DamageType, SensesType
+from dnd.dnd_enums import ResistanceStatus,AdvantageStatus,AutoHitStatus,CritStatus, DamageType,Ability, Skills, AdvantageStatus, ActionType, AttackType, DamageType, SensesType
 
 
 class BaseLogEntry(BaseModel):
@@ -20,23 +20,11 @@ class ContextualEffectLog(BaseLogEntry):
     applied: bool
     value: Optional[int] = None
 
-class DiceRollLog(BaseLogEntry):
-    log_type: str = "DiceRoll"
-    dice_count: int
-    dice_value: int
-    modifier: int
-    advantage_status: AdvantageStatus
-    rolls: List[int]
-    total: int
-    critical_status: str
-    auto_critical: bool = False
-    auto_hit: bool = False
-
-class DamageRollLog(BaseLogEntry):
-    log_type: str = "DamageRoll"
-    damage_type: DamageType
-    dice_roll: DiceRollLog
-    total_damage: int
+class AdvantageLog(BaseLogEntry):
+    log_type: str = Field(default="AdvantageStatus")
+    advantage_status: AdvantageStatus = AdvantageStatus.NONE
+    auto_hit_status: AutoHitStatus = AutoHitStatus.NONE
+    critical_status: CritStatus = CritStatus.NONE
 
 class ModifiableValueLog(BaseLogEntry):
     log_type: str = Field(default="ModifiableValue")
@@ -44,13 +32,135 @@ class ModifiableValueLog(BaseLogEntry):
     static_modifiers: Dict[str, int]
     self_effects: List[ContextualEffectLog]
     target_effects: List[ContextualEffectLog]
-    advantage_status: AdvantageStatus
+    advantage: AdvantageLog
     final_value: int
     min_constraint: Optional[int] = None
     max_constraint: Optional[int] = None
-    auto_fail: bool = False
-    auto_success: bool = False
-    auto_critical: bool = False
+
+
+class SimpleRollLog(BaseLogEntry):
+    log_type: str = "SimpleRoll"
+    base_dice_count: int
+    dice_value: int
+    advantage_status: AdvantageStatus = AdvantageStatus.NONE
+    critical_roll: bool = False
+    total_dice_count: int
+    all_rolls: List[Union[int],Tuple[int,int]]
+    chosen_rolls: List[int]
+
+    @computed_field
+    def result(self) -> int:
+        return sum(self.chosen_rolls)
+
+
+
+
+class DiceRollLog(BaseLogEntry):
+    log_type: str = "DiceRoll"
+    base_roll: SimpleRollLog
+    modifier: ModifiableValueLog
+    
+    @computed_field
+    def total_roll(self) -> int:
+        return self.base_roll.result + self.modifier.final_value
+    @computed_field
+    def is_critical_hit(self, target:Optional[int]=None) -> bool:
+        if self.modifier.advantage.critical_status == CritStatus.NOCRIT or self.base_roll.dice_value != 20 or self.base_roll.base_dice_count != 1:
+            return False
+        elif self.modifier.advantage.critical_status == CritStatus.AUTOCRIT :
+            if target and self.modifier.advantage.auto_hit_status == AutoHitStatus.NONE:
+                return self.base_roll.result >= target
+            elif target and self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOHIT:
+                return True
+            elif target and self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOMISS:
+                return False
+            return True 
+        else:
+            return self.base_roll.result == 20
+    @computed_field
+    def is_hit(self, target:Optional[int]=None) -> bool:
+        if self.modifier.advantage.auto_hit_status == AutoHitStatus.NONE:
+            return self.total_roll >= target and self.base_roll.result != 1
+        elif self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOHIT:
+            return True
+        elif self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOMISS:
+            return False
+        else:
+            raise ValueError("Invalid AutoHitStatus")
+
+
+# class DamageRollLog(BaseLogEntry):
+#     log_type: str = "DamageRoll"
+#     damage_type: DamageType
+#     dice_roll: DiceRollLog
+
+# class DamageLog(BaseLogEntry):
+#     log_type: str = "Damage"
+#     damage_rolls: List[DamageRollLog]
+#     total_damage_by_type: Dict[DamageType, int]
+#     final_damage: int
+
+# class DamageTypeEffect(BaseModel):
+#     damage_type: DamageType
+#     effect_source: EffectSource
+
+class DamageRollLog(BaseLogEntry):
+    log_type: str = "DamageRoll"
+    damage_type: DamageType
+    dice_roll: DiceRollLog
+    @computed_field
+    def damage_rolled(self) -> int:
+        return self.dice_roll.total_roll
+
+class DamageLog(BaseLogEntry):
+    log_type: str = "Damage"
+    damage_rolls: List[DamageRollLog]
+
+    @computed_field
+    def total_damage(self) -> int:
+        return sum([damage.dice_roll.total_roll for damage in self.damage_rolls])
+
+
+
+
+class DamageResistanceCalculation(BaseLogEntry):
+    log_type: str = "HealthChangeCalculation"
+    damage_roll: DamageRollLog
+    resistance_status: ResistanceStatus
+
+    def compute_damage_multiplier(self) -> float:
+        if self.resistance_status == ResistanceStatus.RESISTANCE:
+            return 0.5
+        elif self.resistance_status == ResistanceStatus.IMMUNITY:
+            return 0
+        elif self.resistance_status == ResistanceStatus.VULNERABILITY:
+            return 2
+        else:
+            return 1
+    @computed_field
+    def total_damage_taken(self) -> int:
+        return int(self.damage_roll.damage_rolled * self.compute_damage_multiplier())
+    
+    @computed_field
+    def resistance_delta(self) -> int:
+        return self.damage_roll.damage_rolled - self.total_damage_taken
+
+class HealthSnapshot(BaseLogEntry):
+    log_type: str = "HealthSnapshot"
+    current_hp: int
+    max_hp: int
+    temp_hp: int
+    bonus_hp: int
+
+class DamageTakenLog(BaseLogEntry):
+    log_type: str = "HealthChange"
+    health_before : HealthSnapshot
+    health_after : HealthSnapshot
+    damage_calculations = List[DamageResistanceCalculation]
+
+
+
+
 
 class ContextualEffectsLog(BaseLogEntry):
     log_type: str = Field(default="ContextualEffects")
