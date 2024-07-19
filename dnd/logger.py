@@ -128,7 +128,9 @@ class ValueOut(BaseLogEntry):
                                      max_constraints=new_max, 
                                      advantage_tracker=new_advantage, 
                                      critical_tracker=new_critical, 
-                                     auto_hit_tracker=new_auto_hit)
+                                     auto_hit_tracker=new_auto_hit,
+                                     source_entity_id=self.source_entity_id if self.source_entity_id else other.source_entity_id,
+                                     target_entity_id=self.target_entity_id if self.target_entity_id else other.target_entity_id)
     
     def combine_with_multiple(self, others: List['ValueOut']) -> 'ValueOut':
         combined = self
@@ -176,10 +178,83 @@ class TargetRollOut(BaseLogEntry):
     hit_reason = HitReason = Field(default=HitReason.NORMAL)
     critical_reason = Optional[CriticalReason] = Field(default=None)
 
+    @computed_field
     def total_roll(self) -> int:
         return self.base_roll.result + self.bonus.total_bonus
+    @computed_field
     def success(self) -> bool:
         return self.hit == RollOutcome.HIT or self.hit == RollOutcome.CRIT
+
+
+
+class SkillBonusOut(BaseLogEntry):
+    log_type: str = "SkillBonus"
+    skill: Skills
+    proficiency_bonus: ValueOut
+    ability_bonus: ValueOut
+    skill_bonus: ValueOut
+    total_bonus: ValueOut
+    target_to_self_bonus: Optional[ValueOut] = None
+
+class SkillRollOut(BaseLogEntry):
+    log_type: str = "SkillRoll"
+    skill: Skills
+    ability: Ability
+    skill_proficient: bool
+    skill_expert: bool
+    dc: int
+    roll: TargetRollOut
+    bonus: SkillBonusOut 
+
+    @computed_field
+    def success(self) -> bool:
+        return self.roll.success
+    
+    @computed_field
+    def total_roll(self) -> int:
+        return self.roll.total_roll
+
+
+   
+class CrossSkillRollOut(BaseLogEntry):
+    log_type: str = "CrossSkillRoll"
+    source_skill: Skills
+    target_skill: Skills
+    target_skill_roll: SkillRollOut
+    source_skill_roll: SkillRollOut
+
+    @computed_field
+    def success(self) -> bool:
+        return self.source_skill_roll.success
+    @computed_field
+    def dc(self) -> int:
+        return self.target_skill_roll.total_roll if not self.target_skill_roll.roll.hit_reason == HitReason.AUTOMISS else 0
+
+
+class SavingThrowBonusOut(BaseLogEntry):
+    log_type: str = "SavingThrowBonus"
+    ability : Ability
+    proficiency_bonus: ValueOut
+    ability_bonus: ValueOut
+    saving_throw_bonus: ValueOut
+    total_bonus: ValueOut
+    target_to_self_bonus: Optional[ValueOut] = None
+
+class SavingThrowRollOut(BaseLogEntry):
+    log_type: str = "SavingThrowRoll"
+    ability: Ability
+    proficient: bool
+    dc: int
+    roll: TargetRollOut
+    bonus: SavingThrowBonusOut 
+
+    @computed_field
+    def success(self) -> bool:
+        return self.roll.success
+    
+    @computed_field
+    def total_roll(self) -> int:
+        return self.roll.total_roll
 
 
 class DamageRollOut(BaseLogEntry):
@@ -192,55 +267,60 @@ class DamageRollOut(BaseLogEntry):
     @computed_field
     def total_damage(self) -> int:
         return self.dice_roll.result + self.damage_bonus.total_bonus
-
-class SkillRollOut(BaseLogEntry):
-    log_type: str = "SkillRoll"
-    skill: Skills
-    ability: Ability
-    skill_proficient: bool
-    skill_expert: bool
-    dc: int
-    roll: TargetRollOut
-    proficiency_bonus: ValueOut
-    ability_bonus: ValueOut
-    skill_bonus: ValueOut
-    target_skill_bonus: Optional[ValueOut] = None
-
-
-# class DiceRollLog(BaseLogEntry):
-#     log_type: str = "DiceRoll"
-#     base_roll: SimpleRollLog
-#     modifier: ModifiableValueLog
     
-#     @computed_field
-#     def total_roll(self) -> int:
-#         return int(self.base_roll.result + self.modifier.final_value)
-#     @computed_field
-#     def is_critical_hit(self, target:Optional[int]=None) -> bool:
-#         if self.modifier.advantage.critical_status == CriticalStatus.NOCRIT or self.base_roll.dice_value != 20 or self.base_roll.base_dice_count != 1:
-#             return False
-#         elif self.modifier.advantage.critical_status == CriticalStatus.AUTOCRIT :
-#             if target and self.modifier.advantage.auto_hit_status == AutoHitStatus.NONE:
-#                 return self.base_roll.result >= target
-#             elif target and self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOHIT:
-#                 return True
-#             elif target and self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOMISS:
-#                 return False
-#             return True 
-#         else:
-#             return self.base_roll.result == 20
-#     @computed_field
-#     def is_hit(self, target:Optional[int]=None) -> bool:
-#         if self.modifier.advantage.auto_hit_status == AutoHitStatus.NONE:
-#             return self.total_roll >= target and self.base_roll.result != 1
-#         elif self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOHIT:
-#             return True
-#         elif self.modifier.advantage.auto_hit_status == AutoHitStatus.AUTOMISS:
-#             return False
-#         else:
-#             raise ValueError("Invalid AutoHitStatus")
+class DamageResistanceOut(BaseLogEntry):
+    log_type: str = "DamageResistancOut"
+    damage_roll: DamageRollOut
+    resistance_status: ResistanceStatus
 
+    def compute_damage_multiplier(self) -> float:
+        if self.resistance_status == ResistanceStatus.RESISTANCE:
+            return 0.5
+        elif self.resistance_status == ResistanceStatus.IMMUNITY:
+            return 0
+        elif self.resistance_status == ResistanceStatus.VULNERABILITY:
+            return 2
+        else:
+            return 1
+        
+    @computed_field
+    def total_damage_taken(self) -> int:
+        return int(self.damage_roll.total_damage * self.compute_damage_multiplier())
+    
+    @computed_field
+    def resistance_delta(self) -> int:
+        return int(self.damage_roll.total_damage - self.total_damage_taken)
 
+class HealthSnapshot(BaseLogEntry):
+    log_type: str = "HealthSnapshot"
+    damage_taken: int
+    max_hit_points: int
+    temporary_hit_points: int
+
+    @computed_field
+    def current_hitpoints(self) -> int:
+        return self.max_hit_points - self.damage_taken
+    
+class DamageTakenLog(BaseLogEntry):
+    log_type: str = "HealthChange"
+    health_before : HealthSnapshot
+    health_after : HealthSnapshot
+    damage_calculations : List[DamageResistanceOut]
+    hp_damage: int
+    temp_hp_damage: int
+    is_dead : bool = False
+    flat_damage_reduction: int
+    flat_damage_reduction_bonus: ValueOut
+
+    @computed_field
+    def total_damage(self) -> int:
+        return self.hp_damage + self.temp_hp_damage
+    
+class HealingTakenLog(BaseLogEntry):
+    log_type: str = "HealthChange"
+    health_before : HealthSnapshot
+    health_after : HealthSnapshot
+    healing_received: int
 
 # class DamageRollLog(BaseLogEntry):
 #     log_type: str = "DamageRoll"
@@ -304,11 +384,7 @@ class SkillRollOut(BaseLogEntry):
 #         return self.hp_damage + self.temp_hp_damage + self.bonus_hp_damage
 
 
-# class HealingTakenLog(BaseLogEntry):
-#     log_type: str = "HealthChange"
-#     health_before : HealthSnapshot
-#     health_after : HealthSnapshot
-#     healing_received: int
+
 
 
 # class ContextualEffectsLog(BaseLogEntry):

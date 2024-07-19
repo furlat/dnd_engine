@@ -13,13 +13,14 @@ ContextAwareImmunity = Callable[['StatsBlock', Optional['StatsBlock']], bool]
 
 class MetaData(BaseModel):
     name: str = Field(default="Unnamed")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
     size: Size = Field(default=Size.MEDIUM)
     type: MonsterType = Field(default=MonsterType.HUMANOID)
     alignment: Alignment = Field(default=Alignment.TRUE_NEUTRAL)
     languages: List[Language] = Field(default_factory=list)
 
 class StatsBlock(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     meta: MetaData = Field(default_factory=MetaData)
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
     speed: Speed = Field(default_factory=lambda: Speed(walk=ModifiableValue(base_value=BaseValue(base_value=30))))
