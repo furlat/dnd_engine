@@ -2,7 +2,7 @@ from typing import List, Dict, Optional, Set, Tuple, Any, Callable, Union
 from pydantic import BaseModel, Field, computed_field
 import uuid
 from dnd.core import Ability, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Dice, Skills, ActionEconomy, Sensory, Health
-from dnd.contextual import ModifiableValue
+from dnd.contextual import ModifiableValue, BaseValue
 from dnd.conditions import Condition, ConditionLog
 from dnd.actions import Action, Attack, MovementAction
 from dnd.equipment import Armor, Shield, Weapon, ArmorClass
@@ -11,23 +11,28 @@ from dnd.logger import Logger, SkillCheckLog, SavingThrowLog
 
 ContextAwareImmunity = Callable[['StatsBlock', Optional['StatsBlock']], bool]
 
-class StatsBlock(BaseModel):
+class MetaData(BaseModel):
     name: str = Field(default="Unnamed")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     size: Size = Field(default=Size.MEDIUM)
     type: MonsterType = Field(default=MonsterType.HUMANOID)
     alignment: Alignment = Field(default=Alignment.TRUE_NEUTRAL)
-    speed: Speed = Field(default_factory=lambda: Speed(walk=ModifiableValue(base_value=30)))
+    languages: List[Language] = Field(default_factory=list)
+
+class StatsBlock(BaseModel):
+    meta: MetaData = Field(default_factory=MetaData)
+    proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
+    speed: Speed = Field(default_factory=lambda: Speed(walk=ModifiableValue(base_value=BaseValue(base_value=30))))
     ability_scores: AbilityScores = Field(default_factory=AbilityScores)
     saving_throws: SavingThrows = Field(default_factory=SavingThrows)
     skills: SkillSet = Field(default_factory=SkillSet)
-    languages: List[Language] = Field(default_factory=list)
+    
     challenge: float = Field(default=0.0)
     experience_points: int = Field(default=0)
     actions: List[Action] = Field(default_factory=list)
     reactions: List[Action] = Field(default_factory=list)
     legendary_actions: List[Action] = Field(default_factory=list)
-    armor_class: ArmorClass = Field(default_factory=lambda: ArmorClass(base_ac=ModifiableValue(base_value=10)))
+    armor_class: ArmorClass = Field(default_factory=lambda: ArmorClass(base_ac=ModifiableValue(base_value=BaseValue(base_value=10))))
     weapons: List[Weapon] = Field(default_factory=list)
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy())
     active_conditions: Dict[str, Condition] = Field(default_factory=dict)
@@ -35,6 +40,8 @@ class StatsBlock(BaseModel):
     health: Health = Field(default_factory=lambda: Health(hit_dice=Dice(dice_count=1, dice_value=8, modifier=0)))
     condition_immunities: Set[str] = Field(default_factory=set)
     contextual_condition_immunities: Dict[str, List[Tuple[str, ContextAwareImmunity]]] = Field(default_factory=dict)
+    hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -48,9 +55,6 @@ class StatsBlock(BaseModel):
     def armor_class_value(self) -> int:
         return self.armor_class.get_value(self)
 
-    @computed_field
-    def proficiency_bonus(self) -> int:
-        return self.ability_scores.proficiency_bonus.get_value(self)
 
     @computed_field
     def initiative(self) -> int:
