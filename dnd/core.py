@@ -231,12 +231,31 @@ class Skill(BaseModel):
             return (ability_bonus - 10) // 2
         
         ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(stats_block, target, context)
+        
         proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block, target, context)
         skill_bonus = self.bonus.apply(stats_block, target, context)
+        target_to_self_bonus = None
+        if target:
+            target_skill = target.skillset.get_skill(self.skill)
+            target_to_self_bonus = target_skill.bonus.apply_to_target(target,stats_block,context)
+            skill_bonus = skill_bonus.combine_with(target_to_self_bonus)
         
         total_bonus = skill_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier).combine_with(proficiency_bonus,bonus_converter=self._get_procifiency_converter())
         target_roll = TargetRoll(value=total_bonus)
-        return target_roll.roll(dc)
+        target_roll_out=  target_roll.roll(dc)
+        return SkillRollOut(
+            skill=self.skill,
+            ability=self.ability,
+            skill_proficient=self.proficient,
+            skill_expertise=self.expertise,
+            dc=dc,
+            roll=target_roll_out,
+            proficiency_bonus=proficiency_bonus,
+            ability_bonus=ability_bonus,
+            skill_bonus=skill_bonus,
+            target_to_self_bonus=target_to_self_bonus,
+        )
+
     
     def remove_effects(self, source: str):
         self.bonus.remove_effect(source)
@@ -288,10 +307,10 @@ class SkillSet(BaseModel):
     def remove_all_effects_from_all_skills(self, source: str):
         for skill in Skills:
             skill_obj = self.get_skill(skill)
-            skill_obj.remove_all_effects(source)
+            skill_obj.remove_effects(source)
 
     def perform_skill_check(self, skill: Skills, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
-        return self.get_skill(skill).perform_check(stats_block, dc, target, context, return_log)
+        return self.get_skill(skill).perform_check(stats_block, dc, target, context)
 
 
 
