@@ -174,9 +174,9 @@ class TargetRollOut(BaseLogEntry):
     bonus: ValueOut
     target: int
     base_roll: SimpleRollOut
-    hit = RollOutcome
-    hit_reason = HitReason = Field(default=HitReason.NORMAL)
-    critical_reason = Optional[CriticalReason] = Field(default=None)
+    hit : RollOutcome
+    hit_reason : HitReason = Field(default=HitReason.NORMAL)
+    critical_reason : Optional[CriticalReason] = Field(default=None)
 
     @computed_field
     def total_roll(self) -> int:

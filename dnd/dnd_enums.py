@@ -5,6 +5,13 @@ class RollOutcome(str, Enum):
     MISS = "Miss"
     CRIT = "Critical Hit"
 
+class UnarmoredAc(str, Enum):
+    BARBARIAN = "Barbarian"
+    MONK = "Monk"
+    DRACONIC_SORCER = "Draconic Sorcerer"
+    MAGIC_ARMOR = "Magic Armor"
+    NONE = "None"
+
 class HitReason(str, Enum):
     NORMAL = "Normal"
     CRITICAL = "Critical"
