@@ -98,7 +98,7 @@ class Logger:
 
 
 class ValueOut(BaseLogEntry):
-    log_type: str = Field(default="ContextualEffect")
+    log_type: str = Field(default="ValueOut")
     bonuses: BonusTracker = Field(default_factory=BonusTracker)
     min_constraints: BonusTracker = Field(default_factory=BonusTracker)
     max_constraints: BonusTracker = Field(default_factory=BonusTracker)
@@ -198,11 +198,13 @@ class SkillRollOut(BaseLogEntry):
     skill: Skills
     ability: Ability
     skill_proficient: bool
+    skill_expert: bool
     dc: int
     roll: TargetRollOut
     proficiency_bonus: ValueOut
     ability_bonus: ValueOut
     skill_bonus: ValueOut
+    target_skill_bonus: Optional[ValueOut] = None
 
 
 # class DiceRollLog(BaseLogEntry):

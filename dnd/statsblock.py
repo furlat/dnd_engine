@@ -24,9 +24,10 @@ class StatsBlock(BaseModel):
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
     speed: Speed = Field(default_factory=lambda: Speed(walk=ModifiableValue(base_value=BaseValue(base_value=30))))
     ability_scores: AbilityScores = Field(default_factory=AbilityScores)
-    saving_throws: SavingThrows = Field(default_factory=SavingThrows)
-    skills: SkillSet = Field(default_factory=SkillSet)
     
+    skillset: SkillSet = Field(default_factory=SkillSet)
+    
+    saving_throws: SavingThrows = Field(default_factory=SavingThrows)
     challenge: float = Field(default=0.0)
     experience_points: int = Field(default=0)
     actions: List[Action] = Field(default_factory=list)
