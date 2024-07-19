@@ -1,5 +1,19 @@
 from enum import Enum
 
+class RollOutcome(str, Enum):
+    HIT = "Hit"
+    MISS = "Miss"
+    CRIT = "Critical Hit"
+
+class HitReason(str, Enum):
+    NORMAL = "Normal"
+    CRITICAL = "Critical"
+    AUTOHIT = "AutoHit"
+    AUTOMISS = "AutoMiss"
+
+class CriticalReason(str, Enum):
+    NORMAL = "Normal"
+    AUTO = "Auto"
 
 class SourceType(str, Enum):
     CONDITION = "Condition"
@@ -20,7 +34,7 @@ class AutoHitStatus(str, Enum):
     AUTOHIT = "Autohit"
     AUTOMISS = "Automiss"
 
-class CritStatus(str, Enum):
+class CriticalStatus(str, Enum):
     NONE = "None"
     AUTOCRIT = "Autocrit"
     NOCRIT = "Critical Immune"

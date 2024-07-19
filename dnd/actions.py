@@ -221,7 +221,8 @@ class Attack(Action):
     damage: List[Damage]
     weapon: Optional[Weapon] = None
     is_critical_hit: bool = False
-    hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    weapon_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    weapon_damage_bonus:  ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
 
     def __init__(self, **data):
         super().__init__(**data)
