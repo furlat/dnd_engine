@@ -168,7 +168,10 @@ class ContextualModifier(BaseModel):
             max_constraints=self.get_max_value_tracker(stats_block, target, context),
             advantage_tracker=self.get_advantage_tracker(stats_block, target, context),
             auto_hit_tracker=self.get_auto_hit_tracker(stats_block, target, context),
-            critical_tracker=self.get_critical_tracker(stats_block, target, context)
+            critical_tracker=self.get_critical_tracker(stats_block, target, context),
+            source_entity_id=stats_block.id,
+            target_entity_id=target.id if target else None
+            
         )
 
 
