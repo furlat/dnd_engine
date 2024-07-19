@@ -15,6 +15,7 @@ ContextAwareAutoHit = Callable[['StatsBlock', Optional['StatsBlock'], Optional[D
 ContextAwareBonus = Callable[['StatsBlock', Optional['StatsBlock'], Optional[Dict[str, Any]]], int]
 
 class BaseValue(BaseModel):
+    name:str = Field(default="base")
     base_value: int = Field(default=0)
     min_value: Optional[int] = Field(default=None)
     max_value: Optional[int] = Field(default=None)
@@ -24,12 +25,12 @@ class BaseValue(BaseModel):
 
     def apply(self) -> ValueOut:
         return ValueOut(
-            bonuses=BonusTracker(bonuses={'base': self.base_value}),
-            min_constraints=BonusTracker(bonuses={'base': self.min_value}) if self.min_value is not None else None,
-            max_constraints=BonusTracker(bonuses={'base': self.max_value}) if self.max_value is not None else None,
-            advantage_tracker=AdvantageTracker(active_sources={'base': self.advantage}),
-            auto_hit_tracker=AutoHitTracker(auto_hit_statuses={'base': self.auto_hit}),
-            critical_tracker=CriticalTracker(critical_statuses={'base': self.critical})
+            bonuses=BonusTracker(bonuses={self.name: self.base_value}),
+            min_constraints=BonusTracker(bonuses={self.name: self.min_value}) if self.min_value is not None else None,
+            max_constraints=BonusTracker(bonuses={self.name: self.max_value}) if self.max_value is not None else None,
+            advantage_tracker=AdvantageTracker(active_sources={self.name: self.advantage}),
+            auto_hit_tracker=AutoHitTracker(auto_hit_statuses={self.name: self.auto_hit}),
+            critical_tracker=CriticalTracker(critical_statuses={self.name: self.critical})
         )
 
 
@@ -185,9 +186,9 @@ class ModifiableValue(BaseModel):
         return base_out.combine_with_multiple([static_out, contextual_out])
     
     def apply_to_target(self, stats_block: 'StatsBlock', target: 'StatsBlock', context: Optional[Dict[str, Any]] = None) -> ValueOut:
-        target_static = self.target_static.apply()
-        target_contextual = self.target_contextual.apply(stats_block, target, context)
-        return target_static.combine_with(target_contextual)
+        target_static_out = self.target_static.apply()
+        target_contextual_out = self.target_contextual.apply(stats_block, target, context)
+        return target_static_out.combine_with(target_contextual_out)
 
     def remove_effect(self, source: str):
         self.self_static.remove_effect(source)
