@@ -2,7 +2,7 @@ from typing import Dict, Any, Callable, List, Tuple, TYPE_CHECKING, Optional
 from pydantic import BaseModel, Field, computed_field
 from enum import Enum
 from dnd.dnd_enums import AdvantageStatus, CriticalStatus, AutoHitStatus
-from dnd.logger import ModifiableValueLog, ValueOut, AdvantageTracker, AutoHitTracker, CriticalTracker,BonusTracker
+from dnd.logger import ValueOut, AdvantageTracker, AutoHitTracker, CriticalTracker,BonusTracker
 from dnd.utils import update_or_concat_to_dict, update_or_sum_to_dict
 
 if TYPE_CHECKING:
@@ -181,6 +181,9 @@ class ModifiableValue(BaseModel):
     target_static: StaticModifier = Field(default_factory=StaticModifier)
     self_contextual: ContextualModifier = Field(default_factory=ContextualModifier)
     target_contextual: ContextualModifier = Field(default_factory=ContextualModifier)
+
+    def update_base_value(self, base_value: int):
+        self.base_value.base_value = base_value
 
     def apply(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> ValueOut:
         base_out = self.base_value.apply()

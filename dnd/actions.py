@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, computed_field
 from typing import List, Optional, Union, Dict, Any, Tuple, Set, Callable, TYPE_CHECKING
 from enum import Enum
-from dnd.contextual import ModifiableValue, AdvantageStatus, ContextAwareCondition, ContextAwareBonus
+from dnd.contextual import ModifiableValue, AdvantageStatus, ContextAwareCondition, ContextAwareBonus, BaseValue
 from dnd.core import (Dice, Ability,  AdvantageTracker, DurationType, RegistryHolder, Damage)
 from dnd.equipment import Weapon, Armor, WeaponProperty, ArmorType
 from dnd.dnd_enums import (DamageType,  RangeType, ShapeType, TargetType,
@@ -9,11 +9,10 @@ from dnd.dnd_enums import (DamageType,  RangeType, ShapeType, TargetType,
                                RechargeType, ActionType, AttackType, SourceType)
 
 
-from dnd.logger import PrerequisiteLog,ActionLog, ActionResultDetails, Logger, DamageRollLog, DiceRollLog, PrerequisiteDetails
 
-from dnd.newlogs import (AttackLog, HitRollLog, DamageLog, DamageRollLog, 
-                          HealthChangeLog, DiceRollLog, Modifier, EffectSource, 
-                          ConditionInfo, DamageTypeEffect, AttackResult, AdvantageSource, DisadvantageSource)
+from dnd.logger import Logger
+
+
 if TYPE_CHECKING:
     from dnd.statsblock import StatsBlock
     from dnd.conditions import Condition
@@ -213,6 +212,15 @@ def add_default_prerequisites(action: 'Action'):
     action.add_prerequisite("Range", check_range)
 
 
+class Weapon(BaseModel):
+    name: str
+    damage_dice: int
+    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
+    attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
+    damage_type: DamageType
+    attack_type: AttackType
+    properties: List[WeaponProperty]
+    range: 'Range'
 
 class Attack(Action):
     attack_type: AttackType

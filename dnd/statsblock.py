@@ -1,14 +1,12 @@
 from typing import List, Dict, Optional, Set, Tuple, Any, Callable, Union
 from pydantic import BaseModel, Field, computed_field
 import uuid
-from dnd.core import Ability, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Dice, Skills, ActionEconomy, Sensory, Health
+from dnd.core import Ability, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Skills, ActionEconomy, Sensory, Health, ArmorClass
 from dnd.contextual import ModifiableValue, BaseValue
-from dnd.conditions import Condition, ConditionLog
-from dnd.actions import Action, Attack, MovementAction
-from dnd.equipment import Armor, Shield, Weapon, ArmorClass
+from dnd.conditions import Condition
+from dnd.actions import Action, Attack, MovementAction, Weapon
 from dnd.dnd_enums import Size, MonsterType, Alignment, Language
-from dnd.logger import Logger, SkillCheckLog, SavingThrowLog
-
+from dnd.logger import Logger
 ContextAwareImmunity = Callable[['StatsBlock', Optional['StatsBlock']], bool]
 
 class MetaData(BaseModel):
