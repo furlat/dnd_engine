@@ -87,7 +87,21 @@ class Alignment(str, Enum):
     CHAOTIC_NEUTRAL = "Chaotic Neutral"
     CHAOTIC_EVIL = "Chaotic Evil"
     UNALIGNED = "Unaligned"
+class RemovedReason(str,Enum):
+    EXPIRED = "Expired"
+    SAVED = "Saved"
+    REMOVED = "Removed"
 
+class NotAppliedReason(str, Enum):
+    IMMUNITY = "Immunity"
+    CONTEXTUAL_IMMUNITY = "Contextual Immunity"
+    SAVINGTHROW = "SavingThrow"
+class AttackHand(str,Enum):
+    MELEE_RIGHT = "melee_right"
+    MELEE_LEFT = "melee_left"
+    RANGED_RIGHT = "ranged_right"
+    RANGED_LEFT = "ranged_left"
+    SPELL = "spell"
 class Ability(str, Enum):
     STR = "Strength"
     DEX = "Dexterity"

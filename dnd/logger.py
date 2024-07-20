@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 import uuid
 from enum import Enum
-from dnd.dnd_enums import ResistanceStatus,AdvantageStatus,AutoHitStatus,CriticalStatus, DamageType,Ability, Skills, AdvantageStatus, ActionType, AttackType, DamageType, SensesType
+from dnd.dnd_enums import AttackHand,RemovedReason,DurationType,NotAppliedReason,ResistanceStatus,AdvantageStatus,AutoHitStatus,CriticalStatus, DamageType,Ability, Skills, AdvantageStatus, ActionType, AttackType, DamageType, SensesType
 from dnd.utils import update_or_concat_to_dict, update_or_sum_to_dict
 from dnd.trackers import BonusTracker, BonusConverter,AdvantageTracker, CriticalTracker, AutoHitTracker
 
@@ -257,20 +257,11 @@ class SavingThrowRollOut(BaseLogEntry):
         return self.roll.total_roll
 
 
-class DamageRollOut(BaseLogEntry):
-    log_type: str = "DamageRoll"
-    damage_type: DamageType
-    dice_roll: SimpleRollOut
-    attack_roll: TargetRollOut
-    damage_bonus: ValueOut
 
-    @computed_field
-    def total_damage(self) -> int:
-        return self.dice_roll.result + self.damage_bonus.total_bonus
     
 class DamageResistanceOut(BaseLogEntry):
     log_type: str = "DamageResistancOut"
-    damage_roll: DamageRollOut
+    damage_roll: 'DamageRollOut'
     resistance_status: ResistanceStatus
 
     def compute_damage_multiplier(self) -> float:
@@ -322,300 +313,132 @@ class HealingTakenLog(BaseLogEntry):
     health_after : HealthSnapshot
     healing_received: int
 
-# class DamageRollLog(BaseLogEntry):
-#     log_type: str = "DamageRoll"
-#     damage_type: DamageType
-#     dice_roll: DiceRollLog
-#     @computed_field
-#     def damage_rolled(self) -> int:
-#         return self.dice_roll.total_roll
+class SavingThrowRollRequest(BaseLogEntry):
+    log_type: str = "SavingThrowRollRequest"
+    ability: Ability
+    dc: int
 
-# class DamageLog(BaseLogEntry):
-#     log_type: str = "Damage"
-#     damage_rolls: List[DamageRollLog]
+class Duration(BaseModel):
+    time: Union[int, str]
+    concentration: bool = False
+    type: DurationType = Field(DurationType.ROUNDS, description="The type of duration for the effect")
+    has_advanced: bool = False
 
-#     @computed_field
-#     def total_damage(self) -> int:
-#         return sum([damage.dice_roll.total_roll for damage in self.damage_rolls])
+    def advance(self) -> bool:
+        if self.type in [DurationType.ROUNDS, DurationType.MINUTES, DurationType.HOURS]:
+            if isinstance(self.time, int):
+                self.time -= 1
+                return self.time <= 0
+        return False
+
+    def is_expired(self) -> bool:
+        return self.type != DurationType.INDEFINITE and (
+            (isinstance(self.time, int) and self.time <= 0) or 
+            (isinstance(self.time, str) and self.time.lower() == "expired")
+        )
+
+
+class ConditionNotApplied(BaseLogEntry):
+    log_type: str = "ConditionNotApplied"
+    condition: str
+    reason: NotAppliedReason
+    immunity_conditions: Optional[List[str]] = None
+    requested_saving_throw : Optional[SavingThrowRollRequest] = None
+    application_saving_throw_roll: Optional[SavingThrowRollOut] = None
+    source_entity_id: Optional[str] = None
+    target_entity_id: str
+
+class ConditionAppliedDetails(BaseModel):
+    condition_name: str
+    source_entity_id: Optional[str] = None
+    source_ability: Optional[str] = None
+
+class ConditionApplied(BaseLogEntry):
+    log_type: str = "ConditionApplied"
+    condition: str
+    source_entity_id: Optional[str] = None
+    target_entity_id: str
+    duration: Duration
+    requested_saving_throw : Optional[SavingThrowRollRequest] = None
+    application_saving_throw_roll: Optional[SavingThrowRollOut] = None
+    details: ConditionAppliedDetails
 
 
 
 
-# class DamageResistanceCalculation(BaseLogEntry):
-#     log_type: str = "HealthChangeCalculation"
-#     damage_roll: DamageRollLog
-#     resistance_status: ResistanceStatus
+class ConditionRemovedDetails(BaseModel):
+    details :str
 
-#     def compute_damage_multiplier(self) -> float:
-#         if self.resistance_status == ResistanceStatus.RESISTANCE:
-#             return 0.5
-#         elif self.resistance_status == ResistanceStatus.IMMUNITY:
-#             return 0
-#         elif self.resistance_status == ResistanceStatus.VULNERABILITY:
-#             return 2
-#         else:
-#             return 1
-#     @computed_field
-#     def total_damage_taken(self) -> int:
-#         return int(self.damage_roll.damage_rolled * self.compute_damage_multiplier())
+class ConditionRemoved(BaseLogEntry):
+    log_type: str = "ConditionRemoved"
+    condition_name: str
+    removed_reason: RemovedReason
+    details: Optional[ConditionRemovedDetails] = None
+    requested_saving_throw : Optional[SavingThrowRollRequest] = None
+    removal_saving_throw_roll: Optional[SavingThrowRollOut] = None
+    removed_by_source: Optional[str] = None
+
+class WeaponAttackBonusOut(BaseLogEntry):
+    log_type: str = "WeaponattackBonus"
+    total_weapon_bonus: ValueOut
+    attacker_melee_bonus: Optional[ValueOut] = None
+    attacker_ranged_bonus: Optional[ValueOut] = None
+    weapon_melee_bonus: Optional[ValueOut] = None
+    weapon_ranged_bonus: Optional[ValueOut] = None
+    spell_bonus: Optional[ValueOut] = None
+
+class WeaponDamageBonusOut(BaseLogEntry):
+    log_type: str = "WeaponDamageBonus"
+    total_weapon_bonus: ValueOut
+    attacker_melee_bonus: Optional[ValueOut] = None
+    attacker_ranged_bonus: Optional[ValueOut] = None
+    weapon_melee_bonus: Optional[ValueOut] = None
+    weapon_ranged_bonus: Optional[ValueOut] = None
+    spell_bonus: Optional[ValueOut] = None
+
+class DamageBonusOut(BaseLogEntry):
+    log_type: str = "DamageBonus"
+    hand : AttackHand
+    weapon_bonus: WeaponDamageBonusOut
+    ability_bonus: ValueOut
+    total_bonus: ValueOut
+
+class DamageRollOut(BaseLogEntry):
+    log_type: str = "DamageRoll"
+    damage_type: DamageType
+    dice_roll: SimpleRollOut
+    attack_roll: TargetRollOut
+    damage_bonus: ValueOut
+
+    @computed_field
+    def total_damage(self) -> int:
+        return self.dice_roll.result + self.damage_bonus.total_bonus
+
+class AttackBonusOut(BaseLogEntry):
+    log_type: str = "AttackBonus"
+    hand: AttackHand
+    weapon_bonus: WeaponAttackBonusOut
+    proficiency_bonus: ValueOut
+    ability_bonus: ValueOut
+    total_bonus: ValueOut
+    target_to_self_bonus: Optional[ValueOut] = None
+
+class AttackRollOut(BaseLogEntry):
+    log_type: str = "AttackRoll"
+    hand: AttackHand
+    ability: Ability
+    attack_type: AttackType
+    target_ac: int
+    roll: TargetRollOut
+    attack_bonus: AttackBonusOut 
+
+    @computed_field
+    def success(self) -> bool:
+        return self.roll.success
     
-#     @computed_field
-#     def resistance_delta(self) -> int:
-#         return int(self.damage_roll.damage_rolled - self.total_damage_taken)
-
-# class HealthSnapshot(BaseLogEntry):
-#     log_type: str = "HealthSnapshot"
-#     current_hp: int
-#     max_hp: int
-#     temp_hp: int
-#     bonus_hp: int
-
-# class DamageTakenLog(BaseLogEntry):
-#     log_type: str = "HealthChange"
-#     health_before : HealthSnapshot
-#     health_after : HealthSnapshot
-#     damage_calculations : List[DamageResistanceCalculation]
-#     hp_damage: int
-#     temp_hp_damage: int
-#     bonus_hp_damage: int
-
-#     @computed_field
-#     def total_damage(self) -> int:
-#         return self.hp_damage + self.temp_hp_damage + self.bonus_hp_damage
-
-
-
-
-
-# class ContextualEffectsLog(BaseLogEntry):
-#     log_type: str = Field(default="ContextualEffects")
-#     bonuses: List[ContextualEffectLog]
-#     advantage_conditions: List[ContextualEffectLog]
-#     disadvantage_conditions: List[ContextualEffectLog]
-#     auto_fail_conditions: List[ContextualEffectLog]
-#     auto_success_conditions: List[ContextualEffectLog]
-#     min_constraints: List[ContextualEffectLog]
-#     max_constraints: List[ContextualEffectLog]
-#     auto_critical_conditions: List[ContextualEffectLog]
-
-
-
-# class EffectTargetType(str, Enum):
-#     ABILITY_SCORE = "ability_score"
-#     SKILL = "skill"
-#     SAVING_THROW = "saving_throw"
-#     ATTACK = "attack"
-#     DAMAGE = "damage"
-#     ARMOR_CLASS = "armor_class"
-#     SPEED = "speed"
-#     ACTION_ECONOMY = "action_economy"
-#     SENSES = "senses"
-
-# class EffectTarget(BaseModel):
-#     target_type: EffectTargetType
-#     ability: Optional[Ability] = None
-#     skill: Optional[Skills] = None
-#     attack_type: Optional[AttackType] = None
-#     damage_type: Optional[DamageType] = None
-#     action_type: Optional[ActionType] = None
-#     sense_type: Optional[SensesType] = None
-
-# class EffectType(str, Enum):
-#     ADVANTAGE = "advantage"
-#     DISADVANTAGE = "disadvantage"
-#     AUTO_FAIL = "auto_fail"
-#     AUTO_SUCCESS = "auto_success"
-#     AUTO_CRITICAL = "auto_critical"
-#     MODIFIER = "modifier"
-#     SET_VALUE = "set_value"
-#     MAX_VALUE = "max_value"
-#     MIN_VALUE = "min_value"
-
-# class ConditionEffect(BaseModel):
-#     target: EffectTarget
-#     effect_type: EffectType
-#     value: Optional[int] = None
-#     advantage_status: Optional[AdvantageStatus] = None
-
-# class ConditionLog(BaseLogEntry):
-#     log_type: str = "Condition"
-#     condition_name: str
-#     applied: bool
-#     source_id: Optional[str]
-#     target_id: str
-#     effects: List[ConditionEffect] = Field(default_factory=list)
-#     immunity_reason: Optional[str] = None
-
-# class HealthLog(BaseLogEntry):
-#     log_type: str = "Health"
-#     current_hp: int
-#     max_hp: int
-#     temporary_hp: int
-#     damage_taken: Optional[int] = None
-#     healing_received: Optional[int] = None
-#     source_id: Optional[str] = None
-#     damage_type: Optional[DamageType] = None
-
-# class ActionResultDetails(BaseModel):
-#     hit: Optional[bool] = None
-#     damage_dealt: Optional[int] = None
-#     target_hp_before: Optional[int] = None
-#     target_hp_after: Optional[int] = None
-#     attack_roll: Optional[int] = None
-#     attack_bonus: Optional[int] = None
-#     advantage_status: Optional[AdvantageStatus] = None
-#     target_ac: Optional[int] = None
-#     saving_throw_ability: Optional[str] = None
-#     saving_throw_dc: Optional[int] = None
-#     saving_throw_roll: Optional[int] = None
-#     saving_throw_bonus: Optional[int] = None
-#     conditions_applied: List[str] = Field(default_factory=list)
-#     movement: Optional[Dict[str, Any]] = None
-#     failure_reason: Optional[str] = None
-#     auto_success: bool = False
-#     auto_failure: bool = False
-#     auto_critical: bool = False
-
-# class PrerequisiteDetails(BaseModel):
-#     distance: Optional[int] = None
-#     required_range: Optional[int] = None
-#     is_visible: Optional[bool] = None
-#     failure_reason: Optional[str] = None
-
-# class PrerequisiteLog(BaseLogEntry):
-#     log_type: str = "Prerequisite"
-#     condition_name: str
-#     passed: bool
-#     source_id: str
-#     target_id: Optional[str]
-#     details: PrerequisiteDetails = Field(default_factory=PrerequisiteDetails)
-
-# class ActionLog(BaseLogEntry):
-#     log_type: str = "Action"
-#     action_name: str
-#     source_id: str
-#     target_id: Optional[str]
-#     success: bool
-#     prerequisite_logs: List[PrerequisiteLog]
-#     dice_rolls: List[DiceRollLog] = Field(default_factory=list)
-#     damage_rolls: List[DamageRollLog] = Field(default_factory=list)
-#     details: ActionResultDetails = Field(default_factory=ActionResultDetails)
-
-
-# class SkillCheckLog(BaseLogEntry):
-#     log_type: str = "SkillCheck"
-#     skill: Skills
-#     ability: Ability
-#     dc: int
-#     source_id: str
-#     target_id: Optional[str]
-#     roll_log : Optional[DiceRollLog]
-#     roll: int
-#     total: int
-#     bonus: int
-    
-#     advantage_status: AdvantageStatus
-#     success: bool
-#     auto_success: bool = False
-#     auto_fail: bool = False
-
-# class SavingThrowLog(BaseLogEntry):
-#     log_type: str = "SavingThrow"
-#     ability: Ability
-#     dc: int
-#     source_id: str
-#     target_id: Optional[str]
-#     roll_log : Optional[DiceRollLog]
-#     roll: int
-#     total: int
-#     bonus: int
-#     advantage_status: AdvantageStatus
-#     success: bool
-#     auto_success: bool = False
-#     auto_fail: bool = False
-
-
-# class ConditionInfo(BaseModel):
-#     condition_name: str
-#     affected_entity_id: str
-#     source_entity_id: Optional[str] = None
-#     source_ability: Optional[str] = None
-#     duration: Optional[int] = None
-
-# class EffectSource(BaseModel):
-#     source_type: SourceType
-#     responsible_entity_id: str
-#     condition_info: Optional[ConditionInfo] = None
-#     ability_name: Optional[str] = None
-#     item_name: Optional[str] = None
-#     description: str
-
-# class AdvantageSource(BaseModel):
-#     effect_source: EffectSource
-#     description: str
-
-# DisadvantageSource = AdvantageSource
-
-# class Modifier(BaseModel):
-#     value: int
-#     effect_source: EffectSource
-
-# class DiceRollLog(BaseLogEntry):
-#     log_type: str = "DiceRoll"
-#     dice_size: int
-#     roll_results: List[int]
-#     modifiers: List[Modifier]
-#     advantage_status: AdvantageStatus
-#     advantage_sources: List[AdvantageSource]
-#     disadvantage_sources: List[DisadvantageSource]
-#     total_roll: int
-#     is_critical: bool = False
-#     is_critical_miss: bool = False
-#     is_auto_critical: bool = False
-#     auto_success: bool = False
-#     auto_failure: bool = False
-
-# class HitRollLog(BaseLogEntry):
-#     log_type: str = "HitRoll"
-#     dice_roll: DiceRollLog
-#     target_ac: int
-#     is_hit: bool
-#     auto_hit_source: Optional[EffectSource] = None
-#     auto_miss_source: Optional[EffectSource] = None
-#     auto_critical_source: Optional[EffectSource] = None
-
-# class DamageRollLog(BaseLogEntry):
-#     log_type: str = "DamageRoll"
-#     damage_type: DamageType
-#     dice_roll: DiceRollLog
-
-# class DamageLog(BaseLogEntry):
-#     log_type: str = "Damage"
-#     damage_rolls: List[DamageRollLog]
-#     total_damage_by_type: Dict[DamageType, int]
-#     final_damage: int
-
-# class DamageTypeEffect(BaseModel):
-#     damage_type: DamageType
-#     effect_source: EffectSource
-
-# class HealthChangeLog(BaseLogEntry):
-#     log_type: str = "HealthChange"
-#     target_max_hp: int
-#     target_previous_hp: int
-#     target_previous_temp_hp: int
-#     damage_taken: int
-#     temp_hp_absorbed: int
-#     resistances_applied: List[DamageTypeEffect]
-#     vulnerabilities_applied: List[DamageTypeEffect]
-#     immunities_applied: List[DamageTypeEffect]
-#     target_current_hp: int
-#     target_current_temp_hp: int
-
-# class AttackResult(str, Enum):
-#     HIT = "Hit"
-#     MISS = "Miss"
-#     CRITICAL_HIT = "Critical Hit"
+    @computed_field
+    def total_roll(self) -> int:
+        return self.roll.total_roll
 
 
 

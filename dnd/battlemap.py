@@ -4,7 +4,6 @@ from fractions import Fraction
 import uuid
 from colorama import Fore, Back, Style
 import colorama
-from dnd.core import RegistryHolder
 from dnd.statsblock import StatsBlock
 from dnd.shadowcast import compute_fov
 from dnd.dijkstra import dijkstra
@@ -18,13 +17,14 @@ colorama.init()
 
 from typing import List, Tuple, Optional, Set
 from pydantic import BaseModel, Field, computed_field
-from dnd.core import RegistryHolder, Ability
+from dnd.core import  Ability
+from dnd.spatial import RegistryHolder
 from dnd.statsblock import StatsBlock
-from dnd.equipment import Weapon, WeaponProperty
+from dnd.actions import Weapon
 from dnd.actions import Attack, ActionCost, Targeting, MovementAction
-from dnd.dnd_enums import AttackType, TargetType, TargetRequirementType, ActionType, AttackType
+from dnd.dnd_enums import AttackType, TargetType, TargetRequirementType, ActionType, AttackType,WeaponProperty
 
-class Entity(StatsBlock, RegistryHolder):
+class Entity(StatsBlock):
     battlemap_id: Optional[str] = None
     line_of_sight: Set[Tuple[int, int]] = Field(default_factory=set)
     
