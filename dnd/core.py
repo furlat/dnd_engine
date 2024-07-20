@@ -1,9 +1,10 @@
 from __future__ import annotations
 from typing import List, Union, TYPE_CHECKING, Optional, Dict, Tuple, Set, Callable, Any
+from typing_extensions import Unpack
 
 if TYPE_CHECKING:
     from .statsblock import StatsBlock
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 from enum import Enum
 from typing import List, Union
 from dnd.docstrings import *
@@ -11,12 +12,12 @@ import uuid
 import random
 from dnd.contextual import ModifiableValue, AdvantageStatus, AdvantageTracker, BaseValue, ContextAwareBonus, ContextAwareCondition
 from dnd.dnd_enums import RollOutcome,HitReason, CriticalReason,ResistanceStatus,Ability,AutoHitStatus,CriticalStatus, Skills, SensesType, ActionType, RechargeType, UsageType, DurationType, RangeType, TargetType, ShapeType, TargetRequirementType, DamageType
-from dnd.dnd_enums import UnarmoredAc, ArmorType
-from dnd.logger import ValueOut, SimpleRollOut, TargetRollOut, DamageRollOut, SkillBonusOut, SkillRollOut, CrossSkillRollOut, SavingThrowBonusOut,SavingThrowRollOut, DamageResistanceOut
-from dnd.logger import HealthSnapshot, DamageTakenLog, HealingTakenLog
-from dnd.spatial import DistanceMatrix, FOV, Path,Paths
+from dnd.dnd_enums import AttackHand, UnarmoredAc, ArmorType, NotAppliedReason, RemovedReason, AttackType, WeaponProperty
+from dnd.logger import WeaponDamageBonusOut,DamageBonusOut,ValueOut, SimpleRollOut, TargetRollOut, DamageRollOut, SkillBonusOut, SkillRollOut, CrossSkillRollOut, SavingThrowBonusOut,SavingThrowRollOut, DamageResistanceOut
+from dnd.logger import AttackRollOut, AttackBonusOut, WeaponAttackBonusOut,ConditionApplied, ConditionAppliedDetails,ConditionRemoved,ConditionRemovedDetails,HealthSnapshot, DamageTakenLog, HealingTakenLog, SavingThrowRollRequest,ConditionNotApplied, Duration
+from dnd.spatial import RegistryHolder,DistanceMatrix, FOV, Path,Paths
 
-
+from dnd.utils import update_or_concat_to_dict
     
 class BaseRoll(BaseModel):
     dice_count: int
@@ -118,20 +119,45 @@ class TargetRoll(BaseModel):
             critical_reason = critical_reason)
                     
 
-class AbilityScore(BaseModel):
+class BlockComponent(BaseModel, RegistryHolder):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = Field(default="BlockComponent")
+    description: str = Field(default_factory="")
+    owner_id: Optional[str] = None
+
+    def get_owner(self) -> Optional['StatsBlock']:
+        if self.owner_id:
+            return self.get_instance(self.owner_id)
+        raise ValueError("Owner not set")
+    
+    def set_owner(self, owner: 'StatsBlock'):
+        if not self.is_in_registry(owner.id):
+            raise ValueError(f"Owner {owner.id} is not in the registry")
+        self.owner_id = owner.id
+
+    def get_target(self, target_id: str) -> Optional['StatsBlock']:
+        return self.get_instance(target_id)
+    def get_stats_blocks(self,target: Optional[str] = None) -> Tuple[Optional['StatsBlock'],Optional['StatsBlock']]:
+        stats_block = self.get_owner()
+        target_stats_block = self.get_target(target) if target else None
+        return stats_block, target_stats_block
+
+class AbilityScore(BlockComponent):
     ability: Ability
     score: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(name="ability_score",base_value=10)))    
 
-    def apply(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> ValueOut:
-        return self.score.apply(stats_block, target, context)
+    def apply(self, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> ValueOut:
+        stats_block , target_stats_block = self.get_stats_blocks(target)
+       
+        return self.score.apply(stats_block, target_stats_block, context)
     
-    def get_modifier(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
-        return (self.apply(stats_block, target, context).total_bonus -10) // 2
+    def get_modifier(self, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> int:
+        return (self.apply(target, context).total_bonus -10) // 2
 
     def remove_effect(self, source: str):
         self.score.remove_effect(source)
 
-class AbilityScores(BaseModel):
+class AbilityScores(BlockComponent):
     strength: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.STR, score=ModifiableValue(base_value=BaseValue(name="strength_score",base_value=10))))
     dexterity: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.DEX, score=ModifiableValue(base_value=BaseValue(name="dexterity_score",base_value=10))))
     constitution: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.CON, score=ModifiableValue(base_value=BaseValue(name="constitution_score",base_value=10))))
@@ -142,9 +168,9 @@ class AbilityScores(BaseModel):
     def get_ability(self, ability: Ability) -> AbilityScore:
         return getattr(self, ability.value.lower())
 
-    def get_ability_modifier(self, ability: Ability, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
+    def get_ability_modifier(self, ability: Ability, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None)  -> int:
         ability_score = self.get_ability(ability)
-        return ability_score.get_modifier(stats_block, target, context)
+        return ability_score.get_modifier(target, context)
 
 
 ABILITY_TO_SKILLS = {
@@ -156,7 +182,7 @@ ABILITY_TO_SKILLS = {
     Ability.CHA: [Skills.DECEPTION, Skills.INTIMIDATION, Skills.PERFORMANCE, Skills.PERSUASION]
 }
 
-class Skill(BaseModel):
+class Skill(BlockComponent):
     ability: Ability
     skill: Skills
     proficient: bool = False
@@ -177,17 +203,19 @@ class Skill(BaseModel):
         else:
             return not_proficient
         
-    def _compute_bonus(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> SkillBonusOut:
+    def _compute_bonus(self, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SkillBonusOut:
         def ability_bonus_to_modifier(ability_bonus:int) -> int:
             return (ability_bonus - 10) // 2
         
-        ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(stats_block, target, context)
+        stats_block , target_stats_block = self.get_stats_blocks(target)
         
-        proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block, target, context)
-        skill_bonus = self.bonus.apply(stats_block, target, context)
+        ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(target, context)
+        
+        proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block, target_stats_block, context)
+        skill_bonus = self.bonus.apply(stats_block, target_stats_block, context)
         target_to_self_bonus = None
-        if target:
-            target_skill = target.skillset.get_skill(self.skill)
+        if target_stats_block:
+            target_skill = target_stats_block.skillset.get_skill(self.skill)
             target_to_self_bonus = target_skill.bonus.apply_to_target(target,stats_block,context)
             total_bonus = skill_bonus.combine_with(target_to_self_bonus)
         
@@ -204,8 +232,8 @@ class Skill(BaseModel):
         )
 
     
-    def perform_check(self, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> SkillRollOut:
-        skill_bonus_out = self._compute_bonus(stats_block, target, context)
+    def perform_check(self, dc: int, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None)  -> SkillRollOut:
+        skill_bonus_out = self._compute_bonus(target, context)
         roll = TargetRoll(value=skill_bonus_out.total_bonus)
         roll_out=  roll.roll(dc)
         return SkillRollOut(
@@ -216,19 +244,20 @@ class Skill(BaseModel):
             dc=dc,
             roll=roll_out,
             bonus=skill_bonus_out,
-            source_entity_id=stats_block.id,
-            target_entity_id=target.id if target else None    
+            source_entity_id=self.owner_id,
+            target_entity_id=target if target else None    
         )
     
-    def perform_cross_chek(self, stats_block: 'StatsBlock',target_skill_name:Skills, target: 'StatsBlock', context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
+    def perform_cross_chek(self, target_skill_name:Skills, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
         #first we roll a targetskill check against dc 0 and obtain the result to get the dc
-        target_skill = target.skillset.get_skill(target_skill_name)
-        target_skill_roll = target_skill.perform_check(target,0,stats_block,context)
+        stats_block , target_stats_block = self.get_stats_blocks(target)
+        target_skill = target_stats_block.skillset.get_skill(target_skill_name)
+        target_skill_roll = target_skill.perform_check(0,self.owner_id,context)
         
         target_auto_fail= target_skill_roll.roll.hit_reason == HitReason.AUTOMISS
         dc = target_skill_roll.roll.total_roll if not target_auto_fail else 0
         #then we roll our skill
-        source_skill_roll = self.perform_check(stats_block,dc,target,context)
+        source_skill_roll = self.perform_check(dc,target,context)
         return CrossSkillRollOut(
             source_skill=self.skill,
             target_skill=target_skill_name,
@@ -239,7 +268,7 @@ class Skill(BaseModel):
     def remove_effects(self, source: str):
         self.bonus.remove_effect(source)
 
-class SkillSet(BaseModel):
+class SkillSet(BlockComponent):
     acrobatics: Skill = Field(default_factory=lambda: Skill(ability=Ability.DEX, skill=Skills.ACROBATICS))
     animal_handling: Skill = Field(default_factory=lambda: Skill(ability=Ability.WIS, skill=Skills.ANIMAL_HANDLING))
     arcana: Skill = Field(default_factory=lambda: Skill(ability=Ability.INT, skill=Skills.ARCANA))
@@ -272,39 +301,20 @@ class SkillSet(BaseModel):
     def set_expertise(self, skill: Skills):
         self.expertise.add(skill)
         self.get_skill(skill).expertise = True
+
+    def perform_skill_check(self, skill: Skills, dc: int, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SkillRollOut:
+        return self.get_skill(skill).perform_check(dc, target, context)
     
-    def add_effect_to_all_skills(self, effect_type: str, source: str, effect: Union[ContextAwareBonus, ContextAwareCondition]):
-        for skill in Skills:
-            skill_obj = self.get_skill(skill)
-            getattr(skill_obj, f"add_{effect_type}")(source, effect)
-
-    def remove_effect_from_all_skills(self, effect_type: str, source: str):
-        for skill in Skills:
-            skill_obj = self.get_skill(skill)
-            getattr(skill_obj, f"remove_{effect_type}_effect")(source)
-
-    def remove_all_effects_from_all_skills(self, source: str):
-        for skill in Skills:
-            skill_obj = self.get_skill(skill)
-            skill_obj.remove_effects(source)
-
-    def perform_skill_check(self, skill: Skills, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> SkillRollOut:
-        return self.get_skill(skill).perform_check(stats_block, dc, target, context)
-    
-    def perform_cross_skill_check(self, skill: Skills, target_skill: Skills, stats_block: 'StatsBlock', target: 'StatsBlock' , context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
-        return self.get_skill(skill).perform_cross_chek(stats_block,target_skill,target,context)
+    def perform_cross_skill_check(self, skill: Skills, target_skill: Skills, target: str , context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
+        return self.get_skill(skill).perform_cross_chek(target_skill,target,context)
 
 
-class SavingThrow(BaseModel):
+class SavingThrow(BlockComponent):
     ability: Ability
     proficient: bool
     bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
 
-    def get_bonus(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
-        ability_bonus = stats_block.ability_scores.get_ability_modifier(self.ability, stats_block, target, context)
-        proficiency_bonus = stats_block.ability_scores.proficiency_bonus.get_value(stats_block, target, context) if self.proficient else 0
-        return ability_bonus + proficiency_bonus
-    
+
     def _get_procifiency_converter(self):
         def proficient(proficiency_bonus:int) -> int:
             return proficiency_bonus
@@ -315,17 +325,18 @@ class SavingThrow(BaseModel):
         else:
             return not_proficient
         
-    def _compute_bonus(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowBonusOut:
+    def _compute_bonus(self, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowBonusOut:
         def ability_bonus_to_modifier(ability_bonus:int) -> int:
             return (ability_bonus - 10) // 2
+        stats_block,target_stats_block = self.get_stats_blocks(target)
         
         ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(stats_block, target, context)
         
         proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block, target, context)
         saving_throw_bonus = self.bonus.apply(stats_block, target, context)
         target_to_self_bonus = None
-        if target:
-            target_ability = target.saving_throws.get_ability(self.ability)
+        if target_stats_block:
+            target_ability = target_stats_block.saving_throws.get_ability(self.ability)
             target_to_self_bonus = target_ability.bonus.apply_to_target(target,stats_block,context)
             total_bonus = saving_throw_bonus.combine_with(target_to_self_bonus)
         
@@ -339,8 +350,8 @@ class SavingThrow(BaseModel):
             total_bonus=total_bonus
         )
     
-    def perform_save(self, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowRollOut:
-        saving_throw_bonus_out = self._compute_bonus(stats_block, target, context)
+    def perform_save(self, dc: int, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowRollOut:
+        saving_throw_bonus_out = self._compute_bonus( target, context)
         roll = TargetRoll(value=saving_throw_bonus_out.total_bonus)
         roll_out=  roll.roll(dc)
         return SavingThrowRollOut(
@@ -349,14 +360,14 @@ class SavingThrow(BaseModel):
             dc=dc,
             roll=roll_out,
             bonus=saving_throw_bonus_out,
-            source_entity_id=stats_block.id,
-            target_entity_id=target.id if target else None
+            source_entity_id=self.owner_id,
+            target_entity_id=target if target else None
 
         )
     def remove_effect(self, source: str):
         self.bonus.remove_effect(source)
 
-class SavingThrows(BaseModel):
+class SavingThrows(BlockComponent):
     strength: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.STR, proficient=False))
     dexterity: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.DEX, proficient=False))
     constitution: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.CON, proficient=False))
@@ -374,36 +385,16 @@ class SavingThrows(BaseModel):
     def remove_effect(self, ability: Ability, source: str):
         saving_throw = self.get_ability(ability)
         saving_throw.remove_effect(source)
+    
+    def perform_save(self, ability: Ability, dc: int, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowRollOut:
+        return self.get_ability(ability).perform_save( dc, target, context)
 
-    def perform_save(self, ability: Ability, stats_block: 'StatsBlock', dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowRollOut:
-        return self.get_ability(ability).perform_save(stats_block, dc, target, context)
+    def perform_save_from_request(self, request: SavingThrowRollRequest, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowRollOut:
+        return self.get_ability(request.ability).perform_save(request.dc, target, context)
 
 
-class Damage(BaseModel):
-    dice: BaseRoll
-    damage_bonus : ValueOut
-    attack_roll: TargetRollOut 
-    type: DamageType
-    source: Optional[str] = None
 
-    def roll(self) -> DamageRollOut:
-        damage_advantage = self.damage_bonus.advantage_tracker.status
-        if self.attack_roll.hit_reason == HitReason.CRITICAL:
-            dice = BaseRoll(dice_count=self.dice.dice_count*2, dice_value=self.dice.dice_value)
-        else:
-            dice = self.dice
-        damage_roll = dice.roll(damage_advantage)
-        return DamageRollOut(
-            dice=dice,
-            damage_bonus=self.damage_bonus,
-            attack_roll=self.attack_roll,
-            type=self.type,
-            source=self.source,
-            damage_roll=damage_roll,
-        )
-      
-
-class Health(BaseModel):
+class Health(BlockComponent):
     hit_dice_value: int = 6
     hit_dice_count: int = 1
     max_hit_point_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
@@ -430,7 +421,8 @@ class Health(BaseModel):
     
     @computed_field
     def max_hit_points(self) -> int:
-        return self._hit_dice_exp_value() + self.max_hit_point_bonus.apply(self).total_bonus
+        owner_block = self.get_owner()
+        return self._hit_dice_exp_value() + self.max_hit_point_bonus.apply(owner_block).total_bonus
     
     @computed_field
     def current_hit_points(self) -> int:
@@ -484,15 +476,19 @@ class Health(BaseModel):
         return DamageResistanceOut(damage_roll = damage_roll, resistance_status = resistance_status)
 
 
-    def take_damage(self, damage_rolls: List[DamageRollOut], owner: 'StatsBlock', attacker: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> DamageTakenLog:
+    def take_damage(self, damage_rolls: Union[DamageRollOut,List[DamageRollOut]], attacker: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> DamageTakenLog:
+        if isinstance(damage_rolls, DamageRollOut):
+            damage_rolls = [damage_rolls]
         health_before = self.get_health_snapshot()
         damage_calculations = []
         for damage_roll in damage_rolls:
             damage_resistance = self._get_apply_resistance(damage_roll)
             damage_calculations.append(damage_resistance)
+        
+        owner_stats_block, attacker_stats_block = self.get_stats_blocks(attacker)
 
         total_damage = sum([getattr(damage_resistance,"total_damage_taken") for damage_resistance in damage_calculations])
-        flat_damage_reduction_out = self.damage_reduction.apply(owner, attacker, context)
+        flat_damage_reduction_out = self.damage_reduction.apply(owner_stats_block, attacker_stats_block, context)
         flat_damage_reduction_bonus = flat_damage_reduction_out.total_bonus
         reduced_damage = max(0, total_damage - flat_damage_reduction_bonus)
 
@@ -515,28 +511,29 @@ class Health(BaseModel):
             temp_hp_damage=absorbed_thp,
             hp_damage=hp_damage,
             is_dead=self.is_dead,
+            source_entity_id=attacker_stats_block.id if attacker_stats_block else None,
+            target_entity_id=owner_stats_block.id
         )
 
 
-    def heal(self, healing: int, owner: 'StatsBlock', healer: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> HealingTakenLog:
-        healing_bonus_out = self.healing_bonus.apply(owner, healer, context)
+    def heal(self, healing: int, healer: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> HealingTakenLog:
+        owner_stats_block ,healer_stats_block = self.get_stats_blocks(healer)
+        healing_bonus_out = self.healing_bonus.apply(owner_stats_block, healer_stats_block, context)
         total_healing = healing + healing_bonus_out.total_bonus
         health_before = self.get_health_snapshot()
         old_hp = self.current_hit_points
         self.current_hit_points = min(self.max_hit_points, self.current_hit_points + total_healing)
         actual_healing = self.current_hit_points - old_hp
 
-        # Trigger on-heal conditions
-        for _, condition in self.on_heal_conditions:
-            condition(owner, healer, context)
+
 
         # Log the healing received
         return HealingTakenLog(
             health_before=health_before,
             health_after=self.get_health_snapshot(),
             total_healing=actual_healing,
-            source_entity_id=healer.id if healer else None,
-            target_entity_id=owner.id if owner else None,
+            source_entity_id=healer if healer else None,
+            target_entity_id=self.owner_id
         )
 
 
@@ -549,11 +546,6 @@ class Health(BaseModel):
             self.bonus_hit_points = amount
             self.bonus_hit_points_source = source
 
-    def add_on_damage_condition(self, source: str, condition: ContextAwareCondition):
-        self.on_damage_conditions.append((source, condition))
-
-    def add_on_heal_condition(self, source: str, condition: ContextAwareCondition):
-        self.on_heal_conditions.append((source, condition))
 
     def remove_condition(self, source: str):
         self.on_damage_conditions = [c for c in self.on_damage_conditions if c[0] != source]
@@ -573,13 +565,14 @@ class Shield(BaseModel):
     ac_bonus: int
 
 
-class ArmorClass(BaseModel):
+class ArmorClass(BlockComponent):
     ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=10)))
     equipped_armor: Optional[Armor] = None
     equipped_shield: Optional[Shield] = None
     unarmored_ac: UnarmoredAc = Field(default=UnarmoredAc.NONE)
 
-    def _gert_unarmored_ac(self, stats_block: 'StatsBlock') -> int:
+    def _gert_unarmored_ac(self) -> int:
+        stats_block = self.get_owner() 
         if self.unarmored_ac == UnarmoredAc.BARBARIAN:
             return stats_block.ability_scores.constitution.apply(stats_block).total_bonus + stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 10
         elif self.unarmored_ac == UnarmoredAc.MONK:
@@ -588,7 +581,8 @@ class ArmorClass(BaseModel):
             return stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 13
 
 
-    def update_ac(self, stats_block: 'StatsBlock') -> int:
+    def update_ac(self) -> int:
+        stats_block = self.get_owner()
         if self.equipped_armor:
             base_ac = self.equipped_armor.base_ac
             if self.equipped_armor.dex_bonus:
@@ -612,41 +606,36 @@ class ArmorClass(BaseModel):
     def remove_effect(self, source: str):
         self.ac.remove_effect(source)
 
-    def equip_armor(self, armor: Armor, stats_block: 'StatsBlock'):
+    def equip_armor(self, armor: Armor):
         self.equipped_armor = armor
-        self.update_ac(stats_block)
+        self.update_ac()
 
-    def unequip_armor(self,  stats_block: 'StatsBlock'):
+    def unequip_armor(self):
         self.equipped_armor = None
-        self.update_ac(stats_block)
+        self.update_ac()
 
-    def equip_shield(self, shield: Shield, stats_block: 'StatsBlock'):
+    def equip_shield(self, shield: Shield):
         self.equipped_shield = shield
-        self.update_ac(stats_block)
+        self.update_ac()
 
-    def unequip_shield(self, stats_block: 'StatsBlock'):
+    def unequip_shield(self):
         self.equipped_shield = None
-        self.update_ac(stats_block)
+        self.update_ac()
 
-class Speed(BaseModel):
+class Speed(BlockComponent):
     walk: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
     fly: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
     swim: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
     burrow: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
     climb: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
 
-    def get_speed(self, speed_type: str, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> int:
-        return getattr(self, speed_type).get_value(stats_block, target, context)
-    
-    def remove_effect(self, speed_type: str, source: str):
-        getattr(self, speed_type).remove_effect(source)
-
 
     def reset_max_speed(self, source: str):
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
-            self.remove_effect(speed_type, source)
+            speed_obj : ModifiableValue = getattr(self, speed_type)
+            speed_obj.remove_effect(speed_type, source)
 
-class ActionEconomy(BaseModel):
+class ActionEconomy(BlockComponent):
     actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
     bonus_actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
     reactions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
@@ -686,7 +675,7 @@ class Sense(BaseModel):
     type: SensesType
     range: int
 
-class Sensory(BaseModel):
+class Sensory(BlockComponent):
     senses: List[Sense] = Field(default_factory=list)
     battlemap_id: Union[str,None] = Field(default=None)
     origin: Union[Tuple[int, int],None] = Field(default=None)
@@ -778,3 +767,617 @@ class Sensory(BaseModel):
         self.fov = None
         self.paths = None
 
+
+    
+ContextAwareImmunity = Callable[['StatsBlock', Optional['StatsBlock'],Optional[dict]], bool]
+
+class ConditionManager(BlockComponent):
+    active_conditions: Dict[str, Condition] = Field(default_factory=dict)
+    condition_immunities: Dict[str,List[str]] = Field(default_factory=dict)
+    contextual_condition_immunities: Dict[str, List[Tuple[str, ContextAwareImmunity]]] = Field(default_factory=dict)
+    active_conditions_by_source: Dict[str, List[str]] = Field(default_factory=dict)
+    
+    
+    
+    def add_condition(self, condition: Condition,context: Optional[Dict[str, Any]] = None)  -> Union[ConditionApplied, ConditionNotApplied]:
+        
+        condition_application_report = condition.apply(context)
+        if isinstance(condition_application_report, ConditionApplied):
+            self.active_conditions[condition.name] = condition
+            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, condition.source_entity_id, condition.name)
+        return condition_application_report
+
+    
+
+
+    def _remove_condition_from_dicts(self, condition_name: str) :
+        condition = self.active_conditions.pop(condition_name)
+        self.active_conditions_by_source[condition.source_entity_id].remove(condition_name)
+    
+    def add_condition_immunity(self, condition_name: str, immunity_name: str = "self_immunity"):
+        self.condition_immunities= update_or_concat_to_dict(self.condition_immunities, condition_name, immunity_name)
+
+    def remove_condition_immunity(self, condition_name: str):
+        self.condition_immunities.pop(condition_name)
+
+    def add_contextual_condition_immunity(self, condition_name: str, immunity_name: str, immunity_check: ContextAwareImmunity):
+        self.contextual_condition_immunities = update_or_concat_to_dict(self.contextual_condition_immunities, condition_name, (immunity_name, immunity_check))
+
+    def remove_contextual_condition_immunity(self, condition_name: str, immunity_name: str):
+        if condition_name in self.contextual_condition_immunities:
+            self.contextual_condition_immunities[condition_name] = [
+                (name, check) for name, check in self.contextual_condition_immunities[condition_name]
+                if name != immunity_name
+            ]
+    def remove(self,condition_name:str, external_source:str = "manager") -> ConditionRemoved:
+        condition = self.active_conditions[condition_name]
+        return condition.remove_by_external(external_source)
+    
+    def advance_duration_conditon(self,condition_name:str) -> Optional[ConditionRemoved]:
+        condition = self.active_conditions[condition_name]
+        return condition.advance_duration()
+    
+    def advance_durations(self) -> List[ConditionRemoved]:
+        removed_conditions = []
+        for condition_name in list(self.active_conditions.keys()):
+            removed = self.advance_duration_conditon(condition_name)
+            if removed:
+                removed_conditions.append(removed)
+        return removed_conditions
+
+
+class Condition(BlockComponent):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: str = Field("A generic description of the condition.")
+    duration: Duration = Field(default_factory=lambda: Duration(time=1, type=DurationType.ROUNDS))
+    application_saving_throw: Optional[SavingThrowRollRequest] = None
+    removal_saving_throw: Optional[SavingThrowRollRequest] = None
+    targeted_entity_id: Optional[str] = None
+    source_entity_id: Optional[str] = None
+    source_ability: Optional[str] = None
+
+    
+    def _check_immunity(self, context: Optional[Dict[str, Any]] = None) -> Optional[ConditionNotApplied]:
+        reason = None
+        immunity_conditions = []
+        stats_block = self.get_target(self.targeted_entity_id)
+        source_stats_block = self.get_target(self.source_entity_id)
+        if self.name in stats_block.condition_manager.condition_immunities.keys():
+            reason = NotAppliedReason.IMMUNITY
+            immunity_conditions = stats_block.condition_manager.condition_immunities[self.name]
+        
+        # Check for contextual condition immunity
+        contextual_immunities = stats_block.condition_manager.contextual_condition_immunities.get(self.name, [])
+        for immunity_name, immunity_check in contextual_immunities:
+            if immunity_check(stats_block, source_stats_block, context):
+                reason = NotAppliedReason.CONTEXTUAL_IMMUNITY if not reason else reason
+                immunity_conditions.append(immunity_name)
+        return ConditionNotApplied(
+            condition=self,
+            reason=reason,
+            immunity_conditions=immunity_conditions,
+            source_entity_id=self.source_entity_id if self.source_entity_id else None,
+            target_entity_id=self.targeted_entity_id
+        ) if reason else None
+        
+
+    def apply(self,context: Optional[Dict[str, Any]] = None)  -> Union[ConditionApplied, ConditionNotApplied]:
+        # Check for condition immunity
+        immune = self._check_immunity( context)
+        application_saving_throw_roll = None
+        stats_block = self.get_target(self.targeted_entity_id)
+        if immune:
+            return immune
+        elif self.application_saving_throw:
+            application_saving_throw_roll = stats_block.saving_throws.perform_save_from_request(self.application_saving_throw, self.source_entity_id, context)
+            if application_saving_throw_roll.success:
+                return ConditionNotApplied(
+                    condition=self,
+                    reason=NotAppliedReason.SAVINGTHROW,
+                    requested_saving_throw = self.application_saving_throw,
+                    application_saving_throw_roll = application_saving_throw_roll,
+                    source_entity_id=self.source_entity_id if self.source_entity_id else None,
+                    target_entity_id=stats_block.id
+                )
+            else:
+                applied_details = self._apply(stats_block)
+                stats_block.condition_manager.add_condition(self)
+                return ConditionApplied(
+                    condition=self.name,
+                    applied_details=applied_details,
+                    source_entity_id=self.source_entity_id if self.source_entity_id else None,
+                    target_entity_id=self.targeted_entity_id,
+                    duration=self.duration,
+                    requested_saving_throw=self.application_saving_throw,
+                    application_saving_throw_roll=application_saving_throw_roll
+
+                )
+        else:
+            applied_details = self._apply(stats_block)
+            stats_block.condition_manager.add_condition(self)
+            return ConditionApplied(
+                condition=self.name,
+                applied_details=applied_details,
+                source_entity_id=self.source_entity_id if self.source_entity_id else None,
+                target_entity_id=self.targeted_entity_id,
+                duration=self.duration
+            )
+        # 
+    def roll_removal_saving_throw(self, context: Optional[dict]= None) -> Optional[ConditionRemoved]:
+        stats_block = self.get_target(self.targeted_entity_id)
+        if self.removal_saving_throw:
+            removal_saving_throw =  stats_block.saving_throws.perform_save_from_request(self.removal_saving_throw,self.source_entity_id,context)
+            if removal_saving_throw.success:
+                details = self._remove_from_targeted()
+                return ConditionRemoved(
+                    condition_name=self.name,
+                    removed_reason = RemovedReason.SAVED,
+                    requested_saving_throw=self.removal_saving_throw,
+                    removal_saving_throw_roll=removal_saving_throw,
+                    details=details,
+                    duration=self.duration,
+                    source_entity_id=self.source_entity_id if self.source_entity_id else None,
+                    target_entity_id=self.targeted_entity_id
+                )
+        return None
+    
+    def process_expiration(self,) -> Optional[ConditionRemoved]:
+        if self.duration.is_expired:
+            details = self._remove_from_targeted()
+            return ConditionRemoved(
+                condition_name=self.name,
+                removed_reason=RemovedReason.EXPIRED,
+                details=details,
+                duration=self.duration,
+                source_entity_id=self.source_entity_id if self.source_entity_id else None,
+                target_entity_id=self.targeted_entity_id
+            )
+        
+    def remove_by_external(self,external_source:str) -> ConditionRemoved:
+        details = self._remove_from_targeted()
+        return ConditionRemoved(
+            condition_name=self.name,
+            removed_reason=RemovedReason.REMOVED,
+            details=details,
+            duration=self.duration,
+            removed_by_source=external_source,
+            source_entity_id=self.source_entity_id if self.source_entity_id else None,
+            target_entity_id=self.targeted_entity_id
+        )
+    
+    def advance_duration(self) -> Optional[ConditionRemoved]:
+        self.duration.advance()
+        expired = self.process_expiration()
+        if expired:
+            return expired
+        elif self.removal_saving_throw:
+            return self.roll_removal_saving_throw()
+        return None
+    
+    def _remove_from_targeted(self) -> ConditionRemovedDetails:
+        condition_removed_details = self._remove()
+        targeted_block = self.get_target(self.targeted_entity_id)
+        targeted_block.condition_manager._remove_condition_from_dicts(self.name)
+        return condition_removed_details
+
+    def _apply(self)  -> ConditionAppliedDetails:
+        raise NotImplementedError("Subclasses must implement this method")
+
+    def _remove(self)  -> ConditionRemovedDetails:
+        raise NotImplementedError("Subclasses must implement this method")
+
+class Range(BaseModel):
+    type: RangeType
+    normal: int
+    long: Optional[int] = None
+
+    def __str__(self):
+        if self.type == RangeType.REACH:
+            return f"{self.normal} ft."
+        elif self.type == RangeType.RANGE:
+            return f"{self.normal}/{self.long} ft." if self.long else f"{self.normal} ft."
+
+
+class Damage(BaseModel):
+    dice: BaseRoll
+    damage_bonus : ValueOut
+    attack_roll: AttackRollOut 
+    type: DamageType
+    source: Optional[str] = None
+
+    def roll(self) -> DamageRollOut:
+        damage_advantage = self.damage_bonus.advantage_tracker.status
+        if self.attack_roll.roll.hit_reason == HitReason.CRITICAL:
+            dice = BaseRoll(dice_count=self.dice.dice_count*2, dice_value=self.dice.dice_value)
+        else:
+            dice = self.dice
+        damage_roll = dice.roll(damage_advantage)
+        return DamageRollOut(
+            dice=dice,
+            damage_bonus=self.damage_bonus,
+            attack_roll=self.attack_roll,
+            type=self.type,
+            source=self.source,
+            damage_roll=damage_roll,
+        )
+      
+
+class Weapon(BaseModel):
+    name: str
+    damage_dice: int
+    dice_numbers: int
+    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
+    attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
+    damage_type: DamageType
+    attack_type: AttackType
+    properties: List[WeaponProperty]
+    range: Range
+
+
+
+class AttacksManager(BlockComponent):
+    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    melee_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    ranged_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    spell_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    melee_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    ranged_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    spell_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    melee_right_hand: Optional[Weapon] = None
+    melee_left_hand: Optional[Union[Weapon,Shield]] = None
+    ranged_right_hand: Optional[Weapon] = None
+    ranged_left_hand: Optional[Weapon] = None
+    ambidextrous: bool = False
+    dual_wielder: bool = False
+
+    def get_weapon(self, hand: AttackHand) -> Optional[Weapon]:
+        if hand == AttackHand.MELEE_RIGHT:
+            return self.melee_right_hand
+        elif hand == AttackHand.MELEE_LEFT:
+            return self.melee_left_hand
+        elif hand == AttackHand.RANGED_RIGHT:
+            return self.ranged_right_hand
+        elif hand == AttackHand.RANGED_LEFT:
+            return self.ranged_left_hand
+        else:
+            raise ValueError(f"Invalid hand {hand}")
+
+    def _get_hit_bonuses_from_weapon(self,  hand: AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> WeaponAttackBonusOut:
+        #we have to return the correct melee or ranged hit bonus from self
+        # and also collect from the weapon the weapon.attack_bonus
+        attacker_melee_bonus = None
+        attacker_ranged_bonus = None
+        weapon_melee_bonus = None
+        weapon_ranged_bonus = None
+        spell_bonus = None
+        stast_block, target_stats_block = self.get_stats_blocks(target)
+        if hand == AttackHand.MELEE_RIGHT:
+            attacker_melee_bonus= self.melee_hit_bonus.apply(stast_block,target_stats_block,context)
+            if self.melee_right_hand:
+                weapon_melee_bonus=self.melee_right_hand.attack_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.MELEE_LEFT:
+            attacker_melee_bonus=self.melee_hit_bonus.apply(stast_block,target_stats_block,context)
+            if self.melee_left_hand:
+                weapon_melee_bonus=self.melee_left_hand.attack_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.RANGED_RIGHT:
+            attacker_ranged_bonus=self.ranged_hit_bonus.apply(stast_block,target_stats_block,context)
+            if self.ranged_right_hand:
+                weapon_ranged_bonus=self.ranged_right_hand.attack_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.RANGED_LEFT:
+            attacker_ranged_bonus=self.ranged_hit_bonus.apply(stast_block,target_stats_block,context)
+            if self.ranged_left_hand:
+                weapon_ranged_bonus=self.ranged_left_hand.attack_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.SPELL:
+            spell_bonus=self.spell_hit_bonus.apply(stast_block,target_stats_block,context)
+
+        all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
+        all_bonuses = [bonus for bonus in all_bonuses if bonus]
+        total_weapon_bonus = all_bonuses[0].combine_with(all_bonuses[1:])
+        return WeaponAttackBonusOut(
+            attacker_melee_bonus=attacker_melee_bonus,
+            attacker_ranged_bonus=attacker_ranged_bonus,
+            weapon_melee_bonus=weapon_melee_bonus,
+            weapon_ranged_bonus=weapon_ranged_bonus,
+            spell_bonus=spell_bonus,
+            total_weapon_bonus=total_weapon_bonus
+        )
+        
+    
+    def _get_ability_bonus_from_weapon(self, hand:AttackHand, target:Optional[str], context: Optional[Dict[str, Any]] = None) -> ValueOut:
+        ability = self._get_ability_from_weapon(hand,target,context)
+        owner_block = self.get_owner()
+        
+        return owner_block.ability_scores.get_ability(ability).apply(target, context)
+    
+    def _get_ability_from_weapon(self, hand:AttackHand, target:Optional[str], context: Optional[Dict[str, Any]] = None) -> Ability:
+        #check if is a spell
+        ability =  Ability.STR
+        owner_block = self.get_owner()
+        if hand == AttackHand.SPELL:
+            ability = owner_block.spellcasting_ability
+        weapon = self.get_weapon(hand)
+        if weapon:
+            if WeaponProperty.FINESSE in weapon.properties:
+                dex_bonus = owner_block.ability_scores.dexterity.apply(target, context)
+                str_bonus = owner_block.ability_scores.strength.apply(target, context)
+                ability= Ability.DEX if dex_bonus.total_bonus >= str_bonus.total_bonus else Ability.STR
+            elif WeaponProperty.RANGED in weapon.properties:
+                ability =  Ability.DEX
+            else:
+                ability =  Ability.STR
+        return ability
+
+    def _get_attack_bonus(self, hand: AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> AttackBonusOut:
+        def ability_bonus_to_modifier(ability_bonus:int) -> int:
+            return (ability_bonus - 10) // 2
+        stats_block,target_stats_block = self.get_stats_blocks(target)
+        #computes the proficiency bonus
+        proficiency_bonus = stats_block.proficiency_bonus.apply(target_stats_block,context)
+        #obtain the bonuses from the ac (i.e. debbufs on target)
+        target_to_self_bonus = target_stats_block.armor_class.ac.apply_to_target(target_stats_block,stats_block,context)
+        total_bonus = proficiency_bonus.combine_with(target_to_self_bonus)
+        #get the list of bonuses from the weapon
+        weapon_bonus_out = self._get_hit_bonuses_from_weapon(hand,target,context)
+        total_weapon_bonus = weapon_bonus_out.total_weapon_bonus
+        total_bonus = total_bonus.combine_with(total_weapon_bonus)
+        #get the ability bonus
+        ability_bonus = self._get_ability_bonus_from_weapon(hand,target,context)
+        total_bonus = total_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier)
+        return AttackBonusOut(
+            hand=hand,
+            weapon_bonus=weapon_bonus_out,
+            proficiency_bonus=proficiency_bonus,
+            ability_bonus=ability_bonus,
+            target_to_self_bonus=target_to_self_bonus,
+            total_bonus=total_bonus
+        )
+
+        
+    def roll_to_hit(self, hand:AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
+        target_stats_block = self.get_target(target)
+        #first obtain ac of the target
+        target_ac = target_stats_block.armor_class.ac.apply(self.owner_id,context)
+        #get the attack bonus
+        attack_bonus_out = self._get_attack_bonus(hand,target,context)
+        #roll the dice
+        roll = TargetRoll(value=attack_bonus_out.total_bonus)
+        roll_out=  roll.roll(target_ac)
+        return AttackRollOut(
+            hand=hand,
+            ability = self._get_ability_from_weapon(hand,target,context),
+            attack_bonus=attack_bonus_out,
+            roll=roll_out,
+            target_ac=target_ac,
+            attack_type=self.get_weapon(hand).attack_type if self.get_weapon(hand) else None,
+            source_entity_id=self.owner_id,
+            target_entity_id=target
+        )
+    
+    def _get_damage_bonuses_from_weapon(self, hand:AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> WeaponDamageBonusOut:
+        #we have to return the correct melee or ranged damage bonus from self
+        # and also collect from the weapon the weapon.attack_bonus
+        attacker_melee_bonus = None
+        attacker_ranged_bonus = None
+        weapon_melee_bonus = None
+        weapon_ranged_bonus = None
+        spell_bonus = None
+        stast_block, target_stats_block = self.get_stats_blocks(target)
+        if hand == AttackHand.MELEE_RIGHT:
+            attacker_melee_bonus= self.melee_damage_bonus.apply(stast_block,target_stats_block,context)
+            if self.melee_right_hand:
+                weapon_melee_bonus=self.melee_right_hand.damage_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.MELEE_LEFT:
+            attacker_melee_bonus=self.melee_damage_bonus.apply(stast_block,target_stats_block,context)
+            if self.melee_left_hand:
+                weapon_melee_bonus=self.melee_left_hand.damage_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.RANGED_RIGHT:
+            attacker_ranged_bonus=self.ranged_damage_bonus.apply(stast_block,target_stats_block,context)
+            if self.ranged_right_hand:
+                weapon_ranged_bonus=self.ranged_right_hand.damage_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.RANGED_LEFT:
+            attacker_ranged_bonus=self.ranged_damage_bonus.apply(stast_block,target_stats_block,context)
+            if self.ranged_left_hand:
+                weapon_ranged_bonus=self.ranged_left_hand.damage_bonus.apply(stast_block,target_stats_block,context)
+        elif hand == AttackHand.SPELL:
+            spell_bonus=self.spell_damage_bonus.apply(stast_block,target_stats_block,context)
+
+        all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
+        all_bonuses = [bonus for bonus in all_bonuses if bonus]
+        total_weapon_bonus = all_bonuses[0].combine_with(all_bonuses[1:])
+        return WeaponDamageBonusOut(
+            attacker_melee_bonus=attacker_melee_bonus,
+            attacker_ranged_bonus=attacker_ranged_bonus,
+            weapon_melee_bonus=weapon_melee_bonus,
+            weapon_ranged_bonus=weapon_ranged_bonus,
+            spell_bonus=spell_bonus,
+            total_weapon_bonus=total_weapon_bonus
+        )
+
+    
+    def _get_damage_bonus(self, hand:AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> DamageBonusOut:
+        def ability_bonus_to_modifier(ability_bonus:int) -> int:
+            return (ability_bonus - 10) // 2
+        stats_block,target_stats_block = self.get_stats_blocks(target)
+        #get the list of bonuses from the weapon
+        weapon_bonus_out = self._get_damage_bonuses_from_weapon(hand,target,context)
+        total_weapon_bonus = weapon_bonus_out.total_weapon_bonus
+        #get the ability bonus
+        ability_bonus = self._get_ability_bonus_from_weapon(hand,target,context)
+        total_bonus = total_weapon_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier)
+        return DamageBonusOut(
+            hand=hand,
+            weapon_bonus=weapon_bonus_out,
+            ability_bonus=ability_bonus,
+            total_bonus=total_bonus
+        )
+    
+    def roll_damage(self, hand:AttackHand, attack_roll:AttackRollOut, target: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+        weapon = self.get_weapon(hand)
+        if not context:
+            context = {}
+        context['attack_roll'] = attack_roll #hack to implement modifer on damage bonus that depends on the attack roll like on critical hit effect
+        bonus = self._get_damage_bonus(hand,target,context)
+        damage = Damage(
+            dice=BaseRoll(dice_count=weapon.dice_numbers,dice_value=weapon.damage_dice),
+            damage_bonus=bonus.total_bonus,
+            attack_roll=attack_roll,
+            type=weapon.damage_type,
+            source=self.owner_id,
+        )
+        return damage.roll()
+
+    def can_dual_wield_melee(self, weapon: Weapon,hand:str='left') -> bool:
+        if  WeaponProperty.TWO_HANDED  in weapon.properties:
+            return False
+        elif not self.dual_wielder and WeaponProperty.LIGHT not in weapon.properties:
+            #if not dual wielder and weapon is not light it can't be dual wielded
+            return False
+        elif not self.dual_wielder and hand == 'left' and WeaponProperty.LIGHT in weapon.properties:
+            #not dual wielder but the weapon is light and it is the left hand
+            if self.melee_right_hand and WeaponProperty.LIGHT not in self.melee_right_hand.properties:
+                #the right hand already has an not light weapon
+                return False
+            elif self.melee_right_hand and WeaponProperty.LIGHT in self.melee_right_hand.properties:
+                #the right hand already has a light weapon so it can dual wield
+                return True
+            elif not self.melee_right_hand:
+                return True
+        elif not self.dual_wielder and hand == 'right':
+            #not dual wielder so there either is no weapon in the left hand or the weapon in the left hand is light
+            if self.melee_left_hand and WeaponProperty.LIGHT not in weapon.properties:
+                #you can't dual wield a non light weapon even in the right hand
+                return False
+            elif self.melee_left_hand and WeaponProperty.LIGHT in weapon.properties:
+                return True
+            elif not self.melee_left_hand:
+                return True
+        elif self.dual_wielder:
+            if hand == 'left' and self.melee_right_hand and WeaponProperty.TWO_HANDED in self.melee_right_hand.properties:
+                return False
+            else:
+                return True
+        else:
+            raise ValueError("Invalid dual wield chheck encountered revise the logic")
+            
+        
+    def can_dual_wield_ranged(self, weapon: Weapon,hand:str='left') -> bool:
+        if WeaponProperty.TWO_HANDED in weapon.properties:
+            return False
+        elif not self.dual_wielder and WeaponProperty.LIGHT not in weapon.properties:
+            #if not dual wielder and weapon is not light it can't be dual wielded same for two handed weapons
+            return False
+        elif not self.dual_wielder and hand == 'left' and WeaponProperty.LIGHT in weapon.properties:
+            #not dual wielder but the weapon is light and it is the left hand
+            if self.ranged_right_hand and WeaponProperty.LIGHT not in self.ranged_right_hand.properties:
+                #the right hand already has an not light weapon
+                return False
+            elif self.ranged_right_hand and WeaponProperty.LIGHT in self.ranged_right_hand.properties:
+                #the right hand already has a light weapon so it can dual wield
+                return True
+            elif not self.ranged_right_hand:
+                return True
+        elif not self.dual_wielder and hand == 'right':
+            #not dual wielder so there either is no weapon in the left hand or the weapon in the left hand is light
+            if self.ranged_left_hand and WeaponProperty.LIGHT not in weapon.properties:
+                #you can't dual wield a non light weapon even in the right hand
+                return False
+            elif self.ranged_left_hand and WeaponProperty.LIGHT in weapon.properties:
+                return True
+            elif not self.ranged_left_hand:
+                return True
+        elif self.dual_wielder:
+            if hand == 'left' and self.ranged_right_hand and WeaponProperty.TWO_HANDED in self.ranged_right_hand.properties:
+                return False
+            else:
+                return True
+        else:
+            raise ValueError("Invalid dual wield chheck encountered revise the logic")
+        
+    def equip_right_hand_ranged_weapon(self, weapon: Weapon):
+        if not WeaponProperty.RANGED in weapon.properties :
+            raise ValueError("The weapon is not a ranged weapon")
+        if WeaponProperty.TWO_HANDED in weapon.properties:
+            self.unequip_left_hand_ranged_weapon()
+            self.unequip_right_hand_ranged_weapon()
+            self.ranged_right_hand = weapon
+        elif self.can_dual_wield_ranged(weapon,hand='right'):
+            ranged = True
+            self.unequip_right_hand_ranged_weapon()
+            self.ranged_right_hand = weapon
+        else:
+            raise ValueError("The weapon can't be equipped in the right hand")
+
+    def equip_left_hand_ranged_weapon(self, weapon: Weapon):
+        if not WeaponProperty.RANGED in weapon.properties:
+            raise ValueError("The weapon is not a ranged weapon")
+        if self.can_dual_wield_ranged(weapon,hand='left'):
+            self.unequip_left_hand_ranged_weapon()
+            self.ranged_left_hand = weapon
+        else:
+            raise ValueError("The weapon can't be equipped in the left hand")
+    
+        
+    def equip_right_hand_melee_weapon(self,weapon:Weapon):
+        if WeaponProperty.RANGED in weapon.properties:
+            raise ValueError("The weapon is not a melee weapon")
+        if WeaponProperty.TWO_HANDED in weapon.properties:
+            self.unequip_left_hand_melee_weapon()
+            self.unequip_right_hand_melee_weapon()
+            self.unequip_shield()
+            self.melee_right_hand = weapon
+        elif self.can_dual_wield_melee(weapon,hand='right'):
+            self.unequip_right_hand_melee_weapon()
+            self.melee_right_hand = weapon
+        elif not self.can_dual_wield_melee(weapon,hand='right'):
+            self.unequip_left_hand_melee_weapon()
+            self.melee_right_hand = weapon
+        else:
+            raise ValueError("The weapon can't be equipped in the right hand")
+        
+    def equip_left_hand_weapon(self, weapon: Weapon):
+        if WeaponProperty.RANGED in weapon.properties:
+            raise ValueError("The weapon is not a melee weapon")
+        if self.can_dual_wield_melee(weapon,hand='left'):
+            self.unequip_left_hand_melee_weapon()
+            self.unequip_shield()
+            self.melee_left_hand = weapon
+        else:
+            raise ValueError("The weapon can't be equipped in the left hand")
+    
+    def _update_shield_ac_state(self, shield: Optional[Shield]):
+        owner_stats_block = self.get_owner()
+        if owner_stats_block.armor_class.equipped_shield and not shield:
+            owner_stats_block.armor_class.unequip_shield()
+        elif shield:
+            owner_stats_block.armor_class.equip_shield(shield)
+        
+
+    def equip_shield(self, shield: Shield):
+        if WeaponProperty.TWO_HANDED in self.melee_right_hand.properties:
+            self.unequip_right_hand_melee_weapon()
+            self.shield = shield
+            self._update_shield_ac_state(shield)
+        else:
+            self.unequip_left_hand_melee_weapon()
+            self.shield = shield
+            self._update_shield_ac_state(shield)
+    
+    def unequip_shield(self):
+        self.shield = None
+        self._update_shield_ac_state(None)
+
+    def unequip_right_hand_melee_weapon(self):
+        self.melee_right_hand = None
+
+    def unequip_left_hand_melee_weapon(self):
+        self.melee_left_hand = None
+    
+    def unequip_right_hand_ranged_weapon(self):
+        self.ranged_right_hand = None
+
+    def unequip_left_hand_ranged_weapon(self):
+        self.ranged_left_hand = None
+    
+    

@@ -4,7 +4,10 @@ from pydantic import BaseModel, Field
 class RegistryHolder:
     _registry: Dict[str, 'RegistryHolder'] = {}
     _types: Set[type] = set()
-
+    
+    @classmethod
+    def is_in_registry(cls, instance_id: str):
+        return instance_id in cls._registry
     @classmethod
     def register(cls, instance: 'RegistryHolder'):
         cls._registry[instance.id] = instance
