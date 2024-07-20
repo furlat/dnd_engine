@@ -1,13 +1,12 @@
 from typing import List, Dict, Optional, Set, Tuple, Any, Callable, Union
 from pydantic import BaseModel, Field, computed_field
 import uuid
-from dnd.core import Ability, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Skills, ActionEconomy, Sensory, Health, ArmorClass
+from dnd.core import Condition,Ability,ConditionManager, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Skills, ActionEconomy, Sensory, Health, ArmorClass
 from dnd.contextual import ModifiableValue, BaseValue
-from dnd.conditions import Condition
 from dnd.actions import Action, Attack, MovementAction, Weapon
-from dnd.dnd_enums import Size, MonsterType, Alignment, Language
+from dnd.dnd_enums import Size, MonsterType, Alignment, Language,Abilities
 from dnd.logger import Logger
-ContextAwareImmunity = Callable[['StatsBlock', Optional['StatsBlock']], bool]
+from dnd.spatial import RegistryHolder
 
 class MetaData(BaseModel):
     name: str = Field(default="Unnamed")
@@ -17,13 +16,12 @@ class MetaData(BaseModel):
     alignment: Alignment = Field(default=Alignment.TRUE_NEUTRAL)
     languages: List[Language] = Field(default_factory=list)
 
-class StatsBlock(BaseModel):
+class StatsBlock(BaseModel, RegistryHolder):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     meta: MetaData = Field(default_factory=MetaData)
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
     speed: Speed = Field(default_factory=lambda: Speed(walk=ModifiableValue(base_value=BaseValue(base_value=30))))
     ability_scores: AbilityScores = Field(default_factory=AbilityScores)
-    
     skillset: SkillSet = Field(default_factory=SkillSet)
     
     saving_throws: SavingThrows = Field(default_factory=SavingThrows)
@@ -33,15 +31,15 @@ class StatsBlock(BaseModel):
     reactions: List[Action] = Field(default_factory=list)
     legendary_actions: List[Action] = Field(default_factory=list)
     armor_class: ArmorClass = Field(default_factory=lambda: ArmorClass(base_ac=ModifiableValue(base_value=BaseValue(base_value=10))))
-    weapons: List[Weapon] = Field(default_factory=list)
+    
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy())
-    active_conditions: Dict[str, Condition] = Field(default_factory=dict)
     sensory: Sensory = Field(default_factory=Sensory)
     health: Health = Field(default_factory=lambda: Health(hit_dice=Dice(dice_count=1, dice_value=8, modifier=0)))
-    condition_immunities: Set[str] = Field(default_factory=set)
-    contextual_condition_immunities: Dict[str, List[Tuple[str, ContextAwareImmunity]]] = Field(default_factory=dict)
-    hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    spellcasting_ability: Ability = Field(default=Ability.CHA)
+    
+    
+       
+    condition_manager: ConditionManager = Field(default_factory=ConditionManager)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -59,20 +57,6 @@ class StatsBlock(BaseModel):
     @computed_field
     def initiative(self) -> int:
         return self.ability_scores.dexterity.get_modifier(self)
-
-    def apply_condition(self, condition: Condition, source: Optional['StatsBlock'] = None) -> Optional[ConditionLog]:
-        log = condition.apply(self, source)
-        if log.applied:
-            self.active_conditions[condition.name] = condition
-            self._recompute_fields()
-        return log
-
-    def remove_condition(self, condition_name: str) -> Optional[ConditionLog]:
-        condition = self.active_conditions.get(condition_name)
-        if condition:
-            log = condition.remove(self)
-            return log
-        return None
 
     def add_action(self, action: Action):
         if action.name not in [a.name for a in self.actions]:
@@ -121,25 +105,6 @@ class StatsBlock(BaseModel):
     def get_path_to(self, destination: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
         return self.sensory.get_path_to(destination)
 
-    def add_condition_immunity(self, condition_name: str):
-        self.condition_immunities.add(condition_name)
-
-    def remove_condition_immunity(self, condition_name: str):
-        self.condition_immunities.discard(condition_name)
-
-    def add_contextual_condition_immunity(self, condition_name: str, immunity_name: str, immunity_check: ContextAwareImmunity):
-        if condition_name not in self.contextual_condition_immunities:
-            self.contextual_condition_immunities[condition_name] = []
-        self.contextual_condition_immunities[condition_name].append((immunity_name, immunity_check))
-
-    def remove_contextual_condition_immunity(self, condition_name: str, immunity_name: str):
-        if condition_name in self.contextual_condition_immunities:
-            self.contextual_condition_immunities[condition_name] = [
-                (name, check) for name, check in self.contextual_condition_immunities[condition_name]
-                if name != immunity_name
-            ]
-            if not self.contextual_condition_immunities[condition_name]:
-                del self.contextual_condition_immunities[condition_name]
 
     def perform_ability_check(self, ability: Ability, dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
         return self.ability_scores.perform_ability_check(ability, self, dc, target, context, return_log)

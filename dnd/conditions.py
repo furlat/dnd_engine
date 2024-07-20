@@ -3,7 +3,6 @@ from typing import Optional, TYPE_CHECKING, Dict, Any, Tuple, Union
 import uuid
 from dnd.core import  SensesType, RegistryHolder
 from dnd.actions import Attack
-from dnd.logger import ConditionLog, ConditionEffect, EffectTarget, EffectTargetType, EffectType
 from dnd.dnd_enums import Ability, Skills,DurationType
 from typing import List
 
@@ -11,76 +10,6 @@ from typing import List
 if TYPE_CHECKING:
     from dnd.statsblock import StatsBlock
 
-class Duration(BaseModel):
-    time: Union[int, str]
-    concentration: bool = False
-    type: DurationType = Field(DurationType.ROUNDS, description="The type of duration for the effect")
-    has_advanced: bool = False
-
-    def advance(self) -> bool:
-        if self.type in [DurationType.ROUNDS, DurationType.MINUTES, DurationType.HOURS]:
-            if isinstance(self.time, int):
-                self.time -= 1
-                return self.time <= 0
-        return False
-
-    def is_expired(self) -> bool:
-        return self.type != DurationType.INDEFINITE and (
-            (isinstance(self.time, int) and self.time <= 0) or 
-            (isinstance(self.time, str) and self.time.lower() == "expired")
-        )
-    
-class Condition(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    description: str = Field("A generic description of the condition.")
-    duration: Duration = Field(default_factory=lambda: Duration(time=1, type=DurationType.ROUNDS))
-    source_entity_id: Optional[str] = None
-    source_ability: Optional[str] = None
-
-    def apply(self, stats_block: 'StatsBlock', source: Optional['StatsBlock'] = None) -> Optional[ConditionLog]:
-        # Check for condition immunity
-        if self.name in stats_block.condition_immunities:
-            return ConditionLog(
-                condition_name=self.name,
-                applied=False,
-                source_id=source.id if source else None,
-                target_id=stats_block.id,
-                effects=[],
-                immunity_reason="Condition Immunity"
-            )
-
-        # Check for contextual condition immunity
-        contextual_immunities = stats_block.contextual_condition_immunities.get(self.name, [])
-        for immunity_name, immunity_check in contextual_immunities:
-            if immunity_check(stats_block, source):
-                return ConditionLog(
-                    condition_name=self.name,
-                    applied=False,
-                    source_id=source.id if source else None,
-                    target_id=stats_block.id,
-                    effects=[],
-                    immunity_reason=f"Contextual Condition Immunity: {immunity_name}"
-                )
-
-        # If not immune, apply the condition
-        log = self._apply(stats_block)
-        stats_block.active_conditions[self.name] = self
-        stats_block._recompute_fields()
-        return log
-
-    def remove(self, stats_block: 'StatsBlock') -> ConditionLog:
-        log = self._remove(stats_block)
-        if self.name in stats_block.active_conditions:
-            del stats_block.active_conditions[self.name]
-        stats_block._recompute_fields()
-        return log
-
-    def _apply(self, stats_block: 'StatsBlock') -> ConditionLog:
-        raise NotImplementedError("Subclasses must implement this method")
-
-    def _remove(self, stats_block: 'StatsBlock') -> ConditionLog:
-        raise NotImplementedError("Subclasses must implement this method")
 
 
 class Blinded(Condition):
