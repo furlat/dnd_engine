@@ -15,7 +15,10 @@ dnd/equipment.py
 dnd/logger.py
 dnd/newlogs.py
 dnd/shadowcast.py
+dnd/spatial.py
 dnd/statsblock.py
+dnd/trackers.py
+dnd/utils.py
 dnd.egg-info/PKG-INFO
 dnd.egg-info/SOURCES.txt
 dnd.egg-info/dependency_links.txt
