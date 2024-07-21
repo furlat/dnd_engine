@@ -1419,7 +1419,9 @@ class AttacksManager(BlockComponent):
             total_bonus=total_bonus
         )
     
-    def roll_damage(self, hand:AttackHand, attack_roll:AttackRollOut, target: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+    def roll_damage(self, attack_roll:AttackRollOut, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+        hand = attack_roll.hand
+        target = attack_roll.target_entity_id
         weapon = self.get_weapon(hand)
         if not context:
             context = {}
