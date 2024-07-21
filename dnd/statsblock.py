@@ -119,13 +119,18 @@ class StatsBlock(BaseModel, RegistryHolder):
         hand = AttackHand.RANGED_RIGHT
         return self.perform_attack(hand, target_id, context)
     
-    def melee_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+    def melee_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> Union[DamageRollOut, AttackRollOut]:
         attack_roll = self.perform_melee_attack(target_id, context)
-        return self.roll_damage(attack_roll, context)
+        if attack_roll.success:
+            return self.roll_damage(attack_roll, context)
+        return attack_roll
+        
     
-    def ranged_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+    def ranged_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> Union[DamageRollOut, AttackRollOut]:
         attack_roll = self.perform_ranged_attack(target_id, context)
-        return self.roll_damage(attack_roll, context)
+        if attack_roll.success:
+            return self.roll_damage(attack_roll, context)
+        return attack_roll
     
     def take_damage(self, damage_rolls: Union[DamageRollOut, List[DamageRollOut]], attacker_id: Optional[str] = None, context: Optional[Dict[str, Any]] = None):
         return self.health.take_damage(damage_rolls, attacker_id, context)
@@ -151,4 +156,3 @@ class StatsBlock(BaseModel, RegistryHolder):
     def remove_condition(self, condition_name: str, external_source: str = "manager"):
         return self.condition_manager.remove(condition_name, external_source)
 
-ModifiableValue.model_rebuild()
