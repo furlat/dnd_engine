@@ -1,39 +1,58 @@
-from dnd.statsblock import StatsBlock
 from dnd.monsters.goblin import create_goblin
-from dnd.conditions import Dashing, Duration, DurationType
-
-def print_creature_details(creature: StatsBlock):
-    print(f"{creature.name} Details:")
-    print(f"HP: {creature.current_hit_points}/{creature.max_hit_points}")
-    print(f"Speed: Walk {creature.speed.get_speed('walk', creature)} ft, "
-          f"Fly {creature.speed.get_speed('fly', creature)} ft, "
-          f"Swim {creature.speed.get_speed('swim', creature)} ft")
-    print(f"Active Conditions: {', '.join([cond for cond in creature.active_conditions.keys()])}")
+from dnd.conditions import Dashing
+from dnd.logger import Logger
+from dnd.dnd_enums import DurationType
+from dnd.core import Duration
+from dnd.tests.printer import print_log_details
 
 def test_dashing_condition():
-    goblin = create_goblin()
-    
-    print("\n=== Testing Dashing Condition ===")
-    
-    print("\n1. Initial State")
-    print_creature_details(goblin)
-    
-    print("\n2. Applying Dashing condition to Goblin")
-    dashing_condition = Dashing(name="Dashing", duration=Duration(time=1, type=DurationType.ROUNDS))
-    goblin.apply_condition(dashing_condition)
-    print_creature_details(goblin)
-    
-    print("\n3. Adding a speed bonus while Dashing")
-    goblin.speed.add_static_modifier('walk', "Magic Boost", 10)
-    print_creature_details(goblin)
-    
-    print("\n4. Advancing time to expire the Dashing condition")
-    goblin.update_conditions()
-    print_creature_details(goblin)
-    
-    print("\n5. Removing the speed bonus")
-    goblin.speed.remove_static_modifier('walk', "Magic Boost")
-    print_creature_details(goblin)
+    print("=== Testing Dashing Condition and Logging ===\n")
+
+    # Create creature
+    goblin = create_goblin("Goblin")
+
+    def print_speeds(creature):
+        print(f"{creature.name}'s Speeds:")
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj = getattr(creature.speed, speed_type)
+            speed_value = speed_obj.apply(creature).total_bonus
+            print(f"  {speed_type.capitalize()}: {speed_value} ft")
+        print()
+
+    print("Initial speeds:")
+    print_speeds(goblin)
+
+    print("Turn 1: Applying Dashing to Goblin")
+    dashing_condition = Dashing(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=goblin.id)
+    condition_log = goblin.condition_manager.add_condition(dashing_condition)
+    print_log_details(condition_log)
+
+    print("Speeds after applying Dashing:")
+    print_speeds(goblin)
+
+    print("Adding a 'Magic Boost' of 10 ft to walk speed:")
+    goblin.speed.walk.self_static.add_bonus("Magic Boost", 10)
+    print_speeds(goblin)
+
+    print("\nTurn 2: Advancing duration for Dashing condition")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Speeds on Turn 2 (still Dashing):")
+    print_speeds(goblin)
+
+    print("\nTurn 3: Advancing duration for Dashing condition again (condition should be removed)")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Speeds after Dashing expires:")
+    print_speeds(goblin)
+
+    print("Removing 'Magic Boost':")
+    goblin.speed.walk.remove_effect("Magic Boost")
+    print_speeds(goblin)
 
 if __name__ == "__main__":
     test_dashing_condition()

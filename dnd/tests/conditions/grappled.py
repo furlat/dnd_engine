@@ -1,47 +1,62 @@
-from dnd.statsblock import StatsBlock
 from dnd.monsters.goblin import create_goblin
 from dnd.monsters.skeleton import create_skeleton
-from dnd.conditions import Grappled, Duration, DurationType
-from dnd.core import Speed
+from dnd.conditions import Grappled
+from dnd.logger import Logger
+from dnd.dnd_enums import DurationType
+from dnd.core import Duration
+from dnd.tests.printer import print_log_details
 
-def print_creature_details(creature: StatsBlock):
-    print(f"{creature.name} Details:")
-    print(f"HP: {creature.current_hit_points}/{creature.max_hit_points}")
-    print(f"Speed: Walk {creature.speed.get_speed('walk', creature)} ft, "
-          f"Fly {creature.speed.get_speed('fly', creature)} ft, "
-          f"Swim {creature.speed.get_speed('swim', creature)} ft")
-    print(f"Active Conditions: {', '.join([cond for cond in creature.active_conditions.keys()])}")
 def test_grappled_condition():
-    goblin = create_goblin()
-    skeleton = create_skeleton()
-    
-    print("\n=== Testing Grappled Condition ===")
-    
-    print("\n1. Initial State")
-    print_creature_details(goblin)
-    
-    print("\n2. Applying Grappled condition to Goblin")
-    grappled_condition = Grappled(name="Grappled", duration=Duration(time=3, type=DurationType.ROUNDS), source_entity_id=skeleton.id)
-    goblin.apply_condition(grappled_condition)
-    print_creature_details(goblin)
-    
-    print("\n3. Attempting to move while Grappled")
-    print(f"Goblin tries to move: {'Can move' if goblin.speed.get_speed('walk', goblin) > 0 else 'Cannot move'}")
-    
-    print("\n4. Adding a speed bonus while Grappled")
-    goblin.speed.add_bonus('walk', "Magic Boost", lambda src, tgt,ctx: 10)
-    print_creature_details(goblin)
-    
-    print("\n5. Advancing time to expire the Grappled condition")
-    for _ in range(3):
-        goblin.update_conditions()
-    print_creature_details(goblin)
-    
-    print("\n6. Removing the speed bonus")
-    goblin.speed.remove_effect('walk', "Magic Boost")
-    print_creature_details(goblin)
+    print("=== Testing Grappled Condition and Logging ===\n")
 
-# ... rest of the script remains the same
+    # Create creatures
+    goblin = create_goblin("Goblin")
+    skeleton = create_skeleton("Skeleton")
+
+    def print_speeds(creature):
+        print(f"{creature.name}'s Speeds:")
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj = getattr(creature.speed, speed_type)
+            speed_value_obj = speed_obj.apply(creature)
+            speed_value = speed_value_obj.total_bonus
+            print(f"  {speed_type.capitalize()}: {speed_value} ft")
+            max_constraints = speed_value_obj.max_constraints
+        print()
+
+    print("Initial speeds:")
+    print_speeds(goblin)
+
+    print("Applying Grappled to Goblin")
+    grappled_condition = Grappled(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=goblin.id, source_entity_id=skeleton.id)
+    condition_log = goblin.condition_manager.add_condition(grappled_condition)
+    print_log_details(condition_log)
+
+    print("Speeds after applying Grappled:")
+    print_speeds(goblin)
+
+    print("Adding a 'Magic Boost' of 10 ft to walk speed:")
+    goblin.speed.walk.self_static.add_bonus("Magic Boost", 10)
+    print_speeds(goblin)
+
+    print("\nAdvancing duration for Grappled condition")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Speeds on second turn (still Grappled):")
+    print_speeds(goblin)
+
+    print("\nAdvancing duration for Grappled condition again (condition should be removed)")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Speeds after Grappled expires:")
+    print_speeds(goblin)
+
+    print("Removing 'Magic Boost':")
+    goblin.speed.walk.remove_effect("Magic Boost")
+    print_speeds(goblin)
 
 if __name__ == "__main__":
     test_grappled_condition()

@@ -1,76 +1,71 @@
-# frightened.py
-
-from dnd.statsblock import StatsBlock
 from dnd.monsters.goblin import create_goblin
 from dnd.monsters.skeleton import create_skeleton
-from dnd.conditions import Frightened, Duration, DurationType
-from dnd.actions import Attack
-from dnd.core import Skills, Ability
-
-def print_creature_details(creature: StatsBlock):
-    print(f"{creature.name} Details:")
-    print(f"HP: {creature.current_hit_points}/{creature.max_hit_points}")
-    print(f"Active Conditions: {', '.join([cond for cond in creature.active_conditions.keys()])}")
-    print(f"Line of Sight: {creature.line_of_sight}")
+from dnd.conditions import Frightened
+from dnd.logger import Logger
+from dnd.dnd_enums import DurationType, Ability, Skills
+from dnd.core import Duration
+from dnd.tests.printer import print_log_details
+from dnd.spatial import RegistryHolder
 
 def test_frightened_condition():
-    goblin = create_goblin()
-    skeleton = create_skeleton()
-    
-    print("\n=== Testing Frightened Condition ===")
-    
-    print("\n1. Initial State")
-    print_creature_details(goblin)
-    print_creature_details(skeleton)
-    
-    print("\n2. Applying Frightened condition to Goblin")
-    frightened_condition = Frightened(name="Frightened", duration=Duration(time=3, type=DurationType.ROUNDS), source_entity_id=skeleton.id)
-    goblin.apply_condition(frightened_condition)
-    goblin.refresh_line_of_sight({skeleton.id})
-    print_creature_details(goblin)
-    
-    print("\n3. Goblin attacks while Frightened (Skeleton in sight)")
-    perform_attack(goblin, skeleton)
-    
-    print("\n4. Goblin performs Stealth check while Frightened (Skeleton in sight)")
-    perform_ability_check(goblin, Ability.DEX, Skills.STEALTH, 15)
-    
-    print("\n5. Removing Skeleton from Goblin's line of sight")
-    goblin.refresh_line_of_sight(set())
-    print_creature_details(goblin)
-    
-    print("\n6. Goblin attacks while Frightened (Skeleton not in sight)")
-    perform_attack(goblin, skeleton)
-    
-    print("\n7. Goblin performs Perception check while Frightened (Skeleton not in sight)")
-    perform_ability_check(goblin, Ability.WIS, Skills.PERCEPTION, 15)
-    
-    print("\n8. Advancing time to expire the Frightened condition")
-    for _ in range(3):
-        goblin.update_conditions()
-    print_creature_details(goblin)
-    
-    print("\n9. Goblin attacks after Frightened condition expires")
-    perform_attack(goblin, skeleton)
-    
-    print("\n10. Goblin performs Intimidation check after Frightened condition expires")
-    perform_ability_check(goblin, Ability.CHA, Skills.INTIMIDATION, 15)
+    print("=== Testing Frightened Condition and Logging ===\n")
 
-def perform_attack(attacker, defender):
-    attack_action = next(action for action in attacker.actions if isinstance(action, Attack))
-    hit, details = attack_action.roll_to_hit(defender, verbose=True)
-    print(f"  Advantage status: {details['advantage_status']}")
-    print(f"  Attack roll: {details['roll']}, Total: {details['roll'] + details['total_hit_bonus']}, AC: {details['armor_class']}")
-    print(f"  Result: {'Hit' if hit else 'Miss'}")
+    # Create creatures
+    goblin = create_goblin("Goblin")
+    skeleton = create_skeleton("Skeleton")
 
-def perform_ability_check(creature, ability, skill, dc):
-    roll, total, _ = creature.perform_skill_check(skill, dc, return_roll=True)
-    ability_score = creature.ability_scores.get_ability(ability)
-    advantage_status = ability_score.get_advantage_status(creature)
-    print(f"  Ability: {ability.value}, Skill: {skill.value}")
-    print(f"  Advantage status: {advantage_status}")
-    print(f"  Ability check roll: {roll}, Total: {total}, DC: {dc}")
-    print(f"  Result: {'Success' if total >= dc else 'Failure'}")
+    # Set up initial positions and visibility
+    goblin.sensory.update_origin((0, 0))
+    skeleton.sensory.update_origin((1, 1))
+    visible_tiles = {(1, 1)}  # Skeleton is visible to Goblin
+    goblin.sensory.update_fov(visible_tiles)
+
+    print("Initial state:")
+    print("Goblin attacks Skeleton (before Frightened)")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
+
+    print("Goblin performs Stealth check (before Frightened)")
+    stealth_result = goblin.perform_skill_check(Skills.STEALTH, 15)
+    print_log_details(stealth_result)
+
+    print("\nApplying Frightened to Goblin (caused by Skeleton)")
+    frightened_condition = Frightened(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=goblin.id, source_entity_id=skeleton.id)
+    condition_log = goblin.condition_manager.add_condition(frightened_condition)
+    print_log_details(condition_log)
+
+    print("Goblin attacks Skeleton (while Frightened and can see Skeleton)")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
+
+    print("Goblin performs Perception check (while Frightened and can see Skeleton)")
+    perception_result = goblin.perform_skill_check(Skills.PERCEPTION, 15)
+    print_log_details(perception_result)
+
+    print("\nUpdating visibility: Skeleton is no longer visible to Goblin")
+    goblin.sensory.update_fov(set())  # Empty set means Skeleton is not visible
+
+    print("Goblin attacks Skeleton (while Frightened but cannot see Skeleton)")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
+
+    print("Goblin performs Athletics check (while Frightened but cannot see Skeleton)")
+    athletics_result = goblin.perform_skill_check(Skills.ATHLETICS, 15)
+    print_log_details(athletics_result)
+
+    print("\nAdvancing duration for Frightened condition")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("\nAdvancing duration again (condition should be removed)")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Goblin attacks Skeleton (after Frightened expires)")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
 
 if __name__ == "__main__":
     test_frightened_condition()
