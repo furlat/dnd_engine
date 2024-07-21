@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from pydantic import Field
 from dnd.core import Condition, ConditionAppliedDetails, ConditionRemovedDetails
 from dnd.contextual import ContextAwareAutoHit, ModifiableValue
-from dnd.dnd_enums import AdvantageStatus, AutoHitStatus, Skills,Ability
+from dnd.dnd_enums import AdvantageStatus, AutoHitStatus, Skills,Ability,SensesType,CriticalStatus
 from dnd.statsblock import StatsBlock
 
 class Blinded(Condition):
@@ -240,358 +240,374 @@ class Grappled(Condition):
 
         return ConditionRemovedDetails(details="Removed Grappled condition")
 
-# class Incapacitated(Condition):
-#     name: str = "Incapacitated"
+class Incapacitated(Condition):
+    name: str = "Incapacitated"
 
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Incapacitated condition to {stats_block.name}")
-#         stats_block.action_economy.set_max_actions("Incapacitated", 0)
-#         stats_block.action_economy.set_max_bonus_actions("Incapacitated", 0)
-#         stats_block.action_economy.set_max_reactions("Incapacitated", 0)
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Set max actions, bonus actions, and reactions to 0
+        stats_block.action_economy.actions.self_static.add_max_constraint("Incapacitated", 0)
+        stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Incapacitated", 0)
+        stats_block.action_economy.reactions.self_static.add_max_constraint("Incapacitated", 0)
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Incapacitated condition from {stats_block.name}")
-#         stats_block.action_economy.reset_max_actions("Incapacitated")
-#         stats_block.action_economy.reset_max_bonus_actions("Incapacitated")
-#         stats_block.action_economy.reset_max_reactions("Incapacitated")
+        # Set max speed to 0 for all movement types
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj = getattr(stats_block.speed, speed_type)
+            speed_obj.self_static.add_max_constraint("Incapacitated", 0)
 
-# class Invisible(Condition):
-#     name: str = "Invisible"
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
 
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Invisible condition to {stats_block.name}")
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
         
-#         # Add advantage to all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.add_contextual_advantage("Invisible", self.invisible_offensive_check)
-        
-#         # Give disadvantage to all attacks against this creature
-#         stats_block.armor_class.add_opponent_disadvantage_condition("Invisible", self.invisible_defensive_check)
+        # Remove constraints from action economy
+        stats_block.action_economy.actions.remove_effect("Incapacitated")
+        stats_block.action_economy.bonus_actions.remove_effect("Incapacitated")
+        stats_block.action_economy.reactions.remove_effect("Incapacitated")
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Invisible condition from {stats_block.name}")
-        
-#         # Remove advantage from all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.remove_effect("Invisible")
-        
-#         # Remove disadvantage from all attacks against this creature
-#         stats_block.armor_class.remove_opponent_disadvantage_condition("Invisible")
+        # Remove constraints from speed
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj = getattr(stats_block.speed, speed_type)
+            speed_obj.remove_effect("Incapacitated")
 
-#     @staticmethod
-#     def can_see_invisible(observer: 'StatsBlock', target: 'StatsBlock') -> bool:
-#         observer_senses = {sense.type for sense in observer.sensory.senses}
-#         return SensesType.TRUESIGHT in observer_senses or SensesType.TREMORSENSE in observer_senses
+        return ConditionRemovedDetails(details="Removed Incapacitated condition")
 
-#     @staticmethod
-#     def invisible_offensive_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target is None:
-#             print("No target provided for invisible check")
-#             return True  # If no target, assume advantage applies
-#         if Invisible.can_see_invisible(target, source) and target.is_visible(source.sensory.origin):
-#             print(f"{target.name} can see invisible {source.name}")
-#             return False
-#         print(f"{target.name} cannot see invisible {source.name}")
-#         return True
+class Invisible(Condition):
+    name: str = "Invisible"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Add advantage to all attacks
+        stats_block.attacks_manager.hit_bonus.self_contextual.add_advantage_condition("Invisible", self.invisible_offensive_check)
+        
+        # Give disadvantage to all attacks against this creature
+        stats_block.armor_class.ac.target_contextual.add_advantage_condition("Invisible", self.invisible_defensive_check)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        stats_block.attacks_manager.hit_bonus.remove_effect("Invisible")
+        stats_block.armor_class.ac.remove_effect("Invisible")
+
+        return ConditionRemovedDetails(details="Removed Invisible condition")
+
+    @staticmethod
+    def can_see_invisible(observer: StatsBlock) -> bool:
+        observer_senses = {sense.type for sense in observer.sensory.senses}
+        return SensesType.TRUESIGHT in observer_senses or SensesType.TREMORSENSE in observer_senses
+
+    @staticmethod
+    def invisible_offensive_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
+        if target is None or "Invisible" not in stats_block.condition_manager.active_conditions:
+            return AdvantageStatus.NONE
+        if Invisible.can_see_invisible(target) and target.sensory.is_visible(stats_block.sensory.origin):
+            return AdvantageStatus.NONE
+        return AdvantageStatus.ADVANTAGE
+
+    @staticmethod
+    def invisible_defensive_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
+        if target is None or "Invisible" not in stats_block.condition_manager.active_conditions:
+            return AdvantageStatus.NONE
+        if Invisible.can_see_invisible(target) and target.sensory.is_visible(stats_block.sensory.origin):
+            return AdvantageStatus.NONE
+        return AdvantageStatus.DISADVANTAGE
     
-#     @staticmethod
-#     def invisible_defensive_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target is None:
-#             print("No target provided for invisible check")
-#             return True  # If no target, assume advantage applies
-#         if Invisible.can_see_invisible(source, target) and source.is_visible(target.sensory.origin):
-#             print(f"{source.name} can see invisible {target.name}")
-#             return False
-#         print(f"{source.name} cannot see invisible {target.name}")
-#         return True
+class Paralyzed(Condition):
+    name: str = "Paralyzed"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Set max actions, bonus actions, and reactions to 0
+        stats_block.action_economy.actions.self_static.add_max_constraint("Paralyzed", 0)
+        stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Paralyzed", 0)
+        stats_block.action_economy.reactions.self_static.add_max_constraint("Paralyzed", 0)
+
+        # Set max speed to 0 for all movement types
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.self_static.add_max_constraint("Paralyzed", 0)
+
+        # Auto-fail STR and DEX saves
+        stats_block.saving_throws.get_ability(Ability.STR).bonus.self_static.add_auto_hit_condition("Paralyzed", AutoHitStatus.AUTOMISS)
+        stats_block.saving_throws.get_ability(Ability.DEX).bonus.self_static.add_auto_hit_condition("Paralyzed", AutoHitStatus.AUTOMISS)
+
+        # Auto-critical for attacks within 5 feet
+        stats_block.armor_class.ac.target_contextual.add_critical_condition("Paralyzed", self.paralyzed_attack_check)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        # Remove all effects
+        stats_block.action_economy.actions.remove_effect("Paralyzed")
+        stats_block.action_economy.bonus_actions.remove_effect("Paralyzed")
+        stats_block.action_economy.reactions.remove_effect("Paralyzed")
+        
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.remove_effect("Paralyzed")
+        
+        stats_block.saving_throws.get_ability(Ability.STR).bonus.remove_effect("Paralyzed")
+        stats_block.saving_throws.get_ability(Ability.DEX).bonus.remove_effect("Paralyzed")
+        
+        stats_block.armor_class.ac.remove_effect("Paralyzed")
+
+        return ConditionRemovedDetails(details="Removed Paralyzed condition")
+
+    @staticmethod
+    def paralyzed_attack_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> CriticalStatus:
+        if target is None or "Paralyzed" not in stats_block.condition_manager.active_conditions:
+            return CriticalStatus.NONE
+        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        if distance is not None and distance <= 5:  # 5 feet for melee range
+            return CriticalStatus.AUTOCRIT
+        return CriticalStatus.NONE
     
-# class Paralyzed(Condition):
-#     name: str = "Paralyzed"
+class Poisoned(Condition):
+    name: str = "Poisoned"
 
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Paralyzed condition to {stats_block.name}")
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Add disadvantage to all attacks
+        stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Poisoned", AdvantageStatus.DISADVANTAGE)
         
-#         # Incapacitated effects (can't take actions or reactions)
-#         stats_block.action_economy.set_max_actions("Paralyzed", 0)
-#         stats_block.action_economy.set_max_bonus_actions("Paralyzed", 0)
-#         stats_block.action_economy.set_max_reactions("Paralyzed", 0)
-        
-#         # Can't move
-#         stats_block.speed.set_max_speed_to_zero("Paralyzed")
-        
-#         # Auto-fail STR and DEX saves
-#         stats_block.saving_throws.get_ability(Ability.STR).add_auto_fail_condition("Paralyzed", self.paralyzed_check)
-#         stats_block.saving_throws.get_ability(Ability.DEX).add_auto_fail_condition("Paralyzed", self.paralyzed_check)
-        
-#         # Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature
-#         stats_block.armor_class.add_opponent_auto_critical_condition("Paralyzed", self.paralyzed_attack_check)
+        # Add disadvantage to all ability checks (which includes skill checks)
+        for skill in Skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.self_static.add_advantage_condition("Poisoned", AdvantageStatus.DISADVANTAGE)
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Paralyzed condition from {stats_block.name}")
-        
-#         # Remove Incapacitated effects
-#         stats_block.action_economy.reset_max_actions("Paralyzed")
-#         stats_block.action_economy.reset_max_bonus_actions("Paralyzed")
-#         stats_block.action_economy.reset_max_reactions("Paralyzed")
-        
-#         # Remove movement restriction
-#         stats_block.speed.reset_max_speed("Paralyzed")
-        
-#         # Remove auto-fail on STR and DEX saves
-#         stats_block.saving_throws.get_ability(Ability.STR).remove_effect("Paralyzed")
-#         stats_block.saving_throws.get_ability(Ability.DEX).remove_effect("Paralyzed")
-        
-#         # Remove auto-critical condition
-#         stats_block.armor_class.remove_opponent_auto_critical_condition("Paralyzed")
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
 
-#     @staticmethod
-#     def paralyzed_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply the effect when paralyzed
-    
-#     @staticmethod
-#     def paralyzed_attack_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target is None or source is None:
-#             return False
-#         distance = source.get_distance(target.sensory.origin)
-#         return distance is not None and distance <= 5  # 5 feet for melee range
-    
-# class Poisoned(Condition):
-#     name: str = "Poisoned"
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Poisoned condition to {stats_block.name}")
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
         
-#         # Add disadvantage to all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.hit_bonus.self_effects.add_disadvantage_condition("Poisoned", self.poisoned_check)
+        # Remove disadvantage from all attacks
+        stats_block.attacks_manager.hit_bonus.remove_effect("Poisoned")
         
-#         # Add disadvantage to all ability checks (which includes skill checks)
-#         for skill in Skills:
-#             skill_obj = stats_block.skills.get_skill(skill)
-#             skill_obj.bonus.self_effects.add_disadvantage_condition("Poisoned", self.poisoned_check)
+        # Remove disadvantage from all ability checks
+        for skill in Skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.remove_effect("Poisoned")
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Poisoned condition from {stats_block.name}")
-        
-#         # Remove disadvantage from all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.hit_bonus.self_effects.remove_effect("Poisoned")
-        
-#         # Remove disadvantage from all ability checks
-#         for skill in Skills:
-#             skill_obj = stats_block.skills.get_skill(skill)
-#             skill_obj.bonus.self_effects.remove_effect("Poisoned")
-
-#     @staticmethod
-#     def poisoned_check(source: 'StatsBlock', target: Optional['StatsBlock'] = None,  context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply disadvantage when poisoned
-    
-
-# class Prone(Condition):
-#     name: str = "Prone"
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Prone condition to {stats_block.name}")
-        
-#         # Disadvantage on attack rolls
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.add_contextual_disadvantage("Prone", self.prone_attack_check)
-        
-#         # Advantage on melee attacks within 5 feet, disadvantage on attacks from more than 10 feet
-#         stats_block.armor_class.add_opponent_advantage_condition("Prone", self.prone_melee_advantage_check)
-#         stats_block.armor_class.add_opponent_disadvantage_condition("Prone", self.prone_ranged_disadvantage_check)
-
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Prone condition from {stats_block.name}")
-        
-#         # Remove disadvantage on attack rolls
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.remove_effect("Prone")
-        
-#         # Remove advantage and disadvantage conditions from armor class
-#         stats_block.armor_class.remove_opponent_advantage_condition("Prone")
-#         stats_block.armor_class.remove_opponent_disadvantage_condition("Prone")
-
-#     @staticmethod
-#     def prone_attack_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply disadvantage to own attacks when prone
-
-#     @staticmethod
-#     def prone_melee_advantage_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target is None or source is None:
-#             return False
-#         distance = source.get_distance(target.sensory.origin)
-#         return distance is not None and distance <= 5  # 5 feet for melee range
-
-#     @staticmethod
-#     def prone_ranged_disadvantage_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target is None or source is None:
-#             return False
-#         distance = source.get_distance(target.sensory.origin)
-#         return distance is None or distance > 10  # More than 10 feet for ranged attacks
+        return ConditionRemovedDetails(details="Removed Poisoned condition")
     
 
-# class Stunned(Condition):
-#     name: str = "Stunned"
+class Prone(Condition):
+    name: str = "Prone"
 
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Stunned condition to {stats_block.name}")
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Disadvantage on attack rolls for the prone creature
+        stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Prone", AdvantageStatus.DISADVANTAGE)
         
-#         # Incapacitated effects (can't take actions or reactions)
-#         stats_block.action_economy.set_max_actions("Stunned", 0)
-#         stats_block.action_economy.set_max_bonus_actions("Stunned", 0)
-#         stats_block.action_economy.set_max_reactions("Stunned", 0)
-        
-#         # Can't move
-#         stats_block.speed.set_max_speed_to_zero("Stunned")
-        
-#         # Auto-fail STR and DEX saves
-#         stats_block.saving_throws.get_ability(Ability.STR).add_auto_fail_condition("Stunned", self.stunned_check)
-#         stats_block.saving_throws.get_ability(Ability.DEX).add_auto_fail_condition("Stunned", self.stunned_check)
-        
-#         # Advantage on attacks against this creature
-#         stats_block.armor_class.add_opponent_advantage_condition("Stunned", self.stunned_check)
+        # Advantage on melee attacks within 5 feet, disadvantage from ranged attacks
+        stats_block.armor_class.ac.target_contextual.add_advantage_condition("Prone", self.prone_attack_check)
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Stunned condition from {stats_block.name}")
-        
-#         # Remove Incapacitated effects
-#         stats_block.action_economy.reset_max_actions("Stunned")
-#         stats_block.action_economy.reset_max_bonus_actions("Stunned")
-#         stats_block.action_economy.reset_max_reactions("Stunned")
-        
-#         # Remove movement restriction
-#         stats_block.speed.reset_max_speed("Stunned")
-        
-#         # Remove auto-fail on STR and DEX saves
-#         stats_block.saving_throws.get_ability(Ability.STR).remove_effect("Stunned")
-#         stats_block.saving_throws.get_ability(Ability.DEX).remove_effect("Stunned")
-        
-#         # Remove advantage on attacks against this creature
-#         stats_block.armor_class.remove_opponent_advantage_condition("Stunned")
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
 
-#     @staticmethod
-#     def stunned_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply the effect when stunned
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        # Remove disadvantage on attack rolls
+        stats_block.attacks_manager.hit_bonus.remove_effect("Prone")
+        
+        # Remove advantage/disadvantage conditions from armor class
+        stats_block.armor_class.ac.remove_effect("Prone")
 
-# class Restrained(Condition):
-#     name: str = "Restrained"
+        return ConditionRemovedDetails(details="Removed Prone condition")
 
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Restrained condition to {stats_block.name}")
-        
-#         # Set speed to 0
-#         stats_block.speed.set_max_speed_to_zero("Restrained")
-        
-#         # Add disadvantage to all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.hit_bonus.self_effects.add_disadvantage_condition("Restrained", self.restrained_check)
-        
-#         # Add disadvantage to Dexterity saving throws
-#         dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
-#         dex_save.bonus.self_effects.add_disadvantage_condition("Restrained", self.restrained_check)
+    @staticmethod
+    def prone_attack_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
+        if target is None or "Prone" not in stats_block.condition_manager.active_conditions:
+            return AdvantageStatus.NONE
+        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        if distance is not None and distance <= 5:  # 5 feet for melee range
+            return AdvantageStatus.ADVANTAGE
+        elif distance is None or distance > 5:  # More than 5 feet for ranged attacks
+            return AdvantageStatus.DISADVANTAGE
+        return AdvantageStatus.NONE
+    
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Restrained condition from {stats_block.name}")
-        
-#         # Reset speed
-#         stats_block.speed.reset_max_speed("Restrained")
-        
-#         # Remove disadvantage from all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.hit_bonus.self_effects.remove_effect("Restrained")
-        
-#         # Remove disadvantage from Dexterity saving throws
-#         dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
-#         dex_save.bonus.self_effects.remove_effect("Restrained")
+class Stunned(Condition):
+    name: str = "Stunned"
 
-#     @staticmethod
-#     def restrained_check(source: 'StatsBlock', target: Optional['StatsBlock'] = None,  context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply disadvantage when restrained
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Incapacitated effects (can't take actions or reactions)
+        stats_block.action_economy.actions.self_static.add_max_constraint("Stunned", 0)
+        stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Stunned", 0)
+        stats_block.action_economy.reactions.self_static.add_max_constraint("Stunned", 0)
+        
+        # Can't move
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.self_static.add_max_constraint("Stunned", 0)
+        
+        # Auto-fail STR and DEX saves
+        stats_block.saving_throws.get_ability(Ability.STR).bonus.self_static.add_auto_hit_condition("Stunned", AutoHitStatus.AUTOMISS)
+        stats_block.saving_throws.get_ability(Ability.DEX).bonus.self_static.add_auto_hit_condition("Stunned", AutoHitStatus.AUTOMISS)
+        
+        # Advantage on attacks against this creature
+        stats_block.armor_class.ac.target_static.add_advantage_condition("Stunned", AdvantageStatus.ADVANTAGE)
 
-# class Unconscious(Condition):
-#     name: str = "Unconscious"
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
 
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Unconscious condition to {stats_block.name}")
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
         
-#         # Incapacitated effects (can't take actions or reactions)
-#         stats_block.action_economy.set_max_actions("Unconscious", 0)
-#         stats_block.action_economy.set_max_bonus_actions("Unconscious", 0)
-#         stats_block.action_economy.set_max_reactions("Unconscious", 0)
+        # Remove all effects
+        stats_block.action_economy.actions.remove_effect("Stunned")
+        stats_block.action_economy.bonus_actions.remove_effect("Stunned")
+        stats_block.action_economy.reactions.remove_effect("Stunned")
         
-#         # Can't move
-#         stats_block.speed.set_max_speed_to_zero("Unconscious")
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.remove_effect("Stunned")
         
-#         # Auto-fail STR and DEX saves
-#         stats_block.saving_throws.get_ability(Ability.STR).add_auto_fail_condition("Unconscious", self.unconscious_check)
-#         stats_block.saving_throws.get_ability(Ability.DEX).add_auto_fail_condition("Unconscious", self.unconscious_check)
+        stats_block.saving_throws.get_ability(Ability.STR).bonus.remove_effect("Stunned")
+        stats_block.saving_throws.get_ability(Ability.DEX).bonus.remove_effect("Stunned")
         
-#         # Advantage on attacks against
-#         stats_block.armor_class.add_opponent_advantage_condition("Unconscious", self.unconscious_check)
-        
-#         # Critical hit on attacks within 5 feet
-#         stats_block.armor_class.add_opponent_auto_critical_condition("Unconscious", self.unconscious_melee_check)
-        
-#         # Apply Prone condition
-#         # Disadvantage on attack rolls
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.add_contextual_disadvantage("Unconscious", Prone.prone_attack_check)
-        
-#         # Advantage on melee attacks within 5 feet, disadvantage on attacks from more than 10 feet
-#         stats_block.armor_class.add_opponent_advantage_condition("Unconscious", Prone.prone_melee_advantage_check)
-#         stats_block.armor_class.add_opponent_disadvantage_condition("Unconscious", Prone.prone_ranged_disadvantage_check)
+        stats_block.armor_class.ac.remove_effect("Stunned")
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Unconscious condition from {stats_block.name}")
-        
-#         # Remove Incapacitated effects
-#         stats_block.action_economy.reset_max_actions("Unconscious")
-#         stats_block.action_economy.reset_max_bonus_actions("Unconscious")
-#         stats_block.action_economy.reset_max_reactions("Unconscious")
-        
-#         # Remove movement restriction
-#         stats_block.speed.reset_max_speed("Unconscious")
-        
-#         # Remove auto-fail on STR and DEX saves
-#         stats_block.saving_throws.get_ability(Ability.STR).remove_effect("Unconscious")
-#         stats_block.saving_throws.get_ability(Ability.DEX).remove_effect("Unconscious")
-        
-#         # Remove advantage on attacks against
-#         stats_block.armor_class.remove_opponent_advantage_condition("Unconscious")
-        
-#         # Remove auto-critical condition
-#         stats_block.armor_class.remove_opponent_auto_critical_condition("Unconscious")
-        
-#         # Remove disadvantage on attack rolls
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.remove_effect("Unconscious")
-        
-#         # Remove advantage and disadvantage conditions from armor class
-#         stats_block.armor_class.remove_opponent_advantage_condition("Unconscious")
-#         stats_block.armor_class.remove_opponent_disadvantage_condition("Unconscious")
+        return ConditionRemovedDetails(details="Removed Stunned condition")
 
-#     @staticmethod
-#     def unconscious_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply the effect when unconscious
 
-#     @staticmethod
-#     def unconscious_melee_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target is None or source is None:
-#             return False
-#         distance = source.get_distance(target.sensory.origin)
-#         return distance is not None and distance <= 5  # 5 feet for melee range
+class Restrained(Condition):
+    name: str = "Restrained"
 
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Set speed to 0 for all movement types
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.self_static.add_max_constraint("Restrained", 0)
+        
+        # Add disadvantage to all attacks
+        stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Restrained", AdvantageStatus.DISADVANTAGE)
+        
+        # Add disadvantage to Dexterity saving throws
+        dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
+        dex_save.bonus.self_static.add_advantage_condition("Restrained", AdvantageStatus.DISADVANTAGE)
+
+        # Add advantage to attacks against this creature
+        stats_block.armor_class.ac.target_static.add_advantage_condition("Restrained", AdvantageStatus.ADVANTAGE)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        # Remove all effects
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.remove_effect("Restrained")
+        
+        stats_block.attacks_manager.hit_bonus.remove_effect("Restrained")
+        
+        dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
+        dex_save.bonus.remove_effect("Restrained")
+
+        stats_block.armor_class.ac.remove_effect("Restrained")
+
+        return ConditionRemovedDetails(details="Removed Restrained condition")
+
+class Unconscious(Condition):
+    name: str = "Unconscious"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Incapacitated effects (can't take actions or reactions)
+        stats_block.action_economy.actions.self_static.add_max_constraint("Unconscious", 0)
+        stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Unconscious", 0)
+        stats_block.action_economy.reactions.self_static.add_max_constraint("Unconscious", 0)
+        
+        # Can't move
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj = getattr(stats_block.speed, speed_type)
+            speed_obj.self_static.add_max_constraint("Unconscious", 0)
+        
+        # Auto-fail STR and DEX saves
+        stats_block.saving_throws.get_ability(Ability.STR).bonus.self_static.add_auto_hit_condition("Unconscious", AutoHitStatus.AUTOMISS)
+        stats_block.saving_throws.get_ability(Ability.DEX).bonus.self_static.add_auto_hit_condition("Unconscious", AutoHitStatus.AUTOMISS)
+        
+        # Advantage on attacks against
+        stats_block.armor_class.ac.target_static.add_advantage_condition("Unconscious", AdvantageStatus.ADVANTAGE)
+        
+        # Critical hit on attacks within 5 feet
+        stats_block.armor_class.ac.target_contextual.add_critical_condition("Unconscious", self.unconscious_melee_check)
+
+        # Apply Prone-like effects
+        stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Unconscious", AdvantageStatus.DISADVANTAGE)
+        stats_block.armor_class.ac.target_contextual.add_advantage_condition("Unconscious", self.unconscious_prone_check)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        # Remove all effects
+        stats_block.action_economy.actions.remove_effect("Unconscious")
+        stats_block.action_economy.bonus_actions.remove_effect("Unconscious")
+        stats_block.action_economy.reactions.remove_effect("Unconscious")
+        
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj = getattr(stats_block.speed, speed_type)
+            speed_obj.remove_effect("Unconscious")
+        
+        stats_block.saving_throws.get_ability(Ability.STR).bonus.remove_effect("Unconscious")
+        stats_block.saving_throws.get_ability(Ability.DEX).bonus.remove_effect("Unconscious")
+        
+        stats_block.armor_class.ac.remove_effect("Unconscious")
+        stats_block.attacks_manager.hit_bonus.remove_effect("Unconscious")
+
+        return ConditionRemovedDetails(details="Removed Unconscious condition")
+
+    @staticmethod
+    def unconscious_melee_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> CriticalStatus:
+        if target is None or "Unconscious" not in stats_block.condition_manager.active_conditions:
+            return CriticalStatus.NONE
+        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        if distance is not None and distance <= 5:  # 5 feet for melee range
+            return CriticalStatus.AUTOCRIT
+        return CriticalStatus.NONE
+
+    @staticmethod
+    def unconscious_prone_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
+        if target is None or "Unconscious" not in stats_block.condition_manager.active_conditions:
+            return AdvantageStatus.NONE
+        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        if distance is not None and distance <= 5:  # 5 feet for melee range
+            return AdvantageStatus.ADVANTAGE
+        elif distance is None or distance > 5:  # More than 5 feet for ranged attacks
+            return AdvantageStatus.DISADVANTAGE
+        return AdvantageStatus.NONE
 
 ## missing condition effects
 ## condition effects
