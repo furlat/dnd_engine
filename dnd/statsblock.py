@@ -107,16 +107,25 @@ class StatsBlock(BaseModel, RegistryHolder):
     def perform_attack(self, hand: AttackHand, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
         return self.attacks_manager.roll_to_hit(hand, target_id, context)
 
-    def roll_damage(self, hand: AttackHand, attack_roll: AttackRollOut, target_id: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
-        return self.attacks_manager.roll_damage(hand, attack_roll, target_id, context)
+    def roll_damage(self, attack_roll: AttackRollOut, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+        
+        return self.attacks_manager.roll_damage(attack_roll, context)
 
-    def melee_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
+    def perform_melee_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
         hand = AttackHand.MELEE_RIGHT
         return self.perform_attack(hand, target_id, context)
     
-    def ranged_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
+    def perform_ranged_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
         hand = AttackHand.RANGED_RIGHT
         return self.perform_attack(hand, target_id, context)
+    
+    def melee_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+        attack_roll = self.perform_melee_attack(target_id, context)
+        return self.roll_damage(attack_roll, context)
+    
+    def ranged_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+        attack_roll = self.perform_ranged_attack(target_id, context)
+        return self.roll_damage(attack_roll, context)
     
     def take_damage(self, damage_rolls: Union[DamageRollOut, List[DamageRollOut]], attacker_id: Optional[str] = None, context: Optional[Dict[str, Any]] = None):
         return self.health.take_damage(damage_rolls, attacker_id, context)

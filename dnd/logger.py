@@ -414,7 +414,7 @@ class DamageRollOut(BaseLogEntry):
     log_type: str = "DamageRoll"
     damage_type: DamageType
     dice_roll: SimpleRollOut
-    attack_roll: TargetRollOut
+    attack_roll: 'AttackRollOut'
     damage_bonus: ValueOut
 
     @computed_field
