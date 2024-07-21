@@ -36,6 +36,10 @@ class Entity(StatsBlock):
     @computed_field
     def is_on_battlemap(self) -> bool:
         return self.battlemap_id is not None
+    
+    @computed_field
+    def position(self) -> Optional[Tuple[int, int]]:
+        return self.get_position()
 
     def set_battlemap(self, battlemap_id: str):
         self.battlemap_id = battlemap_id
@@ -64,7 +68,7 @@ class Entity(StatsBlock):
 
     def get_position(self) -> Optional[Tuple[int, int]]:
         if self.battlemap_id:
-            battlemap = RegistryHolder.get_instance(self.battlemap_id)
+            battlemap :BattleMap = RegistryHolder.get_instance(self.battlemap_id)
             if battlemap:
                 return battlemap.get_entity_position(self.id)
         return None

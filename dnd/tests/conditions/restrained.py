@@ -1,62 +1,65 @@
-from dnd.statsblock import StatsBlock
 from dnd.monsters.goblin import create_goblin
 from dnd.monsters.skeleton import create_skeleton
-from dnd.conditions import Restrained, Duration, DurationType
-from dnd.actions import Attack
-from dnd.core import Ability, Skills
-
-def print_creature_details(creature: StatsBlock):
-    print(f"{creature.name} Details:")
-    print(f"HP: {creature.current_hit_points}/{creature.max_hit_points}")
-    print(f"Speed: Walk {creature.speed.get_speed('walk', creature)} ft")
-    print(f"Active Conditions: {', '.join([cond for cond in creature.active_conditions.keys()])}")
+from dnd.conditions import Restrained
+from dnd.logger import Logger
+from dnd.dnd_enums import DurationType, Ability
+from dnd.core import Duration
+from dnd.tests.printer import print_log_details
 
 def test_restrained_condition():
-    goblin = create_goblin()
-    skeleton = create_skeleton()
-    
-    print("\n=== Testing Restrained Condition ===")
-    
-    print("\n1. Initial State")
-    print_creature_details(goblin)
-    
-    def perform_attack_and_check(attacker, defender, description):
-        print(f"\n--- {attacker.name} attacks {defender.name} ({description}) ---")
-        attack_action = next(action for action in attacker.actions if isinstance(action, Attack))
-        hit, details = attack_action.roll_to_hit(defender, verbose=True)
-        print(f"  Advantage status: {details['advantage_status']}")
-        print(f"  Attack roll: {details['roll']}, Total: {details['roll'] + details['total_hit_bonus']}, AC: {details['armor_class']}")
-        print(f"  Result: {'Hit' if hit else 'Miss'}")
+    print("=== Testing Restrained Condition and Logging ===\n")
 
-    def perform_saving_throw(creature, ability, dc, description):
-        print(f"\n--- {creature.name} performs {ability.value} saving throw ({description}) ---")
-        success = creature.perform_saving_throw(ability, dc)
-        saving_throw = creature.saving_throws.get_ability(ability)
-        advantage_status = saving_throw.bonus.get_advantage_status(creature)
-        print(f"  Advantage status: {advantage_status}")
-        print(f"  Result: {'Success' if success else 'Failure'}")
+    # Create creatures
+    goblin = create_goblin("Goblin")
+    skeleton = create_skeleton("Skeleton")
 
-    print("\n2. Goblin attacks and performs Dexterity saving throw before being Restrained")
-    perform_attack_and_check(goblin, skeleton, "before Restrained")
-    perform_saving_throw(goblin, Ability.DEX, 15, "before Restrained")
-    
-    print("\n3. Applying Restrained condition to Goblin")
-    restrained_condition = Restrained(name="Restrained", duration=Duration(time=3, type=DurationType.ROUNDS))
-    goblin.apply_condition(restrained_condition)
-    print_creature_details(goblin)
-    
-    print("\n4. Goblin attacks and performs Dexterity saving throw while Restrained")
-    perform_attack_and_check(goblin, skeleton, "while Restrained")
-    perform_saving_throw(goblin, Ability.DEX, 15, "while Restrained")
-    
-    print("\n5. Advancing time to expire the Restrained condition")
-    for _ in range(3):
-        goblin.update_conditions()
-    print_creature_details(goblin)
-    
-    print("\n6. Goblin attacks and performs Dexterity saving throw after Restrained condition expires")
-    perform_attack_and_check(goblin, skeleton, "after Restrained expires")
-    perform_saving_throw(goblin, Ability.DEX, 15, "after Restrained expires")
+    def print_creature_status(creature):
+        print(f"{creature.name} Status:")
+        print(f"  Speed: {creature.speed.walk.apply(creature).total_bonus}")
+        print(f"  Attack Bonus: {creature.attacks_manager.hit_bonus.apply(creature).advantage_tracker.status}")
+        print(f"  DEX Save Bonus: {creature.saving_throws.get_ability(Ability.DEX).bonus.apply(creature).advantage_tracker.status}")
+        print(f"  AC: {creature.armor_class.ac.apply(creature).total_bonus}")
+        print()
+
+    print("Initial state:")
+    print_creature_status(goblin)
+
+    print("Applying Restrained to Goblin")
+    restrained_condition = Restrained(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=goblin.id)
+    condition_log = goblin.condition_manager.add_condition(restrained_condition)
+    print_log_details(condition_log)
+
+    print("Goblin status after Restrained:")
+    print_creature_status(goblin)
+
+    print("Goblin attacks Skeleton (while Restrained)")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
+
+    print("Skeleton attacks Goblin (Restrained)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("Goblin attempts Dexterity saving throw")
+    dex_save = goblin.perform_saving_throw(Ability.DEX, 10)
+    print_log_details(dex_save)
+
+    print("\nAdvancing duration for Restrained condition")
+    for _ in range(2):
+        advance_result = goblin.condition_manager.advance_durations()
+        for log in advance_result:
+            print_log_details(log)
+
+    print("Goblin status after Restrained expires:")
+    print_creature_status(goblin)
+
+    print("Goblin attacks Skeleton (no longer Restrained)")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
+
+    print("Skeleton attacks Goblin (no longer Restrained)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
 
 if __name__ == "__main__":
     test_restrained_condition()

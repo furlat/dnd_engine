@@ -1,79 +1,77 @@
-from infinipy.dnd.statsblock import *
-from infinipy.dnd.monsters.goblin import create_goblin
-from infinipy.dnd.monsters.skeleton import create_skeleton
-from infinipy.dnd.conditions import Unconscious, Duration, DurationType
-from infinipy.dnd.core import Ability
-
-def print_creature_details(creature):
-    print(f"{creature.name} Details:")
-    print(f"Speed: {creature.speed.walk.get_value(creature)} ft")
-    print(f"Armor Class: {creature.armor_class.get_value(creature)}")
-    print(f"Hit Points: {creature.current_hit_points}/{creature.max_hit_points}")
-    print(f"Active Conditions: {', '.join([cond for cond in creature.active_conditions.keys()])}")
-    print(f"Available Actions: {creature.action_economy.actions.get_value(creature)}")
-    print(f"Available Bonus Actions: {creature.action_economy.bonus_actions.get_value(creature)}")
-    print(f"Available Reactions: {creature.action_economy.reactions.get_value(creature)}")
-    print(f"Distances: {creature.distances}")
-
-def perform_attack(attacker, defender):
-    attack_action = next(action for action in attacker.actions if isinstance(action, Attack))
-    hit, details = attack_action.roll_to_hit(defender, verbose=True)
-    print(f"  Advantage status: {details['advantage_status']}")
-    print(f"  Attack roll: {details['roll']}, Total: {details['roll'] + details['total_hit_bonus']}, AC: {details['armor_class']}")
-    print(f"  Result: {'Hit' if hit else 'Miss'}")
-    print(f"  Critical: {details['is_auto_critical'] or details['is_critical_hit']}")
+from dnd.monsters.goblin import create_goblin
+from dnd.monsters.skeleton import create_skeleton
+from dnd.conditions import Unconscious
+from dnd.logger import Logger
+from dnd.dnd_enums import DurationType, Ability
+from dnd.core import Duration
+from dnd.tests.printer import print_log_details
 
 def test_unconscious_condition():
-    goblin = create_goblin()
-    skeleton = create_skeleton()
-    
-    print("\n=== Testing Unconscious Condition ===")
-    
-    print("\n1. Initial State")
-    print_creature_details(goblin)
-    print_creature_details(skeleton)
-    
-    print("\n2. Setting initial distances")
-    goblin.add_distance(skeleton.id, 5)  # Skeleton is 5 feet away from Goblin
-    skeleton.add_distance(goblin.id, 5)  # Goblin is 5 feet away from Skeleton
-    print_creature_details(goblin)
-    print_creature_details(skeleton)
-    
-    print("\n3. Applying Unconscious condition to Goblin")
-    unconscious_condition = Unconscious(name="Unconscious", duration=Duration(time=3, type=DurationType.ROUNDS))
-    goblin.apply_condition(unconscious_condition)
-    print_creature_details(goblin)
-    
-    print("\n4. Goblin attempts to take an action")
-    print(f"Available actions: {goblin.action_economy.actions.get_value(goblin)}")
-    
-    print("\n5. Skeleton attacks Unconscious Goblin (within 5 feet)")
-    perform_attack(skeleton, goblin)
-    
-    print("\n6. Goblin attempts a Strength saving throw")
-    success = goblin.perform_saving_throw(Ability.STR, 10)
-    print(f"Strength saving throw result: {'Success' if success else 'Failure'}")
-    
-    print("\n7. Goblin attempts a Dexterity saving throw")
-    success = goblin.perform_saving_throw(Ability.DEX, 10)
-    print(f"Dexterity saving throw result: {'Success' if success else 'Failure'}")
-    
-    print("\n8. Moving Skeleton away from Goblin")
-    goblin.add_distance(skeleton.id, 15)  # Skeleton is now 15 feet away from Goblin
-    skeleton.add_distance(goblin.id, 15)  # Goblin is now 15 feet away from Skeleton
-    print_creature_details(goblin)
-    print_creature_details(skeleton)
-    
-    print("\n9. Skeleton attacks Unconscious Goblin (beyond 5 feet)")
-    perform_attack(skeleton, goblin)
-    
-    print("\n10. Advancing time to expire the Unconscious condition")
-    for _ in range(3):
-        goblin.update_conditions()
-    print_creature_details(goblin)
-    
-    print("\n11. Goblin attacks Skeleton after Unconscious condition expires")
-    perform_attack(goblin, skeleton)
+    print("=== Testing Unconscious Condition and Logging ===\n")
+
+    # Create creatures
+    goblin = create_goblin("Goblin")
+    skeleton = create_skeleton("Skeleton")
+
+    # Set up initial positions
+    goblin.sensory.update_origin((0, 0))
+    skeleton.sensory.update_origin((1, 0))  # 5 feet away
+    goblin.sensory.update_distance_matrix({(1, 0): 5})
+    skeleton.sensory.update_distance_matrix({(0, 0): 5})
+
+    def print_creature_status(creature):
+        print(f"{creature.name} Status:")
+        print(f"  Actions: {creature.action_economy.actions.apply(creature).total_bonus}")
+        print(f"  Bonus Actions: {creature.action_economy.bonus_actions.apply(creature).total_bonus}")
+        print(f"  Reactions: {creature.action_economy.reactions.apply(creature).total_bonus}")
+        print(f"  Speed: {creature.speed.walk.apply(creature).total_bonus}")
+        print(f"  AC: {creature.armor_class.ac.apply(creature).total_bonus}")
+        print()
+
+    print("Initial state:")
+    print_creature_status(goblin)
+
+    print("Applying Unconscious to Goblin")
+    unconscious_condition = Unconscious(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=goblin.id)
+    condition_log = goblin.condition_manager.add_condition(unconscious_condition)
+    print_log_details(condition_log)
+
+    print("Goblin status after Unconscious:")
+    print_creature_status(goblin)
+
+    print("Skeleton attacks Unconscious Goblin (within 5 feet)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("Goblin attempts Strength saving throw")
+    str_save = goblin.perform_saving_throw(Ability.STR, 10)
+    print_log_details(str_save)
+
+    print("Goblin attempts Dexterity saving throw")
+    dex_save = goblin.perform_saving_throw(Ability.DEX, 10)
+    print_log_details(dex_save)
+
+    print("\nMoving Skeleton away from Goblin")
+    skeleton.sensory.update_origin((3, 0))  # 15 feet away
+    goblin.sensory.update_distance_matrix({(3, 0): 15})
+    skeleton.sensory.update_distance_matrix({(0, 0): 15})
+
+    print("Skeleton attacks Unconscious Goblin (beyond 5 feet)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("\nAdvancing duration for Unconscious condition")
+    for _ in range(2):
+        advance_result = goblin.condition_manager.advance_durations()
+        for log in advance_result:
+            print_log_details(log)
+
+    print("Goblin status after Unconscious expires:")
+    print_creature_status(goblin)
+
+    print("Goblin attacks Skeleton (no longer Unconscious)")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
 
 if __name__ == "__main__":
     test_unconscious_condition()
