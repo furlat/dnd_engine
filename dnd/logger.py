@@ -112,14 +112,21 @@ class ValueOut(BaseLogEntry):
         min_bonus = self.min_constraints.total_bonus
         max_bonus = self.max_constraints.total_bonus
         #rule is that min bonus has priority over max bonus then so first take min(bonus, max_bonus) and then max(min_bonus, min(bonus, max_bonus))
-        return max(min_bonus, min(bonus, max_bonus))
+        if min_bonus and max_bonus:
+            return max(min_bonus, min(bonus, max_bonus))
+        elif min_bonus:
+            return max(min_bonus, bonus)
+        elif max_bonus:
+            return min(max_bonus, bonus)
+        else:
+            return bonus
 
 
     def combine_with(self, other: 'ValueOut',bonus_converter: Optional[BonusConverter] = None) -> 'ValueOut':
         
-        new_bonuses = self.bonuses.combine_with(other.bonuses,bonus_convter = bonus_converter)
-        new_min =self.min_constraints.combine_with(other.min_constraints,bonus_convter = bonus_converter)
-        new_max = self.max_constraints.combine_with(other.max_constraints,bonus_convter = bonus_converter)
+        new_bonuses = self.bonuses.combine_with(other.bonuses,bonus_converter = bonus_converter)
+        new_min =self.min_constraints.combine_with(other.min_constraints,bonus_converter = bonus_converter)
+        new_max = self.max_constraints.combine_with(other.max_constraints,bonus_converter = bonus_converter)
         new_advantage= self.advantage_tracker.combine_with(other.advantage_tracker)
         new_critical = self.critical_tracker.combine_with(other.critical_tracker)
         new_auto_hit = self.auto_hit_tracker.combine_with(other.auto_hit_tracker)
@@ -428,7 +435,8 @@ class AttackRollOut(BaseLogEntry):
     hand: AttackHand
     ability: Ability
     attack_type: AttackType
-    target_ac: int
+    target_ac: ValueOut
+    total_target_ac: int
     roll: TargetRollOut
     attack_bonus: AttackBonusOut 
 

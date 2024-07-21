@@ -1,56 +1,72 @@
-from dnd.battlemap import Entity
+from dnd.core import  Ability, AbilityScores,AbilityScore, Speed, Sensory,Armor, Shield, Weapon
+from dnd.dnd_enums import AttackType, WeaponProperty, DamageType, RangeType, Size, MonsterType, Alignment, SensesType, Language, AttackHand,ArmorType
+from dnd.contextual import ModifiableValue, BaseValue
 from dnd.statsblock import StatsBlock
-from dnd.equipment import Armor, ArmorType, Shield, Weapon
-from dnd.core import Ability, AbilityScores, AbilityScore, ModifiableValue, Dice, Speed, Skills, Sense, Sensory
-from dnd.dnd_enums import AttackType, WeaponProperty, DamageType, RangeType, Size, MonsterType, Alignment, SensesType, Language
-from dnd.actions import Damage, Range
 
-def create_goblin() -> Entity:
-    goblin_stats = StatsBlock(
-        name="Goblin",
-        size=Size.SMALL,
-        type=MonsterType.HUMANOID,
-        alignment=Alignment.NEUTRAL_EVIL,
-        speed=Speed(walk=ModifiableValue(base_value=30)),
-        ability_scores=AbilityScores(
-            strength=AbilityScore(ability=Ability.STR, score=ModifiableValue(base_value=8)),
-            dexterity=AbilityScore(ability=Ability.DEX, score=ModifiableValue(base_value=14)),
-            constitution=AbilityScore(ability=Ability.CON, score=ModifiableValue(base_value=10)),
-            intelligence=AbilityScore(ability=Ability.INT, score=ModifiableValue(base_value=10)),
-            wisdom=AbilityScore(ability=Ability.WIS, score=ModifiableValue(base_value=8)),
-            charisma=AbilityScore(ability=Ability.CHA, score=ModifiableValue(base_value=8)),
+def create_goblin(name:str ='Goblin') -> StatsBlock:
+    goblin = StatsBlock(
+        meta=dict(
+            name=name,
+            size=Size.SMALL,
+            type=MonsterType.HUMANOID,
+            alignment=Alignment.NEUTRAL_EVIL,
+            languages=[Language.COMMON, Language.GOBLIN],
+            challenge=0.25,
+            experience_points=50
         ),
-        languages=[Language.COMMON, Language.GOBLIN],
-        challenge=0.25,
-        experience_points=50,
-        hit_dice=Dice(dice_count=2, dice_value=6, modifier=0),
-        sensory=Sensory(senses=[Sense(type=SensesType.DARKVISION, range=60)])
+        speed=Speed(
+            description="The goblin can move 30 feet per turn.",
+            walk=ModifiableValue(name="walk_speed", base_value=BaseValue(name="base_walk_speed", base_value=30))
+        ),
+        ability_scores=AbilityScores(
+            strength=AbilityScore(ability=Ability.STR, score=ModifiableValue(name="strength", base_value=BaseValue(name="base_strength", base_value=8))),
+            dexterity=AbilityScore(ability=Ability.DEX, score=ModifiableValue(name="dexterity", base_value=BaseValue(name="base_dexterity", base_value=14))),
+            constitution=AbilityScore(ability=Ability.CON, score=ModifiableValue(name="constitution", base_value=BaseValue(name="base_constitution", base_value=10))),
+            intelligence=AbilityScore(ability=Ability.INT, score=ModifiableValue(name="intelligence", base_value=BaseValue(name="base_intelligence", base_value=10))),
+            wisdom=AbilityScore(ability=Ability.WIS, score=ModifiableValue(name="wisdom", base_value=BaseValue(name="base_wisdom", base_value=8))),
+            charisma=AbilityScore(ability=Ability.CHA, score=ModifiableValue(name="charisma", base_value=BaseValue(name="base_charisma", base_value=8)))
+        ),
+        health=dict(
+            hit_dice_value=6,
+            hit_dice_count=2
+        ),
+        sensory=Sensory(
+            senses=[dict(type=SensesType.DARKVISION, range=60)]
+        )
     )
 
-    
-
+    # Equip armor
     leather_armor = Armor(name="Leather Armor", type=ArmorType.LIGHT, base_ac=11, dex_bonus=True)
-    goblin_stats.armor_class.equip_armor(leather_armor, ability_scores=goblin_stats.ability_scores)
+    goblin.armor_class.equip_armor(leather_armor)
     
+    # Equip shield
     shield = Shield(name="Shield", ac_bonus=2)
-    goblin_stats.armor_class.equip_shield(shield, ability_scores=goblin_stats.ability_scores)
+    goblin.armor_class.equip_shield(shield)
     
+    # Create and equip weapons
     scimitar = Weapon(
         name="Scimitar",
-        damage=Damage(dice=Dice(dice_count=1, dice_value=6, modifier=0), type=DamageType.SLASHING),
+        damage_dice=6,
+        dice_numbers=1,
+        damage_type=DamageType.SLASHING,
         attack_type=AttackType.MELEE_WEAPON,
         properties=[WeaponProperty.FINESSE],
-        range=Range(type=RangeType.REACH, normal=5)
+        range=dict(type=RangeType.REACH, normal=5)
     )
-    goblin_stats.weapons.append(scimitar)
+    goblin.attacks_manager.equip_right_hand_melee_weapon(scimitar)
     
     shortbow = Weapon(
         name="Shortbow",
-        damage=Damage(dice=Dice(dice_count=1, dice_value=6, modifier=0), type=DamageType.PIERCING),
+        damage_dice=6,
+        dice_numbers=1,
+        damage_type=DamageType.PIERCING,
         attack_type=AttackType.RANGED_WEAPON,
         properties=[WeaponProperty.RANGED],
-        range=Range(type=RangeType.RANGE, normal=80, long=320)
+        range=dict(type=RangeType.RANGE, normal=80, long=320)
     )
-    goblin_stats.weapons.append(shortbow)
-    goblin = Entity(**goblin_stats.model_dump())
+    goblin.attacks_manager.equip_right_hand_ranged_weapon(shortbow)
+
     return goblin
+
+# goblin = create_goblin()
+# print(goblin)
