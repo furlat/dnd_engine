@@ -43,17 +43,20 @@ class StaticModifier(BaseModel):
     critical_conditions: Dict[str, CriticalStatus] = Field(default_factory=dict)
 
     def add_bonus(self, source: str, value: int):
-        self.bonuses.update([source, value])
+        self.bonuses.update([(source, value)])
     def add_min_constraint(self, source: str, value: int):
-        self.min_constraints.update([source, value])
+        self.min_constraints.update([(source, value)])
     def add_max_constraint(self, source: str, value: int):
-        self.max_constraints.update([source, value])
+        self.max_constraints.update([(source, value)])
     def add_critical_condition(self, source: str, condition: CriticalStatus):
-        self.critical_conditions.update([source, condition])
+        self.critical_conditions.update([(source, condition)])
     def add_advantage_condition(self, source: str, condition: AdvantageStatus):
-        self.advantage_conditions.update([source, condition])
+
+        self.advantage_conditions.update([(source, condition)])
     def add_auto_hit_condition(self, source: str, condition: AutoHitStatus):
-        self.auto_hit_conditions.update([source, condition])
+        self.auto_hit_conditions.update([(source, condition)])
+    def _convert_items_to_list(self, d: Dict[str, Any]) -> Dict[str, List[Any]]:
+        return {k: [v] for k, v in d.items()}
     def get_bonus_tracker(self) -> BonusTracker:
         return BonusTracker(bonuses=self.bonuses)
     def get_min_value_tracker(self) -> BonusTracker:
@@ -61,11 +64,11 @@ class StaticModifier(BaseModel):
     def get_max_value_tracker(self) -> BonusTracker:
         return BonusTracker(bonuses=self.max_constraints)
     def get_advantage_tracker(self) -> AdvantageTracker:
-        return AdvantageTracker(active_sources=self.advantage_conditions)
+        return AdvantageTracker(active_sources=self._convert_items_to_list(self.advantage_conditions))
     def get_auto_hit_tracker(self) -> AutoHitTracker:
-        return AutoHitTracker(auto_hit_statuses=self.auto_hit_conditions)
+        return AutoHitTracker(auto_hit_statuses=self._convert_items_to_list(self.auto_hit_conditions))
     def get_critical_tracker(self) -> CriticalTracker:
-        return CriticalTracker(critical_statuses=self.critical_conditions)
+        return CriticalTracker(critical_statuses=self._convert_items_to_list(self.critical_conditions))
     def remove_effect(self, source: str):
         self.bonuses.pop(source, None)
         self.min_constraints.pop(source, None)
@@ -94,22 +97,22 @@ class ContextualModifier(BaseModel):
 
 
     def add_bonus(self, source: str, bonus: ContextAwareBonus):
-        self.bonuses.update([source, bonus])
+        self.bonuses.update([(source, bonus)])
 
     def add_min_constraint(self, source: str, constraint: ContextAwareBonus):
-        self.min_constraints.update([source, constraint])
+        self.min_constraints.update([(source, constraint)])
 
     def add_max_constraint(self, source: str, constraint: ContextAwareBonus):
-        self.max_constraints.update([source, constraint])
+        self.max_constraints.update([(source, constraint)])
 
     def add_critical_condition(self, source: str, condition: ContextAwareCritical):
-        self.critical_conditions.update([source, condition])
+        self.critical_conditions.update([(source, condition)])
     
     def add_advantage_condition(self, source: str, condition: ContextAwareCondition):
-        self.advantage_conditions.update([source, condition])
+        self.advantage_conditions.update([(source, condition)])
 
     def add_auto_hit_condition(self, source: str, condition: ContextAwareCondition):
-        self.auto_hit_conditions.update([source, condition])
+        self.auto_hit_conditions.update([(source, condition)])
 
     def get_bonus_tracker(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> BonusTracker:
         bonuses = {}
@@ -128,6 +131,9 @@ class ContextualModifier(BaseModel):
     def get_max_value_tracker(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> BonusTracker:
         max_values = {}
         for source, constraint in self.max_constraints.items():
+            print("AAAAAA")
+            print(f"source: {source}")
+            print(f"constraint: {constraint}")
             value = constraint(stats_block, target, context)
             max_values = update_or_sum_to_dict(max_values, (source, value))
         return BonusTracker(bonuses=max_values)
@@ -135,6 +141,7 @@ class ContextualModifier(BaseModel):
     def get_advantage_tracker(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> AdvantageTracker:
         active_advantage_status= {}
         for source, condition in self.advantage_conditions.items():
+    
             status = condition(stats_block, target, context)
             active_advantage_status = update_or_concat_to_dict(active_advantage_status, (source, status))
         return AdvantageTracker(active_sources=active_advantage_status)

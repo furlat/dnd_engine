@@ -35,11 +35,11 @@ class BaseRoll(BaseModel):
             chosen_rolls = all_rolls
         elif advantage_status == AdvantageStatus.ADVANTAGE:
             for i in range(self.dice_count):
-                all_rolls.append(random.randint(1,self.dice_value),random.randint(1,self.dice_value))
+                all_rolls.append((random.randint(1,self.dice_value),random.randint(1,self.dice_value)))
             chosen_rolls = [max(roll) for roll in all_rolls]
         elif advantage_status == AdvantageStatus.DISADVANTAGE:
             for i in range(self.dice_count):
-                all_rolls.append(random.randint(1,self.dice_value),random.randint(1,self.dice_value))
+                all_rolls.append((random.randint(1,self.dice_value),random.randint(1,self.dice_value)))
             chosen_rolls = [min(roll) for roll in all_rolls]
 
         return SimpleRollOut(
@@ -276,8 +276,10 @@ class Skill(BlockComponent):
         target_to_self_bonus = None
         if target_stats_block:
             target_skill = target_stats_block.skillset.get_skill(self.skill)
-            target_to_self_bonus = target_skill.bonus.apply_to_target(target,stats_block,context)
+            target_to_self_bonus = target_skill.bonus.apply_to_target(target_stats_block,stats_block,context)
             total_bonus = skill_bonus.combine_with(target_to_self_bonus)
+        else:
+            total_bonus = skill_bonus
         
         total_bonus = total_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier).combine_with(proficiency_bonus,bonus_converter=self._get_proficiency_converter())
         return SkillBonusOut(
@@ -288,7 +290,7 @@ class Skill(BlockComponent):
             target_to_self_bonus=target_to_self_bonus,
             total_bonus=total_bonus,
             source_entity_id=stats_block.id,
-            target_entity_id=target.id if target else None
+            target_entity_id=target if target else None
         )
 
     
@@ -300,7 +302,7 @@ class Skill(BlockComponent):
             skill=self.skill,
             ability=self.ability,
             skill_proficient=self.proficient,
-            skill_expertise=self.expertise,
+            skill_expert=self.expertise,
             dc=dc,
             roll=roll_out,
             bonus=skill_bonus_out,
@@ -399,14 +401,14 @@ class SavingThrow(BlockComponent):
             return (ability_bonus - 10) // 2
         stats_block,target_stats_block = self.get_stats_blocks(target)
         
-        ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(stats_block, target, context)
+        ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(target, context)
         
         proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block, target, context)
         saving_throw_bonus = self.bonus.apply(stats_block, target, context)
         target_to_self_bonus = None
         if target_stats_block:
             target_ability = target_stats_block.saving_throws.get_ability(self.ability)
-            target_to_self_bonus = target_ability.bonus.apply_to_target(target,stats_block,context)
+            target_to_self_bonus = target_ability.bonus.apply_to_target(target_stats_block,stats_block,context)
             total_bonus = saving_throw_bonus.combine_with(target_to_self_bonus)
         else:
             total_bonus = saving_throw_bonus
@@ -872,21 +874,21 @@ class Sensory(BlockComponent):
 
     def update_distance_matrix(self, distances: Dict[Tuple[int, int], int]):
         self.distance_matrix = DistanceMatrix(
-            battlemap_id=self.battlemap_id,
+            battlemap_id=self.battlemap_id if self.battlemap_id else "testing",
             origin=self.origin,
             distances=distances
         )
 
     def update_fov(self, visible_tiles: Set[Tuple[int, int]]):
         self.fov = FOV(
-            battlemap_id=self.battlemap_id,
+            battlemap_id=self.battlemap_id if self.battlemap_id else "testing",
             origin=self.origin,
             visible_tiles=visible_tiles
         )
 
     def update_paths(self, paths: Dict[Tuple[int, int], List[Tuple[int, int]]]):
         self.paths = Paths(
-            battlemap_id=self.battlemap_id,
+            battlemap_id=self.battlemap_id if self.battlemap_id else "testing",
             origin=self.origin,
             paths=paths
         )
@@ -955,11 +957,13 @@ class ConditionManager(BlockComponent):
     
     
     def add_condition(self, condition: Condition,context: Optional[Dict[str, Any]] = None)  -> Union[ConditionApplied, ConditionNotApplied]:
+        if condition.targeted_entity_id is None:
+            condition.targeted_entity_id = self.owner_id
         
         condition_application_report = condition.apply(context)
         if isinstance(condition_application_report, ConditionApplied):
             self.active_conditions[condition.name] = condition
-            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, condition.source_entity_id, condition.name)
+            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (condition.source_entity_id, condition.name))
         return condition_application_report
 
     
@@ -970,13 +974,13 @@ class ConditionManager(BlockComponent):
         self.active_conditions_by_source[condition.source_entity_id].remove(condition_name)
     
     def add_condition_immunity(self, condition_name: str, immunity_name: str = "self_immunity"):
-        self.condition_immunities= update_or_concat_to_dict(self.condition_immunities, condition_name, immunity_name)
+        self.condition_immunities= update_or_concat_to_dict(self.condition_immunities, (condition_name, immunity_name))
 
     def remove_condition_immunity(self, condition_name: str):
         self.condition_immunities.pop(condition_name)
 
     def add_contextual_condition_immunity(self, condition_name: str, immunity_name: str, immunity_check: ContextAwareImmunity):
-        self.contextual_condition_immunities = update_or_concat_to_dict(self.contextual_condition_immunities, condition_name, (immunity_name, immunity_check))
+        self.contextual_condition_immunities = update_or_concat_to_dict(self.contextual_condition_immunities, (condition_name, (immunity_name, immunity_check)))
 
     def remove_contextual_condition_immunity(self, condition_name: str, immunity_name: str):
         if condition_name in self.contextual_condition_immunities:
@@ -1060,7 +1064,7 @@ class Condition(BlockComponent):
                 stats_block.condition_manager.add_condition(self)
                 return ConditionApplied(
                     condition=self.name,
-                    applied_details=applied_details,
+                    details=applied_details,
                     source_entity_id=self.source_entity_id if self.source_entity_id else None,
                     target_entity_id=self.targeted_entity_id,
                     duration=self.duration,
@@ -1070,10 +1074,9 @@ class Condition(BlockComponent):
                 )
         else:
             applied_details = self._apply(stats_block)
-            stats_block.condition_manager.add_condition(self)
             return ConditionApplied(
                 condition=self.name,
-                applied_details=applied_details,
+                details=applied_details,
                 source_entity_id=self.source_entity_id if self.source_entity_id else None,
                 target_entity_id=self.targeted_entity_id,
                 duration=self.duration
@@ -1122,14 +1125,12 @@ class Condition(BlockComponent):
         )
     
     def advance_duration(self) -> Optional[ConditionRemoved]:
-        self.duration.advance()
-        expired = self.process_expiration()
-        if expired:
-            return expired
+        if self.duration.advance():
+            return self.process_expiration()
         elif self.removal_saving_throw:
             return self.roll_removal_saving_throw()
         return None
-    
+        
     def _remove_from_targeted(self) -> ConditionRemovedDetails:
         condition_removed_details = self._remove()
         targeted_block = self.get_target(self.targeted_entity_id)
@@ -1258,6 +1259,7 @@ class AttacksManager(BlockComponent):
         weapon_ranged_bonus = None
         spell_bonus = None
         stast_block, target_stats_block = self.get_stats_blocks(target)
+        generic_hit_bonus = self.hit_bonus.apply(stast_block,target_stats_block,context)
         if hand == AttackHand.MELEE_RIGHT:
             attacker_melee_bonus= self.melee_hit_bonus.apply(stast_block,target_stats_block,context)
             if self.melee_right_hand:
@@ -1279,7 +1281,7 @@ class AttacksManager(BlockComponent):
 
         all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
         all_bonuses : List[ValueOut] = [bonus for bonus in all_bonuses if bonus]
-        total_weapon_bonus = all_bonuses[0].combine_with_multiple(all_bonuses[1:])
+        total_weapon_bonus = generic_hit_bonus.combine_with_multiple(all_bonuses)
         return WeaponAttackBonusOut(
             attacker_melee_bonus=attacker_melee_bonus,
             attacker_ranged_bonus=attacker_ranged_bonus,
@@ -1370,6 +1372,7 @@ class AttacksManager(BlockComponent):
         weapon_ranged_bonus = None
         spell_bonus = None
         stast_block, target_stats_block = self.get_stats_blocks(target)
+        general_damage_bonus = self.damage_bonus.apply(stast_block,target_stats_block,context)
         if hand == AttackHand.MELEE_RIGHT:
             attacker_melee_bonus= self.melee_damage_bonus.apply(stast_block,target_stats_block,context)
             if self.melee_right_hand:
@@ -1391,7 +1394,7 @@ class AttacksManager(BlockComponent):
 
         all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
         all_bonuses :List[ValueOut] = [bonus for bonus in all_bonuses if bonus]
-        total_weapon_bonus = all_bonuses[0].combine_with_multiple(all_bonuses[1:])
+        total_weapon_bonus = general_damage_bonus.combine_with_multiple(all_bonuses)
         return WeaponDamageBonusOut(
             attacker_melee_bonus=attacker_melee_bonus,
             attacker_ranged_bonus=attacker_ranged_bonus,
@@ -1472,11 +1475,9 @@ class AttacksManager(BlockComponent):
         
     def can_dual_wield_ranged(self, weapon: Weapon,hand:str='left') -> bool:
         if WeaponProperty.TWO_HANDED in weapon.properties:
-            print(f"The weapon can not be dual wielded because it is two handed")
             return False
         elif not self.dual_wielder and hand == 'left' and WeaponProperty.LIGHT not in weapon.properties:
             #if not dual wielder and weapon is not light it can't be dual wielded same for two handed weapons
-            print(f"The weapon can not be dual wielded because it is not light")
             return False
         elif not self.dual_wielder and hand == 'left' and WeaponProperty.LIGHT in weapon.properties:
             #not dual wielder but the weapon is light and it is the left hand

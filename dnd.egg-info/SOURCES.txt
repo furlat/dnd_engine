@@ -11,9 +11,8 @@ dnd/default_actions.py
 dnd/dijkstra.py
 dnd/dnd_enums.py
 dnd/docstrings.py
-dnd/equipment.py
 dnd/logger.py
-dnd/newlogs.py
+dnd/markdown.py
 dnd/shadowcast.py
 dnd/spatial.py
 dnd/statsblock.py
@@ -34,5 +33,6 @@ dnd/tests/ex_log.py
 dnd/tests/example_bm.py
 dnd/tests/new_logs.py
 dnd/tests/pathfinding.py
+dnd/tests/printer.py
 dnd/tests/shadows.py
 dnd/tests/test_battlemap.py

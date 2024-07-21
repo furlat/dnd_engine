@@ -1,261 +1,244 @@
-from pydantic import BaseModel, Field
-from typing import Optional, TYPE_CHECKING, Dict, Any, Tuple, Union
-import uuid
-from dnd.core import  SensesType, RegistryHolder
-from dnd.actions import Attack
-from dnd.dnd_enums import Ability, Skills,DurationType
-from typing import List
-
-
-if TYPE_CHECKING:
-    from dnd.statsblock import StatsBlock
-
-
+from typing import Dict, Any, Optional
+from pydantic import Field
+from dnd.core import Condition, ConditionAppliedDetails, ConditionRemovedDetails
+from dnd.contextual import ContextAwareAutoHit, ModifiableValue
+from dnd.dnd_enums import AdvantageStatus, AutoHitStatus, Skills,Ability
+from dnd.statsblock import StatsBlock
 
 class Blinded(Condition):
     name: str = "Blinded"
+    description: str = "A blinded creature can't see and automatically fails any ability check that requires sight. Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage."
 
-    def _apply(self, stats_block: 'StatsBlock') -> ConditionLog:
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Add disadvantage to all attacks (static)
+        stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Blinded", AdvantageStatus.DISADVANTAGE)
+        
+        # Give advantage to all attacks against this creature (static)
+        stats_block.armor_class.ac.target_static.add_advantage_condition("Blinded", AdvantageStatus.ADVANTAGE)
+
+        # Add auto-fail condition for sight-based ability checks (contextual)
+        for skill in Skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.self_contextual.add_auto_hit_condition("Blinded", self.blinded_sight_check)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        # Remove effects
+        stats_block.attacks_manager.hit_bonus.remove_effect("Blinded")
+        stats_block.armor_class.ac.remove_effect("Blinded")
+        for skill in Skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.remove_effect("Blinded")
+
+        return ConditionRemovedDetails(details="Removed Blinded condition")
+
+    @staticmethod
+    def blinded_sight_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AutoHitStatus:
+        if context and context.get('requires_sight', False):
+            return AutoHitStatus.AUTOMISS
+        return AutoHitStatus.NONE
+
+# Type hint for the static method
+
+class Charmed(Condition):
+    name: str = "Charmed"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Prevent attacking the charmer
+        stats_block.attacks_manager.hit_bonus.self_contextual.add_auto_hit_condition("Charmed", self.charmed_attack_check)
+
+        # Add advantage on social checks for the charmer
+        social_skills = [Skills.DECEPTION, Skills.INTIMIDATION, Skills.PERFORMANCE, Skills.PERSUASION]
+        for skill in social_skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.target_contextual.add_advantage_condition("Charmed", self.charmed_social_check)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        stats_block.attacks_manager.hit_bonus.remove_effect("Charmed")
+        
+        social_skills = [Skills.DECEPTION, Skills.INTIMIDATION, Skills.PERFORMANCE, Skills.PERSUASION]
+        for skill in social_skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.remove_effect("Charmed")
+
+        return ConditionRemovedDetails(details="Removed Charmed condition")
+
+    @staticmethod
+    def charmed_social_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
+        if target and "Charmed" in stats_block.condition_manager.active_conditions:
+            charmed_condition = stats_block.condition_manager.active_conditions["Charmed"]
+            if charmed_condition.source_entity_id == target.id:
+                return AdvantageStatus.ADVANTAGE
+        return AdvantageStatus.NONE
+
+    @staticmethod
+    def charmed_attack_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AutoHitStatus:
+        if target and "Charmed" in stats_block.condition_manager.active_conditions:
+            charmed_condition = stats_block.condition_manager.active_conditions["Charmed"]
+            if charmed_condition.source_entity_id == target.id:
+                return AutoHitStatus.AUTOMISS
+        return AutoHitStatus.NONE
+
+    
+class Dashing(Condition):
+    name: str = "Dashing"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            base_speed = speed_obj.base_value.base_value
+            if base_speed > 0:
+                speed_obj.self_static.add_bonus("Dashing", base_speed)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.remove_effect("Dashing")
+
+        return ConditionRemovedDetails(details="Removed Dashing condition")
+    
+
+class Deafened(Condition):
+    name: str = "Deafened"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Add auto-fail condition for hearing-based ability checks
+        for skill in Skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.self_contextual.add_auto_hit_condition("Deafened", self.deafened_hearing_check)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        for skill in Skills:
+            skill_obj = stats_block.skillset.get_skill(skill)
+            skill_obj.bonus.remove_effect("Deafened")
+
+        return ConditionRemovedDetails(details="Removed Deafened condition")
+
+    @staticmethod
+    def deafened_hearing_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AutoHitStatus:
+        if context and context.get('requires_hearing', False):
+            return AutoHitStatus.AUTOMISS
+        return AutoHitStatus.NONE
+
+    
+    
+class Dodging(Condition):
+    name: str = "Dodging"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        # Add disadvantage to attacks against this creature
+        stats_block.armor_class.ac.target_static.add_advantage_condition("Dodging", AdvantageStatus.DISADVANTAGE)
+        
+        # Add advantage to Dexterity saving throws
+        dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
+        dex_save.bonus.self_static.add_advantage_condition("Dodging", AdvantageStatus.ADVANTAGE)
+
+        return ConditionAppliedDetails(
+            condition_name=self.name,
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
+        )
+
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
+        
+        stats_block.armor_class.ac.remove_effect("Dodging")
+        dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
+        dex_save.bonus.remove_effect("Dodging")
+
+        return ConditionRemovedDetails(details="Removed Dodging condition")
+
+class Frightened(Condition):
+    name: str = "Frightened"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
         # Add disadvantage to all attacks
-        for action in stats_block.actions:
-            if isinstance(action, Attack):
-                action.hit_bonus.add_disadvantage_condition("Blinded", self.blinded_check)
+        stats_block.attacks_manager.hit_bonus.self_contextual.add_advantage_condition("Frightened", self.frightened_check)
         
-        # Give advantage to all attacks against this creature
-        stats_block.armor_class.add_opponent_advantage_condition("Blinded", self.blinded_check)
+        # Add disadvantage to all ability checks
+        for ability in Ability:
+            ability_score = stats_block.ability_scores.get_ability(ability)
+            ability_score.score.self_contextual.add_advantage_condition("Frightened", self.frightened_check)
 
-        # Add auto-fail condition for sight-based ability checks
-        for skill in Skills:
-            skill_obj = stats_block.skills.get_skill(skill)
-            skill_obj.add_self_auto_fail_condition("Blinded", self.blinded_sight_check)
-
-        return ConditionLog(
+        return ConditionAppliedDetails(
             condition_name=self.name,
-            applied=True,
-            source_id=self.source_entity_id,
-            target_id=stats_block.id,
-            duration=self.duration.time if isinstance(self.duration.time, int) else None,
-            effects=[
-                ConditionEffect(
-                    target=EffectTarget(target_type=EffectTargetType.ATTACK),
-                    effect_type=EffectType.DISADVANTAGE
-                ),
-                ConditionEffect(
-                    target=EffectTarget(target_type=EffectTargetType.ARMOR_CLASS),
-                    effect_type=EffectType.ADVANTAGE
-                ),
-                ConditionEffect(
-                    target=EffectTarget(target_type=EffectTargetType.SKILL),
-                    effect_type=EffectType.AUTO_FAIL
-                )
-            ]
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
         )
 
-    def _remove(self, stats_block: 'StatsBlock') -> ConditionLog:
-        # Remove disadvantage from all attacks
-        for action in stats_block.actions:
-            if isinstance(action, Attack):
-                action.hit_bonus.remove_effect("Blinded")
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
         
-        # Remove advantage from all attacks against this creature
-        stats_block.armor_class.remove_opponent_advantage_condition("Blinded")
+        stats_block.attacks_manager.hit_bonus.remove_effect("Frightened")
+        for ability in Ability:
+            ability_score = stats_block.ability_scores.get_ability(ability)
+            ability_score.score.remove_effect("Frightened")
 
-        # Remove auto-fail condition from all skills
-        for skill in Skills:
-            skill_obj = stats_block.skills.get_skill(skill)
-            skill_obj.remove_all_effects("Blinded")
+        return ConditionRemovedDetails(details="Removed Frightened condition")
 
-        return ConditionLog(
+    @staticmethod
+    def frightened_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
+        if "Frightened" in stats_block.condition_manager.active_conditions:
+            frightened_condition = stats_block.condition_manager.active_conditions["Frightened"]
+            frightening_entity = frightened_condition.source_entity_id
+            frightening_block : StatsBlock = StatsBlock.get_instance(frightening_entity)
+            if frightening_entity and stats_block.sensory.is_visible(frightening_block.sensory.origin):
+                return AdvantageStatus.DISADVANTAGE
+        return AdvantageStatus.NONE
+
+class Grappled(Condition):
+    name: str = "Grappled"
+
+    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.self_static.add_max_constraint("Grappled", 0)
+
+        return ConditionAppliedDetails(
             condition_name=self.name,
-            applied=False,
-            source_id=self.source_entity_id,
-            target_id=stats_block.id
+            source_entity_id=self.source_entity_id,
+            source_ability=self.source_ability
         )
 
-    @staticmethod
-    def blinded_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-        return True  # Always apply the effect when blinded
-
-    @staticmethod
-    def blinded_sight_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-        # Check if the context indicates this is a sight-based check
-        if context:
-            requires_sight = context.get('requires_sight', False)
-            print("requires_sight",requires_sight)
-            return requires_sight  # Auto-fail sight-based checks
-        return False  # Don't auto-fail other checks
-
-# class Charmed(Condition):
-#     name: str = "Charmed"
-#     source_entity_id: str
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Charmed condition to {stats_block.name}")
-#         # Prevent attacking the charmer
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.add_auto_fail_condition("Charmed", self.charmed_attack_check)
-
-#         social_skills = [Skills.DECEPTION, Skills.INTIMIDATION, Skills.PERFORMANCE, Skills.PERSUASION]
-#         for skill in social_skills:
-#             skill_obj = stats_block.skills.get_skill(skill)
-#             print(f"Adding Charmed advantage condition to {skill.value} for {stats_block.name}")
-#             skill_obj.add_target_advantage_condition("Charmed", self.charmed_social_check)
-
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Charmed condition from {stats_block.name}")
-#         # Remove attack restriction
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.remove_effect("Charmed")
-
-#         # Remove social check advantage
-#         social_skills = [Skills.DECEPTION, Skills.INTIMIDATION, Skills.PERFORMANCE, Skills.PERSUASION]
-#         for skill in social_skills:
-#             skill_obj = stats_block.skills.get_skill(skill)
-#             skill_obj.remove_target_effect("Charmed")
-
-#     @staticmethod
-#     def charmed_social_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target and "Charmed" in source.active_conditions and source.active_conditions["Charmed"].source_entity_id == target.id:
-#             return True
-#         return False
-
-#     @staticmethod
-#     def charmed_attack_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if target and "Charmed" in source.active_conditions and target.id == source.active_conditions["Charmed"].source_entity_id:
-#             return True
-#         return False
-
-    
-# class Dashing(Condition):
-#     name: str = "Dashing"
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Dashing condition to {stats_block.name}")
+    def _remove(self) -> ConditionRemovedDetails:
+        stats_block = self.get_target(self.targeted_entity_id)
         
-#         # Double the movement speed
-#         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
-#             current_speed = stats_block.speed.get_speed(speed_type, stats_block)
-#             stats_block.speed.add_static_modifier(speed_type, "Dashing", current_speed)
+        for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
+            speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
+            speed_obj.remove_effect("Grappled")
 
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Dashing condition from {stats_block.name}")
-        
-#         # Remove the speed bonus
-#         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
-#             stats_block.speed.remove_static_modifier(speed_type, "Dashing")
-
-#     @staticmethod
-#     def dashing_check(source: 'StatsBlock', target: Optional['StatsBlock'] = None,  context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply the effect when dashing
-    
-
-# class Deafened(Condition):
-#     name: str = "Deafened"
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Deafened condition to {stats_block.name}")
-        
-#         # Add auto-fail condition for hearing-based ability checks
-#         for skill in Skills:
-#             skill_obj = stats_block.skills.get_skill(skill)
-#             skill_obj.add_self_auto_fail_condition("Deafened", self.deafened_hearing_check)
-
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Deafened condition from {stats_block.name}")
-        
-#         # Remove auto-fail condition from all skills
-#         for skill in Skills:
-#             skill_obj = stats_block.skills.get_skill(skill)
-#             skill_obj.remove_all_effects("Deafened")
-
-#     @staticmethod
-#     def deafened_hearing_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         # Check if the context indicates this is a hearing-based check
-#         if context and context.get('requires_hearing', False):
-#             return True  # Auto-fail hearing-based checks
-#         return False  # Don't auto-fail other checks
-    
-    
-# class Dodging(Condition):
-#     name: str = "Dodging"
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Dodging condition to {stats_block.name}")
-        
-#         # Add disadvantage to attacks against this creature
-#         stats_block.armor_class.base_ac.target_effects.add_disadvantage_condition("Dodging", self.dodging_check)
-        
-#         # Add advantage to Dexterity saving throws
-#         dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
-#         dex_save.bonus.self_effects.add_advantage_condition("Dodging", self.dodging_check)
-
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Dodging condition from {stats_block.name}")
-        
-#         # Remove disadvantage from attacks against this creature
-#         stats_block.armor_class.base_ac.target_effects.remove_effect("Dodging")
-        
-#         # Remove advantage from Dexterity saving throws
-#         dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
-#         dex_save.bonus.self_effects.remove_effect("Dodging")
-
-#     @staticmethod
-#     def dodging_check(source: 'StatsBlock', target: Optional['StatsBlock'] = None,  context: Optional[Dict[str, Any]] = None) -> bool:
-#         return True  # Always apply the effect when dodging
-    
-
-# class Frightened(Condition):
-#     name: str = "Frightened"
-#     source_entity_id: str
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Frightened condition to {stats_block.name}")
-        
-#         # Add disadvantage to all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.add_contextual_disadvantage("Frightened", self.frightened_check)
-        
-#         # Add disadvantage to all ability checks
-#         for ability in Ability:
-#             ability_score = stats_block.ability_scores.get_ability(ability)
-#             ability_score.add_disadvantage_condition("Frightened", self.frightened_check)
-
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Frightened condition from {stats_block.name}")
-        
-#         # Remove disadvantage from all attacks
-#         for action in stats_block.actions:
-#             if isinstance(action, Attack):
-#                 action.remove_effect("Frightened")
-        
-#         # Remove disadvantage from all ability checks
-#         for ability in Ability:
-#             ability_score = stats_block.ability_scores.get_ability(ability)
-#             ability_score.remove_effect("Frightened")
-
-#     @staticmethod
-#     def frightened_check(source: 'StatsBlock', target: Optional['StatsBlock'], context: Optional[Dict[str, Any]] = None) -> bool:
-#         if "Frightened" in source.active_conditions:
-#             frightened_condition = source.active_conditions["Frightened"]
-#             frightening_entity:StatsBlock = RegistryHolder.get_instance(frightened_condition.source_entity_id)
-#             if frightening_entity:
-#                 return source.is_visible(frightening_entity.sensory.origin)
-#         return False
-
-# class Grappled(Condition):
-#     name: str = "Grappled"
-#     source_entity_id: str
-
-#     def apply(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Applying Grappled condition to {stats_block.name}")
-#         stats_block.speed.set_max_speed_to_zero("Grappled")
-
-#     def remove(self, stats_block: 'StatsBlock') -> None:
-#         print(f"Removing Grappled condition from {stats_block.name}")
-#         stats_block.speed.reset_max_speed("Grappled")
+        return ConditionRemovedDetails(details="Removed Grappled condition")
 
 # class Incapacitated(Condition):
 #     name: str = "Incapacitated"

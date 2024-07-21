@@ -112,13 +112,13 @@ class ValueOut(BaseLogEntry):
         min_bonus = self.min_constraints.total_bonus
         max_bonus = self.max_constraints.total_bonus
         #rule is that min bonus has priority over max bonus then so first take min(bonus, max_bonus) and then max(min_bonus, min(bonus, max_bonus))
-        if min_bonus and max_bonus:
+        if min_bonus is not None and max_bonus is not None:
             return max(min_bonus, min(bonus, max_bonus))
-        elif min_bonus:
+        elif min_bonus is not None:
             return max(min_bonus, bonus)
-        elif max_bonus:
+        elif max_bonus is not None:
             return min(max_bonus, bonus)
-        else:
+        elif min_bonus is None and max_bonus is None:
             return bonus
 
 
@@ -335,12 +335,12 @@ class Duration(BaseModel):
         if self.type in [DurationType.ROUNDS, DurationType.MINUTES, DurationType.HOURS]:
             if isinstance(self.time, int):
                 self.time -= 1
-                return self.time <= 0
+                return self.time <= 0  # Changed back to <=
         return False
 
     def is_expired(self) -> bool:
         return self.type != DurationType.INDEFINITE and (
-            (isinstance(self.time, int) and self.time <= 0) or 
+            (isinstance(self.time, int) and self.time <= 0) or  # Changed back to <=
             (isinstance(self.time, str) and self.time.lower() == "expired")
         )
 
@@ -366,9 +366,10 @@ class ConditionApplied(BaseLogEntry):
     source_entity_id: Optional[str] = None
     target_entity_id: str
     duration: Duration
+    details: ConditionAppliedDetails
     requested_saving_throw : Optional[SavingThrowRollRequest] = None
     application_saving_throw_roll: Optional[SavingThrowRollOut] = None
-    details: ConditionAppliedDetails
+    
 
 
 
@@ -447,78 +448,4 @@ class AttackRollOut(BaseLogEntry):
     @computed_field
     def total_roll(self) -> int:
         return self.roll.total_roll
-
-
-
-
-# class AttackLog(BaseLogEntry):
-#     log_type: str = "Attack"
-#     source_entity_id: str
-#     target_entity_id: str
-#     weapon_name: str
-#     attack_type: AttackType
-#     attacker_conditions: List[ConditionInfo]
-#     target_conditions: List[ConditionInfo]
-#     hit_roll_log: HitRollLog
-#     damage_log: Optional[DamageLog] = None
-#     health_change_log: Optional[HealthChangeLog] = None
-#     final_result: AttackResult
-
-#     def generate_log_string(self) -> str:
-#         log_parts = []
-        
-#         # Basic attack information
-#         log_parts.append(f"{self.source_entity_id} attacks {self.target_entity_id} with {self.weapon_name} ({self.attack_type.value}).")
-        
-#         # Conditions
-#         if self.attacker_conditions:
-#             attacker_conditions = ", ".join([c.condition_name for c in self.attacker_conditions])
-#             log_parts.append(f"Attacker conditions: {attacker_conditions}")
-#         if self.target_conditions:
-#             target_conditions = ", ".join([c.condition_name for c in self.target_conditions])
-#             log_parts.append(f"Target conditions: {target_conditions}")
-        
-#         # Hit roll
-#         hit_roll = self.hit_roll_log
-#         dice_roll = hit_roll.dice_roll
-#         advantage_str = f"Roll with {dice_roll.advantage_status.value}:" if dice_roll.advantage_status != AdvantageStatus.NONE else "Roll:"
-#         rolls_str = ", ".join([str(r) for r in dice_roll.roll_results])
-#         log_parts.append(f"{advantage_str} {rolls_str}")
-        
-#         if dice_roll.modifiers:
-#             modifiers_str = ", ".join([f"{m.value} ({m.effect_source.description})" for m in dice_roll.modifiers])
-#             log_parts.append(f"Modifiers: {modifiers_str}")
-        
-#         log_parts.append(f"Total: {dice_roll.total_roll} vs. AC {hit_roll.target_ac}")
-#         log_parts.append(f"Result: {self.final_result.value}")
-        
-#         # Damage (if hit)
-#         if self.damage_log:
-#             damage_parts = []
-#             for roll in self.damage_log.damage_rolls:
-#                 dice_rolls = ", ".join([str(d) for d in roll.dice_roll.roll_results])
-#                 damage_parts.append(f"{roll.damage_type.value}: {dice_rolls} = {roll.dice_roll.total_roll}")
-#             log_parts.append(f"Damage rolls: {'; '.join(damage_parts)}")
-#             log_parts.append(f"Total damage: {self.damage_log.final_damage}")
-        
-#         # Health change
-#         if self.health_change_log:
-#             hc = self.health_change_log
-#             log_parts.append(f"Target HP: {hc.target_previous_hp} -> {hc.target_current_hp}")
-#             if hc.temp_hp_absorbed:
-#                 log_parts.append(f"Temp HP absorbed: {hc.temp_hp_absorbed}")
-#             if hc.resistances_applied:
-#                 resistances = ", ".join([f"{r.damage_type.value} ({r.effect_source.description})" for r in hc.resistances_applied])
-#                 log_parts.append(f"Resistances applied: {resistances}")
-#             if hc.vulnerabilities_applied:
-#                 vulnerabilities = ", ".join([f"{v.damage_type.value} ({v.effect_source.description})" for v in hc.vulnerabilities_applied])
-#                 log_parts.append(f"Vulnerabilities applied: {vulnerabilities}")
-#             if hc.immunities_applied:
-#                 immunities = ", ".join([f"{i.damage_type.value} ({i.effect_source.description})" for i in hc.immunities_applied])
-#                 log_parts.append(f"Immunities applied: {immunities}")
-        
-#         return " ".join(log_parts)
-    
-
-
 

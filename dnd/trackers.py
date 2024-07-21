@@ -19,6 +19,7 @@ class AdvantageTracker(BaseModel):
 
     @computed_field
     def status(self) -> AdvantageStatus:
+ 
         if self.counter > 0:
             return AdvantageStatus.ADVANTAGE
         elif self.counter < 0:
@@ -62,11 +63,12 @@ class CriticalTracker(BaseModel):
         #the rule is if any of the statuse is NOCRIT then the final status is NOCRIT
         # else if any of the status is AUTOCRIT then the final status is AUTOCRIT
         # else the final status is NONE
-        if CriticalStatus.NOCRIT in self.critical_statuses.values():
+        all_statuses = [status for status_list in self.critical_statuses.values() for status in status_list]
+        if CriticalStatus.NOCRIT in all_statuses:
             return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in self.critical_statuses.values():
+        elif CriticalStatus.AUTOCRIT in all_statuses:
             return CriticalStatus.AUTOCRIT
-        elif CriticalStatus.NONE in self.critical_statuses.values() or len(self.critical_statuses.keys()) == 0:
+        elif CriticalStatus.NONE in all_statuses or len(self.critical_statuses.keys()) == 0:
             return CriticalStatus.NONE
         else:
             return CriticalStatus.NONE
@@ -95,11 +97,13 @@ class AutoHitTracker(BaseModel):
         #the rule is if any of the statuse is AUTOMISS then the final status is AUTOMISS
         # else if any of the status is AUTOHIT then the final status is AUTOHIT
         # else the final status is NONE
-        if AutoHitStatus.AUTOMISS in self.auto_hit_statuses.values():
+        #create a flat list of all statuses values which are each a list of statuses
+        all_statuses = [status for status_list in self.auto_hit_statuses.values() for status in status_list]
+        if AutoHitStatus.AUTOMISS in all_statuses:
             return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in self.auto_hit_statuses.values():
+        elif AutoHitStatus.AUTOHIT in all_statuses:
             return AutoHitStatus.AUTOHIT
-        elif AutoHitStatus.NONE in self.auto_hit_statuses.values() or len(self.auto_hit_statuses.keys()) == 0:
+        elif AutoHitStatus.NONE in all_statuses or len(self.auto_hit_statuses.keys()) == 0:
             return AutoHitStatus.NONE
         else:
             return AutoHitStatus.NONE
