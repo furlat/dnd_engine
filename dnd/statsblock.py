@@ -56,6 +56,9 @@ class StatsBlock(BaseModel, RegistryHolder):
         return self.meta.id
 
     @computed_field
+    def name(self) -> str:
+        return self.meta.name
+    @computed_field
     def hp(self) -> int:
         return self.health.current_hit_points
 

@@ -1,63 +1,61 @@
-from dnd.statsblock import StatsBlock
 from dnd.monsters.goblin import create_goblin
 from dnd.monsters.skeleton import create_skeleton
-from dnd.conditions import Dodging, Duration, DurationType
-from dnd.actions import Attack
-from dnd.core import Ability, Skills
-
-def print_creature_details(creature: StatsBlock):
-    print(f"{creature.name} Details:")
-    print(f"HP: {creature.current_hit_points}/{creature.max_hit_points}")
-    print(f"Active Conditions: {', '.join([cond for cond in creature.active_conditions.keys()])}")
+from dnd.conditions import Dodging
+from dnd.logger import Logger
+from dnd.dnd_enums import DurationType, Ability
+from dnd.core import Duration
+from dnd.tests.printer import print_log_details
 
 def test_dodging_condition():
-    goblin = create_goblin()
-    skeleton = create_skeleton()
-    
-    print("\n=== Testing Dodging Condition ===")
-    
-    print("\n1. Initial State")
-    print_creature_details(goblin)
-    print_creature_details(skeleton)
-    
-    def perform_attack_and_check(attacker, defender, description):
-        print(f"\n--- {attacker.name} attacks {defender.name} ({description}) ---")
-        attack_action = next(action for action in attacker.actions if isinstance(action, Attack))
-        hit, details = attack_action.roll_to_hit(defender, verbose=True)
-        advantage_status = defender.armor_class.gives_attacker_disadvantage(defender, attacker)
-        print(f"  Defender gives attacker disadvantage: {advantage_status}")
-        print(f"  Advantage status: {details['advantage_status']}")
-        print(f"  Attack roll: {details['roll']}, Total: {details['roll'] + details['total_hit_bonus']}, AC: {details['armor_class']}")
-        print(f"  Result: {'Hit' if hit else 'Miss'}")
+    print("=== Testing Dodging Condition and Logging ===\n")
 
-    def perform_saving_throw(creature, ability, dc, description):
-        print(f"\n--- {creature.name} performs {ability.value} saving throw ({description}) ---")
-        success = creature.perform_saving_throw(ability, dc)
-        saving_throw = creature.saving_throws.get_ability(ability)
-        advantage_status = saving_throw.bonus.get_advantage_status(creature)
-        print(f"  Advantage status: {advantage_status}")
-        print(f"  Result: {'Success' if success else 'Failure'}")
+    # Create creatures
+    goblin = create_goblin("Goblin")
+    skeleton = create_skeleton("Skeleton")
 
-    print("\n2. Skeleton attacks Goblin and Goblin performs Dexterity saving throw before Dodging")
-    perform_attack_and_check(skeleton, goblin, "before Dodging")
-    perform_saving_throw(goblin, Ability.DEX, 15, "before Dodging")
-    
-    print("\n3. Applying Dodging condition to Goblin")
-    dodging_condition = Dodging(name="Dodging", duration=Duration(time=1, type=DurationType.ROUNDS))
-    goblin.apply_condition(dodging_condition)
-    print_creature_details(goblin)
-    
-    print("\n4. Skeleton attacks Goblin and Goblin performs Dexterity saving throw while Dodging")
-    perform_attack_and_check(skeleton, goblin, "while Dodging")
-    perform_saving_throw(goblin, Ability.DEX, 15, "while Dodging")
-    
-    print("\n5. Advancing time to expire the Dodging condition")
-    goblin.update_conditions()
-    print_creature_details(goblin)
-    
-    print("\n6. Skeleton attacks Goblin and Goblin performs Dexterity saving throw after Dodging expires")
-    perform_attack_and_check(skeleton, goblin, "after Dodging expires")
-    perform_saving_throw(goblin, Ability.DEX, 15, "after Dodging expires")
+    print("Initial state:")
+    print("Skeleton attacks Goblin (before Dodging)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("Goblin performs Dexterity saving throw (before Dodging)")
+    dex_save_result = goblin.perform_saving_throw(Ability.DEX, 15)
+    print_log_details(dex_save_result)
+
+    print("\nTurn 1: Applying Dodging to Goblin")
+    dodging_condition = Dodging(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=goblin.id)
+    condition_log = goblin.condition_manager.add_condition(dodging_condition)
+    print_log_details(condition_log)
+
+    print("Skeleton attacks Goblin (while Dodging)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("Goblin performs Dexterity saving throw (while Dodging)")
+    dex_save_result = goblin.perform_saving_throw(Ability.DEX, 15)
+    print_log_details(dex_save_result)
+
+    print("\nTurn 2: Advancing duration for Dodging condition")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Skeleton attacks Goblin (still Dodging)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("\nTurn 3: Advancing duration for Dodging condition again (condition should be removed)")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Skeleton attacks Goblin (after Dodging expires)")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("Goblin performs Dexterity saving throw (after Dodging expires)")
+    dex_save_result = goblin.perform_saving_throw(Ability.DEX, 15)
+    print_log_details(dex_save_result)
 
 if __name__ == "__main__":
     test_dodging_condition()

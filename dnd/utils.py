@@ -5,7 +5,7 @@ def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, list]) -> Dict[s
     if key in d:
         d[key] += value
     else:
-        d[key] = value
+        d[key] = [value]
     return d
 
 def update_or_sum_to_dict(d: Dict[str, int], kv: Tuple[str, int]) -> Dict[str, int]:

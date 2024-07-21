@@ -1,102 +1,73 @@
 from dnd.monsters.goblin import create_goblin
 from dnd.monsters.skeleton import create_skeleton
-from dnd.conditions import Blinded, Duration
-from dnd.logger import Logger, EffectTarget
-from dnd.dnd_enums import Skills, Ability, DurationType
-from dnd.actions import Attack
-from dnd.tests.example_bm import create_battlemap_with_entities
+from dnd.conditions import Blinded
+from dnd.logger import Logger
+from dnd.dnd_enums import Skills, Ability, DurationType, AttackHand, AdvantageStatus
+from dnd.core import Duration
 
-def print_creature_details(creature):
-    print(f"{creature.name} Details:")
-    print(f"HP: {creature.hp}/{creature.health.max_hit_points}")
-    print(f"AC: {creature.armor_class_value}")
-    print(f"Active Conditions: {', '.join(creature.active_conditions.keys())}")
-    print("Actions:")
-    for attack in creature.actions:
-        if isinstance(attack, Attack):
-            print(attack.action_docstring())
-    print()
-
-def print_log_details(log):
-    print(f"Log Type: {log.log_type}")
-    print(f"Timestamp: {log.timestamp}")
-    if hasattr(log, 'action_name'):
-        print(f"Action: {log.action_name}")
-    if hasattr(log, 'condition_name'):
-        print(f"Condition: {log.condition_name}")
-    print(f"Source ID: {log.source_id}")
-    print(f"Target ID: {log.target_id}")
-    if hasattr(log, 'success'):
-        print(f"Success: {log.success}")
-    if hasattr(log, 'applied'):
-        print(f"Applied: {log.applied}")
-    if hasattr(log, 'effects'):
-        print("Effects:")
-        for effect in log.effects:
-            print(f"  Target: {effect.target.target_type}, Type: {effect.effect_type}")
-    if hasattr(log, 'details'):
-        print("Details:")
-        for key, value in log.details.model_dump().items():
-            print(f"  {key}: {value}")
-    print()
+from dnd.dnd_enums import AdvantageStatus, AutoHitStatus, CriticalStatus, HitReason, CriticalReason
+from dnd.tests.printer import print_log_details
 
 def test_blinded_condition():
     print("=== Testing Blinded Condition and Logging ===\n")
 
-    # Create a battle map with entities
-    battle_map, goblin, skeleton = create_battlemap_with_entities()
+    # Create creatures
+    goblin = create_goblin("Goblin")
+    skeleton = create_skeleton("Skeleton")
 
-    print("Initial State:")
-    print_creature_details(goblin)
-    print_creature_details(skeleton)
-
-    # Apply Blinded condition to Goblin
-    blinded_condition = Blinded(duration=Duration(time=2, type=DurationType.ROUNDS))
-    print("\nApplying Blinded to Goblin:")
-    condition_log = goblin.apply_condition(blinded_condition)
-    print_creature_details(goblin)
-    print("Condition Application Log:")
+    print("Turn 1: Applying Blinded to Goblin at the start of its turn")
+    blinded_condition = Blinded(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=goblin.id)
+    condition_log = goblin.condition_manager.add_condition(blinded_condition)
     print_log_details(condition_log)
 
-    # Goblin attempts a Perception check
-    print("Goblin attempts a Perception check (with disadvantage due to Blinded):")
+    print("Goblin's Turn 1 actions:")
+    
+    print("Goblin attempts a sight-based Perception check (should auto-fail due to Blinded):")
     context = {"requires_sight": True}
-    perception_result = goblin.skills.perform_skill_check(Skills.PERCEPTION, goblin,dc=15,context=context, return_log=True)
-    print(type(perception_result))
+    perception_result = goblin.perform_skill_check(Skills.PERCEPTION, 15, context=context)
     print_log_details(perception_result)
 
-    # Goblin attacks Skeleton
+    print("Goblin attempts a hearing-based Perception check (should not auto-fail):")
+    context = {"requires_sight": False}
+    perception_result = goblin.perform_skill_check(Skills.PERCEPTION, 15, context=context)
+    print_log_details(perception_result)
+
     print("Goblin (Blinded) attacks Skeleton:")
-    attack_action = next(action for action in goblin.actions if isinstance(action, Attack))
-    attack_result = attack_action.apply([skeleton])
-    for log in attack_result:
-        print_log_details(log)
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
 
-    # Skeleton attacks Goblin
+    print("\nSkeleton's Turn 1:")
     print("Skeleton attacks Goblin (Blinded):")
-    skeleton_attack = next(action for action in skeleton.actions if isinstance(action, Attack))
-    skeleton_attack_result = skeleton_attack.apply([goblin])
-    for log in skeleton_attack_result:
+    skeleton_attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(skeleton_attack_result)
+
+    print("\nTurn 2: Start of Goblin's turn, advancing duration")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
         print_log_details(log)
 
-    # Remove Blinded condition from Goblin
-    print("\nRemoving Blinded condition from Goblin:")
-    remove_condition_log = goblin.remove_condition("Blinded")
-    print_creature_details(goblin)
-    print("Condition Removal Log:")
-    print_log_details(remove_condition_log)
+    print("Goblin's Turn 2 actions (still Blinded):")
+    print("Goblin attacks Skeleton:")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
 
-    # Goblin attacks Skeleton again (no longer Blinded)
-    print("Goblin attacks Skeleton (no longer Blinded):")
-    attack_result = attack_action.apply([skeleton])
-    for log in attack_result:
+    print("\nSkeleton's Turn 2:")
+    print("Skeleton attacks Goblin (Blinded):")
+    skeleton_attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(skeleton_attack_result)
+
+    print("\nTurn 3: Start of Goblin's turn, advancing duration again (condition should be removed)")
+    advance_result = goblin.condition_manager.advance_durations()
+    for log in advance_result:
         print_log_details(log)
 
-    # Print all logs
-    print("\n=== All Logs ===")
-    all_logs = Logger.get_logs()
-    for log in all_logs:
-        print_log_details(log)
+    print("Goblin's Turn 3 actions (no longer Blinded):")
+    print("Goblin attacks Skeleton:")
+    attack_result = goblin.perform_melee_attack(skeleton.id)
+    print_log_details(attack_result)
+
+if __name__ == "__main__":
+    test_blinded_condition()
 
 if __name__ == "__main__":
     test_blinded_condition()

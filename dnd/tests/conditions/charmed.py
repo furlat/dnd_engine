@@ -1,66 +1,70 @@
-from dnd.statsblock import StatsBlock
 from dnd.monsters.goblin import create_goblin
 from dnd.monsters.skeleton import create_skeleton
-from dnd.conditions import Charmed, Duration, DurationType
-from dnd.actions import Attack
-from dnd.core import Skills
+from dnd.conditions import Charmed
+from dnd.logger import Logger
+from dnd.dnd_enums import Skills, DurationType, AttackHand
+from dnd.core import Duration
 
-def print_creature_details(creature: StatsBlock):
-    print(f"{creature.name} Details:")
-    print(f"Speed: {creature.speed.walk.get_value(creature)} ft")
-    print(f"Armor Class: {creature.armor_class.get_value(creature)}")
-    print(f"Hit Points: {creature.current_hit_points}/{creature.max_hit_points}")
-    print(f"Proficiency Bonus: +{creature.proficiency_bonus}")
-    print(f"Active Conditions: {', '.join([cond for cond in creature.active_conditions.keys()])}")
+from dnd.tests.printer import print_log_details
+
 
 def test_charmed_condition():
-    goblin = create_goblin()
-    skeleton = create_skeleton()
-    
-    print("\n=== Testing Charmed Condition ===")
-    
-    print("\n1. Initial State")
-    print_creature_details(goblin)
-    print_creature_details(skeleton)
-    
-    def perform_attack(attacker, defender, description):
-        print(f"\n--- {attacker.name} attacks {defender.name} ({description}) ---")
-        attack_action = next(action for action in attacker.actions if isinstance(action, Attack))
-        hit, details = attack_action.roll_to_hit(defender, verbose=True)
-        print(f"  Auto-fail: {details['auto_fail']}")
-        print(f"  Auto-success: {details['auto_success']}")
-        print(f"  Advantage status: {details['advantage_status']}")
-        print(f"  Attack roll: {details['roll']}, Total: {details['roll'] + details['total_hit_bonus']}, AC: {details['armor_class']}")
-        print(f"  Result: {'Hit' if hit else 'Miss'}")
-    def perform_social_check(source, target, skill, dc, description):
-        print(f"\n--- {source.name} uses {skill.value} on {target.name} ({description}) ---")
-        roll, total, _ = source.perform_skill_check(skill, dc, target, return_roll=True)
-        skill_obj = source.skills.get_skill(skill)
-        advantage_status = skill_obj.get_advantage_status(source, target)
-        print(f"  Advantage status: {advantage_status}")
-        print(f"  Skill check roll: {roll}, Total: {total}, DC: {dc}")
-        print(f"  Result: {'Success' if total >= dc else 'Failure'}")
+    print("=== Testing Charmed Condition and Logging ===\n")
 
-    print("\n2. Skeleton attacks Goblin and Goblin uses Persuasion on Skeleton (no conditions)")
-    perform_attack(skeleton, goblin, "no conditions")
-    perform_social_check(goblin, skeleton, Skills.PERSUASION, 15, "no conditions")
+    # Create creatures
+    goblin = create_goblin("Goblin")
+    skeleton = create_skeleton("Skeleton")
+
+    print("Turn 1: Applying Charmed to Skeleton (charmed by Goblin)")
+    charmed_condition = Charmed(duration=Duration(time=2, type=DurationType.ROUNDS), targeted_entity_id=skeleton.id, source_entity_id=goblin.id)
+    condition_log = skeleton.condition_manager.add_condition(charmed_condition)
+    print_log_details(condition_log)
+
+    print("Skeleton's Turn 1 actions:")
     
-    print("\n3. Applying Charmed condition to Skeleton")
-    charmed_condition = Charmed(name="Charmed", duration=Duration(time=1, type=DurationType.ROUNDS), source_entity_id=goblin.id)
-    skeleton.apply_condition(charmed_condition)
-    print_creature_details(skeleton)
-    
-    print("\n4. Skeleton tries to attack Goblin and Goblin uses Persuasion on Skeleton (Charmed condition)")
-    perform_attack(skeleton, goblin, "while Charmed")
-    perform_social_check(goblin, skeleton, Skills.PERSUASION, 15, "while Skeleton is Charmed")
-    
-    print("\n5. Advancing time to expire the Charmed condition")
-    skeleton.update_conditions()
-    print_creature_details(skeleton)
-    
-    print("\n6. Skeleton attacks Goblin and Goblin uses Persuasion on Skeleton (after Charmed expires)")
-    perform_attack(skeleton, goblin, "after Charmed expires")
-    perform_social_check(goblin, skeleton, Skills.PERSUASION, 15, "after Charmed expires")
+    print("Skeleton (Charmed) attempts to attack Goblin (should auto-miss):")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("Skeleton (Charmed) attacks another target:")
+    dummy_target = create_goblin("Dummy")
+    attack_result = skeleton.perform_melee_attack(dummy_target.id)
+    print_log_details(attack_result)
+
+    print("\nGoblin's Turn 1:")
+    print("Goblin uses Persuasion on Skeleton (Charmed, should have advantage):")
+    persuasion_result = goblin.perform_skill_check(Skills.PERSUASION, 15, target_id=skeleton.id)
+    print_log_details(persuasion_result)
+
+    print("\nTurn 2: Start of Skeleton's turn, advancing duration")
+    advance_result = skeleton.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Skeleton's Turn 2 actions (still Charmed):")
+    print("Skeleton attempts to attack Goblin (should still auto-miss):")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("\nGoblin's Turn 2:")
+    print("Goblin uses Intimidation on Skeleton (Charmed, should have advantage):")
+    intimidation_result = goblin.perform_skill_check(Skills.INTIMIDATION, 15, target_id=skeleton.id)
+    print_log_details(intimidation_result)
+
+    print("\nTurn 3: Start of Skeleton's turn, advancing duration again (condition should be removed)")
+    advance_result = skeleton.condition_manager.advance_durations()
+    for log in advance_result:
+        print_log_details(log)
+
+    print("Skeleton's Turn 3 actions (no longer Charmed):")
+    print("Skeleton attacks Goblin (should be possible now):")
+    attack_result = skeleton.perform_melee_attack(goblin.id)
+    print_log_details(attack_result)
+
+    print("\nGoblin's Turn 3:")
+    print("Goblin uses Deception on Skeleton (no longer Charmed, should not have advantage):")
+    deception_result = goblin.perform_skill_check(Skills.DECEPTION, 15, target_id=skeleton.id)
+    print_log_details(deception_result)
 
 if __name__ == "__main__":
     test_charmed_condition()
