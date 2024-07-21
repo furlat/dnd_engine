@@ -122,7 +122,7 @@ class TargetRoll(BaseModel):
 class BlockComponent(BaseModel, RegistryHolder):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str = Field(default="BlockComponent")
-    description: str = Field(default_factory="")
+    description: Optional[str] = None
     owner_id: Optional[str] = None
 
     def get_owner(self) -> Optional['StatsBlock']:
@@ -130,17 +130,33 @@ class BlockComponent(BaseModel, RegistryHolder):
             return self.get_instance(self.owner_id)
         raise ValueError("Owner not set")
     
-    def set_owner(self, owner: 'StatsBlock'):
-        if not self.is_in_registry(owner.id):
-            raise ValueError(f"Owner {owner.id} is not in the registry")
-        self.owner_id = owner.id
+    def set_owner(self, owner_id: str):
+        if not self.is_in_registry(owner_id):
+            raise ValueError(f"Owner {owner_id} is not in the registry")
+        self.owner_id = owner_id
+        
+        # Recursively set owner for all nested BlockComponent attributes
+        for attr_name, attr_value in self.__dict__.items():
+            if isinstance(attr_value, BlockComponent):
+                attr_value.set_owner(owner_id)
+            elif isinstance(attr_value, list):
+                for item in attr_value:
+                    if isinstance(item, BlockComponent):
+                        item.set_owner(owner_id)
+            elif isinstance(attr_value, dict):
+                for item in attr_value.values():
+                    if isinstance(item, BlockComponent):
+                        item.set_owner(owner_id)
 
     def get_target(self, target_id: str) -> Optional['StatsBlock']:
         return self.get_instance(target_id)
-    def get_stats_blocks(self,target: Optional[str] = None) -> Tuple[Optional['StatsBlock'],Optional['StatsBlock']]:
+
+    def get_stats_blocks(self, target: Optional[str] = None) -> Tuple[Optional['StatsBlock'], Optional['StatsBlock']]:
         stats_block = self.get_owner()
         target_stats_block = self.get_target(target) if target else None
         return stats_block, target_stats_block
+
+
 
 class AbilityScore(BlockComponent):
     ability: Ability
@@ -158,13 +174,49 @@ class AbilityScore(BlockComponent):
         self.score.remove_effect(source)
 
 class AbilityScores(BlockComponent):
-    strength: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.STR, score=ModifiableValue(base_value=BaseValue(name="strength_score",base_value=10))))
-    dexterity: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.DEX, score=ModifiableValue(base_value=BaseValue(name="dexterity_score",base_value=10))))
-    constitution: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.CON, score=ModifiableValue(base_value=BaseValue(name="constitution_score",base_value=10))))
-    intelligence: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.INT, score=ModifiableValue(base_value=BaseValue(name="intelligence_score",base_value=10))))
-    wisdom: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.WIS, score=ModifiableValue(base_value=BaseValue(name="wisdom_score",base_value=10))))
-    charisma: AbilityScore = Field(default_factory=lambda: AbilityScore(ability=Ability.CHA, score=ModifiableValue(base_value=BaseValue(name="charisma_score",base_value=10))))
-    
+    name: str = Field(default="AbilityScores")
+    strength: AbilityScore = Field(default_factory=lambda: AbilityScore(
+        name="StrengthScore",
+        ability=Ability.STR, 
+        score=ModifiableValue(
+            name="StrengthScore",
+            base_value=BaseValue(name="base_strength_score", base_value=10, min_value=1, max_value=30))
+    ))
+    dexterity: AbilityScore = Field(default_factory=lambda: AbilityScore(
+        name="DexterityScore",
+        ability=Ability.DEX, 
+        score=ModifiableValue(
+            name = "DexterityScore",
+            base_value=BaseValue(name="base_dexterity_score", base_value=10, min_value=1, max_value=30))
+    ))
+    constitution: AbilityScore = Field(default_factory=lambda: AbilityScore(
+        name="ConstitutionScore",
+        ability=Ability.CON, 
+        score=ModifiableValue(
+            name = "ConstitutionScore",
+            base_value=BaseValue(name="base_constitution_score", base_value=10, min_value=1, max_value=30))
+    ))
+    intelligence: AbilityScore = Field(default_factory=lambda: AbilityScore(
+        name="IntelligenceScore",
+        ability=Ability.INT, 
+        score=ModifiableValue(
+            name = "IntelligenceScore",
+            base_value=BaseValue(name="base_intelligence_score", base_value=10, min_value=1, max_value=30))
+    ))
+    wisdom: AbilityScore = Field(default_factory=lambda: AbilityScore(
+        name="WisdomScore",
+        ability=Ability.WIS, 
+        score=ModifiableValue(
+            name = "WisdomScore",
+            base_value=BaseValue(name="base_wisdom_score", base_value=10, min_value=1, max_value=30))
+    ))
+    charisma: AbilityScore = Field(default_factory=lambda: AbilityScore(
+        name="CharismaScore",
+        ability=Ability.CHA, 
+        score=ModifiableValue(
+            name = "CharismaScore",
+            base_value=BaseValue(name="base_charisma_score", base_value=10, min_value=1, max_value=30))
+    ))
     def get_ability(self, ability: Ability) -> AbilityScore:
         return getattr(self, ability.value.lower())
 
@@ -183,13 +235,21 @@ ABILITY_TO_SKILLS = {
 }
 
 class Skill(BlockComponent):
+    name: str = Field(default="Skill")
     ability: Ability
     skill: Skills
     proficient: bool = False
     expertise: bool = False
-    bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
+    bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        base_value=BaseValue(
+            name="base_skill_bonus",
+            base_value=0,
+            min_value=None,
+            max_value=None
+        )
+    ))
 
-    def _get_procifiency_converter(self):
+    def _get_proficiency_converter(self):
         def proficient(proficiency_bonus:int) -> int:
             return proficiency_bonus
         def not_proficient(proficiency_bonus:int) -> int:
@@ -219,7 +279,7 @@ class Skill(BlockComponent):
             target_to_self_bonus = target_skill.bonus.apply_to_target(target,stats_block,context)
             total_bonus = skill_bonus.combine_with(target_to_self_bonus)
         
-        total_bonus = total_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier).combine_with(proficiency_bonus,bonus_converter=self._get_procifiency_converter())
+        total_bonus = total_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier).combine_with(proficiency_bonus,bonus_converter=self._get_proficiency_converter())
         return SkillBonusOut(
             skill=self.skill,
             ability_bonus=ability_bonus,
@@ -248,7 +308,7 @@ class Skill(BlockComponent):
             target_entity_id=target if target else None    
         )
     
-    def perform_cross_chek(self, target_skill_name:Skills, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
+    def perform_cross_check(self, target_skill_name:Skills, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
         #first we roll a targetskill check against dc 0 and obtain the result to get the dc
         stats_block , target_stats_block = self.get_stats_blocks(target)
         target_skill = target_stats_block.skillset.get_skill(target_skill_name)
@@ -269,26 +329,28 @@ class Skill(BlockComponent):
         self.bonus.remove_effect(source)
 
 class SkillSet(BlockComponent):
-    acrobatics: Skill = Field(default_factory=lambda: Skill(ability=Ability.DEX, skill=Skills.ACROBATICS))
-    animal_handling: Skill = Field(default_factory=lambda: Skill(ability=Ability.WIS, skill=Skills.ANIMAL_HANDLING))
-    arcana: Skill = Field(default_factory=lambda: Skill(ability=Ability.INT, skill=Skills.ARCANA))
-    athletics: Skill = Field(default_factory=lambda: Skill(ability=Ability.STR, skill=Skills.ATHLETICS))
-    deception: Skill = Field(default_factory=lambda: Skill(ability=Ability.CHA, skill=Skills.DECEPTION))
-    history: Skill = Field(default_factory=lambda: Skill(ability=Ability.INT, skill=Skills.HISTORY))
-    insight: Skill = Field(default_factory=lambda: Skill(ability=Ability.WIS, skill=Skills.INSIGHT))
-    intimidation: Skill = Field(default_factory=lambda: Skill(ability=Ability.CHA, skill=Skills.INTIMIDATION))
-    investigation: Skill = Field(default_factory=lambda: Skill(ability=Ability.INT, skill=Skills.INVESTIGATION))
-    medicine: Skill = Field(default_factory=lambda: Skill(ability=Ability.WIS, skill=Skills.MEDICINE))
-    nature: Skill = Field(default_factory=lambda: Skill(ability=Ability.INT, skill=Skills.NATURE))
-    perception: Skill = Field(default_factory=lambda: Skill(ability=Ability.WIS, skill=Skills.PERCEPTION))
-    performance: Skill = Field(default_factory=lambda: Skill(ability=Ability.CHA, skill=Skills.PERFORMANCE))
-    persuasion: Skill = Field(default_factory=lambda: Skill(ability=Ability.CHA, skill=Skills.PERSUASION))
-    religion: Skill = Field(default_factory=lambda: Skill(ability=Ability.INT, skill=Skills.RELIGION))
-    sleight_of_hand: Skill = Field(default_factory=lambda: Skill(ability=Ability.DEX, skill=Skills.SLEIGHT_OF_HAND))
-    stealth: Skill = Field(default_factory=lambda: Skill(ability=Ability.DEX, skill=Skills.STEALTH))
-    survival: Skill = Field(default_factory=lambda: Skill(ability=Ability.WIS, skill=Skills.SURVIVAL))
+    name: str = Field(default="SkillSet")
+    acrobatics: Skill = Field(default_factory=lambda: Skill(name="Acrobatics", ability=Ability.DEX, skill=Skills.ACROBATICS, bonus=ModifiableValue(name="acrobatics_bonus", base_value=BaseValue(name="base_acrobatics_bonus", base_value=0))))
+    animal_handling: Skill = Field(default_factory=lambda: Skill(name="AnimalHandling", ability=Ability.WIS, skill=Skills.ANIMAL_HANDLING, bonus=ModifiableValue(name="animal_handling_bonus", base_value=BaseValue(name="base_animal_handling_bonus", base_value=0))))
+    arcana: Skill = Field(default_factory=lambda: Skill(name="Arcana", ability=Ability.INT, skill=Skills.ARCANA, bonus=ModifiableValue(name="arcana_bonus", base_value=BaseValue(name="base_arcana_bonus", base_value=0))))
+    athletics: Skill = Field(default_factory=lambda: Skill(name="Athletics", ability=Ability.STR, skill=Skills.ATHLETICS, bonus=ModifiableValue(name="athletics_bonus", base_value=BaseValue(name="base_athletics_bonus", base_value=0))))
+    deception: Skill = Field(default_factory=lambda: Skill(name="Deception", ability=Ability.CHA, skill=Skills.DECEPTION, bonus=ModifiableValue(name="deception_bonus", base_value=BaseValue(name="base_deception_bonus", base_value=0))))
+    history: Skill = Field(default_factory=lambda: Skill(name="History", ability=Ability.INT, skill=Skills.HISTORY, bonus=ModifiableValue(name="history_bonus", base_value=BaseValue(name="base_history_bonus", base_value=0))))
+    insight: Skill = Field(default_factory=lambda: Skill(name="Insight", ability=Ability.WIS, skill=Skills.INSIGHT, bonus=ModifiableValue(name="insight_bonus", base_value=BaseValue(name="base_insight_bonus", base_value=0))))
+    intimidation: Skill = Field(default_factory=lambda: Skill(name="Intimidation", ability=Ability.CHA, skill=Skills.INTIMIDATION, bonus=ModifiableValue(name="intimidation_bonus", base_value=BaseValue(name="base_intimidation_bonus", base_value=0))))
+    investigation: Skill = Field(default_factory=lambda: Skill(name="Investigation", ability=Ability.INT, skill=Skills.INVESTIGATION, bonus=ModifiableValue(name="investigation_bonus", base_value=BaseValue(name="base_investigation_bonus", base_value=0))))
+    medicine: Skill = Field(default_factory=lambda: Skill(name="Medicine", ability=Ability.WIS, skill=Skills.MEDICINE, bonus=ModifiableValue(name="medicine_bonus", base_value=BaseValue(name="base_medicine_bonus", base_value=0))))
+    nature: Skill = Field(default_factory=lambda: Skill(name="Nature", ability=Ability.INT, skill=Skills.NATURE, bonus=ModifiableValue(name="nature_bonus", base_value=BaseValue(name="base_nature_bonus", base_value=0))))
+    perception: Skill = Field(default_factory=lambda: Skill(name="Perception", ability=Ability.WIS, skill=Skills.PERCEPTION, bonus=ModifiableValue(name="perception_bonus", base_value=BaseValue(name="base_perception_bonus", base_value=0))))
+    performance: Skill = Field(default_factory=lambda: Skill(name="Performance", ability=Ability.CHA, skill=Skills.PERFORMANCE, bonus=ModifiableValue(name="performance_bonus", base_value=BaseValue(name="base_performance_bonus", base_value=0))))
+    persuasion: Skill = Field(default_factory=lambda: Skill(name="Persuasion", ability=Ability.CHA, skill=Skills.PERSUASION, bonus=ModifiableValue(name="persuasion_bonus", base_value=BaseValue(name="base_persuasion_bonus", base_value=0))))
+    religion: Skill = Field(default_factory=lambda: Skill(name="Religion", ability=Ability.INT, skill=Skills.RELIGION, bonus=ModifiableValue(name="religion_bonus", base_value=BaseValue(name="base_religion_bonus", base_value=0))))
+    sleight_of_hand: Skill = Field(default_factory=lambda: Skill(name="SleightOfHand", ability=Ability.DEX, skill=Skills.SLEIGHT_OF_HAND, bonus=ModifiableValue(name="sleight_of_hand_bonus", base_value=BaseValue(name="base_sleight_of_hand_bonus", base_value=0))))
+    stealth: Skill = Field(default_factory=lambda: Skill(name="Stealth", ability=Ability.DEX, skill=Skills.STEALTH, bonus=ModifiableValue(name="stealth_bonus", base_value=BaseValue(name="base_stealth_bonus", base_value=0))))
+    survival: Skill = Field(default_factory=lambda: Skill(name="Survival", ability=Ability.WIS, skill=Skills.SURVIVAL, bonus=ModifiableValue(name="survival_bonus", base_value=BaseValue(name="base_survival_bonus", base_value=0))))
     proficiencies: Set[Skills] = Field(default_factory=set)
     expertise: Set[Skills] = Field(default_factory=set)
+
 
     def get_skill(self, skill: Skills) -> Skill:
         attribute_name = skill.value.lower().replace(' ', '_')
@@ -306,16 +368,23 @@ class SkillSet(BlockComponent):
         return self.get_skill(skill).perform_check(dc, target, context)
     
     def perform_cross_skill_check(self, skill: Skills, target_skill: Skills, target: str , context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
-        return self.get_skill(skill).perform_cross_chek(target_skill,target,context)
-
+        return self.get_skill(skill).perform_cross_check(target_skill,target,context)
 
 class SavingThrow(BlockComponent):
+    name: str = Field(default="SavingThrow")
     ability: Ability
-    proficient: bool
-    bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
+    proficient: bool = False
+    bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name = "SavingThrowBonus",
+        base_value=BaseValue(
+            name="base_saving_throw_bonus",
+            base_value=0,
+            min_value=None,
+            max_value=None
+        )
+    ))
 
-
-    def _get_procifiency_converter(self):
+    def _get_proficiency_converter(self):
         def proficient(proficiency_bonus:int) -> int:
             return proficiency_bonus
         def not_proficient(proficiency_bonus:int) -> int:
@@ -339,8 +408,10 @@ class SavingThrow(BlockComponent):
             target_ability = target_stats_block.saving_throws.get_ability(self.ability)
             target_to_self_bonus = target_ability.bonus.apply_to_target(target,stats_block,context)
             total_bonus = saving_throw_bonus.combine_with(target_to_self_bonus)
+        else:
+            total_bonus = saving_throw_bonus
         
-        total_bonus = total_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier).combine_with(proficiency_bonus,bonus_converter=self._get_procifiency_converter())
+        total_bonus = total_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier).combine_with(proficiency_bonus,bonus_converter=self._get_proficiency_converter())
         return SavingThrowBonusOut(
             ability=self.ability,
             ability_bonus=ability_bonus,
@@ -368,12 +439,54 @@ class SavingThrow(BlockComponent):
         self.bonus.remove_effect(source)
 
 class SavingThrows(BlockComponent):
-    strength: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.STR, proficient=False))
-    dexterity: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.DEX, proficient=False))
-    constitution: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.CON, proficient=False))
-    intelligence: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.INT, proficient=False))
-    wisdom: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.WIS, proficient=False))
-    charisma: SavingThrow = Field(default_factory=lambda: SavingThrow(ability=Ability.CHA, proficient=False))
+    name: str = Field(default="SavingThrows")
+    strength: SavingThrow = Field(default_factory=lambda: SavingThrow(
+        name="StrengthSavingThrow",
+        ability=Ability.STR,
+        proficient=False,
+        bonus=ModifiableValue(
+            name = "StrengthSavingThrowBonus",
+            base_value=BaseValue(name="base_strength_saving_throw_bonus", base_value=0))
+    ))
+    dexterity: SavingThrow = Field(default_factory=lambda: SavingThrow(
+        name="DexteritySavingThrow",
+        ability=Ability.DEX,
+        proficient=False,
+        bonus=ModifiableValue(
+            name = "DexteritySavingThrowBonus",
+            base_value=BaseValue(name="base_dexterity_saving_throw_bonus", base_value=0))
+    ))
+    constitution: SavingThrow = Field(default_factory=lambda: SavingThrow(
+        name="ConstitutionSavingThrow",
+        ability=Ability.CON,
+        proficient=False,
+        bonus=ModifiableValue(
+            name = "ConstitutionSavingThrowBonus",
+            base_value=BaseValue(name="base_constitution_saving_throw_bonus", base_value=0))
+    ))
+    intelligence: SavingThrow = Field(default_factory=lambda: SavingThrow(
+        name="IntelligenceSavingThrow",
+        ability=Ability.INT,
+        proficient=False,
+        bonus=ModifiableValue(
+            name = "IntelligenceSavingThrowBonus",
+            base_value=BaseValue(name="base_intelligence_saving_throw_bonus", base_value=0))
+    ))
+    wisdom: SavingThrow = Field(default_factory=lambda: SavingThrow(
+        name="WisdomSavingThrow",
+        ability=Ability.WIS,
+        proficient=False,
+        bonus=ModifiableValue(name = "WisdomSavingThrowBonus",
+                              base_value=BaseValue(name="base_wisdom_saving_throw_bonus", base_value=0))
+    ))
+    charisma: SavingThrow = Field(default_factory=lambda: SavingThrow(
+        name="CharismaSavingThrow",
+        ability=Ability.CHA,
+        proficient=False,
+        bonus=ModifiableValue(
+            name= "CharismaSavingThrowBonus",
+            base_value=BaseValue(name="base_charisma_saving_throw_bonus", base_value=0))
+    ))
 
     def get_ability(self, ability: Ability) -> SavingThrow:
         return getattr(self, ability.value.lower())
@@ -395,14 +508,27 @@ class SavingThrows(BlockComponent):
 
 
 class Health(BlockComponent):
+    name: str = Field(default="Health")
     hit_dice_value: int = 6
     hit_dice_count: int = 1
-    max_hit_point_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    damage_taken :int = 0
-    temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    max_hit_point_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name = "MaxHitPointBonus",
+        base_value=BaseValue(name="base_max_hp_bonus", base_value=0)
+    ))
+    damage_taken: int = 0
+    temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name = "TemporaryHitPoints",
+        base_value=BaseValue(name="base_temporary_hp", base_value=0)
+    ))
     temporary_hit_points_damage_taken: int = 0
-    damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    healing_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name = "DamageReduction",
+        base_value=BaseValue(name="base_damage_reduction", base_value=0)
+    ))
+    healing_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name = "HealingBonus",
+        base_value=BaseValue(name="base_healing_bonus", base_value=0)
+    ))
     vulnerabilities: List[DamageType] = Field(default_factory=list)
     resistances: List[DamageType] = Field(default_factory=list)
     immunities: List[DamageType] = Field(default_factory=list)
@@ -414,7 +540,7 @@ class Health(BlockComponent):
     
     @computed_field
     def total_hit_points(self) -> int:
-        return self.current_hit_points + self.bonus_hit_points
+        return self.current_hit_points + self.current_temporary_hit_points
     
     def _hit_dice_exp_value(self) -> int:
         return self.hit_dice_count * (self.hit_dice_value // 2 + 1)
@@ -422,7 +548,9 @@ class Health(BlockComponent):
     @computed_field
     def max_hit_points(self) -> int:
         owner_block = self.get_owner()
-        return self._hit_dice_exp_value() + self.max_hit_point_bonus.apply(owner_block).total_bonus
+        constitution_modifier = owner_block.ability_scores.get_ability_modifier(Ability.CON)
+        total_consitution_bonus = constitution_modifier * self.hit_dice_count
+        return self._hit_dice_exp_value() + self.max_hit_point_bonus.apply(owner_block).total_bonus + total_consitution_bonus
     
     @computed_field
     def current_hit_points(self) -> int:
@@ -566,41 +694,52 @@ class Shield(BaseModel):
 
 
 class ArmorClass(BlockComponent):
-    ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=10)))
+    name: str = Field(default="ArmorClass")
+    ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="armor class",
+        base_value=BaseValue(name="base_armor_class", base_value=10)
+    ))
     equipped_armor: Optional[Armor] = None
     equipped_shield: Optional[Shield] = None
     unarmored_ac: UnarmoredAc = Field(default=UnarmoredAc.NONE)
 
-    def _gert_unarmored_ac(self) -> int:
+    def _get_unarmored_ac(self) -> int:
         stats_block = self.get_owner() 
         if self.unarmored_ac == UnarmoredAc.BARBARIAN:
-            return stats_block.ability_scores.constitution.apply(stats_block).total_bonus + stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 10
+            return stats_block.ability_scores.constitution.apply().total_bonus + stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 10
         elif self.unarmored_ac == UnarmoredAc.MONK:
-            return stats_block.ability_scores.wisdom.apply(stats_block).total_bonus + stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 10
+            return stats_block.ability_scores.wisdom.apply().total_bonus + stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 10
         elif self.unarmored_ac == UnarmoredAc.DRACONIC_SORCER or self.unarmored_ac == UnarmoredAc.MAGIC_ARMOR:
-            return stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 13
+            return stats_block.ability_scores.dexterity.apply().total_bonus + 13
+        else:
+            return stats_block.ability_scores.dexterity.apply().total_bonus + 10
 
 
-    def update_ac(self) -> int:
+    def update_ac(self) -> None:
         stats_block = self.get_owner()
         if self.equipped_armor:
             base_ac = self.equipped_armor.base_ac
             if self.equipped_armor.dex_bonus:
-                dex_bonus = stats_block.ability_scores.dexterity.apply(stats_block).total_bonus
+                dex_bonus = stats_block.ability_scores.dexterity.get_modifier()
                 if self.equipped_armor.max_dex_bonus is not None:
                     dex_bonus = min(dex_bonus, self.equipped_armor.max_dex_bonus)
                 base_ac += dex_bonus
         else:
-            base_ac = self._gert_unarmored_ac(stats_block)
+            base_ac = self._get_unarmored_ac()
         if self.equipped_shield:
             base_ac += self.equipped_shield.ac_bonus
         
-        self.ac.update_base_value = base_ac
+        self.ac.update_base_value(base_ac)
 
     @computed_field
     def base_ac(self) -> int:
         self.update_ac()
         return self.ac.base_value.base_value
+    
+    @computed_field
+    def total_ac(self) -> int:
+        owner = self.get_owner()
+        return self.ac.apply(owner).total_bonus
     
 
     def remove_effect(self, source: str):
@@ -623,28 +762,63 @@ class ArmorClass(BlockComponent):
         self.update_ac()
 
 class Speed(BlockComponent):
-    walk: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    fly: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    swim: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    burrow: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    climb: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-
+    name: str = Field(default="Speed")
+    walk: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="walk",
+        base_value=BaseValue(name="base_walk_speed", base_value=30)
+    ))
+    fly: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="fly",
+        base_value=BaseValue(name="base_fly_speed", base_value=0)
+    ))
+    swim: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="swim",
+        base_value=BaseValue(name="base_swim_speed", base_value=0)
+    ))
+    burrow: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="burrow",
+        base_value=BaseValue(name="base_burrow_speed", base_value=0)
+    ))
+    climb: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="climb",
+        base_value=BaseValue(name="base_climb_speed", base_value=0)
+    ))
 
     def reset_max_speed(self, source: str):
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
-            speed_obj : ModifiableValue = getattr(self, speed_type)
-            speed_obj.remove_effect(speed_type, source)
+            speed_obj: ModifiableValue = getattr(self, speed_type)
+            speed_obj.remove_effect(source)
 
 class ActionEconomy(BlockComponent):
-    actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
-    bonus_actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
-    reactions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
-    movement: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=30))
+    name: str = Field(default="ActionEconomy")
+    actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(name="actions",
+        base_value=BaseValue(name="base_actions", base_value=1)
+    ))
+    bonus_actions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="bonus_actions",
+        base_value=BaseValue(name="base_bonus_actions", base_value=1)
+    ))
+    reactions: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="reactions",
+        base_value=BaseValue(name="base_reactions", base_value=1)
+    ))
+    movement: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="movement",
+        base_value=BaseValue(name="base_movement", base_value=30)
+    ))
 
+    def _sync_movement_with_speed(self):
+        owner_block = self.get_owner()
+        self.movement.update_base_value(owner_block.speed.walk.apply(owner_block).total_bonus)
 
     def reset(self):
-        for attr in ['actions', 'bonus_actions', 'reactions', 'movement']:
-            getattr(self, attr).base_value = getattr(self, attr).base_value
+        base_action = 1
+        base_bonus_action = 1
+        base_reaction = 1
+        self.actions.update_base_value(base_action)
+        self.bonus_actions.update_base_value(base_bonus_action)
+        self.reactions.update_base_value(base_reaction)
+        self._sync_movement_with_speed()
 
     def set_max_actions(self, source: str, value: int):
         self.actions.self_static.add_max_constraint(source, lambda stats_block, target, context: value)
@@ -772,8 +946,9 @@ class Sensory(BlockComponent):
 ContextAwareImmunity = Callable[['StatsBlock', Optional['StatsBlock'],Optional[dict]], bool]
 
 class ConditionManager(BlockComponent):
+    name: str = Field(default="ConditionManager")
     active_conditions: Dict[str, Condition] = Field(default_factory=dict)
-    condition_immunities: Dict[str,List[str]] = Field(default_factory=dict)
+    condition_immunities: Dict[str, List[str]] = Field(default_factory=dict)
     contextual_condition_immunities: Dict[str, List[Tuple[str, ContextAwareImmunity]]] = Field(default_factory=dict)
     active_conditions_by_source: Dict[str, List[str]] = Field(default_factory=dict)
     
@@ -813,23 +988,23 @@ class ConditionManager(BlockComponent):
         condition = self.active_conditions[condition_name]
         return condition.remove_by_external(external_source)
     
-    def advance_duration_conditon(self,condition_name:str) -> Optional[ConditionRemoved]:
+    def advance_duration_condition(self,condition_name:str) -> Optional[ConditionRemoved]:
         condition = self.active_conditions[condition_name]
         return condition.advance_duration()
     
     def advance_durations(self) -> List[ConditionRemoved]:
         removed_conditions = []
         for condition_name in list(self.active_conditions.keys()):
-            removed = self.advance_duration_conditon(condition_name)
+            removed = self.advance_duration_condition(condition_name)
             if removed:
                 removed_conditions.append(removed)
         return removed_conditions
 
 
 class Condition(BlockComponent):
+    name: str = Field(...)  # This should be a required field
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    description: str = Field("A generic description of the condition.")
+    description: str = Field(default="A generic description of the condition.")
     duration: Duration = Field(default_factory=lambda: Duration(time=1, type=DurationType.ROUNDS))
     application_saving_throw: Optional[SavingThrowRollRequest] = None
     removal_saving_throw: Optional[SavingThrowRollRequest] = None
@@ -994,12 +1169,11 @@ class Damage(BaseModel):
             dice = self.dice
         damage_roll = dice.roll(damage_advantage)
         return DamageRollOut(
-            dice=dice,
+            dice_roll=damage_roll,
             damage_bonus=self.damage_bonus,
             attack_roll=self.attack_roll,
-            type=self.type,
-            source=self.source,
-            damage_roll=damage_roll,
+            damage_type=self.type,
+            source=self.source
         )
       
 
@@ -1007,24 +1181,55 @@ class Weapon(BaseModel):
     name: str
     damage_dice: int
     dice_numbers: int
-    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
-    attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=BaseValue(base_value=0)))
+    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="weapon_damage_bonus",
+        base_value=BaseValue(name="base_weapon_damage_bonus", base_value=0)
+    ))
+    attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="weapon_attack_bonus",
+        base_value=BaseValue(name="base_weapon_attack_bonus", base_value=0)
+    ))
     damage_type: DamageType
     attack_type: AttackType
-    properties: List[WeaponProperty]
+    properties: List[WeaponProperty] = Field(default_factory=list)
     range: Range
 
 
 
 class AttacksManager(BlockComponent):
-    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    melee_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    ranged_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    spell_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    melee_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    ranged_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
-    spell_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=0))
+    name: str = Field(default="AttacksManager")
+    damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="general_damage_bonus",
+        base_value=BaseValue(name="base_damage_bonus", base_value=0)
+    ))
+    hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="general_hit_bonus",
+        base_value=BaseValue(name="base_hit_bonus", base_value=0)
+    ))
+    melee_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="melee_hit_bonus",
+        base_value=BaseValue(name="base_melee_hit_bonus", base_value=0)
+    ))
+    ranged_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="ranged_hit_bonus",
+        base_value=BaseValue(name="base_ranged_hit_bonus", base_value=0)
+    ))
+    spell_hit_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="spell_hit_bonus",
+        base_value=BaseValue(name="base_spell_hit_bonus", base_value=0)
+    ))
+    melee_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="melee_damage_bonus",
+        base_value=BaseValue(name="base_melee_damage_bonus", base_value=0)
+    ))
+    ranged_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="ranged_damage_bonus",
+        base_value=BaseValue(name="base_ranged_damage_bonus", base_value=0)
+    ))
+    spell_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="spell_damage_bonus",
+        base_value=BaseValue(name="base_spell_damage_bonus", base_value=0)
+    ))
     melee_right_hand: Optional[Weapon] = None
     melee_left_hand: Optional[Union[Weapon,Shield]] = None
     ranged_right_hand: Optional[Weapon] = None
@@ -1073,8 +1278,8 @@ class AttacksManager(BlockComponent):
             spell_bonus=self.spell_hit_bonus.apply(stast_block,target_stats_block,context)
 
         all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
-        all_bonuses = [bonus for bonus in all_bonuses if bonus]
-        total_weapon_bonus = all_bonuses[0].combine_with(all_bonuses[1:])
+        all_bonuses : List[ValueOut] = [bonus for bonus in all_bonuses if bonus]
+        total_weapon_bonus = all_bonuses[0].combine_with_multiple(all_bonuses[1:])
         return WeaponAttackBonusOut(
             attacker_melee_bonus=attacker_melee_bonus,
             attacker_ranged_bonus=attacker_ranged_bonus,
@@ -1136,20 +1341,21 @@ class AttacksManager(BlockComponent):
 
         
     def roll_to_hit(self, hand:AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
-        target_stats_block = self.get_target(target)
+        owner_stats_block, target_stats_block = self.get_stats_blocks(target)
         #first obtain ac of the target
-        target_ac = target_stats_block.armor_class.ac.apply(self.owner_id,context)
+        target_ac = target_stats_block.armor_class.ac.apply(target_stats_block,owner_stats_block,context)
         #get the attack bonus
         attack_bonus_out = self._get_attack_bonus(hand,target,context)
         #roll the dice
         roll = TargetRoll(value=attack_bonus_out.total_bonus)
-        roll_out=  roll.roll(target_ac)
+        roll_out=  roll.roll(target_ac.total_bonus)
         return AttackRollOut(
             hand=hand,
             ability = self._get_ability_from_weapon(hand,target,context),
             attack_bonus=attack_bonus_out,
             roll=roll_out,
             target_ac=target_ac,
+            total_target_ac=target_ac.total_bonus,
             attack_type=self.get_weapon(hand).attack_type if self.get_weapon(hand) else None,
             source_entity_id=self.owner_id,
             target_entity_id=target
@@ -1184,8 +1390,8 @@ class AttacksManager(BlockComponent):
             spell_bonus=self.spell_damage_bonus.apply(stast_block,target_stats_block,context)
 
         all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
-        all_bonuses = [bonus for bonus in all_bonuses if bonus]
-        total_weapon_bonus = all_bonuses[0].combine_with(all_bonuses[1:])
+        all_bonuses :List[ValueOut] = [bonus for bonus in all_bonuses if bonus]
+        total_weapon_bonus = all_bonuses[0].combine_with_multiple(all_bonuses[1:])
         return WeaponDamageBonusOut(
             attacker_melee_bonus=attacker_melee_bonus,
             attacker_ranged_bonus=attacker_ranged_bonus,
@@ -1264,9 +1470,11 @@ class AttacksManager(BlockComponent):
         
     def can_dual_wield_ranged(self, weapon: Weapon,hand:str='left') -> bool:
         if WeaponProperty.TWO_HANDED in weapon.properties:
+            print(f"The weapon can not be dual wielded because it is two handed")
             return False
-        elif not self.dual_wielder and WeaponProperty.LIGHT not in weapon.properties:
+        elif not self.dual_wielder and hand == 'left' and WeaponProperty.LIGHT not in weapon.properties:
             #if not dual wielder and weapon is not light it can't be dual wielded same for two handed weapons
+            print(f"The weapon can not be dual wielded because it is not light")
             return False
         elif not self.dual_wielder and hand == 'left' and WeaponProperty.LIGHT in weapon.properties:
             #not dual wielder but the weapon is light and it is the left hand

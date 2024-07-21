@@ -26,11 +26,11 @@ class BaseValue(BaseModel):
     def apply(self) -> ValueOut:
         return ValueOut(
             bonuses=BonusTracker(bonuses={self.name: self.base_value}),
-            min_constraints=BonusTracker(bonuses={self.name: self.min_value}) if self.min_value is not None else None,
-            max_constraints=BonusTracker(bonuses={self.name: self.max_value}) if self.max_value is not None else None,
-            advantage_tracker=AdvantageTracker(active_sources={self.name: self.advantage}),
-            auto_hit_tracker=AutoHitTracker(auto_hit_statuses={self.name: self.auto_hit}),
-            critical_tracker=CriticalTracker(critical_statuses={self.name: self.critical})
+            min_constraints=BonusTracker(bonuses={self.name: self.min_value}) if self.min_value is not None else BonusTracker(),
+            max_constraints=BonusTracker(bonuses={self.name: self.max_value}) if self.max_value is not None else BonusTracker(),
+            advantage_tracker=AdvantageTracker(active_sources={self.name: [self.advantage]}),
+            auto_hit_tracker=AutoHitTracker(auto_hit_statuses={self.name: [self.auto_hit]}),
+            critical_tracker=CriticalTracker(critical_statuses={self.name: [self.critical]})
         )
 
 

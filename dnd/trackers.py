@@ -15,6 +15,7 @@ class AdvantageTracker(BaseModel):
                     counter += 1
                 elif status == AdvantageStatus.DISADVANTAGE:
                     counter -= 1
+        return counter
 
     @computed_field
     def status(self) -> AdvantageStatus:
@@ -34,10 +35,7 @@ class AdvantageTracker(BaseModel):
     def add(self,advantage_status: AdvantageStatus, source: str = "nosource"):
         
         self.active_sources = update_or_concat_to_dict(self.active_sources, (source, advantage_status))
-        if advantage_status == AdvantageStatus.ADVANTAGE:
-            self.add_advantage()
-        elif advantage_status == AdvantageStatus.DISADVANTAGE:
-            self.add_disadvantage()
+ 
         return self.status
     
     def add_multiple(self, advantage_statuses: List[Tuple[AdvantageStatus,str]]):
@@ -71,7 +69,7 @@ class CriticalTracker(BaseModel):
         elif CriticalStatus.NONE in self.critical_statuses.values() or len(self.critical_statuses.keys()) == 0:
             return CriticalStatus.NONE
         else:
-            raise ValueError("Invalid Critical Status")
+            return CriticalStatus.NONE
         
 class AutoHitTracker(BaseModel):
     auto_hit_statuses :Dict[str,List[AutoHitStatus]] = Field(default_factory=dict)
@@ -104,7 +102,7 @@ class AutoHitTracker(BaseModel):
         elif AutoHitStatus.NONE in self.auto_hit_statuses.values() or len(self.auto_hit_statuses.keys()) == 0:
             return AutoHitStatus.NONE
         else:
-            raise ValueError("Invalid AutoHit Status")
+            return AutoHitStatus.NONE
 
 BonusConverter = Callable[[int], int]
 

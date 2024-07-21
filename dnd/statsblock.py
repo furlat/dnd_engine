@@ -1,11 +1,10 @@
-from typing import List, Dict, Optional, Set, Tuple, Any, Callable, Union
+from typing import List, Dict, Optional, Set, Tuple, Any, Union
 from pydantic import BaseModel, Field, computed_field
 import uuid
-from dnd.core import Condition,Ability,ConditionManager, SkillSet, AbilityScores, Speed, SavingThrows, DamageType, Skills, ActionEconomy, Sensory, Health, ArmorClass
+from dnd.core import BlockComponent,Condition, SavingThrows, Ability, ConditionManager, SkillSet, AbilityScores, Speed, SavingThrow , ActionEconomy, Sensory, Health, ArmorClass,AttacksManager, Weapon
 from dnd.contextual import ModifiableValue, BaseValue
-from dnd.actions import Action, Attack, MovementAction, Weapon
-from dnd.dnd_enums import Size, MonsterType, Alignment, Language,Abilities
-from dnd.logger import Logger
+from dnd.dnd_enums import Size, MonsterType, Alignment, Language, AttackHand, Skills
+from dnd.logger import Logger, SkillRollOut, SavingThrowRollOut, AttackRollOut, DamageRollOut
 from dnd.spatial import RegistryHolder
 
 class MetaData(BaseModel):
@@ -19,77 +18,62 @@ class MetaData(BaseModel):
     experience_points: int = Field(default=0)
 
 class StatsBlock(BaseModel, RegistryHolder):
-    
     meta: MetaData = Field(default_factory=MetaData)
-    proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(base_value=1))
-    speed: Speed = Field(default_factory=lambda: Speed(walk=ModifiableValue(base_value=BaseValue(base_value=30))))
+    proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue(
+        name="proficiency_bonus",
+        base_value=BaseValue(name="base_proficiency_bonus", base_value=2)
+    ))
+    speed: Speed = Field(default_factory=Speed)
     ability_scores: AbilityScores = Field(default_factory=AbilityScores)
     skillset: SkillSet = Field(default_factory=SkillSet)
-    
     saving_throws: SavingThrows = Field(default_factory=SavingThrows)
-    
-    actions: List[Action] = Field(default_factory=list)
-    reactions: List[Action] = Field(default_factory=list)
-    legendary_actions: List[Action] = Field(default_factory=list)
-    armor_class: ArmorClass = Field(default_factory=lambda: ArmorClass(base_ac=ModifiableValue(base_value=BaseValue(base_value=10))))
-    
-    action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy())
+    armor_class: ArmorClass = Field(default_factory=ArmorClass)
+    action_economy: ActionEconomy = Field(default_factory=ActionEconomy)
     sensory: Sensory = Field(default_factory=Sensory)
-    health: Health = Field(default_factory=lambda: Health(hit_dice=Dice(dice_count=1, dice_value=8, modifier=0)))
+    health: Health = Field(default_factory=Health)
     spellcasting_ability: Ability = Field(default=Ability.CHA)
-    
-    
-       
     condition_manager: ConditionManager = Field(default_factory=ConditionManager)
+    attacks_manager: AttacksManager = Field(default_factory=AttacksManager)
 
     def __init__(self, **data):
         super().__init__(**data)
         self.register(self)
+        self._initialize_components()
         self._recompute_fields()
-        
+
+    def _initialize_components(self):
+        components : List[BlockComponent] = [
+            self.speed, self.ability_scores, self.skillset, self.saving_throws,
+            self.armor_class, self.action_economy, self.sensory, self.health,
+            self.condition_manager, self.attacks_manager
+        ]
+        for component in components:
+            component.set_owner(self.meta.id)
+            self.register(component)
+
     @computed_field
     def id(self) -> str:
         return self.meta.id
+
     @computed_field
     def hp(self) -> int:
-        return self.health.total_hit_points
+        return self.health.current_hit_points
 
     @computed_field
-    def armor_class_value(self) -> int:
-        return self.armor_class.get_value(self)
-
+    def ac(self) -> int:
+        return self.armor_class.total_ac
 
     @computed_field
     def initiative(self) -> int:
-        return self.ability_scores.dexterity.get_modifier(self)
-
-    def add_action(self, action: Action):
-        if action.name not in [a.name for a in self.actions]:
-            action.stats_block = self
-            self.actions.append(action)
-
-    def add_reaction(self, reaction: Action):
-        reaction.stats_block = self
-        self.reactions.append(reaction)
-
-    def add_legendary_action(self, legendary_action: Action):
-        legendary_action.stats_block = self
-        self.legendary_actions.append(legendary_action)
+        return self.ability_scores.get_ability_modifier(Ability.DEX)
 
     def _recompute_fields(self):
-        self.armor_class.compute_base_ac(self.ability_scores)
-        self.action_economy.movement.base_value = self.speed.walk.get_value(self)
+        self.armor_class.update_ac()
+        self.action_economy._sync_movement_with_speed()
         self.action_economy.reset()
-        for action in self.actions:
-            if isinstance(action, Attack):
-                action.update_hit_bonus()
-
-        # Update health's hit point bonus based on Constitution modifier
-        con_modifier = self.ability_scores.constitution.get_modifier(self)
-        self.health.hit_point_bonus.base_value = con_modifier * self.health.hit_dice.dice_count
 
     def update_sensory(self, battlemap_id: str, origin: Tuple[int, int]):
-        self.sensory.battlemap_id = battlemap_id
+        self.sensory.update_battlemap(battlemap_id)
         self.sensory.update_origin(origin)
 
     def update_fov(self, visible_tiles: Set[Tuple[int, int]]):
@@ -110,16 +94,52 @@ class StatsBlock(BaseModel, RegistryHolder):
     def get_path_to(self, destination: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
         return self.sensory.get_path_to(destination)
 
+    def perform_ability_check(self, ability: Ability, dc: int, target_id: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> int:
+        ability_score = self.ability_scores.get_ability(ability)
+        return ability_score.apply(target_id, context).total_bonus
 
-    def perform_ability_check(self, ability: Ability, dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
-        return self.ability_scores.perform_ability_check(ability, self, dc, target, context, return_log)
+    def perform_skill_check(self, skill: Skills, dc: int, target_id: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SkillRollOut:
+        return self.skillset.perform_skill_check(skill, dc, target_id, context)
 
-    def perform_skill_check(self, skill: Skills, dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SkillCheckLog]:
-        return self.skills.perform_skill_check(skill, self, dc, target, context, return_log)
+    def perform_saving_throw(self, ability: Ability, dc: int, target_id: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> SavingThrowRollOut:
+        return self.saving_throws.perform_save(ability, dc, target_id, context)
 
-    def perform_saving_throw(self, ability: Ability, dc: int, target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None, return_log: bool = False) -> Union[bool, SavingThrowLog]:
-        return self.saving_throws.perform_save(ability, self, dc, target, context, return_log)
+    def perform_attack(self, hand: AttackHand, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
+        return self.attacks_manager.roll_to_hit(hand, target_id, context)
+
+    def roll_damage(self, hand: AttackHand, attack_roll: AttackRollOut, target_id: str, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
+        return self.attacks_manager.roll_damage(hand, attack_roll, target_id, context)
+
+    def melee_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
+        hand = AttackHand.MELEE_RIGHT
+        return self.perform_attack(hand, target_id, context)
+    
+    def ranged_attack(self, target_id: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
+        hand = AttackHand.RANGED_RIGHT
+        return self.perform_attack(hand, target_id, context)
+    
+    def take_damage(self, damage_rolls: Union[DamageRollOut, List[DamageRollOut]], attacker_id: Optional[str] = None, context: Optional[Dict[str, Any]] = None):
+        return self.health.take_damage(damage_rolls, attacker_id, context)
+
+    def heal(self, amount: int, healer_id: Optional[str] = None, context: Optional[Dict[str, Any]] = None):
+        return self.health.heal(amount, healer_id, context)
+
+    def equip_weapon(self, weapon: Weapon, hand: AttackHand):
+        if hand in [AttackHand.MELEE_RIGHT, AttackHand.MELEE_LEFT]:
+            if hand == AttackHand.MELEE_RIGHT:
+                self.attacks_manager.equip_right_hand_melee_weapon(weapon)
+            else:
+                self.attacks_manager.equip_left_hand_weapon(weapon)
+        elif hand in [AttackHand.RANGED_RIGHT, AttackHand.RANGED_LEFT]:
+            if hand == AttackHand.RANGED_RIGHT:
+                self.attacks_manager.equip_right_hand_ranged_weapon(weapon)
+            else:
+                self.attacks_manager.equip_left_hand_ranged_weapon(weapon)
+
+    def add_condition(self, condition: Condition, context: Optional[Dict[str, Any]] = None):
+        return self.condition_manager.add_condition(condition, context)
+
+    def remove_condition(self, condition_name: str, external_source: str = "manager"):
+        return self.condition_manager.remove(condition_name, external_source)
 
 ModifiableValue.model_rebuild()
-Attack.model_rebuild()
-MovementAction.model_rebuild()
