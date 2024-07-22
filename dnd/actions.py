@@ -58,6 +58,8 @@ class ActionResultDetails(BaseModel):
     reason: Optional[str] = None
     effects: Dict[str, Any] = Field(default_factory=dict)
 
+
+
 class ActionLog(BaseLogEntry):
     log_type: str = "Action"
     action_name: str
@@ -140,6 +142,43 @@ class TargetTypePrerequisite(Prerequisite):
         details.failure_reason = f"Invalid target type. Allowed types: {', '.join(t.value for t in self.allowed_types)}"
         return False, details
 
+class PathExistsPrerequisite(Prerequisite):
+    type: PrerequisiteType = PrerequisiteType.PATH
+
+    def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
+        if not isinstance(target, tuple) or len(target) != 2:
+            return False, PrerequisiteDetails(failure_reason="Invalid target position")
+
+        path = source.sensory.get_path_to(target)
+        details = PrerequisiteDetails(path_length=len(path) if path else 0)
+        
+        if not path:
+            details.failure_reason = "No valid path to target position"
+            return False, details
+        
+        context['path'] = path  # Store the path in the context for later use
+        return True, details
+
+class MovementBudgetPrerequisite(Prerequisite):
+    type: PrerequisiteType = PrerequisiteType.ACTION_ECONOMY
+
+    def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
+        path = source.sensory.get_path_to(target)
+        movement_budget = source.action_economy.movement.apply(source).total_bonus
+        movement_cost = (len(path) - 1) * 5 if path else 0  # Each step is 5 feet
+        
+        details = PrerequisiteDetails(
+            movement_budget=movement_budget,
+            path_length=len(path) - 1 if path else 0,
+            required_actions=movement_cost
+        )
+        
+        if movement_cost > movement_budget:
+            details.failure_reason = "Insufficient movement points"
+            return False, details
+        
+        return True, details
+    
 def check_prerequisites(prerequisites: Dict[str, Prerequisite], source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, Dict[str, PrerequisiteLog]]:
     all_passed = True
     logs = {}
@@ -375,42 +414,7 @@ class SelfCondition(Action):
         return f"{self.name}: Applies {conditions_str} to self. {self.description}"
 
 
-class PathExistsPrerequisite(Prerequisite):
-    type: PrerequisiteType = PrerequisiteType.PATH
 
-    def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
-        if not isinstance(target, tuple) or len(target) != 2:
-            return False, PrerequisiteDetails(failure_reason="Invalid target position")
-
-        path = source.sensory.get_path_to(target)
-        details = PrerequisiteDetails(path_length=len(path) if path else 0)
-        
-        if not path:
-            details.failure_reason = "No valid path to target position"
-            return False, details
-        
-        context['path'] = path  # Store the path in the context for later use
-        return True, details
-
-class MovementBudgetPrerequisite(Prerequisite):
-    type: PrerequisiteType = PrerequisiteType.ACTION_ECONOMY
-
-    def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
-        path = source.sensory.get_path_to(target)
-        movement_budget = source.action_economy.movement.apply(source).total_bonus
-        movement_cost = (len(path) - 1) * 5 if path else 0  # Each step is 5 feet
-        
-        details = PrerequisiteDetails(
-            movement_budget=movement_budget,
-            path_length=len(path) - 1 if path else 0,
-            required_actions=movement_cost
-        )
-        
-        if movement_cost > movement_budget:
-            details.failure_reason = "Insufficient movement points"
-            return False, details
-        
-        return True, details
 
 class MovementAction(Action):
     step_by_step: bool = Field(default=False)
