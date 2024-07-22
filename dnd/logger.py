@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from collections import OrderedDict
 import uuid
 from enum import Enum
-from dnd.dnd_enums import AttackHand,RemovedReason,DurationType,NotAppliedReason,ResistanceStatus,AdvantageStatus,AutoHitStatus,CriticalStatus, DamageType,Ability, Skills, AdvantageStatus, ActionType, AttackType, DamageType, SensesType
+from dnd.dnd_enums import PrerequisiteType,AttackHand,RemovedReason,DurationType,NotAppliedReason,ResistanceStatus,AdvantageStatus,AutoHitStatus,CriticalStatus, DamageType,Ability, Skills, AdvantageStatus, ActionType, AttackType, DamageType, SensesType
 from dnd.utils import update_or_concat_to_dict, update_or_sum_to_dict
 from dnd.trackers import BonusTracker, BonusConverter,AdvantageTracker, CriticalTracker, AutoHitTracker
 
@@ -449,3 +449,40 @@ class AttackRollOut(BaseLogEntry):
     def total_roll(self) -> int:
         return self.roll.total_roll
 
+# Models
+class PrerequisiteDetails(BaseLogEntry):
+    log_type: str = "PrerequisiteDetails"
+    distance: Optional[int] = None
+    required_range: Optional[int] = None
+    is_visible: Optional[bool] = None
+    available_actions: Optional[int] = None
+    required_actions: Optional[int] = None
+    path_length: Optional[int] = None
+    movement_budget: Optional[int] = None
+    failure_reason: Optional[str] = None
+
+class PrerequisiteLog(BaseLogEntry):
+    log_type: str = "PrerequisiteCheck"
+    prerequisite_type: PrerequisiteType
+    passed: bool
+    details: PrerequisiteDetails
+
+class ActionCost(BaseModel):
+    type: ActionType
+    cost: int
+
+class ActionResultDetails(BaseModel):
+    success: bool
+    reason: Optional[str] = None
+    effects: Dict[str, Any] = Field(default_factory=dict)
+
+
+
+class ActionLog(BaseLogEntry):
+    log_type: str = "Action"
+    action_name: str
+    success: bool
+    prerequisite_logs: Dict[str, PrerequisiteLog]
+    result_details: ActionResultDetails
+    dice_rolls: List[Any] = Field(default_factory=list)
+    damage_rolls: List[Any] = Field(default_factory=list)

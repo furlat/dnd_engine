@@ -3,7 +3,7 @@ from typing import List, Optional, Union, Dict, Any, Tuple, Set, Callable, TYPE_
 from enum import Enum
 from dnd.contextual import ModifiableValue, AdvantageStatus, ContextAwareCondition, ContextAwareBonus, BaseValue
 from dnd.core import (Ability,  AdvantageTracker, DurationType, RegistryHolder, Damage,Weapon, Armor, Condition)
-from dnd.dnd_enums import (DamageType,  RangeType, ShapeType, TargetType,
+from dnd.dnd_enums import (PrerequisiteType, DamageType,  RangeType, ShapeType, TargetType,
                                TargetRequirementType, UsageType,
                                RechargeType, ActionType, AttackType, SourceType,WeaponProperty, ArmorType,HitReason, AttackHand
                                )
@@ -12,7 +12,7 @@ from dnd.statsblock import StatsBlock
 
 
 from dnd.logger import ConditionApplied, ConditionNotApplied, Logger, BaseLogEntry, SkillRollOut, SavingThrowRollOut, AttackRollOut, DamageRollOut, ActionType 
-
+from dnd.logger import PrerequisiteDetails, PrerequisiteLog, ActionLog, ActionResultDetails, ActionCost
 
 if TYPE_CHECKING:
     from dnd.statsblock import StatsBlock
@@ -23,51 +23,6 @@ if TYPE_CHECKING:
 Position = Tuple[int, int]
 Target = Union[StatsBlock, Position]
 
-# Enums
-class PrerequisiteType(Enum):
-    ACTION_ECONOMY = "Action Economy"
-    LINE_OF_SIGHT = "Line of Sight"
-    RANGE = "Range"
-    PATH = "Path"
-    SELF = "Self"
-    TARGET = "Target"
-
-# Models
-class PrerequisiteDetails(BaseModel):
-    distance: Optional[int] = None
-    required_range: Optional[int] = None
-    is_visible: Optional[bool] = None
-    available_actions: Optional[int] = None
-    required_actions: Optional[int] = None
-    path_length: Optional[int] = None
-    movement_budget: Optional[int] = None
-    failure_reason: Optional[str] = None
-
-class PrerequisiteLog(BaseLogEntry):
-    log_type: str = "PrerequisiteCheck"
-    prerequisite_type: PrerequisiteType
-    passed: bool
-    details: PrerequisiteDetails
-
-class ActionCost(BaseModel):
-    type: ActionType
-    cost: int
-
-class ActionResultDetails(BaseModel):
-    success: bool
-    reason: Optional[str] = None
-    effects: Dict[str, Any] = Field(default_factory=dict)
-
-
-
-class ActionLog(BaseLogEntry):
-    log_type: str = "Action"
-    action_name: str
-    success: bool
-    prerequisite_logs: Dict[str, PrerequisiteLog]
-    result_details: ActionResultDetails
-    dice_rolls: List[Any] = Field(default_factory=list)
-    damage_rolls: List[Any] = Field(default_factory=list)
 
 # Prerequisite system
 class Prerequisite(BaseModel):
