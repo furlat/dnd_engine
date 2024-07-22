@@ -621,7 +621,7 @@ class Health(BlockComponent):
         flat_damage_reduction_out = self.damage_reduction.apply(owner_stats_block, attacker_stats_block, context)
         flat_damage_reduction_bonus = flat_damage_reduction_out.total_bonus
         reduced_damage = max(0, total_damage - flat_damage_reduction_bonus)
-
+        absorbed_thp = 0
         if self.current_temporary_hit_points > 0:
             absorbed_thp = min(self.current_temporary_hit_points, reduced_damage)
             self.damage_temporary_hit_points += absorbed_thp
@@ -630,6 +630,8 @@ class Health(BlockComponent):
                 hp_damage = reduced_damage - absorbed_thp
             else:
                 hp_damage = 0
+        else:
+            hp_damage = reduced_damage
         
         self.damage_taken += hp_damage
         return DamageTakenLog(
@@ -813,6 +815,15 @@ class ActionEconomy(BlockComponent):
         owner_block = self.get_owner()
         self.movement.update_base_value(owner_block.speed.walk.apply(owner_block).total_bonus)
 
+    def _remove_cost_bonus(self):
+        #removes from self_static all the conditions with cost in it
+        for action_type in ['actions', 'bonus_actions', 'reactions']:
+            action_obj: ModifiableValue = getattr(self, action_type)
+            #all effects in the self_static
+            cost_effects = [effect_name for effect_name in action_obj.self_static.bonuses.keys() if "_cost" in effect_name]
+            for effect_name in cost_effects:
+                action_obj.remove_effect(effect_name)
+
     def reset(self):
         base_action = 1
         base_bonus_action = 1
@@ -821,6 +832,7 @@ class ActionEconomy(BlockComponent):
         self.bonus_actions.update_base_value(base_bonus_action)
         self.reactions.update_base_value(base_reaction)
         self._sync_movement_with_speed()
+        self._remove_cost_bonus()
 
     def set_max_actions(self, source: str, value: int):
         self.actions.self_static.add_max_constraint(source, lambda stats_block, target, context: value)

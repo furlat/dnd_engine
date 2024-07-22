@@ -166,6 +166,7 @@ class MovementBudgetPrerequisite(Prerequisite):
         path = source.sensory.get_path_to(target)
         movement_budget = source.action_economy.movement.apply(source).total_bonus
         movement_cost = (len(path) - 1) * 5 if path else 0  # Each step is 5 feet
+        print(f"testing movement budget {movement_budget} {movement_cost}")
         
         details = PrerequisiteDetails(
             movement_budget=movement_budget,
@@ -174,7 +175,7 @@ class MovementBudgetPrerequisite(Prerequisite):
         )
         
         if movement_cost > movement_budget:
-            details.failure_reason = "Insufficient movement points"
+            details.failure_reason = f"Insufficient movement points. Required: {movement_cost}, Available: {movement_budget}"
             return False, details
         
         return True, details
@@ -325,7 +326,6 @@ class Attack(Action):
         self.add_prerequisite("Action Economy", ActionEconomyPrerequisite(name="Action Economy", action_type=ActionType.ACTION, cost=1))
         self.add_prerequisite("Range", RangePrerequisite(name="Range", range_type=self.range_type, range_normal=self.range_normal, range_long=self.range_long))
         self.add_prerequisite("Line of Sight", LineOfSightPrerequisite(name="Line of Sight"))
-        self.add_prerequisite("Target Type", TargetTypePrerequisite(name="Target Type", allowed_types=[TargetType.ENEMY]))
 
     def _apply(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[AttackRollOut], List[DamageRollOut]]:
         if not isinstance(target, StatsBlock):
