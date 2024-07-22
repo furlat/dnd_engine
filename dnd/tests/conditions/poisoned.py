@@ -48,6 +48,7 @@ def test_poisoned_condition():
     print("Goblin performs Intimidation check (after Poisoned expires)")
     intimidation_result = goblin.perform_skill_check(Skills.INTIMIDATION, 15)
     print_log_details(intimidation_result)
+    print(intimidation_result)
 
 if __name__ == "__main__":
     test_poisoned_condition()
