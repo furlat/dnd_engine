@@ -1,9 +1,59 @@
+from dnd.actions import PrerequisiteDetails, ActionLog, ActionResultDetails
 
 def print_log_details(log):
-    print(f"Log Type: {log.log_type}")
-    print(f"Timestamp: {log.timestamp}")
-    print(f"Source ID: {log.source_entity_id}")
-    print(f"Target ID: {log.target_entity_id}")
+    # Handle PrerequisiteDetails specifically
+    if isinstance(log, PrerequisiteDetails):
+        print("Prerequisite Details:")
+        for field, value in log.model_dump().items():
+            if value is not None:
+                print(f"  {field.capitalize().replace('_', ' ')}: {value}")
+        print()
+        return
+
+    # Handle ActionLog specifically
+    if isinstance(log, ActionLog):
+        print(f"Log Type: {log.log_type}")
+        print(f"Action Name: {log.action_name}")
+        print(f"Timestamp: {log.timestamp}")
+        print(f"Source ID: {log.source_entity_id}")
+        print(f"Target ID: {log.target_entity_id}")
+        print(f"Success: {log.success}")
+        
+        if log.result_details:
+            print("Result Details:")
+            print(f"  Success: {log.result_details.success}")
+            print(f"  Reason: {log.result_details.reason}")
+            print(f"  Effects: {log.result_details.effects}")
+        
+        if log.prerequisite_logs:
+            print("Prerequisite Logs:")
+            for prereq_name, prereq_log in log.prerequisite_logs.items():
+                print(f"  {prereq_name}:")
+                print(f"    Passed: {prereq_log.passed}")
+                print(f"    Details: {prereq_log.details.model_dump()}")
+        
+        if log.dice_rolls:
+            print("Dice Rolls:")
+            for roll in log.dice_rolls:
+                print_log_details(roll)
+        
+        if log.damage_rolls:
+            print("Damage Rolls:")
+            for roll in log.damage_rolls:
+                print_log_details(roll)
+        
+        print()
+        return
+
+    # Original logic for other log types
+    if hasattr(log, 'log_type'):
+        print(f"Log Type: {log.log_type}")
+    if hasattr(log, 'timestamp'):
+        print(f"Timestamp: {log.timestamp}")
+    if hasattr(log, 'source_entity_id'):
+        print(f"Source ID: {log.source_entity_id}")
+    if hasattr(log, 'target_entity_id'):
+        print(f"Target ID: {log.target_entity_id}")
     
     if hasattr(log, 'condition'):
         print(f"Condition: {log.condition}")
@@ -47,5 +97,3 @@ def print_log_details(log):
         print(f"Total Damage: {log.total_damage}")
     
     print()
-
-
