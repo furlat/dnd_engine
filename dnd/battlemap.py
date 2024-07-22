@@ -73,33 +73,6 @@ class Entity(StatsBlock):
                 return battlemap.get_entity_position(self.id)
         return None
 
-    def add_weapon_attack(self, weapon: Weapon):
-        ability = Ability.DEX if WeaponProperty.FINESSE in weapon.properties else Ability.STR
-        if weapon.attack_type == AttackType.RANGED_WEAPON:
-            ability = Ability.DEX
-
-        targeting = Targeting(
-            type=TargetType.ONE_TARGET,
-            range=weapon.range.normal,
-            line_of_sight=True,
-            requirement=TargetRequirementType.ANY
-        )
-
-        attack = Attack(
-            name=weapon.name,
-            description=f"{weapon.attack_type.value} Attack with {weapon.name}",
-            cost=[ActionCost(type=ActionType.ACTION, cost=1)],
-            limited_usage=None,
-            attack_type=weapon.attack_type,
-            ability=ability,
-            range=weapon.range,
-            damage=[damage for damage in weapon.damage],
-            targeting=targeting,
-            stats_block=self,
-            weapon=weapon
-        )
-        self.add_action(attack)
-
     def generate_movement_actions(self) -> List[MovementAction]:
         movement_actions = []
         if self.sensory and self.sensory.paths:

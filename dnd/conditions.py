@@ -609,10 +609,3 @@ class Unconscious(Condition):
             return AdvantageStatus.DISADVANTAGE
         return AdvantageStatus.NONE
 
-## missing condition effects
-## condition effects
-# | **Status Effect**       | **Description**                                                                                             | **Required Components in Submodels**                                                                                        |
-# |-------------------------|-------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-# | **Petrified**           | Transformed into solid inanimate substance, incapacitated, and unaware of surroundings.                     | `ActionEconomy`: Add logic to block actions and reactions; `Speed`: Add logic to set speed to 0; `SavingThrow`: Add failure condition. |
-# | **Hiding**              | Makes Dexterity (Stealth) checks to hide.                                                                   | `AbilityCheck`: Add logic for hiding mechanic.                                                                              |
-# | **Helping**             | Lends aid to another creature, giving advantage on next ability check or attack roll.                       | `Attack`: Add ability to apply advantage; `AbilityCheck`: Add ability to apply advantage.                                   |
