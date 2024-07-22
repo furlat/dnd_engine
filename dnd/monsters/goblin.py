@@ -68,5 +68,3 @@ def create_goblin(name:str ='Goblin') -> StatsBlock:
 
     return goblin
 
-# goblin = create_goblin()
-# print(goblin)
