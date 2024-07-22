@@ -212,10 +212,18 @@ class RangeType(str, Enum):
 
 class TargetType(str, Enum):
     SELF = "Self"
-    ONE_TARGET = "One Target"
-    MULTIPLE_TARGETS = "Multiple Targets"
-    AREA = "Area"
+    ENEMY = "Enemy"
+    POSITION = "Position"
     ALLY = "Ally"  # Added this line
+
+class PrerequisiteType(Enum):
+    ACTION_ECONOMY = "Action Economy"
+    LINE_OF_SIGHT = "Line of Sight"
+    RANGE = "Range"
+    PATH = "Path"
+    SELF = "Self"
+    TARGET = "Target"
+
 
 class ShapeType(str, Enum):
     SPHERE = "Sphere"
