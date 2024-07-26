@@ -161,7 +161,7 @@ class Action(BaseModel):
     description: str
     cost: Optional[List[ActionCost]] = None
     prerequisites: Dict[str, Prerequisite] = Field(default_factory=dict)
-    source: Optional[StatsBlock] = None
+    source: StatsBlock 
     target: Optional[Target] = None
     context: Optional[Dict[str, Any]] = None
 
@@ -289,13 +289,15 @@ class Action(BaseModel):
 class Attack(Action):
     attack_type: AttackType
     attack_hand: AttackHand
-    range_type: RangeType
-    range_normal: int
+    range_type: Optional[RangeType] = None
+    weapon : Optional[Weapon] = None
+    range_normal: Optional[int] = None
     range_long: Optional[int] = None
     default_prerequisites: bool = Field(default=True)
 
     def __init__(self, **data):
         super().__init__(**data)
+        self._set_weapon()
         if self.default_prerequisites:
             self._add_default_prerequisites()
 
@@ -303,6 +305,21 @@ class Attack(Action):
         self.add_prerequisite("Range", RangePrerequisite(name="Range", range_type=self.range_type, range_normal=self.range_normal, range_long=self.range_long))
         self.add_prerequisite("Line of Sight", LineOfSightPrerequisite(name="Line of Sight"))
     
+    def _set_weapon(self) -> Weapon:
+        if not self.weapon and not self.attack_type == AttackType.MELEE_SPELL and not self.attack_type == AttackType.RANGED_SPELL:
+            weapon = self.source.attacks_manager.get_weapon(self.attack_hand)
+            range_normal = weapon.range.normal
+            range_long = weapon.range.long if weapon.range.type == RangeType.RANGE else None
+            self.weapon = weapon
+            self.range_normal = range_normal
+            self.range_long = range_long
+            self.range_type = weapon.range.type
+        elif self.weapon:
+            self.range_normal = weapon.range.normal
+            self.range_long = weapon.range.long if weapon.range.type == RangeType.RANGE else None
+            self.range_type = weapon.range.type
+        else:
+            raise ValueError("Spell attacks are not supported yet")
     
     def _get_costs(self,source: Optional[StatsBlock] = None ) -> List[ActionCost]:
         if self.attack_hand == AttackHand.MELEE_LEFT or self.attack_hand == AttackHand.RANGED_LEFT:
@@ -360,6 +377,17 @@ class Attack(Action):
         range_str = f"{self.range_normal} ft." if self.range_type == RangeType.REACH else f"{self.range_normal}/{self.range_long} ft."
         return f"{self.attack_type.value} Attack using {self.attack_hand.value}, Range: {range_str}"
     
+
+def create_all_hands_attacks():
+    for hand in AttackHand:
+        for attack_type in AttackType:
+            yield Attack(
+                name=f"{attack_type.value} {hand.value}",
+                description=f"{attack_type.value} attack using {hand.value}",
+                attack_type=attack_type,
+                attack_hand=hand
+            )
+
 class SelfCondition(Action):
     conditions: List[Condition] = Field(default_factory=list)
 
@@ -401,15 +429,25 @@ class SelfCondition(Action):
 
 class MovementAction(Action):
     step_by_step: bool = Field(default=False)
+    path : Optional[List[Tuple[int, int]]] = None
 
     def __init__(self, **data):
+        
         super().__init__(**data)
         self.add_prerequisite("Path Exists", PathExistsPrerequisite())
-        self.add_prerequisite("Movement Budget", MovementBudgetPrerequisite())
+        if not self.path and self.source and self.target:
+            self._set_path(self.source, self.target, self.context)
+            self.add_cost_prequisites()
 
-    def _apply(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[Any], List[Any]]:
+    def _get_costs(self,source: Optional[StatsBlock] = None ) -> List[ActionCost]:
+        if not self.path:
+            raise [ActionCost(type=ActionType.MOVEMENT, cost=0)]
+    
+        return [ActionCost(type=ActionType.MOVEMENT, cost=(len(self.path) - 1)* 5)]
+    
+    def _set_path(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> List[Tuple[int, int]]:
         if not isinstance(target, tuple) or len(target) != 2:
-            return False, ActionResultDetails(success=False, reason="Invalid target position"), [], []
+                return False, ActionResultDetails(success=False, reason="Invalid target position"), [], []
 
         battlemap: Optional['BattleMap'] = RegistryHolder.get_instance(source.sensory.battlemap_id)
         if not battlemap:
@@ -418,13 +456,16 @@ class MovementAction(Action):
         path = source.sensory.get_path_to(target)
         if not path:
             return False, ActionResultDetails(success=False, reason="No valid path to target"), [], []
+        self.path = path
 
+    def _apply(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[Any], List[Any]]:
+        
         start_position = source.sensory.origin
-        end_position = target
-        movement_cost = (len(path) - 1) * 5  # Each step is 5 feet
-
+        end_position = self.path[-1]
+        movement_cost = (len(self.path) - 1) * 5  # Each step is 5 feet
+        battlemap= source.get_battlemap()
         if self.step_by_step:
-            for step in path[1:]:  # Skip the first step as it's the starting position
+            for step in self.path[1:]:  # Skip the first step as it's the starting position
                 battlemap.move_entity(source, step)
                 battlemap.update_entity_fov(source)
         else:
@@ -440,7 +481,7 @@ class MovementAction(Action):
                 "start_position": start_position,
                 "end_position": end_position,
                 "movement_cost": movement_cost,
-                "path": path
+                "path": self.path
             }
         )
 
