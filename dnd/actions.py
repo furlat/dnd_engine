@@ -114,26 +114,7 @@ class PathExistsPrerequisite(Prerequisite):
         context['path'] = path  # Store the path in the context for later use
         return True, details
 
-class MovementBudgetPrerequisite(Prerequisite):
-    type: PrerequisiteType = PrerequisiteType.ACTION_ECONOMY
 
-    def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
-        path = source.sensory.get_path_to(target)
-        movement_budget = source.action_economy.movement.apply(source).total_bonus
-        movement_cost = (len(path) - 1) * 5 if path else 0  # Each step is 5 feet
-        print(f"testing movement budget {movement_budget} {movement_cost}")
-        
-        details = PrerequisiteDetails(
-            movement_budget=movement_budget,
-            path_length=len(path) - 1 if path else 0,
-            required_actions=movement_cost
-        )
-        
-        if movement_cost > movement_budget:
-            details.failure_reason = f"Insufficient movement points. Required: {movement_cost}, Available: {movement_budget}"
-            return False, details
-        
-        return True, details
     
 def check_prerequisites(prerequisites: Dict[str, Prerequisite], source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, Dict[str, PrerequisiteLog]]:
     all_passed = True
@@ -221,8 +202,7 @@ class Action(BaseModel):
 
     def apply_cost(self, source: Optional[StatsBlock] = None):
         source = source or self.source
-        if not source:
-            raise ValueError("Source must be provided either through binding or as a method argument.")
+        
         costs = self._get_costs(source)
         for cost in costs:
             action_economy_attr : ModifiableValue = getattr(source.action_economy, f"{cost.type.value.lower()}s")
@@ -378,15 +358,7 @@ class Attack(Action):
         return f"{self.attack_type.value} Attack using {self.attack_hand.value}, Range: {range_str}"
     
 
-def create_all_hands_attacks():
-    for hand in AttackHand:
-        for attack_type in AttackType:
-            yield Attack(
-                name=f"{attack_type.value} {hand.value}",
-                description=f"{attack_type.value} attack using {hand.value}",
-                attack_type=attack_type,
-                attack_hand=hand
-            )
+
 
 class SelfCondition(Action):
     conditions: List[Condition] = Field(default_factory=list)
@@ -430,12 +402,13 @@ class SelfCondition(Action):
 class MovementAction(Action):
     step_by_step: bool = Field(default=False)
     path : Optional[List[Tuple[int, int]]] = None
+    target: Optional[Target] = None
 
     def __init__(self, **data):
         
         super().__init__(**data)
         self.add_prerequisite("Path Exists", PathExistsPrerequisite())
-        if not self.path and self.source and self.target:
+        if not self.path and self.target:
             self._set_path(self.source, self.target, self.context)
             self.add_cost_prequisites()
 
@@ -460,19 +433,18 @@ class MovementAction(Action):
 
     def _apply(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[Any], List[Any]]:
         
-        start_position = source.sensory.origin
+        start_position = self.source.sensory.origin
         end_position = self.path[-1]
         movement_cost = (len(self.path) - 1) * 5  # Each step is 5 feet
-        battlemap= source.get_battlemap()
+        battlemap: Optional['BattleMap'] = RegistryHolder.get_instance(source.sensory.battlemap_id)
         if self.step_by_step:
             for step in self.path[1:]:  # Skip the first step as it's the starting position
-                battlemap.move_entity(source, step)
-                battlemap.update_entity_fov(source)
+                battlemap.move_entity(self.source, step)
+                battlemap.update_entity_fov(self.source)
         else:
-            battlemap.move_entity(source, end_position)
-            battlemap.update_entity_fov(source)
+            battlemap.move_entity(self.source, end_position)
+            battlemap.update_entity_fov(self.source)
 
-        source.action_economy.movement.self_static.add_bonus("movement_used", -movement_cost)
 
         result_details = ActionResultDetails(
             success=True,
@@ -487,10 +459,11 @@ class MovementAction(Action):
 
         return True, result_details, [], []  # No dice rolls or damage rolls for movement
 
-    def apply(self, source: StatsBlock, targets: Union[List[Target], Target], context: Dict[str, Any] = None) -> List[ActionLog]:
-        if not isinstance(targets, tuple) or len(targets) != 2:
-            raise ValueError("MovementAction requires a single target position (tuple of two integers)")
-
+    def apply(self, source: Optional[StatsBlock] = None, targets: Optional[Union[List[Target], Target]] = None, context: Optional[Dict[str, Any]] = None) -> List[ActionLog]:
+        if not self.path and not targets:
+            raise ValueError("MovementAction requires a single target position (tuple of two integers) or a path object or target to be set at init.")
+        source = self.source
+        targets = [self.path[-1]] if not targets else targets
         return super().apply(source, targets, context)
 
     def __str__(self):
