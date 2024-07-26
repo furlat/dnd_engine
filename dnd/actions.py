@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, computed_field
 from typing import List, Optional, Union, Dict, Any, Tuple, Set, Callable, TYPE_CHECKING, TypeVar
 from enum import Enum
 from dnd.contextual import ModifiableValue, AdvantageStatus, ContextAwareCondition, ContextAwareBonus, BaseValue
-from dnd.core import (Ability,  AdvantageTracker, DurationType, RegistryHolder, Damage,Weapon, Armor, Condition)
+from dnd.core import (BlockComponent,Ability,  AdvantageTracker, DurationType, RegistryHolder, Damage,Weapon, Armor, Condition)
 from dnd.dnd_enums import (PrerequisiteType, DamageType,  RangeType, ShapeType, TargetType,
                                TargetRequirementType, UsageType,
                                RechargeType, ActionType, AttackType, SourceType,WeaponProperty, ArmorType,HitReason, AttackHand
@@ -159,14 +159,34 @@ T = TypeVar('T', bound='Action')
 class Action(BaseModel):
     name: str
     description: str
-    cost: List[ActionCost]
+    cost: Optional[List[ActionCost]] = None
     prerequisites: Dict[str, Prerequisite] = Field(default_factory=dict)
     source: Optional[StatsBlock] = None
     target: Optional[Target] = None
     context: Optional[Dict[str, Any]] = None
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.add_cost_prequisites()
     
     def add_prerequisite(self, name: str, prerequisite: Prerequisite):
         self.prerequisites[name] = prerequisite
+
+    def _get_costs(self, source: Optional[StatsBlock]=None) -> Optional[List[ActionCost]]:
+        return self.cost if self.cost else None
+    
+    def _create_action_economy_prerequisite_single(self,action_cost :ActionCost) -> ActionEconomyPrerequisite:
+        cost_type =action_cost.type
+        cost_unit = action_cost.cost
+
+        return ActionEconomyPrerequisite(name="Action Economy", action_type=cost_type, cost=cost_unit)
+
+    def create_action_economy_prerequisites(self) -> List[ActionEconomyPrerequisite]:
+        return [self._create_action_economy_prerequisite_single(cost) for cost in self._get_costs() if self._get_costs() and cost is not None]
+
+    def add_cost_prequisites(self):
+        for prerequisite in self.create_action_economy_prerequisites():
+            self.add_prerequisite(prerequisite.name, prerequisite)
 
     def remove_prerequisite(self, name: str):
         self.prerequisites.pop(name, None)
@@ -196,14 +216,16 @@ class Action(BaseModel):
             all_passed = all_passed and passed
 
         return all_passed, logs
+    
+    
 
     def apply_cost(self, source: Optional[StatsBlock] = None):
         source = source or self.source
         if not source:
             raise ValueError("Source must be provided either through binding or as a method argument.")
-        
-        for cost in self.cost:
-            action_economy_attr = getattr(source.action_economy, f"{cost.type.value.lower()}s")
+        costs = self._get_costs(source)
+        for cost in costs:
+            action_economy_attr : ModifiableValue = getattr(source.action_economy, f"{cost.type.value.lower()}s")
             action_economy_attr.self_static.add_bonus(f"{self.name}_cost", -cost.cost)
 
     def apply(self, source: Optional[StatsBlock] = None, targets: Optional[Union[List[Target], Target]] = None, context: Optional[Dict[str, Any]] = None) -> List[ActionLog]:
@@ -278,10 +300,16 @@ class Attack(Action):
             self._add_default_prerequisites()
 
     def _add_default_prerequisites(self):
-        self.add_prerequisite("Action Economy", ActionEconomyPrerequisite(name="Action Economy", action_type=ActionType.ACTION, cost=1))
         self.add_prerequisite("Range", RangePrerequisite(name="Range", range_type=self.range_type, range_normal=self.range_normal, range_long=self.range_long))
         self.add_prerequisite("Line of Sight", LineOfSightPrerequisite(name="Line of Sight"))
-
+    
+    
+    def _get_costs(self,source: Optional[StatsBlock] = None ) -> List[ActionCost]:
+        if self.attack_hand == AttackHand.MELEE_LEFT or self.attack_hand == AttackHand.RANGED_LEFT:
+            return [ActionCost(type=ActionType.BONUS_ACTION, cost=1)]
+        else:
+            return [ActionCost(type=ActionType.ACTION, cost=1)]
+        
     def _apply(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[AttackRollOut], List[DamageRollOut]]:
         if not isinstance(target, StatsBlock):
             return False, ActionResultDetails(success=False, reason="Invalid target type"), [], []

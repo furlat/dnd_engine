@@ -50,10 +50,11 @@ def create_goblin(name:str ='Goblin') -> StatsBlock:
         dice_numbers=1,
         damage_type=DamageType.SLASHING,
         attack_type=AttackType.MELEE_WEAPON,
-        properties=[WeaponProperty.FINESSE],
+        properties=[WeaponProperty.FINESSE,WeaponProperty.LIGHT],
         range=dict(type=RangeType.REACH, normal=5)
     )
     goblin.attacks_manager.equip_right_hand_melee_weapon(scimitar)
+    goblin.attacks_manager.equip_left_hand_melee_weapon(scimitar)
     
     shortbow = Weapon(
         name="Shortbow",

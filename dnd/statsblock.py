@@ -146,7 +146,7 @@ class StatsBlock(BaseModel, RegistryHolder):
             if hand == AttackHand.MELEE_RIGHT:
                 self.attacks_manager.equip_right_hand_melee_weapon(weapon)
             else:
-                self.attacks_manager.equip_left_hand_weapon(weapon)
+                self.attacks_manager.equip_left_hand_melee_weapon(weapon)
         elif hand in [AttackHand.RANGED_RIGHT, AttackHand.RANGED_LEFT]:
             if hand == AttackHand.RANGED_RIGHT:
                 self.attacks_manager.equip_right_hand_ranged_weapon(weapon)

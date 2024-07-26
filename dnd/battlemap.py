@@ -1,4 +1,4 @@
-from typing import Dict, Set, List, Tuple, Optional, Union, Any
+from typing import Dict, Set, List, Tuple, Optional, Union, Any, Type, Optional
 from pydantic import BaseModel, Field, computed_field
 from fractions import Fraction
 import uuid
@@ -21,7 +21,7 @@ from dnd.core import  Ability
 from dnd.spatial import RegistryHolder
 from dnd.statsblock import StatsBlock
 from dnd.actions import Weapon
-from dnd.actions import Attack, ActionCost, Targeting, MovementAction
+from dnd.actions import Attack, ActionCost, MovementAction
 from dnd.dnd_enums import AttackType, TargetType, TargetRequirementType, ActionType, AttackType,WeaponProperty
 
 class Entity(StatsBlock):
@@ -56,7 +56,7 @@ class Entity(StatsBlock):
 
     @classmethod
     def get_or_create(cls, entity_id: str, **kwargs):
-        instance = cls.get_instance(entity_id)
+        instance : Optional[Entity] = cls.get_instance(entity_id)
         if instance is None:
             instance = cls(id=entity_id, **kwargs)
         else:
@@ -127,19 +127,22 @@ class BattleMap(BaseModel, RegistryHolder):
         super().__init__(**data)
         self.register(self)
 
+    def is_in_bounds(self, x: int, y: int) -> bool:
+        return 0 <= x < self.width and 0 <= y < self.height
+
     def set_tile(self, x: int, y: int, tile_type: str):
         self.tiles[(x, y)] = tile_type
 
     def get_tile(self, x: int, y: int) -> Optional[str]:
         # print(f"Getting tile at {x}, {y}")
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+        if not self.is_in_bounds(x, y):
             print(f"Tile at {x}, {y} is out of bounds")
             return None
         return self.tiles.get((x, y))
 
     def is_blocking(self, x: int, y: int) -> bool:
         # Check if the coordinates are within the battlemap bounds
-        if 0 <= x < self.width and 0 <= y < self.height:
+        if self.is_in_bounds(x, y):
             tile = self.get_tile(x, y)
             return tile == "WALL"
         else:
