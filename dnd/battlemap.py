@@ -21,7 +21,7 @@ from dnd.core import  Ability
 from dnd.spatial import RegistryHolder
 from dnd.statsblock import StatsBlock
 from dnd.actions import Weapon
-from dnd.actions import Attack, ActionCost, MovementAction
+from dnd.actions import Attack, ActionCost, MovementAction, Action
 from dnd.dnd_enums import AttackType, TargetType, TargetRequirementType, ActionType, AttackType,WeaponProperty
 
 class Entity(StatsBlock):
@@ -47,6 +47,11 @@ class Entity(StatsBlock):
     def remove_from_battlemap(self):
         self.battlemap_id = None
         self.line_of_sight.clear()
+    
+    def get_battlemap(self) -> Optional['BattleMap']:
+        if self.battlemap_id:
+            return RegistryHolder.get_instance(self.battlemap_id)
+        return None
 
     def update(self, **kwargs):
         for key, value in kwargs.items():
@@ -76,7 +81,7 @@ class Entity(StatsBlock):
     def generate_movement_actions(self) -> List[MovementAction]:
         movement_actions = []
         if self.sensory and self.sensory.paths:
-            movement_budget = self.action_economy.movement.get_value(self)
+            movement_budget = self.action_economy.movement.apply(self).total_bonus
             print(f"Movement budget for {self.name}: {movement_budget}")
             reachable_positions = self.sensory.paths.get_reachable_positions(movement_budget/5)
             print(f"Reachable positions for {self.name}: {reachable_positions}")
@@ -87,10 +92,8 @@ class Entity(StatsBlock):
                     movement_actions.append(MovementAction(
                         name=f"Move to {position}",
                         description=f"Move from {self.sensory.origin} to {position}",
-                        cost=[ActionCost(type=ActionType.MOVEMENT, cost=len(path) - 1)],
-                        limited_usage=None,
-                        targeting=Targeting(type=TargetType.SELF),
-                        stats_block=self,
+                        source=self,
+                        target=position,
                         path=path
                     ))
 
@@ -99,8 +102,7 @@ class Entity(StatsBlock):
     def update_weapon_attacks(self):
         self.actions = [action for action in self.actions if not isinstance(action, Attack)]
         # Add weapon attacks
-        for weapon in self.weapons:
-            self.add_weapon_attack(weapon)
+        pass
     
     def update_movement_actions(self):
         # Clear existing movement actions
@@ -112,7 +114,6 @@ class Entity(StatsBlock):
     def update_available_actions(self):
         self.update_weapon_attacks()
         self.update_movement_actions()
-
 
 
 class BattleMap(BaseModel, RegistryHolder):
@@ -231,4 +232,3 @@ class BattleMap(BaseModel, RegistryHolder):
 
 
     
-
