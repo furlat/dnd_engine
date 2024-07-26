@@ -1249,6 +1249,7 @@ class AttacksManager(BlockComponent):
     ranged_left_hand: Optional[Weapon] = None
     ambidextrous: bool = False
     dual_wielder: bool = False
+    shield: Optional[Shield] = None
 
     def get_weapon(self, hand: AttackHand) -> Optional[Weapon]:
         if hand == AttackHand.MELEE_RIGHT:
@@ -1302,7 +1303,20 @@ class AttacksManager(BlockComponent):
             spell_bonus=spell_bonus,
             total_weapon_bonus=total_weapon_bonus
         )
+    
+    def _get_ability_bonus_from_weapon_for_damage(self, hand:AttackHand, target:Optional[str], context: Optional[Dict[str, Any]] = None) -> ValueOut:
+        ability = self._get_ability_from_weapon(hand,target,context)
+        owner_block = self.get_owner()
+        #checks if the hand is left and not ambidextrous
+        if hand == AttackHand.MELEE_LEFT and not self.ambidextrous:
+            #create a dummy ModifiableValue with 0 bonus and applies it with names: NoAbilityModifier and basevalue name NoAbilityModifier
+            target_stats_block = self.get_target(target)
+            return ModifiableValue(name="NoAbilityModifier",base_value=BaseValue(name="NoAbilityModifier",base_value=10)).apply(owner_block,target_stats_block,context)
+
+
         
+        
+        return owner_block.ability_scores.get_ability(ability).apply(target, context)
     
     def _get_ability_bonus_from_weapon(self, hand:AttackHand, target:Optional[str], context: Optional[Dict[str, Any]] = None) -> ValueOut:
         ability = self._get_ability_from_weapon(hand,target,context)
@@ -1370,7 +1384,7 @@ class AttacksManager(BlockComponent):
             roll=roll_out,
             target_ac=target_ac,
             total_target_ac=target_ac.total_bonus,
-            attack_type=self.get_weapon(hand).attack_type if self.get_weapon(hand) else None,
+            attack_type=self.get_weapon(hand).attack_type if self.get_weapon(hand) else AttackType.MELEE_WEAPON,
             source_entity_id=self.owner_id,
             target_entity_id=target
         )
@@ -1415,6 +1429,8 @@ class AttacksManager(BlockComponent):
             spell_bonus=spell_bonus,
             total_weapon_bonus=total_weapon_bonus
         )
+    
+
 
     
     def _get_damage_bonus(self, hand:AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> DamageBonusOut:
@@ -1425,7 +1441,8 @@ class AttacksManager(BlockComponent):
         weapon_bonus_out = self._get_damage_bonuses_from_weapon(hand,target,context)
         total_weapon_bonus = weapon_bonus_out.total_weapon_bonus
         #get the ability bonus
-        ability_bonus = self._get_ability_bonus_from_weapon(hand,target,context)
+        ability_bonus = self._get_ability_bonus_from_weapon_for_damage(hand,target,context)
+            
         total_bonus = total_weapon_bonus.combine_with(ability_bonus,bonus_converter=ability_bonus_to_modifier)
         return DamageBonusOut(
             hand=hand,
@@ -1559,7 +1576,7 @@ class AttacksManager(BlockComponent):
         else:
             raise ValueError("The weapon can't be equipped in the right hand")
         
-    def equip_left_hand_weapon(self, weapon: Weapon):
+    def equip_left_hand_melee_weapon(self, weapon: Weapon):
         if WeaponProperty.RANGED in weapon.properties:
             raise ValueError("The weapon is not a melee weapon")
         if self.can_dual_wield_melee(weapon,hand='left'):

@@ -171,7 +171,7 @@ class Language(str, Enum):
 
 class ActionType(str, Enum):
     ACTION = "Action"
-    BONUS_ACTION = "Bonus Action"
+    BONUS_ACTION = "Bonus_Action"
     REACTION = "Reaction"
     MOVEMENT = "Movement"
     LEGENDARY_ACTION = "Legendary Action"
