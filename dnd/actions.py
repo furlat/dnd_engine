@@ -219,7 +219,7 @@ class Action(BaseModel):
     
 
     def apply_cost(self, source: Optional[StatsBlock] = None):
-        source = source or self.source
+        source = source if source else self.source
         
         costs = self._get_costs(source)
         for cost in costs:
@@ -228,7 +228,8 @@ class Action(BaseModel):
                 action_economy_attr : ModifiableValue = getattr(source.action_economy, f"{cost.type.value.lower()}")
             else:
                 action_economy_attr : ModifiableValue = getattr(source.action_economy, f"{cost.type.value.lower()}s")
-            action_economy_attr.self_static.add_bonus(f"{self.name}_cost", -cost.cost)
+            if cost.cost > 0:
+                action_economy_attr.self_static.add_bonus(f"{self.name}_cost", -cost.cost)
 
     def apply(self, source: Optional[StatsBlock] = None, targets: Optional[Union[List[Target], Target]] = None, context: Optional[Dict[str, Any]] = None) -> List[ActionLog]:
         source = source or self.source
@@ -448,7 +449,8 @@ class MovementAction(Action):
     def _get_costs(self, source: Optional[StatsBlock] = None) -> List[ActionCost]:
         if not self.path:
             return [ActionCost(type=ActionType.MOVEMENT, cost=0)]
-        same_cell = len(self.path) - 1 == -1
+        same_cell = len(self.path) - 1 == 0
+
         cost = (len(self.path) - 1) * 5 if not same_cell else 0
         return [ActionCost(type=ActionType.MOVEMENT, cost=cost)]
 
