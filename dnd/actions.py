@@ -32,13 +32,25 @@ class Prerequisite(BaseModel):
     def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
         raise NotImplementedError("Subclasses must implement this method")
 
+ACTION_TYPE_TO_ATTRIBUTE = {
+    ActionType.ACTION: "actions",
+    ActionType.BONUS_ACTION: "bonus_actions",
+    ActionType.REACTION: "reactions",
+    ActionType.MOVEMENT: "movement",
+    # Add any other action types here
+}
+
 class ActionEconomyPrerequisite(Prerequisite):
     type: PrerequisiteType = PrerequisiteType.ACTION_ECONOMY
     action_type: ActionType
     cost: int
 
     def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
-        available = getattr(source.action_economy, f"{self.action_type.value.lower()}s").apply(source).total_bonus
+        attribute_name = ACTION_TYPE_TO_ATTRIBUTE.get(self.action_type)
+        if attribute_name is None:
+            raise ValueError(f"Unsupported action type: {self.action_type}")
+        
+        available = getattr(source.action_economy, attribute_name).apply(source).total_bonus
         details = PrerequisiteDetails(
             available_actions=available,
             required_actions=self.cost
@@ -99,6 +111,7 @@ class TargetTypePrerequisite(Prerequisite):
 
 class PathExistsPrerequisite(Prerequisite):
     type: PrerequisiteType = PrerequisiteType.PATH
+    name: str = "Path Exists"
 
     def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
         if not isinstance(target, tuple) or len(target) != 2:
@@ -177,6 +190,11 @@ class Action(BaseModel):
         target = target or self.target
         context = context or self.context or {}
         
+        if not isinstance(source, StatsBlock):
+            raise TypeError(f"Expected source to be StatsBlock, got {type(source)}")
+        if not source or not target:
+            raise ValueError("Source and target must be provided either through binding or as method arguments.")
+        
         if not source or not target:
             raise ValueError("Source and target must be provided either through binding or as method arguments.")
         
@@ -205,7 +223,11 @@ class Action(BaseModel):
         
         costs = self._get_costs(source)
         for cost in costs:
-            action_economy_attr : ModifiableValue = getattr(source.action_economy, f"{cost.type.value.lower()}s")
+            #chheck for movement vs movemetns
+            if cost.type == ActionType.MOVEMENT:
+                action_economy_attr : ModifiableValue = getattr(source.action_economy, f"{cost.type.value.lower()}")
+            else:
+                action_economy_attr : ModifiableValue = getattr(source.action_economy, f"{cost.type.value.lower()}s")
             action_economy_attr.self_static.add_bonus(f"{self.name}_cost", -cost.cost)
 
     def apply(self, source: Optional[StatsBlock] = None, targets: Optional[Union[List[Target], Target]] = None, context: Optional[Dict[str, Any]] = None) -> List[ActionLog]:
@@ -267,46 +289,60 @@ class Action(BaseModel):
         )
     
 class Attack(Action):
-    attack_type: AttackType
     attack_hand: AttackHand
-    range_type: Optional[RangeType] = None
-    weapon : Optional[Weapon] = None
-    range_normal: Optional[int] = None
-    range_long: Optional[int] = None
     default_prerequisites: bool = Field(default=True)
 
     def __init__(self, **data):
         super().__init__(**data)
-        self._set_weapon()
         if self.default_prerequisites:
             self._add_default_prerequisites()
+
+    @computed_field
+    def weapon(self) -> Optional[Weapon]:
+        return self.source.attacks_manager.get_weapon(self.attack_hand)
+
+    @computed_field
+    def attack_type(self) -> AttackType:
+        if self.weapon:
+            return self.weapon.attack_type
+        elif self.attack_hand in [AttackHand.MELEE_RIGHT, AttackHand.MELEE_LEFT]:
+            return AttackType.MELEE_SPELL
+        else:
+            return AttackType.RANGED_SPELL
+
+    @computed_field
+    def range_type(self) -> Optional[RangeType]:
+        return self.weapon.range.type if self.weapon else None
+
+    @computed_field
+    def range_normal(self) -> Optional[int]:
+        return self.weapon.range.normal if self.weapon else None
+
+    @computed_field
+    def range_long(self) -> Optional[int]:
+        if self.weapon and self.weapon.range.type == RangeType.RANGE:
+            return self.weapon.range.long
+        return None
+
+    @classmethod
+    def from_weapon(cls, weapon: Weapon, source: 'Entity', hand: AttackHand):
+        return cls(
+            name=f"{weapon.name} Attack",
+            description=f"Attack with {weapon.name}",
+            attack_hand=hand,
+            source=source
+        )
 
     def _add_default_prerequisites(self):
         self.add_prerequisite("Range", RangePrerequisite(name="Range", range_type=self.range_type, range_normal=self.range_normal, range_long=self.range_long))
         self.add_prerequisite("Line of Sight", LineOfSightPrerequisite(name="Line of Sight"))
-    
-    def _set_weapon(self) -> Weapon:
-        if not self.weapon and not self.attack_type == AttackType.MELEE_SPELL and not self.attack_type == AttackType.RANGED_SPELL:
-            weapon = self.source.attacks_manager.get_weapon(self.attack_hand)
-            range_normal = weapon.range.normal
-            range_long = weapon.range.long if weapon.range.type == RangeType.RANGE else None
-            self.weapon = weapon
-            self.range_normal = range_normal
-            self.range_long = range_long
-            self.range_type = weapon.range.type
-        elif self.weapon:
-            self.range_normal = weapon.range.normal
-            self.range_long = weapon.range.long if weapon.range.type == RangeType.RANGE else None
-            self.range_type = weapon.range.type
-        else:
-            raise ValueError("Spell attacks are not supported yet")
-    
-    def _get_costs(self,source: Optional[StatsBlock] = None ) -> List[ActionCost]:
-        if self.attack_hand == AttackHand.MELEE_LEFT or self.attack_hand == AttackHand.RANGED_LEFT:
+
+    def _get_costs(self, source: Optional[StatsBlock] = None) -> List[ActionCost]:
+        if self.attack_hand in [AttackHand.MELEE_LEFT, AttackHand.RANGED_LEFT]:
             return [ActionCost(type=ActionType.BONUS_ACTION, cost=1)]
         else:
             return [ActionCost(type=ActionType.ACTION, cost=1)]
-        
+
     def _apply(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[AttackRollOut], List[DamageRollOut]]:
         if not isinstance(target, StatsBlock):
             return False, ActionResultDetails(success=False, reason="Invalid target type"), [], []
@@ -356,7 +392,6 @@ class Attack(Action):
     def __str__(self):
         range_str = f"{self.range_normal} ft." if self.range_type == RangeType.REACH else f"{self.range_normal}/{self.range_long} ft."
         return f"{self.attack_type.value} Attack using {self.attack_hand.value}, Range: {range_str}"
-    
 
 
 
@@ -401,50 +436,48 @@ class SelfCondition(Action):
 
 class MovementAction(Action):
     step_by_step: bool = Field(default=False)
-    path : Optional[List[Tuple[int, int]]] = None
-    target: Optional[Target] = None
+    path: Optional[List[Tuple[int, int]]] = None
+    target: Tuple[int, int]
 
     def __init__(self, **data):
-        
         super().__init__(**data)
         self.add_prerequisite("Path Exists", PathExistsPrerequisite())
         if not self.path and self.target:
             self._set_path(self.source, self.target, self.context)
-            self.add_cost_prequisites()
 
-    def _get_costs(self,source: Optional[StatsBlock] = None ) -> List[ActionCost]:
+    def _get_costs(self, source: Optional[StatsBlock] = None) -> List[ActionCost]:
         if not self.path:
-            raise [ActionCost(type=ActionType.MOVEMENT, cost=0)]
-    
-        return [ActionCost(type=ActionType.MOVEMENT, cost=(len(self.path) - 1)* 5)]
-    
-    def _set_path(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> List[Tuple[int, int]]:
-        if not isinstance(target, tuple) or len(target) != 2:
-                return False, ActionResultDetails(success=False, reason="Invalid target position"), [], []
+            return [ActionCost(type=ActionType.MOVEMENT, cost=0)]
+        same_cell = len(self.path) - 1 == -1
+        cost = (len(self.path) - 1) * 5 if not same_cell else 0
+        return [ActionCost(type=ActionType.MOVEMENT, cost=cost)]
 
+    def _set_path(self, source: StatsBlock, target: Tuple[int, int], context: Dict[str, Any]) -> None:
+        if not isinstance(target, tuple) or len(target) != 2:
+            raise ValueError("Invalid target position")
+        path = source.sensory.get_path_to(target)
+        if not path:
+            raise ValueError("No valid path to target")
+        self.path = path
+
+    def _apply(self, source: StatsBlock, target: Tuple[int, int], context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[Any], List[Any]]:
+        start_position = source.position
+        end_position = target
+        movement_cost = (len(self.path) - 1) * 5 if self.path else 0
         battlemap: Optional['BattleMap'] = RegistryHolder.get_instance(source.sensory.battlemap_id)
+        
         if not battlemap:
             return False, ActionResultDetails(success=False, reason="Entity is not on a battlemap"), [], []
 
-        path = source.sensory.get_path_to(target)
-        if not path:
-            return False, ActionResultDetails(success=False, reason="No valid path to target"), [], []
-        self.path = path
-
-    def _apply(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, ActionResultDetails, List[Any], List[Any]]:
-        
-        start_position = self.source.sensory.origin
-        end_position = self.path[-1]
-        movement_cost = (len(self.path) - 1) * 5  # Each step is 5 feet
-        battlemap: Optional['BattleMap'] = RegistryHolder.get_instance(source.sensory.battlemap_id)
-        if self.step_by_step:
-            for step in self.path[1:]:  # Skip the first step as it's the starting position
-                battlemap.move_entity(self.source, step)
-                battlemap.update_entity_fov(self.source)
+        # Move the entity
+        if self.step_by_step and self.path:
+            for step in self.path[1:]:
+                battlemap.move_entity_without_update(source, step)
         else:
-            battlemap.move_entity(self.source, end_position)
-            battlemap.update_entity_fov(self.source)
+            battlemap.move_entity_without_update(source, end_position)
 
+        # Update entity senses after movement is complete
+        battlemap.update_entity_senses(source)
 
         result_details = ActionResultDetails(
             success=True,
@@ -457,15 +490,9 @@ class MovementAction(Action):
             }
         )
 
-        return True, result_details, [], []  # No dice rolls or damage rolls for movement
+        return True, result_details, [], []
 
-    def apply(self, source: Optional[StatsBlock] = None, targets: Optional[Union[List[Target], Target]] = None, context: Optional[Dict[str, Any]] = None) -> List[ActionLog]:
-        if not self.path and not targets:
-            raise ValueError("MovementAction requires a single target position (tuple of two integers) or a path object or target to be set at init.")
-        source = self.source
-        targets = [self.path[-1]] if not targets else targets
-        return super().apply(source, targets, context)
 
     def __str__(self):
         movement_type = "Step-by-step" if self.step_by_step else "Direct"
-        return f"{self.name}: {movement_type} movement to target position"
+        return f"{self.name}: {movement_type} movement to {self.target}"
