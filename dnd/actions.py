@@ -79,9 +79,10 @@ class RangePrerequisite(Prerequisite):
 
     def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
         target_position = target.sensory.origin if isinstance(target, StatsBlock) else target
-        distance = source.get_distance(target_position)
+        distance = source.get_distance(target_position)*5
         max_range = self.range_long if self.range_type == RangeType.RANGE and self.range_long else self.range_normal
         details = PrerequisiteDetails(distance=distance, required_range=max_range)
+        print(f" Checking range \n Distance: {distance}, Max Range: {max_range}")
         if distance is None:
             details.failure_reason = "Distance could not be calculated"
             return False, details

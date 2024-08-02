@@ -817,7 +817,7 @@ class ActionEconomy(BlockComponent):
 
     def _remove_cost_bonus(self):
         #removes from self_static all the conditions with cost in it
-        for action_type in ['actions', 'bonus_actions', 'reactions']:
+        for action_type in ['actions', 'bonus_actions', 'reactions', 'movement']:
             action_obj: ModifiableValue = getattr(self, action_type)
             #all effects in the self_static
             cost_effects = [effect_name for effect_name in action_obj.self_static.bonuses.keys() if "_cost" in effect_name]

@@ -1,5 +1,5 @@
 import heapq
-from typing import Dict, Tuple, List, Optional, Set
+from typing import Dict, Tuple, List, Optional, Callable
 
 def get_neighbors(position: Tuple[int, int], diagonal: bool, width: int, height: int) -> List[Tuple[int, int]]:
     x, y = position
@@ -16,13 +16,15 @@ def get_neighbors(position: Tuple[int, int], diagonal: bool, width: int, height:
 
 def dijkstra(
     start: Tuple[int, int], 
-    is_walkable: callable, 
+    is_walkable: Callable[[int, int], bool], 
     width: int, 
     height: int, 
     diagonal: bool = True, 
-    max_distance: Optional[int] = None
-) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
+    max_distance: Optional[int] = None,
+    epsilon: float = 0.001  # Small cost added for diagonal moves
+) -> Tuple[Dict[Tuple[int, int], float], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
     distances = {start: 0}
+    true_distances = {start: 0}  # Distances without epsilon for final return
     paths = {start: [start]}
     pq = [(0, start)]
     visited = set()
@@ -38,13 +40,19 @@ def dijkstra(
             if not is_walkable(*neighbor):
                 continue
             
-            distance = current_distance + 1
+            # Calculate cost: add epsilon for diagonal moves
+            is_diagonal = (neighbor[0] != current_position[0]) and (neighbor[1] != current_position[1])
+            additional_cost = epsilon if is_diagonal else 0
+            distance = current_distance + 1 + additional_cost
+            
             if max_distance is not None and distance > max_distance:
                 continue
             
             if neighbor not in distances or distance < distances[neighbor]:
                 distances[neighbor] = distance
+                true_distances[neighbor] = true_distances[current_position] + 1  # Keep true distance without epsilon
                 paths[neighbor] = paths[current_position] + [neighbor]
                 heapq.heappush(pq, (distance, neighbor))
 
-    return distances, paths
+    return true_distances, paths
+
