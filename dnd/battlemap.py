@@ -126,6 +126,8 @@ class Entity(StatsBlock):
         else:
             instance.update(**kwargs)
         return instance
+    def __str__(self):
+        return f"Entity(id={self.id}, name={self.name})"
 
 
 
