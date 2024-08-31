@@ -9,8 +9,13 @@ class Blinded(Condition):
     name: str = "Blinded"
     description: str = "A blinded creature can't see and automatically fails any ability check that requires sight. Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage."
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
         # Add disadvantage to all attacks (static)
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Blinded", AdvantageStatus.DISADVANTAGE)
         
         # Give advantage to all attacks against this creature (static)
@@ -28,7 +33,11 @@ class Blinded(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove effects
         stats_block.attacks_manager.hit_bonus.remove_effect("Blinded")
@@ -50,7 +59,12 @@ class Blinded(Condition):
 class Charmed(Condition):
     name: str = "Charmed"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Prevent attacking the charmer
         stats_block.attacks_manager.hit_bonus.self_contextual.add_auto_hit_condition("Charmed", self.charmed_attack_check)
 
@@ -67,7 +81,11 @@ class Charmed(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         stats_block.attacks_manager.hit_bonus.remove_effect("Charmed")
         
@@ -98,7 +116,12 @@ class Charmed(Condition):
 class Dashing(Condition):
     name: str = "Dashing"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
             speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
             base_speed = speed_obj.base_value.base_value
@@ -112,7 +135,11 @@ class Dashing(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
             speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
@@ -124,7 +151,12 @@ class Dashing(Condition):
 class Deafened(Condition):
     name: str = "Deafened"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Add auto-fail condition for hearing-based ability checks
         for skill in Skills:
             skill_obj = stats_block.skillset.get_skill(skill)
@@ -137,7 +169,11 @@ class Deafened(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         for skill in Skills:
             skill_obj = stats_block.skillset.get_skill(skill)
@@ -156,7 +192,12 @@ class Deafened(Condition):
 class Dodging(Condition):
     name: str = "Dodging"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Add disadvantage to attacks against this creature
         stats_block.armor_class.ac.target_static.add_advantage_condition("Dodging", AdvantageStatus.DISADVANTAGE)
         
@@ -171,7 +212,11 @@ class Dodging(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         stats_block.armor_class.ac.remove_effect("Dodging")
         dex_save = stats_block.saving_throws.get_ability(Ability.DEX)
@@ -182,7 +227,12 @@ class Dodging(Condition):
 class Frightened(Condition):
     name: str = "Frightened"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Add disadvantage to all attacks
         stats_block.attacks_manager.hit_bonus.self_contextual.add_advantage_condition("Frightened", self.frightened_check)
         
@@ -198,7 +248,11 @@ class Frightened(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         stats_block.attacks_manager.hit_bonus.remove_effect("Frightened")
         for ability in Ability:
@@ -212,15 +266,28 @@ class Frightened(Condition):
         if "Frightened" in stats_block.condition_manager.active_conditions:
             frightened_condition = stats_block.condition_manager.active_conditions["Frightened"]
             frightening_entity = frightened_condition.source_entity_id
-            frightening_block : StatsBlock = StatsBlock.get_instance(frightening_entity)
-            if frightening_entity and stats_block.sensory.is_visible(frightening_block.sensory.origin):
+            if not frightening_entity:
+                raise ValueError("Frightening entity ID is not set")
+            frightening_block  = StatsBlock.get_instance(frightening_entity)
+            if not frightening_block:
+                raise ValueError(f"Frightening entity {frightening_entity} not found")
+            assert isinstance(frightening_block, StatsBlock)
+            frightening_position = frightening_block.position
+            if not frightening_position:
+                raise ValueError("Frightening entity position is not set")
+            if frightening_entity and stats_block.sensory.is_visible(frightening_position):
                 return AdvantageStatus.DISADVANTAGE
         return AdvantageStatus.NONE
 
 class Grappled(Condition):
     name: str = "Grappled"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
             speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
             speed_obj.self_static.add_max_constraint("Grappled", 0)
@@ -232,7 +299,11 @@ class Grappled(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
             speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
@@ -243,7 +314,12 @@ class Grappled(Condition):
 class Incapacitated(Condition):
     name: str = "Incapacitated"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Set max actions, bonus actions, and reactions to 0
         stats_block.action_economy.actions.self_static.add_max_constraint("Incapacitated", 0)
         stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Incapacitated", 0)
@@ -261,7 +337,11 @@ class Incapacitated(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove constraints from action economy
         stats_block.action_economy.actions.remove_effect("Incapacitated")
@@ -278,7 +358,12 @@ class Incapacitated(Condition):
 class Invisible(Condition):
     name: str = "Invisible"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Add advantage to all attacks
         stats_block.attacks_manager.hit_bonus.self_contextual.add_advantage_condition("Invisible", self.invisible_offensive_check)
         
@@ -292,7 +377,11 @@ class Invisible(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         stats_block.attacks_manager.hit_bonus.remove_effect("Invisible")
         stats_block.armor_class.ac.remove_effect("Invisible")
@@ -308,7 +397,10 @@ class Invisible(Condition):
     def invisible_offensive_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
         if target is None or "Invisible" not in stats_block.condition_manager.active_conditions:
             return AdvantageStatus.NONE
-        if Invisible.can_see_invisible(target) and target.sensory.is_visible(stats_block.sensory.origin):
+        stats_block_position = stats_block.position
+        if not stats_block_position:
+            raise ValueError("Stats block position is not set")
+        if Invisible.can_see_invisible(target) and target.sensory.is_visible(stats_block_position):
             return AdvantageStatus.NONE
         return AdvantageStatus.ADVANTAGE
 
@@ -316,14 +408,22 @@ class Invisible(Condition):
     def invisible_defensive_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
         if target is None or "Invisible" not in stats_block.condition_manager.active_conditions:
             return AdvantageStatus.NONE
-        if Invisible.can_see_invisible(target) and target.sensory.is_visible(stats_block.sensory.origin):
+        stats_block_position = stats_block.position
+        if not stats_block_position:
+            raise ValueError("Stats block position is not set")
+        if Invisible.can_see_invisible(target) and target.sensory.is_visible(stats_block_position):
             return AdvantageStatus.NONE
         return AdvantageStatus.DISADVANTAGE
     
 class Paralyzed(Condition):
     name: str = "Paralyzed"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")    
         # Set max actions, bonus actions, and reactions to 0
         stats_block.action_economy.actions.self_static.add_max_constraint("Paralyzed", 0)
         stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Paralyzed", 0)
@@ -348,7 +448,11 @@ class Paralyzed(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove all effects
         stats_block.action_economy.actions.remove_effect("Paralyzed")
@@ -370,7 +474,10 @@ class Paralyzed(Condition):
     def paralyzed_attack_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> CriticalStatus:
         if target is None or "Paralyzed" not in stats_block.condition_manager.active_conditions:
             return CriticalStatus.NONE
-        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        stats_block_position = stats_block.position
+        if not stats_block_position:
+            raise ValueError("Stats block position is not set")
+        distance = stats_block.sensory.get_distance(stats_block_position)
         if distance is not None and distance <= 5:  # 5 feet for melee range
             return CriticalStatus.AUTOCRIT
         return CriticalStatus.NONE
@@ -378,7 +485,12 @@ class Paralyzed(Condition):
 class Poisoned(Condition):
     name: str = "Poisoned"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Add disadvantage to all attacks
         stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Poisoned", AdvantageStatus.DISADVANTAGE)
         
@@ -394,7 +506,11 @@ class Poisoned(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove disadvantage from all attacks
         stats_block.attacks_manager.hit_bonus.remove_effect("Poisoned")
@@ -410,7 +526,12 @@ class Poisoned(Condition):
 class Prone(Condition):
     name: str = "Prone"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Disadvantage on attack rolls for the prone creature
         stats_block.attacks_manager.hit_bonus.self_static.add_advantage_condition("Prone", AdvantageStatus.DISADVANTAGE)
         
@@ -424,7 +545,11 @@ class Prone(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove disadvantage on attack rolls
         stats_block.attacks_manager.hit_bonus.remove_effect("Prone")
@@ -438,7 +563,11 @@ class Prone(Condition):
     def prone_attack_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
         if target is None or "Prone" not in stats_block.condition_manager.active_conditions:
             return AdvantageStatus.NONE
-        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        stats_block_position = stats_block.position
+        if not stats_block_position:
+            raise ValueError("Stats block position is not set")
+        
+        distance = stats_block.sensory.get_distance(stats_block_position)
         if distance is not None and distance <= 5:  # 5 feet for melee range
             return AdvantageStatus.ADVANTAGE
         elif distance is None or distance > 5:  # More than 5 feet for ranged attacks
@@ -449,7 +578,12 @@ class Prone(Condition):
 class Stunned(Condition):
     name: str = "Stunned"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Incapacitated effects (can't take actions or reactions)
         stats_block.action_economy.actions.self_static.add_max_constraint("Stunned", 0)
         stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Stunned", 0)
@@ -474,7 +608,11 @@ class Stunned(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove all effects
         stats_block.action_economy.actions.remove_effect("Stunned")
@@ -496,7 +634,12 @@ class Stunned(Condition):
 class Restrained(Condition):
     name: str = "Restrained"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Set speed to 0 for all movement types
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
             speed_obj : ModifiableValue = getattr(stats_block.speed, speed_type)
@@ -519,7 +662,11 @@ class Restrained(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove all effects
         for speed_type in ['walk', 'fly', 'swim', 'burrow', 'climb']:
@@ -538,7 +685,12 @@ class Restrained(Condition):
 class Unconscious(Condition):
     name: str = "Unconscious"
 
-    def _apply(self, stats_block: StatsBlock) -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None) -> ConditionAppliedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
+        stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         # Incapacitated effects (can't take actions or reactions)
         stats_block.action_economy.actions.self_static.add_max_constraint("Unconscious", 0)
         stats_block.action_economy.bonus_actions.self_static.add_max_constraint("Unconscious", 0)
@@ -570,7 +722,11 @@ class Unconscious(Condition):
         )
 
     def _remove(self) -> ConditionRemovedDetails:
+        if not self.targeted_entity_id:
+            raise ValueError("Targeted entity ID is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if not stats_block:
+            raise ValueError(f"Targeted entity {self.targeted_entity_id} not found")
         
         # Remove all effects
         stats_block.action_economy.actions.remove_effect("Unconscious")
@@ -593,7 +749,11 @@ class Unconscious(Condition):
     def unconscious_melee_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> CriticalStatus:
         if target is None or "Unconscious" not in stats_block.condition_manager.active_conditions:
             return CriticalStatus.NONE
-        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        stats_block_position = stats_block.position
+        if not stats_block_position:
+            raise ValueError("Stats block position is not set")
+        
+        distance = stats_block.sensory.get_distance(stats_block_position)
         if distance is not None and distance <= 5:  # 5 feet for melee range
             return CriticalStatus.AUTOCRIT
         return CriticalStatus.NONE
@@ -602,7 +762,11 @@ class Unconscious(Condition):
     def unconscious_prone_check(stats_block: StatsBlock, target: Optional[StatsBlock], context: Optional[Dict[str, Any]] = None) -> AdvantageStatus:
         if target is None or "Unconscious" not in stats_block.condition_manager.active_conditions:
             return AdvantageStatus.NONE
-        distance = stats_block.sensory.get_distance(target.sensory.origin)
+        stats_block_position = stats_block.position
+        if not stats_block_position:
+            raise ValueError("Stats block position is not set")
+        
+        distance = stats_block.sensory.get_distance(stats_block_position)
         if distance is not None and distance <= 5:  # 5 feet for melee range
             return AdvantageStatus.ADVANTAGE
         elif distance is None or distance > 5:  # More than 5 feet for ranged attacks

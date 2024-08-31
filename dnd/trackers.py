@@ -138,5 +138,5 @@ class BonusTracker(BaseModel):
 
     @computed_field
     @property
-    def total_bonus(self) -> int:
-        return sum(self.bonuses.values()) if len(self.bonuses.keys())>0 else 0
+    def total_bonus(self) -> Optional[int]:
+        return sum(self.bonuses.values()) if len(self.bonuses.keys())>0 else None

@@ -75,6 +75,11 @@ class StatsBlock(BaseModel, RegistryHolder):
     @property
     def initiative(self) -> int:
         return self.ability_scores.get_ability_modifier(Ability.DEX)
+    
+    @computed_field
+    @property
+    def position(self) -> Optional[Tuple[int, int]]:
+        return self.sensory.origin
 
     def _recompute_fields(self):
         self.armor_class.update_ac()

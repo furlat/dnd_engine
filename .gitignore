@@ -6,3 +6,4 @@ dnd.egg-info/PKG-INFO
 .vscode/settings.json
 /dnd.egg-info
 dnd.egg-info/SOURCES.txt
+/.venv

@@ -69,3 +69,9 @@ def create_goblin(name:str ='Goblin') -> StatsBlock:
 
     return goblin
 
+
+if __name__ == "__main__":
+    goblin = create_goblin()
+    print(goblin.health.max_hit_points)
+    print(goblin.health.current_hit_points)
+    print(goblin.health.total_hit_points)

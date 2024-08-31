@@ -1,6 +1,7 @@
 from typing import Dict, Set, List, Tuple, Optional, Union, Any, Type, Optional
 from pydantic import BaseModel, Field, computed_field
 import uuid
+from build.lib.dnd import battlemap
 from dnd.statsblock import StatsBlock
 from dnd.shadowcast import compute_fov
 from dnd.dijkstra import dijkstra
@@ -18,7 +19,7 @@ class Entity(StatsBlock):
     
     def __init__(self, **data):
         super().__init__(**data)
-        self.register(self)
+        self.register(self,self.id)
 
     @classmethod
     def from_stats_block(cls, stats_block: StatsBlock):
@@ -49,18 +50,25 @@ class Entity(StatsBlock):
 
     def get_battlemap(self) -> Optional['BattleMap']:
         if self.battlemap_id:
-            return RegistryHolder.get_instance(self.battlemap_id)
+            battlemap= RegistryHolder.get_instance(self.battlemap_id)
+            if not isinstance(battlemap, BattleMap):
+                raise ValueError(f"Battlemap {self.battlemap_id} is not a valid battlemap")
+            return battlemap
         return None
 
     def is_in_line_of_sight(self, other: 'Entity') -> bool:
-        return self.sensory.is_visible(other.position) if self.sensory else False
+        other_position = other.position
+        assert isinstance(other_position, tuple)
+        is_visible = self.sensory.is_visible(other_position) if self.sensory else False
+        return is_visible
 
     def get_weapon_attacks(self) -> List[Attack]:
         attacks = []
         if self.attacks_manager.melee_right_hand:
             attacks.append(Attack.from_weapon(self.attacks_manager.melee_right_hand, self, AttackHand.MELEE_RIGHT))
         if self.attacks_manager.melee_left_hand:
-            attacks.append(Attack.from_weapon(self.attacks_manager.melee_left_hand, self, AttackHand.MELEE_LEFT))
+            if isinstance(self.attacks_manager.melee_left_hand, Weapon):
+                attacks.append(Attack.from_weapon(self.attacks_manager.melee_left_hand, self, AttackHand.MELEE_LEFT))
         if self.attacks_manager.ranged_right_hand:
             attacks.append(Attack.from_weapon(self.attacks_manager.ranged_right_hand, self, AttackHand.RANGED_RIGHT))
         if self.attacks_manager.ranged_left_hand:
@@ -81,11 +89,13 @@ class Entity(StatsBlock):
     def get_potential_targets(self) -> List['Entity']:
         if not self.sensory or not self.sensory.fov:
             return []
-        return [
+        targets = [
             Entity.get_instance(entity_id)
             for entity_id in self.sensory.get_visible_entities()
             if Entity.get_instance(entity_id) != self
         ]
+        typed_targets = [target for target in targets if isinstance(target, Entity)]
+        return typed_targets
 
     def generate_movement_actions(self) -> List[MovementAction]:
         movement_actions = []
@@ -109,18 +119,23 @@ class Entity(StatsBlock):
         return movement_actions
 
     @computed_field
-    def actions(self) -> List[Action]:
-        return self.generate_movement_actions() + self.get_valid_attacks()
+    def actions(self) -> List[Union[MovementAction, Attack]]:
+        movement_actions = self.generate_movement_actions()
+        attack_actions = self.get_valid_attacks()        
+        return movement_actions + attack_actions
 
     def update(self, **kwargs):
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        self.register(self)
+        self.register(self,self.id)
+
 
     @classmethod
     def get_or_create(cls, entity_id: str, **kwargs):
-        instance : Optional[Entity] = cls.get_instance(entity_id)
+        instance  = cls.get_instance(entity_id)
+        if not isinstance(instance, cls):
+            raise ValueError(f"Entity {entity_id} is not a valid entity of type {cls.__name__}")
         if instance is None:
             instance = cls(id=entity_id, **kwargs)
         else:
@@ -141,7 +156,7 @@ class BattleMap(BaseModel, RegistryHolder):
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.register(self)
+        self.register(self,self.id)
 
     def is_in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height
