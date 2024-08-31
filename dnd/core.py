@@ -25,7 +25,7 @@ class BaseRoll(BaseModel):
 
     def _single_roll(self) -> int:
         return random.randint(1, self.dice_value)
-    
+   
     def roll(self,advantage_status:AdvantageStatus) -> SimpleRollOut:
         all_rolls = []
 
@@ -127,7 +127,10 @@ class BlockComponent(BaseModel, RegistryHolder):
 
     def get_owner(self) -> Optional['StatsBlock']:
         if self.owner_id:
-            return self.get_instance(self.owner_id)
+            instance = self.get_instance(self.owner_id)
+            if TYPE_CHECKING:
+                assert isinstance(instance, StatsBlock)
+            return instance
         raise ValueError("Owner not set")
     
     def set_owner(self, owner_id: str):
@@ -149,7 +152,10 @@ class BlockComponent(BaseModel, RegistryHolder):
                         item.set_owner(owner_id)
 
     def get_target(self, target_id: str) -> Optional['StatsBlock']:
-        return self.get_instance(target_id)
+        instance = self.get_instance(target_id)
+        if TYPE_CHECKING:
+            assert isinstance(instance, StatsBlock)
+        return instance
 
     def get_stats_blocks(self, target: Optional[str] = None) -> Tuple[Optional['StatsBlock'], Optional['StatsBlock']]:
         stats_block = self.get_owner()
@@ -164,7 +170,9 @@ class AbilityScore(BlockComponent):
 
     def apply(self, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> ValueOut:
         stats_block , target_stats_block = self.get_stats_blocks(target)
-       
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
+            assert isinstance(target_stats_block, StatsBlock) or target_stats_block is None
         return self.score.apply(stats_block, target_stats_block, context)
     
     def get_modifier(self, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> int:
@@ -268,6 +276,9 @@ class Skill(BlockComponent):
             return (ability_bonus - 10) // 2
         
         stats_block , target_stats_block = self.get_stats_blocks(target)
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
+            assert isinstance(target_stats_block, StatsBlock) or target_stats_block is None
         
         ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(target, context)
         
@@ -313,6 +324,8 @@ class Skill(BlockComponent):
     def perform_cross_check(self, target_skill_name:Skills, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> CrossSkillRollOut:
         #first we roll a targetskill check against dc 0 and obtain the result to get the dc
         stats_block , target_stats_block = self.get_stats_blocks(target)
+        if stats_block is None or target_stats_block is None:
+            raise ValueError("StatsBlock or TargetStatsBlock is None")  
         target_skill = target_stats_block.skillset.get_skill(target_skill_name)
         target_skill_roll = target_skill.perform_check(0,self.owner_id,context)
         
@@ -400,11 +413,13 @@ class SavingThrow(BlockComponent):
         def ability_bonus_to_modifier(ability_bonus:int) -> int:
             return (ability_bonus - 10) // 2
         stats_block,target_stats_block = self.get_stats_blocks(target)
-        
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
+            assert isinstance(target_stats_block, StatsBlock) or target_stats_block is None
         ability_bonus = stats_block.ability_scores.get_ability(self.ability).apply(target, context)
         
-        proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block, target, context)
-        saving_throw_bonus = self.bonus.apply(stats_block, target, context)
+        proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block, target_stats_block, context)
+        saving_throw_bonus = self.bonus.apply(stats_block, target_stats_block, context)
         target_to_self_bonus = None
         if target_stats_block:
             target_ability = target_stats_block.saving_throws.get_ability(self.ability)
@@ -537,10 +552,12 @@ class Health(BlockComponent):
  
 
     @computed_field
+    @property
     def is_dead(self) -> bool:
         return self.current_hit_points <= 0
     
     @computed_field
+    @property
     def total_hit_points(self) -> int:
         return self.current_hit_points + self.current_temporary_hit_points
     
@@ -548,13 +565,17 @@ class Health(BlockComponent):
         return self.hit_dice_count * (self.hit_dice_value // 2 + 1)
     
     @computed_field
+    @property
     def max_hit_points(self) -> int:
         owner_block = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(owner_block, StatsBlock)
         constitution_modifier = owner_block.ability_scores.get_ability_modifier(Ability.CON)
         total_consitution_bonus = constitution_modifier * self.hit_dice_count
         return self._hit_dice_exp_value() + self.max_hit_point_bonus.apply(owner_block).total_bonus + total_consitution_bonus
     
     @computed_field
+    @property
     def current_hit_points(self) -> int:
         return max(0,self.max_hit_points - self.damage_taken)
     
@@ -566,7 +587,7 @@ class Health(BlockComponent):
     
     def add_temporary_hit_points(self, source: str, amount: int):
         if len(self.temporary_hit_points.self_static.bonuses.keys())>0:
-            current_hp_source, current_hp_bonus = self.temporary_hit_points.self_static.bonuses.items()[-1]
+            current_hp_source, current_hp_bonus = list(self.temporary_hit_points.self_static.bonuses.items())[-1]
      
         if amount > current_hp_bonus:
             self.temporary_hit_points.self_static.remove_effect(current_hp_source)
@@ -577,8 +598,12 @@ class Health(BlockComponent):
         self.temporary_hit_points_damage_taken -= amount
 
     @computed_field
+    @property
     def current_temporary_hit_points(self) -> int:
-        return self.temporary_hit_points.apply(self).total_bonus - self.temporary_hit_points_damage_taken
+        owner = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(owner, StatsBlock)
+        return self.temporary_hit_points.apply(owner).total_bonus - self.temporary_hit_points_damage_taken
     
     def reset_temporary_hitpoints(self):
         sources = [source for source in self.temporary_hit_points.self_static.bonuses.keys()]
@@ -616,6 +641,9 @@ class Health(BlockComponent):
             damage_calculations.append(damage_resistance)
         
         owner_stats_block, attacker_stats_block = self.get_stats_blocks(attacker)
+        if TYPE_CHECKING:
+            assert isinstance(owner_stats_block, StatsBlock)
+            assert isinstance(attacker_stats_block, StatsBlock) or attacker_stats_block is None
 
         total_damage = sum([getattr(damage_resistance,"total_damage_taken") for damage_resistance in damage_calculations])
         flat_damage_reduction_out = self.damage_reduction.apply(owner_stats_block, attacker_stats_block, context)
@@ -624,7 +652,7 @@ class Health(BlockComponent):
         absorbed_thp = 0
         if self.current_temporary_hit_points > 0:
             absorbed_thp = min(self.current_temporary_hit_points, reduced_damage)
-            self.damage_temporary_hit_points += absorbed_thp
+            self.damage_temporary_hit_points(absorbed_thp)
             if self.current_temporary_hit_points<=0:
                 self.reset_temporary_hitpoints()
                 hp_damage = reduced_damage - absorbed_thp
@@ -650,12 +678,14 @@ class Health(BlockComponent):
 
     def heal(self, healing: int, healer: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> HealingTakenLog:
         owner_stats_block ,healer_stats_block = self.get_stats_blocks(healer)
+        if TYPE_CHECKING:
+            assert isinstance(owner_stats_block, StatsBlock)
+            assert isinstance(healer_stats_block, StatsBlock) or healer_stats_block is None
         healing_bonus_out = self.healing_bonus.apply(owner_stats_block, healer_stats_block, context)
         total_healing = healing + healing_bonus_out.total_bonus
         health_before = self.get_health_snapshot()
-        old_hp = self.current_hit_points
-        self.current_hit_points = min(self.max_hit_points, self.current_hit_points + total_healing)
-        actual_healing = self.current_hit_points - old_hp
+        actual_healing = min(total_healing, self.damage_taken)
+        self.damage_taken = max(0, self.damage_taken - total_healing)
 
 
 
@@ -663,15 +693,13 @@ class Health(BlockComponent):
         return HealingTakenLog(
             health_before=health_before,
             health_after=self.get_health_snapshot(),
-            total_healing=actual_healing,
+            healing_received=actual_healing,
             source_entity_id=healer if healer else None,
             target_entity_id=self.owner_id
         )
 
 
 
-    def add_temporary_hit_points(self, amount: int):
-        self.temporary_hit_points = max(self.temporary_hit_points, amount)
 
     def set_bonus_hit_points(self, source: str, amount: int):
         if self.bonus_hit_points_source != source:
@@ -708,11 +736,16 @@ class ArmorClass(BlockComponent):
     unarmored_ac: UnarmoredAc = Field(default=UnarmoredAc.NONE)
 
     def _get_unarmored_ac(self) -> int:
-        stats_block = self.get_owner() 
+        owner_id = self.owner_id
+        assert isinstance(owner_id, str)
+        stats_block = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
+        
         if self.unarmored_ac == UnarmoredAc.BARBARIAN:
-            return stats_block.ability_scores.constitution.apply().total_bonus + stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 10
+            return stats_block.ability_scores.constitution.apply().total_bonus + stats_block.ability_scores.dexterity.apply(owner_id).total_bonus + 10
         elif self.unarmored_ac == UnarmoredAc.MONK:
-            return stats_block.ability_scores.wisdom.apply().total_bonus + stats_block.ability_scores.dexterity.apply(stats_block).total_bonus + 10
+            return stats_block.ability_scores.wisdom.apply().total_bonus + stats_block.ability_scores.dexterity.apply(owner_id).total_bonus + 10
         elif self.unarmored_ac == UnarmoredAc.DRACONIC_SORCER or self.unarmored_ac == UnarmoredAc.MAGIC_ARMOR:
             return stats_block.ability_scores.dexterity.apply().total_bonus + 13
         else:
@@ -721,6 +754,8 @@ class ArmorClass(BlockComponent):
 
     def update_ac(self) -> None:
         stats_block = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
         if self.equipped_armor:
             base_ac = self.equipped_armor.base_ac
             if self.equipped_armor.dex_bonus:
@@ -736,13 +771,17 @@ class ArmorClass(BlockComponent):
         self.ac.update_base_value(base_ac)
 
     @computed_field
+    @property
     def base_ac(self) -> int:
         self.update_ac()
         return self.ac.base_value.base_value
     
     @computed_field
+    @property
     def total_ac(self) -> int:
         owner = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(owner, StatsBlock)
         return self.ac.apply(owner).total_bonus
     
 
@@ -811,8 +850,22 @@ class ActionEconomy(BlockComponent):
         base_value=BaseValue(name="base_movement", base_value=30)
     ))
 
+    def set_max_actions(self, source: str, value: int):
+        self.actions.self_static.add_max_constraint(source, value)
+
+    def set_max_bonus_actions(self, source: str, value: int):
+        self.bonus_actions.self_static.add_max_constraint(source, value)
+
+    def set_max_reactions(self, source: str, value: int):
+        self.reactions.self_static.add_max_constraint(source, value)
+    def _constant_value(self, value: int) -> Callable[[Any, Any, Any], int]:
+        def constant(*args) -> int:
+            return value
+        return constant
     def _sync_movement_with_speed(self):
         owner_block = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(owner_block, StatsBlock)
         self.movement.update_base_value(owner_block.speed.walk.apply(owner_block).total_bonus)
 
     def _remove_cost_bonus(self):
@@ -834,15 +887,7 @@ class ActionEconomy(BlockComponent):
         self._sync_movement_with_speed()
         self._remove_cost_bonus()
 
-    def set_max_actions(self, source: str, value: int):
-        self.actions.self_static.add_max_constraint(source, lambda stats_block, target, context: value)
-
-    def set_max_bonus_actions(self, source: str, value: int):
-        self.bonus_actions.self_static.add_max_constraint(source, lambda stats_block, target, context: value)
-
-    def set_max_reactions(self, source: str, value: int):
-        self.reactions.self_static.add_max_constraint(source, lambda stats_block, target, context: value)
-
+    
     def reset_max_actions(self, source: str):
         self.actions.remove_effect(source)
 
@@ -885,6 +930,8 @@ class Sensory(BlockComponent):
         self.battlemap_id = battlemap_id
 
     def update_distance_matrix(self, distances: Dict[Tuple[int, int], int]):
+        if self.origin is None:
+            raise ValueError("Origin is not set")
         self.distance_matrix = DistanceMatrix(
             battlemap_id=self.battlemap_id if self.battlemap_id else "testing",
             origin=self.origin,
@@ -892,6 +939,8 @@ class Sensory(BlockComponent):
         )
 
     def update_fov(self, visible_tiles: Set[Tuple[int, int]]):
+        if self.origin is None:
+            raise ValueError("Origin is not set")
         self.fov = FOV(
             battlemap_id=self.battlemap_id if self.battlemap_id else "testing",
             origin=self.origin,
@@ -899,6 +948,8 @@ class Sensory(BlockComponent):
         )
 
     def update_paths(self, paths: Dict[Tuple[int, int], List[Tuple[int, int]]]):
+        if self.origin is None:
+            raise ValueError("Origin is not set")
         self.paths = Paths(
             battlemap_id=self.battlemap_id if self.battlemap_id else "testing",
             origin=self.origin,
@@ -975,6 +1026,8 @@ class ConditionManager(BlockComponent):
         condition_application_report = condition.apply(context)
         if isinstance(condition_application_report, ConditionApplied):
             self.active_conditions[condition.name] = condition
+            if condition.source_entity_id is None:
+                raise ValueError("Source entity id is not set")
             self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (condition.source_entity_id, condition.name))
         return condition_application_report
 
@@ -983,6 +1036,7 @@ class ConditionManager(BlockComponent):
 
     def _remove_condition_from_dicts(self, condition_name: str) :
         condition = self.active_conditions.pop(condition_name)
+        assert condition.source_entity_id is not None
         self.active_conditions_by_source[condition.source_entity_id].remove(condition_name)
     
     def add_condition_immunity(self, condition_name: str, immunity_name: str = "self_immunity"):
@@ -1018,7 +1072,7 @@ class ConditionManager(BlockComponent):
 
 
 class Condition(BlockComponent):
-    name: str = Field(...)  # This should be a required field
+    name: str = Field(default="Condition")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     description: str = Field(default="A generic description of the condition.")
     duration: Duration = Field(default_factory=lambda: Duration(time=1, type=DurationType.ROUNDS))
@@ -1032,8 +1086,15 @@ class Condition(BlockComponent):
     def _check_immunity(self, context: Optional[Dict[str, Any]] = None) -> Optional[ConditionNotApplied]:
         reason = None
         immunity_conditions = []
+        if self.targeted_entity_id is None:
+            raise ValueError("Targeted entity id is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if self.source_entity_id is None:
+            raise ValueError("Source entity id is not set")
         source_stats_block = self.get_target(self.source_entity_id)
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
+            assert isinstance(source_stats_block, StatsBlock)
         if self.name in stats_block.condition_manager.condition_immunities.keys():
             reason = NotAppliedReason.IMMUNITY
             immunity_conditions = stats_block.condition_manager.condition_immunities[self.name]
@@ -1045,7 +1106,7 @@ class Condition(BlockComponent):
                 reason = NotAppliedReason.CONTEXTUAL_IMMUNITY if not reason else reason
                 immunity_conditions.append(immunity_name)
         return ConditionNotApplied(
-            condition=self,
+            condition=self.name,
             reason=reason,
             immunity_conditions=immunity_conditions,
             source_entity_id=self.source_entity_id if self.source_entity_id else None,
@@ -1057,14 +1118,18 @@ class Condition(BlockComponent):
         # Check for condition immunity
         immune = self._check_immunity( context)
         application_saving_throw_roll = None
+        if not isinstance(self.targeted_entity_id, str):
+            raise ValueError("Targeted entity id is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
         if immune:
             return immune
         elif self.application_saving_throw:
             application_saving_throw_roll = stats_block.saving_throws.perform_save_from_request(self.application_saving_throw, self.source_entity_id, context)
             if application_saving_throw_roll.success:
                 return ConditionNotApplied(
-                    condition=self,
+                    condition=self.name,
                     reason=NotAppliedReason.SAVINGTHROW,
                     requested_saving_throw = self.application_saving_throw,
                     application_saving_throw_roll = application_saving_throw_roll,
@@ -1072,7 +1137,7 @@ class Condition(BlockComponent):
                     target_entity_id=stats_block.id
                 )
             else:
-                applied_details = self._apply(stats_block)
+                applied_details = self._apply(context)
                 stats_block.condition_manager.add_condition(self)
                 return ConditionApplied(
                     condition=self.name,
@@ -1085,7 +1150,7 @@ class Condition(BlockComponent):
 
                 )
         else:
-            applied_details = self._apply(stats_block)
+            applied_details = self._apply(context)
             return ConditionApplied(
                 condition=self.name,
                 details=applied_details,
@@ -1095,7 +1160,11 @@ class Condition(BlockComponent):
             )
         # 
     def roll_removal_saving_throw(self, context: Optional[dict]= None) -> Optional[ConditionRemoved]:
+        if not isinstance(self.targeted_entity_id, str):
+            raise ValueError("Targeted entity id is not set")
         stats_block = self.get_target(self.targeted_entity_id)
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
         if self.removal_saving_throw:
             removal_saving_throw =  stats_block.saving_throws.perform_save_from_request(self.removal_saving_throw,self.source_entity_id,context)
             if removal_saving_throw.success:
@@ -1106,7 +1175,6 @@ class Condition(BlockComponent):
                     requested_saving_throw=self.removal_saving_throw,
                     removal_saving_throw_roll=removal_saving_throw,
                     details=details,
-                    duration=self.duration,
                     source_entity_id=self.source_entity_id if self.source_entity_id else None,
                     target_entity_id=self.targeted_entity_id
                 )
@@ -1119,7 +1187,6 @@ class Condition(BlockComponent):
                 condition_name=self.name,
                 removed_reason=RemovedReason.EXPIRED,
                 details=details,
-                duration=self.duration,
                 source_entity_id=self.source_entity_id if self.source_entity_id else None,
                 target_entity_id=self.targeted_entity_id
             )
@@ -1130,7 +1197,6 @@ class Condition(BlockComponent):
             condition_name=self.name,
             removed_reason=RemovedReason.REMOVED,
             details=details,
-            duration=self.duration,
             removed_by_source=external_source,
             source_entity_id=self.source_entity_id if self.source_entity_id else None,
             target_entity_id=self.targeted_entity_id
@@ -1145,11 +1211,15 @@ class Condition(BlockComponent):
         
     def _remove_from_targeted(self) -> ConditionRemovedDetails:
         condition_removed_details = self._remove()
+        if not isinstance(self.targeted_entity_id, str):
+            raise ValueError("Targeted entity id is not set")
         targeted_block = self.get_target(self.targeted_entity_id)
+        if TYPE_CHECKING:
+            assert isinstance(targeted_block, StatsBlock)
         targeted_block.condition_manager._remove_condition_from_dicts(self.name)
         return condition_removed_details
 
-    def _apply(self)  -> ConditionAppliedDetails:
+    def _apply(self,context: Optional[Dict[str, Any]] = None)  -> ConditionAppliedDetails:
         raise NotImplementedError("Subclasses must implement this method")
 
     def _remove(self)  -> ConditionRemovedDetails:
@@ -1186,7 +1256,8 @@ class Damage(BaseModel):
             damage_bonus=self.damage_bonus,
             attack_roll=self.attack_roll,
             damage_type=self.type,
-            source=self.source
+            source_entity_id=self.source if self.source else None,
+
         )
       
 
@@ -1255,7 +1326,10 @@ class AttacksManager(BlockComponent):
         if hand == AttackHand.MELEE_RIGHT:
             return self.melee_right_hand
         elif hand == AttackHand.MELEE_LEFT:
-            return self.melee_left_hand
+            left_hand = self.melee_left_hand
+            if isinstance(left_hand,Shield):
+                left_hand = None
+            return left_hand
         elif hand == AttackHand.RANGED_RIGHT:
             return self.ranged_right_hand
         elif hand == AttackHand.RANGED_LEFT:
@@ -1272,6 +1346,9 @@ class AttacksManager(BlockComponent):
         weapon_ranged_bonus = None
         spell_bonus = None
         stast_block, target_stats_block = self.get_stats_blocks(target)
+        if TYPE_CHECKING:
+            assert isinstance(stast_block, StatsBlock)
+            assert isinstance(target_stats_block, StatsBlock) or target_stats_block is None
         generic_hit_bonus = self.hit_bonus.apply(stast_block,target_stats_block,context)
         if hand == AttackHand.MELEE_RIGHT:
             attacker_melee_bonus= self.melee_hit_bonus.apply(stast_block,target_stats_block,context)
@@ -1279,7 +1356,7 @@ class AttacksManager(BlockComponent):
                 weapon_melee_bonus=self.melee_right_hand.attack_bonus.apply(stast_block,target_stats_block,context)
         elif hand == AttackHand.MELEE_LEFT:
             attacker_melee_bonus=self.melee_hit_bonus.apply(stast_block,target_stats_block,context)
-            if self.melee_left_hand:
+            if self.melee_left_hand and not isinstance(self.melee_left_hand,Shield):
                 weapon_melee_bonus=self.melee_left_hand.attack_bonus.apply(stast_block,target_stats_block,context)
         elif hand == AttackHand.RANGED_RIGHT:
             attacker_ranged_bonus=self.ranged_hit_bonus.apply(stast_block,target_stats_block,context)
@@ -1293,7 +1370,7 @@ class AttacksManager(BlockComponent):
             spell_bonus=self.spell_hit_bonus.apply(stast_block,target_stats_block,context)
 
         all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
-        all_bonuses : List[ValueOut] = [bonus for bonus in all_bonuses if bonus]
+        all_bonuses  = [bonus for bonus in all_bonuses if bonus is not None]
         total_weapon_bonus = generic_hit_bonus.combine_with_multiple(all_bonuses)
         return WeaponAttackBonusOut(
             attacker_melee_bonus=attacker_melee_bonus,
@@ -1307,10 +1384,15 @@ class AttacksManager(BlockComponent):
     def _get_ability_bonus_from_weapon_for_damage(self, hand:AttackHand, target:Optional[str], context: Optional[Dict[str, Any]] = None) -> ValueOut:
         ability = self._get_ability_from_weapon(hand,target,context)
         owner_block = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(owner_block, StatsBlock)
         #checks if the hand is left and not ambidextrous
         if hand == AttackHand.MELEE_LEFT and not self.ambidextrous:
             #create a dummy ModifiableValue with 0 bonus and applies it with names: NoAbilityModifier and basevalue name NoAbilityModifier
-            target_stats_block = self.get_target(target)
+            if target is not None:
+                target_stats_block = self.get_target(target)
+            else:
+                target_stats_block = None
             return ModifiableValue(name="NoAbilityModifier",base_value=BaseValue(name="NoAbilityModifier",base_value=10)).apply(owner_block,target_stats_block,context)
 
 
@@ -1321,13 +1403,16 @@ class AttacksManager(BlockComponent):
     def _get_ability_bonus_from_weapon(self, hand:AttackHand, target:Optional[str], context: Optional[Dict[str, Any]] = None) -> ValueOut:
         ability = self._get_ability_from_weapon(hand,target,context)
         owner_block = self.get_owner()
-        
+        if TYPE_CHECKING:
+            assert isinstance(owner_block, StatsBlock)
         return owner_block.ability_scores.get_ability(ability).apply(target, context)
     
     def _get_ability_from_weapon(self, hand:AttackHand, target:Optional[str], context: Optional[Dict[str, Any]] = None) -> Ability:
         #check if is a spell
         ability =  Ability.STR
         owner_block = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(owner_block, StatsBlock)
         if hand == AttackHand.SPELL:
             ability = owner_block.spellcasting_ability
         weapon = self.get_weapon(hand)
@@ -1346,8 +1431,11 @@ class AttacksManager(BlockComponent):
         def ability_bonus_to_modifier(ability_bonus:int) -> int:
             return (ability_bonus - 10) // 2
         stats_block,target_stats_block = self.get_stats_blocks(target)
+        if TYPE_CHECKING:
+            assert isinstance(stats_block, StatsBlock)
+            assert isinstance(target_stats_block, StatsBlock)
         #computes the proficiency bonus
-        proficiency_bonus = stats_block.proficiency_bonus.apply(target_stats_block,context)
+        proficiency_bonus = stats_block.proficiency_bonus.apply(stats_block,target_stats_block,context)
         #obtain the bonuses from the ac (i.e. debbufs on target)
         target_to_self_bonus = target_stats_block.armor_class.ac.apply_to_target(target_stats_block,stats_block,context)
         total_bonus = proficiency_bonus.combine_with(target_to_self_bonus)
@@ -1370,6 +1458,9 @@ class AttacksManager(BlockComponent):
         
     def roll_to_hit(self, hand:AttackHand, target: str, context: Optional[Dict[str, Any]] = None) -> AttackRollOut:
         owner_stats_block, target_stats_block = self.get_stats_blocks(target)
+        if TYPE_CHECKING:
+            assert isinstance(owner_stats_block, StatsBlock)
+            assert isinstance(target_stats_block, StatsBlock)
         #first obtain ac of the target
         target_ac = target_stats_block.armor_class.ac.apply(target_stats_block,owner_stats_block,context)
         #get the attack bonus
@@ -1377,14 +1468,22 @@ class AttacksManager(BlockComponent):
         #roll the dice
         roll = TargetRoll(value=attack_bonus_out.total_bonus)
         roll_out=  roll.roll(target_ac.total_bonus)
+        if self.get_weapon(hand):
+            weapon = self.get_weapon(hand)
+            if TYPE_CHECKING:
+                assert isinstance(weapon, Weapon)
+            weapon_attack_type = weapon.attack_type
+        else:
+            weapon_attack_type = AttackType.MELEE_WEAPON
+
         return AttackRollOut(
             hand=hand,
-            ability = self._get_ability_from_weapon(hand,target,context),
+            ability=self._get_ability_from_weapon(hand, target, context),
             attack_bonus=attack_bonus_out,
             roll=roll_out,
             target_ac=target_ac,
             total_target_ac=target_ac.total_bonus,
-            attack_type=self.get_weapon(hand).attack_type if self.get_weapon(hand) else AttackType.MELEE_WEAPON,
+            attack_type=weapon_attack_type,
             source_entity_id=self.owner_id,
             target_entity_id=target
         )
@@ -1398,6 +1497,9 @@ class AttacksManager(BlockComponent):
         weapon_ranged_bonus = None
         spell_bonus = None
         stast_block, target_stats_block = self.get_stats_blocks(target)
+        if TYPE_CHECKING:
+            assert isinstance(stast_block, StatsBlock)
+            assert isinstance(target_stats_block, StatsBlock)
         general_damage_bonus = self.damage_bonus.apply(stast_block,target_stats_block,context)
         if hand == AttackHand.MELEE_RIGHT:
             attacker_melee_bonus= self.melee_damage_bonus.apply(stast_block,target_stats_block,context)
@@ -1406,7 +1508,8 @@ class AttacksManager(BlockComponent):
         elif hand == AttackHand.MELEE_LEFT:
             attacker_melee_bonus=self.melee_damage_bonus.apply(stast_block,target_stats_block,context)
             if self.melee_left_hand:
-                weapon_melee_bonus=self.melee_left_hand.damage_bonus.apply(stast_block,target_stats_block,context)
+                if not isinstance(self.melee_left_hand,Shield):
+                    weapon_melee_bonus=self.melee_left_hand.damage_bonus.apply(stast_block,target_stats_block,context)
         elif hand == AttackHand.RANGED_RIGHT:
             attacker_ranged_bonus=self.ranged_damage_bonus.apply(stast_block,target_stats_block,context)
             if self.ranged_right_hand:
@@ -1419,8 +1522,8 @@ class AttacksManager(BlockComponent):
             spell_bonus=self.spell_damage_bonus.apply(stast_block,target_stats_block,context)
 
         all_bonuses = [attacker_melee_bonus,attacker_ranged_bonus,weapon_melee_bonus,weapon_ranged_bonus,spell_bonus] 
-        all_bonuses :List[ValueOut] = [bonus for bonus in all_bonuses if bonus]
-        total_weapon_bonus = general_damage_bonus.combine_with_multiple(all_bonuses)
+        all_bonuses_typed :List[ValueOut] = [bonus for bonus in all_bonuses if bonus is not None]
+        total_weapon_bonus = general_damage_bonus.combine_with_multiple(all_bonuses_typed)
         return WeaponDamageBonusOut(
             attacker_melee_bonus=attacker_melee_bonus,
             attacker_ranged_bonus=attacker_ranged_bonus,
@@ -1454,7 +1557,11 @@ class AttacksManager(BlockComponent):
     def roll_damage(self, attack_roll:AttackRollOut, context: Optional[Dict[str, Any]] = None) -> DamageRollOut:
         hand = attack_roll.hand
         target = attack_roll.target_entity_id
+        if target is None:
+            raise ValueError("Target is None")
         weapon = self.get_weapon(hand)
+        if not weapon:
+            raise ValueError("Weapon is None")
         if not context:
             context = {}
         context['attack_roll'] = attack_roll #hack to implement modifer on damage bonus that depends on the attack roll like on critical hit effect
@@ -1498,8 +1605,8 @@ class AttacksManager(BlockComponent):
                 return False
             else:
                 return True
-        else:
-            raise ValueError("Invalid dual wield chheck encountered revise the logic")
+        return False
+
             
         
     def can_dual_wield_ranged(self, weapon: Weapon,hand:str='left') -> bool:
@@ -1532,9 +1639,7 @@ class AttacksManager(BlockComponent):
                 return False
             else:
                 return True
-        else:
-            raise ValueError("Invalid dual wield chheck encountered revise the logic")
-        
+        return False
     def equip_right_hand_ranged_weapon(self, weapon: Weapon):
         if not WeaponProperty.RANGED in weapon.properties :
             raise ValueError("The weapon is not a ranged weapon")
@@ -1588,6 +1693,8 @@ class AttacksManager(BlockComponent):
     
     def _update_shield_ac_state(self, shield: Optional[Shield]):
         owner_stats_block = self.get_owner()
+        if TYPE_CHECKING:
+            assert isinstance(owner_stats_block, StatsBlock)
         if owner_stats_block.armor_class.equipped_shield and not shield:
             owner_stats_block.armor_class.unequip_shield()
         elif shield:
@@ -1595,6 +1702,8 @@ class AttacksManager(BlockComponent):
         
 
     def equip_shield(self, shield: Shield):
+        if TYPE_CHECKING:
+            assert self.melee_right_hand is not None
         if WeaponProperty.TWO_HANDED in self.melee_right_hand.properties:
             self.unequip_right_hand_melee_weapon()
             self.shield = shield

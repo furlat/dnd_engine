@@ -27,12 +27,5 @@ dnd/monsters/__init__.py
 dnd/monsters/goblin.py
 dnd/monsters/skeleton.py
 dnd/tests/__init__.py
-dnd/tests/big_test.py
-dnd/tests/entiti_bm.py
-dnd/tests/ex_log.py
 dnd/tests/example_bm.py
-dnd/tests/new_logs.py
-dnd/tests/pathfinding.py
 dnd/tests/printer.py
-dnd/tests/shadows.py
-dnd/tests/test_battlemap.py

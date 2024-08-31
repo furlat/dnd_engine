@@ -22,11 +22,11 @@ def dijkstra(
     diagonal: bool = True, 
     max_distance: Optional[int] = None,
     epsilon: float = 0.001  # Small cost added for diagonal moves
-) -> Tuple[Dict[Tuple[int, int], float], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
-    distances = {start: 0}
+) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
+    distances : Dict[Tuple[int, int], float] = {start: 0}
     true_distances = {start: 0}  # Distances without epsilon for final return
     paths = {start: [start]}
-    pq = [(0, start)]
+    pq = [(float(0), start)]
     visited = set()
 
     while pq:
@@ -49,8 +49,9 @@ def dijkstra(
                 continue
             
             if neighbor not in distances or distance < distances[neighbor]:
+                
                 distances[neighbor] = distance
-                true_distances[neighbor] = true_distances[current_position] + 1  # Keep true distance without epsilon
+                true_distances[neighbor] = int(true_distances[current_position] + 1)  # Keep true distance without epsilon
                 paths[neighbor] = paths[current_position] + [neighbor]
                 heapq.heappush(pq, (distance, neighbor))
 

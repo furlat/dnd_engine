@@ -1,5 +1,8 @@
-from typing import List, Tuple, Dict, Set, Optional, Callable
+from typing import List, Tuple, Dict, Set, Optional, Callable, TYPE_CHECKING
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from dnd.battlemap import BattleMap
 
 class RegistryHolder:
     _registry: Dict[str, 'RegistryHolder'] = {}
@@ -9,8 +12,9 @@ class RegistryHolder:
     def is_in_registry(cls, instance_id: str):
         return instance_id in cls._registry
     @classmethod
-    def register(cls, instance: 'RegistryHolder'):
-        cls._registry[instance.id] = instance
+    def register(cls, instance: 'RegistryHolder',instance_id: str):
+        
+        cls._registry[instance_id] = instance
         cls._types.add(type(instance))
 
     @classmethod
@@ -39,6 +43,8 @@ class BaseSpatial(BaseModel):
 
     def get_entities_at(self, position: Tuple[int, int]) -> List[str]:
         battlemap = RegistryHolder.get_instance(self.battlemap_id)
+        if TYPE_CHECKING:
+            assert isinstance(battlemap, BattleMap)
         return list(battlemap.positions.get(position, set()))
 
     def filter_positions(self, condition: Callable[[Tuple[int, int]], bool]) -> List[Tuple[int, int]]:
@@ -46,6 +52,8 @@ class BaseSpatial(BaseModel):
 
     def get_entities(self, positions: List[Tuple[int, int]]) -> List[str]:
         battlemap = RegistryHolder.get_instance(self.battlemap_id)
+        if TYPE_CHECKING:
+            assert isinstance(battlemap, BattleMap)
         return [entity_id for pos in positions for entity_id in battlemap.positions.get(pos, set())]
     
 class FOV(BaseSpatial):
