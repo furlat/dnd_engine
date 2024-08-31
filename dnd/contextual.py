@@ -35,6 +35,7 @@ class BaseValue(BaseModel):
 
 
 class StaticModifier(BaseModel):
+    name: str = Field(default="static")
     bonuses: Dict[str, int] = Field(default_factory=dict)
     min_constraints: Dict[str, int] = Field(default_factory=dict)
     max_constraints: Dict[str, int] = Field(default_factory=dict)
@@ -88,6 +89,7 @@ class StaticModifier(BaseModel):
         )
 
 class ContextualModifier(BaseModel):
+    name: str = Field(default="contextual")
     bonuses: Dict[str, ContextAwareBonus] = Field(default_factory=dict)
     min_constraints: Dict[str, ContextAwareBonus] = Field(default_factory=dict)
     max_constraints: Dict[str, ContextAwareBonus] = Field(default_factory=dict)
@@ -108,10 +110,10 @@ class ContextualModifier(BaseModel):
     def add_critical_condition(self, source: str, condition: ContextAwareCritical):
         self.critical_conditions.update([(source, condition)])
     
-    def add_advantage_condition(self, source: str, condition: ContextAwareCondition):
+    def add_advantage_condition(self, source: str, condition: ContextAwareAdvantage):
         self.advantage_conditions.update([(source, condition)])
 
-    def add_auto_hit_condition(self, source: str, condition: ContextAwareCondition):
+    def add_auto_hit_condition(self, source: str, condition: ContextAwareAutoHit):
         self.auto_hit_conditions.update([(source, condition)])
 
     def get_bonus_tracker(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> BonusTracker:
@@ -153,11 +155,15 @@ class ContextualModifier(BaseModel):
             active_auto_hit_status = update_or_concat_to_dict(active_auto_hit_status, (source, status))
         return AutoHitTracker(auto_hit_statuses=active_auto_hit_status)
 
-    def get_critical_tracker(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> CriticalStatus:
+    def get_critical_tracker(self, stats_block: 'StatsBlock', target: Optional['StatsBlock'] = None, context: Optional[Dict[str, Any]] = None) -> CriticalTracker:
         active_critical_status= {}
         for source, condition in self.critical_conditions.items():
             status = condition(stats_block, target, context)
-            active_critical_status = update_or_concat_to_dict(active_critical_status, (source, status))
+            active_critical_status = update_or_concat_to_dict(active_critical_status, (source, status)) 
+            
+            #now loop through the lists and check that all status are CriticalStatus
+            
+            
         return CriticalTracker(critical_statuses=active_critical_status)
 
     def remove_effect(self, source: str):
@@ -183,6 +189,7 @@ class ContextualModifier(BaseModel):
 
 
 class ModifiableValue(BaseModel):
+    name: str = Field(default="modifiable")
     base_value: BaseValue = Field(default_factory=BaseValue)
     self_static: StaticModifier = Field(default_factory=StaticModifier)
     target_static: StaticModifier = Field(default_factory=StaticModifier)

@@ -7,6 +7,7 @@ class AdvantageTracker(BaseModel):
     active_sources: Dict[str,list[AdvantageStatus]] = Field(default_factory=dict)
 
     @computed_field
+    @property
     def counter(self) -> int:
         counter = 0
         for status_list in self.active_sources.values():
@@ -18,6 +19,7 @@ class AdvantageTracker(BaseModel):
         return counter
 
     @computed_field
+    @property
     def status(self) -> AdvantageStatus:
  
         if self.counter > 0:
@@ -59,6 +61,7 @@ class CriticalTracker(BaseModel):
         return CriticalTracker(critical_statuses=critical_statuses)
     
     @computed_field
+    @property
     def status(self) -> CriticalStatus:
         #the rule is if any of the statuse is NOCRIT then the final status is NOCRIT
         # else if any of the status is AUTOCRIT then the final status is AUTOCRIT
@@ -93,6 +96,7 @@ class AutoHitTracker(BaseModel):
         return AutoHitTracker(auto_hit_statuses=auto_hit_statuses)
     
     @computed_field
+    @property
     def status(self) -> AutoHitStatus:
         #the rule is if any of the statuse is AUTOMISS then the final status is AUTOMISS
         # else if any of the status is AUTOHIT then the final status is AUTOHIT
@@ -133,5 +137,6 @@ class BonusTracker(BaseModel):
         return BonusTracker(bonuses=bonuses)
 
     @computed_field
+    @property
     def total_bonus(self) -> int:
-        return sum(self.bonuses.values()) if len(self.bonuses.keys())>0 else None
+        return sum(self.bonuses.values()) if len(self.bonuses.keys())>0 else 0

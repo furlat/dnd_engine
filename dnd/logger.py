@@ -107,6 +107,7 @@ class ValueOut(BaseLogEntry):
     auto_hit_tracker: AutoHitTracker = Field(default_factory=AutoHitTracker)
 
     @computed_field
+    @property
     def total_bonus(self) -> int:
         bonus = self.bonuses.total_bonus
         min_bonus = self.min_constraints.total_bonus
@@ -120,7 +121,8 @@ class ValueOut(BaseLogEntry):
             return min(max_bonus, bonus)
         elif min_bonus is None and max_bonus is None:
             return bonus
-
+        else:
+            return 0
 
     def combine_with(self, other: 'ValueOut',bonus_converter: Optional[BonusConverter] = None) -> 'ValueOut':
         
@@ -158,37 +160,27 @@ class SimpleRollOut(BaseLogEntry):
     chosen_rolls: List[int]
 
     @computed_field
+    @property
     def result(self) -> int:
         return sum(self.chosen_rolls)
     
-class RollOutcome(str, Enum):
-    HIT = "Hit"
-    MISS = "Miss"
-    CRIT = "Critical Hit"
-
-class HitReason(str, Enum):
-    NORMAL = "Normal"
-    CRITICAL = "Critical"
-    AUTOHIT = "AutoHit"
-    AUTOMISS = "AutoMiss"
-
-class CriticalReason(str, Enum):
-    NORMAL = "Normal"
-    AUTO = "Auto"
+from dnd.dnd_enums import RollOutcome, HitReason, CriticalReason, AttackType
 
 class TargetRollOut(BaseLogEntry):
     log_type: str = "TargetRoll"
     bonus: ValueOut
     target: int
     base_roll: SimpleRollOut
-    hit : RollOutcome
-    hit_reason : HitReason = Field(default=HitReason.NORMAL)
-    critical_reason : Optional[CriticalReason] = Field(default=None)
+    hit: RollOutcome
+    hit_reason: HitReason = Field(default=HitReason.NORMAL)
+    critical_reason: Optional[CriticalReason] = None
 
     @computed_field
+    @property
     def total_roll(self) -> int:
         return self.base_roll.result + self.bonus.total_bonus
     @computed_field
+    @property
     def success(self) -> bool:
         return self.hit == RollOutcome.HIT or self.hit == RollOutcome.CRIT
 
@@ -214,10 +206,12 @@ class SkillRollOut(BaseLogEntry):
     bonus: SkillBonusOut 
 
     @computed_field
+    @property
     def success(self) -> bool:
         return self.roll.success
     
     @computed_field
+    @property
     def total_roll(self) -> int:
         return self.roll.total_roll
 
@@ -231,9 +225,11 @@ class CrossSkillRollOut(BaseLogEntry):
     source_skill_roll: SkillRollOut
 
     @computed_field
+    @property
     def success(self) -> bool:
         return self.source_skill_roll.success
     @computed_field
+    @property
     def dc(self) -> int:
         return self.target_skill_roll.total_roll if not self.target_skill_roll.roll.hit_reason == HitReason.AUTOMISS else 0
 
@@ -282,10 +278,12 @@ class DamageResistanceOut(BaseLogEntry):
             return 1
         
     @computed_field
+    @property
     def total_damage_taken(self) -> int:
-        return int(self.damage_roll.total_damage * self.compute_damage_multiplier())
+        return int(float(self.damage_roll.total_damage) * self.compute_damage_multiplier())
     
     @computed_field
+    @property
     def resistance_delta(self) -> int:
         return int(self.damage_roll.total_damage - self.total_damage_taken)
 
@@ -353,7 +351,6 @@ class ConditionNotApplied(BaseLogEntry):
     requested_saving_throw : Optional[SavingThrowRollRequest] = None
     application_saving_throw_roll: Optional[SavingThrowRollOut] = None
     source_entity_id: Optional[str] = None
-    target_entity_id: str
 
 class ConditionAppliedDetails(BaseModel):
     condition_name: str
@@ -364,7 +361,6 @@ class ConditionApplied(BaseLogEntry):
     log_type: str = "ConditionApplied"
     condition: str
     source_entity_id: Optional[str] = None
-    target_entity_id: str
     duration: Duration
     details: ConditionAppliedDetails
     requested_saving_throw : Optional[SavingThrowRollRequest] = None
@@ -419,6 +415,7 @@ class DamageRollOut(BaseLogEntry):
     damage_bonus: ValueOut
 
     @computed_field
+    @property
     def total_damage(self) -> int:
         return self.dice_roll.result + self.damage_bonus.total_bonus
 

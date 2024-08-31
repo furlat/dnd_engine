@@ -37,7 +37,7 @@ class StatsBlock(BaseModel, RegistryHolder):
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.register(self)
+        self.register(self,self.id)
         self._initialize_components()
         self._recompute_fields()
 
@@ -49,24 +49,30 @@ class StatsBlock(BaseModel, RegistryHolder):
         ]
         for component in components:
             component.set_owner(self.meta.id)
-            self.register(component)
+            self.register(component,component.id)
+
 
     @computed_field
+    @property
     def id(self) -> str:
         return self.meta.id
 
     @computed_field
+    @property
     def name(self) -> str:
         return self.meta.name
     @computed_field
+    @property
     def hp(self) -> int:
         return self.health.current_hit_points
 
     @computed_field
+    @property
     def ac(self) -> int:
         return self.armor_class.total_ac
 
     @computed_field
+    @property
     def initiative(self) -> int:
         return self.ability_scores.get_ability_modifier(Ability.DEX)
 
