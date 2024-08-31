@@ -113,13 +113,13 @@ class ValueOut(BaseLogEntry):
         min_bonus = self.min_constraints.total_bonus
         max_bonus = self.max_constraints.total_bonus
         #rule is that min bonus has priority over max bonus then so first take min(bonus, max_bonus) and then max(min_bonus, min(bonus, max_bonus))
-        if min_bonus is not None and max_bonus is not None:
+        if bonus is not None and min_bonus is not None and max_bonus is not None:
             return max(min_bonus, min(bonus, max_bonus))
-        elif min_bonus is not None:
+        elif bonus is not None and min_bonus is not None:
             return max(min_bonus, bonus)
-        elif max_bonus is not None:
+        elif bonus is not None and max_bonus is not None:
             return min(max_bonus, bonus)
-        elif min_bonus is None and max_bonus is None:
+        elif bonus is not None and min_bonus is None and max_bonus is None:
             return bonus
         else:
             return 0

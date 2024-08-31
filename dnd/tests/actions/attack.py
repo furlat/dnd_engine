@@ -29,8 +29,7 @@ def test_attack_class():
         cost=[ActionCost(type=ActionType.ACTION, cost=1)],
         attack_type=AttackType.MELEE_WEAPON,
         attack_hand=AttackHand.MELEE_RIGHT,
-        range_type=RangeType.REACH,
-        range_normal=5
+        source=goblin  # Add this line to provide the source
     )
 
     def print_attack_result(scenario, attack_logs):
@@ -58,7 +57,11 @@ def test_attack_class():
 
     # Scenario 3: Attack while Blinded
     reset_action_economy()
-    blinded_condition = Blinded(duration=Duration(time=1, type=DurationType.ROUNDS), targeted_entity_id=goblin.id)
+    blinded_condition = Blinded(
+        duration=Duration(time=1, type=DurationType.ROUNDS),
+        targeted_entity_id=goblin.id,
+        source_entity_id=goblin.id  # Add this line to set the source
+    )
     goblin.add_condition(blinded_condition)
     attack_logs = melee_attack.apply(goblin, skeleton)
     print_attack_result("Scenario 3: Attack while Blinded", attack_logs)
@@ -66,7 +69,11 @@ def test_attack_class():
 
     # Scenario 4: Attack a Paralyzed target
     reset_action_economy()
-    paralyzed_condition = Paralyzed(duration=Duration(time=1, type=DurationType.ROUNDS), targeted_entity_id=skeleton.id)
+    paralyzed_condition = Paralyzed(
+        duration=Duration(time=1, type=DurationType.ROUNDS),
+        targeted_entity_id=skeleton.id,
+        source_entity_id=goblin.id  # Add this line to set the source
+    )
     skeleton.add_condition(paralyzed_condition)
     attack_logs = melee_attack.apply(goblin, skeleton)
     print_attack_result("Scenario 4: Attack a Paralyzed target", attack_logs)

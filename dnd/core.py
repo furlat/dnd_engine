@@ -176,7 +176,9 @@ class AbilityScore(BlockComponent):
         return self.score.apply(stats_block, target_stats_block, context)
     
     def get_modifier(self, target: Optional[str] = None, context: Optional[Dict[str, Any]] = None) -> int:
-        return (self.apply(target, context).total_bonus -10) // 2
+        base_bonus = self.apply(target, context).total_bonus
+        # print(f"base_bonus: {base_bonus} for ability {self.ability}")
+        return (base_bonus -10) // 2
 
     def remove_effect(self, source: str):
         self.score.remove_effect(source)
@@ -572,7 +574,10 @@ class Health(BlockComponent):
             assert isinstance(owner_block, StatsBlock)
         constitution_modifier = owner_block.ability_scores.get_ability_modifier(Ability.CON)
         total_consitution_bonus = constitution_modifier * self.hit_dice_count
-        return self._hit_dice_exp_value() + self.max_hit_point_bonus.apply(owner_block).total_bonus + total_consitution_bonus
+        hit_dice_exp_value = self._hit_dice_exp_value()
+        max_hit_point_bonus = self.max_hit_point_bonus.apply(owner_block).total_bonus
+        # print(f"hit_dice_exp_value: {hit_dice_exp_value}, max_hit_point_bonus: {max_hit_point_bonus}, total_consitution_bonus: {total_consitution_bonus}, base_constitution_bonus: {constitution_modifier}")
+        return hit_dice_exp_value + max_hit_point_bonus + total_consitution_bonus
     
     @computed_field
     @property
