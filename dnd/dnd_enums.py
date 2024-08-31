@@ -1,9 +1,9 @@
-from enum import Enum
+from enum import Enum, auto
 
-class RollOutcome(str, Enum):
-    HIT = "Hit"
-    MISS = "Miss"
-    CRIT = "Critical Hit"
+class RollOutcome(Enum):
+    HIT = auto()
+    MISS = auto()
+    CRIT = auto()
 
 class UnarmoredAc(str, Enum):
     BARBARIAN = "Barbarian"
@@ -12,15 +12,15 @@ class UnarmoredAc(str, Enum):
     MAGIC_ARMOR = "Magic Armor"
     NONE = "None"
 
-class HitReason(str, Enum):
-    NORMAL = "Normal"
-    CRITICAL = "Critical"
-    AUTOHIT = "AutoHit"
-    AUTOMISS = "AutoMiss"
+class HitReason(Enum):
+    NORMAL = auto()
+    CRITICAL = auto()
+    AUTOHIT = auto()
+    AUTOMISS = auto()
 
-class CriticalReason(str, Enum):
-    NORMAL = "Normal"
-    AUTO = "Auto"
+class CriticalReason(Enum):
+    NORMAL = auto()
+    AUTO = auto()
 
 class SourceType(str, Enum):
     CONDITION = "Condition"

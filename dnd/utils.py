@@ -1,11 +1,13 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, Any
 
-def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, list]) -> Dict[str, list]:
+def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, Union[list,Any]]) -> Dict[str, list]:
     key, value = kv
+    if not isinstance(value, list):
+        value = [value]
     if key in d:
         d[key] += value
     else:
-        d[key] = [value]
+        d[key] = value
     return d
 
 def update_or_sum_to_dict(d: Dict[str, int], kv: Tuple[str, int]) -> Dict[str, int]:
