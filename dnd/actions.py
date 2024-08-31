@@ -65,6 +65,8 @@ class LineOfSightPrerequisite(Prerequisite):
 
     def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
         target_position = target.sensory.origin if isinstance(target, StatsBlock) else target
+        if not target_position:
+            raise ValueError("Target position not found")
         is_visible = source.is_visible(target_position)
         details = PrerequisiteDetails(is_visible=is_visible)
         if not is_visible:
@@ -79,7 +81,12 @@ class RangePrerequisite(Prerequisite):
 
     def check(self, source: StatsBlock, target: Target, context: Dict[str, Any]) -> Tuple[bool, PrerequisiteDetails]:
         target_position = target.sensory.origin if isinstance(target, StatsBlock) else target
-        distance = source.get_distance(target_position)*5
+        if not target_position:
+            raise ValueError("Target position not found")
+        distance = source.get_distance(target_position)
+        if distance is None:
+            raise ValueError("Distance could not be calculated")
+        
         max_range = self.range_long if self.range_type == RangeType.RANGE and self.range_long else self.range_normal
         details = PrerequisiteDetails(distance=distance, required_range=max_range)
         print(f" Checking range \n Distance: {distance}, Max Range: {max_range}")
@@ -177,7 +184,13 @@ class Action(BaseModel):
         return ActionEconomyPrerequisite(name="Action Economy", action_type=cost_type, cost=cost_unit)
 
     def create_action_economy_prerequisites(self) -> List[ActionEconomyPrerequisite]:
-        return [self._create_action_economy_prerequisite_single(cost) for cost in self._get_costs() if self._get_costs() and cost is not None]
+        costs = self._get_costs()
+        
+        if costs is None:
+            return []
+        costs = [cost for cost in costs if cost is not None]
+        
+        return [self._create_action_economy_prerequisite_single(cost) for cost in costs]
 
     def add_cost_prequisites(self):
         for prerequisite in self.create_action_economy_prerequisites():
@@ -223,6 +236,9 @@ class Action(BaseModel):
         source = source if source else self.source
         
         costs = self._get_costs(source)
+        if costs is None:
+            return
+        costs = [cost for cost in costs if cost is not None]
         for cost in costs:
             #chheck for movement vs movemetns
             if cost.type == ActionType.MOVEMENT:
@@ -336,7 +352,8 @@ class Attack(Action):
         )
 
     def _add_default_prerequisites(self):
-        self.add_prerequisite("Range", RangePrerequisite(name="Range", range_type=self.range_type, range_normal=self.range_normal, range_long=self.range_long))
+        if isinstance(self.range_type, RangeType) and isinstance(self.range_normal, int) and isinstance(self.range_long, int):
+            self.add_prerequisite("Range", RangePrerequisite(name="Range", range_type=self.range_type, range_normal=self.range_normal, range_long=self.range_long))
         self.add_prerequisite("Line of Sight", LineOfSightPrerequisite(name="Line of Sight"))
 
     def _get_costs(self, source: Optional[StatsBlock] = None) -> List[ActionCost]:
@@ -368,7 +385,7 @@ class Attack(Action):
             return None, 0.0, "Auto-miss"
 
         target_ac = target.ac
-        total_attack_bonus = attack_roll.attack_bonus.total_bonus
+        total_attack_bonus = attack_roll.attack_bonus.total_bonus.total_bonus
         min_roll_to_hit = max(1, target_ac - total_attack_bonus)
 
         if min_roll_to_hit > 20:
@@ -439,7 +456,7 @@ class SelfCondition(Action):
 class MovementAction(Action):
     step_by_step: bool = Field(default=False)
     path: Optional[List[Tuple[int, int]]] = None
-    target: Tuple[int, int]
+    target: Optional[Tuple[int, int]] = None
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -455,7 +472,7 @@ class MovementAction(Action):
         cost = (len(self.path) - 1) * 5 if not same_cell else 0
         return [ActionCost(type=ActionType.MOVEMENT, cost=cost)]
 
-    def _set_path(self, source: StatsBlock, target: Tuple[int, int], context: Dict[str, Any]) -> None:
+    def _set_path(self, source: StatsBlock, target: Tuple[int, int], context: Optional[Dict[str, Any]] = None) -> None:
         if not isinstance(target, tuple) or len(target) != 2:
             raise ValueError("Invalid target position")
         path = source.sensory.get_path_to(target)
@@ -467,7 +484,13 @@ class MovementAction(Action):
         start_position = source.position
         end_position = target
         movement_cost = (len(self.path) - 1) * 5 if self.path else 0
-        battlemap: Optional['BattleMap'] = RegistryHolder.get_instance(source.sensory.battlemap_id)
+        if not source.sensory.battlemap_id:
+            raise ValueError("Entity is not on a battlemap")
+        battlemap = RegistryHolder.get_instance(source.sensory.battlemap_id)
+        if TYPE_CHECKING:
+            assert isinstance(battlemap, BattleMap)
+            assert isinstance(source, Entity)
+
         
         if not battlemap:
             return False, ActionResultDetails(success=False, reason="Entity is not on a battlemap"), [], []
