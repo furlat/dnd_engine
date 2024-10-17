@@ -456,6 +456,10 @@ class ModifiableValue(BaseValue):
     from_target_contextual: Optional[ContextualValue] = None
     from_target_static: Optional[StaticValue] = None
 
+    def get_typed_modifiers(self) -> List[Union[StaticValue, ContextualValue]]:
+        modifiers = [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual, self.from_target_contextual, self.from_target_static]
+        return [modifier for modifier in modifiers if modifier is not None]
+
     @classmethod
     def get(cls, uuid: UUID) -> Optional['ModifiableValue']:
         value = cls._registry.get(uuid)
@@ -470,8 +474,7 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def min(self) -> Optional[int]:
-        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        typed_modifiers = self.get_typed_modifiers()
         modifiers_min = [modifier.min for modifier in typed_modifiers if modifier.min is not None]
         if len(modifiers_min) == 0:
             return None
@@ -481,8 +484,7 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def max(self) -> Optional[int]:
-        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        typed_modifiers = self.get_typed_modifiers()
         modifiers_max = [modifier.max for modifier in typed_modifiers if modifier.max is not None]
         if len(modifiers_max) == 0:
             return None
@@ -492,8 +494,7 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def score(self) -> int:
-        modifiers = [self.self_contextual, self.self_static, self.from_target_static, self.from_target_contextual]
-        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        typed_modifiers = self.get_typed_modifiers()
         if self.max is not None and self.min is not None:
             return max(self.min, min(sum(modifier.score for modifier in typed_modifiers), self.max))
         elif self.max is not None:
@@ -522,8 +523,7 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def critical(self) -> CriticalStatus:
-        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        typed_modifiers = self.get_typed_modifiers()
         all_critical_modifiers = [modifier.critical for modifier in typed_modifiers]
         if CriticalStatus.NOCRIT in all_critical_modifiers:
             return CriticalStatus.NOCRIT
@@ -535,8 +535,7 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def auto_hit(self) -> AutoHitStatus:
-        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        typed_modifiers = self.get_typed_modifiers()
         all_auto_hit_modifiers = [modifier.auto_hit for modifier in typed_modifiers]
         if AutoHitStatus.AUTOMISS in all_auto_hit_modifiers:
             return AutoHitStatus.AUTOMISS
