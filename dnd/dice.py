@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, computed_field, model_validator
 from typing import List, Optional, Union, Tuple, Self, ClassVar, Dict
 import random
-from dnd.modifiable_values import ModifiableValue, AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue,NumericalModifier
+from dnd.modifiable_values import ModifiableValue, AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue,NumericalModifier, ContextualValue
 from enum import Enum
 from uuid import UUID, uuid4
 from functools import cached_property
@@ -131,20 +131,32 @@ class Dice(BaseModel):
             attack_outcome=self.attack_outcome
         )
     
-source_entity_uuid = uuid4()
-target_entity_uuid = uuid4()
-some_modifiable_value = ModifiableValue(source_entity_uuid=source_entity_uuid, 
-                                        target_entity_uuid=target_entity_uuid, 
-                                        self_static=StaticValue(name="example",
-                                                                source_entity_uuid=uuid4(),
-                                                                value_modifiers=[NumericalModifier(
-                                                                    name="example_numerical_modifier",value=1,source_entity_uuid=source_entity_uuid)],
-                                                                advantage=AdvantageStatus.NONE, critical=CriticalStatus.NONE, auto_hit=AutoHitStatus.NONE))
-# Usage example:
-d20 = Dice(count=1, value=20, bonus=some_modifiable_value, roll_type=RollType.ATTACK)
-attack_roll = d20.roll()
-print(f"Attack roll result: {attack_roll.total}")
+if __name__ == "__main__":
+    
+    source_entity_uuid = uuid4()
+    target_entity_uuid = uuid4()
+    some_modifiable_value = ModifiableValue(source_entity_uuid=source_entity_uuid, 
+                                            target_entity_uuid=target_entity_uuid, 
+                                            self_static=StaticValue(name="example_static",
+                                                                    source_entity_uuid=uuid4(),
+                                                                    value_modifiers=[NumericalModifier(
+                                                                        name="example_numerical_modifier",value=10,source_entity_uuid=source_entity_uuid)],
+                                                                    advantage=AdvantageStatus.NONE, critical=CriticalStatus.NONE, auto_hit=AutoHitStatus.NONE),
+                                            
+                                            self_contextual=ContextualValue(name="example_contextual",
+                                                                        source_entity_uuid=source_entity_uuid),
+                                            to_target_contextual=ContextualValue(name="example_to_target_contextual",
+                                                                        source_entity_uuid=source_entity_uuid,
+                                                                        target_entity_uuid=target_entity_uuid),
+                                            to_target_static=StaticValue(name="example_to_target_static",
+                                                                    source_entity_uuid=source_entity_uuid)
+                                                                   
+                                            )
+    # Usage example:
+    d20 = Dice(count=1, value=20, bonus=some_modifiable_value, roll_type=RollType.ATTACK)
+    attack_roll = d20.roll()
+    print(f"Attack roll result: {attack_roll.total}")
 
-# Retrieving Dice and DiceRoll objects from registry
-retrieved_dice = Dice.get(d20.uuid)
-retrieved_roll = DiceRoll.get(attack_roll.roll_uuid)
+    # Retrieving Dice and DiceRoll objects from registry
+    retrieved_dice = Dice.get(d20.uuid)
+    retrieved_roll = DiceRoll.get(attack_roll.roll_uuid)
