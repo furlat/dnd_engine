@@ -472,23 +472,23 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def min(self) -> Optional[int]:
-        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
-        targets_min = [target.min for target in typed_targets if target.min is not None]
-        if len(targets_min) == 0:
+        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        modifiers_min = [modifier.min for modifier in typed_modifiers if modifier.min is not None]
+        if len(modifiers_min) == 0:
             return None
-        return min(targets_min)
+        return min(modifiers_min)
     
     
     @computed_field
     @property
     def max(self) -> Optional[int]:
-        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
-        targets_max = [target.max for target in typed_targets if target.max is not None]
-        if len(targets_max) == 0:
+        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        modifiers_max = [modifier.max for modifier in typed_modifiers if modifier.max is not None]
+        if len(modifiers_max) == 0:
             return None
-        return max(targets_max)
+        return max(modifiers_max)
     
 
     @computed_field
@@ -501,9 +501,9 @@ class ModifiableValue(BaseValue):
         elif self.min is not None:
             return max(self.min, sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score))
         else:
-            targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-            typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
-            return sum(target.score for target in typed_targets)
+            modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+            typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+            return sum(modifier.score for modifier in typed_modifiers)
     
     @computed_field
     @property
@@ -524,9 +524,9 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def critical(self) -> CriticalStatus:
-        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
-        all_critical_modifiers = [target.critical for target in typed_targets]
+        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        all_critical_modifiers = [modifier.critical for modifier in typed_modifiers]
         if CriticalStatus.NOCRIT in all_critical_modifiers:
             return CriticalStatus.NOCRIT
         elif CriticalStatus.AUTOCRIT in all_critical_modifiers:
@@ -537,9 +537,9 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def auto_hit(self) -> AutoHitStatus:
-        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
-        all_auto_hit_modifiers = [target.auto_hit for target in typed_targets]
+        modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
+        all_auto_hit_modifiers = [modifier.auto_hit for modifier in typed_modifiers]
         if AutoHitStatus.AUTOMISS in all_auto_hit_modifiers:
             return AutoHitStatus.AUTOMISS
         elif AutoHitStatus.AUTOHIT in all_auto_hit_modifiers:
