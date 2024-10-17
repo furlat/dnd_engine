@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, computed_field, field_validator, PrivateAttr,model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, PrivateAttr,model_validator, ValidationError
 from typing import List, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar,Union, Tuple, Self
 from uuid import UUID, uuid4
 from enum import Enum
@@ -105,10 +105,9 @@ class BaseModifier(BaseModel):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, BaseModifier):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a BaseModifier, but {type(modifier)}")
+        if not isinstance(modifier, cls):
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier).__name__}")
+        return modifier
 
     @classmethod
     def register(cls, modifier: 'BaseModifier') -> None:
@@ -180,10 +179,10 @@ class NumericalModifier(BaseModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, NumericalModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a NumericalModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 class AdvantageModifier(BaseModifier):
     """
@@ -238,10 +237,10 @@ class AdvantageModifier(BaseModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, AdvantageModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not an AdvantageModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
     @computed_field
     @property
@@ -309,10 +308,10 @@ class CriticalModifier(BaseModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, CriticalModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a CriticalModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 class AutoHitModifier(BaseModifier):
     """
@@ -364,10 +363,10 @@ class AutoHitModifier(BaseModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, AutoHitModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not an AutoHitModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 ContextAwareCondition = ContextAwareCallable[bool]
 ContextAwareAdvantage = ContextAwareCallable[AdvantageModifier]
@@ -441,42 +440,49 @@ class ContextualModifier(BaseModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, ContextualModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a ContextualModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
     @model_validator(mode="after")
     def validate_callable_source_iid(self) -> Self:
-        """
-        Validate that the source entity UUID in callable_arguments matches the target entity UUID of the modifier.
-
-        Returns:
-            Self: The validated ContextualModifier instance.
-
-        Raises:
-            ValueError: If the source entity UUID in callable_arguments doesn't match the target entity UUID.
-        """
+        self.callable_validation_function()
+        return self
+    
+    def callable_validation_function(self) -> None:
         if self.callable_arguments is not None:
             source_entity_uuid, target_entity_uuid, context = self.callable_arguments
             if source_entity_uuid != self.target_entity_uuid:
                 raise ValueError("Callable argument Source entity UUID does not match target entity UUID of the modifier")
-        return self
     
     def setup_callable_arguments(self, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str,Any]]=None) -> None:
-        """
-        Set up the arguments for the callable function.
-
-        Args:
-            source_entity_uuid (UUID): The UUID of the source entity.
-            target_entity_uuid (Optional[UUID]): The UUID of the target entity, if any.
-            context (Optional[Dict[str, Any]]): Additional context information, if any.
-
-        Raises:
-            ValueError: If the setup fails validation.
-        """
         self.callable_arguments = (source_entity_uuid, target_entity_uuid, context)
-        self.model_validate(self)
+        try:
+            self.callable_validation_function()
+        except ValueError as e:
+            raise ValueError(str(e))
+
+    def execute_callable(self) -> Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier]:
+        if self.callable_arguments is None:
+            raise ValueError("Callable arguments not set")
+        result = self.callable(*self.callable_arguments)
+        expected_type = self._get_expected_return_type()
+        if not isinstance(result, expected_type):
+            raise ValueError(f"Callable returned unexpected type. Expected {expected_type.__name__}, got {type(result).__name__}")
+        return result
+
+    def _get_expected_return_type(self):
+        if isinstance(self, ContextualNumericalModifier):
+            return NumericalModifier
+        elif isinstance(self, ContextualAdvantageModifier):
+            return AdvantageModifier
+        elif isinstance(self, ContextualCriticalModifier):
+            return CriticalModifier
+        elif isinstance(self, ContextualAutoHitModifier):
+            return AutoHitModifier
+        else:
+            raise ValueError("Unknown ContextualModifier subclass")
 
 class ContextualAdvantageModifier(ContextualModifier):
     """
@@ -534,10 +540,10 @@ class ContextualAdvantageModifier(ContextualModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, ContextualAdvantageModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a ContextualAdvantageModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 class ContextualCriticalModifier(ContextualModifier):
     """
@@ -595,10 +601,10 @@ class ContextualCriticalModifier(ContextualModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, ContextualCriticalModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a ContextualCriticalModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 class ContextualAutoHitModifier(ContextualModifier):
     """
@@ -656,10 +662,10 @@ class ContextualAutoHitModifier(ContextualModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, ContextualAutoHitModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a ContextualAutoHitModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 class ContextualNumericalModifier(ContextualModifier):
     """
@@ -717,7 +723,7 @@ class ContextualNumericalModifier(ContextualModifier):
         modifier = cls._registry.get(uuid)
         if modifier is None:
             return None
-        elif isinstance(modifier, ContextualNumericalModifier):
+        elif isinstance(modifier, cls):
             return modifier
         else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a ContextualNumericalModifier, but {type(modifier)}")
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
