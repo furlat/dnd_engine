@@ -84,7 +84,7 @@ class BaseValue(BaseModel):
     # Using ClassVar to declare a class-level attribute
     _registry: ClassVar[Dict[UUID, 'BaseValue']] = {}
 
-    name: Optional[str] = None
+    name: str = Field(default="A Value")
     uuid: UUID = Field(default_factory=uuid4)
     source_entity_uuid: UUID = Field(default_factory=uuid4)
     source_entity_name: Optional[str] = None
@@ -94,8 +94,6 @@ class BaseValue(BaseModel):
     score_normalizer: Callable[[int], int] = Field(default=lambda x: x)
     generated_from: List[UUID] = Field(default_factory=list)
 
-    # Using PrivateAttr for instance-specific private attributes
-    _instance_specific_data: PrivateAttr = PrivateAttr(default=None)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -236,7 +234,7 @@ class StaticValue(BaseValue):
             self.validate_source_id(other.source_entity_uuid)
         
         return StaticValue(
-            name=naming_callable([self.name] + [other.name for other in others]),
+            name=naming_callable([self.name] + [other.name for other in others ]),
             value_modifiers=self.value_modifiers + [mod for other in others for mod in other.value_modifiers],
             min_constraints=self.min_constraints + [con for other in others for con in other.min_constraints],
             max_constraints=self.max_constraints + [con for other in others for con in other.max_constraints],
@@ -304,7 +302,7 @@ class ContextualValue(BaseValue):
     @computed_field
     @property
     def advantage_sum(self) -> int:
-        return sum(modifier.numerical_value for modifier in self.advantage_modifiers)
+        return sum(modifier.numerical_value for modifier in self.advantage_modifiers.values())
 
     @computed_field
     @property
@@ -494,15 +492,15 @@ class ModifiableValue(BaseValue):
     @computed_field
     @property
     def score(self) -> int:
+        modifiers = [self.self_contextual, self.self_static, self.from_target_static, self.from_target_contextual]
+        typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
         if self.max is not None and self.min is not None:
-            return max(self.min, min(sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score), self.max))
+            return max(self.min, min(sum(modifier.score for modifier in typed_modifiers), self.max))
         elif self.max is not None:
-            return min(sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score), self.max)
+            return min(sum(modifier.score for modifier in typed_modifiers), self.max)
         elif self.min is not None:
-            return max(self.min, sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score))
+            return max(self.min, sum(modifier.score for modifier in typed_modifiers))
         else:
-            modifiers = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
-            typed_modifiers: List[Union[StaticValue, ContextualValue]] = [modifier for modifier in modifiers if modifier is not None]
             return sum(modifier.score for modifier in typed_modifiers)
     
     @computed_field
@@ -594,9 +592,9 @@ class ModifiableValue(BaseValue):
         return ModifiableValue(
             name=naming_callable([self.name] + [other.name for other in others]),
             self_static=self.self_static.combine_values([other.self_static for other in others]),
-            target_static=self.target_static.combine_values([other.target_static for other in others]),
+            to_target_static=self.to_target_static.combine_values([other.to_target_static for other in others]),
             self_contextual=self.self_contextual.combine_values([other.self_contextual for other in others]),
-            target_contextual=self.target_contextual.combine_values([other.target_contextual for other in others]),
+            to_target_contextual=self.to_target_contextual.combine_values([other.to_target_contextual for other in others]),
             generated_from=[self.uuid] + [other.uuid for other in others],
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
