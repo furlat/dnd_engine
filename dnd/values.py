@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, computed_field, field_validator, PrivateAttr,model_validator
-from typing import List, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar,Union, Tuple, Self
+from pydantic import BaseModel, Field, computed_field, field_validator, PrivateAttr, model_validator, ConfigDict
+from typing import List, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar, Union, Tuple, Self
 import uuid
 from uuid import UUID, uuid4
 from enum import Enum
@@ -96,6 +96,7 @@ class BaseValue(BaseModel):
         description="List of UUIDs of values that this value was generated from."
     )
 
+
     def __init__(self, **data):
         """
         Initialize the BaseValue and register it in the class registry.
@@ -149,18 +150,18 @@ class BaseValue(BaseModel):
         cls._registry.pop(uuid, None)
 
     def get_generation_chain(self) -> List['BaseValue']:
-        """
-        Get the chain of values that this value was generated from.
-
-        Returns:
-            List[BaseValue]: A list of BaseValue instances that this value was generated from.
-        """
         chain = []
-        for uuid in self.generated_from:
-            value = self.get(uuid)
-            if value:
-                chain.append(value)
-                chain.extend(value.get_generation_chain())
+        visited = set()
+        def dfs(value):
+            if value.uuid in visited:
+                return
+            visited.add(value.uuid)
+            for uuid in value.generated_from:
+                generated_value = self.get(uuid)
+                if generated_value and generated_value.uuid not in visited:
+                    chain.append(generated_value)
+                    dfs(generated_value)
+        dfs(self)
         return chain
 
     def validate_source_id(self, source_id: UUID) -> None:
@@ -259,26 +260,11 @@ class StaticValue(BaseValue):
     )
 
     @classmethod
-    def get(cls, uuid: UUID) -> Optional['StaticValue']:
-        """
-        Retrieve a StaticValue instance from the registry by its UUID.
-
-        Args:
-            uuid (UUID): The UUID of the value to retrieve.
-
-        Returns:
-            Optional[StaticValue]: The StaticValue instance if found, None otherwise.
-
-        Raises:
-            ValueError: If the retrieved object is not a StaticValue instance.
-        """
+    def get(cls, uuid: UUID) -> 'StaticValue':
         value = cls._registry.get(uuid)
-        if value is None:
-            return None
-        elif isinstance(value, StaticValue):
-            return value
-        else:
+        if not isinstance(value, StaticValue):
             raise ValueError(f"Value with UUID {uuid} is not a StaticValue, but {type(value)}")
+        return value
 
     @computed_field
     @property
@@ -592,8 +578,16 @@ class ContextualValue(BaseValue):
         Returns:
             int: The final calculated score.
         """
-        modifier_sum = sum(context_aware_modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context).value 
-                           for context_aware_modifier in self.value_modifiers.values())
+        modifier_sum = 0
+        for context_aware_modifier in self.value_modifiers.values():
+            try:
+                result = context_aware_modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
+                if not isinstance(result, NumericalModifier):
+                    raise ValueError(f"Callable returned unexpected type. Expected NumericalModifier, got {type(result)}")
+                modifier_sum += result.value
+            except Exception as e:
+                raise ValueError(f"Error calculating score: {str(e)}")
+        
         if self.max is not None and self.min is not None:
             return max(self.min, min(modifier_sum, self.max))
         elif self.max is not None:
@@ -722,6 +716,8 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
+        if uuid in self.value_modifiers:
+            raise ValueError(f"Modifier with UUID {uuid} already exists")
         self.value_modifiers[uuid] = modifier
         return uuid
     
@@ -1125,6 +1121,8 @@ class ModifiableValue(BaseValue):
             target_entity_uuid (UUID): The UUID of the target entity.
             target_entity_name (Optional[str]): The name of the target entity, if available.
         """
+        if not isinstance(target_entity_uuid, UUID):
+            raise ValueError("target_entity_uuid must be a UUID")
         self.target_entity_uuid = target_entity_uuid
         self.target_entity_name = target_entity_name
         self.self_contextual.set_target_entity(target_entity_uuid, target_entity_name)
