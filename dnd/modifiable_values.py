@@ -1,7 +1,7 @@
-from pydantic import BaseModel, Field, computed_field, field_validator
-from typing import List, Optional, Dict, Any, Callable, Protocol, TypeVar
+from pydantic import BaseModel, Field, computed_field, field_validator, PrivateAttr
+from typing import List, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar,Union
 import uuid
-from uuid import UUID
+from uuid import UUID, uuid4
 from enum import Enum
 
 
@@ -26,22 +26,22 @@ class CriticalStatus(str, Enum):
 
 
 class NumericalModifier(BaseModel):
-    name: str
+    name: Optional[str] = None
     value: int
-    uuid: UUID = Field(default_factory=lambda: uuid.uuid4())
+    uuid: UUID = Field(default_factory=lambda: uuid4())
     source_entity_uuid: UUID
-    source_entity_name: str
-    target_entity_uuid: UUID
-    target_entity_name: str
+    source_entity_name: Optional[str] = None
+    target_entity_uuid: Optional[UUID] = None
+    target_entity_name: Optional[str] = None
 
 class AdvantageModifier(BaseModel):
-    name: str
+    name: Optional[str] = None
     value: AdvantageStatus
-    uuid: UUID = Field(default_factory=lambda: str(uuid.uuid4()))
+    uuid: UUID = Field(default_factory=lambda: str(uuid4()))
     source_entity_uuid: UUID
-    source_entity_name: str
-    target_entity_uuid: UUID
-    target_entity_name: str
+    source_entity_name: Optional[str] = None
+    target_entity_uuid: Optional[UUID] = None
+    target_entity_name: Optional[str] = None
 
     @computed_field
     @property
@@ -54,22 +54,22 @@ class AdvantageModifier(BaseModel):
             return 0
 
 class CriticalModifier(BaseModel):
-    name: str
+    name: Optional[str] = None
     value: CriticalStatus
-    uuid: UUID = Field(default_factory=lambda: str(uuid.uuid4()))
+    uuid: UUID = Field(default_factory=lambda: str(uuid4()))
     source_entity_uuid: UUID
-    source_entity_name: str
-    target_entity_uuid: UUID
-    target_entity_name: str
+    source_entity_name: Optional[str] = None
+    target_entity_uuid: Optional[UUID] = None
+    target_entity_name: Optional[str] = None
 
 class AutoHitModifier(BaseModel):
-    name: str
+    name: Optional[str] = None
     value: AutoHitStatus
-    uuid: UUID = Field(default_factory=lambda: str(uuid.uuid4()))
+    uuid: UUID = Field(default_factory=lambda: str(uuid4()))
     source_entity_uuid: UUID
-    source_entity_name: str
-    target_entity_uuid: UUID
-    target_entity_name: str
+    source_entity_name: Optional[str] = None
+    target_entity_uuid: Optional[UUID] = None
+    target_entity_name: Optional[str] = None
 
 ContextAwareCondition = ContextAwareCallable[bool]
 ContextAwareAdvantage = ContextAwareCallable[AdvantageModifier]
@@ -81,15 +81,52 @@ naming_callable = Callable[[List[str]],str]
 
 
 class BaseValue(BaseModel):
-    name: str
-    uuid: UUID = Field(default_factory=lambda: uuid.uuid4())
-    source_entity_uuid: UUID
-    source_entity_name: str
+    # Using ClassVar to declare a class-level attribute
+    _registry: ClassVar[Dict[UUID, 'BaseValue']] = {}
+
+    name: Optional[str] = None
+    uuid: UUID = Field(default_factory=uuid4)
+    source_entity_uuid: UUID = Field(default_factory=uuid4)
+    source_entity_name: Optional[str] = None
     target_entity_uuid: Optional[UUID] = None
     target_entity_name: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
-    score_normalizer: score_normaliziation_method = Field(default=lambda x: x)
+    score_normalizer: Callable[[int], int] = Field(default=lambda x: x)
     generated_from: List[UUID] = Field(default_factory=list)
+
+    # Using PrivateAttr for instance-specific private attributes
+    _instance_specific_data: PrivateAttr = PrivateAttr(default=None)
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.__class__._registry[self.uuid] = self
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['BaseValue']:
+        value = cls._registry.get(uuid)
+        if value is None:
+            return None
+        elif isinstance(value, BaseValue):
+            return value
+        else:
+            raise ValueError(f"Value with UUID {uuid} is not a BaseValue, but {type(value)}")
+
+    @classmethod
+    def register(cls, value: 'BaseValue') -> None:
+        cls._registry[value.uuid] = value
+
+    @classmethod
+    def unregister(cls, uuid: UUID) -> None:
+        cls._registry.pop(uuid, None)
+
+    def get_generation_chain(self) -> List['BaseValue']:
+        chain = []
+        for uuid in self.generated_from:
+            value = self.get(uuid)
+            if value:
+                chain.append(value)
+                chain.extend(value.get_generation_chain())
+        return chain
 
     def validate_source_id(self, source_id: UUID) -> None:
         if self.source_entity_uuid != source_id:
@@ -107,23 +144,44 @@ class StaticValue(BaseValue):
     critical_modifiers: List[CriticalModifier] = Field(default_factory=list)
     auto_hit_modifiers: List[AutoHitModifier] = Field(default_factory=list)
 
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['StaticValue']:
+        value = cls._registry.get(uuid)
+        if value is None:
+            return None
+        elif isinstance(value, StaticValue):
+            return value
+        else:
+            raise ValueError(f"Value with UUID {uuid} is not a StaticValue, but {type(value)}")
+
     @computed_field
     @property
-    def min(self) -> int:
+    def min(self) -> Optional[int]:
         "min of all the min constraints"
+        if not self.min_constraints:
+            return None
         return min(constraint.value for constraint in self.min_constraints)
     
     @computed_field
     @property
-    def max(self) -> int:
+    def max(self) -> Optional[int]:
         "max of all the max constraints"
+        if not self.max_constraints:
+            return None
         return max(constraint.value for constraint in self.max_constraints)
     
     @computed_field
     @property
     def score(self) -> int:
         modifier_sum= sum(modifier.value for modifier in self.value_modifiers)
-        return max(self.min, min(modifier_sum, self.max))
+        if self.max is not None and self.min is not None:
+            return max(self.min, min(modifier_sum, self.max))
+        elif self.max is not None:
+            return min(modifier_sum, self.max)
+        elif self.min is not None:
+            return max(self.min, modifier_sum)
+        else:
+            return modifier_sum
     
     @computed_field
     @property
@@ -199,102 +257,44 @@ class ContextualValue(BaseValue):
     critical_modifiers: Dict[UUID, ContextAwareCritical] = Field(default_factory=dict)
     auto_hit_modifiers: Dict[UUID, ContextAwareAutoHit] = Field(default_factory=dict)
 
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
-    
-    def clear_target_entity(self) -> None:
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-    
-    def set_context(self, context: Dict[str,Any]) -> None:
-        self.context = context
-    
-    def clear_context(self) -> None:
-        self.context = None
-    
-    def add_value_modifier(self, modifier: ContextAwareModifier,uiid:Optional[UUID]=None) -> UUID:
-        if uiid is None:
-            uiid = uuid.uuid4()
-        self.value_modifiers[uiid] = modifier
-        return uiid
-    
-    def remove_value_modifier(self, uiid:UUID) -> None:
-        if uiid in self.value_modifiers:
-            del self.value_modifiers[uiid]
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['ContextualValue']:
+        value = cls._registry.get(uuid)
+        if value is None:
+            return None
+        elif isinstance(value, ContextualValue):
+            return value
+        else:
+            raise ValueError(f"Value with UUID {uuid} is not a ContextualValue, but {type(value)}")
 
-    def add_min_constraint(self, constraint: ContextAwareModifier,uiid:Optional[UUID]=None) -> UUID:
-        if uiid is None:
-            uiid = uuid.uuid4()
-        self.min_constraints[uiid] = constraint
-        return uiid
     
-    def remove_min_constraint(self, uiid:UUID) -> None:
-        if uiid in self.min_constraints:
-            del self.min_constraints[uiid]
-    def add_max_constraint(self, constraint: ContextAwareModifier,uiid:Optional[UUID]=None) -> UUID:
-        if uiid is None:
-            uiid = uuid.uuid4()
-        self.max_constraints[uiid] = constraint
-        return uiid
-    
-    def remove_max_constraint(self, uiid:UUID) -> None:
-        if uiid in self.max_constraints:
-            del self.max_constraints[uiid]
-    
-    def add_advantage_modifier(self, modifier: ContextAwareAdvantage,uiid:Optional[UUID]=None) -> UUID:
-        if uiid is None:
-            uiid = uuid.uuid4()
-        self.advantage_modifiers[uiid] = modifier
-        return uiid
-    
-    def remove_advantage_modifier(self, uiid:UUID) -> None:
-        if uiid in self.advantage_modifiers:
-            del self.advantage_modifiers[uiid]
-    
-    def add_critical_modifier(self, modifier: ContextAwareCritical,uiid:Optional[UUID]=None) -> UUID:
-        if uiid is None:
-            uiid = uuid.uuid4()
-        self.critical_modifiers[uiid] = modifier
-        return uiid
-    
-    def remove_critical_modifier(self, uiid:UUID) -> None:
-        if uiid in self.critical_modifiers:
-            del self.critical_modifiers[uiid]
-    
-    def add_auto_hit_modifier(self, modifier: ContextAwareAutoHit,uiid:Optional[UUID]=None) -> UUID:
-        if uiid is None:
-            uiid = uuid.uuid4()
-        self.auto_hit_modifiers[uiid] = modifier
-        return uiid
-    
-    def remove_auto_hit_modifier(self, uiid:UUID) -> None:
-        if uiid in self.auto_hit_modifiers:
-            del self.auto_hit_modifiers[uiid]
-    
-    def remove_modifier(self, uiid:UUID) -> None:
-        self.remove_value_modifier(uiid)
-        self.remove_min_constraint(uiid)
-        self.remove_max_constraint(uiid)
-        self.remove_advantage_modifier(uiid)
-        self.remove_critical_modifier(uiid)
-        self.remove_auto_hit_modifier(uiid)
 
     @computed_field
     @property
-    def min(self) -> int:
+    def min(self) -> Optional[int]:
+        if not self.min_constraints:
+            return None
         return min(constraint(self.source_entity_uuid, self.target_entity_uuid, self.context).value for constraint in self.min_constraints.values())
     
     @computed_field
     @property
-    def max(self) -> int:
+    def max(self) -> Optional[int]:
+        if not self.max_constraints:
+            return None
         return max(constraint(self.source_entity_uuid, self.target_entity_uuid, self.context).value for constraint in self.max_constraints.values())
 
     @computed_field
     @property
     def score(self) -> int:
         modifier_sum= sum(context_aware_modifier(self.source_entity_uuid, self.target_entity_uuid, self.context).value for context_aware_modifier in self.value_modifiers.values())
-        return max(self.min, min(modifier_sum, self.max))
+        if self.max is not None and self.min is not None:
+            return max(self.min, min(modifier_sum, self.max))
+        elif self.max is not None:
+            return min(modifier_sum, self.max)
+        elif self.min is not None:
+            return max(self.min, modifier_sum)
+        else:
+            return modifier_sum
 
     @computed_field
     @property
@@ -340,6 +340,88 @@ class ContextualValue(BaseValue):
             return AutoHitStatus.AUTOHIT
         else:
             return AutoHitStatus.NONE
+    
+    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
+        self.target_entity_uuid = target_entity_uuid
+        self.target_entity_name = target_entity_name
+    
+    def clear_target_entity(self) -> None:
+        self.target_entity_uuid = None
+        self.target_entity_name = None
+    
+    def set_context(self, context: Dict[str,Any]) -> None:
+        self.context = context
+    
+    def clear_context(self) -> None:
+        self.context = None
+    
+    def add_value_modifier(self, modifier: ContextAwareModifier,uiid:Optional[UUID]=None) -> UUID:
+        if uiid is None:
+            uiid = uuid4()
+        self.value_modifiers[uiid] = modifier
+        return uiid
+    
+    def remove_value_modifier(self, uiid:UUID) -> None:
+        if uiid in self.value_modifiers:
+            del self.value_modifiers[uiid]
+
+    def add_min_constraint(self, constraint: ContextAwareModifier,uiid:Optional[UUID]=None) -> UUID:
+        if uiid is None:
+            uiid = uuid4()
+        self.min_constraints[uiid] = constraint
+        return uiid
+    
+    def remove_min_constraint(self, uiid:UUID) -> None:
+        if uiid in self.min_constraints:
+            del self.min_constraints[uiid]
+    def add_max_constraint(self, constraint: ContextAwareModifier,uiid:Optional[UUID]=None) -> UUID:
+        if uiid is None:
+            uiid = uuid4()
+        self.max_constraints[uiid] = constraint
+        return uiid
+    
+    def remove_max_constraint(self, uiid:UUID) -> None:
+        if uiid in self.max_constraints:
+            del self.max_constraints[uiid]
+    
+    def add_advantage_modifier(self, modifier: ContextAwareAdvantage,uiid:Optional[UUID]=None) -> UUID:
+        if uiid is None:
+            uiid = uuid4()
+        self.advantage_modifiers[uiid] = modifier
+        return uiid
+    
+    def remove_advantage_modifier(self, uiid:UUID) -> None:
+        if uiid in self.advantage_modifiers:
+            del self.advantage_modifiers[uiid]
+    
+    def add_critical_modifier(self, modifier: ContextAwareCritical,uiid:Optional[UUID]=None) -> UUID:
+        if uiid is None:
+            uiid = uuid4()
+        self.critical_modifiers[uiid] = modifier
+        return uiid
+    
+    def remove_critical_modifier(self, uiid:UUID) -> None:
+        if uiid in self.critical_modifiers:
+            del self.critical_modifiers[uiid]
+    
+    def add_auto_hit_modifier(self, modifier: ContextAwareAutoHit,uiid:Optional[UUID]=None) -> UUID:
+        if uiid is None:
+            uiid = uuid4()
+        self.auto_hit_modifiers[uiid] = modifier
+        return uiid
+    
+    def remove_auto_hit_modifier(self, uiid:UUID) -> None:
+        if uiid in self.auto_hit_modifiers:
+            del self.auto_hit_modifiers[uiid]
+    
+    def remove_modifier(self, uiid:UUID) -> None:
+        self.remove_value_modifier(uiid)
+        self.remove_min_constraint(uiid)
+        self.remove_max_constraint(uiid)
+        self.remove_advantage_modifier(uiid)
+        self.remove_critical_modifier(uiid)
+        self.remove_auto_hit_modifier(uiid)
+
     def combine_values(self, others: List['ContextualValue'], naming_callable: Optional[naming_callable] = None) -> 'ContextualValue':
         """ Combines this ContextualValue with a list of other ContextualValues """
         if naming_callable is None:
@@ -369,12 +451,101 @@ class ContextualValue(BaseValue):
         )
 
 class ModifiableValue(BaseValue):
-    self_static: StaticValue
-    to_target_static: StaticValue
-    self_contextual: ContextualValue
-    to_target_contextual: ContextualValue
+    self_static: StaticValue = Field(default_factory=StaticValue)
+    to_target_static: StaticValue = Field(default_factory=StaticValue)
+    self_contextual: ContextualValue = Field(default_factory=ContextualValue)
+    to_target_contextual: ContextualValue = Field(default_factory=ContextualValue)
     from_target_contextual: Optional[ContextualValue] = None
     from_target_static: Optional[StaticValue] = None
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['ModifiableValue']:
+        value = cls._registry.get(uuid)
+        if value is None:
+            return None
+        elif isinstance(value, ModifiableValue):
+            return value
+        else:
+            raise ValueError(f"Value with UUID {uuid} is not a ModifiableValue, but {type(value)}")
+        
+    
+    @computed_field
+    @property
+    def min(self) -> Optional[int]:
+        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
+        targets_min = [target.min for target in typed_targets if target.min is not None]
+        if len(targets_min) == 0:
+            return None
+        return min(targets_min)
+    
+    
+    @computed_field
+    @property
+    def max(self) -> Optional[int]:
+        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
+        targets_max = [target.max for target in typed_targets if target.max is not None]
+        if len(targets_max) == 0:
+            return None
+        return max(targets_max)
+    
+
+    @computed_field
+    @property
+    def score(self) -> int:
+        if self.max is not None and self.min is not None:
+            return max(self.min, min(sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score), self.max))
+        elif self.max is not None:
+            return min(sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score), self.max)
+        elif self.min is not None:
+            return max(self.min, sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score))
+        else:
+            targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+            typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
+            return sum(target.score for target in typed_targets)
+    
+    @computed_field
+    @property
+    def normalized_score(self) -> int:
+        return self.score_normalizer(self.score)
+    
+    @computed_field
+    @property
+    def advantage(self) -> AdvantageStatus:
+        total_sum = sum(adv.advantage_sum for adv in [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual] if adv is not None)
+        if total_sum > 0:
+            return AdvantageStatus.ADVANTAGE
+        elif total_sum < 0:
+            return AdvantageStatus.DISADVANTAGE
+        else:
+            return AdvantageStatus.NONE
+    
+    @computed_field
+    @property
+    def critical(self) -> CriticalStatus:
+        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
+        all_critical_modifiers = [target.critical for target in typed_targets]
+        if CriticalStatus.NOCRIT in all_critical_modifiers:
+            return CriticalStatus.NOCRIT
+        elif CriticalStatus.AUTOCRIT in all_critical_modifiers:
+            return CriticalStatus.AUTOCRIT
+        else:
+            return CriticalStatus.NONE
+    
+    @computed_field
+    @property
+    def auto_hit(self) -> AutoHitStatus:
+        targets = [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]
+        typed_targets: List[Union[StaticValue, ContextualValue]] = [target for target in targets if target is not None]
+        all_auto_hit_modifiers = [target.auto_hit for target in typed_targets]
+        if AutoHitStatus.AUTOMISS in all_auto_hit_modifiers:
+            return AutoHitStatus.AUTOMISS
+        elif AutoHitStatus.AUTOHIT in all_auto_hit_modifiers:
+            return AutoHitStatus.AUTOHIT
+        else:
+            return AutoHitStatus.NONE
 
     def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
         self.target_entity_uuid = target_entity_uuid
@@ -411,56 +582,6 @@ class ModifiableValue(BaseValue):
     def set_from_target(self, target_value: 'ModifiableValue') -> None:
         self.set_from_target_contextual(target_value.to_target_contextual)
         self.set_from_target_static(target_value.to_target_static)
-
-    @computed_field
-    @property
-    def min(self) -> int:
-        return min(self.self_static.min, self.from_target_static.min,self.from_target_contextual.min, self.self_contextual.min)
-    
-    
-    @computed_field
-    @property
-    def max(self) -> int:
-        return max(self.self_static.max, self.from_target_static.max, self.self_contextual.max)
-    
-
-    @computed_field
-    @property
-    def score(self) -> int:
-        return max(self.min, min(sum(self.self_contextual.score,self.self_static.score,self.from_target_static.score,self.from_target_contextual.score), self.max))
-    
-    @computed_field
-    @property
-    def normalized_score(self) -> int:
-        return self.score_normalizer(self.score)
-    
-    @computed_field
-    @property
-    def advantage(self) -> AdvantageStatus:
-        return sum(self.self_static.advantage_sum, self.from_target_static.advantage_sum, self.self_contextual.advantage_sum, self.from_target_contextual.advantage_sum)
-    
-    @computed_field
-    @property
-    def critical(self) -> CriticalStatus:
-        all_critical_modifiers = [self.self_static.critical, self.from_target_static.critical, self.self_contextual.critical, self.from_target_contextual.critical]
-        if CriticalStatus.NOCRIT in all_critical_modifiers:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in all_critical_modifiers:
-            return CriticalStatus.AUTOCRIT
-        else:
-            return CriticalStatus.NONE
-    
-    @computed_field
-    @property
-    def auto_hit(self) -> AutoHitStatus:
-        all_auto_hit_modifiers = [self.self_static.auto_hit, self.from_target_static.auto_hit, self.self_contextual.auto_hit, self.from_target_contextual.auto_hit]
-        if AutoHitStatus.AUTOMISS in all_auto_hit_modifiers:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in all_auto_hit_modifiers:
-            return AutoHitStatus.AUTOHIT
-        else:
-            return AutoHitStatus.NONE
-
     
     def combine_values(self, others: List['ModifiableValue'], naming_callable: Optional[naming_callable] = None) -> 'ModifiableValue':
         """ Combines this ModifiableValue with a list of other ModifiableValues """
