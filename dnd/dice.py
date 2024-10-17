@@ -141,7 +141,7 @@ if __name__ == "__main__":
                                                                     source_entity_uuid=uuid4(),
                                                                     value_modifiers=[NumericalModifier(
                                                                         name="example_numerical_modifier",value=10,source_entity_uuid=source_entity_uuid)],
-                                                                    advantage=AdvantageStatus.NONE, critical=CriticalStatus.NONE, auto_hit=AutoHitStatus.NONE),
+                                                                   ),
                                             
                                             self_contextual=ContextualValue(name="example_contextual",
                                                                         source_entity_uuid=source_entity_uuid),
