@@ -17,6 +17,7 @@ from dnd.modifiers import (
     ContextualCriticalModifier,
     ContextualAutoHitModifier
 )
+import inspect
 
 
 
@@ -189,6 +190,39 @@ class BaseValue(BaseModel):
         """
         if self.target_entity_uuid != target_id:
             raise ValueError("Target entity UUIDs do not match")
+    
+    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
+        """
+        Set the target entity for this contextual value.
+
+        Args:
+            target_entity_uuid (UUID): The UUID of the target entity.
+            target_entity_name (Optional[str]): The name of the target entity, if available.
+        """
+        self.target_entity_uuid = target_entity_uuid
+        self.target_entity_name = target_entity_name
+    
+    def clear_target_entity(self) -> None:
+        """
+        Clear the target entity information for this contextual value.
+        """
+        self.target_entity_uuid = None
+        self.target_entity_name = None
+    
+    def set_context(self, context: Dict[str,Any]) -> None:
+        """
+        Set the context for this contextual value.
+
+        Args:
+            context (Dict[str,Any]): The context dictionary to set.
+        """
+        self.context = context
+    
+    def clear_context(self) -> None:
+        """
+        Clear the context for this contextual value.
+        """
+        self.context = None
 
 class StaticValue(BaseValue):
     """
@@ -200,19 +234,20 @@ class StaticValue(BaseValue):
     Attributes:
         name (str): The name of the value.
         uuid (UUID): Unique identifier for the value.
-        source_entity_uuid (UUID): UUID of the entity that is the source of this value.
+        source_entity_name (str): Name of the entity that is the source of this value.
         source_entity_uuid (UUID): UUID of the entity that is the source of this value. Must be provided explicitly.
         target_entity_uuid (Optional[UUID]): UUID of the entity that this value targets, if any.
         target_entity_name (Optional[str]): Name of the entity that this value targets, if any.
         context (Optional[Dict[str, Any]]): Additional context information for this value.
         score_normalizer (Callable[[int], int]): A function to normalize the score.
         generated_from (List[UUID]): List of UUIDs of values that this value was generated from.
-        value_modifiers (List[NumericalModifier]): List of numerical modifiers applied to this value.
-        min_constraints (List[NumericalModifier]): List of minimum value constraints.
-        max_constraints (List[NumericalModifier]): List of maximum value constraints.
-        advantage_modifiers (List[AdvantageModifier]): List of advantage modifiers.
-        critical_modifiers (List[CriticalModifier]): List of critical hit modifiers.
-        auto_hit_modifiers (List[AutoHitModifier]): List of auto-hit modifiers.
+        value_modifiers (Dict[UUID, NumericalModifier]): Dictionary of numerical modifiers applied to this value.
+        min_constraints (Dict[UUID, NumericalModifier]): Dictionary of minimum value constraints.
+        max_constraints (Dict[UUID, NumericalModifier]): Dictionary of maximum value constraints.
+        advantage_modifiers (Dict[UUID, AdvantageModifier]): Dictionary of advantage modifiers.
+        critical_modifiers (Dict[UUID, CriticalModifier]): Dictionary of critical hit modifiers.
+        auto_hit_modifiers (Dict[UUID, AutoHitModifier]): Dictionary of auto-hit modifiers.
+        is_outgoing_modifier (bool): Flag to indicate if this value represents outgoing modifiers (to others).
 
     Class Attributes:
         _registry (ClassVar[Dict[UUID, 'BaseValue']]): A class-level registry to store all instances.
@@ -232,32 +267,51 @@ class StaticValue(BaseValue):
             Retrieve a StaticValue instance from the registry by its UUID.
         combine_values(self, others: List['StaticValue'], naming_callable: Optional[naming_callable] = None) -> 'StaticValue':
             Combine this StaticValue with a list of other StaticValues.
+
+    Validators:
+        validate_value_source_corresponds_to_modifiers_target: Ensures that the source and target UUIDs are consistent
+        with the is_outgoing_modifier flag.
     """
 
-    value_modifiers: List[NumericalModifier] = Field(
-        default_factory=list,
-        description="List of numerical modifiers applied to this value."
+    value_modifiers: Dict[UUID, NumericalModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of numerical modifiers applied to this value."
     )
-    min_constraints: List[NumericalModifier] = Field(
-        default_factory=list,
-        description="List of minimum value constraints."
+    min_constraints: Dict[UUID, NumericalModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of minimum value constraints."
     )
-    max_constraints: List[NumericalModifier] = Field(
-        default_factory=list,
-        description="List of maximum value constraints."
+    max_constraints: Dict[UUID, NumericalModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of maximum value constraints."
     )
-    advantage_modifiers: List[AdvantageModifier] = Field(
-        default_factory=list,
-        description="List of advantage modifiers."
+    advantage_modifiers: Dict[UUID, AdvantageModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of advantage modifiers."
     )
-    critical_modifiers: List[CriticalModifier] = Field(
-        default_factory=list,
-        description="List of critical hit modifiers."
+    critical_modifiers: Dict[UUID, CriticalModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of critical hit modifiers."
     )
-    auto_hit_modifiers: List[AutoHitModifier] = Field(
-        default_factory=list,
-        description="List of auto-hit modifiers."
+    auto_hit_modifiers: Dict[UUID, AutoHitModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of auto-hit modifiers."
     )
+    is_outgoing_modifier: bool = Field(
+        default=False,
+        description="Flag to indicate if this value represents outgoing modifiers (to others)."
+    )
+
+    @model_validator(mode="after")
+    def validate_value_source_corresponds_to_modifiers_target(self) -> Self:
+        for modifier in list(self.value_modifiers.values()) + list(self.min_constraints.values()) + list(self.max_constraints.values()):
+            if self.is_outgoing_modifier:
+                if modifier.target_entity_uuid == self.source_entity_uuid:
+                    raise ValueError(f"Outgoing modifier target ({modifier.target_entity_uuid}) should not be the same as the value source ({self.source_entity_uuid})")
+            else:
+                if modifier.target_entity_uuid != self.source_entity_uuid:
+                    raise ValueError(f"Value source ({self.source_entity_uuid}) does not correspond to modifier target ({modifier.target_entity_uuid})")
+        return self
 
     @classmethod
     def get(cls, uuid: UUID) -> 'StaticValue':
@@ -265,6 +319,152 @@ class StaticValue(BaseValue):
         if not isinstance(value, StaticValue):
             raise ValueError(f"Value with UUID {uuid} is not a StaticValue, but {type(value)}")
         return value
+
+    def add_value_modifier(self, modifier: NumericalModifier) -> UUID:
+        """
+        Add a numerical modifier to this value.
+
+        Args:
+            modifier (NumericalModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.value_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+    
+    def remove_value_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a numerical modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.value_modifiers.pop(uuid, None)
+
+    def add_min_constraint(self, constraint: NumericalModifier) -> UUID:
+        """
+        Add a minimum constraint to this value.
+
+        Args:
+            constraint (NumericalModifier): The constraint to add.
+
+        Returns:
+            UUID: The UUID of the added constraint.
+        """
+        self.min_constraints[constraint.uuid] = constraint
+        return constraint.uuid
+    
+    def remove_min_constraint(self, uuid: UUID) -> None:
+        """
+        Remove a minimum constraint from this value.
+
+        Args:
+            uuid (UUID): The UUID of the constraint to remove.
+        """
+        self.min_constraints.pop(uuid, None)
+
+    def add_max_constraint(self, constraint: NumericalModifier) -> UUID:
+        """
+        Add a maximum constraint to this value.
+
+        Args:
+            constraint (NumericalModifier): The constraint to add.
+
+        Returns:
+            UUID: The UUID of the added constraint.
+        """
+        self.max_constraints[constraint.uuid] = constraint
+        return constraint.uuid
+    
+    def remove_max_constraint(self, uuid: UUID) -> None:
+        """
+        Remove a maximum constraint from this value.
+
+        Args:
+            uuid (UUID): The UUID of the constraint to remove.
+        """
+        self.max_constraints.pop(uuid, None)
+    
+    def add_advantage_modifier(self, modifier: AdvantageModifier) -> UUID:
+        """
+        Add an advantage modifier to this value.
+
+        Args:
+            modifier (AdvantageModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.advantage_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+    
+    def remove_advantage_modifier(self, uuid: UUID) -> None:
+        """
+        Remove an advantage modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.advantage_modifiers.pop(uuid, None)
+    
+    def add_critical_modifier(self, modifier: CriticalModifier) -> UUID:
+        """
+        Add a critical modifier to this value.
+
+        Args:
+            modifier (CriticalModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.critical_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+    
+    def remove_critical_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a critical modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.critical_modifiers.pop(uuid, None)
+    
+    def add_auto_hit_modifier(self, modifier: AutoHitModifier) -> UUID:
+        """
+        Add an auto-hit modifier to this value.
+
+        Args:
+            modifier (AutoHitModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.auto_hit_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+    
+    def remove_auto_hit_modifier(self, uuid: UUID) -> None:
+        """
+        Remove an auto-hit modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.auto_hit_modifiers.pop(uuid, None)
+
+    def remove_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a modifier from all modifier dictionaries of this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.remove_value_modifier(uuid)
+        self.remove_min_constraint(uuid)
+        self.remove_max_constraint(uuid)
+        self.remove_advantage_modifier(uuid)
+        self.remove_critical_modifier(uuid)
+        self.remove_auto_hit_modifier(uuid)
 
     @computed_field
     @property
@@ -277,7 +477,7 @@ class StaticValue(BaseValue):
         """
         if not self.min_constraints:
             return None
-        return min(constraint.value for constraint in self.min_constraints)
+        return min(constraint.value for constraint in self.min_constraints.values())
     
     @computed_field
     @property
@@ -290,7 +490,7 @@ class StaticValue(BaseValue):
         """
         if not self.max_constraints:
             return None
-        return max(constraint.value for constraint in self.max_constraints)
+        return max(constraint.value for constraint in self.max_constraints.values())
     
     @computed_field
     @property
@@ -301,7 +501,7 @@ class StaticValue(BaseValue):
         Returns:
             int: The final calculated score.
         """
-        modifier_sum = sum(modifier.value for modifier in self.value_modifiers)
+        modifier_sum = sum(modifier.value for modifier in self.value_modifiers.values())
         if self.max is not None and self.min is not None:
             return max(self.min, min(modifier_sum, self.max))
         elif self.max is not None:
@@ -331,7 +531,7 @@ class StaticValue(BaseValue):
         Returns:
             int: The total advantage sum.
         """
-        return sum(modifier.numerical_value for modifier in self.advantage_modifiers)
+        return sum(modifier.numerical_value for modifier in self.advantage_modifiers.values())
     
     @computed_field
     @property
@@ -358,9 +558,9 @@ class StaticValue(BaseValue):
         Returns:
             CriticalStatus: The final critical status (NOCRIT, AUTOCRIT, or NONE).
         """
-        if CriticalStatus.NOCRIT in (mod.value for mod in self.critical_modifiers):
+        if CriticalStatus.NOCRIT in (mod.value for mod in self.critical_modifiers.values()):
             return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in (mod.value for mod in self.critical_modifiers):
+        elif CriticalStatus.AUTOCRIT in (mod.value for mod in self.critical_modifiers.values()):
             return CriticalStatus.AUTOCRIT
         else:
             return CriticalStatus.NONE
@@ -374,9 +574,9 @@ class StaticValue(BaseValue):
         Returns:
             AutoHitStatus: The final auto-hit status (AUTOMISS, AUTOHIT, or NONE).
         """
-        if AutoHitStatus.AUTOMISS in (mod.value for mod in self.auto_hit_modifiers):
+        if AutoHitStatus.AUTOMISS in (mod.value for mod in self.auto_hit_modifiers.values()):
             return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in (mod.value for mod in self.auto_hit_modifiers):
+        elif AutoHitStatus.AUTOHIT in (mod.value for mod in self.auto_hit_modifiers.values()):
             return AutoHitStatus.AUTOHIT
         else:
             return AutoHitStatus.NONE
@@ -403,16 +603,17 @@ class StaticValue(BaseValue):
         
         return StaticValue(
             name=naming_callable([self.name] + [other.name for other in others]),
-            value_modifiers=self.value_modifiers + [mod for other in others for mod in other.value_modifiers],
-            min_constraints=self.min_constraints + [con for other in others for con in other.min_constraints],
-            max_constraints=self.max_constraints + [con for other in others for con in other.max_constraints],
-            advantage_modifiers=self.advantage_modifiers + [mod for other in others for mod in other.advantage_modifiers],
-            critical_modifiers=self.critical_modifiers + [mod for other in others for mod in other.critical_modifiers],
-            auto_hit_modifiers=self.auto_hit_modifiers + [mod for other in others for mod in other.auto_hit_modifiers],
+            value_modifiers={**self.value_modifiers, **{k: v for other in others for k, v in other.value_modifiers.items()}},
+            min_constraints={**self.min_constraints, **{k: v for other in others for k, v in other.min_constraints.items()}},
+            max_constraints={**self.max_constraints, **{k: v for other in others for k, v in other.max_constraints.items()}},
+            advantage_modifiers={**self.advantage_modifiers, **{k: v for other in others for k, v in other.advantage_modifiers.items()}},
+            critical_modifiers={**self.critical_modifiers, **{k: v for other in others for k, v in other.critical_modifiers.items()}},
+            auto_hit_modifiers={**self.auto_hit_modifiers, **{k: v for other in others for k, v in other.auto_hit_modifiers.items()}},
             generated_from=[self.uuid] + [other.uuid for other in others],
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            score_normalizer=self.score_normalizer
+            score_normalizer=self.score_normalizer,
+            is_outgoing_modifier=self.is_outgoing_modifier
         )
 
 class ContextualValue(BaseValue):
@@ -439,6 +640,7 @@ class ContextualValue(BaseValue):
         advantage_modifiers (Dict[UUID, ContextualAdvantageModifier]): Dictionary of contextual advantage modifiers.
         critical_modifiers (Dict[UUID, ContextualCriticalModifier]): Dictionary of contextual critical hit modifiers.
         auto_hit_modifiers (Dict[UUID, ContextualAutoHitModifier]): Dictionary of contextual auto-hit modifiers.
+        is_outgoing_modifier (bool): Flag to indicate if this value represents outgoing modifiers (to others).
 
     Class Attributes:
         _registry (ClassVar[Dict[UUID, 'BaseValue']]): A class-level registry to store all instances.
@@ -492,6 +694,10 @@ class ContextualValue(BaseValue):
             Remove a modifier from all modifier dictionaries of this value.
         combine_values(self, others: List['ContextualValue'], naming_callable: Optional[naming_callable] = None) -> 'ContextualValue':
             Combine this ContextualValue with a list of other ContextualValues.
+
+    Validators:
+        validate_value_source_corresponds_to_modifiers_target: Ensures that the source and target UUIDs are consistent
+        with the is_outgoing_modifier flag.
     """
 
     value_modifiers: Dict[UUID, ContextualNumericalModifier] = Field(
@@ -517,6 +723,10 @@ class ContextualValue(BaseValue):
     auto_hit_modifiers: Dict[UUID, ContextualAutoHitModifier] = Field(
         default_factory=dict,
         description="Dictionary of contextual auto-hit modifiers, keyed by UUID."
+    )
+    is_outgoing_modifier: bool = Field(
+        default=False,
+        description="Flag to indicate if this value represents outgoing modifiers (to others)."
     )
 
     @classmethod
@@ -672,38 +882,7 @@ class ContextualValue(BaseValue):
         else:
             return AutoHitStatus.NONE
     
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
-        """
-        Set the target entity for this contextual value.
-
-        Args:
-            target_entity_uuid (UUID): The UUID of the target entity.
-            target_entity_name (Optional[str]): The name of the target entity, if available.
-        """
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
     
-    def clear_target_entity(self) -> None:
-        """
-        Clear the target entity information for this contextual value.
-        """
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-    
-    def set_context(self, context: Dict[str,Any]) -> None:
-        """
-        Set the context for this contextual value.
-
-        Args:
-            context (Dict[str,Any]): The context dictionary to set.
-        """
-        self.context = context
-    
-    def clear_context(self) -> None:
-        """
-        Clear the context for this contextual value.
-        """
-        self.context = None
     
     def add_value_modifier(self, modifier: ContextualNumericalModifier) -> UUID:
         """
@@ -902,8 +1081,29 @@ class ContextualValue(BaseValue):
             target_entity_uuid=self.target_entity_uuid,
             target_entity_name=self.target_entity_name,
             context=self.context,
-            score_normalizer=self.score_normalizer
+            score_normalizer=self.score_normalizer,
+            is_outgoing_modifier=self.is_outgoing_modifier
         )
+
+    @model_validator(mode="after")
+    def validate_value_source_corresponds_to_modifiers_target(self) -> Self:
+        all_modifiers = (
+            list(self.value_modifiers.values()) +
+            list(self.min_constraints.values()) +
+            list(self.max_constraints.values()) +
+            list(self.advantage_modifiers.values()) +
+            list(self.critical_modifiers.values()) +
+            list(self.auto_hit_modifiers.values())
+        )
+        
+        for modifier in all_modifiers:
+            if self.is_outgoing_modifier:
+                if modifier.target_entity_uuid == self.source_entity_uuid:
+                    raise ValueError(f"Outgoing contextual modifier target ({modifier.target_entity_uuid}) should not be the same as the value source ({self.source_entity_uuid})")
+            else:
+                if modifier.target_entity_uuid != self.source_entity_uuid:
+                    raise ValueError(f"Contextual value source ({self.source_entity_uuid}) does not correspond to modifier target ({modifier.target_entity_uuid})")
+        return self
 
 class ModifiableValue(BaseValue):
     """
@@ -938,6 +1138,10 @@ class ModifiableValue(BaseValue):
         create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None) -> 'ModifiableValue':
             Create a new ModifiableValue instance with shared source UUID for all components.
         // ... (other methods remain the same)
+
+    Validators:
+        validate_outgoing_modifier_flags: Ensures that the is_outgoing_modifier flags are set correctly for all components.
+        validate_source_and_target_consistency: Ensures that the source and target UUIDs are consistent across all components.
     """
 
     self_static: StaticValue
@@ -948,25 +1152,51 @@ class ModifiableValue(BaseValue):
     from_target_static: Optional[StaticValue] = None
 
     @classmethod
-    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None) -> 'ModifiableValue':
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+                base_value: int = 0, value_name: str = "default_value",score_normalizer: Callable[[int], int] = lambda x: x) -> 'ModifiableValue':
         """
         Create a new ModifiableValue instance with shared source UUID for all components.
 
         Args:
             source_entity_uuid (UUID): The UUID of the source entity.
             source_entity_name (Optional[str]): The name of the source entity, if available.
+            target_entity_uuid (Optional[UUID]): The UUID of the target entity, if any.
+            target_entity_name (Optional[str]): The name of the target entity, if available.
+            base_value (int): The base value for this ModifiableValue. Defaults to 0.
+            base_value_name (str): The name for the base value modifier. Defaults to "default_value".
 
         Returns:
             ModifiableValue: A new ModifiableValue instance with initialized components.
         """
-        return cls(
+        base_modifier = NumericalModifier(
+            name=f"{value_name}_base_value",
+            value=base_value,
             source_entity_uuid=source_entity_uuid,
             source_entity_name=source_entity_name,
-            self_static=StaticValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name),
-            to_target_static=StaticValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name),
-            self_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name),
-            to_target_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name)
+            target_entity_uuid=source_entity_uuid,
+            target_entity_name=source_entity_name
         )
+
+        obj = cls(
+            name = value_name,
+            source_entity_uuid=source_entity_uuid,
+            source_entity_name=source_entity_name,
+            self_static=StaticValue(
+                source_entity_uuid=source_entity_uuid,
+                source_entity_name=source_entity_name,
+                is_outgoing_modifier=False,
+                value_modifiers={base_modifier.uuid: base_modifier},
+            
+            ),
+            score_normalizer=score_normalizer,
+            to_target_static=StaticValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=True),
+            self_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=False),
+            to_target_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=True)
+        )
+        if target_entity_uuid is not None:
+            obj.set_target_entity(target_entity_uuid, target_entity_name)
+        return obj
 
     def get_typed_modifiers(self) -> List[Union[StaticValue, ContextualValue]]:
         """
@@ -1058,6 +1288,9 @@ class ModifiableValue(BaseValue):
         Returns:
             int: The normalized score.
         """
+        normalizer_code = inspect.getsource(self.score_normalizer)
+        print(f"Normalizing score {self.score} with normalizer {normalizer_code}")
+        print(f"Normalized score: {self.score_normalizer(self.score)}")
         return self.score_normalizer(self.score)
     
     @computed_field
@@ -1126,6 +1359,8 @@ class ModifiableValue(BaseValue):
         self.target_entity_uuid = target_entity_uuid
         self.target_entity_name = target_entity_name
         self.self_contextual.set_target_entity(target_entity_uuid, target_entity_name)
+        self.self_static.set_target_entity(target_entity_uuid, target_entity_name)
+        self.to_target_static.set_target_entity(target_entity_uuid, target_entity_name)
         self.to_target_contextual.set_target_entity(target_entity_uuid, target_entity_name)
 
     def clear_target_entity(self) -> None:
@@ -1135,7 +1370,9 @@ class ModifiableValue(BaseValue):
         self.target_entity_uuid = None
         self.target_entity_name = None
         self.self_contextual.clear_target_entity()
+        self.self_static.clear_target_entity()
         self.to_target_contextual.clear_target_entity()
+        self.to_target_static.clear_target_entity()
         self.from_target_contextual = None
         self.from_target_static = None
 
@@ -1169,6 +1406,9 @@ class ModifiableValue(BaseValue):
             ValueError: If the source entity UUID of the contextual value doesn't match the target entity UUID of this value.
         """
         self.validate_target_id(contextual.source_entity_uuid)
+        if contextual.target_entity_uuid is None:
+            raise ValueError("Contextual value target entity UUID cannot be None when being assigned to a ModifiableValue")
+        self.validate_source_id(contextual.target_entity_uuid)
         self.from_target_contextual = contextual.model_copy(update={"target_entity_uuid": self.source_entity_uuid, "target_entity_name": self.source_entity_name})
 
     def set_from_target_static(self, static: StaticValue) -> None:
@@ -1228,6 +1468,68 @@ class ModifiableValue(BaseValue):
             context=self.context,
             score_normalizer=self.score_normalizer
         )
+    def remove_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a modifier from this ModifiableValue.
+        """
+        self.self_static.remove_modifier(uuid)
+        self.self_contextual.remove_modifier(uuid)
+        self.to_target_static.remove_modifier(uuid)
+        self.to_target_contextual.remove_modifier(uuid)
+        if self.from_target_static is not None:
+            self.from_target_static.remove_modifier(uuid)
+        if self.from_target_contextual is not None:
+            self.from_target_contextual.remove_modifier(uuid)
+
+
+    @model_validator(mode="after")
+    def validate_outgoing_modifier_flags(self) -> Self:
+        # Check self_static and self_contextual
+        if self.self_static.is_outgoing_modifier:
+            raise ValueError("self_static should not have is_outgoing_modifier set to True")
+        if self.self_contextual.is_outgoing_modifier:
+            raise ValueError("self_contextual should not have is_outgoing_modifier set to True")
+        
+        # Check to_target_static and to_target_contextual
+        if not self.to_target_static.is_outgoing_modifier:
+            raise ValueError("to_target_static should have is_outgoing_modifier set to True")
+        if not self.to_target_contextual.is_outgoing_modifier:
+            raise ValueError("to_target_contextual should have is_outgoing_modifier set to True")
+        
+        # Check from_target_static and from_target_contextual if they exist
+        if self.from_target_static is not None and not self.from_target_static.is_outgoing_modifier:
+            raise ValueError("from_target_static should have is_outgoing_modifier set to True")
+        if self.from_target_contextual is not None and not self.from_target_contextual.is_outgoing_modifier:
+            raise ValueError("from_target_contextual should have is_outgoing_modifier set to True")
+        
+        return self
+
+    @model_validator(mode="after")
+    def validate_source_and_target_consistency(self) -> Self:
+        # Check that self and to_target components have the same source as the ModifiableValue
+        for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
+            if component.source_entity_uuid != self.source_entity_uuid:
+                raise ValueError(f"{component.__class__.__name__} source UUID ({component.source_entity_uuid}) "
+                                 f"does not match ModifiableValue source UUID ({self.source_entity_uuid})")
+
+        # Check from_target components if they exist
+        if self.from_target_static is not None:
+            if self.from_target_static.target_entity_uuid != self.source_entity_uuid:
+                raise ValueError(f"from_target_static target UUID ({self.from_target_static.target_entity_uuid}) "
+                                 f"should be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
+            if self.from_target_static.source_entity_uuid == self.source_entity_uuid:
+                raise ValueError(f"from_target_static source UUID ({self.from_target_static.source_entity_uuid}) "
+                                 f"should not be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
+
+        if self.from_target_contextual is not None:
+            if self.from_target_contextual.target_entity_uuid != self.source_entity_uuid:
+                raise ValueError(f"from_target_contextual target UUID ({self.from_target_contextual.target_entity_uuid}) "
+                                 f"should be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
+            if self.from_target_contextual.source_entity_uuid == self.source_entity_uuid:
+                raise ValueError(f"from_target_contextual source UUID ({self.from_target_contextual.source_entity_uuid}) "
+                                 f"should not be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
+
+        return self
     
 
         
