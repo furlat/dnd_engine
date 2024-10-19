@@ -703,6 +703,147 @@ class TestModifiableValue:
         with pytest.raises(ValueError):
             value.set_from_target(invalid_target_value)
 
+    def test_modifiable_value_set_context(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        context = {"test_key": "test_value"}
+        value.set_context(context)
+        
+        assert value.context == context
+        assert value.self_contextual.context == context
+        assert value.to_target_contextual.context == context
+
+    def test_modifiable_value_clear_context(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_context({"test_key": "test_value"})
+        value.clear_context()
+        
+        assert value.context is None
+        assert value.self_contextual.context is None
+        assert value.to_target_contextual.context is None
+
+    def test_modifiable_value_remove_modifier(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        modifier = NumericalModifier(target_entity_uuid=source_uuid, value=5)
+        uuid = value.self_static.add_value_modifier(modifier)
+        
+        assert len(value.self_static.value_modifiers) == 2  # Including base value
+        value.remove_modifier(uuid)
+        assert len(value.self_static.value_modifiers) == 1
+
+    def test_modifiable_value_remove_all_modifiers(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
+        value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
+        
+        value.remove_all_modifiers()
+        
+        assert len(value.self_static.value_modifiers) == 0
+        assert len(value.to_target_static.value_modifiers) == 0
+
+    def test_modifiable_value_get_all_modifier_uuids(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        mod1 = value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
+        mod2 = value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
+        
+        uuids = value.get_all_modifier_uuids()
+        assert mod1 in uuids
+        assert mod2 in uuids
+
+    def test_modifiable_value_score_normalization(self, source_uuid):
+        def custom_normalizer(x):
+            return max(0, min(x, 20))
+        
+        value = ModifiableValue.create(source_entity_uuid=source_uuid, score_normalizer=custom_normalizer)
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=25))
+        
+        assert value.score == 25
+        assert value.normalized_score == 20
+
+    def test_modifiable_value_advantage_calculation(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        
+        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE))
+        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.DISADVANTAGE))
+        
+        assert value.advantage == AdvantageStatus.NONE
+
+    def test_modifiable_value_critical_calculation(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        
+        value.self_static.add_critical_modifier(CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.AUTOCRIT))
+        value.to_target_static.add_critical_modifier(CriticalModifier(target_entity_uuid=target_uuid, value=CriticalStatus.NOCRIT))
+        
+        assert value.critical == CriticalStatus.NOCRIT
+
+    def test_modifiable_value_auto_hit_calculation(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        
+        value.self_static.add_auto_hit_modifier(AutoHitModifier(target_entity_uuid=source_uuid, value=AutoHitStatus.AUTOHIT))
+        value.to_target_static.add_auto_hit_modifier(AutoHitModifier(target_entity_uuid=target_uuid, value=AutoHitStatus.AUTOMISS))
+        
+        assert value.auto_hit == AutoHitStatus.AUTOMISS
+
+    def test_modifiable_value_contextual_modifiers(self, source_uuid, target_uuid):
+        def context_aware_numerical(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=target_uuid, value=context.get('bonus', 0))
+
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.self_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=context_aware_numerical))
+        
+        value.set_context({'bonus': 5})
+        assert value.score == 5
+
+        value.set_context({'bonus': 10})
+        assert value.score == 10
+
+    def test_modifiable_value_from_target_modifiers(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        target_value = ModifiableValue.create(source_entity_uuid=target_uuid)
+        
+        target_value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
+        
+        def contextual_modifier(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=target_uuid, value=3)
+        
+        target_value.to_target_contextual.add_value_modifier(
+            ContextualNumericalModifier(
+                target_entity_uuid=source_uuid,
+                callable=contextual_modifier
+            )
+        )
+        target_value.set_target_entity(source_uuid)
+        
+        value.set_target_entity(target_uuid)
+        value.set_from_target(target_value)
+        
+        assert value.score == 8  # 5 from static + 3 from contextual
+
+    def test_modifiable_value_validation(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        
+        with pytest.raises(ValueError):
+            value.self_static.is_outgoing_modifier = True
+            ModifiableValue.model_validate(value)
+
+        with pytest.raises(ValueError):
+            value.to_target_static.is_outgoing_modifier = False
+            ModifiableValue.model_validate(value)
+
+    def test_modifiable_value_combine_values(self, source_uuid):
+        value1 = ModifiableValue.create(source_entity_uuid=source_uuid, value_name="Value1")
+        value1.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
+        
+        value2 = ModifiableValue.create(source_entity_uuid=source_uuid, value_name="Value2")
+        value2.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
+        
+        combined = value1.combine_values([value2])
+        assert combined.name == "Value1_Value2"
+        assert combined.score == 8
+
 class TestEdgeCasesAndErrorHandling:
     def test_missing_required_field(self):
         with pytest.raises(ValueError):
@@ -793,6 +934,43 @@ class TestEdgeCasesAndErrorHandling:
 
         assert original.score == 5
         assert copied.score == 10
+
+    def test_invalid_uuid_in_set_target_entity(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        with pytest.raises(ValueError):
+            value.set_target_entity("not-a-uuid") # type: ignore[arg-type]
+
+    def test_contextual_value_without_setup(self, source_uuid, target_uuid):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        
+        def dummy_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
+        
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=dummy_callable))
+        
+        with pytest.raises(ValueError):
+            _ = value.score  # Should raise an error because callable_arguments are not set
+
+    def test_modifiable_value_with_invalid_from_target(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        invalid_target = BaseValue(source_entity_uuid=target_uuid)
+        
+        with pytest.raises(AttributeError):
+            value.set_from_target(invalid_target) # type: ignore[arg-type]
+
+    def test_combine_values_with_different_source_uuids(self, source_uuid):
+        value1 = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value2 = ModifiableValue.create(source_entity_uuid=uuid4())
+        
+        with pytest.raises(ValueError):
+            value1.combine_values([value2])
+
+    def test_modifiable_value_extreme_values(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=2**63 - 1))
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=-(2**63)))
+        
+        assert value.score == -1  # Assuming no overflow handling
 
 if __name__ == "__main__":
     pytest.main([__file__])
