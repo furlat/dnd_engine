@@ -38,14 +38,42 @@ class BaseBlock(BaseModel):
             Remove a BaseBlock instance from the class registry.
         get_values() -> List[ModifiableValue]:
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']:
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
         set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
             Set the target entity for all the values contained in this Block instance.
         clear_target_entity() -> None:
             Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None:
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None:
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None:
+            Clear the source, target, and context for all the values contained in this Block instance.
+        create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               name: str = "Base Block") -> 'BaseBlock':
+            Create a new BaseBlock instance with the given parameters.
+        get_value_from_uuid(uuid: UUID) -> Optional[ModifiableValue]:
+            Get a ModifiableValue instance from this block by its UUID.
+        get_value_from_name(name: str) -> Optional[ModifiableValue]:
+            Get a ModifiableValue instance from this block by its name.
+        get_block_from_uuid(uuid: UUID) -> Optional['BaseBlock']:
+            Get a BaseBlock instance from this block by its UUID.
+        get_block_from_name(name: str) -> Optional['BaseBlock']:
+            Get a BaseBlock instance from this block by its name.
+
+    Computed Fields:
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names.
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs.
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names.
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs.
 
     Validators:
-        validate_values_source_and_target: Ensures that all ModifiableValue instances within the block
+        set_values_and_blocks_source: Ensures that all ModifiableValue and BaseBlock instances within the block
         have the same source and target UUIDs as the block itself.
+        validate_values_and_blocks_source_and_target: Ensures that all ModifiableValue and BaseBlock instances
+        within the block have matching source and target UUIDs.
     """
 
     name: str = Field(
@@ -321,9 +349,54 @@ def ability_score_normalizer(score: int) -> int:
 abilities = Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']
 
 class Ability(BaseBlock):
-    name: abilities = Field(default="strength")
-    ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer))
-    modifier_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Modifier Bonus"))
+    """
+    Represents an ability score in the D&D 5e game system.
+
+    This class extends BaseBlock to represent a specific ability score, including its
+    base value and any modifiers.
+
+    Attributes:
+        name (abilities): The name of the ability (e.g., 'strength', 'dexterity', etc.).
+        ability_score (ModifiableValue): The base ability score value, typically ranging from 3 to 20 for most characters.
+        modifier_bonus (ModifiableValue): Any additional bonus to the ability modifier, separate from the base score.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Additional Methods:
+        get(cls, uuid: UUID) -> Optional['Ability']:
+            Retrieve an Ability instance from the registry by its UUID.
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Computed Fields:
+        modifier (int): The calculated ability modifier, combining the normalized ability score and any bonuses.
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+    """
+
+    name: abilities = Field(default="strength", description="The name of the ability (Strength, Dexterity, Constitution, Intelligence, Wisdom, or Charisma)")
+    ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
+    modifier_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Modifier Bonus"), description="Any additional bonus to the ability modifier, separate from the base score")
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Ability']:
         obj= super().get(uuid)
@@ -338,13 +411,67 @@ class Ability(BaseBlock):
     
     
 class AbilityScores(BaseBlock):
-    name: str = Field(default="AbilityScores")
-    strength: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="strength"))
-    dexterity: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="dexterity"))
-    constitution: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="constitution"))
-    intelligence: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="intelligence"))
-    wisdom: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="wisdom"))
-    charisma: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="charisma"))
+    """
+    Represents the set of six ability scores for an entity in the D&D 5e game system.
+
+    This class extends BaseBlock to represent all six standard ability scores used in D&D 5e.
+
+    Attributes:
+        name (str): The name of this ability scores block. Defaults to "AbilityScores".
+        strength (Ability): Strength measures bodily power, athletic training, and the extent to which you can exert raw physical force.
+        dexterity (Ability): Dexterity measures agility, reflexes, and balance.
+        constitution (Ability): Constitution measures health, stamina, and vital force.
+        intelligence (Ability): Intelligence measures mental acuity, accuracy of recall, and the ability to reason.
+        wisdom (Ability): Wisdom reflects how attuned you are to the world around you and represents perceptiveness and intuition.
+        charisma (Ability): Charisma measures your ability to interact effectively with others. It includes such factors as confidence and eloquence.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Additional Methods:
+        get_modifier(ability_uuid: UUID) -> int:
+            Get the modifier for a specific ability by its UUID.
+        get_modifier_from_uuid(ability_uuid: UUID) -> int:
+            Get the modifier for a specific ability by its UUID.
+        get_modifier_from_name(ability_name: abilities) -> int:
+            Get the modifier for a specific ability by its name.
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Computed Fields:
+        abilities_list (List[Ability]): A list of all Ability instances in this AbilityScores block.
+        ability_blocks_uuid_by_name (Dict[abilities, UUID]): A dictionary mapping ability names to their UUIDs.
+        ability_blocks_names_by_uuid (Dict[UUID, abilities]): A dictionary mapping ability UUIDs to their names.
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+    """
+
+    name: str = Field(default="AbilityScores", description="The set of six core ability scores in D&D 5e")
+    strength: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="strength"), description="Strength measures bodily power, athletic training, and the extent to which you can exert raw physical force")
+    dexterity: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="dexterity"), description="Dexterity measures agility, reflexes, and balance")
+    constitution: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="constitution"), description="Constitution measures health, stamina, and vital force")
+    intelligence: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="intelligence"), description="Intelligence measures mental acuity, accuracy of recall, and the ability to reason")
+    wisdom: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="wisdom"), description="Wisdom reflects how attuned you are to the world around you and represents perceptiveness and intuition")
+    charisma: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="charisma"), description="Charisma measures your ability to interact effectively with others. It includes such factors as confidence and eloquence")
 
     @computed_field
     @property
@@ -394,15 +521,71 @@ ABILITY_TO_SKILLS: Dict[abilities, List[skills]] = {
 }
 
 class Skill(BaseBlock):
-    name: skills = Field(default="acrobatics", description="The name of the skill")
-    skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"))
-    expertise: bool = Field(default=False, description="Whether the character is proficient in this skill")
-    proficiency: bool = Field(default=False, description="Whether the character is proficient in this skill")
+    """
+    Represents a skill in the D&D 5e game system.
+
+    This class extends BaseBlock to represent a specific skill, including its proficiency status and any bonuses.
+
+    Attributes:
+        name (skills): The name of the skill.
+        skill_bonus (ModifiableValue): Any additional bonus applied to the skill checks.
+        expertise (bool): Whether the character has expertise in this skill, which doubles the proficiency bonus.
+        proficiency (bool): Whether the character is proficient in this skill, adding their proficiency bonus to checks.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Additional Methods:
+        set_proficiency(proficiency: bool) -> None:
+            Set the proficiency status for this skill.
+        set_expertise(expertise: bool) -> None:
+            Set the expertise status for this skill.
+        get_score(proficiency_bonus: int) -> int:
+            Calculate the total score for this skill.
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Class Methods:
+        create(cls, source_entity_uuid: UUID, name: skills, source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               expertise: bool = False, proficiency: bool = False) -> 'Skill':
+            Create a new Skill instance with the given parameters.
+
+    Computed Fields:
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+    """
+
+    name: skills = Field(default="acrobatics", description="The name of the skill in D&D 5e")
+    skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
+    expertise: bool = Field(default=False, description="If true, the character has expertise in this skill, doubling their proficiency bonus")
+    proficiency: bool = Field(default=False, description="If true, the character is proficient in this skill, adding their proficiency bonus to checks")
 
     def set_proficiency(self, proficiency: bool) -> None:
         self.proficiency = proficiency
     def set_expertise(self, expertise: bool) -> None:
         self.expertise = expertise
+        if not self.proficiency:
+            self.proficiency = True
     def _get_proficiency_converter(self):
         def proficient(proficiency_bonus:int) -> int:
             return proficiency_bonus
@@ -431,25 +614,84 @@ class Skill(BaseBlock):
         
 
 class SkillSet(BaseBlock):
-    name: str = Field(default="SkillSet")
-    acrobatics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="acrobatics"))
-    animal_handling: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="animal_handling"))
-    arcana: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="arcana"))
-    athletics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="athletics"))
-    deception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="deception"))
-    history: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="history"))
-    insight: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="insight"))
-    intimidation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="intimidation"))
-    investigation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="investigation"))
-    medicine: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="medicine"))
-    nature: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="nature"))
-    perception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="perception"))
-    performance: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="performance"))
-    persuasion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="persuasion"))
-    religion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="religion"))
-    sleight_of_hand: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="sleight_of_hand"))
-    stealth: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="stealth"))
-    survival: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="survival"))
+    """
+    Represents the complete set of skills for an entity in the D&D 5e game system.
+
+    This class extends BaseBlock to represent all 18 standard skills used in D&D 5e.
+
+    Attributes:
+        name (str): The name of this skill set block. Defaults to "SkillSet".
+        acrobatics (Skill): Your Dexterity (Acrobatics) check covers your attempt to stay on your feet in a tricky situation.
+        animal_handling (Skill): When there is any question whether you can calm down a domesticated animal, keep a mount from getting spooked, or intuit an animal's intentions, the GM might call for a Wisdom (Animal Handling) check.
+        arcana (Skill): Your Intelligence (Arcana) check measures your ability to recall lore about spells, magic items, eldritch symbols, magical traditions, the planes of existence, and the inhabitants of those planes.
+        athletics (Skill): Your Strength (Athletics) check covers difficult situations you encounter while climbing, jumping, or swimming.
+        deception (Skill): Your Charisma (Deception) check determines whether you can convincingly hide the truth, either verbally or through your actions.
+        history (Skill): Your Intelligence (History) check measures your ability to recall lore about historical events, legendary people, ancient kingdoms, past disputes, recent wars, and lost civilizations.
+        insight (Skill): Your Wisdom (Insight) check decides whether you can determine the true intentions of a creature, such as when searching out a lie or predicting someone's next move.
+        intimidation (Skill): When you attempt to influence someone through overt threats, hostile actions, and physical violence, the GM might ask you to make a Charisma (Intimidation) check.
+        investigation (Skill): When you look around for clues and make deductions based on those clues, you make an Intelligence (Investigation) check.
+        medicine (Skill): A Wisdom (Medicine) check lets you try to stabilize a dying companion or diagnose an illness.
+        nature (Skill): Your Intelligence (Nature) check measures your ability to recall lore about terrain, plants and animals, the weather, and natural cycles.
+        perception (Skill): Your Wisdom (Perception) check lets you spot, hear, or otherwise detect the presence of something. It measures your general awareness of your surroundings and the keenness of your senses.
+        performance (Skill): Your Charisma (Performance) check determines how well you can delight an audience with music, dance, acting, storytelling, or some other form of entertainment.
+        persuasion (Skill): When you attempt to influence someone or a group of people with tact, social graces, or good nature, the GM might ask you to make a Charisma (Persuasion) check.
+        religion (Skill): Your Intelligence (Religion) check measures your ability to recall lore about deities, rites and prayers, religious hierarchies, holy symbols, and the practices of secret cults.
+        sleight_of_hand (Skill): Whenever you attempt an act of legerdemain or manual trickery, such as planting something on someone else or concealing an object on your person, make a Dexterity (Sleight of Hand) check.
+        stealth (Skill): Make a Dexterity (Stealth) check when you attempt to conceal yourself from enemies, slink past guards, slip away without being noticed, or sneak up on someone without being seen or heard.
+        survival (Skill): The GM might ask you to make a Wisdom (Survival) check to follow tracks, hunt wild game, guide your group through frozen wastelands, identify signs that owlbears live nearby, predict the weather, or avoid quicksand and other natural hazards.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Methods:
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Computed Fields:
+        proficiencies (List[Skill]): A list of all skills in which the entity is proficient.
+        expertise (List[Skill]): A list of all skills in which the entity has expertise.
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+    """
+
+    name: str = Field(default="SkillSet", description="The complete set of 18 skills in D&D 5e")
+    acrobatics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="acrobatics"), description="Dexterity (Acrobatics): Staying on your feet in tricky situations, such as balancing on a tightrope or staying upright on a rocking ship's deck")
+    animal_handling: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="animal_handling"), description="Wisdom (Animal Handling): Calming domesticated animals, keeping mounts from getting spooked, or intuiting an animal's intentions")
+    arcana: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="arcana"), description="Intelligence (Arcana): Recalling lore about spells, magic items, eldritch symbols, magical traditions, planes of existence, and planar inhabitants")
+    athletics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="athletics"), description="Strength (Athletics): Climbing, jumping, swimming, and other difficult physical activities")
+    deception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="deception"), description="Charisma (Deception): Convincingly hiding the truth through words or actions")
+    history: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="history"), description="Intelligence (History): Recalling lore about historical events, legendary people, ancient kingdoms, past disputes, recent wars, and lost civilizations")
+    insight: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="insight"), description="Wisdom (Insight): Determining the true intentions of others, detecting lies, and predicting someone's next move")
+    intimidation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="intimidation"), description="Charisma (Intimidation): Influencing others through overt threats, hostile actions, and physical violence")
+    investigation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="investigation"), description="Intelligence (Investigation): Searching for clues and making deductions based on those clues")
+    medicine: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="medicine"), description="Wisdom (Medicine): Stabilizing dying companions or diagnosing illnesses")
+    nature: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="nature"), description="Intelligence (Nature): Recalling lore about terrain, plants and animals, the weather, and natural cycles")
+    perception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="perception"), description="Wisdom (Perception): Spotting, hearing, or detecting the presence of something, measuring general awareness and sensory acuity")
+    performance: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="performance"), description="Charisma (Performance): Delighting an audience with music, dance, acting, storytelling, or other forms of entertainment")
+    persuasion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="persuasion"), description="Charisma (Persuasion): Influencing others through tact, social graces, or good nature")
+    religion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="religion"), description="Intelligence (Religion): Recalling lore about deities, rites, prayers, religious hierarchies, holy symbols, and the practices of secret cults")
+    sleight_of_hand: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="sleight_of_hand"), description="Dexterity (Sleight of Hand): Performing acts of legerdemain, manual trickery, or subtle manipulations")
+    stealth: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="stealth"), description="Dexterity (Stealth): Concealing yourself, moving silently, and avoiding detection")
+    survival: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="survival"), description="Wisdom (Survival): Following tracks, hunting wild game, guiding through wilderness, identifying natural hazards, and predicting weather")
 
     @computed_field
     @property
@@ -473,9 +715,58 @@ saving_throw_name_to_ability = {
     "charisma_saving_throw": "charisma"
 }
 class SavingThrow(BaseBlock):
-    name: saving_throws = Field(default="strength_saving_throw")
-    proficiency: bool = Field(default=False)
-    bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Saving Throw Bonus"))
+    """
+    Represents a saving throw in the D&D 5e game system.
+
+    This class extends BaseBlock to represent a specific saving throw, including its proficiency status and any bonuses.
+
+    Attributes:
+        name (saving_throws): The name of the saving throw, corresponding to an ability score.
+        proficiency (bool): Whether the entity is proficient in this saving throw, adding their proficiency bonus.
+        bonus (ModifiableValue): Any additional bonus applied to the saving throw, beyond ability modifier and proficiency.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Additional Methods:
+        get_bonus(proficiency_bonus: int) -> int:
+            Calculate the total bonus for this saving throw.
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Class Methods:
+        create(cls, source_entity_uuid: UUID, name: saving_throws, source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               proficiency: bool = False) -> 'SavingThrow':
+            Create a new SavingThrow instance with the given parameters.
+
+    Computed Fields:
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+    """
+
+    name: saving_throws = Field(default="strength_saving_throw", description="The name of the saving throw, corresponding to an ability score in D&D 5e")
+    proficiency: bool = Field(default=False, description="If true, the character is proficient in this saving throw, adding their proficiency bonus")
+    bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Saving Throw Bonus"), description="Any additional bonus applied to the saving throw, beyond ability modifier and proficiency")
 
     def get_bonus(self, proficiency_bonus:int) -> int:
         if self.proficiency:
@@ -492,13 +783,59 @@ class SavingThrow(BaseBlock):
                    proficiency=proficiency)
 
 class SavingThrowSet(BaseBlock):
-    name: str = Field(default="SavingThrowSet")
-    strength_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="strength_saving_throw"))
-    dexterity_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="dexterity_saving_throw"))
-    constitution_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="constitution_saving_throw"))
-    intelligence_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="intelligence_saving_throw"))
-    wisdom_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="wisdom_saving_throw"))
-    charisma_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="charisma_saving_throw"))
+    """
+    Represents the complete set of saving throws for an entity in the D&D 5e game system.
+
+    This class extends BaseBlock to represent all six standard saving throws used in D&D 5e.
+
+    Attributes:
+        name (str): The name of this saving throw set block. Defaults to "SavingThrowSet".
+        strength_saving_throw (SavingThrow): Used to resist physical force and avoid being moved against your will.
+        dexterity_saving_throw (SavingThrow): Used to dodge area effects, such as the breath of a dragon or a fireball spell.
+        constitution_saving_throw (SavingThrow): Used to resist poison, disease, and other bodily ailments.
+        intelligence_saving_throw (SavingThrow): Used to resist mental attacks and illusions.
+        wisdom_saving_throw (SavingThrow): Used to resist mental influence or charm effects.
+        charisma_saving_throw (SavingThrow): Used to resist effects that would subsume your personality or possess you.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Methods:
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Computed Fields:
+        proficiencies (List[SavingThrow]): A list of all saving throws in which the entity is proficient.
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+    """
+
+    name: str = Field(default="SavingThrowSet", description="The complete set of six saving throws in D&D 5e")
+    strength_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="strength_saving_throw"), description="Strength saving throw: Used to resist physical force and avoid being moved against your will")
+    dexterity_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="dexterity_saving_throw"), description="Dexterity saving throw: Used to dodge area effects, such as the breath of a dragon or a fireball spell")
+    constitution_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="constitution_saving_throw"), description="Constitution saving throw: Used to resist poison, disease, and other bodily ailments")
+    intelligence_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="intelligence_saving_throw"), description="Intelligence saving throw: Used to resist mental attacks and illusions")
+    wisdom_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="wisdom_saving_throw"), description="Wisdom saving throw: Used to resist mental influence or charm effects")
+    charisma_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="charisma_saving_throw"), description="Charisma saving throw: Used to resist effects that would subsume your personality or possess you")
     
     @computed_field
     @property
@@ -508,6 +845,60 @@ class SavingThrowSet(BaseBlock):
     
     
 class HitDice(BaseBlock):
+    """
+    Represents the hit dice of an entity in the game system.
+
+    This class extends BaseBlock to represent the hit dice used for determining hit points and healing.
+
+    Attributes:
+        name (str): The name of this hit dice block. Defaults to "HitDice".
+        hit_dice_value (ModifiableValue): The value of each hit die (e.g., d6, d8, d10, etc.).
+        hit_dice_count (ModifiableValue): The number of hit dice available.
+        mode (Literal["average", "maximums", "roll"]): The mode for calculating hit points.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Additional Methods:
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Class Methods:
+        create(cls, source_entity_uuid: UUID, name: str = "HitDice", source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               hit_dice_value: Literal[4,6,8,10,12] = 6, hit_dice_count: int = 1, 
+               mode: Literal["average", "maximums","roll"] = "average") -> 'HitDice':
+            Create a new HitDice instance with the given parameters.
+
+    Computed Fields:
+        hit_points (int): The calculated hit points based on the hit dice and mode.
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+
+    Validators:
+        check_hit_dice_value: Ensures that the hit dice value is one of the allowed values.
+        check_hit_dice_count: Ensures that the hit dice count is greater than 0.
+    """
+
     name: str = Field(default="HitDice")
     hit_dice_value: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=6, value_name="Hit Dice Value"))
     hit_dice_count: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=1, value_name="Hit Dice Count"))
@@ -519,7 +910,7 @@ class HitDice(BaseBlock):
         first_level_hit_points = self.hit_dice_value.score
         remaining_dice_count = self.hit_dice_count.score - 1
         if self.mode == "average":
-            return first_level_hit_points + remaining_dice_count * (self.hit_dice_value.score // 2)
+            return first_level_hit_points + remaining_dice_count * ((self.hit_dice_value.score // 2)+1)
         elif self.mode == "maximums":
             return first_level_hit_points + remaining_dice_count * self.hit_dice_value.score
         elif self.mode == "roll":
@@ -552,8 +943,89 @@ class HitDice(BaseBlock):
                    hit_dice_value=modifiable_hit_dice_value, hit_dice_count=modifiable_hit_dice_count, mode=mode)
 
 damage_types = Literal["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
+damage_types_list = ["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
 
 class Health(BaseBlock):
+    """
+    Represents the health status of an entity in the game system.
+
+    This class extends BaseBlock to represent various aspects of an entity's health, including
+    hit points, temporary hit points, and damage resistances.
+
+    Attributes:
+        name (str): The name of this health block. Defaults to "Health".
+        hit_dices (List[HitDice]): The hit dice used for determining hit points and healing.
+        max_hit_points_bonus (ModifiableValue): Any additional bonus to maximum hit points.
+        temporary_hit_points (ModifiableValue): Temporary hit points that can absorb damage.
+        damage_taken (int): The amount of damage the entity has taken.
+        damage_reduction (ModifiableValue): Any damage reduction applied to incoming damage.
+        vulnerabilities (List[damage_types]): Types of damage the entity is vulnerable to.
+        resistances (List[damage_types]): Types of damage the entity is resistant to.
+        immunities (List[damage_types]): Types of damage the entity is immune to.
+        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
+        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
+        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
+        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
+        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
+        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Inherits all attributes and methods from BaseBlock.
+
+    Additional Methods:
+        add_damage(damage: int) -> None:
+            Add damage to the entity's current damage taken.
+        remove_damage(damage: int) -> None:
+            Remove damage from the entity's current damage taken.
+        damage_multiplier(damage_type: damage_types) -> float:
+            Calculate the damage multiplier based on vulnerabilities and resistances.
+        take_damage(damage: int, damage_type: damage_types, source_entity_uuid: UUID) -> None:
+            Apply damage to the entity, considering resistances and temporary hit points.
+        heal(heal: int) -> None:
+            Heal the entity by removing damage.
+        add_temporary_hit_points(temporary_hit_points: int, source_entity_uuid: UUID) -> None:
+            Add temporary hit points to the entity.
+        remove_temporary_hit_points(temporary_hit_points: int, source_entity_uuid: UUID) -> None:
+            Remove temporary hit points from the entity.
+        get_max_hit_dices_points(constitution_modifier: int) -> int:
+            Calculate the maximum hit points based on hit dice and constitution modifier.
+        get_total_hit_points(constitution_modifier: int) -> int:
+            Calculate the total current hit points, including temporary hit points.
+        add_vulnerability(vulnerability: damage_types) -> None:
+            Add a damage type to the entity's vulnerabilities.
+        remove_vulnerability(vulnerability: damage_types) -> None:
+            Remove a damage type from the entity's vulnerabilities.
+        add_resistance(resistance: damage_types) -> None:
+            Add a damage type to the entity's resistances.
+        remove_resistance(resistance: damage_types) -> None:
+            Remove a damage type from the entity's resistances.
+        add_immunity(immunity: damage_types) -> None:
+            Add a damage type to the entity's immunities.
+        remove_immunity(immunity: damage_types) -> None:
+            Remove a damage type from the entity's immunities.
+        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
+            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
+        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
+            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
+            Set the target entity for all the values contained in this Block instance.
+        clear_target_entity() -> None: (Inherited from BaseBlock)
+            Clear the target entity for all the values contained in this Block instance.
+        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
+            Set the context for all the values contained in this Block instance.
+        clear_context() -> None: (Inherited from BaseBlock)
+            Clear the context for all the values contained in this Block instance.
+        clear() -> None: (Inherited from BaseBlock)
+            Clear the source, target, and context for all the values contained in this Block instance.
+
+    Computed Fields:
+        hit_dices_total_hit_points (int): The total hit points from all hit dice.
+        total_hit_dices_number (int): The total number of hit dice.
+        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
+        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
+        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
+        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+    """
+
     name: str = Field(default="Health")
     hit_dices: List[HitDice] = Field(default_factory=lambda: [HitDice.create(source_entity_uuid=uuid4(),name="HitDice")])
     max_hit_points_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Max Hit Points Bonus"), description="Max Hit Points Bonus, e.g. Aid spell")
@@ -589,6 +1061,8 @@ class Health(BaseBlock):
     def take_damage(self, damage: int, damage_type: damage_types,source_entity_uuid:UUID) -> None:
         if damage <0:
             raise ValueError(f"Damage must be greater than 0 instead of {damage}")
+        if damage_type not in damage_types_list:
+            raise ValueError(f"Damage type must be one of the following: {damage_types_list} instead of {damage_type}")
         damage_after_absorption = damage - self.damage_reduction.score
         damage_after_multiplier = int(damage_after_absorption * self.damage_multiplier(damage_type))
         current_temporary_hit_points = self.temporary_hit_points.score
@@ -642,3 +1116,4 @@ class Health(BaseBlock):
     def remove_immunity(self, immunity: damage_types) -> None:
         if immunity in self.immunities:
             self.immunities.remove(immunity)
+

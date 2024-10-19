@@ -1,7 +1,7 @@
 import pytest
 from uuid import UUID, uuid4
 from typing import Dict, Any, List
-from dnd.blocks import BaseBlock, Ability, AbilityScores, ability_score_normalizer
+from dnd.blocks import BaseBlock, Ability, AbilityScores, ability_score_normalizer, Skill, SkillSet, SavingThrow, SavingThrowSet, HitDice, Health, ABILITY_TO_SKILLS, skills, saving_throws, damage_types
 from dnd.values import ModifiableValue
 
 @pytest.fixture
@@ -281,6 +281,245 @@ class TestAbilityScores:
             assert ability.ability_score.context is None
             assert ability.modifier_bonus.context is None
 
+    def test_abilities_list(self, source_uuid):
+        ability_scores = AbilityScores(source_entity_uuid=source_uuid)
+        abilities = ability_scores.abilities_list
+        assert len(abilities) == 6
+        assert all(isinstance(ability, Ability) for ability in abilities)
+
+    def test_ability_blocks_uuid_by_name(self, source_uuid):
+        ability_scores = AbilityScores(source_entity_uuid=source_uuid)
+        uuid_by_name = ability_scores.ability_blocks_uuid_by_name
+        assert len(uuid_by_name) == 6
+        assert all(isinstance(uuid, UUID) for uuid in uuid_by_name.values())
+
+    def test_ability_blocks_names_by_uuid(self, source_uuid):
+        ability_scores = AbilityScores(source_entity_uuid=source_uuid)
+        names_by_uuid = ability_scores.ability_blocks_names_by_uuid
+        assert len(names_by_uuid) == 6
+        assert all(name in ABILITY_TO_SKILLS.keys() for name in names_by_uuid.values())
+
+    def test_get_modifier(self, source_uuid):
+        ability_scores = AbilityScores(source_entity_uuid=source_uuid)
+        strength_uuid = ability_scores.strength.uuid
+        modifier = ability_scores.get_modifier(strength_uuid)
+        assert isinstance(modifier, int)
+
+    def test_get_modifier_from_uuid(self, source_uuid):
+        ability_scores = AbilityScores(source_entity_uuid=source_uuid)
+        strength_uuid = ability_scores.strength.uuid
+        modifier = ability_scores.get_modifier_from_uuid(strength_uuid)
+        assert isinstance(modifier, int)
+
+    def test_get_modifier_from_name(self, source_uuid):
+        ability_scores = AbilityScores(source_entity_uuid=source_uuid)
+        modifier = ability_scores.get_modifier_from_name("strength")
+        assert isinstance(modifier, int)
+
+class TestSkill:
+    def test_skill_initialization(self, source_uuid):
+        skill = Skill(source_entity_uuid=source_uuid, name="acrobatics")
+        assert isinstance(skill, BaseBlock)
+        assert isinstance(skill.skill_bonus, ModifiableValue)
+        assert skill.name == "acrobatics"
+        assert not skill.expertise
+        assert not skill.proficiency
+
+    def test_set_proficiency(self, source_uuid):
+        skill = Skill(source_entity_uuid=source_uuid, name="acrobatics")
+        skill.set_proficiency(True)
+        assert skill.proficiency
+
+    def test_set_expertise(self, source_uuid):
+        skill = Skill(source_entity_uuid=source_uuid, name="acrobatics")
+        skill.set_expertise(True)
+        assert skill.expertise
+        assert skill.proficiency  # Expertise implies proficiency
+
+    def test_get_score(self, source_uuid):
+        skill = Skill(source_entity_uuid=source_uuid, name="acrobatics")
+        skill.set_proficiency(True)
+        score = skill.get_score(2)  # Assuming proficiency bonus of 2
+        assert score == 2
+
+    def test_create_method(self, source_uuid):
+        skill = Skill.create(source_entity_uuid=source_uuid, name="acrobatics", expertise=True)
+        assert skill.expertise
+        assert skill.proficiency
+
+class TestSkillSet:
+    def test_skillset_initialization(self, source_uuid):
+        skillset = SkillSet(source_entity_uuid=source_uuid)
+        assert isinstance(skillset, BaseBlock)
+        assert all(isinstance(getattr(skillset, skill), Skill) for skill in skills.__args__)
+
+    def test_proficiencies(self, source_uuid):
+        skillset = SkillSet(source_entity_uuid=source_uuid)
+        skillset.acrobatics.set_proficiency(True)
+        proficiencies = skillset.proficiencies
+        assert len(proficiencies) == 1
+        assert proficiencies[0].name == "acrobatics"
+
+    def test_expertise(self, source_uuid):
+        skillset = SkillSet(source_entity_uuid=source_uuid)
+        skillset.acrobatics.set_expertise(True)
+        expertise = skillset.expertise
+        assert len(expertise) == 1
+        assert expertise[0].name == "acrobatics"
+
+class TestSavingThrow:
+    def test_saving_throw_initialization(self, source_uuid):
+        saving_throw = SavingThrow(source_entity_uuid=source_uuid, name="strength_saving_throw")
+        assert isinstance(saving_throw, BaseBlock)
+        assert isinstance(saving_throw.bonus, ModifiableValue)
+        assert saving_throw.name == "strength_saving_throw"
+        assert not saving_throw.proficiency
+
+    def test_get_bonus(self, source_uuid):
+        saving_throw = SavingThrow(source_entity_uuid=source_uuid, name="strength_saving_throw")
+        saving_throw.proficiency = True
+        bonus = saving_throw.get_bonus(2)  # Assuming proficiency bonus of 2
+        assert bonus == 2
+
+    def test_create_method(self, source_uuid):
+        saving_throw = SavingThrow.create(source_entity_uuid=source_uuid, name="strength_saving_throw", proficiency=True)
+        assert saving_throw.proficiency
+
+class TestSavingThrowSet:
+    def test_saving_throw_set_initialization(self, source_uuid):
+        saving_throw_set = SavingThrowSet(source_entity_uuid=source_uuid)
+        assert isinstance(saving_throw_set, BaseBlock)
+        assert all(isinstance(getattr(saving_throw_set, st), SavingThrow) for st in saving_throws.__args__)
+
+    def test_proficiencies(self, source_uuid):
+        saving_throw_set = SavingThrowSet(source_entity_uuid=source_uuid)
+        saving_throw_set.strength_saving_throw.proficiency = True
+        proficiencies = saving_throw_set.proficiencies
+        assert len(proficiencies) == 1
+        assert proficiencies[0].name == "strength_saving_throw"
+
+class TestHitDice:
+    def test_hit_dice_initialization(self, source_uuid):
+        hit_dice = HitDice(source_entity_uuid=source_uuid)
+        assert isinstance(hit_dice, BaseBlock)
+        assert isinstance(hit_dice.hit_dice_value, ModifiableValue)
+        assert isinstance(hit_dice.hit_dice_count, ModifiableValue)
+        assert hit_dice.mode == "average"
+
+    def test_hit_points_calculation(self, source_uuid):
+        hit_dice = HitDice.create(source_entity_uuid=source_uuid, hit_dice_value=8, hit_dice_count=3, mode="average")
+        
+        assert hit_dice.hit_points == 18  # 8 + (2 * 5)
+
+    def test_hit_dice_value_validator(self, source_uuid):
+        with pytest.raises(ValueError):
+            HitDice(source_entity_uuid=source_uuid, hit_dice_value=ModifiableValue.create(source_entity_uuid=source_uuid, base_value=7))
+
+    def test_hit_dice_count_validator(self, source_uuid):
+        with pytest.raises(ValueError):
+            HitDice(source_entity_uuid=source_uuid, hit_dice_count=ModifiableValue.create(source_entity_uuid=source_uuid, base_value=0))
+
+    def test_create_method(self, source_uuid):
+        hit_dice = HitDice.create(source_entity_uuid=source_uuid, hit_dice_value=10, hit_dice_count=2, mode="maximums")
+        assert hit_dice.hit_dice_value.score == 10
+        assert hit_dice.hit_dice_count.score == 2
+        assert hit_dice.mode == "maximums"
+
+class TestHealth:
+    def test_health_initialization(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        assert isinstance(health, BaseBlock)
+        assert isinstance(health.hit_dices[0], HitDice)
+        assert isinstance(health.max_hit_points_bonus, ModifiableValue)
+        assert isinstance(health.temporary_hit_points, ModifiableValue)
+        assert health.damage_taken == 0
+
+    def test_hit_dices_total_hit_points(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.hit_dices[0].hit_dice_value.self_static.value_modifiers[list(health.hit_dices[0].hit_dice_value.self_static.value_modifiers.keys())[0]].value = 8
+        health.hit_dices[0].hit_dice_count.self_static.value_modifiers[list(health.hit_dices[0].hit_dice_count.self_static.value_modifiers.keys())[0]].value = 3
+        assert health.hit_dices_total_hit_points == 18
+
+    def test_total_hit_dices_number(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.hit_dices[0].hit_dice_count.self_static.value_modifiers[list(health.hit_dices[0].hit_dice_count.self_static.value_modifiers.keys())[0]].value = 3
+        assert health.total_hit_dices_number == 3
+
+    def test_add_remove_damage(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.add_damage(5)
+        assert health.damage_taken == 5
+        health.remove_damage(3)
+        assert health.damage_taken == 2
+
+    def test_damage_multiplier(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.vulnerabilities.append("fire")
+        health.resistances.append("cold")
+        assert health.damage_multiplier("fire") == 2
+        assert health.damage_multiplier("cold") == 0.5
+        assert health.damage_multiplier("piercing") == 1
+
+    def test_take_damage(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.take_damage(10, "fire", source_uuid)
+        assert health.damage_taken == 10
+
+        health.resistances.append("cold")
+        health.take_damage(10, "cold", source_uuid)
+        assert health.damage_taken == 15  # 10 + 5 (10 * 0.5)
+
+    def test_heal(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.add_damage(10)
+        health.heal(6)
+        assert health.damage_taken == 4
+
+    def test_add_remove_temporary_hit_points(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.add_temporary_hit_points(5, source_uuid)
+        assert health.temporary_hit_points.score == 5
+        health.remove_temporary_hit_points(3, source_uuid)
+        assert health.temporary_hit_points.score == 2
+
+    def test_get_max_hit_dices_points(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.hit_dices[0].hit_dice_value.self_static.value_modifiers[list(health.hit_dices[0].hit_dice_value.self_static.value_modifiers.keys())[0]].value = 8
+        health.hit_dices[0].hit_dice_count.self_static.value_modifiers[list(health.hit_dices[0].hit_dice_count.self_static.value_modifiers.keys())[0]].value = 3
+        max_points = health.get_max_hit_dices_points(2)  # Assuming Constitution modifier of 2
+        assert max_points == 24  # 18 (from hit dice) + 6 (3 * 2 from Constitution)
+
+    def test_get_total_hit_points(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.hit_dices[0].hit_dice_value.self_static.value_modifiers[list(health.hit_dices[0].hit_dice_value.self_static.value_modifiers.keys())[0]].value = 8
+        health.hit_dices[0].hit_dice_count.self_static.value_modifiers[list(health.hit_dices[0].hit_dice_count.self_static.value_modifiers.keys())[0]].value = 3
+        health.max_hit_points_bonus.self_static.value_modifiers[list(health.max_hit_points_bonus.self_static.value_modifiers.keys())[0]].value = 5
+        health.add_temporary_hit_points(3, source_uuid)
+        health.add_damage(7)
+        total_hp = health.get_total_hit_points(2)  # Assuming Constitution modifier of 2
+        assert total_hp == 25  # 24 (max) + 5 (bonus) + 3 (temp) - 7 (damage)
+
+    def test_add_remove_vulnerability(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.add_vulnerability("fire")
+        assert "fire" in health.vulnerabilities
+        health.remove_vulnerability("fire")
+        assert "fire" not in health.vulnerabilities
+
+    def test_add_remove_resistance(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.add_resistance("cold")
+        assert "cold" in health.resistances
+        health.remove_resistance("cold")
+        assert "cold" not in health.resistances
+
+    def test_add_remove_immunity(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        health.add_immunity("poison")
+        assert "poison" in health.immunities
+        health.remove_immunity("poison")
+        assert "poison" not in health.immunities
+
 class TestEdgeCasesAndErrorHandling:
     def test_missing_required_field(self):
         with pytest.raises(ValueError):
@@ -349,6 +588,27 @@ class TestEdgeCasesAndErrorHandling:
         assert block.target_entity_name is None
         assert block.context is None
 
+    def test_invalid_skill_name(self, source_uuid):
+        with pytest.raises(ValueError):
+            Skill(source_entity_uuid=source_uuid, name="invalid_skill") # type: ignore[arg-type]
+
+    def test_invalid_saving_throw_name(self, source_uuid):
+        with pytest.raises(ValueError):
+            SavingThrow(source_entity_uuid=source_uuid, name="invalid_saving_throw") # type: ignore[arg-type]
+
+    def test_invalid_hit_dice_mode(self, source_uuid):
+        with pytest.raises(ValueError):
+            HitDice(source_entity_uuid=source_uuid, mode="invalid_mode") # type: ignore[arg-type]
+
+    def test_negative_damage(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        with pytest.raises(ValueError):
+            health.take_damage(-5, "fire", source_uuid)
+
+    def test_invalid_damage_type(self, source_uuid):
+        health = Health(source_entity_uuid=source_uuid)
+        with pytest.raises(ValueError):
+            health.take_damage(5, "invalid_damage_type", source_uuid) # type: ignore[arg-type]
+
 if __name__ == "__main__":
     pytest.main([__file__])
-
