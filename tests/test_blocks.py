@@ -183,7 +183,7 @@ class TestAbility:
         assert isinstance(ability, BaseBlock)
         assert isinstance(ability.ability_score, ModifiableValue)
         assert isinstance(ability.modifier_bonus, ModifiableValue)
-        assert ability.name == "Ability Score"
+        assert ability.name == "strength"
 
     def test_ability_score_normalization(self, source_uuid):
         ability = Ability(source_entity_uuid=source_uuid)
