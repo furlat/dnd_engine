@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, computed_field, model_validator
-from typing import List, Optional, Union, Tuple, Self, ClassVar, Dict
+from typing import List, Optional, Union, Tuple, Self, ClassVar, Dict, Literal
 import random
 from dnd.values import ModifiableValue, AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue,NumericalModifier, ContextualValue
 from enum import Enum
@@ -47,6 +47,7 @@ class DiceRoll(BaseModel):
         unregister(cls, uuid: UUID) -> None:
             Remove a DiceRoll instance from the class registry.
     """
+
     _registry: ClassVar[Dict[UUID, 'DiceRoll']] = {}
 
     roll_uuid: UUID = Field(
@@ -98,7 +99,6 @@ class DiceRoll(BaseModel):
         description="The outcome of an attack roll, if applicable."
     )
 
-
     def __init__(self, **data):
         super().__init__(**data)
         self.__class__._registry[self.roll_uuid] = self
@@ -145,7 +145,14 @@ class Dice(BaseModel):
             Validate the number of dice based on the roll_type.
         roll(self) -> DiceRoll:
             Perform a roll using these dice and return a DiceRoll object.
+
+    Validators:
+        check_attack_outcome(self) -> Self:
+            Validate the attack_outcome based on the roll_type.
+        check_num_dice(self) -> Self:
+            Validate the number of dice based on the roll_type.
     """
+
     _registry: ClassVar[Dict[UUID, 'Dice']] = {}
 
     uuid: UUID = Field(
@@ -154,9 +161,10 @@ class Dice(BaseModel):
     )
     count: int = Field(
         ...,
-        description="The number of dice in this set."
+        description="The number of dice in this set.",
+        ge=1,
     )
-    value: int = Field(
+    value: Literal[4, 6, 8, 10, 12, 20] = Field(
         ...,
         description="The number of sides on each die (e.g., 6 for a d6, 20 for a d20)."
     )
@@ -189,8 +197,6 @@ class Dice(BaseModel):
             Optional[Dice]: The Dice instance if found, None otherwise.
         """
         return cls._registry.get(uuid)
-
-
 
     @model_validator(mode="after")
     def check_attack_outcome(self) -> Self:
@@ -290,7 +296,8 @@ class Dice(BaseModel):
             return [self._roll_with_disadvantage() for _ in range(count)]
         else:
             return [(random.randint(1, self.value), []) for _ in range(count)]
-
+    @computed_field
+    @cached_property
     def roll(self) -> DiceRoll:
         """
         Perform a roll using these dice and return a DiceRoll object.
@@ -318,33 +325,38 @@ class Dice(BaseModel):
             target_entity_uuid=self.target_entity_uuid,
             attack_outcome=self.attack_outcome
         )
+
     
 if __name__ == "__main__":
     
     source_entity_uuid = uuid4()
     target_entity_uuid = uuid4()
+    modifier_uuid = uuid4()
     some_modifiable_value = ModifiableValue(source_entity_uuid=source_entity_uuid, 
                                             target_entity_uuid=target_entity_uuid, 
                                             self_static=StaticValue(name="example_static",
                                                                     source_entity_uuid=source_entity_uuid,
-                                                                    value_modifiers=[NumericalModifier(
+                                                                    value_modifiers={modifier_uuid: NumericalModifier(
+                                                                        uuid=modifier_uuid,
                                                                         name="example_numerical_modifier",
                                                                         value=10,
-                                                                        target_entity_uuid=source_entity_uuid)],
+                                                                        target_entity_uuid=source_entity_uuid)},
                                                                    ),
                                             
                                             self_contextual=ContextualValue(name="example_contextual",
                                                                         source_entity_uuid=source_entity_uuid),
                                             to_target_contextual=ContextualValue(name="example_to_target_contextual",
                                                                         source_entity_uuid=source_entity_uuid,
-                                                                        target_entity_uuid=target_entity_uuid),
+                                                                        target_entity_uuid=target_entity_uuid,is_outgoing_modifier=True),
+                                                                        
+
                                             to_target_static=StaticValue(name="example_to_target_static",
-                                                                    source_entity_uuid=source_entity_uuid)
+                                                                    source_entity_uuid=source_entity_uuid,is_outgoing_modifier=True)
                                                                    
                                             )
     # Usage example:
     d20 = Dice(count=1, value=20, bonus=some_modifiable_value, roll_type=RollType.ATTACK)
-    attack_roll = d20.roll()
+    attack_roll = d20.roll
     print(f"Attack roll result: {attack_roll.total}")
 
     # Retrieving Dice and DiceRoll objects from registry

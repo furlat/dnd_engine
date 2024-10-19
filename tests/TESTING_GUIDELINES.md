@@ -57,6 +57,14 @@
    - Pitfall: Not properly setting up or validating UUIDs when testing relationships between entities.
    - Solution: Ensure that source and target UUIDs are correctly set and validated in tests involving multiple entities.
 
+9. **Not Revalidating Pydantic Models After Direct Attribute Modification**:
+   - Pitfall: Modifying attributes of a Pydantic model directly without revalidating the model.
+   - Solution: After modifying attributes directly, use `Model.model_validate(instance)` to trigger validation.
+
+10. **Over-specific Error Message Matching**:
+    - Pitfall: Using overly specific error message matching in pytest.raises, which can lead to brittle tests.
+    - Solution: Use more general error type checking or broader message patterns. Avoid matching exact error strings unless absolutely necessary.
+
 ## Best Practices
 
 1. **Isolate Tests**: Each test should be independent of others. Avoid relying on the state from previous tests.
@@ -83,4 +91,14 @@
 
 12. **Check Computed Properties**: Ensure that computed properties (like score, advantage, critical, etc.) are correctly calculated based on all relevant modifiers.
 
-Remember: The goal of testing is not just to increase code coverage, but to verify that the code behaves correctly under various scenarios. When a test fails, the first step should always be to understand why, rather than immediately changing the source code or the test itself.
+13. **Revalidate Modified Pydantic Models**: When directly modifying attributes of a Pydantic model in tests, always revalidate the model using `Model.model_validate(instance)` to ensure all validators are triggered.
+
+14. **Careful Error Message Matching**: When using `pytest.raises`, prefer checking for the error type rather than matching specific error messages. If message matching is necessary, use broader patterns that allow for minor changes in error messages.
+
+15. **Test Model Validation**: Include specific tests for model validation, especially when working with complex Pydantic models with multiple validators.
+
+## Examples
+
+### Revalidating Pydantic Models in Tests
+
+Incorrect:
