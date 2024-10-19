@@ -616,6 +616,31 @@ class StaticValue(BaseValue):
             is_outgoing_modifier=self.is_outgoing_modifier
         )
 
+    def get_all_modifier_uuids(self) -> List[UUID]:
+        """
+        Get a list of UUIDs for all modifiers in this StaticValue.
+
+        Returns:
+            List[UUID]: A list of all modifier UUIDs.
+        """
+        return (list(self.value_modifiers.keys()) +
+                list(self.min_constraints.keys()) +
+                list(self.max_constraints.keys()) +
+                list(self.advantage_modifiers.keys()) +
+                list(self.critical_modifiers.keys()) +
+                list(self.auto_hit_modifiers.keys()))
+
+    def remove_all_modifiers(self) -> None:
+        """
+        Remove all modifiers from this StaticValue.
+        """
+        self.value_modifiers.clear()
+        self.min_constraints.clear()
+        self.max_constraints.clear()
+        self.advantage_modifiers.clear()
+        self.critical_modifiers.clear()
+        self.auto_hit_modifiers.clear()
+
 class ContextualValue(BaseValue):
     """
     A value type that represents a context-dependent value with various modifiers.
@@ -694,6 +719,10 @@ class ContextualValue(BaseValue):
             Remove a modifier from all modifier dictionaries of this value.
         combine_values(self, others: List['ContextualValue'], naming_callable: Optional[naming_callable] = None) -> 'ContextualValue':
             Combine this ContextualValue with a list of other ContextualValues.
+        get_all_modifier_uuids(self) -> List[UUID]:
+            Get a list of UUIDs for all modifiers in this ContextualValue.
+        remove_all_modifiers(self) -> None:
+            Remove all modifiers from this ContextualValue.
 
     Validators:
         validate_value_source_corresponds_to_modifiers_target: Ensures that the source and target UUIDs are consistent
@@ -1105,6 +1134,31 @@ class ContextualValue(BaseValue):
                     raise ValueError(f"Contextual value source ({self.source_entity_uuid}) does not correspond to modifier target ({modifier.target_entity_uuid})")
         return self
 
+    def get_all_modifier_uuids(self) -> List[UUID]:
+        """
+        Get a list of UUIDs for all modifiers in this ContextualValue.
+
+        Returns:
+            List[UUID]: A list of all modifier UUIDs.
+        """
+        return (list(self.value_modifiers.keys()) +
+                list(self.min_constraints.keys()) +
+                list(self.max_constraints.keys()) +
+                list(self.advantage_modifiers.keys()) +
+                list(self.critical_modifiers.keys()) +
+                list(self.auto_hit_modifiers.keys()))
+
+    def remove_all_modifiers(self) -> None:
+        """
+        Remove all modifiers from this ContextualValue.
+        """
+        self.value_modifiers.clear()
+        self.min_constraints.clear()
+        self.max_constraints.clear()
+        self.advantage_modifiers.clear()
+        self.critical_modifiers.clear()
+        self.auto_hit_modifiers.clear()
+
 class ModifiableValue(BaseValue):
     """
     A comprehensive value type that combines static and contextual modifiers for both self and target entities.
@@ -1480,7 +1534,45 @@ class ModifiableValue(BaseValue):
             self.from_target_static.remove_modifier(uuid)
         if self.from_target_contextual is not None:
             self.from_target_contextual.remove_modifier(uuid)
+    
+    def remove_all_modifiers(self) -> None:
+        """
+        Remove all modifiers from this ModifiableValue.
+        """
+        self.self_static.remove_all_modifiers()
+        self.self_contextual.remove_all_modifiers()
+        self.to_target_static.remove_all_modifiers()
+        self.to_target_contextual.remove_all_modifiers()
+        if self.from_target_static is not None:
+            self.from_target_static.remove_all_modifiers()
+        if self.from_target_contextual is not None:
+            self.from_target_contextual.remove_all_modifiers()
 
+    def get_all_modifier_uuids(self) -> List[UUID]:
+        """
+        Get a list of UUIDs for all modifiers in this ModifiableValue.
+
+        Returns:
+            List[UUID]: A list of all modifier UUIDs.
+        """
+        uuids = []
+        for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
+            uuids.extend(component.get_all_modifier_uuids())
+        if self.from_target_static:
+            uuids.extend(self.from_target_static.get_all_modifier_uuids())
+        if self.from_target_contextual:
+            uuids.extend(self.from_target_contextual.get_all_modifier_uuids())
+        return uuids
+
+    def remove_modifiers(self, uuids: List[UUID]) -> None:
+        """
+        Remove multiple modifiers from this ModifiableValue.
+
+        Args:
+            uuids (List[UUID]): A list of UUIDs of modifiers to remove.
+        """
+        for uuid in uuids:
+            self.remove_modifier(uuid)
 
     @model_validator(mode="after")
     def validate_outgoing_modifier_flags(self) -> Self:
