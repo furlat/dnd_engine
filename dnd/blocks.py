@@ -111,6 +111,30 @@ class BaseBlock(BaseModel):
     class Config:
         validate_assignment = True
 
+    def _set_values_and_blocks_source(self, block: 'BaseBlock') -> None:
+        """
+        Helper function to set source and target for values and sub-blocks.
+
+        Args:
+            block (BaseBlock): The block to process.
+        """
+        for value in block.get_values():
+            value.set_source_entity(block.source_entity_uuid, block.source_entity_name)
+            if block.context is not None:
+                value.set_context(block.context)
+            if block.target_entity_uuid is not None:
+                value.set_target_entity(block.target_entity_uuid, block.target_entity_name)
+        
+        for sub_block in block.get_blocks():
+            sub_block.source_entity_uuid = block.source_entity_uuid
+            sub_block.source_entity_name = block.source_entity_name
+            if block.context is not None:
+                sub_block.set_context(block.context)
+            if block.target_entity_uuid is not None:
+                sub_block.set_target_entity(block.target_entity_uuid, block.target_entity_name)
+            # Recursively apply to sub-blocks
+            self._set_values_and_blocks_source(sub_block)
+
     @model_validator(mode='after')
     def set_values_and_blocks_source(self) -> 'Self':
         """
@@ -120,20 +144,7 @@ class BaseBlock(BaseModel):
         Returns:
             Self: The modified instance of the class.
         """
-        for value in self.get_values():
-            value.source_entity_uuid = self.source_entity_uuid
-            value.source_entity_name = self.source_entity_name
-            if self.context is not None:
-                value.set_context(self.context)
-            if self.target_entity_uuid is not None:
-                value.set_target_entity(self.target_entity_uuid, self.target_entity_name)
-        for block in self.get_blocks():
-            block.source_entity_uuid = self.source_entity_uuid
-            block.source_entity_name = self.source_entity_name
-            if self.context is not None:
-                block.set_context(self.context)
-            if self.target_entity_uuid is not None:
-                block.set_target_entity(self.target_entity_uuid, self.target_entity_name)
+        self._set_values_and_blocks_source(self)
         return self
 
     @model_validator(mode='after')
@@ -1418,8 +1429,12 @@ class Health(BaseBlock):
             temporary_hit_points (int): The amount of temporary hit points to add.
             source_entity_uuid (UUID): The UUID of the entity granting the temporary hit points.
         """
-        modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=temporary_hit_points)
+        modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=temporary_hit_points)
         if modifier.value > 0 and modifier.value > self.temporary_hit_points.score:
+            print(f"healths source uuid: {self.source_entity_uuid}")
+            print(f"modifier target uuid: {modifier.target_entity_uuid}")
+            print(f"temporary hit point source uuid: {self.temporary_hit_points.source_entity_uuid}")
+            print(f"tempory hitpoint static source uuid: {self.temporary_hit_points.self_static.source_entity_uuid}")
             self.temporary_hit_points.remove_all_modifiers()
             self.temporary_hit_points.self_static.add_value_modifier(modifier)
     
@@ -1431,10 +1446,11 @@ class Health(BaseBlock):
             temporary_hit_points (int): The amount of temporary hit points to remove.
             source_entity_uuid (UUID): The UUID of the entity removing the temporary hit points.
         """
-        modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=-temporary_hit_points)
+        modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=-temporary_hit_points)
         if modifier.value + self.temporary_hit_points.score <= 0:
             self.temporary_hit_points.remove_all_modifiers()
         else:
+            
             self.temporary_hit_points.self_static.add_value_modifier(modifier)
 
     def get_max_hit_dices_points(self, constitution_modifier: int) -> int:

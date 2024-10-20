@@ -10,6 +10,7 @@ from dnd.values import (
 import threading
 from dnd.modifiers import score_normaliziation_method
 import json
+from dnd.modifiers import Size, DamageType, SizeModifier, DamageTypeModifier, ResistanceModifier, ResistanceStatus, ContextualResistanceModifier, ContextualDamageTypeModifier, ContextualSizeModifier
 
 @pytest.fixture
 def source_uuid():
@@ -269,47 +270,200 @@ class TestStaticValue:
         value.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=-(2**63)))
         assert value.score == -1
 
+    def test_static_value_size_modifiers(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        value.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.HUGE))
+        
+        assert value.size == Size.HUGE  # Default is largest size
+
+    def test_static_value_size_modifiers_smallest_priority(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid, largest_size_priority=False)
+        value.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.TINY))
+        
+        assert value.size == Size.TINY
+
+    def test_static_value_damage_type_modifiers(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD))
+        
+        assert set(value.damage_types) == {DamageType.FIRE, DamageType.COLD}
+
+    def test_static_value_damage_type_random_selection(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD))
+        value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        
+        # Run multiple times to ensure randomness
+        damage_types = set()
+        for _ in range(100):
+            damage_types.add(value.damage_type)
+        
+        assert damage_types == {DamageType.FIRE}  # FIRE should always be selected as it's the most common
+
+    def test_static_value_resistance_modifiers(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD))
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.IMMUNITY
+
+    def test_static_value_resistance_sum(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.FIRE))
+        
+        assert value.resistance_sum[DamageType.FIRE] == 3  # RESISTANCE (1) + IMMUNITY (2)
+
+    def test_static_value_resistance_calculation(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=DamageType.COLD))
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.LIGHTNING))
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.VULNERABILITY
+        assert value.resistance[DamageType.LIGHTNING] == ResistanceStatus.IMMUNITY
+        assert value.resistance[DamageType.ACID] == ResistanceStatus.NONE
+
+    def test_static_value_remove_size_modifier(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        modifier_uuid = value.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.remove_size_modifier(modifier_uuid)
+        
+        assert value.size == Size.MEDIUM  # Default size
+
+    def test_static_value_remove_damage_type_modifier(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        modifier_uuid = value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.remove_damage_type_modifier(modifier_uuid)
+        
+        assert len(value.damage_types) == 0
+
+    def test_static_value_remove_resistance_modifier(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        modifier_uuid = value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.remove_resistance_modifier(modifier_uuid)
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.NONE
+
+    def test_static_value_get_all_modifier_uuids(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        size_uuid = value.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        damage_uuid = value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        resistance_uuid = value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        
+        all_uuids = value.get_all_modifier_uuids()
+        assert size_uuid in all_uuids
+        assert damage_uuid in all_uuids
+        assert resistance_uuid in all_uuids
+
+    def test_static_value_remove_all_modifiers(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        value.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        
+        value.remove_all_modifiers()
+        
+        assert value.size == Size.MEDIUM
+        assert len(value.damage_types) == 0
+        assert all(status == ResistanceStatus.NONE for status in value.resistance.values())
+
+    def test_static_value_combine_with_new_modifiers(self, source_uuid):
+        value1 = StaticValue(source_entity_uuid=source_uuid)
+        value1.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        
+        value2 = StaticValue(source_entity_uuid=source_uuid)
+        value2.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        
+        combined = value1.combine_values([value2])
+        
+        assert combined.size == Size.LARGE
+        assert DamageType.FIRE in combined.damage_types
+
+class TestStaticValueNewFeatures:
+    def test_size_modifiers(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        modifier = SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        uuid = value.add_size_modifier(modifier)
+        
+        assert value.size == Size.LARGE
+        
+        value.remove_size_modifier(uuid)
+        assert value.size == Size.MEDIUM
+
+    def test_damage_type_modifiers(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        modifier1 = DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        modifier2 = DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD)
+        
+        value.add_damage_type_modifier(modifier1)
+        value.add_damage_type_modifier(modifier2)
+        
+        assert set(value.damage_types) == {DamageType.FIRE, DamageType.COLD}
+        assert value.damage_type in {DamageType.FIRE, DamageType.COLD}
+
+    def test_resistance_modifiers(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        modifier1 = ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        modifier2 = ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD)
+        
+        value.add_resistance_modifier(modifier1)
+        value.add_resistance_modifier(modifier2)
+        
+        assert value.resistance_sum[DamageType.FIRE] == 1
+        assert value.resistance_sum[DamageType.COLD] == 2
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.IMMUNITY
+
 class TestContextualValue:
     def test_contextual_value_initialization(self, source_uuid):
         value = ContextualValue(source_entity_uuid=source_uuid)
         
         assert isinstance(value, BaseValue)
-        assert isinstance(value.value_modifiers, dict)
-        assert isinstance(value.min_constraints, dict)
-        assert isinstance(value.max_constraints, dict)
-        assert isinstance(value.advantage_modifiers, dict)
-        assert isinstance(value.critical_modifiers, dict)
-        assert isinstance(value.auto_hit_modifiers, dict)
+        assert value.value_modifiers == {}
+        assert value.min_constraints == {}
+        assert value.max_constraints == {}
+        assert value.advantage_modifiers == {}
+        assert value.critical_modifiers == {}
+        assert value.auto_hit_modifiers == {}
+        assert value.target_entity_uuid is None
+        assert value.context is None
 
     def test_contextual_value_computed_fields(self, source_uuid, target_uuid, sample_context):
-        def context_aware_numerical(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
-
-        def context_aware_advantage(source_uuid, target_uuid, context):
-            return AdvantageModifier(target_entity_uuid=target_uuid, value=AdvantageStatus.ADVANTAGE)
-
-        def context_aware_critical(source_uuid, target_uuid, context):
-            return CriticalModifier(target_entity_uuid=target_uuid, value=CriticalStatus.AUTOCRIT)
-
-        def context_aware_auto_hit(source_uuid, target_uuid, context):
-            return AutoHitModifier(target_entity_uuid=target_uuid, value=AutoHitStatus.AUTOHIT)
-
-        def min_constraint(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=0)
-
-        def max_constraint(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=10)
-
         value = ContextualValue(source_entity_uuid=source_uuid)
         value.set_target_entity(target_uuid)
         value.set_context(sample_context)
-
-        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=context_aware_numerical))
-        value.add_min_constraint(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=min_constraint))
-        value.add_max_constraint(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=max_constraint))
-        value.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=target_uuid, callable=context_aware_advantage))
-        value.add_critical_modifier(ContextualCriticalModifier(target_entity_uuid=target_uuid, callable=context_aware_critical))
-        value.add_auto_hit_modifier(ContextualAutoHitModifier(target_entity_uuid=target_uuid, callable=context_aware_auto_hit))
+        
+        def value_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=5)
+        
+        def min_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=0)
+        
+        def max_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=10)
+        
+        def advantage_callable(source_uuid, target_uuid, context):
+            return AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE)
+        
+        def critical_callable(source_uuid, target_uuid, context):
+            return CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.AUTOCRIT)
+        
+        def auto_hit_callable(source_uuid, target_uuid, context):
+            return AutoHitModifier(target_entity_uuid=source_uuid, value=AutoHitStatus.AUTOHIT)
+        
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable))
+        value.add_min_constraint(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=min_callable))
+        value.add_max_constraint(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=max_callable))
+        value.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=source_uuid, callable=advantage_callable))
+        value.add_critical_modifier(ContextualCriticalModifier(target_entity_uuid=source_uuid, callable=critical_callable))
+        value.add_auto_hit_modifier(ContextualAutoHitModifier(target_entity_uuid=source_uuid, callable=auto_hit_callable))
 
         assert value.min == 0
         assert value.max == 10
@@ -320,100 +474,420 @@ class TestContextualValue:
         assert value.critical == CriticalStatus.AUTOCRIT
         assert value.auto_hit == AutoHitStatus.AUTOHIT
 
-    def test_contextual_value_add_remove_modifiers(self, source_uuid, target_uuid):
-        value = ContextualValue(source_entity_uuid=source_uuid)
-
-        def dummy_callable(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
-
-        modifier_uuid = value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=dummy_callable))
-        assert len(value.value_modifiers) == 1
-
-        value.remove_value_modifier(modifier_uuid)
-        assert len(value.value_modifiers) == 0
-
-    def test_contextual_value_combine(self, source_uuid):
+    def test_contextual_value_combine(self, source_uuid, target_uuid, sample_context):
         value1 = ContextualValue(source_entity_uuid=source_uuid, name="Value1")
+        value1.set_target_entity(target_uuid)
+        value1.set_context(sample_context)
+        
+        def value_callable1(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=5)
+        
+        value1.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable1))
+        
+        
         value2 = ContextualValue(source_entity_uuid=source_uuid, name="Value2")
+        value2.set_target_entity(target_uuid)
+        value2.set_context(sample_context)
+        
+        def value_callable2(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=3)
+        
+        value2.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable2))
 
         combined = value1.combine_values([value2])
         assert combined.name == "Value1_Value2"
-        assert isinstance(combined, ContextualValue)
+        assert len(combined.value_modifiers) == 2
+        assert combined.score == 8
 
-    def test_contextual_value_changing_context(self, source_uuid, target_uuid):
+    def test_contextual_value_with_multiple_modifiers(self, source_uuid, target_uuid, sample_context):
         value = ContextualValue(source_entity_uuid=source_uuid)
         value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def value_callable1(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=5)
+        
+        def value_callable2(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=-2)
+        
+        def value_callable3(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=3)
+        
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable1))
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable2))
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable3))
+        assert value.score == 6
 
-        def context_aware_numerical(source_uuid, target_uuid, context):
-            if context is None:
-                return NumericalModifier(target_entity_uuid=target_uuid, value=0)
-            return NumericalModifier(target_entity_uuid=target_uuid, value=context.get('modifier', 0))
+    def test_contextual_value_with_conflicting_advantage(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def advantage_callable1(source_uuid, target_uuid, context):
+            return AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE)
+        
+        def advantage_callable2(source_uuid, target_uuid, context):
+            return AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.DISADVANTAGE)
+        
+        value.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=source_uuid, callable=advantage_callable1))
+        value.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=source_uuid, callable=advantage_callable2))
+        assert value.advantage == AdvantageStatus.NONE
 
-        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=context_aware_numerical))
+    def test_contextual_value_with_multiple_critical_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def critical_callable1(source_uuid, target_uuid, context):
+            return CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.AUTOCRIT)
+        
+        def critical_callable2(source_uuid, target_uuid, context):
+            return CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.NOCRIT)
+        
+        value.add_critical_modifier(ContextualCriticalModifier(target_entity_uuid=source_uuid, callable=critical_callable1))
+        value.add_critical_modifier(ContextualCriticalModifier(target_entity_uuid=source_uuid, callable=critical_callable2))
+        assert value.critical == CriticalStatus.NOCRIT
 
-        value.set_context({'modifier': 5})
-        assert value.score == 5
+    def test_min_max_constraints_conflict(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def min_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=10)
+        
+        def max_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=5)
+        
+        def value_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=7)
+        
+        value.add_min_constraint(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=min_callable))
+        value.add_max_constraint(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=max_callable))
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable))
 
-        value.set_context({'modifier': 10})
-        assert value.score == 10
+        assert value.score == 10  # Should respect the min constraint
 
-        value.clear_context()
+    def test_empty_modifiers_and_constraints(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
         assert value.score == 0
+        assert value.min is None
+        assert value.max is None
+        assert value.advantage == AdvantageStatus.NONE
+        assert value.critical == CriticalStatus.NONE
+        assert value.auto_hit == AutoHitStatus.NONE
 
-    def test_contextual_value_remove_all_modifiers(self, source_uuid, target_uuid):
+    def test_modifiers_with_invalid_target_uuid(self, source_uuid, target_uuid, sample_context):
         value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
         
-        def dummy_numerical_callable(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
-        
-        def dummy_advantage_callable(source_uuid, target_uuid, context):
-            return AdvantageModifier(target_entity_uuid=target_uuid, value=AdvantageStatus.ADVANTAGE)
-        
-        modifier1 = value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=dummy_numerical_callable))
-        modifier2 = value.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=target_uuid, callable=dummy_advantage_callable))
-        
-        value.remove_modifier(modifier1)
-        value.remove_modifier(modifier2)
-        
-        assert len(value.value_modifiers) == 0
-        assert len(value.advantage_modifiers) == 0
-
-    def test_callable_exception_handling(self, source_uuid, target_uuid):
-        def faulty_callable(source_uuid, target_uuid, context):
-            raise ValueError("Intentional error")
-
-        value = ContextualValue(source_entity_uuid=source_uuid)
-        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=faulty_callable))
-
-        with pytest.raises(ValueError):
-            _ = value.score
-
-    def test_duplicate_modifier_uuids(self, source_uuid, target_uuid):
-        value = ContextualValue(source_entity_uuid=source_uuid)
-        
-        def dummy_callable(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
-
-        modifier = ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
-        value.add_value_modifier(modifier)
-
-        with pytest.raises(ValueError):
-            value.add_value_modifier(modifier)  # Attempting to add the same modifier again
-
-    def test_remove_non_existent_modifier(self, source_uuid):
-        value = ContextualValue(source_entity_uuid=source_uuid)
-        non_existent_uuid = uuid4()
-        value.remove_modifier(non_existent_uuid)  # Should not raise an exception
-
-    def test_callable_returning_invalid_type(self, source_uuid, target_uuid):
         def invalid_callable(source_uuid, target_uuid, context):
-            return "Not a modifier"
+            return NumericalModifier(target_entity_uuid=uuid4(), value=5)
+        
+        with pytest.raises(ValueError):
+            value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=uuid4(), callable=invalid_callable))
 
+    def test_extreme_modifier_values(self, source_uuid, target_uuid, sample_context):
         value = ContextualValue(source_entity_uuid=source_uuid)
-        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=invalid_callable)) # type: ignore[arg-type]
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def value_callable1(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=2**63 - 1)
+        
+        def value_callable2(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=-(2**63))
+        
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable1))
+        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable2))
+        assert value.score == -1
 
-        with pytest.raises(ValueError, match="Callable returned unexpected type"):
-            _ = value.score
+    def test_contextual_value_size_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def size_callable1(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        
+        def size_callable2(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.HUGE)
+        
+        value.add_size_modifier(ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable1))
+        value.add_size_modifier(ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable2))
+        
+        assert value.size == Size.HUGE  # Default is largest size
+
+    def test_contextual_value_size_modifiers_smallest_priority(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid, largest_size_priority=False)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def size_callable1(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        
+        def size_callable2(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.TINY)
+        
+        value.add_size_modifier(ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable1))
+        value.add_size_modifier(ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable2))
+        
+        assert value.size == Size.TINY
+
+    def test_contextual_value_damage_type_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def damage_type_callable1(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        def damage_type_callable2(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD)
+        
+        value.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable1))
+        value.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable2))
+        
+        assert set(value.damage_types) == {DamageType.FIRE, DamageType.COLD}
+
+    def test_contextual_value_damage_type_random_selection(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def damage_type_callable1(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        def damage_type_callable2(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD)
+        
+        def damage_type_callable3(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        value.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable1))
+        value.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable2))
+        value.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable3))
+        
+        # Run multiple times to ensure randomness
+        damage_types = set()
+        for _ in range(100):
+            damage_types.add(value.damage_type)
+        
+        assert damage_types == {DamageType.FIRE}  # FIRE should always be selected as it's the most common
+
+    def test_contextual_value_resistance_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def resistance_callable1(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        
+        def resistance_callable2(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD)
+        
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable1))
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable2))
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.IMMUNITY
+
+    def test_contextual_value_resistance_sum(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def resistance_callable1(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        
+        def resistance_callable2(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.FIRE)
+        
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable1))
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable2))
+        
+        assert value.resistance_sum[DamageType.FIRE] == 3  # RESISTANCE (1) + IMMUNITY (2)
+
+    def test_contextual_value_resistance_calculation(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def resistance_callable1(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        
+        def resistance_callable2(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=DamageType.COLD)
+        
+        def resistance_callable3(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.LIGHTNING)
+        
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable1))
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable2))
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable3))
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.VULNERABILITY
+        assert value.resistance[DamageType.LIGHTNING] == ResistanceStatus.IMMUNITY
+        assert value.resistance[DamageType.ACID] == ResistanceStatus.NONE
+
+    def test_contextual_value_remove_size_modifier(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def size_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        
+        modifier = ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable)
+        uuid = value.add_size_modifier(modifier)
+        value.remove_size_modifier(uuid)
+        
+        assert value.size == Size.MEDIUM  # Default size
+
+    def test_contextual_value_remove_damage_type_modifier(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def damage_type_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        modifier = ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable)
+        uuid = value.add_damage_type_modifier(modifier)
+        value.remove_damage_type_modifier(uuid)
+        
+        assert len(value.damage_types) == 0
+
+    def test_contextual_value_remove_resistance_modifier(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def resistance_callable(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        
+        modifier = ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable)
+        uuid = value.add_resistance_modifier(modifier)
+        value.remove_resistance_modifier(uuid)
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.NONE
+
+    def test_contextual_value_get_all_modifier_uuids(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def size_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        
+        def damage_type_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        def resistance_callable(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        
+        size_uuid = value.add_size_modifier(ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable))
+        damage_uuid = value.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable))
+        resistance_uuid = value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable))
+        
+        all_uuids = value.get_all_modifier_uuids()
+        assert size_uuid in all_uuids
+        assert damage_uuid in all_uuids
+        assert resistance_uuid in all_uuids
+
+    def test_contextual_value_remove_all_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def size_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        
+        def damage_type_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        def resistance_callable(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        
+        value.add_size_modifier(ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable))
+        value.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable))
+        value.add_resistance_modifier(ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable))
+        
+        value.remove_all_modifiers()
+        
+        assert value.size == Size.MEDIUM
+        assert len(value.damage_types) == 0
+        assert all(status == ResistanceStatus.NONE for status in value.resistance.values())
+
+    def test_contextual_value_combine_with_new_modifiers(self, source_uuid, target_uuid, sample_context):
+        value1 = ContextualValue(source_entity_uuid=source_uuid)
+        value1.set_target_entity(target_uuid)
+        value1.set_context(sample_context)
+        
+        def size_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        
+        value1.add_size_modifier(ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable))
+        
+        value2 = ContextualValue(source_entity_uuid=source_uuid)
+        value2.set_target_entity(target_uuid)
+        value2.set_context(sample_context)
+        
+        def damage_type_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        value2.add_damage_type_modifier(ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable))
+        
+        combined = value1.combine_values([value2])
+        
+        assert combined.size == Size.LARGE
+        assert DamageType.FIRE in combined.damage_types
+
+class TestContextualValueNewFeatures:
+    def test_size_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def size_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE)
+        
+        modifier = ContextualSizeModifier(target_entity_uuid=source_uuid, callable=size_callable)
+        value.add_size_modifier(modifier)
+        
+        assert value.size == Size.LARGE
+
+    def test_damage_type_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def damage_type_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE)
+        
+        modifier = ContextualDamageTypeModifier(target_entity_uuid=source_uuid, callable=damage_type_callable)
+        value.add_damage_type_modifier(modifier)
+        
+        assert DamageType.FIRE in value.damage_types
+        assert value.damage_type == DamageType.FIRE
+
+    def test_resistance_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ContextualValue(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        def resistance_callable(source_uuid, target_uuid, context):
+            return ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE)
+        
+        modifier = ContextualResistanceModifier(target_entity_uuid=source_uuid, callable=resistance_callable)
+        value.add_resistance_modifier(modifier)
+        
+        assert value.resistance_sum[DamageType.FIRE] == 1
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
 
 class TestModifiableValue:
     def test_modifiable_value_initialization(self, source_uuid):
@@ -421,556 +895,362 @@ class TestModifiableValue:
         
         assert isinstance(value, BaseValue)
         assert isinstance(value.self_static, StaticValue)
-        assert isinstance(value.to_target_static, StaticValue)
         assert isinstance(value.self_contextual, ContextualValue)
+        assert isinstance(value.to_target_static, StaticValue)
         assert isinstance(value.to_target_contextual, ContextualValue)
-        assert value.from_target_contextual is None
         assert value.from_target_static is None
+        assert value.from_target_contextual is None
 
     def test_modifiable_value_computed_fields(self, source_uuid, target_uuid, sample_context):
         value = ModifiableValue.create(source_entity_uuid=source_uuid)
         value.set_target_entity(target_uuid)
         value.set_context(sample_context)
-
+        
         value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
-        value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=target_uuid, value=3))
-
-        def context_aware_numerical(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=2)
-
-        value.self_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=context_aware_numerical))
-        value.to_target_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=context_aware_numerical))
-
-        assert value.score == 12  # 5 + 3 + 2 + 2
-        assert value.normalized_score == 12  # Default normalizer
-
-    def test_modifiable_value_set_from_target(self, source_uuid, target_uuid):
-        # Create the main value with source_uuid
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.self_static.add_min_constraint(NumericalModifier(target_entity_uuid=source_uuid, value=0))
+        value.self_static.add_max_constraint(NumericalModifier(target_entity_uuid=source_uuid, value=10))
+        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE))
+        value.self_static.add_critical_modifier(CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.AUTOCRIT))
+        value.self_static.add_auto_hit_modifier(AutoHitModifier(target_entity_uuid=source_uuid, value=AutoHitStatus.AUTOHIT))
         
-        # Create the target value with target_uuid
-        target_value = ModifiableValue.create(source_entity_uuid=target_uuid)
-        target_value.set_target_entity(source_uuid)
-        # Set the target entity for the main value
-        value.set_target_entity(target_uuid)
 
-        # Set up the target value's modifiers
-        target_value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, source_entity_uuid=target_uuid, value=5))
-
-        def context_aware_numerical(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=3)
-
-        target_value.to_target_contextual.add_value_modifier(
-            ContextualNumericalModifier(
-                target_entity_uuid=source_uuid,
-                callable=context_aware_numerical
-            )
-        )
-
-        # Set the from_target values
-        value.set_from_target(target_value)
-
-        # Assertions
-        assert value.from_target_static is not None
-        assert value.from_target_contextual is not None
-        assert value.from_target_static.score == 5
-        assert value.from_target_contextual.score == 3
-
-        # Additional checks to ensure correct setup
-        assert value.target_entity_uuid == target_uuid
-        assert target_value.source_entity_uuid == target_uuid
-        assert value.from_target_static.source_entity_uuid == target_uuid
-        assert value.from_target_contextual.source_entity_uuid == target_uuid
-
-    def test_modifiable_value_combine(self, source_uuid):
-        value1 = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value1.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
         
-        value2 = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value2.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
-
-        combined = value1.combine_values([value2])
-        assert isinstance(combined, ModifiableValue)
-        assert combined.self_static.score == 8
-
-    def test_modifiable_value_complex_scenario(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-        
-        # Add modifiers to all components
-        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, source_entity_uuid=source_uuid, value=1))
-        value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=target_uuid, source_entity_uuid=target_uuid, value=2))
-        
-        def context_aware_self(source_uuid, target_uuid, context):
+        def value_callable(source_uuid, target_uuid, context):
             return NumericalModifier(target_entity_uuid=source_uuid, value=3)
         
-        def context_aware_target(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=4)
+        def min_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=0)
         
-        value.self_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=context_aware_self))
-        value.to_target_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=context_aware_target))
+        def max_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=source_uuid, value=10)
         
-        # Set from_target components
-        from_target_static = StaticValue(source_entity_uuid=target_uuid, target_entity_uuid=source_uuid)
+        def advantage_callable(source_uuid, target_uuid, context):
+            return AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE)
         
-        from_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, source_entity_uuid=target_uuid, value=5))
-        value.set_from_target_static(from_target_static)
+        def critical_callable(source_uuid, target_uuid, context):
+            return CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.AUTOCRIT)
         
-        from_target_contextual = ContextualValue(source_entity_uuid=target_uuid)
-        def context_aware_from_target(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=6)
-        from_target_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=context_aware_from_target))
-        from_target_contextual.set_target_entity(source_uuid)
-        value.set_from_target_contextual(from_target_contextual)
+        def auto_hit_callable(source_uuid, target_uuid, context):
+            return AutoHitModifier(target_entity_uuid=source_uuid, value=AutoHitStatus.AUTOHIT)
         
-        # Assert the total score
-        assert value.score == 21  # 1 + 2 + 3 + 4 + 5 + 6
+        value.self_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=value_callable))
+        value.self_contextual.add_min_constraint(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=min_callable))
+        value.self_contextual.add_max_constraint(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=max_callable))
+        value.self_contextual.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=source_uuid, callable=advantage_callable))
+        value.self_contextual.add_critical_modifier(ContextualCriticalModifier(target_entity_uuid=source_uuid, callable=critical_callable))
+        value.self_contextual.add_auto_hit_modifier(ContextualAutoHitModifier(target_entity_uuid=source_uuid, callable=auto_hit_callable))
+        
 
-    def test_modifiable_value_advantage_interaction(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-        
-        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE))
-        value.to_target_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=target_uuid, value=AdvantageStatus.DISADVANTAGE))
-        
-        def context_aware_advantage(source_uuid, target_uuid, context):
-            return AdvantageModifier(target_entity_uuid=target_uuid, value=AdvantageStatus.ADVANTAGE)
-        
-        value.self_contextual.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=source_uuid, callable=context_aware_advantage))
-        
-        assert value.advantage == AdvantageStatus.ADVANTAGE  # 2 advantages vs 1 disadvantage
 
-    def test_modifiable_value_with_none_components(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.from_target_contextual = None
-        value.from_target_static = None
+        assert value.min == 0
+        assert value.max == 10
+        assert value.score == 8
+        assert value.normalized_score == 8  # Default normalizer
+        assert value.advantage_sum == 2
+        assert value.advantage == AdvantageStatus.ADVANTAGE
+        assert value.critical == CriticalStatus.AUTOCRIT
+        assert value.auto_hit == AutoHitStatus.AUTOHIT
 
-        assert value.score == 0  # Should not raise an exception
-
-    def test_modifiable_value_multiple_targets(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        target1 = uuid4()
-        target2 = uuid4()
-
-        value.set_target_entity(target1)
-        assert value.target_entity_uuid == target1
-
-        value.set_target_entity(target2)
-        assert value.target_entity_uuid == target2
-
-    def test_modifiable_value_invalid_uuid_in_set_methods(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-
-        with pytest.raises(ValueError):
-            value.set_target_entity("not-a-uuid") # type: ignore[arg-type]
-
-    def test_modifiable_value_conflicting_data(self, source_uuid):
-        value1 = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value2 = ModifiableValue.create(source_entity_uuid=uuid4())  # Different source UUID
-
-        with pytest.raises(ValueError):
-            value1.combine_values([value2])
-
-    def test_modifiable_value_edge_case_computations(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-
-        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=10))
-        value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=target_uuid, value=-10))
-
-        assert value.score == 0  # Should cancel out
-
-    def test_outgoing_modifier_flags(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        
-        assert not value.self_static.is_outgoing_modifier
-        assert not value.self_contextual.is_outgoing_modifier
-        assert value.to_target_static.is_outgoing_modifier
-        assert value.to_target_contextual.is_outgoing_modifier
-
-    def test_invalid_outgoing_modifier_flags(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        
-        with pytest.raises(ValueError):
-            value.self_static.is_outgoing_modifier = True
-            value= ModifiableValue.model_validate(value)
-    
-        with pytest.raises(ValueError):
-            value.self_contextual.is_outgoing_modifier = True
-            value= ModifiableValue.model_validate(value)
-
-        with pytest.raises(ValueError):
-            value.to_target_static.is_outgoing_modifier = False
-            value= ModifiableValue.model_validate(value)
-        with pytest.raises(ValueError):
-            value.to_target_contextual.is_outgoing_modifier = False
-            value= ModifiableValue.model_validate(value)
-    def test_source_and_target_consistency(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-        
-        assert value.self_static.source_entity_uuid == source_uuid
-        assert value.self_contextual.source_entity_uuid == source_uuid
-        assert value.to_target_static.source_entity_uuid == source_uuid
-        assert value.to_target_contextual.source_entity_uuid == source_uuid
-
-    def test_invalid_source_consistency(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        
-        with pytest.raises(ValueError, match="source UUID .* does not match ModifiableValue source UUID"):
-            value.self_static.source_entity_uuid = target_uuid
-            value = ModifiableValue.model_validate(value)
-
-    def test_from_target_consistency(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        target_value = ModifiableValue.create(source_entity_uuid=target_uuid)
-        target_value.set_target_entity(source_uuid)
-        
-        value.set_target_entity(target_uuid)
-        value.set_from_target(target_value)
-        
-        assert value.from_target_static is not None
-        assert value.from_target_contextual is not None
-        assert value.from_target_static.source_entity_uuid == target_uuid
-        assert value.from_target_contextual.source_entity_uuid == target_uuid
-        assert value.from_target_static.target_entity_uuid == source_uuid
-        assert value.from_target_contextual.target_entity_uuid == source_uuid
-
-    def test_invalid_from_target_consistency(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        target_value = ModifiableValue.create(source_entity_uuid=target_uuid)
-        target_value.set_target_entity(source_uuid)
-        value.set_target_entity(target_uuid)
-        value.set_from_target(target_value)
-        assert value.from_target_static is not None
-        assert value.from_target_contextual is not None
-        
-        with pytest.raises(ValueError):
-            value.from_target_static.target_entity_uuid = target_uuid
-            new_value = ModifiableValue.model_validate(value)
-        with pytest.raises(ValueError):
-            value.from_target_contextual.target_entity_uuid = target_uuid
-            new_value = ModifiableValue.model_validate(value)
-        with pytest.raises(ValueError):
-            value.from_target_static.source_entity_uuid = source_uuid
-            new_value = ModifiableValue.model_validate(value)
-        with pytest.raises(ValueError):
-            value.from_target_contextual.source_entity_uuid = source_uuid
-            new_value   = ModifiableValue.model_validate(value)
-    def test_modifiable_value_clear_from_target(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        target_value = ModifiableValue.create(source_entity_uuid=target_uuid)
-        target_value.set_target_entity(source_uuid)
-        
-        value.set_target_entity(target_uuid)
-        value.set_from_target(target_value)
-        
-        assert value.from_target_static is not None
-        assert value.from_target_contextual is not None
-        
-        value.clear_target_entity()
-        
-        assert value.from_target_static is None
-        assert value.from_target_contextual is None
-
-    def test_modifiable_value_combine_with_outgoing_modifiers(self, source_uuid):
-        value1 = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value2 = ModifiableValue.create(source_entity_uuid=source_uuid)
-        
-        combined = value1.combine_values([value2])
-        
-        assert not combined.self_static.is_outgoing_modifier
-        assert not combined.self_contextual.is_outgoing_modifier
-        assert combined.to_target_static.is_outgoing_modifier
-        assert combined.to_target_contextual.is_outgoing_modifier
-
-    def test_modifiable_value_serialization_with_outgoing_modifiers(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        serialized = value.model_dump_json()
-        deserialized = ModifiableValue.model_validate_json(serialized)
-        
-        assert not deserialized.self_static.is_outgoing_modifier
-        assert not deserialized.self_contextual.is_outgoing_modifier
-        assert deserialized.to_target_static.is_outgoing_modifier
-        assert deserialized.to_target_contextual.is_outgoing_modifier
-
-    def test_modifiable_value_with_invalid_from_target(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        invalid_target_value = ModifiableValue.create(source_entity_uuid=source_uuid)  # Same source UUID as value
-
-        value.set_target_entity(target_uuid)
-
-        with pytest.raises(ValueError):
-            value.set_from_target(invalid_target_value)
-
-    def test_modifiable_value_set_context(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        context = {"test_key": "test_value"}
-        value.set_context(context)
-        
-        assert value.context == context
-        assert value.self_contextual.context == context
-        assert value.to_target_contextual.context == context
-
-    def test_modifiable_value_clear_context(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_context({"test_key": "test_value"})
-        value.clear_context()
-        
-        assert value.context is None
-        assert value.self_contextual.context is None
-        assert value.to_target_contextual.context is None
-
-    def test_modifiable_value_remove_modifier(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        modifier = NumericalModifier(target_entity_uuid=source_uuid, value=5)
-        uuid = value.self_static.add_value_modifier(modifier)
-        
-        assert len(value.self_static.value_modifiers) == 2  # Including base value
-        value.remove_modifier(uuid)
-        assert len(value.self_static.value_modifiers) == 1
-
-    def test_modifiable_value_remove_all_modifiers(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
-        value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
-        
-        value.remove_all_modifiers()
-        
-        assert len(value.self_static.value_modifiers) == 0
-        assert len(value.to_target_static.value_modifiers) == 0
-
-    def test_modifiable_value_get_all_modifier_uuids(self, source_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        mod1 = value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
-        mod2 = value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
-        
-        uuids = value.get_all_modifier_uuids()
-        assert mod1 in uuids
-        assert mod2 in uuids
-
-    def test_modifiable_value_score_normalization(self, source_uuid):
-        def custom_normalizer(x):
-            return max(0, min(x, 20))
-        
-        value = ModifiableValue.create(source_entity_uuid=source_uuid, score_normalizer=custom_normalizer)
-        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=25))
-        
-        assert value.score == 25
-        assert value.normalized_score == 20
-
-    def test_modifiable_value_advantage_calculation(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-        
-        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE))
-        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.DISADVANTAGE))
-        
-        assert value.advantage == AdvantageStatus.NONE
-
-    def test_modifiable_value_critical_calculation(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-        
-        value.self_static.add_critical_modifier(CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.AUTOCRIT))
-        value.to_target_static.add_critical_modifier(CriticalModifier(target_entity_uuid=target_uuid, value=CriticalStatus.NOCRIT))
-        
-        assert value.critical == CriticalStatus.NOCRIT
-
-    def test_modifiable_value_auto_hit_calculation(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-        
-        value.self_static.add_auto_hit_modifier(AutoHitModifier(target_entity_uuid=source_uuid, value=AutoHitStatus.AUTOHIT))
-        value.to_target_static.add_auto_hit_modifier(AutoHitModifier(target_entity_uuid=target_uuid, value=AutoHitStatus.AUTOMISS))
-        
-        assert value.auto_hit == AutoHitStatus.AUTOMISS
-
-    def test_modifiable_value_contextual_modifiers(self, source_uuid, target_uuid):
-        def context_aware_numerical(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=context.get('bonus', 0))
-
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value.set_target_entity(target_uuid)
-        value.self_contextual.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable=context_aware_numerical))
-        
-        value.set_context({'bonus': 5})
-        assert value.score == 5
-
-        value.set_context({'bonus': 10})
-        assert value.score == 10
-
-    def test_modifiable_value_from_target_modifiers(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        target_value = ModifiableValue.create(source_entity_uuid=target_uuid)
-        
-        target_value.to_target_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
-        
-        def contextual_modifier(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=3)
-        
-        target_value.to_target_contextual.add_value_modifier(
-            ContextualNumericalModifier(
-                target_entity_uuid=source_uuid,
-                callable=contextual_modifier
-            )
-        )
-        target_value.set_target_entity(source_uuid)
-        
-        value.set_target_entity(target_uuid)
-        value.set_from_target(target_value)
-        
-        assert value.score == 8  # 5 from static + 3 from contextual
-
-    def test_modifiable_value_validation(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        
-        with pytest.raises(ValueError):
-            value.self_static.is_outgoing_modifier = True
-            ModifiableValue.model_validate(value)
-
-        with pytest.raises(ValueError):
-            value.to_target_static.is_outgoing_modifier = False
-            ModifiableValue.model_validate(value)
-
-    def test_modifiable_value_combine_values(self, source_uuid):
+    def test_modifiable_value_combine(self, source_uuid, target_uuid, sample_context):
         value1 = ModifiableValue.create(source_entity_uuid=source_uuid, value_name="Value1")
+        value1.set_target_entity(target_uuid)
+        value1.set_context(sample_context)
+        value1.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
         value1.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
         
         value2 = ModifiableValue.create(source_entity_uuid=source_uuid, value_name="Value2")
+        value2.set_target_entity(target_uuid)
+        value2.set_context(sample_context)
         value2.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
-        
+
         combined = value1.combine_values([value2])
         assert combined.name == "Value1_Value2"
-        assert combined.score == 8
+        assert len(combined.self_static.value_modifiers) == 5 # 3 added and 2 base values.
+        assert combined.score == 13
 
-class TestEdgeCasesAndErrorHandling:
-    def test_missing_required_field(self):
-        with pytest.raises(ValueError):
-            BaseValue()  # Missing required source_entity_uuid
-
-    def test_invalid_enum_value(self, source_uuid):
-        with pytest.raises(ValueError):
-            StaticValue(source_entity_uuid=source_uuid, advantage_modifiers={
-                uuid4(): AdvantageModifier(target_entity_uuid=source_uuid, value="InvalidValue") # type: ignore[arg-type]
-            })
-
-    def test_contextual_value_invalid_callable(self, source_uuid):
-        value = ContextualValue(source_entity_uuid=source_uuid)
-        with pytest.raises(ValueError):
-            value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=source_uuid, callable="not_a_callable")) # type: ignore[arg-type]
-
-    def test_modifiable_value_set_from_target_mismatch(self, source_uuid, target_uuid):
-        value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        wrong_target_value = ModifiableValue.create(source_entity_uuid=uuid4())  # Different from target_uuid
-
-        with pytest.raises(ValueError):
-            value.set_from_target(wrong_target_value)
-
-    def test_combine_values_with_different_source(self, source_uuid):
-        value1 = StaticValue(source_entity_uuid=source_uuid)
-        value2 = StaticValue(source_entity_uuid=uuid4())  # Different source_entity_uuid
-
-        with pytest.raises(ValueError):
-            value1.combine_values([value2])
-
-    def test_contextual_value_execute_callable_without_setup(self, source_uuid, target_uuid):
-        value = ContextualValue(source_entity_uuid=source_uuid)
-        
-        def dummy_callable(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
-
-        modifier = ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
-        value.add_value_modifier(modifier)
-
-        # Trying to calculate score without setting up target and context
-        with pytest.raises(ValueError):
-            _ = value.score
-
-    def test_modifiable_value_clear_target_and_context(self, source_uuid, target_uuid, sample_context):
+    def test_modifiable_value_with_multiple_modifiers(self, source_uuid, target_uuid, sample_context):
         value = ModifiableValue.create(source_entity_uuid=source_uuid)
         value.set_target_entity(target_uuid)
         value.set_context(sample_context)
+        
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=-2))
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=3))
+        assert value.score == 6
 
-        value.clear_target_entity()
-        assert value.target_entity_uuid is None
-        assert value.self_contextual.target_entity_uuid is None
-        assert value.to_target_contextual.target_entity_uuid is None
-
-        value.clear_context()
-        assert value.context is None
-        assert value.self_contextual.context is None
-        assert value.to_target_contextual.context is None
-
-    def test_invalid_score_normalizer(self, source_uuid):
-        with pytest.raises(ValueError):
-            BaseValue(source_entity_uuid=source_uuid, score_normalizer="not_a_callable")
-
-    def test_modifiable_value_set_invalid_from_target(self, source_uuid):
+    def test_modifiable_value_with_conflicting_advantage(self, source_uuid, target_uuid, sample_context):
         value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        invalid_target = BaseValue(source_entity_uuid=uuid4())
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
         
-        with pytest.raises(AttributeError):
-            value.set_from_target(invalid_target) # type: ignore[arg-type]  
+        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.ADVANTAGE))
+        value.self_static.add_advantage_modifier(AdvantageModifier(target_entity_uuid=source_uuid, value=AdvantageStatus.DISADVANTAGE))
+        assert value.advantage == AdvantageStatus.NONE
 
-    def test_invalid_enum_value_in_callable(self, source_uuid, target_uuid):
-        def invalid_enum_callable(source_uuid, target_uuid, context):
-            return AdvantageModifier(target_entity_uuid=target_uuid, value="InvalidValue") # type: ignore[arg-type]
-
-        value = ContextualValue(source_entity_uuid=source_uuid)
-        value.add_advantage_modifier(ContextualAdvantageModifier(target_entity_uuid=target_uuid, callable=invalid_enum_callable))
-
-        with pytest.raises(ValueError):
-            _ = value.advantage
-
-    def test_deep_copy_independence(self, source_uuid):
-        import copy
-
-        original = StaticValue(source_entity_uuid=source_uuid)
-        original.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=5))
-
-        copied = copy.deepcopy(original)
-        copied.value_modifiers[list(copied.value_modifiers.keys())[0]].value = 10
-
-        assert original.score == 5
-        assert copied.score == 10
-
-    def test_invalid_uuid_in_set_target_entity(self, source_uuid):
+    def test_modifiable_value_with_multiple_critical_modifiers(self, source_uuid, target_uuid, sample_context):
         value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        with pytest.raises(ValueError):
-            value.set_target_entity("not-a-uuid") # type: ignore[arg-type]
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        
+        value.self_static.add_critical_modifier(CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.AUTOCRIT))
+        value.self_static.add_critical_modifier(CriticalModifier(target_entity_uuid=source_uuid, value=CriticalStatus.NOCRIT))
+        assert value.critical == CriticalStatus.NOCRIT
 
-    def test_contextual_value_without_setup(self, source_uuid, target_uuid):
-        value = ContextualValue(source_entity_uuid=source_uuid)
-        
-        def dummy_callable(source_uuid, target_uuid, context):
-            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
-        
-        value.add_value_modifier(ContextualNumericalModifier(target_entity_uuid=target_uuid, callable=dummy_callable))
-        
-        with pytest.raises(ValueError):
-            _ = value.score  # Should raise an error because callable_arguments are not set
-
-    def test_modifiable_value_with_invalid_from_target(self, source_uuid, target_uuid):
+    def test_min_max_constraints_conflict(self, source_uuid, target_uuid, sample_context):
         value = ModifiableValue.create(source_entity_uuid=source_uuid)
-        invalid_target = BaseValue(source_entity_uuid=target_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
         
-        with pytest.raises(AttributeError):
-            value.set_from_target(invalid_target) # type: ignore[arg-type]
+        value.self_static.add_min_constraint(NumericalModifier(target_entity_uuid=source_uuid, value=10))
+        value.self_static.add_max_constraint(NumericalModifier(target_entity_uuid=source_uuid, value=5))
+        value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=7))
 
-    def test_combine_values_with_different_source_uuids(self, source_uuid):
-        value1 = ModifiableValue.create(source_entity_uuid=source_uuid)
-        value2 = ModifiableValue.create(source_entity_uuid=uuid4())
-        
-        with pytest.raises(ValueError):
-            value1.combine_values([value2])
+        assert value.score == 10  # Should respect the min constraint
 
-    def test_modifiable_value_extreme_values(self, source_uuid):
+    def test_empty_modifiers_and_constraints(self, source_uuid, target_uuid, sample_context):
         value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        assert value.score == 0
+        assert value.min is None
+        assert value.max is None
+        assert value.advantage == AdvantageStatus.NONE
+        assert value.critical == CriticalStatus.NONE
+        assert value.auto_hit == AutoHitStatus.NONE
+
+    def test_modifiers_with_invalid_target_uuid(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        invalid_modifier = NumericalModifier(target_entity_uuid=uuid4(), value=5)
+        with pytest.raises(ValueError):
+            value.self_static.add_value_modifier(invalid_modifier)
+
+    def test_extreme_modifier_values(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
         value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=2**63 - 1))
         value.self_static.add_value_modifier(NumericalModifier(target_entity_uuid=source_uuid, value=-(2**63)))
+        assert value.score == -1
+
+    def test_modifiable_value_size_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.HUGE))
         
-        assert value.score == -1  # Assuming no overflow handling
+        assert value.size == Size.HUGE  # Default is largest size
+
+    def test_modifiable_value_size_modifiers_smallest_priority(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.self_static.largest_size_priority = False
+        value.self_contextual.largest_size_priority = False
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.TINY))
+        
+        assert value.size == Size.TINY
+
+    def test_modifiable_value_damage_type_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD))
+        
+        assert set(value.damage_types) == {DamageType.FIRE, DamageType.COLD}
+
+    def test_modifiable_value_damage_type_random_selection(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD))
+        value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        
+        # Run multiple times to ensure randomness
+        damage_types = set()
+        for _ in range(100):
+            damage_types.add(value.damage_type)
+        
+        assert damage_types == {DamageType.FIRE}  # FIRE should always be selected as it's the most common
+
+    def test_modifiable_value_resistance_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD))
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.IMMUNITY
+
+    def test_modifiable_value_resistance_sum(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.FIRE))
+        
+        assert value.resistance_sum[DamageType.FIRE] == 3  # RESISTANCE (1) + IMMUNITY (2)
+
+    def test_modifiable_value_resistance_calculation(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=DamageType.COLD))
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.LIGHTNING))
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.VULNERABILITY
+        assert value.resistance[DamageType.LIGHTNING] == ResistanceStatus.IMMUNITY
+        assert value.resistance[DamageType.ACID] == ResistanceStatus.NONE
+
+    def test_modifiable_value_remove_size_modifier(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        modifier_uuid = value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.self_static.remove_size_modifier(modifier_uuid)
+        
+        assert value.size == Size.MEDIUM  # Default size
+
+    def test_modifiable_value_remove_damage_type_modifier(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        modifier_uuid = value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.self_static.remove_damage_type_modifier(modifier_uuid)
+        
+        assert len(value.damage_types) == 0
+
+    def test_modifiable_value_remove_resistance_modifier(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        modifier_uuid = value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.self_static.remove_resistance_modifier(modifier_uuid)
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.NONE
+
+    def test_modifiable_value_get_all_modifier_uuids(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        size_uuid = value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        damage_uuid = value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        resistance_uuid = value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        
+        all_uuids = value.get_all_modifier_uuids()
+        assert size_uuid in all_uuids
+        assert damage_uuid in all_uuids
+        assert resistance_uuid in all_uuids
+
+    def test_modifiable_value_remove_all_modifiers(self, source_uuid, target_uuid, sample_context):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.set_target_entity(target_uuid)
+        value.set_context(sample_context)
+        value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        
+        value.remove_all_modifiers()
+        
+        assert value.size == Size.MEDIUM
+        assert len(value.damage_types) == 0
+        assert all(status == ResistanceStatus.NONE for status in value.resistance.values())
+
+    def test_modifiable_value_combine_with_new_modifiers(self, source_uuid, target_uuid, sample_context):
+        value1 = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value1.set_target_entity(target_uuid)
+        value1.set_context(sample_context)
+        value1.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        
+        value2 = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value2.set_target_entity(target_uuid)
+        value2.set_context(sample_context)
+        value2.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        
+        combined = value1.combine_values([value2])
+        
+        assert combined.size == Size.LARGE
+        assert DamageType.FIRE in combined.damage_types
+
+class TestModifiableValueNewFeatures:
+    def test_get_typed_modifiers(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        typed_modifiers = value.get_typed_modifiers()
+        
+        assert len(typed_modifiers) == 2  # self_static, , self_contextual,
+        assert all(isinstance(mod, (StaticValue, ContextualValue)) for mod in typed_modifiers)
+
+    def test_set_from_target(self, source_uuid, target_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        target_value = ModifiableValue.create(source_entity_uuid=target_uuid)
+        
+        value.set_target_entity(target_uuid)
+        target_value.set_target_entity(source_uuid)
+        
+        value.set_from_target(target_value)
+        
+        assert value.from_target_contextual is not None
+        assert value.from_target_static is not None
+        assert value.from_target_contextual.source_entity_uuid == target_uuid
+        assert value.from_target_static.source_entity_uuid == target_uuid
+
+    def test_size_property(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        
+        assert value.size == Size.LARGE
+
+    def test_damage_types_property(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        value.to_target_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.COLD))
+        
+        assert set(value.damage_types) == {DamageType.FIRE, DamageType.COLD}
+
+    def test_resistance_property(self, source_uuid):
+        value = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value.self_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+        value.to_target_static.add_resistance_modifier(ResistanceModifier(target_entity_uuid=source_uuid, value=ResistanceStatus.IMMUNITY, damage_type=DamageType.COLD))
+        
+        assert value.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+        assert value.resistance[DamageType.COLD] == ResistanceStatus.IMMUNITY
+
+class TestEdgeCasesAndErrorHandling:
+    def test_invalid_size_modifier(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        with pytest.raises(ValueError):
+            value.add_size_modifier(SizeModifier(target_entity_uuid=uuid4(), value=Size.LARGE))
+
+    def test_invalid_damage_type_modifier(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        with pytest.raises(ValueError):
+            value.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=uuid4(), value=DamageType.FIRE))
+
+    def test_invalid_resistance_modifier(self, source_uuid):
+        value = StaticValue(source_entity_uuid=source_uuid)
+        with pytest.raises(ValueError):
+            value.add_resistance_modifier(ResistanceModifier(target_entity_uuid=uuid4(), value=ResistanceStatus.RESISTANCE, damage_type=DamageType.FIRE))
+
+
+    def test_modifiable_value_combine_with_new_modifiers(self, source_uuid):
+        value1 = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value1.self_static.add_size_modifier(SizeModifier(target_entity_uuid=source_uuid, value=Size.LARGE))
+        
+        value2 = ModifiableValue.create(source_entity_uuid=source_uuid)
+        value2.self_static.add_damage_type_modifier(DamageTypeModifier(target_entity_uuid=source_uuid, value=DamageType.FIRE))
+        
+        combined = value1.combine_values([value2])
+        
+        assert combined.size == Size.LARGE
+        assert DamageType.FIRE in combined.damage_types
 
 if __name__ == "__main__":
     pytest.main([__file__])
