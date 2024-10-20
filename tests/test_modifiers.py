@@ -4,9 +4,12 @@ from dnd.modifiers import (
     BaseModifier, NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier,
     ContextualModifier, ContextualAdvantageModifier, ContextualCriticalModifier,
     ContextualAutoHitModifier, ContextualNumericalModifier,
-    AdvantageStatus, CriticalStatus, AutoHitStatus
+    AdvantageStatus, CriticalStatus, AutoHitStatus,
+    SizeModifier, DamageTypeModifier, ContextualSizeModifier, ContextualDamageTypeModifier,
+    Size, DamageType
 )
 import threading
+from pydantic import ValidationError
 
 @pytest.fixture
 def target_uuid():
@@ -342,6 +345,146 @@ class TestContextualNumericalModifier:
         assert retrieved_modifier is not None
         assert retrieved_modifier == modifier
 
+class TestSizeModifier:
+    def test_size_modifier_initialization(self, target_uuid):
+        modifier = SizeModifier(target_entity_uuid=target_uuid, value=Size.LARGE)
+        
+        assert isinstance(modifier, BaseModifier)
+        assert modifier.value == Size.LARGE
+
+    def test_size_modifier_get(self, target_uuid):
+        modifier = SizeModifier(target_entity_uuid=target_uuid, value=Size.SMALL)
+        
+        retrieved_modifier = SizeModifier.get(modifier.uuid)
+        assert retrieved_modifier is not None
+        assert retrieved_modifier == modifier
+        assert retrieved_modifier.value == Size.SMALL
+
+    def test_size_modifier_get_wrong_type(self, target_uuid):
+        class FakeModifier(BaseModifier):
+            pass
+        
+        fake_modifier = FakeModifier(target_entity_uuid=target_uuid)
+        BaseModifier.register(fake_modifier)
+        
+        with pytest.raises(ValueError):
+            SizeModifier.get(fake_modifier.uuid)
+
+class TestDamageTypeModifier:
+    def test_damage_type_modifier_initialization(self, target_uuid):
+        modifier = DamageTypeModifier(target_entity_uuid=target_uuid, value=DamageType.FIRE)
+        
+        assert isinstance(modifier, BaseModifier)
+        assert modifier.value == DamageType.FIRE
+
+    def test_damage_type_modifier_get(self, target_uuid):
+        modifier = DamageTypeModifier(target_entity_uuid=target_uuid, value=DamageType.COLD)
+        
+        retrieved_modifier = DamageTypeModifier.get(modifier.uuid)
+        assert retrieved_modifier is not None
+        assert retrieved_modifier == modifier
+        assert retrieved_modifier.value == DamageType.COLD
+
+    def test_damage_type_modifier_get_wrong_type(self, target_uuid):
+        class FakeModifier(BaseModifier):
+            pass
+        
+        fake_modifier = FakeModifier(target_entity_uuid=target_uuid)
+        BaseModifier.register(fake_modifier)
+        
+        with pytest.raises(ValueError):
+            DamageTypeModifier.get(fake_modifier.uuid)
+
+class TestContextualSizeModifier:
+    def test_contextual_size_modifier_initialization(self, target_uuid):
+        def dummy_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=target_uuid, value=Size.HUGE)
+        
+        modifier = ContextualSizeModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
+        
+        assert isinstance(modifier, ContextualModifier)
+        assert callable(modifier.callable)
+
+    def test_contextual_size_modifier_get(self, target_uuid):
+        def dummy_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=target_uuid, value=Size.HUGE)
+        
+        modifier = ContextualSizeModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
+        
+        retrieved_modifier = ContextualSizeModifier.get(modifier.uuid)
+        assert retrieved_modifier is not None
+        assert retrieved_modifier == modifier
+
+    def test_contextual_size_modifier_execute_callable(self, target_uuid):
+        def dummy_callable(source_uuid, target_uuid, context):
+            return SizeModifier(target_entity_uuid=target_uuid, value=Size.HUGE)
+        
+        modifier = ContextualSizeModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
+        modifier.setup_callable_arguments(target_uuid, target_uuid, {})
+        
+        result = modifier.execute_callable()
+        assert isinstance(result, SizeModifier)
+        assert result.value == Size.HUGE
+
+    def test_contextual_size_modifier_wrong_return_type(self, target_uuid):
+        def wrong_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
+        
+        modifier = ContextualSizeModifier(target_entity_uuid=target_uuid, callable=wrong_callable) # type: ignore[arg-type]
+        modifier.setup_callable_arguments(target_uuid, target_uuid, {})
+        
+        with pytest.raises(ValueError, match="Callable returned unexpected type"):
+            modifier.execute_callable()
+
+    def test_contextual_size_modifier_wrong_callable_type(self, target_uuid):
+        with pytest.raises(ValidationError):
+            ContextualSizeModifier(target_entity_uuid=target_uuid, callable="not_a_callable") # type: ignore[arg-type]
+
+class TestContextualDamageTypeModifier:
+    def test_contextual_damage_type_modifier_initialization(self, target_uuid):
+        def dummy_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=target_uuid, value=DamageType.LIGHTNING)
+        
+        modifier = ContextualDamageTypeModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
+        
+        assert isinstance(modifier, ContextualModifier)
+        assert callable(modifier.callable)
+
+    def test_contextual_damage_type_modifier_get(self, target_uuid):
+        def dummy_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=target_uuid, value=DamageType.LIGHTNING)
+        
+        modifier = ContextualDamageTypeModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
+        
+        retrieved_modifier = ContextualDamageTypeModifier.get(modifier.uuid)
+        assert retrieved_modifier is not None
+        assert retrieved_modifier == modifier
+
+    def test_contextual_damage_type_modifier_execute_callable(self, target_uuid):
+        def dummy_callable(source_uuid, target_uuid, context):
+            return DamageTypeModifier(target_entity_uuid=target_uuid, value=DamageType.LIGHTNING)
+        
+        modifier = ContextualDamageTypeModifier(target_entity_uuid=target_uuid, callable=dummy_callable)
+        modifier.setup_callable_arguments(target_uuid, target_uuid, {})
+        
+        result = modifier.execute_callable()
+        assert isinstance(result, DamageTypeModifier)
+        assert result.value == DamageType.LIGHTNING
+
+    def test_contextual_damage_type_modifier_wrong_return_type(self, target_uuid):
+        def wrong_callable(source_uuid, target_uuid, context):
+            return NumericalModifier(target_entity_uuid=target_uuid, value=5)
+        
+        modifier = ContextualDamageTypeModifier(target_entity_uuid=target_uuid, callable=wrong_callable) # type: ignore[arg-type]
+        modifier.setup_callable_arguments(target_uuid, target_uuid, {})
+        
+        with pytest.raises(ValueError, match="Callable returned unexpected type"):
+            modifier.execute_callable()
+
+    def test_contextual_damage_type_modifier_wrong_callable_type(self, target_uuid):
+        with pytest.raises(ValidationError):
+            ContextualDamageTypeModifier(target_entity_uuid=target_uuid, callable="not_a_callable") # type: ignore[arg-type]
+
 class TestEdgeCasesAndErrorHandling:
     def test_missing_required_field(self):
         with pytest.raises(ValueError):
@@ -435,6 +578,32 @@ class TestEdgeCasesAndErrorHandling:
             # Intentionally passing None as callable for testing
             
             ContextualModifier(target_entity_uuid=target_uuid, callable=None) # type: ignore[arg-type]
+
+    def test_size_modifier_invalid_value(self, target_uuid):
+        with pytest.raises(ValueError):
+            SizeModifier(target_entity_uuid=target_uuid, value="InvalidSize") # type: ignore[arg-type]
+
+    def test_damage_type_modifier_invalid_value(self, target_uuid):
+        with pytest.raises(ValueError):
+            DamageTypeModifier(target_entity_uuid=target_uuid, value="InvalidDamageType") # type: ignore[arg-type]
+
+    def test_contextual_size_modifier_invalid_callable(self, target_uuid):
+        with pytest.raises(ValueError):
+            ContextualSizeModifier(target_entity_uuid=target_uuid, callable="not_a_callable") # type: ignore[arg-type]
+
+    def test_contextual_damage_type_modifier_invalid_callable(self, target_uuid):
+        with pytest.raises(ValueError): 
+            ContextualDamageTypeModifier(target_entity_uuid=target_uuid, callable="not_a_callable") # type: ignore[arg-type]
+
+    def test_size_modifier_edge_values(self, target_uuid):
+        for size in Size:
+            modifier = SizeModifier(target_entity_uuid=target_uuid, value=size)
+            assert modifier.value == size
+
+    def test_damage_type_modifier_edge_values(self, target_uuid):
+        for damage_type in DamageType:
+            modifier = DamageTypeModifier(target_entity_uuid=target_uuid, value=damage_type)
+            assert modifier.value == damage_type
 
 if __name__ == "__main__":
     pytest.main([__file__])

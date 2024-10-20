@@ -12,14 +12,26 @@ from dnd.modifiers import (
     AdvantageStatus,
     CriticalStatus,
     AutoHitStatus,
+    Size,
+    DamageType,
+    SizeModifier,
+    DamageTypeModifier,
     ContextualNumericalModifier,
     ContextualAdvantageModifier,
     ContextualCriticalModifier,
-    ContextualAutoHitModifier
+    ContextualAutoHitModifier,
+    ContextualSizeModifier,
+    ContextualDamageTypeModifier,
+    ResistanceModifier,
+    ContextualResistanceModifier,
+    ResistanceStatus
 )
 import inspect
+import random  # Add this import at the top of the file
 
 
+def identity(x: int) -> int:
+    return x
 
 class BaseValue(BaseModel): 
     """
@@ -89,7 +101,7 @@ class BaseValue(BaseModel):
         description="Additional context information for this value. Can be None."
     )
     score_normalizer: Callable[[int], int] = Field(
-        default=lambda x: x,
+        default=identity,
         description="A function to normalize the score. Defaults to identity function."
     )
     generated_from: List[UUID] = Field(
@@ -149,6 +161,18 @@ class BaseValue(BaseModel):
             uuid (UUID): The UUID of the value to unregister.
         """
         cls._registry.pop(uuid, None)
+    
+    def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str]=None) -> None:
+        """
+        Set the source entity for this value and its components.
+        """
+        self.source_entity_uuid = source_entity_uuid
+        self.source_entity_name = source_entity_name
+        
+    
+    def validate_modifier_target(self, modifier: Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier, SizeModifier, DamageTypeModifier, ResistanceModifier, ContextualNumericalModifier, ContextualAdvantageModifier, ContextualCriticalModifier, ContextualAutoHitModifier, ContextualSizeModifier, ContextualDamageTypeModifier, ContextualResistanceModifier]) -> None:
+        if modifier.target_entity_uuid != self.source_entity_uuid:
+            raise ValueError(f"Modifier target ({modifier.target_entity_uuid}) does not correspond to value source ({self.source_entity_uuid})")
 
     def get_generation_chain(self) -> List['BaseValue']:
         chain = []
@@ -229,7 +253,7 @@ class StaticValue(BaseValue):
     A value type that represents a static (non-contextual) value with various modifiers.
 
     This class extends BaseValue to include static modifiers for numerical values,
-    constraints, advantage, critical hits, and auto-hits.
+    constraints, advantage, critical hits, auto-hits, size, damage type, and resistance.
 
     Attributes:
         name (str): The name of the value.
@@ -248,6 +272,10 @@ class StaticValue(BaseValue):
         critical_modifiers (Dict[UUID, CriticalModifier]): Dictionary of critical hit modifiers.
         auto_hit_modifiers (Dict[UUID, AutoHitModifier]): Dictionary of auto-hit modifiers.
         is_outgoing_modifier (bool): Flag to indicate if this value represents outgoing modifiers (to others).
+        size_modifiers (Dict[UUID, SizeModifier]): Dictionary of size modifiers.
+        damage_type_modifiers (Dict[UUID, DamageTypeModifier]): Dictionary of damage type modifiers.
+        resistance_modifiers (Dict[UUID, ResistanceModifier]): Dictionary of resistance modifiers.
+        largest_size_priority (bool): Flag to indicate whether the largest size (True) or smallest size (False) has precedence.
 
     Class Attributes:
         _registry (ClassVar[Dict[UUID, 'BaseValue']]): A class-level registry to store all instances.
@@ -261,12 +289,29 @@ class StaticValue(BaseValue):
         advantage (AdvantageStatus): The final advantage status based on all advantage modifiers.
         critical (CriticalStatus): The final critical status based on all critical modifiers.
         auto_hit (AutoHitStatus): The final auto-hit status based on all auto-hit modifiers.
+        size (Size): The final size based on all size modifiers.
+        damage_types (List[DamageType]): The list of damage types with the highest occurrence.
+        damage_type (Optional[DamageType]): A randomly selected damage type from the most common types.
+        resistance_sum (Dict[DamageType, int]): The sum of resistance values for each damage type.
+        resistance (Dict[DamageType, ResistanceStatus]): The final resistance status for each damage type.
 
     Methods:
         get(cls, uuid: UUID) -> Optional['StaticValue']:
             Retrieve a StaticValue instance from the registry by its UUID.
         combine_values(self, others: List['StaticValue'], naming_callable: Optional[naming_callable] = None) -> 'StaticValue':
             Combine this StaticValue with a list of other StaticValues.
+        add_size_modifier(self, modifier: SizeModifier) -> UUID:
+            Add a size modifier to this value.
+        remove_size_modifier(self, uuid: UUID) -> None:
+            Remove a size modifier from this value.
+        add_damage_type_modifier(self, modifier: DamageTypeModifier) -> UUID:
+            Add a damage type modifier to this value.
+        remove_damage_type_modifier(self, uuid: UUID) -> None:
+            Remove a damage type modifier from this value.
+        add_resistance_modifier(self, modifier: ResistanceModifier) -> UUID:
+            Add a resistance modifier to this value.
+        remove_resistance_modifier(self, uuid: UUID) -> None:
+            Remove a resistance modifier from this value.
 
     Validators:
         validate_value_source_corresponds_to_modifiers_target: Ensures that the source and target UUIDs are consistent
@@ -301,6 +346,22 @@ class StaticValue(BaseValue):
         default=False,
         description="Flag to indicate if this value represents outgoing modifiers (to others)."
     )
+    size_modifiers: Dict[UUID, SizeModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of size modifiers."
+    )
+    damage_type_modifiers: Dict[UUID, DamageTypeModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of damage type modifiers."
+    )
+    resistance_modifiers: Dict[UUID, ResistanceModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of resistance modifiers."
+    )
+    largest_size_priority: bool = Field(
+        default=True,
+        description="Flag to indicate whether the largest size (True) or smallest size (False) has precedence."
+    )
 
     @model_validator(mode="after")
     def validate_value_source_corresponds_to_modifiers_target(self) -> Self:
@@ -330,6 +391,8 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
+        if modifier.target_entity_uuid != self.source_entity_uuid:
+            raise ValueError(f"Value source ({self.source_entity_uuid}) does not correspond to modifier target ({modifier.target_entity_uuid})")
         self.value_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -352,6 +415,7 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added constraint.
         """
+        self.validate_modifier_target(constraint)
         self.min_constraints[constraint.uuid] = constraint
         return constraint.uuid
     
@@ -374,6 +438,7 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added constraint.
         """
+        self.validate_modifier_target(constraint)
         self.max_constraints[constraint.uuid] = constraint
         return constraint.uuid
     
@@ -396,6 +461,7 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
+        self.validate_modifier_target(modifier)
         self.advantage_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -418,6 +484,7 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
+        self.validate_modifier_target(modifier)
         self.critical_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -440,6 +507,7 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
+        self.validate_modifier_target(modifier)
         self.auto_hit_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -451,6 +519,75 @@ class StaticValue(BaseValue):
             uuid (UUID): The UUID of the modifier to remove.
         """
         self.auto_hit_modifiers.pop(uuid, None)
+
+    def add_size_modifier(self, modifier: SizeModifier) -> UUID:
+        """
+        Add a size modifier to this value.
+
+        Args:
+            modifier (SizeModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.validate_modifier_target(modifier)
+        self.size_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+    
+    def remove_size_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a size modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.size_modifiers.pop(uuid, None)
+
+    def add_damage_type_modifier(self, modifier: DamageTypeModifier) -> UUID:
+        """
+        Add a damage type modifier to this value.
+
+        Args:
+            modifier (DamageTypeModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.validate_modifier_target(modifier)
+        self.damage_type_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+    
+    def remove_damage_type_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a damage type modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.damage_type_modifiers.pop(uuid, None)
+
+    def add_resistance_modifier(self, modifier: ResistanceModifier) -> UUID:
+        """
+        Add a resistance modifier to this value.
+
+        Args:
+            modifier (ResistanceModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.validate_modifier_target(modifier)
+        self.resistance_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+    
+    def remove_resistance_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a resistance modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        self.resistance_modifiers.pop(uuid, None)
 
     def remove_modifier(self, uuid: UUID) -> None:
         """
@@ -465,6 +602,9 @@ class StaticValue(BaseValue):
         self.remove_advantage_modifier(uuid)
         self.remove_critical_modifier(uuid)
         self.remove_auto_hit_modifier(uuid)
+        self.remove_size_modifier(uuid)
+        self.remove_damage_type_modifier(uuid)
+        self.remove_resistance_modifier(uuid)
 
     @computed_field
     @property
@@ -581,6 +721,96 @@ class StaticValue(BaseValue):
         else:
             return AutoHitStatus.NONE
         
+    @computed_field
+    @property
+    def size(self) -> Size:
+        """
+        Determine the final size based on all size modifiers.
+
+        Returns:
+            Size: The final size.
+        """
+        if not self.size_modifiers:
+            return Size.MEDIUM  # Default size if no modifiers
+
+        sizes = [modifier.value for modifier in self.size_modifiers.values()]
+        if self.largest_size_priority:
+            return max(sizes, key=lambda s: list(Size).index(s))
+        else:
+            return min(sizes, key=lambda s: list(Size).index(s))
+
+    @computed_field
+    @property
+    def damage_types(self) -> List[DamageType]:
+        """
+        Determine the list of damage types based on damage type modifiers.
+
+        Returns:
+            List[DamageType]: The list of damage types with the highest occurrence.
+        """
+        if not self.damage_type_modifiers:
+            return []
+        
+        type_counts = {}
+        for modifier in self.damage_type_modifiers.values():
+            type_counts[modifier.value] = type_counts.get(modifier.value, 0) + 1
+        
+        max_count = max(type_counts.values())
+        if max_count == 0:
+            return []
+        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
+        
+        return most_common_types
+
+    @computed_field
+    @property
+    def damage_type(self) -> Optional[DamageType]:
+        """
+        Determine a single damage type based on damage type modifiers.
+
+        Returns:
+            Optional[DamageType]: A randomly selected damage type from the most common types, or None if no modifiers.
+        """
+        most_common_types = self.damage_types
+        if not most_common_types:
+            return None
+        return random.choice(most_common_types)
+
+    @computed_field
+    @property
+    def resistance_sum(self) -> Dict[DamageType, int]:
+        """
+        Calculate the sum of resistance values for each damage type.
+
+        Returns:
+            Dict[DamageType, int]: A dictionary with damage types as keys and summed resistance values as values.
+        """
+        resistance_sum = {damage_type: 0 for damage_type in DamageType}
+        for modifier in self.resistance_modifiers.values():
+            resistance_sum[modifier.damage_type] += modifier.numerical_value
+        return resistance_sum
+
+    @computed_field
+    @property
+    def resistance(self) -> Dict[DamageType, ResistanceStatus]:
+        """
+        Determine the final resistance status for each damage type based on the resistance sum.
+
+        Returns:
+            Dict[DamageType, ResistanceStatus]: A dictionary with damage types as keys and final resistance statuses as values.
+        """
+        resistance = {}
+        for damage_type, sum_value in self.resistance_sum.items():
+            if sum_value > 1:
+                resistance[damage_type] = ResistanceStatus.IMMUNITY
+            elif sum_value == 1:
+                resistance[damage_type] = ResistanceStatus.RESISTANCE
+            elif sum_value == 0:
+                resistance[damage_type] = ResistanceStatus.NONE
+            else:  # sum_value < 0
+                resistance[damage_type] = ResistanceStatus.VULNERABILITY
+        return resistance
+
     def combine_values(self, others: List['StaticValue'], naming_callable: Optional[naming_callable] = None) -> 'StaticValue':
         """
         Combine this StaticValue with a list of other StaticValues.
@@ -609,6 +839,9 @@ class StaticValue(BaseValue):
             advantage_modifiers={**self.advantage_modifiers, **{k: v for other in others for k, v in other.advantage_modifiers.items()}},
             critical_modifiers={**self.critical_modifiers, **{k: v for other in others for k, v in other.critical_modifiers.items()}},
             auto_hit_modifiers={**self.auto_hit_modifiers, **{k: v for other in others for k, v in other.auto_hit_modifiers.items()}},
+            size_modifiers={**self.size_modifiers, **{k: v for other in others for k, v in other.size_modifiers.items()}},
+            damage_type_modifiers={**self.damage_type_modifiers, **{k: v for other in others for k, v in other.damage_type_modifiers.items()}},
+            resistance_modifiers={**self.resistance_modifiers, **{k: v for other in others for k, v in other.resistance_modifiers.items()}},
             generated_from=[self.uuid] + [other.uuid for other in others],
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
@@ -628,7 +861,10 @@ class StaticValue(BaseValue):
                 list(self.max_constraints.keys()) +
                 list(self.advantage_modifiers.keys()) +
                 list(self.critical_modifiers.keys()) +
-                list(self.auto_hit_modifiers.keys()))
+                list(self.auto_hit_modifiers.keys()) +
+                list(self.size_modifiers.keys()) +
+                list(self.damage_type_modifiers.keys()) +
+                list(self.resistance_modifiers.keys()))
 
     def remove_all_modifiers(self) -> None:
         """
@@ -640,14 +876,16 @@ class StaticValue(BaseValue):
         self.advantage_modifiers.clear()
         self.critical_modifiers.clear()
         self.auto_hit_modifiers.clear()
+        self.size_modifiers.clear()
+        self.damage_type_modifiers.clear()
+        self.resistance_modifiers.clear()
 
 class ContextualValue(BaseValue):
     """
     A value type that represents a context-dependent value with various modifiers.
 
     This class extends BaseValue to include contextual modifiers for numerical values,
-    constraints, advantage, critical hits, and auto-hits. The effects of these modifiers
-    are determined dynamically based on the current game context.
+    constraints, advantage, critical hits, auto-hits, size, damage type, and resistance.
 
     Attributes:
         name (str): The name of the value.
@@ -666,6 +904,10 @@ class ContextualValue(BaseValue):
         critical_modifiers (Dict[UUID, ContextualCriticalModifier]): Dictionary of contextual critical hit modifiers.
         auto_hit_modifiers (Dict[UUID, ContextualAutoHitModifier]): Dictionary of contextual auto-hit modifiers.
         is_outgoing_modifier (bool): Flag to indicate if this value represents outgoing modifiers (to others).
+        size_modifiers (Dict[UUID, ContextualSizeModifier]): Dictionary of contextual size modifiers.
+        damage_type_modifiers (Dict[UUID, ContextualDamageTypeModifier]): Dictionary of contextual damage type modifiers.
+        resistance_modifiers (Dict[UUID, ContextualResistanceModifier]): Dictionary of contextual resistance modifiers.
+        largest_size_priority (bool): Flag to indicate whether the largest size (True) or smallest size (False) has precedence.
 
     Class Attributes:
         _registry (ClassVar[Dict[UUID, 'BaseValue']]): A class-level registry to store all instances.
@@ -679,6 +921,11 @@ class ContextualValue(BaseValue):
         advantage (AdvantageStatus): The final advantage status based on all contextual advantage modifiers.
         critical (CriticalStatus): The final critical status based on all contextual critical modifiers.
         auto_hit (AutoHitStatus): The final auto-hit status based on all contextual auto-hit modifiers.
+        size (Size): The final size based on all contextual size modifiers.
+        damage_types (List[DamageType]): The list of all damage types based on contextual damage type modifiers.
+        damage_type (Optional[DamageType]): A randomly selected damage type from the most common types.
+        resistance_sum (Dict[DamageType, int]): The sum of resistance values for each damage type.
+        resistance (Dict[DamageType, ResistanceStatus]): The final resistance status for each damage type.
 
     Methods:
         get(cls, uuid: UUID) -> Optional['ContextualValue']:
@@ -715,6 +962,18 @@ class ContextualValue(BaseValue):
             Add a contextual auto-hit modifier to this value.
         remove_auto_hit_modifier(self, uuid: UUID) -> None:
             Remove a contextual auto-hit modifier from this value.
+        add_size_modifier(self, modifier: ContextualSizeModifier) -> UUID:
+            Add a contextual size modifier to this value.
+        remove_size_modifier(self, uuid: UUID) -> None:
+            Remove a contextual size modifier from this value.
+        add_damage_type_modifier(self, modifier: ContextualDamageTypeModifier) -> UUID:
+            Add a contextual damage type modifier to this value.
+        remove_damage_type_modifier(self, uuid: UUID) -> None:
+            Remove a contextual damage type modifier from this value.
+        add_resistance_modifier(self, modifier: ContextualResistanceModifier) -> UUID:
+            Add a contextual resistance modifier to this value.
+        remove_resistance_modifier(self, uuid: UUID) -> None:
+            Remove a contextual resistance modifier from this value.
         remove_modifier(self, uuid: UUID) -> None:
             Remove a modifier from all modifier dictionaries of this value.
         combine_values(self, others: List['ContextualValue'], naming_callable: Optional[naming_callable] = None) -> 'ContextualValue':
@@ -756,6 +1015,22 @@ class ContextualValue(BaseValue):
     is_outgoing_modifier: bool = Field(
         default=False,
         description="Flag to indicate if this value represents outgoing modifiers (to others)."
+    )
+    size_modifiers: Dict[UUID, ContextualSizeModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of contextual size modifiers."
+    )
+    damage_type_modifiers: Dict[UUID, ContextualDamageTypeModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of contextual damage type modifiers."
+    )
+    resistance_modifiers: Dict[UUID, ContextualResistanceModifier] = Field(
+        default_factory=dict,
+        description="Dictionary of contextual resistance modifiers."
+    )
+    largest_size_priority: bool = Field(
+        default=True,
+        description="Flag to indicate whether the largest size (True) or smallest size (False) has precedence."
     )
 
     @classmethod
@@ -911,8 +1186,98 @@ class ContextualValue(BaseValue):
         else:
             return AutoHitStatus.NONE
     
-    
-    
+    @computed_field
+    @property
+    def size(self) -> Size:
+        """
+        Determine the final size based on all contextual size modifiers.
+
+        Returns:
+            Size: The final size.
+        """
+        if not self.size_modifiers:
+            return Size.MEDIUM  # Default size if no modifiers
+        size_modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
+                          for modifier in self.size_modifiers.values()]
+        sizes = [modifier.value for modifier in size_modifiers]
+        if self.largest_size_priority:
+            return max(sizes, key=lambda s: list(Size).index(s))
+        else:
+            return min(sizes, key=lambda s: list(Size).index(s))
+        
+
+    @computed_field
+    @property
+    def damage_types(self) -> List[DamageType]:
+        """
+        Determine the list of damage types based on contextual damage type modifiers.
+
+        Returns:
+            List[DamageType]: The list of damage types with the highest occurrence.
+        """
+        if not self.damage_type_modifiers:
+            return []
+        
+        type_counts = {}
+        for modifier in self.damage_type_modifiers.values():
+            result = modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
+            type_counts[result.value] = type_counts.get(result.value, 0) + 1
+        
+        max_count = max(type_counts.values())
+        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
+        
+        return most_common_types
+
+    @computed_field
+    @property
+    def damage_type(self) -> Optional[DamageType]:
+        """
+        Determine a single damage type based on contextual damage type modifiers.
+
+        Returns:
+            Optional[DamageType]: A randomly selected damage type from the most common types, or None if no modifiers.
+        """
+        most_common_types = self.damage_types
+        if not most_common_types:
+            return None
+        return random.choice(most_common_types)
+
+    @computed_field
+    @property
+    def resistance_sum(self) -> Dict[DamageType, int]:
+        """
+        Calculate the sum of resistance values for each damage type based on contextual modifiers.
+
+        Returns:
+            Dict[DamageType, int]: A dictionary with damage types as keys and summed resistance values as values.
+        """
+        resistance_sum = {damage_type: 0 for damage_type in DamageType}
+        for modifier in self.resistance_modifiers.values():
+            result = modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
+            resistance_sum[result.damage_type] += result.numerical_value
+        return resistance_sum
+
+    @computed_field
+    @property
+    def resistance(self) -> Dict[DamageType, ResistanceStatus]:
+        """
+        Determine the final resistance status for each damage type based on the resistance sum.
+
+        Returns:
+            Dict[DamageType, ResistanceStatus]: A dictionary with damage types as keys and final resistance statuses as values.
+        """
+        resistance = {}
+        for damage_type, sum_value in self.resistance_sum.items():
+            if sum_value > 1:
+                resistance[damage_type] = ResistanceStatus.IMMUNITY
+            elif sum_value == 1:
+                resistance[damage_type] = ResistanceStatus.RESISTANCE
+            elif sum_value == 0:
+                resistance[damage_type] = ResistanceStatus.NONE
+            else:  # sum_value < 0
+                resistance[damage_type] = ResistanceStatus.VULNERABILITY
+        return resistance
+
     def add_value_modifier(self, modifier: ContextualNumericalModifier) -> UUID:
         """
         Add a contextual numerical modifier to this value.
@@ -924,6 +1289,7 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
+        self.validate_modifier_target(modifier)
         if uuid in self.value_modifiers:
             raise ValueError(f"Modifier with UUID {uuid} already exists")
         self.value_modifiers[uuid] = modifier
@@ -950,6 +1316,7 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added constraint.
         """
         uuid = constraint.uuid
+        self.validate_modifier_target(constraint)
         self.min_constraints[uuid] = constraint
         return uuid
     
@@ -960,6 +1327,7 @@ class ContextualValue(BaseValue):
         Args:
             uuid (UUID): The UUID of the constraint to remove.
         """
+
         if uuid in self.min_constraints:
             del self.min_constraints[uuid]
 
@@ -973,6 +1341,7 @@ class ContextualValue(BaseValue):
         Returns:
             UUID: The UUID of the added constraint.
         """
+        self.validate_modifier_target(constraint)
         uuid = constraint.uuid
         self.max_constraints[uuid] = constraint
         return uuid
@@ -998,6 +1367,7 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
+        self.validate_modifier_target(modifier)
         self.advantage_modifiers[uuid] = modifier
         return uuid
     
@@ -1022,6 +1392,7 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
+        self.validate_modifier_target(modifier)
         self.critical_modifiers[uuid] = modifier
         return uuid
     
@@ -1046,6 +1417,7 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
+        self.validate_modifier_target(modifier)
         self.auto_hit_modifiers[uuid] = modifier
         return uuid
     
@@ -1058,6 +1430,81 @@ class ContextualValue(BaseValue):
         """
         if uuid in self.auto_hit_modifiers:
             del self.auto_hit_modifiers[uuid]
+
+    def add_size_modifier(self, modifier: ContextualSizeModifier) -> UUID:
+        """
+        Add a contextual size modifier to this value.
+
+        Args:
+            modifier (ContextualSizeModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.validate_modifier_target(modifier)
+        uuid = modifier.uuid
+        self.size_modifiers[uuid] = modifier
+        return uuid
+    
+    def remove_size_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a contextual size modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        if uuid in self.size_modifiers:
+            del self.size_modifiers[uuid]
+
+    def add_damage_type_modifier(self, modifier: ContextualDamageTypeModifier) -> UUID:
+        """
+        Add a contextual damage type modifier to this value.
+
+        Args:
+            modifier (ContextualDamageTypeModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.validate_modifier_target(modifier)
+        uuid = modifier.uuid
+        self.damage_type_modifiers[uuid] = modifier
+        return uuid
+    
+    def remove_damage_type_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a contextual damage type modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        if uuid in self.damage_type_modifiers:
+            del self.damage_type_modifiers[uuid]
+
+    def add_resistance_modifier(self, modifier: ContextualResistanceModifier) -> UUID:
+        """
+        Add a contextual resistance modifier to this value.
+
+        Args:
+            modifier (ContextualResistanceModifier): The modifier to add.
+
+        Returns:
+            UUID: The UUID of the added modifier.
+        """
+        self.validate_modifier_target(modifier)
+        uuid = modifier.uuid
+        self.resistance_modifiers[uuid] = modifier
+        return uuid
+    
+    def remove_resistance_modifier(self, uuid: UUID) -> None:
+        """
+        Remove a contextual resistance modifier from this value.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to remove.
+        """
+        if uuid in self.resistance_modifiers:
+            del self.resistance_modifiers[uuid]
 
     def remove_modifier(self, uuid: UUID) -> None:
         """
@@ -1072,6 +1519,9 @@ class ContextualValue(BaseValue):
         self.remove_advantage_modifier(uuid)
         self.remove_critical_modifier(uuid)
         self.remove_auto_hit_modifier(uuid)
+        self.remove_size_modifier(uuid)
+        self.remove_damage_type_modifier(uuid)
+        self.remove_resistance_modifier(uuid)
 
     def combine_values(self, others: List['ContextualValue'], naming_callable: Optional[naming_callable] = None) -> 'ContextualValue':
         """
@@ -1104,6 +1554,9 @@ class ContextualValue(BaseValue):
             advantage_modifiers=merge_dicts(self.advantage_modifiers, *(other.advantage_modifiers for other in others)),
             critical_modifiers=merge_dicts(self.critical_modifiers, *(other.critical_modifiers for other in others)),
             auto_hit_modifiers=merge_dicts(self.auto_hit_modifiers, *(other.auto_hit_modifiers for other in others)),
+            size_modifiers=merge_dicts(self.size_modifiers, *(other.size_modifiers for other in others)),
+            damage_type_modifiers=merge_dicts(self.damage_type_modifiers, *(other.damage_type_modifiers for other in others)),
+            resistance_modifiers=merge_dicts(self.resistance_modifiers, *(other.resistance_modifiers for other in others)),
             generated_from=[self.uuid] + [other.uuid for other in others],
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
@@ -1122,7 +1575,10 @@ class ContextualValue(BaseValue):
             list(self.max_constraints.values()) +
             list(self.advantage_modifiers.values()) +
             list(self.critical_modifiers.values()) +
-            list(self.auto_hit_modifiers.values())
+            list(self.auto_hit_modifiers.values()) +
+            list(self.size_modifiers.values()) +
+            list(self.damage_type_modifiers.values()) +
+            list(self.resistance_modifiers.values())
         )
         
         for modifier in all_modifiers:
@@ -1146,7 +1602,10 @@ class ContextualValue(BaseValue):
                 list(self.max_constraints.keys()) +
                 list(self.advantage_modifiers.keys()) +
                 list(self.critical_modifiers.keys()) +
-                list(self.auto_hit_modifiers.keys()))
+                list(self.auto_hit_modifiers.keys()) +
+                list(self.size_modifiers.keys()) +
+                list(self.damage_type_modifiers.keys()) +
+                list(self.resistance_modifiers.keys()))
 
     def remove_all_modifiers(self) -> None:
         """
@@ -1158,6 +1617,9 @@ class ContextualValue(BaseValue):
         self.advantage_modifiers.clear()
         self.critical_modifiers.clear()
         self.auto_hit_modifiers.clear()
+        self.size_modifiers.clear()
+        self.damage_type_modifiers.clear()
+        self.resistance_modifiers.clear()
 
 class ModifiableValue(BaseValue):
     """
@@ -1192,6 +1654,20 @@ class ModifiableValue(BaseValue):
         create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None) -> 'ModifiableValue':
             Create a new ModifiableValue instance with shared source UUID for all components.
         // ... (other methods remain the same)
+
+    Computed Attributes:
+        min (Optional[int]): The minimum value based on all modifiers.
+        max (Optional[int]): The maximum value based on all modifiers.
+        score (int): The final calculated score.
+        normalized_score (int): The normalized score after applying the score normalizer.
+        advantage (AdvantageStatus): The final advantage status.
+        critical (CriticalStatus): The final critical status.
+        auto_hit (AutoHitStatus): The final auto-hit status.
+        size (Size): The final size based on all size modifiers.
+        damage_types (List[DamageType]): The list of all damage types based on damage type modifiers.
+        damage_type (Optional[DamageType]): A randomly selected damage type from the most common types.
+        resistance_sum (Dict[DamageType, int]): The sum of resistance values for each damage type.
+        resistance (Dict[DamageType, ResistanceStatus]): The final resistance status for each damage type.
 
     Validators:
         validate_outgoing_modifier_flags: Ensures that the is_outgoing_modifier flags are set correctly for all components.
@@ -1259,7 +1735,7 @@ class ModifiableValue(BaseValue):
         Returns:
             List[Union[StaticValue, ContextualValue]]: A list of all non-None modifiers.
         """
-        modifiers = [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual, self.from_target_contextual, self.from_target_static]
+        modifiers = [self.self_static, self.self_contextual, self.from_target_contextual, self.from_target_static]
         return [modifier for modifier in modifiers if modifier is not None]
 
     @classmethod
@@ -1346,6 +1822,13 @@ class ModifiableValue(BaseValue):
         print(f"Normalizing score {self.score} with normalizer {normalizer_code}")
         print(f"Normalized score: {self.score_normalizer(self.score)}")
         return self.score_normalizer(self.score)
+    @computed_field
+    @property
+    def advantage_sum(self) -> int:
+        """
+        Calculate the sum of advantage values from all modifiers.
+        """
+        return sum(adv.advantage_sum for adv in [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual] if adv is not None)
     
     @computed_field
     @property
@@ -1356,7 +1839,7 @@ class ModifiableValue(BaseValue):
         Returns:
             AdvantageStatus: The final advantage status (ADVANTAGE, DISADVANTAGE, or NONE).
         """
-        total_sum = sum(adv.advantage_sum for adv in [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual] if adv is not None)
+        total_sum = self.advantage_sum
         if total_sum > 0:
             return AdvantageStatus.ADVANTAGE
         elif total_sum < 0:
@@ -1399,6 +1882,130 @@ class ModifiableValue(BaseValue):
             return AutoHitStatus.AUTOHIT
         else:
             return AutoHitStatus.NONE
+
+    @computed_field
+    @property
+    def size(self) -> Size:
+        """
+        Determine the final size based on all size modifiers.
+
+        Returns:
+            Size: The final size.
+        """
+        sizes : List[Size] = []
+        components = self.get_typed_modifiers()
+        for component in components:
+            if component.size != Size.MEDIUM:  # Only consider non-default sizes
+                sizes.append(component.size)
+        if self.from_target_static and self.from_target_static.size != Size.MEDIUM:
+            sizes.append(self.from_target_static.size)
+        if self.from_target_contextual and self.from_target_contextual.size != Size.MEDIUM:
+            sizes.append(self.from_target_contextual.size)
+        
+        if not sizes:
+            return Size.MEDIUM  # Default size if no modifiers
+        
+        largest_size_priority = self.self_static.largest_size_priority  # Use the priority from self_static
+        
+        if largest_size_priority:
+            return max(sizes, key=lambda s: list(Size).index(s))
+        else:
+            return min(sizes, key=lambda s: list(Size).index(s))
+
+    @computed_field
+    @property
+    def damage_types(self) -> List[DamageType]:
+        """
+        Determine the list of damage types based on all damage type modifiers.
+
+        Returns:
+            List[DamageType]: The list of damage types with the highest occurrence.
+        """
+        type_counts = {}
+        for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
+            for dt in component.damage_types:
+                type_counts[dt] = type_counts.get(dt, 0) + 1
+        if self.from_target_static:
+            for dt in self.from_target_static.damage_types:
+                type_counts[dt] = type_counts.get(dt, 0) + 1
+        if self.from_target_contextual:
+            for dt in self.from_target_contextual.damage_types:
+                type_counts[dt] = type_counts.get(dt, 0) + 1
+        
+        if not type_counts:
+            return []
+        
+        max_count = max(type_counts.values())
+        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
+        
+        return most_common_types
+
+    @computed_field
+    @property
+    def damage_type(self) -> Optional[DamageType]:
+        """
+        Determine a single damage type based on all damage type modifiers.
+
+        Returns:
+            Optional[DamageType]: A randomly selected damage type from the most common types, or None if no modifiers.
+        """
+        most_common_types = self.damage_types
+        if not most_common_types:
+            return None
+        return random.choice(most_common_types)
+
+    @computed_field
+    @property
+    def resistance_sum(self) -> Dict[DamageType, int]:
+        """
+        Calculate the sum of resistance values for each damage type.
+
+        Returns:
+            Dict[DamageType, int]: A dictionary with damage types as keys and summed resistance values as values.
+        """
+        resistance_sum = {damage_type: 0 for damage_type in DamageType}
+        for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
+            for damage_type, value in component.resistance_sum.items():
+                resistance_sum[damage_type] += value
+        if self.from_target_static:
+            for damage_type, value in self.from_target_static.resistance_sum.items():
+                resistance_sum[damage_type] += value
+        if self.from_target_contextual:
+            for damage_type, value in self.from_target_contextual.resistance_sum.items():
+                resistance_sum[damage_type] += value
+        return resistance_sum
+
+    @computed_field
+    @property
+    def resistance(self) -> Dict[DamageType, ResistanceStatus]:
+        """
+        Determine the final resistance status for each damage type based on the resistance sum.
+
+        Returns:
+            Dict[DamageType, ResistanceStatus]: A dictionary with damage types as keys and final resistance statuses as values.
+        """
+        resistance = {}
+        for damage_type, sum_value in self.resistance_sum.items():
+            if sum_value > 1:
+                resistance[damage_type] = ResistanceStatus.IMMUNITY
+            elif sum_value == 1:
+                resistance[damage_type] = ResistanceStatus.RESISTANCE
+            elif sum_value == 0:
+                resistance[damage_type] = ResistanceStatus.NONE
+            else:  # sum_value < 0
+                resistance[damage_type] = ResistanceStatus.VULNERABILITY
+        return resistance
+    
+    def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str]=None) -> None:
+        """
+        Set the source entity for this modifiable value and its components.
+        """
+        self.source_entity_uuid = source_entity_uuid
+        self.source_entity_name = source_entity_name
+        self.self_static.set_source_entity(source_entity_uuid, source_entity_name)
+        self.to_target_static.set_source_entity(source_entity_uuid, source_entity_name)
+        self.self_contextual.set_source_entity(source_entity_uuid, source_entity_name)
+        self.to_target_contextual.set_source_entity(source_entity_uuid, source_entity_name)
 
     def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
         """
@@ -1522,6 +2129,7 @@ class ModifiableValue(BaseValue):
             context=self.context,
             score_normalizer=self.score_normalizer
         )
+
     def remove_modifier(self, uuid: UUID) -> None:
         """
         Remove a modifier from this ModifiableValue.
@@ -1543,9 +2151,9 @@ class ModifiableValue(BaseValue):
         self.self_contextual.remove_all_modifiers()
         self.to_target_static.remove_all_modifiers()
         self.to_target_contextual.remove_all_modifiers()
-        if self.from_target_static is not None:
+        if self.from_target_static:
             self.from_target_static.remove_all_modifiers()
-        if self.from_target_contextual is not None:
+        if self.from_target_contextual:
             self.from_target_contextual.remove_all_modifiers()
 
     def get_all_modifier_uuids(self) -> List[UUID]:

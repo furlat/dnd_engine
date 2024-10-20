@@ -22,6 +22,36 @@ class CriticalStatus(str, Enum):
     NONE = "None"
     AUTOCRIT = "Autocrit"
     NOCRIT = "Critical Immune"
+class ResistanceStatus(str,Enum):
+    NONE = "None"
+    RESISTANCE = "Resistance"
+    IMMUNITY = "Immunity"
+    VULNERABILITY = "Vulnerability"
+    
+class Size(str, Enum):
+    TINY = "Tiny"
+    SMALL = "Small"
+    MEDIUM = "Medium"
+    LARGE = "Large"
+    HUGE = "Huge"
+    GARGANTUAN = "Gargantuan"
+
+class DamageType(str, Enum):
+    ACID = "Acid"
+    BLUDGEONING = "Bludgeoning"
+    COLD = "Cold"
+    FIRE = "Fire"
+    FORCE = "Force"
+    LIGHTNING = "Lightning"
+    NECROTIC = "Necrotic"
+    PIERCING = "Piercing"
+    POISON = "Poison"
+    PSYCHIC = "Psychic"
+    RADIANT = "Radiant"
+    SLASHING = "Slashing"
+    THUNDER = "Thunder"
+
+
 
 class BaseModifier(BaseModel):
     """
@@ -481,8 +511,12 @@ class ContextualModifier(BaseModifier):
             return CriticalModifier
         elif isinstance(self, ContextualAutoHitModifier):
             return AutoHitModifier
+        elif isinstance(self, ContextualSizeModifier):
+            return SizeModifier
+        elif isinstance(self, ContextualDamageTypeModifier):
+            return DamageTypeModifier
         else:
-            raise ValueError("Unknown ContextualModifier subclass")
+            raise ValueError(f"Unknown ContextualModifier subclass: {self.__class__.__name__}")
 
 class ContextualAdvantageModifier(ContextualModifier):
     """
@@ -727,3 +761,305 @@ class ContextualNumericalModifier(ContextualModifier):
             return modifier
         else:
             raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+
+class SizeModifier(BaseModifier):
+    """
+    A modifier that applies a size change to a target.
+
+    This class represents modifiers that affect the size of an entity.
+
+    Attributes:
+        name (Optional[str]): The name of the modifier. Can be None if not specified.
+        uuid (UUID): Unique identifier for the modifier. Automatically generated if not provided.
+        source_entity_uuid (Optional[UUID]): UUID of the entity that is the source of this modifier. Can be None.
+        source_entity_name (Optional[str]): Name of the entity that is the source of this modifier. Can be None.
+        target_entity_uuid (UUID): UUID of the entity that this modifier targets. Required.
+        target_entity_name (Optional[str]): Name of the entity that this modifier targets. Can be None.
+        value (Size): The size value applied by this modifier. Required.
+    """
+
+    value: Size = Field(
+        ...,
+        description="The size value applied by this modifier. Required."
+    )
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['SizeModifier']:
+        """
+        Retrieve a SizeModifier instance from the registry by its UUID.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to retrieve.
+
+        Returns:
+            Optional[SizeModifier]: The SizeModifier instance if found, None otherwise.
+
+        Raises:
+            ValueError: If the retrieved object is not a SizeModifier instance.
+        """
+        modifier = cls._registry.get(uuid)
+        if modifier is None:
+            return None
+        elif isinstance(modifier, cls):
+            return modifier
+        else:
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+
+class DamageTypeModifier(BaseModifier):
+    """
+    A modifier that applies a damage type change or addition to a target.
+
+    This class represents modifiers that affect the damage type of an attack or ability.
+
+    Attributes:
+        name (Optional[str]): The name of the modifier. Can be None if not specified.
+        uuid (UUID): Unique identifier for the modifier. Automatically generated if not provided.
+        source_entity_uuid (Optional[UUID]): UUID of the entity that is the source of this modifier. Can be None.
+        source_entity_name (Optional[str]): Name of the entity that is the source of this modifier. Can be None.
+        target_entity_uuid (UUID): UUID of the entity that this modifier targets. Required.
+        target_entity_name (Optional[str]): Name of the entity that this modifier targets. Can be None.
+        value (DamageType): The damage type applied by this modifier. Required.
+    """
+
+    value: DamageType = Field(
+        ...,
+        description="The damage type applied by this modifier. Required."
+    )
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['DamageTypeModifier']:
+        """
+        Retrieve a DamageTypeModifier instance from the registry by its UUID.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to retrieve.
+
+        Returns:
+            Optional[DamageTypeModifier]: The DamageTypeModifier instance if found, None otherwise.
+
+        Raises:
+            ValueError: If the retrieved object is not a DamageTypeModifier instance.
+        """
+        modifier = cls._registry.get(uuid)
+        if modifier is None:
+            return None
+        elif isinstance(modifier, cls):
+            return modifier
+        else:
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+
+ContextAwareSize = ContextAwareCallable[SizeModifier]
+ContextAwareDamageType = ContextAwareCallable[DamageTypeModifier]
+
+class ContextualSizeModifier(ContextualModifier):
+    """
+    A contextual modifier that applies a size change based on the game context.
+
+    This class represents modifiers that dynamically determine a size change
+    based on the current game state and entities involved.
+
+    Attributes:
+        name (Optional[str]): The name of the modifier. Can be None if not specified.
+        uuid (UUID): Unique identifier for the modifier. Automatically generated if not provided.
+        source_entity_uuid (Optional[UUID]): UUID of the entity that is the source of this modifier. Can be None.
+        source_entity_name (Optional[str]): Name of the entity that is the source of this modifier. Can be None.
+        target_entity_uuid (UUID): UUID of the entity that this modifier targets. Required.
+        target_entity_name (Optional[str]): Name of the entity that this modifier targets. Can be None.
+        callable (ContextAwareSize): A callable function that returns a SizeModifier based on context.
+        callable_arguments (Optional[Tuple[UUID, Optional[UUID], Optional[Dict[str, Any]]]]): 
+            The arguments to be passed to the callable function.
+    """
+
+    callable: ContextAwareSize = Field(
+        ...,
+        description="A context-aware callable function that returns a SizeModifier."
+    )
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['ContextualSizeModifier']:
+        """
+        Retrieve a ContextualSizeModifier instance from the registry by its UUID.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to retrieve.
+
+        Returns:
+            Optional[ContextualSizeModifier]: The ContextualSizeModifier instance if found, None otherwise.
+
+        Raises:
+            ValueError: If the retrieved object is not a ContextualSizeModifier instance.
+        """
+        modifier = cls._registry.get(uuid)
+        if modifier is None:
+            return None
+        elif isinstance(modifier, cls):
+            return modifier
+        else:
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+
+class ContextualDamageTypeModifier(ContextualModifier):
+    """
+    A contextual modifier that applies a damage type change based on the game context.
+
+    This class represents modifiers that dynamically determine a damage type change
+    based on the current game state and entities involved.
+
+    Attributes:
+        name (Optional[str]): The name of the modifier. Can be None if not specified.
+        uuid (UUID): Unique identifier for the modifier. Automatically generated if not provided.
+        source_entity_uuid (Optional[UUID]): UUID of the entity that is the source of this modifier. Can be None.
+        source_entity_name (Optional[str]): Name of the entity that is the source of this modifier. Can be None.
+        target_entity_uuid (UUID): UUID of the entity that this modifier targets. Required.
+        target_entity_name (Optional[str]): Name of the entity that this modifier targets. Can be None.
+        callable (ContextAwareDamageType): A callable function that returns a DamageTypeModifier based on context.
+        callable_arguments (Optional[Tuple[UUID, Optional[UUID], Optional[Dict[str, Any]]]]): 
+            The arguments to be passed to the callable function.
+    """
+
+    callable: ContextAwareDamageType = Field(
+        ...,
+        description="A context-aware callable function that returns a DamageTypeModifier."
+    )
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['ContextualDamageTypeModifier']:
+        """
+        Retrieve a ContextualDamageTypeModifier instance from the registry by its UUID.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to retrieve.
+
+        Returns:
+            Optional[ContextualDamageTypeModifier]: The ContextualDamageTypeModifier instance if found, None otherwise.
+
+        Raises:
+            ValueError: If the retrieved object is not a ContextualDamageTypeModifier instance.
+        """
+        modifier = cls._registry.get(uuid)
+        if modifier is None:
+            return None
+        elif isinstance(modifier, cls):
+            return modifier
+        else:
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+
+class ResistanceModifier(BaseModifier):
+    """
+    A modifier that applies resistance, immunity, or vulnerability to a damage type for a target.
+
+    This class represents modifiers that affect how a target takes damage of a specific type.
+
+    Attributes:
+        name (Optional[str]): The name of the modifier. Can be None if not specified.
+        uuid (UUID): Unique identifier for the modifier. Automatically generated if not provided.
+        source_entity_uuid (Optional[UUID]): UUID of the entity that is the source of this modifier. Can be None.
+        source_entity_name (Optional[str]): Name of the entity that is the source of this modifier. Can be None.
+        target_entity_uuid (UUID): UUID of the entity that this modifier targets. Required.
+        target_entity_name (Optional[str]): Name of the entity that this modifier targets. Can be None.
+        value (ResistanceStatus): The resistance status applied by this modifier. Required.
+        damage_type (DamageType): The damage type this resistance applies to. Required.
+
+    Computed Attributes:
+        numerical_value (int): Numerical representation of the resistance status 
+            (2 for IMMUNITY, 1 for RESISTANCE, 0 for NONE, -1 for VULNERABILITY).
+    """
+
+    value: ResistanceStatus = Field(
+        ...,
+        description="The resistance status (NONE, RESISTANCE, IMMUNITY, or VULNERABILITY) applied by this modifier. Required."
+    )
+    damage_type: DamageType = Field(
+        ...,
+        description="The damage type this resistance applies to. Required."
+    )
+
+    @computed_field
+    @property
+    def numerical_value(self) -> int:
+        """
+        Convert the resistance status to a numerical representation.
+
+        Returns:
+            int: 2 for IMMUNITY, 1 for RESISTANCE, 0 for NONE, -1 for VULNERABILITY.
+        """
+        if self.value == ResistanceStatus.IMMUNITY:
+            return 2
+        elif self.value == ResistanceStatus.RESISTANCE:
+            return 1
+        elif self.value == ResistanceStatus.VULNERABILITY:
+            return -1
+        else:  # ResistanceStatus.NONE
+            return 0
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['ResistanceModifier']:
+        """
+        Retrieve a ResistanceModifier instance from the registry by its UUID.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to retrieve.
+
+        Returns:
+            Optional[ResistanceModifier]: The ResistanceModifier instance if found, None otherwise.
+
+        Raises:
+            ValueError: If the retrieved object is not a ResistanceModifier instance.
+        """
+        modifier = cls._registry.get(uuid)
+        if modifier is None:
+            return None
+        elif isinstance(modifier, cls):
+            return modifier
+        else:
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+
+ContextAwareResistance = ContextAwareCallable[ResistanceModifier]
+
+class ContextualResistanceModifier(ContextualModifier):
+    """
+    A contextual modifier that applies resistance, immunity, or vulnerability based on the game context.
+
+    This class represents modifiers that dynamically determine resistance status for a specific damage type
+    based on the current game state and entities involved.
+
+    Attributes:
+        name (Optional[str]): The name of the modifier. Can be None if not specified.
+        uuid (UUID): Unique identifier for the modifier. Automatically generated if not provided.
+        source_entity_uuid (Optional[UUID]): UUID of the entity that is the source of this modifier. Can be None.
+        source_entity_name (Optional[str]): Name of the entity that is the source of this modifier. Can be None.
+        target_entity_uuid (UUID): UUID of the entity that this modifier targets. Required.
+        target_entity_name (Optional[str]): Name of the entity that this modifier targets. Can be None.
+        callable (ContextAwareResistance): A callable function that returns a ResistanceModifier based on context.
+        callable_arguments (Optional[Tuple[UUID, Optional[UUID], Optional[Dict[str, Any]]]]): 
+            The arguments to be passed to the callable function.
+    """
+
+    callable: ContextAwareResistance = Field(
+        ...,
+        description="A context-aware callable function that returns a ResistanceModifier."
+    )
+
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['ContextualResistanceModifier']:
+        """
+        Retrieve a ContextualResistanceModifier instance from the registry by its UUID.
+
+        Args:
+            uuid (UUID): The UUID of the modifier to retrieve.
+
+        Returns:
+            Optional[ContextualResistanceModifier]: The ContextualResistanceModifier instance if found, None otherwise.
+
+        Raises:
+            ValueError: If the retrieved object is not a ContextualResistanceModifier instance.
+        """
+        modifier = cls._registry.get(uuid)
+        if modifier is None:
+            return None
+        elif isinstance(modifier, cls):
+            return modifier
+        else:
+            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+
+
+
