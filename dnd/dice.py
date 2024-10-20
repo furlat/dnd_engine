@@ -340,6 +340,7 @@ if __name__ == "__main__":
                                                                         uuid=modifier_uuid,
                                                                         name="example_numerical_modifier",
                                                                         value=10,
+                                                                        source_entity_uuid=source_entity_uuid,
                                                                         target_entity_uuid=source_entity_uuid)},
                                                                    ),
                                             

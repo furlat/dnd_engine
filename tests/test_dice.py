@@ -26,6 +26,7 @@ def sample_modifiable_value(source_uuid, target_uuid):
                 uuid=modifer_uuid,
                 name="example_numerical_modifier",
                 value=10,
+                source_entity_uuid=target_uuid,
                 target_entity_uuid=source_uuid
             )}
         ),
@@ -177,7 +178,7 @@ class TestDice:
         assert roll.target_entity_uuid == dice.target_entity_uuid
 
     def test_dice_roll_with_advantage(self, sample_modifiable_value):
-        advantage_modifier = AdvantageModifier(target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.ADVANTAGE)
+        advantage_modifier = AdvantageModifier(source_entity_uuid=uuid4(),target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.ADVANTAGE)
         sample_modifiable_value.self_static.advantage_modifiers[advantage_modifier.uuid] = advantage_modifier
         dice = Dice(count=1, value=20, bonus=sample_modifiable_value)
         
@@ -224,7 +225,7 @@ class TestEdgeCasesAndErrorHandling:
             Dice(count=2, value=6, bonus=sample_modifiable_value, roll_type=RollType.DAMAGE)
 
     def test_dice_roll_with_extreme_modifiers(self, sample_modifiable_value):
-        extreme_modifier = NumericalModifier(target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=1000000)
+        extreme_modifier = NumericalModifier(source_entity_uuid=uuid4(),target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=1000000)
         sample_modifiable_value.self_static.value_modifiers[extreme_modifier.uuid] = extreme_modifier
         dice = Dice(count=1, value=20, bonus=sample_modifiable_value)
         roll = dice.roll
@@ -232,7 +233,7 @@ class TestEdgeCasesAndErrorHandling:
         assert roll.total > 1000000
 
     def test_dice_roll_with_negative_modifiers(self, sample_modifiable_value):
-        negative_modifier = NumericalModifier(target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=-100)
+        negative_modifier = NumericalModifier(source_entity_uuid=uuid4(),target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=-100)
         sample_modifiable_value.self_static.value_modifiers[negative_modifier.uuid] = negative_modifier
         dice = Dice(count=1, value=20, bonus=sample_modifiable_value)
         roll = dice.roll
@@ -241,9 +242,9 @@ class TestEdgeCasesAndErrorHandling:
 
     def test_multiple_advantage_disadvantage_modifiers(self, sample_modifiable_value):
         advantage_modifiers = [
-            AdvantageModifier(target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.ADVANTAGE),
-            AdvantageModifier(target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.DISADVANTAGE),
-            AdvantageModifier(target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.ADVANTAGE)
+            AdvantageModifier(source_entity_uuid=uuid4(),target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.ADVANTAGE),
+            AdvantageModifier(source_entity_uuid=uuid4(),target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.DISADVANTAGE),
+            AdvantageModifier(source_entity_uuid=uuid4(),target_entity_uuid=sample_modifiable_value.source_entity_uuid, value=AdvantageStatus.ADVANTAGE)
         ]
         for modifier in advantage_modifiers:
             sample_modifiable_value.self_static.advantage_modifiers[modifier.uuid] = modifier
