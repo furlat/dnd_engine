@@ -1,7 +1,8 @@
 import pytest
 from uuid import UUID, uuid4
 from typing import Dict, Any, List
-from dnd.blocks import BaseBlock, Ability, AbilityScores, ability_score_normalizer, Skill, SkillSet, SavingThrow, SavingThrowSet, HitDice, Health, ABILITY_TO_SKILLS, skills, saving_throws, damage_types
+from dnd.blocks import BaseBlock, Ability, AbilityScores, ability_score_normalizer, Skill, SkillSet, SavingThrow, SavingThrowSet, HitDice, Health, ABILITY_TO_SKILLS, skills, saving_throws
+from dnd.modifiers import DamageType, ResistanceStatus, ResistanceModifier
 from dnd.values import ModifiableValue
 
 @pytest.fixture
@@ -454,19 +455,34 @@ class TestHealth:
 
     def test_damage_multiplier(self, source_uuid):
         health = Health(source_entity_uuid=source_uuid)
-        health.vulnerabilities.append("fire")
-        health.resistances.append("cold")
-        assert health.damage_multiplier("fire") == 2
-        assert health.damage_multiplier("cold") == 0.5
-        assert health.damage_multiplier("piercing") == 1
+        health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=source_uuid,
+            value=ResistanceStatus.VULNERABILITY,
+            damage_type=DamageType.FIRE
+        ))
+        health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=source_uuid,
+            value=ResistanceStatus.RESISTANCE,
+            damage_type=DamageType.COLD
+        ))
+        assert health.damage_multiplier(DamageType.FIRE) == 2
+        assert health.damage_multiplier(DamageType.COLD) == 0.5
+        assert health.damage_multiplier(DamageType.PIERCING) == 1
 
     def test_take_damage(self, source_uuid):
         health = Health(source_entity_uuid=source_uuid)
-        health.take_damage(10, "fire", source_uuid)
+        health.take_damage(10, DamageType.FIRE, source_uuid)
         assert health.damage_taken == 10
 
-        health.resistances.append("cold")
-        health.take_damage(10, "cold", source_uuid)
+        health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=source_uuid,
+            value=ResistanceStatus.RESISTANCE,
+            damage_type=DamageType.COLD
+        ))
+        health.take_damage(10, DamageType.COLD, source_uuid)
         assert health.damage_taken == 15  # 10 + 5 (10 * 0.5)
 
     def test_heal(self, source_uuid):
@@ -501,24 +517,39 @@ class TestHealth:
 
     def test_add_remove_vulnerability(self, source_uuid):
         health = Health(source_entity_uuid=source_uuid)
-        health.add_vulnerability("fire")
-        assert "fire" in health.vulnerabilities
-        health.remove_vulnerability("fire")
-        assert "fire" not in health.vulnerabilities
+        health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=source_uuid,
+            value=ResistanceStatus.VULNERABILITY,
+            damage_type=DamageType.FIRE
+        ))
+        assert health.get_resistance(DamageType.FIRE) == ResistanceStatus.VULNERABILITY
+        health.damage_reduction.self_static.remove_resistance_modifier(list(health.damage_reduction.self_static.resistance_modifiers.keys())[0])
+        assert health.get_resistance(DamageType.FIRE) == ResistanceStatus.NONE
 
     def test_add_remove_resistance(self, source_uuid):
         health = Health(source_entity_uuid=source_uuid)
-        health.add_resistance("cold")
-        assert "cold" in health.resistances
-        health.remove_resistance("cold")
-        assert "cold" not in health.resistances
+        health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=source_uuid,
+            value=ResistanceStatus.RESISTANCE,
+            damage_type=DamageType.COLD
+        ))
+        assert health.get_resistance(DamageType.COLD) == ResistanceStatus.RESISTANCE
+        health.damage_reduction.self_static.remove_resistance_modifier(list(health.damage_reduction.self_static.resistance_modifiers.keys())[0])
+        assert health.get_resistance(DamageType.COLD) == ResistanceStatus.NONE
 
     def test_add_remove_immunity(self, source_uuid):
         health = Health(source_entity_uuid=source_uuid)
-        health.add_immunity("poison")
-        assert "poison" in health.immunities
-        health.remove_immunity("poison")
-        assert "poison" not in health.immunities
+        health.damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=source_uuid,
+            value=ResistanceStatus.IMMUNITY,
+            damage_type=DamageType.POISON
+        ))
+        assert health.get_resistance(DamageType.POISON) == ResistanceStatus.IMMUNITY
+        health.damage_reduction.self_static.remove_resistance_modifier(list(health.damage_reduction.self_static.resistance_modifiers.keys())[0])
+        assert health.get_resistance(DamageType.POISON) == ResistanceStatus.NONE
 
 class TestEdgeCasesAndErrorHandling:
     def test_missing_required_field(self):
@@ -603,7 +634,7 @@ class TestEdgeCasesAndErrorHandling:
     def test_negative_damage(self, source_uuid):
         health = Health(source_entity_uuid=source_uuid)
         with pytest.raises(ValueError):
-            health.take_damage(-5, "fire", source_uuid)
+            health.take_damage(-5, DamageType.FIRE, source_uuid)
 
     def test_invalid_damage_type(self, source_uuid):
         health = Health(source_entity_uuid=source_uuid)
