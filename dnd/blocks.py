@@ -1,9 +1,9 @@
-from re import T
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar
+
+from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.values import ModifiableValue
-from dnd.modifiers import NumericalModifier
+from dnd.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject
 from enum import Enum
 from random import randint
 from functools import cached_property
@@ -931,6 +931,14 @@ saving_throw_name_to_ability = {
     "wisdom_saving_throw": "wisdom",
     "charisma_saving_throw": "charisma"
 }
+class SavingThrowRequest(BaseModel):
+    """ A request to make a saving throw """
+    saving_throw: saving_throws
+    dc: int
+    source_entity_uuid: UUID
+    target_entity_uuid: Optional[UUID] = None
+    context: Optional[Dict[str,Any]] = None
+
 class SavingThrow(BaseBlock):
     """
     Represents a saving throw in the D&D 5e game system.
@@ -1236,8 +1244,8 @@ class HitDice(BaseBlock):
                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
                    hit_dice_value=modifiable_hit_dice_value, hit_dice_count=modifiable_hit_dice_count, mode=mode)
 
-damage_types = Literal["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
-damage_types_list = ["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
+# damage_types = Literal["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
+# damage_types_list = ["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
 
 class Health(BaseBlock):
     """
@@ -1326,10 +1334,10 @@ class Health(BaseBlock):
     temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Temporary Hit Points"), description="Temporary Hit Points, e.g. False Life spell")
     damage_taken: int = Field(default=0,ge=0, description="The amount of damage taken")
     damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Damage Reduction"), description="Damage Reduction, e.g. Damage Resistance")
-    vulnerabilities: List[damage_types] = Field(default_factory=list, description="Damage Vulnerabilities")
-    resistances: List[damage_types] = Field(default_factory=list, description="Damage Resistances")
-    immunities: List[damage_types] = Field(default_factory=list, description="Damage Immunities")
 
+    def get_resistance(self,damage_type: DamageType) -> ResistanceStatus:
+        return self.damage_reduction.resistance[damage_type]
+    
     @computed_field
     @property
     def hit_dices_total_hit_points(self) -> int:
@@ -1369,7 +1377,7 @@ class Health(BaseBlock):
         """
         self.damage_taken = max(0, self.damage_taken - damage)
     
-    def damage_multiplier(self, damage_type: damage_types) -> float:
+    def damage_multiplier(self, damage_type: DamageType) -> float:
         """
         Calculate the damage multiplier based on vulnerabilities and resistances.
 
@@ -1379,13 +1387,17 @@ class Health(BaseBlock):
         Returns:
             float: The damage multiplier (2.0 for vulnerabilities, 0.5 for resistances, 1.0 otherwise).
         """
-        if damage_type in self.vulnerabilities:
-            return 2
-        elif damage_type in self.resistances:
+        resistance = self.get_resistance(damage_type)
+        if resistance == ResistanceStatus.IMMUNITY:
+            return 0
+        elif resistance == ResistanceStatus.RESISTANCE:
             return 0.5
-        return 1
+        elif resistance == ResistanceStatus.VULNERABILITY:
+            return 2
+        else:
+            return 1
     
-    def take_damage(self, damage: int, damage_type: damage_types, source_entity_uuid: UUID) -> None:
+    def take_damage(self, damage: int, damage_type: DamageType, source_entity_uuid: UUID) -> None:
         """
         Apply damage to the entity, considering resistances and temporary hit points.
 
@@ -1399,8 +1411,8 @@ class Health(BaseBlock):
         """
         if damage < 0:
             raise ValueError(f"Damage must be greater than 0 instead of {damage}")
-        if damage_type not in damage_types_list:
-            raise ValueError(f"Damage type must be one of the following: {damage_types_list} instead of {damage_type}")
+        if not isinstance(damage_type, DamageType):
+            raise ValueError(f"Damage type must be one of the following: {[damage.value for damage in DamageType]} instead of {damage_type}")
         damage_after_absorption = damage - self.damage_reduction.score
         damage_after_multiplier = int(damage_after_absorption * self.damage_multiplier(damage_type))
         current_temporary_hit_points = self.temporary_hit_points.score
@@ -1477,54 +1489,5 @@ class Health(BaseBlock):
         """
         return self.get_max_hit_dices_points(constitution_modifier) + self.max_hit_points_bonus.score + self.temporary_hit_points.score - self.damage_taken
 
-    def add_vulnerability(self, vulnerability: damage_types) -> None:
-        if vulnerability not in self.vulnerabilities:
-            self.vulnerabilities.append(vulnerability)
-    def remove_vulnerability(self, vulnerability: damage_types) -> None:
-        """
-        Remove a damage type from the entity's vulnerabilities.
 
-        Args:
-            vulnerability (damage_types): The damage type to remove from vulnerabilities.
-        """
-        if vulnerability in self.vulnerabilities:
-            self.vulnerabilities.remove(vulnerability)
-    
-    def add_resistance(self, resistance: damage_types) -> None:
-        """
-        Add a damage type to the entity's resistances.
-
-        Args:
-            resistance (damage_types): The damage type to add as a resistance.
-        """
-        if resistance not in self.resistances:
-            self.resistances.append(resistance)
-    def remove_resistance(self, resistance: damage_types) -> None:
-        """
-        Remove a damage type from the entity's resistances.
-
-        Args:
-            resistance (damage_types): The damage type to remove from resistances.
-        """
-        if resistance in self.resistances:
-            self.resistances.remove(resistance)
-    
-    def add_immunity(self, immunity: damage_types) -> None:
-        """
-        Add a damage type to the entity's immunities.
-
-        Args:
-            immunity (damage_types): The damage type to add as an immunity.
-        """
-        if immunity not in self.immunities:
-            self.immunities.append(immunity)
-    def remove_immunity(self, immunity: damage_types) -> None:
-        """
-        Remove a damage type from the entity's immunities.
-
-        Args:
-            immunity (damage_types): The damage type to remove from immunities.
-        """
-        if immunity in self.immunities:
-            self.immunities.remove(immunity)
 

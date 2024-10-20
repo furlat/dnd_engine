@@ -4,6 +4,7 @@ import uuid
 from uuid import UUID, uuid4
 from enum import Enum
 from dnd.modifiers import (
+    BaseObject,
     naming_callable,
     NumericalModifier,
     AdvantageModifier,
@@ -33,7 +34,7 @@ import random  # Add this import at the top of the file
 def identity(x: int) -> int:
     return x
 
-class BaseValue(BaseModel): 
+class BaseValue(BaseObject): 
     """
     Base class for all value types in the system.
 
@@ -110,16 +111,6 @@ class BaseValue(BaseModel):
     )
 
 
-    def __init__(self, **data):
-        """
-        Initialize the BaseValue and register it in the class registry.
-
-        Args:
-            **data: Keyword arguments to initialize the BaseValue attributes.
-        """
-        super().__init__(**data)
-        self.__class__._registry[self.uuid] = self
-
     @classmethod
     def get(cls, uuid: UUID) -> Optional['BaseValue']:
         """
@@ -142,33 +133,6 @@ class BaseValue(BaseModel):
         else:
             raise ValueError(f"Value with UUID {uuid} is not a BaseValue, but {type(value)}")
 
-    @classmethod
-    def register(cls, value: 'BaseValue') -> None:
-        """
-        Register a BaseValue instance in the class registry.
-
-        Args:
-            value (BaseValue): The value instance to register.
-        """
-        cls._registry[value.uuid] = value
-
-    @classmethod
-    def unregister(cls, uuid: UUID) -> None:
-        """
-        Remove a BaseValue instance from the class registry.
-
-        Args:
-            uuid (UUID): The UUID of the value to unregister.
-        """
-        cls._registry.pop(uuid, None)
-    
-    def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str]=None) -> None:
-        """
-        Set the source entity for this value and its components.
-        """
-        self.source_entity_uuid = source_entity_uuid
-        self.source_entity_name = source_entity_name
-        
     
     def validate_modifier_target(self, modifier: Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier, SizeModifier, DamageTypeModifier, ResistanceModifier, ContextualNumericalModifier, ContextualAdvantageModifier, ContextualCriticalModifier, ContextualAutoHitModifier, ContextualSizeModifier, ContextualDamageTypeModifier, ContextualResistanceModifier]) -> None:
         if modifier.target_entity_uuid != self.source_entity_uuid:
@@ -189,64 +153,7 @@ class BaseValue(BaseModel):
         dfs(self)
         return chain
 
-    def validate_source_id(self, source_id: UUID) -> None:
-        """
-        Validate that the given source_id matches the source_entity_uuid of this value.
-
-        Args:
-            source_id (UUID): The source ID to validate.
-
-        Raises:
-            ValueError: If the source IDs do not match.
-        """
-        if self.source_entity_uuid != source_id:
-            raise ValueError("Source entity UUIDs do not match")
     
-    def validate_target_id(self, target_id: UUID) -> None:
-        """
-        Validate that the given target_id matches the target_entity_uuid of this value.
-
-        Args:
-            target_id (UUID): The target ID to validate.
-
-        Raises:
-            ValueError: If the target IDs do not match.
-        """
-        if self.target_entity_uuid != target_id:
-            raise ValueError("Target entity UUIDs do not match")
-    
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
-        """
-        Set the target entity for this contextual value.
-
-        Args:
-            target_entity_uuid (UUID): The UUID of the target entity.
-            target_entity_name (Optional[str]): The name of the target entity, if available.
-        """
-        self.target_entity_uuid = target_entity_uuid
-        self.target_entity_name = target_entity_name
-    
-    def clear_target_entity(self) -> None:
-        """
-        Clear the target entity information for this contextual value.
-        """
-        self.target_entity_uuid = None
-        self.target_entity_name = None
-    
-    def set_context(self, context: Dict[str,Any]) -> None:
-        """
-        Set the context for this contextual value.
-
-        Args:
-            context (Dict[str,Any]): The context dictionary to set.
-        """
-        self.context = context
-    
-    def clear_context(self) -> None:
-        """
-        Clear the context for this contextual value.
-        """
-        self.context = None
 
 class StaticValue(BaseValue):
     """
@@ -1674,17 +1581,17 @@ class ModifiableValue(BaseValue):
         validate_source_and_target_consistency: Ensures that the source and target UUIDs are consistent across all components.
     """
 
-    self_static: StaticValue
-    to_target_static: StaticValue
-    self_contextual: ContextualValue
-    to_target_contextual: ContextualValue
-    from_target_contextual: Optional[ContextualValue] = None
-    from_target_static: Optional[StaticValue] = None
+    self_static: StaticValue = Field(default_factory=lambda: StaticValue(source_entity_uuid=uuid4()))
+    to_target_static: StaticValue = Field(default_factory=lambda: StaticValue(source_entity_uuid=uuid4(), is_outgoing_modifier=True))
+    self_contextual: ContextualValue = Field(default_factory=lambda: ContextualValue(source_entity_uuid=uuid4()))
+    to_target_contextual: ContextualValue = Field(default_factory=lambda: ContextualValue(source_entity_uuid=uuid4(), is_outgoing_modifier=True))
+    from_target_contextual: Optional[ContextualValue] = Field(default=None)
+    from_target_static: Optional[StaticValue] = Field(default=None)
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-                base_value: int = 0, value_name: str = "default_value",score_normalizer: Callable[[int], int] = lambda x: x) -> 'ModifiableValue':
+                base_value: int = 0, value_name: str = "default_value", score_normalizer: Callable[[int], int] = lambda x: x) -> 'ModifiableValue':
         """
         Create a new ModifiableValue instance with shared source UUID for all components.
 
@@ -1694,35 +1601,23 @@ class ModifiableValue(BaseValue):
             target_entity_uuid (Optional[UUID]): The UUID of the target entity, if any.
             target_entity_name (Optional[str]): The name of the target entity, if available.
             base_value (int): The base value for this ModifiableValue. Defaults to 0.
-            base_value_name (str): The name for the base value modifier. Defaults to "default_value".
+            value_name (str): The name for the ModifiableValue. Defaults to "default_value".
+            score_normalizer (Callable[[int], int]): A function to normalize the score. Defaults to identity function.
 
         Returns:
             ModifiableValue: A new ModifiableValue instance with initialized components.
         """
-        base_modifier = NumericalModifier(
-            name=f"{value_name}_base_value",
-            value=base_value,
-            source_entity_uuid=source_entity_uuid,
-            source_entity_name=source_entity_name,
-            target_entity_uuid=source_entity_uuid,
-            target_entity_name=source_entity_name
-        )
+        base_modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=source_entity_uuid, value=base_value, name=f"{value_name}_base_value")
 
         obj = cls(
-            name = value_name,
+            name=value_name,
             source_entity_uuid=source_entity_uuid,
             source_entity_name=source_entity_name,
-            self_static=StaticValue(
-                source_entity_uuid=source_entity_uuid,
-                source_entity_name=source_entity_name,
-                is_outgoing_modifier=False,
-                value_modifiers={base_modifier.uuid: base_modifier},
-            
-            ),
-            score_normalizer=score_normalizer,
+            self_static=StaticValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, value_modifiers={base_modifier.uuid: base_modifier}),
             to_target_static=StaticValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=True),
-            self_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=False),
-            to_target_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=True)
+            self_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name),
+            to_target_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=True),
+            score_normalizer=score_normalizer
         )
         if target_entity_uuid is not None:
             obj.set_target_entity(target_entity_uuid, target_entity_name)
