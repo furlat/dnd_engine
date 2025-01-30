@@ -3,7 +3,7 @@ from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.values import ModifiableValue
-from dnd.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject
+from dnd.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws
 from enum import Enum
 from random import randint
 from functools import cached_property
@@ -922,7 +922,6 @@ class SkillSet(BaseBlock):
         blocks = self.get_blocks()
         return [skill for skill in blocks if isinstance(skill, Skill) and skill.expertise]
     
-saving_throws = Literal["strength_saving_throw", "dexterity_saving_throw", "constitution_saving_throw", "intelligence_saving_throw", "wisdom_saving_throw", "charisma_saving_throw"]
 saving_throw_name_to_ability = {
     "strength_saving_throw": "strength",
     "dexterity_saving_throw": "dexterity",
@@ -931,13 +930,7 @@ saving_throw_name_to_ability = {
     "wisdom_saving_throw": "wisdom",
     "charisma_saving_throw": "charisma"
 }
-class SavingThrowRequest(BaseModel):
-    """ A request to make a saving throw """
-    saving_throw: saving_throws
-    dc: int
-    source_entity_uuid: UUID
-    target_entity_uuid: Optional[UUID] = None
-    context: Optional[Dict[str,Any]] = None
+
 
 class SavingThrow(BaseBlock):
     """
