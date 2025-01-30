@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, computed_field, field_validator, PrivateAttr,model_validator, ValidationError
-from typing import List, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar,Union, Tuple, Self
+from typing import List,Literal, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar,Union, Tuple, Self
 from uuid import UUID, uuid4
 from enum import Enum
 
@@ -50,8 +50,15 @@ class DamageType(str, Enum):
     RADIANT = "Radiant"
     SLASHING = "Slashing"
     THUNDER = "Thunder"
+saving_throws = Literal["strength_saving_throw", "dexterity_saving_throw", "constitution_saving_throw", "intelligence_saving_throw", "wisdom_saving_throw", "charisma_saving_throw"]
 
-
+class SavingThrowRequest(BaseModel):
+    """ A request to make a saving throw """
+    saving_throw: saving_throws
+    dc: int
+    source_entity_uuid: UUID
+    target_entity_uuid: Optional[UUID] = None
+    context: Optional[Dict[str,Any]] = None
 
 class BaseObject(BaseModel):
     """
