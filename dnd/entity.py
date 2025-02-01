@@ -5,7 +5,7 @@ from enum import Enum
 
 from dnd.blocks import (
     BaseBlock, AbilityScores, SavingThrowSet, Health, 
-    Equipped, Speed, ActionEconomy,SkillSet,skill_names
+    Equipped, Speed, ActionEconomy,SkillSet,SkillName
 )
 from dnd.values import ModifiableValue
 from dnd.modifiers import (
@@ -35,7 +35,7 @@ class Entity(BaseBlock):
 
 
     # No need for post_init as BaseBlock.set_values_and_blocks_source already handles this
-    def skill_roll(self, skill_name: skill_names, target: Union['Entity', UUID, None] = None) -> DiceRoll:
+    def skill_roll(self, skill_name: SkillName, target: Union['Entity', UUID, None] = None) -> DiceRoll:
         """
         Perform a skill check roll using a d20 and adding relevant modifiers.
         
