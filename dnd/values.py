@@ -2076,13 +2076,35 @@ class ModifiableValue(BaseValue):
         for other in others:
             print(f"Validating others source id {other.source_entity_uuid} against self source {self.source_entity_uuid} for modifer  with name {self.name} and uuid {self.uuid} and type {type(self)} against {type(other)} with name {other.name} and uuid {other.uuid}")
             self.validate_source_id(other.source_entity_uuid)
+
+        other_from_target_static_values = [other.from_target_static for other in others if other.from_target_static is not None]
+        other_from_target_contextual_values = [other.from_target_contextual for other in others if other.from_target_contextual is not None]
+        if self.from_target_static is not None:
+            new_from_target_static = self.from_target_static.combine_values(other_from_target_static_values)
+        elif len(other_from_target_static_values) > 0:
+            new_from_target_static = other_from_target_static_values[0].combine_values(other_from_target_static_values[1:])
+        else:
+            new_from_target_static = None
         
-        return ModifiableValue(
+        if self.from_target_contextual is not None:
+            new_from_target_contextual = self.from_target_contextual.combine_values(other_from_target_contextual_values)
+        elif len(other_from_target_contextual_values) > 0:
+            new_from_target_contextual = other_from_target_contextual_values[0].combine_values(other_from_target_contextual_values[1:])
+        else:
+            new_from_target_contextual = None
+        if new_from_target_static is not None:
+            new_from_target_static.set_target_entity(self.source_entity_uuid, self.source_entity_name)
+        if new_from_target_contextual is not None:
+            new_from_target_contextual.set_target_entity(self.source_entity_uuid, self.source_entity_name)
+        
+        new_value= ModifiableValue(
             name=naming_callable([self.name] + [other.name for other in others]),
             self_static=self.self_static.combine_values([other.self_static for other in others]),
             to_target_static=self.to_target_static.combine_values([other.to_target_static for other in others]),
             self_contextual=self.self_contextual.combine_values([other.self_contextual for other in others]),
             to_target_contextual=self.to_target_contextual.combine_values([other.to_target_contextual for other in others]),
+            from_target_static=new_from_target_static,
+            from_target_contextual=new_from_target_contextual,
             generated_from=[self.uuid] + [other.uuid for other in others],
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
@@ -2092,6 +2114,9 @@ class ModifiableValue(BaseValue):
             score_normalizer=self.score_normalizer,
             global_normalizer=False,
         )
+        if self.target_entity_uuid is not None:
+            new_value.set_target_entity(self.target_entity_uuid, self.target_entity_name)
+        return new_value
     
     def get_generated_from(self) -> List['ModifiableValue']:
         """

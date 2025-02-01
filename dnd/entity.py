@@ -32,9 +32,7 @@ class Entity(BaseBlock):
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['Entity']:
-        return cls.get(uuid)
+
     
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Entity") -> 'Entity':
@@ -58,4 +56,5 @@ class Entity(BaseBlock):
         if self.target_entity_uuid is None:
             return None
         target_entity = Entity.get(self.target_entity_uuid)
-        return target_entity
+        assert isinstance(target_entity, Entity)
+        return target_entity 
