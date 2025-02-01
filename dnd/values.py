@@ -109,6 +109,10 @@ class BaseValue(BaseObject):
         default_factory=list,
         description="List of UUIDs of values that this value was generated from."
     )
+    global_normalizer: bool = Field(
+        default=True,
+        description="Whether to apply the value's normalizer globally to all numerical modifiers"
+    )
 
 
     @classmethod
@@ -773,6 +777,27 @@ class StaticValue(BaseValue):
         self.size_modifiers.clear()
         self.damage_type_modifiers.clear()
         self.resistance_modifiers.clear()
+
+    @model_validator(mode='after')
+    def apply_global_normalizer(self) -> Self:
+        """
+        Apply the score normalizer to all numerical modifiers if global_normalizer is True.
+        Only affects modifiers that don't already have a normalizer.
+        """
+        if self.global_normalizer and self.score_normalizer is not None:
+            # Apply to value modifiers
+            for modifier in self.value_modifiers.values():
+                if modifier.score_normalizer is None:
+                    modifier.score_normalizer = self.score_normalizer
+            # Apply to min constraints
+            for constraint in self.min_constraints.values():
+                if constraint.score_normalizer is None:
+                    constraint.score_normalizer = self.score_normalizer
+            # Apply to max constraints
+            for constraint in self.max_constraints.values():
+                if constraint.score_normalizer is None:
+                    constraint.score_normalizer = self.score_normalizer
+        return self
 
 class ContextualValue(BaseValue):
     """
@@ -1499,6 +1524,27 @@ class ContextualValue(BaseValue):
         self.damage_type_modifiers.clear()
         self.resistance_modifiers.clear()
 
+    @model_validator(mode='after')
+    def apply_global_normalizer(self) -> Self:
+        """
+        Apply the score normalizer to all numerical modifiers if global_normalizer is True.
+        Only affects modifiers that don't already have a normalizer.
+        """
+        if self.global_normalizer and self.score_normalizer is not None:
+            # Apply to contextual value modifiers
+            for modifier in self.value_modifiers.values():
+                if modifier.callable.score_normalizer is None:  # Note: This needs to be adapted based on how ContextualNumericalModifier is structured
+                    modifier.callable.score_normalizer = self.score_normalizer
+            # Apply to contextual min constraints
+            for constraint in self.min_constraints.values():
+                if constraint.callable.score_normalizer is None:
+                    constraint.callable.score_normalizer = self.score_normalizer
+            # Apply to contextual max constraints
+            for constraint in self.max_constraints.values():
+                if constraint.callable.score_normalizer is None:
+                    constraint.callable.score_normalizer = self.score_normalizer
+        return self
+
 class ModifiableValue(BaseValue):
     """
     A comprehensive value type that combines static and contextual modifiers for both self and target entities.
@@ -1558,6 +1604,10 @@ class ModifiableValue(BaseValue):
     to_target_contextual: ContextualValue = Field(default_factory=lambda: ContextualValue(source_entity_uuid=uuid4(), is_outgoing_modifier=True))
     from_target_contextual: Optional[ContextualValue] = Field(default=None)
     from_target_static: Optional[StaticValue] = Field(default=None)
+    global_normalizer: bool = Field(
+        default=False,
+        description="Whether to apply the value's normalizer globally to all numerical modifiers"
+    )
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
@@ -1593,6 +1643,7 @@ class ModifiableValue(BaseValue):
         if target_entity_uuid is not None:
             obj.set_target_entity(target_entity_uuid, target_entity_name)
         return obj
+    
 
     def get_typed_modifiers(self) -> List[Union[StaticValue, ContextualValue]]:
         """
@@ -2098,6 +2149,19 @@ class ModifiableValue(BaseValue):
 
         return self
     
+    @model_validator(mode='after')
+    def apply_global_normalizer(self) -> Self:
+        """
+        Apply the score normalizer to all numerical modifiers if global_normalizer is True.
+        Only affects modifiers that don't already have a normalizer.
+        """
+        if self.global_normalizer and self.score_normalizer is not None:
+            # Apply to contextual value modifiers
+            for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
+                if component.score_normalizer is None:  # Note: This needs to be adapted based on how ContextualNumericalModifier is structured
+                    component.score_normalizer = self.score_normalizer
+                component.global_normalizer = True  # Propagate the global normalizer flag
+        return self
 
         
             
