@@ -250,9 +250,13 @@ class NumericalModifier(BaseObject):
         target_entity_uuid (UUID): UUID of the entity that this modifier targets. Required.
         target_entity_name (Optional[str]): Name of the entity that this modifier targets. Can be None.
         value (int): The numerical value of the modifier. Required.
+        score_normalizer (Optional[Callable[[int], int]]): Optional function to normalize this modifier's value.
 
     Class Attributes:
         _registry (ClassVar[Dict[UUID, 'BaseModifier']]): A class-level registry to store all instances.
+
+    Computed Attributes:
+        normalized_value (int): The normalized value of this modifier.
 
     Methods:
         get(cls, uuid: UUID) -> Optional['NumericalModifier']:
@@ -267,6 +271,18 @@ class NumericalModifier(BaseObject):
         ...,
         description="The numerical value of the modifier. Required."
     )
+    score_normalizer: Optional[Callable[[int], int]] = Field(
+        default=None,
+        description="Optional function to normalize this modifier's value"
+    )
+
+    @computed_field
+    @property
+    def normalized_value(self) -> int:
+        """Get the normalized value of this modifier."""
+        if self.score_normalizer is None:
+            return self.value
+        return self.score_normalizer(self.value)
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['NumericalModifier']:
