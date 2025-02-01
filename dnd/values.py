@@ -2092,6 +2092,13 @@ class ModifiableValue(BaseValue):
             score_normalizer=self.score_normalizer,
             global_normalizer=False,
         )
+    
+    def get_generated_from(self) -> List['ModifiableValue']:
+        """
+        Get the list of ModifiableValues that generated this ModifiableValue.
+        """
+        generated_from = [ModifiableValue.get(uuid) for uuid in self.generated_from if uuid is not None]
+        return [x for x in generated_from if x is not None]
 
     def remove_modifier(self, uuid: UUID) -> None:
         """

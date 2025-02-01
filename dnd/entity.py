@@ -18,7 +18,6 @@ from dnd.equipment import (
     Boots, Amulet, Ring, Cloak, Helmet, BodyPart
 )
 from dnd.dice import Dice, RollType, DiceRoll
-
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
     require interactions between blocks """
@@ -31,57 +30,32 @@ class Entity(BaseBlock):
     equipped: Equipped = Field(default_factory=lambda: Equipped.create(source_entity_uuid=uuid4()))
     speed: Speed = Field(default_factory=lambda: Speed.create(source_entity_uuid=uuid4()))
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
-    proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=0))
-
-
-    # No need for post_init as BaseBlock.set_values_and_blocks_source already handles this
-    def skill_roll(self, skill_name: SkillName, target: Union['Entity', UUID, None] = None) -> DiceRoll:
+    proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
+    
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['Entity']:
+        return cls.get(uuid)
+    
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, name: str = "Entity") -> 'Entity':
         """
-        Perform a skill check roll using a d20 and adding relevant modifiers.
-        
+        Create a new Entity instance with the given parameters. All sub-blocks will share
+        the same source_entity_uuid as the entity itself.
+
         Args:
-            skill_name (str): The name of the skill to roll for
-            target (Union[Entity, UUID, None]): The target entity or its UUID, if any
-            
+            source_entity_uuid (UUID): The UUID that will be used as both the entity's UUID and source_entity_uuid
+            name (str): The name of the entity. Defaults to "Entity"
+
         Returns:
-            DiceRoll: The result of the skill check roll
-            
-        Raises:
-            ValueError: If the skill name is invalid
+            Entity: The newly created Entity instance
         """
-        # Get target UUID if an Entity was passed
-        target_uuid = target.uuid if isinstance(target, Entity) else target
-        assert target_uuid is not None, "Target UUID cannot be None"
-        target_entity = Entity.get(target_uuid)
-
-        
-
-
-        #bonus for a skill roll is composed by
-        # proficiency bonus
-        proficiency_bonus = self.proficiency_bonus
-        proficiency_bonus_multiplier = self.skill_set.get_skill(skill_name)._get_proficiency_converter()
-        temporary_proficiency_bonus = proficiency_bonus.model_copy(update={"self_static.score_normalizer":lambda x: x*proficiency_bonus_multiplier})
-        self_skill_bonus = self.skill_set.get_skill(skill_name).skill_bonus
-        # modfier from skill
-
-        # modifier from proficiency
-        # modifier from target skill
-        
-        # Create a d20 for the roll
-        d20 = Dice(
-            count=1,
-            value=20,
-            bonus=ModifiableValue.create(
-                source_entity_uuid=self.uuid,
-                target_entity_uuid=target_uuid,
-                base_value=self.proficiency_bonus.score,  # Add proficiency bonus
-                value_name=f"{skill_name} check"
-            ),
-            roll_type=RollType.CHECK
-        )
-        
-        # Perform the roll
-        roll_result = d20.roll
-        
-        return roll_result 
+        return cls(
+            uuid=source_entity_uuid,
+            source_entity_uuid=source_entity_uuid,
+            name=name)
+    
+    def get_target_entity(self) -> Optional['Entity']:
+        if self.target_entity_uuid is None:
+            return None
+        target_entity = Entity.get(self.target_entity_uuid)
+        return target_entity
