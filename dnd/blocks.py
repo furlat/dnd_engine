@@ -3,11 +3,14 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.values import ModifiableValue
 from dnd.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws
+from dnd.equipment import (
+    Armor, Weapon, Shield, BodyArmor, Gauntlets, Greaves, 
+    Boots, Amulet, Ring, Cloak, Helmet, BodyPart
+)
 from enum import Enum
 from random import randint
 from functools import cached_property
 
-from old_dnd.core import BlockComponent
 
 class BaseBlock(BaseModel):
     """
@@ -824,7 +827,7 @@ class Skill(BaseBlock):
                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
                    expertise=expertise, proficiency=proficiency)
         
-
+skill_names =  Literal["acrobatics", "animal_handling", "arcana", "athletics", "deception", "history", "insight", "intimidation", "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion", "sleight_of_hand", "stealth", "survival"]
 class SkillSet(BaseBlock):
     """
     Represents the complete set of skills for an entity in the D&D 5e game system.
@@ -922,6 +925,9 @@ class SkillSet(BaseBlock):
     def expertise(self) -> List[Skill]:
         blocks = self.get_blocks()
         return [skill for skill in blocks if isinstance(skill, Skill) and skill.expertise]
+    def get_skill(self, skill_name: skill_names) -> Skill:
+        """ gett the attribute corresponding to the skill name"""
+        return getattr(self, skill_name)
     
 saving_throw_name_to_ability = {
     "strength_saving_throw": "strength",
@@ -1486,10 +1492,7 @@ class Health(BaseBlock):
 
 
 
-from dnd.equipment import (
-    Armor, Weapon, Shield, BodyArmor, Gauntlets, Greaves, 
-    Boots, Amulet, Ring, Cloak, Helmet, BodyPart
-)
+
 
 class RingSlot(str, Enum):
     LEFT = "Left Ring"
