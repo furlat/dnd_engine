@@ -135,8 +135,7 @@ class BaseValue(BaseObject):
 
     
     def validate_modifier_target(self, modifier: Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier, SizeModifier, DamageTypeModifier, ResistanceModifier, ContextualNumericalModifier, ContextualAdvantageModifier, ContextualCriticalModifier, ContextualAutoHitModifier, ContextualSizeModifier, ContextualDamageTypeModifier, ContextualResistanceModifier]) -> None:
-        if modifier.target_entity_uuid != self.source_entity_uuid:
-            raise ValueError(f"Modifier target ({modifier.target_entity_uuid}) does not correspond to value source ({self.source_entity_uuid})")
+        pass
 
     def get_generation_chain(self) -> List['BaseValue']:
         chain = []
@@ -276,9 +275,7 @@ class StaticValue(BaseValue):
             if self.is_outgoing_modifier:
                 if modifier.target_entity_uuid == self.source_entity_uuid:
                     raise ValueError(f"Outgoing modifier target ({modifier.target_entity_uuid}) should not be the same as the value source ({self.source_entity_uuid})")
-            else:
-                if modifier.target_entity_uuid != self.source_entity_uuid:
-                    raise ValueError(f"Value source ({self.source_entity_uuid}) does not correspond to modifier target ({modifier.target_entity_uuid})")
+           
         return self
 
     @classmethod
@@ -298,8 +295,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        if modifier.target_entity_uuid != self.source_entity_uuid:
-            raise ValueError(f"Value source ({self.source_entity_uuid}) does not correspond to modifier target ({modifier.target_entity_uuid})")
         self.value_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -322,7 +317,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added constraint.
         """
-        self.validate_modifier_target(constraint)
         self.min_constraints[constraint.uuid] = constraint
         return constraint.uuid
     
@@ -345,7 +339,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added constraint.
         """
-        self.validate_modifier_target(constraint)
         self.max_constraints[constraint.uuid] = constraint
         return constraint.uuid
     
@@ -368,7 +361,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
         self.advantage_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -391,7 +383,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
         self.critical_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -414,7 +405,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
         self.auto_hit_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -437,7 +427,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
         self.size_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -460,7 +449,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
         self.damage_type_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -483,7 +471,6 @@ class StaticValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
         self.resistance_modifiers[modifier.uuid] = modifier
         return modifier.uuid
     
@@ -1196,9 +1183,6 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
-        self.validate_modifier_target(modifier)
-        if uuid in self.value_modifiers:
-            raise ValueError(f"Modifier with UUID {uuid} already exists")
         self.value_modifiers[uuid] = modifier
         return uuid
     
@@ -1223,7 +1207,6 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added constraint.
         """
         uuid = constraint.uuid
-        self.validate_modifier_target(constraint)
         self.min_constraints[uuid] = constraint
         return uuid
     
@@ -1248,7 +1231,6 @@ class ContextualValue(BaseValue):
         Returns:
             UUID: The UUID of the added constraint.
         """
-        self.validate_modifier_target(constraint)
         uuid = constraint.uuid
         self.max_constraints[uuid] = constraint
         return uuid
@@ -1274,7 +1256,6 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
-        self.validate_modifier_target(modifier)
         self.advantage_modifiers[uuid] = modifier
         return uuid
     
@@ -1299,7 +1280,6 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
-        self.validate_modifier_target(modifier)
         self.critical_modifiers[uuid] = modifier
         return uuid
     
@@ -1324,7 +1304,6 @@ class ContextualValue(BaseValue):
             UUID: The UUID of the added modifier.
         """
         uuid = modifier.uuid
-        self.validate_modifier_target(modifier)
         self.auto_hit_modifiers[uuid] = modifier
         return uuid
     
@@ -1348,10 +1327,8 @@ class ContextualValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
-        uuid = modifier.uuid
-        self.size_modifiers[uuid] = modifier
-        return uuid
+        self.size_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
     
     def remove_size_modifier(self, uuid: UUID) -> None:
         """
@@ -1373,10 +1350,8 @@ class ContextualValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
-        uuid = modifier.uuid
-        self.damage_type_modifiers[uuid] = modifier
-        return uuid
+        self.damage_type_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
     
     def remove_damage_type_modifier(self, uuid: UUID) -> None:
         """
@@ -1398,10 +1373,8 @@ class ContextualValue(BaseValue):
         Returns:
             UUID: The UUID of the added modifier.
         """
-        self.validate_modifier_target(modifier)
-        uuid = modifier.uuid
-        self.resistance_modifiers[uuid] = modifier
-        return uuid
+        self.resistance_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
     
     def remove_resistance_modifier(self, uuid: UUID) -> None:
         """
@@ -1492,9 +1465,7 @@ class ContextualValue(BaseValue):
             if self.is_outgoing_modifier:
                 if modifier.target_entity_uuid == self.source_entity_uuid:
                     raise ValueError(f"Outgoing contextual modifier target ({modifier.target_entity_uuid}) should not be the same as the value source ({self.source_entity_uuid})")
-            else:
-                if modifier.target_entity_uuid != self.source_entity_uuid:
-                    raise ValueError(f"Contextual value source ({self.source_entity_uuid}) does not correspond to modifier target ({modifier.target_entity_uuid})")
+        
         return self
 
     def get_all_modifier_uuids(self) -> List[UUID]:
@@ -2008,6 +1979,7 @@ class ModifiableValue(BaseValue):
             naming_callable = lambda names: "_".join(names)
         
         for other in others:
+            print(f"Validating others source id {other.source_entity_uuid} against self source {self.source_entity_uuid} for modifer  with name {self.name} and uuid {self.uuid} and type {type(self)} against {type(other)} with name {other.name} and uuid {other.uuid}")
             self.validate_source_id(other.source_entity_uuid)
         
         return ModifiableValue(
