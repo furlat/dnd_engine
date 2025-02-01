@@ -10,6 +10,7 @@ from dnd.equipment import (
 from enum import Enum
 from random import randint
 from functools import cached_property
+from typing import Literal as TypeLiteral
 
 
 class BaseBlock(BaseModel):
@@ -453,6 +454,34 @@ def ability_score_normalizer(score: int) -> int:
     return (score - 10) // 2
 abilities = Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']
 
+# Define abilities as a proper string literal type
+AbilityName = TypeLiteral[
+    'strength', 'dexterity', 'constitution', 
+    'intelligence', 'wisdom', 'charisma'
+]
+
+# Update the SKILL_TO_ABILITY mapping
+SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
+    'acrobatics': 'dexterity',
+    'animal_handling': 'wisdom',
+    'arcana': 'intelligence',
+    'athletics': 'strength',
+    'deception': 'charisma',
+    'history': 'intelligence',
+    'insight': 'wisdom',
+    'intimidation': 'charisma',
+    'investigation': 'intelligence',
+    'medicine': 'wisdom',
+    'nature': 'intelligence',
+    'perception': 'wisdom',
+    'performance': 'charisma',
+    'persuasion': 'charisma',
+    'religion': 'intelligence',
+    'sleight_of_hand': 'dexterity',
+    'stealth': 'dexterity',
+    'survival': 'wisdom'
+}
+
 class Ability(BaseBlock):
     """
     Represents an ability score in the D&D 5e game system.
@@ -499,7 +528,10 @@ class Ability(BaseBlock):
         blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
     """
 
-    name: abilities = Field(default="strength", description="The name of the ability (Strength, Dexterity, Constitution, Intelligence, Wisdom, or Charisma)")
+    name: AbilityName = Field(
+        default="strength", 
+        description="The name of the ability (Strength, Dexterity, Constitution, Intelligence, Wisdom, or Charisma)"
+    )
     ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
     modifier_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Modifier Bonus"), description="Any additional bonus to the ability modifier, separate from the base score")
     @classmethod
@@ -682,16 +714,26 @@ class AbilityScores(BaseBlock):
             return ability_object.modifier
         raise ValueError(f"No Ability found with name {ability_name}")
 
-skills = Literal['acrobatics', 'animal_handling', 'arcana', 'athletics', 'deception', 'history', 'insight', 'intimidation', 'investigation', 'medicine', 'nature', 'perception', 'performance', 'persuasion', 'religion', 'sleight_of_hand', 'stealth', 'survival']
+    def get_ability(self, ability_name: AbilityName) -> Ability:
+        """
+        Get an Ability instance by its name.
 
-ABILITY_TO_SKILLS: Dict[abilities, List[skills]] = {
-    'strength': ['athletics'],
-    'dexterity': ['acrobatics', 'sleight_of_hand', 'stealth'],
-    'constitution': [],
-    'intelligence': ['arcana', 'history', 'investigation', 'nature', 'religion'],
-    'wisdom': ['animal_handling', 'insight', 'medicine', 'perception', 'survival'],
-    'charisma': ['deception', 'intimidation', 'performance', 'persuasion']
-}
+        Args:
+            ability_name (AbilityName): The name of the ability to retrieve.
+
+        Returns:
+            Ability: The corresponding Ability instance.
+        """
+        return getattr(self, ability_name)
+
+# Define skills as a proper string literal type
+SkillName = TypeLiteral[
+    'acrobatics', 'animal_handling', 'arcana', 'athletics', 
+    'deception', 'history', 'insight', 'intimidation', 
+    'investigation', 'medicine', 'nature', 'perception', 
+    'performance', 'persuasion', 'religion', 'sleight_of_hand', 
+    'stealth', 'survival'
+]
 
 class Skill(BaseBlock):
     """
@@ -748,10 +790,20 @@ class Skill(BaseBlock):
         blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
     """
 
-    name: skills = Field(default="acrobatics", description="The name of the skill in D&D 5e")
+    name: SkillName = Field(default="acrobatics", description="The name of the skill in D&D 5e")
     skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
     expertise: bool = Field(default=False, description="If true, the character has expertise in this skill, doubling their proficiency bonus")
     proficiency: bool = Field(default=False, description="If true, the character is proficient in this skill, adding their proficiency bonus to checks")
+
+    @property
+    def ability(self) -> AbilityName:
+        """
+        Get the ability score associated with this skill.
+
+        Returns:
+            AbilityName: The ability score type (strength, dexterity, etc.) that this skill is based on.
+        """
+        return SKILL_TO_ABILITY[self.name]
 
     def set_proficiency(self, proficiency: bool) -> None:
         """
@@ -803,7 +855,7 @@ class Skill(BaseBlock):
         return self._get_proficiency_converter()(profiency_bonus)+self.skill_bonus.score
     
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: skills, source_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, name: SkillName, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
                expertise:bool=False,proficiency:bool=False) -> 'Skill':
         """
@@ -827,7 +879,6 @@ class Skill(BaseBlock):
                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
                    expertise=expertise, proficiency=proficiency)
         
-skill_names =  Literal["acrobatics", "animal_handling", "arcana", "athletics", "deception", "history", "insight", "intimidation", "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion", "sleight_of_hand", "stealth", "survival"]
 class SkillSet(BaseBlock):
     """
     Represents the complete set of skills for an entity in the D&D 5e game system.
@@ -925,8 +976,8 @@ class SkillSet(BaseBlock):
     def expertise(self) -> List[Skill]:
         blocks = self.get_blocks()
         return [skill for skill in blocks if isinstance(skill, Skill) and skill.expertise]
-    def get_skill(self, skill_name: skill_names) -> Skill:
-        """ gett the attribute corresponding to the skill name"""
+    def get_skill(self, skill_name: SkillName) -> Skill:
+        """ Get the attribute corresponding to the skill name"""
         return getattr(self, skill_name)
     
 saving_throw_name_to_ability = {
