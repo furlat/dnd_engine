@@ -1,4 +1,3 @@
-
 from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
@@ -7,6 +6,8 @@ from dnd.modifiers import NumericalModifier, DamageType , ResistanceStatus, Cont
 from enum import Enum
 from random import randint
 from functools import cached_property
+
+from old_dnd.core import BlockComponent
 
 class BaseBlock(BaseModel):
     """
@@ -1484,3 +1485,218 @@ class Health(BaseBlock):
 
 
 
+
+from dnd.equipment import (
+    Armor, Weapon, Shield, BodyArmor, Gauntlets, Greaves, 
+    Boots, Amulet, Ring, Cloak, Helmet, BodyPart
+)
+
+class RingSlot(str, Enum):
+    LEFT = "Left Ring"
+    RIGHT = "Right Ring"
+
+class WeaponSlot(str, Enum):
+    MAIN_HAND = "Main Hand"
+    OFF_HAND = "Off Hand"
+
+class UnarmoredAc(str, Enum):
+    BARBARIAN = "Barbarian"
+    MONK = "Monk"
+    DRACONIC_SORCER = "Draconic Sorcerer"
+    MAGIC_ARMOR = "Magic Armor"
+    NONE = "None"
+
+class Equipped(BaseBlock):
+    """
+    Represents all equipped items on an entity in the game system.
+    """
+    name: str = Field(default="Equipped", description="Equipment slots for an entity")
+    helmet: Optional[Helmet] = Field(default=None, description="Head slot armor")
+    body_armor: Optional[BodyArmor] = Field(default=None, description="Body slot armor")
+    gauntlets: Optional[Gauntlets] = Field(default=None, description="Hand slot armor")
+    greaves: Optional[Greaves] = Field(default=None, description="Leg slot armor")
+    boots: Optional[Boots] = Field(default=None, description="Feet slot armor")
+    amulet: Optional[Amulet] = Field(default=None, description="Amulet slot item")
+    ring_left: Optional[Ring] = Field(default=None, description="Left ring slot")
+    ring_right: Optional[Ring] = Field(default=None, description="Right ring slot")
+    cloak: Optional[Cloak] = Field(default=None, description="Cloak slot item")
+    weapon_main_hand: Optional[Weapon] = Field(default=None, description="Main hand weapon slot")
+    weapon_off_hand: Optional[Union[Weapon, Shield]] = Field(default=None, description="Off-hand weapon or shield slot")
+    unarmored_ac: UnarmoredAc = Field(default=UnarmoredAc.NONE)
+    ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=10,
+        value_name="Armor Class"
+    ))
+
+    _slot_mapping = {
+        BodyPart.HEAD: "helmet",
+        BodyPart.BODY: "body_armor",
+        BodyPart.HANDS: "gauntlets",
+        BodyPart.LEGS: "greaves",
+        BodyPart.FEET: "boots",
+        BodyPart.AMULET: "amulet",
+        BodyPart.CLOAK: "cloak",
+    }
+
+    def equip(self, item: Union[Armor, Weapon, Shield], slot: Optional[Union[BodyPart, RingSlot, WeaponSlot]] = None) -> None:
+        """
+        Equip an item in the specified slot. For most items, the slot can be automatically
+        determined from the item type. For rings and weapons, the slot must be specified.
+
+        Args:
+            item: The item to equip
+            slot: Optional slot specification, required for rings and weapons
+
+        Raises:
+            ValueError: If the slot is invalid or if a ring/weapon is equipped without specifying the slot
+        """
+        if isinstance(item, Ring):
+            if slot not in (RingSlot.LEFT, RingSlot.RIGHT):
+                raise ValueError("Must specify LEFT or RIGHT slot for rings")
+            if slot == RingSlot.LEFT:
+                self.ring_left = item
+            else:
+                self.ring_right = item
+            return
+
+        if isinstance(item, (Weapon, Shield)):
+            if slot not in (WeaponSlot.MAIN_HAND, WeaponSlot.OFF_HAND):
+                # Default to main hand if not specified
+                slot = WeaponSlot.MAIN_HAND
+            
+            if slot == WeaponSlot.MAIN_HAND and isinstance(item, Weapon):
+                self.weapon_main_hand = item
+            else:
+                self.weapon_off_hand = item
+            return
+
+        # For armor pieces, get the slot from the item's body_part if not specified
+        if slot is None and isinstance(item, Armor):
+            slot = item.body_part
+
+        if slot not in self._slot_mapping:
+            raise ValueError(f"Invalid equipment slot: {slot}")
+
+        attribute_name = self._slot_mapping[slot]
+        setattr(self, attribute_name, item)
+
+    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot]) -> None:
+        """
+        Unequip the item in the specified slot.
+
+        Args:
+            slot: The slot to unequip from
+
+        Raises:
+            ValueError: If the slot is invalid
+        """
+        if isinstance(slot, RingSlot):
+            attribute_name = "ring_left" if slot == RingSlot.LEFT else "ring_right"
+        elif isinstance(slot, WeaponSlot):
+            attribute_name = "weapon_main_hand" if slot == WeaponSlot.MAIN_HAND else "weapon_off_hand"
+        elif isinstance(slot, BodyPart):
+            if slot not in self._slot_mapping:
+                raise ValueError(f"Invalid equipment slot: {slot}")
+            attribute_name = self._slot_mapping[slot]
+        else:
+            raise ValueError(f"Invalid equipment slot: {slot}")
+
+        setattr(self, attribute_name, None)
+
+
+class Speed(BaseBlock):
+    """
+    Represents the movement speeds of an entity in the game system.
+
+    This class extends BaseBlock to represent various types of movement speeds.
+
+    Attributes:
+        name (str): The name of this speed block. Defaults to "Speed".
+        walk (ModifiableValue): Base walking speed, typically 30 feet.
+        fly (ModifiableValue): Flying speed, if any.
+        swim (ModifiableValue): Swimming speed, if any.
+        burrow (ModifiableValue): Burrowing speed, if any.
+        climb (ModifiableValue): Climbing speed, if any.
+    """
+    name: str = Field(default="Speed")
+    walk: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=30,
+            value_name="Walk Speed"
+        )
+    )
+    fly: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=0,
+            value_name="Fly Speed"
+        )
+    )
+    swim: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=0,
+            value_name="Swim Speed"
+        )
+    )
+    burrow: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=0,
+            value_name="Burrow Speed"
+        )
+    )
+    climb: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=0,
+            value_name="Climb Speed"
+        )
+    )
+
+
+class ActionEconomy(BaseBlock):
+    """
+    Represents the action economy of an entity in the game system.
+
+    This class extends BaseBlock to represent the various actions available to an entity
+    during their turn.
+
+    Attributes:
+        name (str): The name of this action economy block. Defaults to "ActionEconomy".
+        actions (ModifiableValue): Number of standard actions available, typically 1.
+        bonus_actions (ModifiableValue): Number of bonus actions available, typically 1.
+        reactions (ModifiableValue): Number of reactions available, typically 1.
+        movement (ModifiableValue): Amount of movement available, typically 30 feet.
+    """
+    name: str = Field(default="ActionEconomy")
+    actions: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=1,
+            value_name="Actions"
+        )
+    )
+    bonus_actions: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=1,
+            value_name="Bonus Actions"
+        )
+    )
+    reactions: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=1,
+            value_name="Reactions"
+        )
+    )
+    movement: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=30,
+            value_name="Movement"
+        )
+    )

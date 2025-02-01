@@ -30,7 +30,7 @@ class BodyPart(str, Enum):
     LEGS = "Legs"
     FEET = "Feet"
     AMULET = "Amulet"
-    RING = "Right Ring"
+    RING = "Ring"
     CLOAK = "Cloak"
 
 class RangeType(str, Enum):
@@ -112,7 +112,62 @@ class Armor(BaseModel):
         default=None,
         description="Whether the armor imposes disadvantage on Stealth checks"
     )
-    
+
+class Helmet(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.HEAD,
+        
+        description="Head slot armor"
+    )
+
+class BodyArmor(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.BODY,
+        
+        description="Body slot armor"
+    )
+
+class Gauntlets(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.HANDS,
+        
+        description="Hand slot armor"
+    )
+
+class Greaves(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.LEGS,
+        
+        description="Leg slot armor"
+    )
+
+class Boots(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.FEET,
+        
+        description="Feet slot armor"
+    )
+
+class Amulet(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.AMULET,
+        
+        description="Amulet slot armor"
+    )
+
+class Ring(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.RING,
+        
+        description="Ring slot armor"
+    )
+
+class Cloak(Armor):
+    body_part: BodyPart = Field(
+        default=BodyPart.CLOAK,
+        
+        description="Cloak slot armor"
+    )
 
 class Shield(BaseModel):
     uuid: UUID = Field(
