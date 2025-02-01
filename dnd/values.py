@@ -753,7 +753,8 @@ class StaticValue(BaseValue):
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
             score_normalizer=self.score_normalizer,
-            is_outgoing_modifier=self.is_outgoing_modifier
+            is_outgoing_modifier=self.is_outgoing_modifier,
+            global_normalizer=False
         )
 
     def get_all_modifier_uuids(self) -> List[UUID]:
@@ -1496,7 +1497,8 @@ class ContextualValue(BaseValue):
             target_entity_name=self.target_entity_name,
             context=self.context,
             score_normalizer=self.score_normalizer,
-            is_outgoing_modifier=self.is_outgoing_modifier
+            is_outgoing_modifier=self.is_outgoing_modifier,
+            global_normalizer=False
         )
 
     def get_all_modifier_uuids(self) -> List[UUID]:
@@ -1625,7 +1627,7 @@ class ModifiableValue(BaseValue):
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-               base_value: int = 0, value_name: str = "Value", score_normalizer: Optional[Callable[[int], int]] = None) -> 'ModifiableValue':
+               base_value: int = 0, value_name: str = "Value", score_normalizer: Optional[Callable[[int], int]] = None, global_normalizer: bool = True) -> 'ModifiableValue':
         """
         Create a new ModifiableValue instance with shared source UUID for all components.
         """
@@ -1648,26 +1650,31 @@ class ModifiableValue(BaseValue):
                 source_entity_uuid=source_entity_uuid, 
                 source_entity_name=source_entity_name, 
                 value_modifiers={base_modifier.uuid: base_modifier},
-                score_normalizer=normalizer
+                score_normalizer=normalizer,
+                global_normalizer=global_normalizer
             ),
             to_target_static=StaticValue(
                 source_entity_uuid=source_entity_uuid, 
                 source_entity_name=source_entity_name, 
                 is_outgoing_modifier=True,
-                score_normalizer=normalizer
+                score_normalizer=normalizer,
+                global_normalizer=global_normalizer
             ),
             self_contextual=ContextualValue(
                 source_entity_uuid=source_entity_uuid, 
                 source_entity_name=source_entity_name,
-                score_normalizer=normalizer
+                score_normalizer=normalizer,
+                global_normalizer=global_normalizer
             ),
             to_target_contextual=ContextualValue(
                 source_entity_uuid=source_entity_uuid, 
                 source_entity_name=source_entity_name, 
                 is_outgoing_modifier=True,
-                score_normalizer=normalizer
+                score_normalizer=normalizer,
+                global_normalizer=global_normalizer
             ),
-            score_normalizer=normalizer
+            score_normalizer=normalizer,
+            global_normalizer=global_normalizer
         )
         
         if target_entity_uuid is not None:
@@ -2082,7 +2089,8 @@ class ModifiableValue(BaseValue):
             target_entity_uuid=self.target_entity_uuid,
             target_entity_name=self.target_entity_name,
             context=self.context,
-            score_normalizer=self.score_normalizer
+            score_normalizer=self.score_normalizer,
+            global_normalizer=False,
         )
 
     def remove_modifier(self, uuid: UUID) -> None:
@@ -2137,46 +2145,6 @@ class ModifiableValue(BaseValue):
         for uuid in uuids:
             self.remove_modifier(uuid)
 
-    # def _set_normalizer_recursive(self, normalizer: Callable[[int], int]) -> None:
-    #     """
-    #     Set the score normalizer for this value and its immediate components.
-    #     Goes two levels deep: ModifiableValue -> components -> modifiers
-        
-    #     Args:
-    #         normalizer (Callable[[int], int]): The normalizer function to apply.
-    #     """
-    #     self.score_normalizer = normalizer
-        
-    #     # First level: Apply to immediate components
-    #     components = [
-    #         self.self_static, 
-    #         self.to_target_static, 
-    #         self.self_contextual, 
-    #         self.to_target_contextual
-    #     ]
-    #     if self.from_target_static is not None:
-    #         components.append(self.from_target_static)
-    #     if self.from_target_contextual is not None:
-    #         components.append(self.from_target_contextual)
-            
-    #     # Second level: Apply to modifiers within components
-    #     for component in components:
-    #         component.score_normalizer = normalizer
-    #         if isinstance(component, StaticValue):
-    #             for modifier in component.value_modifiers.values():
-    #                 modifier.score_normalizer = normalizer
-    #         elif isinstance(component, ContextualValue):
-    #             for modifier in component.value_modifiers.values():
-    #                 modifier.callable.score_normalizer = normalizer
-
-    # @model_validator(mode='after')
-    # def apply_global_normalizer(self) -> Self:
-    #     """
-    #     Apply the score normalizer if global_normalizer is True.
-    #     """
-    #     if self.global_normalizer and self.score_normalizer is not None:
-    #         self._set_normalizer_recursive(self.score_normalizer)
-    #     return self
 
     @model_validator(mode="after")
     def validate_outgoing_modifier_flags(self) -> Self:
