@@ -529,7 +529,22 @@ class StaticValue(BaseValue):
         if not self.max_constraints:
             return None
         return max(constraint.value for constraint in self.max_constraints.values())
-    
+    def _score(self,normalized=False) -> int:
+        """
+        Calculate the final score of the value, considering all modifiers and constraints.
+
+        Returns:
+            int: The final calculated score.
+        """
+        modifier_sum = sum(modifier.value if not normalized else modifier.normalized_value for modifier in self.value_modifiers.values())
+        if self.max is not None and self.min is not None:
+            return max(self.min, min(modifier_sum, self.max))
+        elif self.max is not None:
+            return min(modifier_sum, self.max)
+        elif self.min is not None:
+            return max(self.min, modifier_sum)
+        else:
+            return modifier_sum
     @computed_field
     @property
     def score(self) -> int:
@@ -539,15 +554,9 @@ class StaticValue(BaseValue):
         Returns:
             int: The final calculated score.
         """
-        modifier_sum = sum(modifier.value for modifier in self.value_modifiers.values())
-        if self.max is not None and self.min is not None:
-            return max(self.min, min(modifier_sum, self.max))
-        elif self.max is not None:
-            return min(modifier_sum, self.max)
-        elif self.min is not None:
-            return max(self.min, modifier_sum)
-        else:
-            return modifier_sum
+        return self._score()
+        
+    
     
     @computed_field
     @property
@@ -558,7 +567,7 @@ class StaticValue(BaseValue):
         Returns:
             int: The normalized score.
         """
-        return self.score_normalizer(self.score)
+        return self._score(normalized=True)
     
     @computed_field
     @property
@@ -778,6 +787,25 @@ class StaticValue(BaseValue):
         self.damage_type_modifiers.clear()
         self.resistance_modifiers.clear()
 
+    def _set_normalizer_recursive(self, normalizer: Callable[[int], int]) -> None:
+        """
+        Recursively set the score normalizer for this value and all its components.
+        
+        Args:
+            normalizer (Callable[[int], int]): The normalizer function to apply.
+        """
+        self.score_normalizer = normalizer
+        
+        # Apply to value modifiers
+        for modifier in self.value_modifiers.values():
+            modifier.score_normalizer = normalizer
+        
+        # Apply to min/max constraints if needed
+        # for constraint in self.min_constraints.values():
+        #     constraint.score_normalizer = normalizer
+        # for constraint in self.max_constraints.values():
+        #     constraint.score_normalizer = normalizer
+
     @model_validator(mode='after')
     def apply_global_normalizer(self) -> Self:
         """
@@ -785,18 +813,7 @@ class StaticValue(BaseValue):
         Only affects modifiers that don't already have a normalizer.
         """
         if self.global_normalizer and self.score_normalizer is not None:
-            # Apply to value modifiers
-            for modifier in self.value_modifiers.values():
-                if modifier.score_normalizer is None:
-                    modifier.score_normalizer = self.score_normalizer
-            # Apply to min constraints
-            for constraint in self.min_constraints.values():
-                if constraint.score_normalizer is None:
-                    constraint.score_normalizer = self.score_normalizer
-            # Apply to max constraints
-            for constraint in self.max_constraints.values():
-                if constraint.score_normalizer is None:
-                    constraint.score_normalizer = self.score_normalizer
+            self._set_normalizer_recursive(self.score_normalizer)
         return self
 
 class ContextualValue(BaseValue):
@@ -1002,9 +1019,7 @@ class ContextualValue(BaseValue):
         return max(constraint.callable(self.source_entity_uuid, self.target_entity_uuid, self.context).value 
                    for constraint in self.max_constraints.values())
 
-    @computed_field
-    @property
-    def score(self) -> int:
+    def _score(self,normalized=False) -> int:
         """
         Calculate the final score of the value, considering all contextual modifiers and constraints.
 
@@ -1017,7 +1032,7 @@ class ContextualValue(BaseValue):
                 result = context_aware_modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
                 if not isinstance(result, NumericalModifier):
                     raise ValueError(f"Callable returned unexpected type. Expected NumericalModifier, got {type(result)}")
-                modifier_sum += result.value
+                modifier_sum += result.value if not normalized else result.normalized_value
             except Exception as e:
                 raise ValueError(f"Error calculating score: {str(e)}")
         
@@ -1029,6 +1044,18 @@ class ContextualValue(BaseValue):
             return max(self.min, modifier_sum)
         else:
             return modifier_sum
+    
+    @computed_field
+    @property
+    def score(self) -> int:
+        """
+        Calculate the final score of the value, considering all contextual modifiers and constraints.
+
+        Returns:
+            int: The final calculated score.
+        """
+        return self._score()
+
 
     @computed_field
     @property
@@ -1039,7 +1066,7 @@ class ContextualValue(BaseValue):
         Returns:
             int: The normalized score.
         """
-        return self.score_normalizer(self.score)
+        return self._score(normalized=True)
     
     @computed_field
     @property
@@ -1472,27 +1499,6 @@ class ContextualValue(BaseValue):
             is_outgoing_modifier=self.is_outgoing_modifier
         )
 
-    @model_validator(mode="after")
-    def validate_value_source_corresponds_to_modifiers_target(self) -> Self:
-        all_modifiers = (
-            list(self.value_modifiers.values()) +
-            list(self.min_constraints.values()) +
-            list(self.max_constraints.values()) +
-            list(self.advantage_modifiers.values()) +
-            list(self.critical_modifiers.values()) +
-            list(self.auto_hit_modifiers.values()) +
-            list(self.size_modifiers.values()) +
-            list(self.damage_type_modifiers.values()) +
-            list(self.resistance_modifiers.values())
-        )
-        
-        for modifier in all_modifiers:
-            if self.is_outgoing_modifier:
-                if modifier.target_entity_uuid == self.source_entity_uuid:
-                    raise ValueError(f"Outgoing contextual modifier target ({modifier.target_entity_uuid}) should not be the same as the value source ({self.source_entity_uuid})")
-        
-        return self
-
     def get_all_modifier_uuids(self) -> List[UUID]:
         """
         Get a list of UUIDs for all modifiers in this ContextualValue.
@@ -1524,25 +1530,32 @@ class ContextualValue(BaseValue):
         self.damage_type_modifiers.clear()
         self.resistance_modifiers.clear()
 
+    def _set_normalizer_recursive(self, normalizer: Callable[[int], int]) -> None:
+        """
+        Recursively set the score normalizer for this value and all its components.
+        
+        Args:
+            normalizer (Callable[[int], int]): The normalizer function to apply.
+        """
+        self.score_normalizer = normalizer
+        
+        # Apply to value modifiers
+        for modifier in self.value_modifiers.values():
+            modifier.callable.score_normalizer = normalizer
+        
+        # Apply to min/max constraints if needed
+        # for constraint in self.min_constraints.values():
+        #     constraint.callable.score_normalizer = normalizer
+        # for constraint in self.max_constraints.values():
+        #     constraint.callable.score_normalizer = normalizer
+
     @model_validator(mode='after')
     def apply_global_normalizer(self) -> Self:
         """
-        Apply the score normalizer to all numerical modifiers if global_normalizer is True.
-        Only affects modifiers that don't already have a normalizer.
+        Apply the score normalizer to all numerical modifiers if global        Only affects modifiers that don't already have a normalizer.
         """
         if self.global_normalizer and self.score_normalizer is not None:
-            # Apply to contextual value modifiers
-            for modifier in self.value_modifiers.values():
-                if modifier.callable.score_normalizer is None:  # Note: This needs to be adapted based on how ContextualNumericalModifier is structured
-                    modifier.callable.score_normalizer = self.score_normalizer
-            # Apply to contextual min constraints
-            for constraint in self.min_constraints.values():
-                if constraint.callable.score_normalizer is None:
-                    constraint.callable.score_normalizer = self.score_normalizer
-            # Apply to contextual max constraints
-            for constraint in self.max_constraints.values():
-                if constraint.callable.score_normalizer is None:
-                    constraint.callable.score_normalizer = self.score_normalizer
+            self._set_normalizer_recursive(self.score_normalizer)
         return self
 
 class ModifiableValue(BaseValue):
@@ -1605,43 +1618,61 @@ class ModifiableValue(BaseValue):
     from_target_contextual: Optional[ContextualValue] = Field(default=None)
     from_target_static: Optional[StaticValue] = Field(default=None)
     global_normalizer: bool = Field(
-        default=False,
+        default=True,
         description="Whether to apply the value's normalizer globally to all numerical modifiers"
     )
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
-                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-                base_value: int = 0, value_name: str = "default_value", score_normalizer: Callable[[int], int] = lambda x: x) -> 'ModifiableValue':
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               base_value: int = 0, value_name: str = "Value", score_normalizer: Optional[Callable[[int], int]] = None) -> 'ModifiableValue':
         """
         Create a new ModifiableValue instance with shared source UUID for all components.
-
-        Args:
-            source_entity_uuid (UUID): The UUID of the source entity.
-            source_entity_name (Optional[str]): The name of the source entity, if available.
-            target_entity_uuid (Optional[UUID]): The UUID of the target entity, if any.
-            target_entity_name (Optional[str]): The name of the target entity, if available.
-            base_value (int): The base value for this ModifiableValue. Defaults to 0.
-            value_name (str): The name for the ModifiableValue. Defaults to "default_value".
-            score_normalizer (Callable[[int], int]): A function to normalize the score. Defaults to identity function.
-
-        Returns:
-            ModifiableValue: A new ModifiableValue instance with initialized components.
         """
-        base_modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=source_entity_uuid, value=base_value, name=f"{value_name}_base_value")
-
+        # Use identity function if normalizer is None
+        normalizer = score_normalizer if score_normalizer is not None else lambda x: x
+        
+        base_modifier = NumericalModifier(
+            source_entity_uuid=source_entity_uuid, 
+            target_entity_uuid=source_entity_uuid, 
+            value=base_value, 
+            name=f"{value_name}_base_value",
+            score_normalizer=normalizer
+        )
+        
         obj = cls(
             name=value_name,
             source_entity_uuid=source_entity_uuid,
             source_entity_name=source_entity_name,
-            self_static=StaticValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, value_modifiers={base_modifier.uuid: base_modifier}),
-            to_target_static=StaticValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=True),
-            self_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name),
-            to_target_contextual=ContextualValue(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, is_outgoing_modifier=True),
-            score_normalizer=score_normalizer
+            self_static=StaticValue(
+                source_entity_uuid=source_entity_uuid, 
+                source_entity_name=source_entity_name, 
+                value_modifiers={base_modifier.uuid: base_modifier},
+                score_normalizer=normalizer
+            ),
+            to_target_static=StaticValue(
+                source_entity_uuid=source_entity_uuid, 
+                source_entity_name=source_entity_name, 
+                is_outgoing_modifier=True,
+                score_normalizer=normalizer
+            ),
+            self_contextual=ContextualValue(
+                source_entity_uuid=source_entity_uuid, 
+                source_entity_name=source_entity_name,
+                score_normalizer=normalizer
+            ),
+            to_target_contextual=ContextualValue(
+                source_entity_uuid=source_entity_uuid, 
+                source_entity_name=source_entity_name, 
+                is_outgoing_modifier=True,
+                score_normalizer=normalizer
+            ),
+            score_normalizer=normalizer
         )
+        
         if target_entity_uuid is not None:
             obj.set_target_entity(target_entity_uuid, target_entity_name)
+            
         return obj
     
 
@@ -1707,6 +1738,23 @@ class ModifiableValue(BaseValue):
             return None
         return max(modifiers_max)
     
+    def _score(self,normalized=False) -> int:
+        """
+        Calculate the final score of the value, considering all modifiers and constraints.
+
+        Returns:
+            int: The final calculated score.
+        """
+        typed_modifiers = self.get_typed_modifiers()
+        if self.max is not None and self.min is not None:
+            return max(self.min, min(sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers), self.max))
+        elif self.max is not None:
+            return min(sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers), self.max)
+        elif self.min is not None:
+            return max(self.min, sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers))
+        else:
+            return sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers)
+        
     @computed_field
     @property
     def score(self) -> int:
@@ -1716,15 +1764,7 @@ class ModifiableValue(BaseValue):
         Returns:
             int: The final calculated score.
         """
-        typed_modifiers = self.get_typed_modifiers()
-        if self.max is not None and self.min is not None:
-            return max(self.min, min(sum(modifier.score for modifier in typed_modifiers), self.max))
-        elif self.max is not None:
-            return min(sum(modifier.score for modifier in typed_modifiers), self.max)
-        elif self.min is not None:
-            return max(self.min, sum(modifier.score for modifier in typed_modifiers))
-        else:
-            return sum(modifier.score for modifier in typed_modifiers)
+        return self._score(normalized=False)
     
     @computed_field
     @property
@@ -1735,10 +1775,7 @@ class ModifiableValue(BaseValue):
         Returns:
             int: The normalized score.
         """
-        normalizer_code = inspect.getsource(self.score_normalizer)
-        # print(f"Normalizing score {self.score} with normalizer {normalizer_code}")
-        # print(f"Normalized score: {self.score_normalizer(self.score)}")
-        return self.score_normalizer(self.score)
+        return self._score(normalized=True)
     @computed_field
     @property
     def advantage_sum(self) -> int:
@@ -2100,6 +2137,47 @@ class ModifiableValue(BaseValue):
         for uuid in uuids:
             self.remove_modifier(uuid)
 
+    # def _set_normalizer_recursive(self, normalizer: Callable[[int], int]) -> None:
+    #     """
+    #     Set the score normalizer for this value and its immediate components.
+    #     Goes two levels deep: ModifiableValue -> components -> modifiers
+        
+    #     Args:
+    #         normalizer (Callable[[int], int]): The normalizer function to apply.
+    #     """
+    #     self.score_normalizer = normalizer
+        
+    #     # First level: Apply to immediate components
+    #     components = [
+    #         self.self_static, 
+    #         self.to_target_static, 
+    #         self.self_contextual, 
+    #         self.to_target_contextual
+    #     ]
+    #     if self.from_target_static is not None:
+    #         components.append(self.from_target_static)
+    #     if self.from_target_contextual is not None:
+    #         components.append(self.from_target_contextual)
+            
+    #     # Second level: Apply to modifiers within components
+    #     for component in components:
+    #         component.score_normalizer = normalizer
+    #         if isinstance(component, StaticValue):
+    #             for modifier in component.value_modifiers.values():
+    #                 modifier.score_normalizer = normalizer
+    #         elif isinstance(component, ContextualValue):
+    #             for modifier in component.value_modifiers.values():
+    #                 modifier.callable.score_normalizer = normalizer
+
+    # @model_validator(mode='after')
+    # def apply_global_normalizer(self) -> Self:
+    #     """
+    #     Apply the score normalizer if global_normalizer is True.
+    #     """
+    #     if self.global_normalizer and self.score_normalizer is not None:
+    #         self._set_normalizer_recursive(self.score_normalizer)
+    #     return self
+
     @model_validator(mode="after")
     def validate_outgoing_modifier_flags(self) -> Self:
         # Check self_static and self_contextual
@@ -2127,14 +2205,14 @@ class ModifiableValue(BaseValue):
         # Check that self and to_target components have the same source as the ModifiableValue
         for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
             if component.source_entity_uuid != self.source_entity_uuid:
-                raise ValueError(f"{component.__class__.__name__} source UUID ({component.source_entity_uuid}) "
-                                 f"does not match ModifiableValue source UUID ({self.source_entity_uuid})")
+                component.source_entity_uuid = self.source_entity_uuid
+                #raise ValueError(f"{component.__class__.__name__} source UUID ({component.source_entity_uuid}) "
+                #                 f"does not match ModifiableValue source UUID ({self.source_entity_uuid})")
 
         # Check from_target components if they exist
         if self.from_target_static is not None:
             if self.from_target_static.target_entity_uuid != self.source_entity_uuid:
-                raise ValueError(f"from_target_static target UUID ({self.from_target_static.target_entity_uuid}) "
-                                 f"should be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
+                raise ValueError(f"from_target_static target UUID ({self.from_target_static.target_entity_uuid}) "                                 f"should be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
             if self.from_target_static.source_entity_uuid == self.source_entity_uuid:
                 raise ValueError(f"from_target_static source UUID ({self.from_target_static.source_entity_uuid}) "
                                  f"should not be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
@@ -2147,20 +2225,6 @@ class ModifiableValue(BaseValue):
                 raise ValueError(f"from_target_contextual source UUID ({self.from_target_contextual.source_entity_uuid}) "
                                  f"should not be the same as ModifiableValue source UUID ({self.source_entity_uuid})")
 
-        return self
-    
-    @model_validator(mode='after')
-    def apply_global_normalizer(self) -> Self:
-        """
-        Apply the score normalizer to all numerical modifiers if global_normalizer is True.
-        Only affects modifiers that don't already have a normalizer.
-        """
-        if self.global_normalizer and self.score_normalizer is not None:
-            # Apply to contextual value modifiers
-            for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
-                if component.score_normalizer is None:  # Note: This needs to be adapted based on how ContextualNumericalModifier is structured
-                    component.score_normalizer = self.score_normalizer
-                component.global_normalizer = True  # Propagate the global normalizer flag
         return self
 
         
