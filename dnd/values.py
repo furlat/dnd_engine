@@ -1714,8 +1714,8 @@ class ModifiableValue(BaseValue):
             int: The normalized score.
         """
         normalizer_code = inspect.getsource(self.score_normalizer)
-        print(f"Normalizing score {self.score} with normalizer {normalizer_code}")
-        print(f"Normalized score: {self.score_normalizer(self.score)}")
+        # print(f"Normalizing score {self.score} with normalizer {normalizer_code}")
+        # print(f"Normalized score: {self.score_normalizer(self.score)}")
         return self.score_normalizer(self.score)
     @computed_field
     @property
