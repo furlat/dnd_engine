@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, computed_field, field_validator, PrivateAttr,model_validator, ValidationError
+from pydantic import ConfigDict, BaseModel, Field, computed_field, field_validator, PrivateAttr,model_validator, ValidationError
 from typing import List,Literal, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar,Union, Tuple, Self
 from uuid import UUID, uuid4
 from enum import Enum
@@ -89,6 +89,7 @@ class BaseObject(BaseModel):
     """
 
     _registry: ClassVar[Dict[UUID, 'BaseObject']] = {}
+    # model_config = ConfigDict(validate_assignment=True)
 
     name: Optional[str] = Field(
         default=None,
