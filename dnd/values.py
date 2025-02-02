@@ -2176,7 +2176,33 @@ class ModifiableValue(BaseValue):
         """
         for uuid in uuids:
             self.remove_modifier(uuid)
+            
+    def update_normalizers(self, new_normalizer: Optional[Callable[[int], int]] = None) -> None:
+        """
+        Update all component values and their modifiers with this ModifiableValue's score normalizer.
+        This propagates the normalizer down through all static and contextual values and their modifiers.
 
+        Args:
+            new_normalizer (Optional[Callable[[int], int]]): If provided, first updates this ModifiableValue's
+                score_normalizer to this new function before propagating it.
+        """
+        # Update this ModifiableValue's normalizer if a new one is provided
+        if new_normalizer is not None:
+            self.score_normalizer = new_normalizer
+        
+        # Update self components
+        self.self_static._set_normalizer_recursive(self.score_normalizer)
+        self.self_contextual._set_normalizer_recursive(self.score_normalizer)
+        
+        # Update to_target components
+        self.to_target_static._set_normalizer_recursive(self.score_normalizer)
+        self.to_target_contextual._set_normalizer_recursive(self.score_normalizer)
+        
+        # Update from_target components if they exist
+        if self.from_target_static is not None:
+            self.from_target_static._set_normalizer_recursive(self.score_normalizer)
+        if self.from_target_contextual is not None:
+            self.from_target_contextual._set_normalizer_recursive(self.score_normalizer)
 
     @model_validator(mode="after")
     def validate_outgoing_modifier_flags(self) -> Self:
