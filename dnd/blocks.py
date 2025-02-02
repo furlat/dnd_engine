@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union
+from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.values import ModifiableValue
@@ -823,7 +823,7 @@ class Skill(BaseBlock):
         self.expertise = expertise
         if not self.proficiency:
             self.proficiency = True
-    def _get_proficiency_converter(self):
+    def _get_proficiency_converter(self) -> Callable[[int], int]:
         """
         Get a function that calculates the proficiency bonus based on the character's expertise and proficiency.
 
@@ -989,6 +989,21 @@ saving_throw_name_to_ability = {
     "charisma_saving_throw": "charisma"
 }
 
+# Define saving throws as a proper string literal type
+SavingThrowName = TypeLiteral[
+    'strength_saving_throw', 'dexterity_saving_throw', 'constitution_saving_throw',
+    'intelligence_saving_throw', 'wisdom_saving_throw', 'charisma_saving_throw'
+]
+
+# Update the mapping dictionary
+SAVING_THROW_TO_ABILITY: Dict[SavingThrowName, AbilityName] = {
+    'strength_saving_throw': 'strength',
+    'dexterity_saving_throw': 'dexterity',
+    'constitution_saving_throw': 'constitution',
+    'intelligence_saving_throw': 'intelligence',
+    'wisdom_saving_throw': 'wisdom',
+    'charisma_saving_throw': 'charisma'
+}
 
 class SavingThrow(BaseBlock):
     """
@@ -1006,6 +1021,9 @@ class SavingThrow(BaseBlock):
         target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
         target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
         context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
+
+    Properties:
+        ability (AbilityName): The ability score type (strength, dexterity, etc.) that this saving throw is based on.
 
     Inherits all attributes and methods from BaseBlock.
 
@@ -1040,9 +1058,22 @@ class SavingThrow(BaseBlock):
         blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
     """
 
-    name: saving_throws = Field(default="strength_saving_throw", description="The name of the saving throw, corresponding to an ability score in D&D 5e")
+    name: SavingThrowName = Field(
+        default="strength_saving_throw",
+        description="The name of the saving throw in D&D 5e"
+    )
     proficiency: bool = Field(default=False, description="If true, the character is proficient in this saving throw, adding their proficiency bonus")
     bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Saving Throw Bonus"), description="Any additional bonus applied to the saving throw, beyond ability modifier and proficiency")
+
+    @property
+    def ability(self) -> AbilityName:
+        """
+        Get the ability score associated with this saving throw.
+
+        Returns:
+            AbilityName: The ability score type (strength, dexterity, etc.) that this saving throw is based on.
+        """
+        return SAVING_THROW_TO_ABILITY[self.name]
 
     def get_bonus(self, proficiency_bonus: int) -> int:
         """
@@ -1059,8 +1090,22 @@ class SavingThrow(BaseBlock):
         else:
             return self.bonus.score
 
+    def _get_proficiency_converter(self) -> Callable[[int], int]:
+        """
+        Returns a lambda function that converts the proficiency bonus based on proficiency status.
+        
+        For saving throws, this is a simple binary multiplier:
+        - If proficient: returns lambda x: x (multiplier of 1)
+        - If not proficient: returns lambda x: 0 (multiplier of 0)
+
+        Returns:
+            Callable[[int], int]: A lambda function that applies the appropriate multiplier
+                                 to the proficiency bonus.
+        """
+        return lambda x: x if self.proficiency else 0
+
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: saving_throws, source_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, name: SavingThrowName, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
                proficiency:bool=False) -> 'SavingThrow':
         """
@@ -1102,9 +1147,9 @@ class SavingThrowSet(BaseBlock):
         target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
         context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
 
-    Inherits all attributes and methods from BaseBlock.
-
     Methods:
+        get_saving_throw(ability_name: AbilityName) -> SavingThrow:
+            Get a SavingThrow instance by its corresponding ability name.
         get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
         get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
@@ -1147,6 +1192,24 @@ class SavingThrowSet(BaseBlock):
         """
         blocks = self.get_blocks()
         return [saving_throw for saving_throw in blocks if isinstance(saving_throw, SavingThrow) and saving_throw.proficiency]
+    
+    def get_saving_throw(self, ability_name: AbilityName) -> SavingThrow:
+        """
+        Get a SavingThrow instance by its corresponding ability name.
+
+        Args:
+            ability_name (AbilityName): The name of the ability to get the saving throw for.
+
+        Returns:
+            SavingThrow: The corresponding SavingThrow instance.
+
+        Raises:
+            ValueError: If no saving throw is found for the given ability name.
+        """
+        saving_throw_name = f"{ability_name}_saving_throw"
+        if not hasattr(self, saving_throw_name):
+            raise ValueError(f"No saving throw found for ability {ability_name}")
+        return getattr(self, saving_throw_name)
     
     
 class HitDice(BaseBlock):
