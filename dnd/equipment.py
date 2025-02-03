@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from enum import Enum
 from uuid import UUID
-from dnd.values import ModifiableValue, StaticValue
+from dnd.values import ModifiableValue
 from dnd.modifiers import DamageType
 from pydantic import Field
 from typing import List
