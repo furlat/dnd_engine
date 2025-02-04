@@ -12,13 +12,22 @@ from dnd.modifiers import (
     NumericalModifier, DamageType, ResistanceStatus, 
     ContextAwareCondition, BaseObject
 )
-from dnd.conditions import BaseCondition
+from dnd.conditions import Condition
 from dnd.equipment import (
     Armor, Weapon, Shield, BodyArmor, Gauntlets, Greaves,
     Boots, Amulet, Ring, Cloak, Helmet, BodyPart
 )
 from dnd.dice import Dice, RollType, DiceRoll
 
+def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, Union[list,Any]]) -> Dict[str, list]:
+    key, value = kv
+    if not isinstance(value, list):
+        value = [value]
+    if key in d:
+        d[key] += value
+    else:
+        d[key] = value
+    return d
 
 ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
 
@@ -37,8 +46,8 @@ class Entity(BaseBlock):
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     
-    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict)
-    condition_immunities: Dict[str, List[str]] = Field(default_factory=dict)
+    active_conditions: Dict[str, Condition] = Field(default_factory=dict)
+    condition_immunities: List[str] = Field(default_factory=list)
     contextual_condition_immunities: Dict[str, List[Tuple[str, ContextualConditionImmunity]]] = Field(default_factory=dict)
     active_conditions_by_source: Dict[str, List[str]] = Field(default_factory=dict)
 
@@ -68,8 +77,29 @@ class Entity(BaseBlock):
         assert isinstance(target_entity, Entity)
         return target_entity if not copy else target_entity.model_copy(deep=True)
     
+    def add_condition(self, condition: Condition, context: Optional[Dict[str, Any]] = None)  -> bool:
+        if condition.name is None:
+            raise ValueError("Condition name is not set")
+        if condition.target_entity_uuid is None:
+            condition.target_entity_uuid = self.uuid
+        if context is not None:
+            condition.set_context(context)
+        
 
+        condition_applied = condition.apply()
+        if condition_applied:
+            self.active_conditions[condition.name] = condition
+
+            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (str(condition.source_entity_uuid), condition.name))
+        return condition_applied
     
+    def _remove_condition_from_dicts(self, condition_name: str) :
+        condition = self.active_conditions.pop(condition_name)
+        assert condition.source_entity_uuid is not None
+        self.active_conditions_by_source[str(condition.source_entity_uuid)].remove(condition_name)
+    
+    
+
     
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
         proficiency_bonus = self.proficiency_bonus
