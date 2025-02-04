@@ -32,6 +32,7 @@ def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, Union[list,Any]]
 ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
 
 
+
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
     require interactions between blocks """
@@ -47,8 +48,8 @@ class Entity(BaseBlock):
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     
     active_conditions: Dict[str, Condition] = Field(default_factory=dict)
-    condition_immunities: List[str] = Field(default_factory=list)
-    contextual_condition_immunities: Dict[str, List[Tuple[str, ContextualConditionImmunity]]] = Field(default_factory=dict)
+    condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
+    contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
     active_conditions_by_source: Dict[str, List[str]] = Field(default_factory=dict)
 
     
@@ -77,6 +78,18 @@ class Entity(BaseBlock):
         assert isinstance(target_entity, Entity)
         return target_entity if not copy else target_entity.model_copy(deep=True)
     
+    def check_condition_immunity(self, condition_name: str) -> bool:
+        #first check static immunities
+        for static_immunity in self.condition_immunities:
+            if static_immunity[0] == condition_name:
+                return True
+        #then check contextual immunities
+        condition_contextual_immunities = self.contextual_condition_immunities.get(condition_name,[])
+        for immunity_name, immunity_check in condition_contextual_immunities:
+            if immunity_check(self,self.get_target_entity(copy=True),self.context):
+                return True
+        return False
+    
     def add_condition(self, condition: Condition, context: Optional[Dict[str, Any]] = None)  -> bool:
         if condition.name is None:
             raise ValueError("Condition name is not set")
@@ -85,6 +98,8 @@ class Entity(BaseBlock):
         if context is not None:
             condition.set_context(context)
         
+        if self.check_condition_immunity(condition.name):
+            return False
 
         condition_applied = condition.apply()
         if condition_applied:
@@ -97,9 +112,52 @@ class Entity(BaseBlock):
         condition = self.active_conditions.pop(condition_name)
         assert condition.source_entity_uuid is not None
         self.active_conditions_by_source[str(condition.source_entity_uuid)].remove(condition_name)
-    
-    
 
+    def add_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
+        self.condition_immunities.append((condition_name,immunity_name))
+    
+    def _remove_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
+        for condition_tuple in self.condition_immunities:
+            if condition_tuple[0] == condition_name:
+                if immunity_name is None:
+                    self.condition_immunities.remove(condition_tuple)                
+                else:
+                    if condition_tuple[1] == immunity_name:
+                        self.condition_immunities.remove(condition_tuple)
+                        break
+        return
+    
+    def add_contextual_condition_immunity(self, condition_name: str, immunity_name:str, immunity_check: ContextualConditionImmunity):
+        if condition_name not in self.contextual_condition_immunities:
+            self.contextual_condition_immunities[condition_name] = []
+        self.contextual_condition_immunities[condition_name].append((immunity_name,immunity_check))
+
+    def add_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None, immunity_check: Optional[ContextualConditionImmunity]=None):
+        if immunity_check is not None:
+            if immunity_name is None:
+                raise ValueError("Immunity name is required when adding a contextual condition immunity")
+            self.add_contextual_condition_immunity(condition_name,immunity_name,immunity_check)
+        else:
+            self.add_static_condition_immunity(condition_name,immunity_name)
+    
+    def _remove_contextual_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None):
+        for self_condition_name in self.contextual_condition_immunities:
+            if self_condition_name == condition_name:
+                if immunity_name is None:
+                    self.contextual_condition_immunities.pop(self_condition_name)
+                    break
+                else:
+                    for immunity_tuple in self.contextual_condition_immunities[self_condition_name]:
+                        if immunity_tuple[0] == immunity_name:
+                            self.contextual_condition_immunities[self_condition_name].remove(immunity_tuple)
+                            break
+
+    
+    def remove_condition_immunity(self, condition_name: str):
+        self._remove_static_condition_immunity(condition_name)
+        self._remove_contextual_condition_immunity(condition_name)
+        return
+    
     
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
         proficiency_bonus = self.proficiency_bonus
@@ -186,3 +244,15 @@ class Entity(BaseBlock):
         target_entity.clear_target_entity()
 
         return total_bonus_source, total_bonus_target
+    
+    def advance_duration_condition(self,condition_name:str) -> bool:
+        condition = self.active_conditions[condition_name]
+        return condition.duration.progress()
+    
+    def advance_durations(self) -> List[str]:
+        removed_conditions = []
+        for condition_name in list(self.active_conditions.keys()):
+            removed = self.advance_duration_condition(condition_name)
+            if removed:
+                removed_conditions.append(condition_name)
+        return removed_conditions
