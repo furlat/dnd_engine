@@ -3,7 +3,7 @@ from pydantic import Field, computed_field
 from typing import Dict, Any, Optional, Self, Union
 from pydantic import BaseModel, model_validator
 from enum import Enum
-from dnd.modifiers import ContextAwareCondition, SavingThrowRequest
+from dnd.modifiers import ContextAwareCondition, SavingThrowRequest, BaseObject
 
 class DurationType(Enum,str):
     ROUNDS = "rounds"
@@ -11,7 +11,7 @@ class DurationType(Enum,str):
     UNTIL_LONG_REST = "until_long_rest"
     ON_CONDITION = "on_condition"
 
-class Duration(BaseModel):
+class Duration(BaseObject):
     duration : Optional[Union[int,ContextAwareCondition]]
     duration_type: DurationType = Field(default=DurationType.ROUNDS)
     source_entity_uuid: UUID
@@ -68,14 +68,8 @@ class Duration(BaseModel):
         self.long_rested = True
         
 
-class BaseCondition(BaseModel):
-    name: str
-    uuid: UUID = Field(default_factory=lambda: uuid4())
-    description: str
+class Condition(BaseObject):
     duration: Duration
-    source_entity_uuid: UUID
-    target_entity_uuid: UUID
-    context: Optional[Dict[str,Any]] = None
     application_saving_throw: Optional[SavingThrowRequest] = None
     removal_saving_throw: Optional[SavingThrowRequest] = None
     applied:bool = Field(default=False)
