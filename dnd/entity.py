@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple
+from typing import Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
 from enum import Enum
@@ -12,12 +12,17 @@ from dnd.modifiers import (
     NumericalModifier, DamageType, ResistanceStatus, 
     ContextAwareCondition, BaseObject
 )
-
+from dnd.conditions import BaseCondition
 from dnd.equipment import (
     Armor, Weapon, Shield, BodyArmor, Gauntlets, Greaves,
     Boots, Amulet, Ring, Cloak, Helmet, BodyPart
 )
 from dnd.dice import Dice, RollType, DiceRoll
+
+
+ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
+
+
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
     require interactions between blocks """
@@ -32,6 +37,10 @@ class Entity(BaseBlock):
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     
+    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict)
+    condition_immunities: Dict[str, List[str]] = Field(default_factory=dict)
+    contextual_condition_immunities: Dict[str, List[Tuple[str, ContextualConditionImmunity]]] = Field(default_factory=dict)
+    active_conditions_by_source: Dict[str, List[str]] = Field(default_factory=dict)
 
     
     @classmethod
@@ -58,6 +67,9 @@ class Entity(BaseBlock):
         target_entity = Entity.get(self.target_entity_uuid)
         assert isinstance(target_entity, Entity)
         return target_entity if not copy else target_entity.model_copy(deep=True)
+    
+
+    
     
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
         proficiency_bonus = self.proficiency_bonus
