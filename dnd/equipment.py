@@ -1,10 +1,10 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Self
 from enum import Enum
 from uuid import UUID
 from dnd.values import ModifiableValue
 from dnd.modifiers import DamageType
-from pydantic import Field
+from pydantic import Field, model_validator
 from typing import List
 
 class ArmorType(str, Enum):
@@ -219,3 +219,17 @@ class Weapon(BaseModel):
     range: Range = Field(
         description="Weapon's reach or range capabilities"
     )
+    extra_damage_bonus: List[ModifiableValue] = Field(
+        default_factory=list,
+        description="Extra damage bonus for the weapon"
+    )
+    extra_damage_type: List[DamageType] = Field(
+        default_factory=list,
+        description="Extra damage type for the weapon")
+    
+    #validator to ensure both extra damage bonus and extra damage type are of the same length
+    @model_validator(mode="after")
+    def check_extra_damage_consistency(self) -> Self:
+        if len(self.extra_damage_bonus) != len(self.extra_damage_type):
+            raise ValueError("Extra damage bonus and extra damage type must be of the same length")
+        return self
