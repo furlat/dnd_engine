@@ -57,11 +57,16 @@ class Duration(BaseObject):
         else:
             return False
     
-    def progress(self) -> None:
+    def progress(self) -> bool:
         """ Progress the duration by one round """
         if self.duration_type == DurationType.ROUNDS:
             assert isinstance(self.duration,int)
             self.duration -= 1
+            if self.is_expired:
+                return True
+            return False
+        else:
+            return False
     
     def long_rest(self) -> None:
         """ Set the long rested flag to True """
