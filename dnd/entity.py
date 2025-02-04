@@ -157,6 +157,18 @@ class Entity(BaseBlock):
         self._remove_static_condition_immunity(condition_name)
         self._remove_contextual_condition_immunity(condition_name)
         return
+
+    def advance_duration_condition(self,condition_name:str) -> bool:
+        condition = self.active_conditions[condition_name]
+        return condition.duration.progress()
+    
+    def advance_durations(self) -> List[str]:
+        removed_conditions = []
+        for condition_name in list(self.active_conditions.keys()):
+            removed = self.advance_duration_condition(condition_name)
+            if removed:
+                removed_conditions.append(condition_name)
+        return removed_conditions
     
     
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
@@ -245,14 +257,4 @@ class Entity(BaseBlock):
 
         return total_bonus_source, total_bonus_target
     
-    def advance_duration_condition(self,condition_name:str) -> bool:
-        condition = self.active_conditions[condition_name]
-        return condition.duration.progress()
     
-    def advance_durations(self) -> List[str]:
-        removed_conditions = []
-        for condition_name in list(self.active_conditions.keys()):
-            removed = self.advance_duration_condition(condition_name)
-            if removed:
-                removed_conditions.append(condition_name)
-        return removed_conditions

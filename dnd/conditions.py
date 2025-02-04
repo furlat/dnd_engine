@@ -74,6 +74,7 @@ class Duration(BaseObject):
         
 
 class Condition(BaseObject):
+    """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""
     duration: Duration
     application_saving_throw: Optional[SavingThrowRequest] = None
     removal_saving_throw: Optional[SavingThrowRequest] = None
