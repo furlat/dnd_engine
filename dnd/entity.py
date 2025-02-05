@@ -5,7 +5,7 @@ from enum import Enum
 
 from dnd.blocks import (
     BaseBlock, AbilityScores, SavingThrowSet, Health, 
-    Equipment, Speed, ActionEconomy,SkillSet,SkillName,AbilityName,SkillName
+    Equipment, Speed, ActionEconomy,SkillSet,SkillName,AbilityName,SkillName,WeaponSlot,RangeType,WeaponProperty, Range
 )
 from dnd.values import ModifiableValue
 from dnd.modifiers import (
@@ -192,6 +192,84 @@ class Entity(BaseBlock):
         normalized_proficiency_bonus = proficiency_bonus.model_copy(deep=True)
         normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
         return normalized_proficiency_bonus, saving_throw_bonus, ability_bonus,ability_modifier_bonus
+    
+    def _get_attack_bonuses(self,weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[ModifiableValue,ModifiableValue,List[ModifiableValue],List[ModifiableValue],Range ]:
+        """ We have to get from weapon and then from equipment 
+        attack_bonus 
+        ability bonuses
+        weapon attack bonus """
+        weapon = self.equipment.weapon_main_hand
+        ability_bonuses : List[ModifiableValue] = []
+        dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
+        dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
+        strength_bonus = self.ability_scores.get_ability("strength").ability_score
+        strength_modifier_bonus = self.ability_scores.get_ability("strength").modifier_bonus
+        attack_bonuses : List[ModifiableValue] = []
+        if weapon is None:
+            weapon_bonus=self.equipment.unarmed_attack_bonus
+            attack_bonuses.append(self.equipment.melee_attack_bonus)
+            range = Range(type=RangeType.REACH,normal=5)
+        else:
+            weapon_bonus=weapon.attack_bonus
+            range = weapon.range
+            if range.type == RangeType.RANGE:
+
+                attack_bonuses.append(self.equipment.ranged_attack_bonus)
+                ability_bonuses.append(dexterity_bonus)
+                ability_bonuses.append(dexterity_modifier_bonus)
+            elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
+                attack_bonuses.append(self.equipment.melee_attack_bonus)
+                ability_bonuses.append(strength_bonus)
+                ability_bonuses.append(strength_modifier_bonus)
+                ability_bonuses.append(dexterity_bonus)
+                ability_bonuses.append(dexterity_modifier_bonus)
+            else:
+                attack_bonuses.append(self.equipment.melee_attack_bonus)
+                ability_bonuses.append(strength_bonus)
+                ability_bonuses.append(strength_modifier_bonus)
+        proficiency_bonus = self.proficiency_bonus
+        
+        return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
+      
+    
+    def _get_damage_bonuses(self,weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[List[ModifiableValue],List[ModifiableValue],DamageType,int,int]:
+        """ currently not considering extra damage bonuses from weapon"""
+        weapon = self.equipment.weapon_main_hand
+        ability_bonuses : List[ModifiableValue] = []
+        dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
+        dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
+        strength_bonus = self.ability_scores.get_ability("strength").ability_score
+        strength_modifier_bonus = self.ability_scores.get_ability("strength").modifier_bonus
+        damage_bonuses : List[ModifiableValue] = []
+        if weapon is None:
+            weapon_bonus=self.equipment.unarmed_damage_bonus
+            damage_bonuses.append(self.equipment.melee_damage_bonus)
+            damage_type = self.equipment.unarmed_damage_type
+            damage_dice = self.equipment.unarmed_damage_dice
+            num_damage_dice = self.equipment.unarmed_dice_numbers
+            range = Range(type=RangeType.REACH,normal=5)
+        else:
+            weapon_bonus=weapon.attack_bonus
+            damage_dice = weapon.damage_dice
+            num_damage_dice = weapon.dice_numbers
+            range = weapon.range
+            damage_type = weapon.damage_type
+            if range.type == RangeType.RANGE:
+
+                damage_bonuses.append(self.equipment.ranged_damage_bonus)
+                ability_bonuses.append(dexterity_bonus)
+                ability_bonuses.append(dexterity_modifier_bonus)
+            elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
+                damage_bonuses.append(self.equipment.melee_damage_bonus)
+                ability_bonuses.append(strength_bonus)
+                ability_bonuses.append(strength_modifier_bonus)
+                ability_bonuses.append(dexterity_bonus)
+                ability_bonuses.append(dexterity_modifier_bonus)
+            else:
+                damage_bonuses.append(self.equipment.melee_damage_bonus)
+                ability_bonuses.append(strength_bonus)
+                ability_bonuses.append(strength_modifier_bonus)
+        return damage_bonuses, ability_bonuses, damage_type, damage_dice, num_damage_dice
     
     def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName) -> ModifiableValue:
         if target_entity_uuid is not None:
