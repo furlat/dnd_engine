@@ -1623,7 +1623,7 @@ class UnarmoredAc(str, Enum):
     MAGIC_ARMOR = "Magic Armor"
     NONE = "None"
 
-class Equipped(BaseBlock):
+class Equipment(BaseBlock):
     """
     Represents all equipped items on an entity in the game system.
     """
