@@ -5,7 +5,7 @@ from enum import Enum
 
 from dnd.blocks import (
     BaseBlock, AbilityScores, SavingThrowSet, Health, 
-    Equipped, Speed, ActionEconomy,SkillSet,SkillName,AbilityName,SkillName
+    Equipment, Speed, ActionEconomy,SkillSet,SkillName,AbilityName,SkillName
 )
 from dnd.values import ModifiableValue
 from dnd.modifiers import (
@@ -42,7 +42,7 @@ class Entity(BaseBlock):
     skill_set: SkillSet = Field(default_factory=lambda: SkillSet.create(source_entity_uuid=uuid4()))
     saving_throws: SavingThrowSet = Field(default_factory=lambda: SavingThrowSet.create(source_entity_uuid=uuid4()))
     health: Health = Field(default_factory=lambda: Health.create(source_entity_uuid=uuid4()))
-    equipped: Equipped = Field(default_factory=lambda: Equipped.create(source_entity_uuid=uuid4()))
+    equipped: Equipment = Field(default_factory=lambda: Equipment.create(source_entity_uuid=uuid4()))
     speed: Speed = Field(default_factory=lambda: Speed.create(source_entity_uuid=uuid4()))
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
