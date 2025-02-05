@@ -1898,9 +1898,12 @@ class Weapon(BaseBlock):
         default=None,
         description="Fixed bonus to damage rolls"
     )
-    attack_bonus: Optional[ModifiableValue] = Field(
-        default=None,
-        description="Fixed bonus to attack rolls"
+    attack_bonus: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=0,
+            value_name="Attack Bonus"
+        )
     )
     damage_type: DamageType = Field(
         description="Type of damage dealt by the weapon"
@@ -1986,7 +1989,23 @@ class Equipment(BaseBlock):
         base_value=0,
         value_name="Ranged Damage Bonus"
     ))
-    
+    unarmed_attack_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Unarmed Attack Bonus"
+    ))
+
+    unarmed_damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Unarmed Damage Bonus"
+    ))
+
+    unarmed_damage_type: DamageType = Field(default=DamageType.BLUDGEONING)
+
+    unarmed_damage_dice: int = Field(default=4)
+
+    unarmed_dice_numbers: int = Field(default=1)
 
     _slot_mapping = {
         BodyPart.HEAD: "helmet",
