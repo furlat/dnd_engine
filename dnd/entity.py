@@ -63,7 +63,7 @@ class Entity(BaseBlock):
 
     
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: str = "Entity",config: Optional[EntityConfig] = None) -> 'Entity':
+    def create(cls, source_entity_uuid: UUID, name: str = "Entity",description: Optional[str] = None,config: Optional[EntityConfig] = None) -> 'Entity':
         """
         Create a new Entity instance with the given parameters. All sub-blocks will share
         the same source_entity_uuid as the entity itself.
@@ -95,6 +95,7 @@ class Entity(BaseBlock):
                 uuid=source_entity_uuid,
                 source_entity_uuid=source_entity_uuid,
                 name=name,
+                description=description,
                 ability_scores=ability_scores,
                 skill_set=skill_set,
                 saving_throws=saving_throws,
