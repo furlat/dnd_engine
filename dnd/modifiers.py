@@ -306,6 +306,26 @@ class NumericalModifier(BaseObject):
             return modifier
         else:
             raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               name: str = "Numerical Modifier", value: int = 0, score_normalizer: Optional[Callable[[int], int]] = None) -> 'NumericalModifier':
+        """
+        Create a new NumericalModifier instance with the given parameters.
+
+        Args:
+            source_entity_uuid (UUID): The UUID of the source entity.
+            source_entity_name (Optional[str]): The name of the source entity.
+            target_entity_uuid (Optional[UUID]): The UUID of the target entity.
+            target_entity_name (Optional[str]): The name of the target entity.
+            name (str): The name of the modifier.
+            value (int): The numerical value of the modifier.
+            score_normalizer (Optional[Callable[[int], int]]): Optional function to normalize this modifier's value.
+
+        Returns:
+            NumericalModifier: The newly created NumericalModifier instance.
+        """
+        return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name=name, value=value, score_normalizer=score_normalizer)
 
 class AdvantageModifier(BaseObject):
     """

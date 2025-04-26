@@ -1,8 +1,8 @@
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable
+from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
-from dnd.values import ModifiableValue
-from dnd.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws
+from dnd.values import ModifiableValue, StaticValue
+from dnd.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
 
 from enum import Enum
 from random import randint
@@ -328,7 +328,7 @@ class BaseBlock(BaseModel):
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
                 name: str = "Base Block") -> 'BaseBlock':
         """
-        Create a new BaseBlock instance with the given parameters.
+        Create a new BaseBlock instance with the given parameters. Subclasses should override this method to add their own attributes and handle the modifiable values initialization in the method.
 
         Args:
             source_entity_uuid (UUID): The UUID of the source entity.
@@ -479,6 +479,23 @@ SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
     'survival': 'wisdom'
 }
 
+class AbilityConfig(BaseModel):
+    """
+    Configuration for an Ability block.
+
+    Attributes:
+        ability_score (int): The base ability score, typically ranging from 3 to 20 for most characters, it will be used to initialize the base modifier of the ability
+        ability_scores_modifiers (List[NumericalModifier]): Any additional numerical modifiers to the ability score, separate from the base score
+        modifier_bonus (int): Any additional bonus to the ability modifier, separate from the base score
+        modifier_bonus_modifiers (List[NumericalModifier]): Any additional numerical modifiers to the modifier bonus, separate from the base score
+    """
+
+    ability_score: int = Field(default=10, description="The base ability score, typically ranging from 3 to 20 for most characters, it will be used to initialize the base modifier of the ability")
+    ability_scores_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional numerical modifiers to the ability score, separate from the base score")
+    modifier_bonus: int = Field(default=0, description="Any additional bonus to the ability modifier, separate from the base score")
+    modifier_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional numerical modifiers to the modifier bonus, separate from the base score")
+
+
 class Ability(BaseBlock):
     """
     Represents an ability score in the D&D 5e game system.
@@ -560,7 +577,55 @@ class Ability(BaseBlock):
         """
         return self.ability_score.normalized_score + self.modifier_bonus.score
     
-    
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+                name: Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] = 'strength', config: Optional[AbilityConfig] = None) -> 'Ability':
+        """
+        Create a new BaseBlock instance with the given parameters. Subclasses should override this method to add their own attributes and handle the modifiable values initialization in the method.
+
+        Args:
+            source_entity_uuid (UUID): The UUID of the source entity.
+            source_entity_name (Optional[str]): The name of the source entity.
+            target_entity_uuid (Optional[UUID]): The UUID of the target entity.
+            target_entity_name (Optional[str]): The name of the target entity.
+            name (str): The name of the block. Defaults to "Base Block".
+
+        Returns:
+            BaseBlock: The newly created BaseBlock instance.
+        """
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name=name)
+        else:
+            ability_score = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ability_score, value_name=name+" Ability Score", score_normalizer=ability_score_normalizer)
+            if len(config.ability_scores_modifiers) > 0:
+                for modifier in config.ability_scores_modifiers:
+                    ability_score.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            modifier_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.modifier_bonus, value_name=name+" Modifier Bonus")
+            if len(config.modifier_bonus_modifiers) > 0:
+                for modifier in config.modifier_bonus_modifiers:
+                    modifier_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name=name, ability_score=ability_score, modifier_bonus=modifier_bonus)
+        
+class AbilityScoresConfig(BaseModel):
+    """
+    Configuration for an AbilityScores block.
+
+    Attributes:
+        strength (AbilityConfig): Configuration for the strength ability.
+        dexterity (AbilityConfig): Configuration for the dexterity ability.
+        constitution (AbilityConfig): Configuration for the constitution ability.
+        intelligence (AbilityConfig): Configuration for the intelligence ability.
+        wisdom (AbilityConfig): Configuration for the wisdom ability.
+        charisma (AbilityConfig): Configuration for the charisma ability.
+    """
+    strength: AbilityConfig = Field(default_factory=AbilityConfig)
+    dexterity: AbilityConfig = Field(default_factory=AbilityConfig)
+    constitution: AbilityConfig = Field(default_factory=AbilityConfig)
+    intelligence: AbilityConfig = Field(default_factory=AbilityConfig)
+    wisdom: AbilityConfig = Field(default_factory=AbilityConfig)
+    charisma: AbilityConfig = Field(default_factory=AbilityConfig)
+
 class AbilityScores(BaseBlock):
     """
     Represents the set of six ability scores for an entity in the D&D 5e game system.
@@ -616,7 +681,7 @@ class AbilityScores(BaseBlock):
         blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
     """
 
-    name: str = Field(default="AbilityScores", description="The set of six core ability scores in D&D 5e")
+    name: str = Field(default="ability_scores", description="The set of six core ability scores in D&D 5e")
     strength: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="strength"), description="Strength measures bodily power, athletic training, and the extent to which you can exert raw physical force")
     dexterity: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="dexterity"), description="Dexterity measures agility, reflexes, and balance")
     constitution: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="constitution"), description="Constitution measures health, stamina, and vital force")
@@ -722,6 +787,35 @@ class AbilityScores(BaseBlock):
             Ability: The corresponding Ability instance.
         """
         return getattr(self, ability_name)
+    
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               config: Optional[AbilityScoresConfig] = None) -> 'AbilityScores':
+        """
+        Create a new AbilityScores instance with the given parameters.
+
+        Args:
+            source_entity_uuid (UUID): The UUID of the source entity.
+            source_entity_name (Optional[str]): The name of the source entity.
+            target_entity_uuid (Optional[UUID]): The UUID of the target entity.
+            target_entity_name (Optional[str]): The name of the target entity.
+            config (Optional[AbilityScoresConfig]): The configuration for the ability scores.
+
+        Returns:
+            AbilityScores: The newly created AbilityScores instance.
+        """
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name="ability_scores")
+        else:
+            strength = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.strength)
+            dexterity = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.dexterity)
+            constitution = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.constitution)
+            intelligence = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.intelligence)
+            wisdom = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.wisdom)
+            charisma = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.charisma)
+            return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name="ability_scores", strength=strength, dexterity=dexterity, constitution=constitution, intelligence=intelligence, wisdom=wisdom, charisma=charisma)
+
 
 # Define skills as a proper string literal type
 SkillName = TypeLiteral[
@@ -731,6 +825,24 @@ SkillName = TypeLiteral[
     'performance', 'persuasion', 'religion', 'sleight_of_hand', 
     'stealth', 'survival'
 ]
+
+class SkillConfig(BaseModel):
+    """
+    Configuration for a skill in the D&D 5e game system.
+
+    Attributes:
+    skill_bonus (int): The bonus to the skill check.
+    skill_bonus_modifiers (List[Tuple[str, int]]): Any additional numerical modifiers to the skill bonus, separate from the base score.
+    expertise (bool): Whether the character has expertise in this skill, which doubles the proficiency bonus.
+    proficiency (bool): Whether the character is proficient in this skill, adding their proficiency bonus to checks.
+    """
+    skill_bonus: int = Field(default=0, description="The bonus to the skill check.")
+    skill_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional numerical modifiers to the skill bonus, separate from the base score.")
+    expertise: bool = Field(default=False, description="Whether the character has expertise in this skill, which doubles the proficiency bonus.")
+    proficiency: bool = Field(default=False, description="Whether the character is proficient in this skill, adding their proficiency bonus to checks.")
+
+
+
 
 class Skill(BaseBlock):
     """
@@ -854,7 +966,7 @@ class Skill(BaseBlock):
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: SkillName, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-               expertise:bool=False,proficiency:bool=False) -> 'Skill':
+                config: Optional[SkillConfig] = None) -> 'Skill':
         """
         Create a new Skill instance with the given parameters.
 
@@ -870,12 +982,50 @@ class Skill(BaseBlock):
         Returns:
             Skill: The newly created Skill instance.
         """
-        if expertise and not proficiency:
-            proficiency = True
-        return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
-                   expertise=expertise, proficiency=proficiency)
-        
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            skill_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.skill_bonus, value_name=name+" Skill Bonus")
+            if len(config.skill_bonus_modifiers) > 0:
+                for modifier in config.skill_bonus_modifiers:
+                    skill_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       skill_bonus=skill_bonus, expertise=config.expertise, proficiency=config.proficiency)
+
+class SkillSetConfig(BaseModel):
+    """
+    Configuration for a set of skills in the D&D 5e game system.
+
+    Attributes:
+    """
+    acrobatics: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Dexterity (Acrobatics): Staying on your feet in tricky situations, such as balancing on a tightrope or staying upright on a rocking ship's deck")
+    animal_handling: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Wisdom (Animal Handling): Calming domesticated animals, keeping mounts from getting spooked, or intuiting an animal's intentions")
+    arcana: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Intelligence (Arcana): Recalling lore about spells, magic items, eldritch symbols, magical traditions, planes of existence, and planar inhabitants")
+    athletics: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Strength (Athletics): Climbing, jumping, swimming, and other difficult physical activities")
+    deception: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Charisma (Deception): Convincingly hiding the truth through words or actions")
+    history: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Intelligence (History): Recalling lore about historical events, legendary people, ancient kingdoms, past disputes, recent wars, and lost civilizations")
+    insight: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Wisdom (Insight): Determining the true intentions of others, detecting lies, and predicting someone's next move")
+    intimidation: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Charisma (Intimidation): Influencing others through overt threats, hostile actions, and physical violence")
+    investigation: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Intelligence (Investigation): Searching for clues and making deductions based on those clues")
+    medicine: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Wisdom (Medicine): Stabilizing dying companions or diagnosing illnesses")
+    nature: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Intelligence (Nature): Recalling lore about terrain, plants and animals, the weather, and natural cycles")
+    perception: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Wisdom (Perception): Spotting, hearing, or detecting the presence of something, measuring general awareness and sensory acuity")
+    performance: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Charisma (Performance): Delighting an audience with music, dance, acting, storytelling, or other forms of entertainment")
+    persuasion: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Charisma (Persuasion): Influencing others through tact, social graces, or good nature")
+    religion: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Intelligence (Religion): Recalling lore about deities, rites, prayers, religious hierarchies, holy symbols, and the practices of secret cults")
+    sleight_of_hand: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Dexterity (Sleight of Hand): Performing acts of legerdemain, manual trickery, or subtle manipulations")
+    stealth: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Dexterity (Stealth): Concealing yourself, moving silently, and avoiding detection")
+    survival: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Wisdom (Survival): Following tracks, hunting wild game, guiding through wilderness, identifying natural hazards, and predicting weather")
+    
+    
+
+
+
+
+
 class SkillSet(BaseBlock):
     """
     Represents the complete set of skills for an entity in the D&D 5e game system.
@@ -977,6 +1127,63 @@ class SkillSet(BaseBlock):
         """ Get the attribute corresponding to the skill name"""
         return getattr(self, skill_name)
     
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               config: Optional[SkillSetConfig] = None) -> 'SkillSet':
+        """
+        Create a new SkillSet instance with the given parameters.
+        """
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            acrobatics = Skill.create(source_entity_uuid=source_entity_uuid, name="acrobatics", source_entity_name=source_entity_name, 
+                                      target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.acrobatics)
+            animal_handling = Skill.create(source_entity_uuid=source_entity_uuid, name="animal_handling", source_entity_name=source_entity_name, 
+                                           target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.animal_handling)
+            arcana = Skill.create(source_entity_uuid=source_entity_uuid, name="arcana", source_entity_name=source_entity_name, 
+                                 target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.arcana)
+            athletics = Skill.create(source_entity_uuid=source_entity_uuid, name="athletics", source_entity_name=source_entity_name, 
+                                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.athletics)
+            deception = Skill.create(source_entity_uuid=source_entity_uuid, name="deception", source_entity_name=source_entity_name, 
+                                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.deception)
+            history = Skill.create(source_entity_uuid=source_entity_uuid, name="history", source_entity_name=source_entity_name, 
+                                  target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.history)
+            insight = Skill.create(source_entity_uuid=source_entity_uuid, name="insight", source_entity_name=source_entity_name, 
+                                  target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.insight)
+            intimidation = Skill.create(source_entity_uuid=source_entity_uuid, name="intimidation", source_entity_name=source_entity_name, 
+                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.intimidation)
+            investigation = Skill.create(source_entity_uuid=source_entity_uuid, name="investigation", source_entity_name=source_entity_name, 
+                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.investigation)
+            medicine = Skill.create(source_entity_uuid=source_entity_uuid, name="medicine", source_entity_name=source_entity_name, 
+                                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.medicine)
+            nature = Skill.create(source_entity_uuid=source_entity_uuid, name="nature", source_entity_name=source_entity_name, 
+                                  target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.nature)
+            perception = Skill.create(source_entity_uuid=source_entity_uuid, name="perception", source_entity_name=source_entity_name, 
+                                      target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.perception)
+            performance = Skill.create(source_entity_uuid=source_entity_uuid, name="performance", source_entity_name=source_entity_name, 
+                                      target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.performance)
+            persuasion = Skill.create(source_entity_uuid=source_entity_uuid, name="persuasion", source_entity_name=source_entity_name, 
+                                      target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.persuasion)
+            religion = Skill.create(source_entity_uuid=source_entity_uuid, name="religion", source_entity_name=source_entity_name, 
+                                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.religion)
+            sleight_of_hand = Skill.create(source_entity_uuid=source_entity_uuid, name="sleight_of_hand", source_entity_name=source_entity_name, 
+                                          target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.sleight_of_hand)
+            stealth = Skill.create(source_entity_uuid=source_entity_uuid, name="stealth", source_entity_name=source_entity_name, 
+                                  target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.stealth)
+            survival = Skill.create(source_entity_uuid=source_entity_uuid, name="survival", source_entity_name=source_entity_name, 
+                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.survival)
+            
+            return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       acrobatics=acrobatics, animal_handling=animal_handling, arcana=arcana, athletics=athletics, deception=deception, history=history, 
+                       insight=insight, intimidation=intimidation, investigation=investigation, medicine=medicine, nature=nature, perception=perception, 
+                       performance=performance, persuasion=persuasion, religion=religion, sleight_of_hand=sleight_of_hand, stealth=stealth, survival=survival)
+    
+    
+    
+    
 saving_throw_name_to_ability = {
     "strength_saving_throw": "strength",
     "dexterity_saving_throw": "dexterity",
@@ -1001,6 +1208,14 @@ SAVING_THROW_TO_ABILITY: Dict[SavingThrowName, AbilityName] = {
     'wisdom_saving_throw': 'wisdom',
     'charisma_saving_throw': 'charisma'
 }
+
+class SavingThrowConfig(BaseModel):
+    """
+    Configuration for a saving throw in the D&D 5e game system.
+    """
+    proficiency: bool = Field(default=False, description="If true, the character is proficient in this saving throw, adding their proficiency bonus")
+    bonus: int = Field(default=0, description="Any additional static bonus applied to the saving throw, beyond ability modifier and proficiency")
+    bonus_modifiers: List[Tuple[str, int]] = Field(default=[], description="Any additional static modifiers applied to the saving throw, beyond ability modifier and proficiency")
 
 class SavingThrow(BaseBlock):
     """
@@ -1104,7 +1319,7 @@ class SavingThrow(BaseBlock):
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: SavingThrowName, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-               proficiency:bool=False) -> 'SavingThrow':
+                config: Optional[SavingThrowConfig] = None) -> 'SavingThrow':
         """
         Create a new SavingThrow instance with the given parameters.
 
@@ -1119,9 +1334,28 @@ class SavingThrow(BaseBlock):
         Returns:
             SavingThrow: A new instance of the SavingThrow class.
         """
-        return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
-                   proficiency=proficiency)
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus, value_name=name+" Saving Throw Bonus")
+            for modifier in config.bonus_modifiers:
+                bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       proficiency=config.proficiency, bonus=bonus)
+        
+class SavingThrowSetConfig(BaseModel):
+    """
+    Configuration for a set of saving throws in the D&D 5e game system.
+    """
+    strength_saving_throw: SavingThrowConfig = Field(default_factory=lambda: SavingThrowConfig(proficiency=False, bonus=0, bonus_modifiers=[]), description="Configuration for the strength saving throw")
+    dexterity_saving_throw: SavingThrowConfig = Field(default_factory=lambda: SavingThrowConfig(proficiency=False, bonus=0, bonus_modifiers=[]), description="Configuration for the dexterity saving throw")
+    constitution_saving_throw: SavingThrowConfig = Field(default_factory=lambda: SavingThrowConfig(proficiency=False, bonus=0, bonus_modifiers=[]), description="Configuration for the constitution saving throw")
+    intelligence_saving_throw: SavingThrowConfig = Field(default_factory=lambda: SavingThrowConfig(proficiency=False, bonus=0, bonus_modifiers=[]), description="Configuration for the intelligence saving throw")
+    wisdom_saving_throw: SavingThrowConfig = Field(default_factory=lambda: SavingThrowConfig(proficiency=False, bonus=0, bonus_modifiers=[]), description="Configuration for the wisdom saving throw")
+    charisma_saving_throw: SavingThrowConfig = Field(default_factory=lambda: SavingThrowConfig(proficiency=False, bonus=0, bonus_modifiers=[]), description="Configuration for the charisma saving throw")
+
 
 class SavingThrowSet(BaseBlock):
     """
@@ -1208,7 +1442,45 @@ class SavingThrowSet(BaseBlock):
             raise ValueError(f"No saving throw found for ability {ability_name}")
         return getattr(self, saving_throw_name)
     
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, name: str = "SavingThrowSet", source_entity_name: Optional[str] = None, 
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+               config: Optional[SavingThrowSetConfig] = None) -> 'SavingThrowSet':
+        """
+        Create a new SavingThrowSet instance with the given parameters.
+        """
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            strength_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="strength_saving_throw", source_entity_name=source_entity_name, 
+                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.strength_saving_throw)
+            dexterity_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="dexterity_saving_throw", source_entity_name=source_entity_name, 
+                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.dexterity_saving_throw)
+            constitution_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="constitution_saving_throw", source_entity_name=source_entity_name, 
+                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.constitution_saving_throw)
+            intelligence_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="intelligence_saving_throw", source_entity_name=source_entity_name, 
+                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.intelligence_saving_throw)
+            wisdom_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="wisdom_saving_throw", source_entity_name=source_entity_name, 
+                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.wisdom_saving_throw)
+            charisma_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="charisma_saving_throw", source_entity_name=source_entity_name, 
+                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.charisma_saving_throw)  
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       strength_saving_throw=strength_saving_throw, dexterity_saving_throw=dexterity_saving_throw, constitution_saving_throw=constitution_saving_throw, 
+                       intelligence_saving_throw=intelligence_saving_throw, wisdom_saving_throw=wisdom_saving_throw, charisma_saving_throw=charisma_saving_throw)
     
+class HitDiceConfig(BaseModel):
+    """
+    Configuration for the HitDice block.
+    """
+    hit_dice_value: Literal[4,6,8,10,12] = 6
+    hit_dice_value_modifiers: List[Tuple[str, int]] = Field(default=[], description="Any additional static modifiers applied to the hit dice value")
+    hit_dice_count: int = 1
+    hit_dice_count_modifiers: List[Tuple[str, int]] = Field(default=[], description="Any additional static modifiers applied to the hit dice count")
+    mode: Literal["average", "maximums","roll"] = "average"
+    ignore_first_level: bool = Field(default=False)
+
 class HitDice(BaseBlock):
     """
     Represents the hit dice of an entity in the game system.
@@ -1268,6 +1540,7 @@ class HitDice(BaseBlock):
     hit_dice_value: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=6, value_name="Hit Dice Value"))
     hit_dice_count: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=1, value_name="Hit Dice Count"))
     mode: Literal["average", "maximums","roll"] = Field(default="average")
+    ignore_first_level: bool = Field(default=False)
 
     @computed_field
     @cached_property
@@ -1281,8 +1554,8 @@ class HitDice(BaseBlock):
         Raises:
             ValueError: If an invalid mode is specified.
         """
-        first_level_hit_points = self.hit_dice_value.score
-        remaining_dice_count = self.hit_dice_count.score - 1
+        first_level_hit_points = self.hit_dice_value.score if not self.ignore_first_level else 0
+        remaining_dice_count = self.hit_dice_count.score - 1 if not self.ignore_first_level else self.hit_dice_count.score
         if self.mode == "average":
             return first_level_hit_points + remaining_dice_count * ((self.hit_dice_value.score // 2)+1)
         elif self.mode == "maximums":
@@ -1332,7 +1605,7 @@ class HitDice(BaseBlock):
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "HitDice", source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-               hit_dice_value: Literal[4,6,8,10,12] = 6, hit_dice_count: int = 1, mode: Literal["average", "maximums","roll"] = "average") -> 'HitDice':
+                config: Optional[HitDiceConfig] = None) -> 'HitDice':
         """
         Create a new HitDice instance with the given parameters.
 
@@ -1349,14 +1622,37 @@ class HitDice(BaseBlock):
         Returns:
             HitDice: A new instance of the HitDice class.
         """
-        modifiable_hit_dice_value = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=hit_dice_value, value_name="Hit Dice Value")
-        modifiable_hit_dice_count = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=hit_dice_count, value_name="Hit Dice Count")
-        return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
-                   hit_dice_value=modifiable_hit_dice_value, hit_dice_count=modifiable_hit_dice_count, mode=mode)
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            modifiable_hit_dice_value = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.hit_dice_value, value_name="Hit Dice Value")
+            for modifier in config.hit_dice_value_modifiers:
+                modifiable_hit_dice_value.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            modifiable_hit_dice_count = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.hit_dice_count, value_name="Hit Dice Count")
+            for modifier in config.hit_dice_count_modifiers:
+                modifiable_hit_dice_count.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       hit_dice_value=modifiable_hit_dice_value, hit_dice_count=modifiable_hit_dice_count, mode=config.mode, ignore_first_level=config.ignore_first_level)
 
 # damage_types = Literal["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
 # damage_types_list = ["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
+
+class HealthConfig(BaseModel):
+    """
+    Configuration for the Health block.
+    """
+    hit_dices: List[HitDiceConfig] = Field(default_factory=list, description="Hit dice configuration")
+    max_hit_points_bonus: int = Field(default=0, description="Max Hit Points Bonus, e.g. something like a default Aid spell, not really used in dnd but kept for consistency")
+    max_hit_points_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the max hit points bonus,  e.g. Aid spell but here it would not have a duration")
+    temporary_hit_points: int = Field(default=0, description="Temporary Hit Points, e.g. something like a default False Life spell")
+    temporary_hit_points_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the temporary hit points, e.g. False Life spell but here it would not have a duration")
+    damage_reduction: int = Field(default=0, description="Damage Reduction, e.g. flat Damage Reduction")
+    damage_reduction_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the damage reduction")
+    vulnerabilities: List[DamageType] = Field(default_factory=list, description="Types of damage the entity is vulnerable to")
+    resistances: List[DamageType] = Field(default_factory=list, description="Types of damage the entity is resistant to")
+    immunities: List[DamageType] = Field(default_factory=list, description="Types of damage the entity is immune to")
 
 class Health(BaseBlock):
     """
@@ -1524,8 +1820,8 @@ class Health(BaseBlock):
             raise ValueError(f"Damage must be greater than 0 instead of {damage}")
         if not isinstance(damage_type, DamageType):
             raise ValueError(f"Damage type must be one of the following: {[damage.value for damage in DamageType]} instead of {damage_type}")
-        damage_after_absorption = damage - self.damage_reduction.score
-        damage_after_multiplier = int(damage_after_absorption * self.damage_multiplier(damage_type))
+        damage_after_absorption = damage 
+        damage_after_multiplier = max(0,int(damage_after_absorption * self.damage_multiplier(damage_type)) - self.damage_reduction.score)
         current_temporary_hit_points = self.temporary_hit_points.score
         if current_temporary_hit_points < 0:
             raise ValueError(f"Temporary Hit Points must be greater than 0 instead of {current_temporary_hit_points}")
@@ -1537,12 +1833,23 @@ class Health(BaseBlock):
     
     def heal(self, heal: int) -> None:
         """
-        Heal the entity by removing damage.
+        Heal the entity by removing damage. Cannot remove damage taken by the temporary hit points.
 
         Args:
             heal (int): The amount of healing to apply.
         """
-        self.damage_taken = max(0, self.damage_taken - heal)
+        if self.temporary_hit_points.score > 0:
+            #check if we have temporary hit points that absorbed the damage taken, 
+            # sicne we can not heal them we can only heal the portion that went through them
+
+            damage_taken_after_temporary_hp = self.damage_taken - self.temporary_hit_points.score
+            damage_absorbed_by_temporary_hp = min(self.damage_taken,self.temporary_hit_points.score)
+            if damage_taken_after_temporary_hp > 0:
+                #if some damage went through the temporary hit points we can heal them but keep the absorbed portion of damage
+                self.damage_taken = max(0, damage_taken_after_temporary_hp - heal) + damage_absorbed_by_temporary_hp
+        else:
+            #if we have no temporary hit points we can heal the damage taken
+            self.damage_taken = max(0, self.damage_taken - heal)
 
     def add_temporary_hit_points(self, temporary_hit_points: int, source_entity_uuid: UUID) -> None:
         """
@@ -1600,7 +1907,51 @@ class Health(BaseBlock):
         """
         return self.get_max_hit_dices_points(constitution_modifier) + self.max_hit_points_bonus.score + self.temporary_hit_points.score - self.damage_taken
 
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, name: str = "Health", source_entity_name: Optional[str] = None, 
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+                config: Optional[HealthConfig] = None) -> 'Health':
+        """
+        Create a new Health instance with the given parameters.
+        """
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            hit_dices = [HitDice.create(source_entity_uuid=source_entity_uuid, config=hit_dice) for hit_dice in config.hit_dices]
+            max_hit_points_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.max_hit_points_bonus, value_name="Max Hit Points Bonus")
+            for modifier in config.max_hit_points_bonus_modifiers:
+                max_hit_points_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            temporary_hit_points = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.temporary_hit_points, value_name="Temporary Hit Points")
+            for modifier in config.temporary_hit_points_modifiers:
+                temporary_hit_points.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            damage_reduction = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.damage_reduction, value_name="Damage Reduction")
+            for modifier in config.damage_reduction_modifiers:
+                damage_reduction.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            for vulnerability in config.vulnerabilities:
+                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.VULNERABILITY, damage_type=vulnerability, name=f"Vulnerability to {vulnerability}"))
+            for resistance in config.resistances:
+                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.RESISTANCE, damage_type=resistance, name=f"Resistance to {resistance}"))
+            for immunity in config.immunities:
+                damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.IMMUNITY, damage_type=immunity, name=f"Immunity to {immunity}"))
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction)
 
+class SpeedConfig(BaseModel):
+    """
+    Configuration for the Speed block.
+    """
+    walk: int = Field(default=30, description="Walk Speed")
+    walk_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the walk speed")
+    fly: int = Field(default=0, description="Fly Speed")
+    fly_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the fly speed")
+    swim: int = Field(default=0, description="Swim Speed")
+    swim_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the swim speed")
+    burrow: int = Field(default=0, description="Burrow Speed")
+    burrow_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the burrow speed")
+    climb: int = Field(default=0, description="Climb Speed")
+    climb_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the climb speed")
 
 class Speed(BaseBlock):
     """
@@ -1653,6 +2004,49 @@ class Speed(BaseBlock):
         )
     )
 
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, name: str = "Speed", source_entity_name: Optional[str] = None, 
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+                config: Optional[SpeedConfig] = None) -> 'Speed':
+        """
+        Create a new Speed instance with the given parameters.
+        """
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            walk = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.walk, value_name="Walk Speed")
+            for modifier in config.walk_modifiers:
+                walk.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            fly = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.fly, value_name="Fly Speed")
+            for modifier in config.fly_modifiers:
+                fly.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            swim = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.swim, value_name="Swim Speed")
+            for modifier in config.swim_modifiers:
+                swim.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            burrow = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.burrow, value_name="Burrow Speed")
+            for modifier in config.burrow_modifiers:
+                burrow.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            climb = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.climb, value_name="Climb Speed")
+            for modifier in config.climb_modifiers:
+                climb.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       walk=walk, fly=fly, swim=swim, burrow=burrow, climb=climb)
+
+class ActionEconomyConfig(BaseModel):
+    """
+    Configuration for the ActionEconomy block.
+    """
+    actions: int = Field(default=1, description="Number of standard actions available")
+    actions_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the actions")
+    bonus_actions: int = Field(default=1, description="Number of bonus actions available")
+    bonus_actions_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the bonus actions")
+    reactions: int = Field(default=1, description="Number of reactions available")
+    reactions_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the reactions")
+    movement: int = Field(default=30, description="Amount of movement available")
+    movement_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the movement")
+    
 
 class ActionEconomy(BaseBlock):
     """
@@ -1698,6 +2092,30 @@ class ActionEconomy(BaseBlock):
         )
     )
 
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, name: str = "ActionEconomy", source_entity_name: Optional[str] = None, 
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+                config: Optional[ActionEconomyConfig] = None) -> 'ActionEconomy':
+
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.actions, value_name="Actions")
+            for modifier in config.actions_modifiers:
+                actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            bonus_actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus_actions, value_name="Bonus Actions")
+            for modifier in config.bonus_actions_modifiers:
+                bonus_actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            reactions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.reactions, value_name="Reactions")
+            for modifier in config.reactions_modifiers:
+                reactions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            movement = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.movement, value_name="Movement")
+            for modifier in config.movement_modifiers:
+                movement.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       actions=actions, bonus_actions=bonus_actions, reactions=reactions, movement=movement)
 
 class RingSlot(str, Enum):
     LEFT = "Left Ring"
@@ -1929,6 +2347,44 @@ class Weapon(BaseBlock):
         if len(self.extra_damage_bonus) != len(self.extra_damage_type):
             raise ValueError("Extra damage bonus and extra damage type must be of the same length")
         return self
+    
+slot_mapping = {
+        BodyPart.HEAD: "helmet",
+        BodyPart.BODY: "body_armor",
+        BodyPart.HANDS: "gauntlets",
+        BodyPart.LEGS: "greaves",
+
+
+        BodyPart.FEET: "boots",
+        BodyPart.AMULET: "amulet",
+        BodyPart.CLOAK: "cloak",
+    }
+
+class EquipmentConfig(BaseModel):
+    """ ignores the actual equipment and only focuses on the modifiers """
+    unarmored_ac: UnarmoredAc = Field(default=UnarmoredAc.NONE, description="Unarmored Armor Class")
+    ac: int = Field(default=10, description="Armor Class")
+    ac_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the armor class")
+    damage_bonus: int = Field(default=0, description="Damage Bonus")
+    damage_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the damage bonus")
+    attack_bonus: int = Field(default=0, description="Attack Bonus")
+    attack_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the attack bonus")
+    melee_attack_bonus: int = Field(default=0, description="Melee Attack Bonus")
+    melee_attack_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the melee attack bonus")
+    ranged_attack_bonus: int = Field(default=0, description="Ranged Attack Bonus")
+    ranged_attack_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the ranged attack bonus")
+    melee_damage_bonus: int = Field(default=0, description="Melee Damage Bonus")
+    melee_damage_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the melee damage bonus")
+    ranged_damage_bonus: int = Field(default=0, description="Ranged Damage Bonus")
+    ranged_damage_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the ranged damage bonus")
+    unarmed_attack_bonus: int = Field(default=0, description="Unarmed Attack Bonus")
+    unarmed_attack_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the unarmed attack bonus")
+    unarmed_damage_bonus: int = Field(default=0, description="Unarmed Damage Bonus")
+    unarmed_damage_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the unarmed damage bonus")
+    unarmed_damage_type: DamageType = Field(default=DamageType.BLUDGEONING, description="Unarmed Damage Type")
+    unarmed_damage_dice: int = Field(default=4, description="Unarmed Damage Dice")
+    unarmed_dice_numbers: int = Field(default=1, description="Unarmed Dice Numbers")
+    
 
 class Equipment(BaseBlock):
     """
@@ -2007,17 +2463,7 @@ class Equipment(BaseBlock):
 
     unarmed_dice_numbers: int = Field(default=1)
 
-    _slot_mapping = {
-        BodyPart.HEAD: "helmet",
-        BodyPart.BODY: "body_armor",
-        BodyPart.HANDS: "gauntlets",
-        BodyPart.LEGS: "greaves",
-
-
-        BodyPart.FEET: "boots",
-        BodyPart.AMULET: "amulet",
-        BodyPart.CLOAK: "cloak",
-    }
+    
 
     def equip(self, item: Union[Armor, Weapon, Shield], slot: Optional[Union[BodyPart, RingSlot, WeaponSlot]] = None) -> None:
         """
@@ -2055,10 +2501,10 @@ class Equipment(BaseBlock):
         if slot is None and isinstance(item, Armor):
             slot = item.body_part
 
-        if slot not in self._slot_mapping:
+        if slot not in slot_mapping:
             raise ValueError(f"Invalid equipment slot: {slot}")
 
-        attribute_name = self._slot_mapping[slot]
+        attribute_name = slot_mapping[slot]
         setattr(self, attribute_name, item)
 
     def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot]) -> None:
@@ -2076,12 +2522,61 @@ class Equipment(BaseBlock):
         elif isinstance(slot, WeaponSlot):
             attribute_name = "weapon_main_hand" if slot == WeaponSlot.MAIN_HAND else "weapon_off_hand"
         elif isinstance(slot, BodyPart):
-            if slot not in self._slot_mapping:
+            if slot not in slot_mapping:
                 raise ValueError(f"Invalid equipment slot: {slot}")
-            attribute_name = self._slot_mapping[slot]
+            attribute_name = slot_mapping[slot]
         else:
             raise ValueError(f"Invalid equipment slot: {slot}")
 
         setattr(self, attribute_name, None)
+    
+    @classmethod
+    def create(cls, source_entity_uuid: UUID, name: str = "Equipped", source_entity_name: Optional[str] = None, 
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+                config: Optional[EquipmentConfig] = None) -> 'Equipment':
+        if config is None:
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
+        else:
+            ac = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ac, value_name="Armor Class")
+            for modifier in config.ac_modifiers:
+                ac.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.damage_bonus, value_name="Damage Bonus")
+            for modifier in config.damage_bonus_modifiers:
+                damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.attack_bonus, value_name="Attack Bonus")
+            for modifier in config.attack_bonus_modifiers:
+                attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            melee_attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.melee_attack_bonus, value_name="Melee Attack Bonus")
+            for modifier in config.melee_attack_bonus_modifiers:
+                melee_attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            ranged_attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ranged_attack_bonus, value_name="Ranged Attack Bonus")
+            for modifier in config.ranged_attack_bonus_modifiers:
+                ranged_attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            melee_damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.melee_damage_bonus, value_name="Melee Damage Bonus")
+            for modifier in config.melee_damage_bonus_modifiers:
+                melee_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            ranged_damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ranged_damage_bonus, value_name="Ranged Damage Bonus")
+            for modifier in config.ranged_damage_bonus_modifiers:
+                ranged_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            unarmed_attack_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.unarmed_attack_bonus, value_name="Unarmed Attack Bonus")
+            for modifier in config.unarmed_attack_bonus_modifiers:
+                unarmed_attack_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            unarmed_damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.unarmed_damage_bonus, value_name="Unarmed Damage Bonus")
+            for modifier in config.unarmed_damage_bonus_modifiers:
+                unarmed_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+                       ac=ac, damage_bonus=damage_bonus, attack_bonus=attack_bonus, melee_attack_bonus=melee_attack_bonus, ranged_attack_bonus=ranged_attack_bonus, 
+                       melee_damage_bonus=melee_damage_bonus, ranged_damage_bonus=ranged_damage_bonus, unarmed_attack_bonus=unarmed_attack_bonus, unarmed_damage_bonus=unarmed_damage_bonus)
+            
+                
+                
+            
+
+
+
+
+
 
 
