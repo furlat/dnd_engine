@@ -82,6 +82,10 @@ class BaseBlock(BaseModel):
         default="A Block",
         description="The name of the block. Defaults to 'A Block' if not specified."
     )
+    description: Optional[str] = Field(
+        default=None,
+        description="A description of the block. Can be None."
+    )
     uuid: UUID = Field(
         default_factory=uuid4,
         description="Unique identifier for the block. Automatically generated if not provided."
