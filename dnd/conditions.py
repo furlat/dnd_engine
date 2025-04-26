@@ -5,7 +5,7 @@ from pydantic import BaseModel, model_validator
 from enum import Enum
 from dnd.modifiers import ContextAwareCondition, SavingThrowRequest, BaseObject
 
-class DurationType(Enum,str):
+class DurationType(str,Enum):
     ROUNDS = "rounds"
     PERMANENT = "permanent"
     UNTIL_LONG_REST = "until_long_rest"
