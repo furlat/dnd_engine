@@ -3,7 +3,7 @@ from pydantic import Field, computed_field
 from typing import Dict, Any, Optional, Self, Union
 from pydantic import BaseModel, model_validator
 from enum import Enum
-from dnd.modifiers import ContextAwareCondition, SavingThrowRequest, BaseObject
+from dnd.core.modifiers import ContextAwareCondition, SavingThrowRequest, BaseObject
 
 class DurationType(str,Enum):
     ROUNDS = "rounds"

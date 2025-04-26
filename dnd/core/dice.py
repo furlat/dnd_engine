@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, computed_field, model_validator
 from typing import List, Optional, Union, Tuple, Self, ClassVar, Dict, Literal
 import random
-from dnd.values import ModifiableValue, AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue,NumericalModifier, ContextualValue
+from dnd.core.values import ModifiableValue, AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue,NumericalModifier, ContextualValue
 from enum import Enum
 from uuid import UUID, uuid4
 from functools import cached_property

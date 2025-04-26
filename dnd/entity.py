@@ -2,21 +2,28 @@ from typing import Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tu
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
 from enum import Enum
-#import all configs
-from dnd.blocks import (AbilityConfig,SavingThrowConfig,AbilityScoresConfig,SavingThrowSetConfig,HealthConfig,EquipmentConfig,SpeedConfig,ActionEconomyConfig,SkillSetConfig)
-from dnd.blocks import (
-    BaseBlock, AbilityScores, SavingThrowSet, Health, 
-    Equipment, Speed, ActionEconomy,SkillSet,SkillName,
-    AbilityName,SkillName,WeaponSlot,RangeType,WeaponProperty, Range, Shield,
-)
-from dnd.values import ModifiableValue
-from dnd.modifiers import (
+
+
+
+from dnd.core.values import ModifiableValue
+from dnd.core.modifiers import (
     NumericalModifier, DamageType, ResistanceStatus, 
     ContextAwareCondition, BaseObject
 )
-from dnd.conditions import Condition
+from dnd.core.conditions import Condition
+from dnd.core.dice import Dice, RollType, DiceRoll
 
-from dnd.dice import Dice, RollType, DiceRoll
+
+from dnd.blocks.base_block import BaseBlock
+from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores,AbilityName)
+from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
+from dnd.blocks.health import (HealthConfig,Health)
+from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield)
+from dnd.blocks.speed import (SpeedConfig,Speed)
+from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
+from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName)
+
+
 
 def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, Union[list,Any]]) -> Dict[str, list]:
     key, value = kv
