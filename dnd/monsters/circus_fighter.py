@@ -1,24 +1,16 @@
-from dnd.blocks import Ability, AbilityConfig, AbilityScoresConfig, AbilityScores, Skill, SkillConfig, SkillSet, SkillSetConfig
+from dnd.core.modifiers import NumericalModifier, DamageType
 
-
-from dnd.blocks import (
-    SavingThrowConfig,
-    SavingThrowSetConfig,
-    SavingThrowSet,
-    HitDiceConfig,
-    HealthConfig,
-    Health,
-    SpeedConfig,
-    Speed,
-    ActionEconomyConfig,
-    ActionEconomy,
-    EquipmentConfig,
-    Equipment,
-)
+from dnd.blocks.base_block import BaseBlock
+from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores,AbilityName)
+from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
+from dnd.blocks.health import (HealthConfig,Health,HitDiceConfig)
+from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield)
+from dnd.blocks.speed import (SpeedConfig,Speed)
+from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
+from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName,SkillConfig)
 
 from dnd.entity import Entity, EntityConfig
     
-from dnd.modifiers import NumericalModifier, DamageType
 from uuid import uuid4, UUID
 from typing import Optional
 
