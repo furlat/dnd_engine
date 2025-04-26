@@ -2,10 +2,12 @@ from typing import Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tu
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
 from enum import Enum
-
+#import all configs
+from dnd.blocks import (AbilityConfig,SavingThrowConfig,AbilityScoresConfig,SavingThrowSetConfig,HealthConfig,EquipmentConfig,SpeedConfig,ActionEconomyConfig,SkillSetConfig)
 from dnd.blocks import (
     BaseBlock, AbilityScores, SavingThrowSet, Health, 
-    Equipment, Speed, ActionEconomy,SkillSet,SkillName,AbilityName,SkillName,WeaponSlot,RangeType,WeaponProperty, Range
+    Equipment, Speed, ActionEconomy,SkillSet,SkillName,
+    AbilityName,SkillName,WeaponSlot,RangeType,WeaponProperty, Range, Shield,
 )
 from dnd.values import ModifiableValue
 from dnd.modifiers import (
@@ -28,6 +30,16 @@ def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, Union[list,Any]]
 
 ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
 
+class EntityConfig(BaseModel):
+    ability_scores: AbilityScoresConfig = Field(default_factory=lambda: AbilityScoresConfig,description="Ability scores for the entity")
+    skill_set: SkillSetConfig = Field(default_factory=lambda: SkillSetConfig,description="Skill set for the entity")
+    saving_throws: SavingThrowSetConfig = Field(default_factory=lambda: SavingThrowSetConfig,description="Saving throws for the entity")
+    health: HealthConfig = Field(default_factory=lambda: HealthConfig,description="Health for the entity")
+    equipment: EquipmentConfig = Field(default_factory=lambda: EquipmentConfig,description="Equipment for the entity")
+    speed: SpeedConfig = Field(default_factory=lambda: SpeedConfig,description="Speed for the entity")
+    action_economy: ActionEconomyConfig = Field(default_factory=lambda: ActionEconomyConfig,description="Action economy for the entity")
+    proficiency_bonus: int = Field(default=0,description="Proficiency bonus for the entity")
+    proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
 
 
 class Entity(BaseBlock):
@@ -51,7 +63,7 @@ class Entity(BaseBlock):
 
     
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: str = "Entity") -> 'Entity':
+    def create(cls, source_entity_uuid: UUID, name: str = "Entity",config: Optional[EntityConfig] = None) -> 'Entity':
         """
         Create a new Entity instance with the given parameters. All sub-blocks will share
         the same source_entity_uuid as the entity itself.
@@ -63,11 +75,36 @@ class Entity(BaseBlock):
         Returns:
             Entity: The newly created Entity instance
         """
-        return cls(
-            uuid=source_entity_uuid,
-            source_entity_uuid=source_entity_uuid,
-            name=name)
-    
+        if config is None:
+            return cls(
+                uuid=source_entity_uuid,
+                source_entity_uuid=source_entity_uuid,
+                name=name)
+        else:
+            ability_scores = AbilityScores.create(source_entity_uuid=source_entity_uuid,config=config.ability_scores)
+            skill_set = SkillSet.create(source_entity_uuid=source_entity_uuid,config=config.skill_set)
+            saving_throws = SavingThrowSet.create(source_entity_uuid=source_entity_uuid,config=config.saving_throws)
+            health = Health.create(source_entity_uuid=source_entity_uuid,config=config.health)
+            equipment = Equipment.create(source_entity_uuid=source_entity_uuid,config=config.equipment)
+            speed = Speed.create(source_entity_uuid=source_entity_uuid,config=config.speed)
+            action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid,config=config.action_economy)
+            proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.proficiency_bonus)
+            for modifier in config.proficiency_bonus_modifiers:
+                proficiency_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid,name=modifier[0],value=modifier[1]))
+            return cls(
+                uuid=source_entity_uuid,
+                source_entity_uuid=source_entity_uuid,
+                name=name,
+                ability_scores=ability_scores,
+                skill_set=skill_set,
+                saving_throws=saving_throws,
+                health=health,
+                equipment=equipment,
+                speed=speed,
+                action_economy=action_economy,
+                proficiency_bonus=proficiency_bonus
+            )
+        
     def get_target_entity(self,copy: bool = False) -> Optional['Entity']:
         if self.target_entity_uuid is None:
             return None
@@ -198,14 +235,18 @@ class Entity(BaseBlock):
         attack_bonus 
         ability bonuses
         weapon attack bonus """
-        weapon = self.equipment.weapon_main_hand
+        if weapon_slot == WeaponSlot.MAIN_HAND:
+            weapon = self.equipment.weapon_main_hand
+        elif weapon_slot == WeaponSlot.OFF_HAND:
+            weapon = self.equipment.weapon_off_hand
+
         ability_bonuses : List[ModifiableValue] = []
         dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
         dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
         strength_bonus = self.ability_scores.get_ability("strength").ability_score
         strength_modifier_bonus = self.ability_scores.get_ability("strength").modifier_bonus
         attack_bonuses : List[ModifiableValue] = []
-        if weapon is None:
+        if weapon is None or isinstance(weapon, Shield):
             weapon_bonus=self.equipment.unarmed_attack_bonus
             attack_bonuses.append(self.equipment.melee_attack_bonus)
             range = Range(type=RangeType.REACH,normal=5)
