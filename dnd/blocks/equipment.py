@@ -3,12 +3,12 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
-
+from dnd.blocks.abilities import AbilityName, AbilityScores
 from enum import Enum
 from random import randint
 from functools import cached_property
 from typing import Literal as TypeLiteral
-
+import copy
 
 from dnd.blocks.base_block import BaseBlock
 
@@ -24,7 +24,7 @@ class WeaponSlot(str, Enum):
 class UnarmoredAc(str, Enum):
     BARBARIAN = "Barbarian"
     MONK = "Monk"
-    DRACONIC_SORCER = "Draconic Sorcerer"
+    DRACONIC_SORCERER = "Draconic Sorcerer"
     MAGIC_ARMOR = "Magic Armor"
     NONE = "None"
 
@@ -32,6 +32,7 @@ class ArmorType(str, Enum):
     LIGHT = "Light"
     MEDIUM = "Medium"
     HEAVY = "Heavy"
+    CLOTH = "Cloth"
 
 class WeaponProperty(str, Enum):
     FINESSE = "Finesse"
@@ -88,17 +89,22 @@ class Armor(BaseBlock):
     body_part: BodyPart = Field(
         description="Body part where the armor is worn"
     )
-    base_ac: Optional[int] = Field(
-        default=None,
-        description="Base Armor Class provided by the armor"
+
+    ac: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=0,
+            value_name="Armor Class"
+        ),
+        description="Armor Class provided by the armor, the base value is the base armor ac and the modifiers are the modifiers to the ac"
     )
-    bonus_ac: Optional[ModifiableValue] = Field(
-        default=None,
-        description="Bonus Armor Class provided by the armor"
-    )
-    max_dex_bonus: Optional[int] = Field(
-        default=None,
-        description="Maximum Dexterity bonus that can be added to AC"
+    max_dex_bonus: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=5,
+            value_name="Max Dex Bonus"
+        ),
+        description="Max Dex Bonus provided by the armor, the base value is the base max dex bonus and the modifiers are the modifiers to the max dex bonus"
     )
     strength_requirement: Optional[int] = Field(
         default=None,
@@ -196,13 +202,30 @@ class Shield(BaseBlock):
         description="Armor Class bonus provided by the shield"
     )
 
+class Damage(BaseBlock):
+    name: str = Field(default="Damage", description="Name of the damage")
+    damage_dice: Literal[4,6,8,10,12,20] = Field(
+        description="Number of sides on the damage dice (e.g., 6 for d6)"
+    )
+    dice_numbers: int = Field(
+        description="Number of dice to roll for damage (e.g., 2 for 2d6)"
+    )
+    damage_bonus: Optional[ModifiableValue] = Field(
+        default=None,
+        description="Fixed bonus to damage rolls"
+    )
+    damage_type: DamageType = Field(
+        description="Type of damage dealt by the weapon"
+    )
+    
+
 class Weapon(BaseBlock):
     name: str = Field(default="Weapon", description="Name of the weapon")
     description: Optional[str] = Field(
         default=None,
         description="Detailed description of the weapon"
     )
-    damage_dice: int = Field(
+    damage_dice: Literal[4,6,8,10,12,20] = Field(
         description="Number of sides on the damage dice (e.g., 6 for d6)"
     )
     dice_numbers: int = Field(
@@ -229,6 +252,14 @@ class Weapon(BaseBlock):
     range: Range = Field(
         description="Weapon's reach or range capabilities"
     )
+    extra_damage_dices: List[Literal[4,6,8,10,12,20]] = Field(
+        default_factory=list,
+        description="Extra damage dice for the weapon"
+    )
+    extra_damage_dices_numbers: List[int] = Field(
+        default_factory=list,
+        description="Extra damage dice numbers for the weapon"
+    )
     extra_damage_bonus: List[ModifiableValue] = Field(
         default_factory=list,
         description="Extra damage bonus for the weapon"
@@ -240,9 +271,53 @@ class Weapon(BaseBlock):
     #validator to ensure both extra damage bonus and extra damage type are of the same length
     @model_validator(mode="after")
     def check_extra_damage_consistency(self) -> Self:
-        if len(self.extra_damage_bonus) != len(self.extra_damage_type):
-            raise ValueError("Extra damage bonus and extra damage type must be of the same length")
+        targets = [self.extra_damage_dices, self.extra_damage_dices_numbers, self.extra_damage_bonus, self.extra_damage_type]
+        for target in targets:
+            for i in range(len(target)):
+                if len(target[i]) != len(targets[0]):
+                    raise ValueError("All extra damage targets must be of the same length")
         return self
+    
+    def get_main_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> Damage:
+        bonuses = []
+        if self.damage_bonus is not None:
+            bonuses.append(self.damage_bonus)
+        if equipment_block.damage_bonus is not None:
+            bonuses.append(equipment_block.damage_bonus)
+        if WeaponProperty.RANGED in self.properties:
+            #get dex bonuses
+            dex_bonus = ability_block.dexterity.get_combined_values()
+            bonuses.append(dex_bonus)
+            #get ranged bonuses
+            ranged_bonus = equipment_block.ranged_damage_bonus
+            bonuses.append(ranged_bonus)
+        elif WeaponProperty.FINESSE in self.properties:
+            dex_bonus = ability_block.dexterity.get_combined_values()
+            strength_bonus = ability_block.strength.get_combined_values()
+            if dex_bonus.normalized_score > strength_bonus.normalized_score:
+                bonuses.append(dex_bonus)
+            else:
+                bonuses.append(strength_bonus)
+            melee_bonus = equipment_block.melee_damage_bonus
+            bonuses.append(melee_bonus)
+        else:
+            strength_bonus = ability_block.strength.get_combined_values()
+            bonuses.append(strength_bonus)
+            melee_bonus = equipment_block.melee_damage_bonus
+            bonuses.append(melee_bonus)
+
+        bonuses.append(equipment_block.damage_bonus)
+        combined_bonuses= bonuses[0].combine_values(bonuses[1:])
+        return Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=self.damage_dice, dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
+    def get_extra_damages(self) -> List[Damage]:
+        damages = []
+        for i in range(len(self.extra_damage_dices)):
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
+        return damages
+    def get_all_weapon_damages(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> List[Damage]:
+        damages = [self.get_main_damage(equipment_block, ability_block)]
+        damages.extend(self.get_extra_damages())
+        return damages
     
 slot_mapping = {
         BodyPart.HEAD: "helmet",
@@ -258,9 +333,11 @@ slot_mapping = {
 
 class EquipmentConfig(BaseModel):
     """ ignores the actual equipment and only focuses on the modifiers """
-    unarmored_ac: UnarmoredAc = Field(default=UnarmoredAc.NONE, description="Unarmored Armor Class")
-    ac: int = Field(default=10, description="Armor Class")
-    ac_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the armor class")
+    unarmored_ac_type: UnarmoredAc = Field(default=UnarmoredAc.NONE, description="Unarmored Armor Class")
+    unarmored_ac: int = Field(default=10, description="Unarmored Armor Class")
+    unarmored_ac_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the unarmored  armor class")
+    ac_bonus: int = Field(default=0, description="Armor Class Bonus")
+    ac_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the armor class bonus")
     damage_bonus: int = Field(default=0, description="Damage Bonus")
     damage_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the damage bonus")
     attack_bonus: int = Field(default=0, description="Attack Bonus")
@@ -298,12 +375,22 @@ class Equipment(BaseBlock):
     cloak: Optional[Cloak] = Field(default=None, description="Cloak slot item")
     weapon_main_hand: Optional[Weapon] = Field(default=None, description="Main hand weapon slot")
     weapon_off_hand: Optional[Union[Weapon, Shield]] = Field(default=None, description="Off-hand weapon or shield slot")
-    unarmored_ac: UnarmoredAc = Field(default=UnarmoredAc.NONE)
+    unarmored_ac_type: UnarmoredAc = Field(default=UnarmoredAc.NONE)
+    unarmed_properties: List[WeaponProperty] = Field(
+        default_factory=list,
+        description="Special properties of the unarmed attack like finesse for monks"
+    )
     
-    ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+    unarmored_ac: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
         source_entity_uuid=uuid4(),
         base_value=10,
-        value_name="Armor Class"
+        value_name="Unarmored Armor Class"
+    ))
+
+    ac_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Armor Class Bonus"
     ))
 
     damage_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
@@ -353,14 +440,127 @@ class Equipment(BaseBlock):
         value_name="Unarmed Damage Bonus"
     ))
 
+    extra_attack_damage_dices: List[Literal[4,6,8,10,12,20]] = Field(
+        default_factory=list,
+        description="Extra damage dice for the weapon"
+    )
+    extra_attack_damage_dices_numbers: List[int] = Field(
+        default_factory=list,
+        description="Extra damage dice numbers for the weapon"
+    )
+    extra_attack_damage_bonus: List[ModifiableValue] = Field(
+        default_factory=list,
+        description="Extra damage bonus for the weapon"
+    )
+    extra_attack_damage_type: List[DamageType] = Field(
+        default_factory=list,
+        description="Extra damage type for the weapon")
+
     unarmed_damage_type: DamageType = Field(default=DamageType.BLUDGEONING)
 
-    unarmed_damage_dice: int = Field(default=4)
+    unarmed_damage_dice: Literal[4,6,8,10,12,20] = Field(default=4)
 
     unarmed_dice_numbers: int = Field(default=1)
 
+    def is_unarmed(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> bool:
+        if weapon_slot == WeaponSlot.MAIN_HAND:
+            return self.weapon_main_hand is None
+        elif weapon_slot == WeaponSlot.OFF_HAND:
+            return self.weapon_off_hand is None
     
+    def is_ranged(self, weapon_slot: WeaponSlot) -> bool:
+        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
+            return WeaponProperty.RANGED  in self.weapon_main_hand.properties
+        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
+            return WeaponProperty.RANGED in self.weapon_off_hand.properties
+        else:
+            return False
+        
+    def _get_main_unarmed_damage(self, ability_block: AbilityScores) -> Damage:
+        """ combines the unarmed damage bonus with the damage bonus and melee damage bonus into a single damage block"""
+        unarmed_damage_bonus = self.unarmed_damage_bonus
+        strength_bonus = ability_block.strength.get_combined_values()
+        ability_bonus = strength_bonus
+        if WeaponProperty.FINESSE in self.unarmed_properties:
+            dexterity_bonus = ability_block.dexterity.get_combined_values()
+            if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
+                ability_bonus = dexterity_bonus
+        combined_bonus = unarmed_damage_bonus.combine_values([self.damage_bonus,self.melee_damage_bonus, ability_bonus])
+        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=self.unarmed_damage_dice, dice_numbers=self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=self.unarmed_damage_type)
+        return unarmed_damage
+    
+    def _get_main_weapon_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> Optional[Damage]:
+        """ combines the weapon damage bonus with the damage bonus and melee damage bonus into a single damage block"""
+        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
+            damage= self.weapon_main_hand.get_main_damage(self, ability_block)
+        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
+            damage = self.weapon_off_hand.get_main_damage(self, ability_block)
+        else:
+            return None
 
+        return damage
+ 
+    def get_extra_attack_damage(self) -> List[Damage]:
+        damages = []
+        for dice, dice_numbers, bonus, damage_type in zip(self.extra_attack_damage_dices, self.extra_attack_damage_dices_numbers, self.extra_attack_damage_bonus, self.extra_attack_damage_type):
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
+        return damages
+
+    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> List[Damage]:
+        if self.is_unarmed(weapon_slot):
+            return [self._get_main_unarmed_damage(ability_block)]+self.get_extra_attack_damage()
+        else:
+            outs = []
+            main_damage = self._get_main_weapon_damage(weapon_slot, ability_block)
+            if main_damage is not None:
+                outs.append(main_damage)
+            outs.extend(self.get_extra_attack_damage())
+            return outs
+        
+    def get_main_damage_type(self, weapon_slot: WeaponSlot) -> DamageType:
+        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
+            return self.weapon_main_hand.damage_type
+        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
+            return self.weapon_off_hand.damage_type
+        else:
+            return self.unarmed_damage_type
+
+    def get_unarmored_abilities(self) -> List[AbilityName]:
+        if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
+            return ["dexterity", "constitution"]
+        elif self.unarmored_ac_type == UnarmoredAc.MONK:
+            return ["dexterity", "strength"]
+        else:
+            return["dexterity"]
+    def is_unarmored(self) -> bool:
+        return self.body_armor is None or self.body_armor.type == ArmorType.CLOTH
+    
+    def get_unarmored_ac_values(self) -> List[ModifiableValue]:
+        values = [self.ac_bonus]
+        if self.unarmored_ac_type in [UnarmoredAc.DRACONIC_SORCERER, UnarmoredAc.MAGIC_ARMOR]:
+            unarmored_ac_static_modifier = NumericalModifier.create(source_entity_uuid=self.source_entity_uuid, name="unarmored_ac_bonus", value=3)
+            temporary_value = copy.deepcopy(self.unarmored_ac)
+            temporary_value.self_static.add_value_modifier(unarmored_ac_static_modifier)
+            values.append(temporary_value)
+        else:
+            values.append(self.unarmored_ac)
+        if self.weapon_off_hand and isinstance(self.weapon_off_hand, Shield):
+            values.append(self.weapon_off_hand.ac_bonus)
+        return values
+
+    def get_armored_ac_values(self) -> List[ModifiableValue]:
+        values = [self.ac_bonus]
+        if self.body_armor is not None and self.body_armor.type != ArmorType.CLOTH:
+            values.append(self.body_armor.ac)
+        if self.weapon_off_hand and isinstance(self.weapon_off_hand, Shield):
+            values.append(self.weapon_off_hand.ac_bonus)
+        return values
+    
+    def get_armored_max_dex_bonus(self) -> Optional[ModifiableValue]:
+        if self.body_armor is not None and self.body_armor.type != ArmorType.CLOTH:
+            return self.body_armor.max_dex_bonus
+        return None
+     
     def equip(self, item: Union[Armor, Weapon, Shield], slot: Optional[Union[BodyPart, RingSlot, WeaponSlot]] = None) -> None:
         """
         Equip an item in the specified slot. For most items, the slot can be automatically
@@ -434,9 +634,12 @@ class Equipment(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            ac = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ac, value_name="Armor Class")
-            for modifier in config.ac_modifiers:
-                ac.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            unarmored_ac = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.unarmored_ac, value_name="Unarmored Armor Class")
+            for modifier in config.unarmored_ac_modifiers:
+                unarmored_ac.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            ac_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.ac_bonus, value_name="Armor Class Bonus")
+            for modifier in config.ac_bonus_modifiers:
+                ac_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             damage_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.damage_bonus, value_name="Damage Bonus")
             for modifier in config.damage_bonus_modifiers:
                 damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
@@ -463,7 +666,7 @@ class Equipment(BaseBlock):
                 unarmed_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
-                       ac=ac, damage_bonus=damage_bonus, attack_bonus=attack_bonus, melee_attack_bonus=melee_attack_bonus, ranged_attack_bonus=ranged_attack_bonus, 
+                       unarmored_ac=unarmored_ac, ac_bonus=ac_bonus,unarmored_ac_type=config.unarmored_ac_type, damage_bonus=damage_bonus, attack_bonus=attack_bonus, melee_attack_bonus=melee_attack_bonus, ranged_attack_bonus=ranged_attack_bonus, 
                        melee_damage_bonus=melee_damage_bonus, ranged_damage_bonus=ranged_damage_bonus, unarmed_attack_bonus=unarmed_attack_bonus, unarmed_damage_bonus=unarmed_damage_bonus)
             
                 

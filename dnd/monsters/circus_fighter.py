@@ -5,7 +5,6 @@ from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScor
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health,HitDiceConfig)
 from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield)
-from dnd.blocks.speed import (SpeedConfig,Speed)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName,SkillConfig)
 
@@ -52,8 +51,6 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0) -> Entity:
                                 temporary_hit_points_modifiers=[("permanentfalse_life", 10)],
                                 )
 
-    #Speed
-    speed_config = SpeedConfig(walk=30,climb_modifiers=[("a past in the circus", 10)])
 
     #Action economy
     action_economy_config = ActionEconomyConfig(
@@ -62,7 +59,7 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0) -> Entity:
     #Equipment
 
     equipment_config = EquipmentConfig(
-        ac_modifiers=[("a past in the circus", 1)],
+        ac_bonus_modifiers=[("a past in the circus", 1)],
         unarmed_damage_bonus=1,
         unarmed_damage_type=DamageType.PIERCING,
         unarmed_damage_bonus_modifiers=[("a past in the circus", 1)],
@@ -78,7 +75,6 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0) -> Entity:
         saving_throws=saving_throw_set_config,
         health=health_config,
         equipment=equipment_config,
-        speed=speed_config,
         action_economy=action_economy_config,
         proficiency_bonus=proficiency_bonus,
         proficiency_bonus_modifiers=[("a past in the circus", -1)],

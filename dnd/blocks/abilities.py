@@ -122,6 +122,12 @@ class Ability(BaseBlock):
         """
         return self.ability_score.normalized_score + self.modifier_bonus.score
     
+    def get_combined_values(self) -> ModifiableValue:
+        """
+        Combines the ability score and the modifier bonus.
+        """
+        return self.ability_score.combine_values([self.modifier_bonus])
+    
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
