@@ -1624,6 +1624,13 @@ class ModifiableValue(BaseValue):
         description="Whether to apply the value's normalizer globally to all numerical modifiers"
     )
 
+    def get_base_modifier(self) -> Optional[NumericalModifier]:
+        """returns the base modifier for the value that is contained inside self_static and contains "_base_value" in the name"""
+        for modifier in self.self_static.value_modifiers.values():
+            if  modifier.name and "_base_value" in modifier.name:
+                return modifier
+        return None
+
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 

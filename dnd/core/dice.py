@@ -307,17 +307,17 @@ class Dice(BaseModel):
         """
         if self.roll_type == RollType.DAMAGE:
             results = [roll[0] for roll in self._roll(crit=(self.attack_outcome == AttackOutcome.CRIT))]
-            total = sum(results) + self.bonus.score
+            total = sum(results) + self.bonus.normalized_score
         else:
             results = self._roll()[0][0]
-            total = results + self.bonus.score
+            total = results + self.bonus.normalized_score
 
         return DiceRoll(
             dice_uuid=self.uuid,
             roll_type=self.roll_type,
             results=results,
             total=total,
-            bonus=self.bonus.score,
+            bonus=self.bonus.normalized_score,
             advantage_status=self.bonus.advantage,
             critical_status=self.bonus.critical,
             auto_hit_status=self.bonus.auto_hit,
