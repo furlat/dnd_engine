@@ -19,7 +19,6 @@ from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScor
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health)
 from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield)
-from dnd.blocks.speed import (SpeedConfig,Speed)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName)
 
@@ -43,7 +42,6 @@ class EntityConfig(BaseModel):
     saving_throws: SavingThrowSetConfig = Field(default_factory=lambda: SavingThrowSetConfig,description="Saving throws for the entity")
     health: HealthConfig = Field(default_factory=lambda: HealthConfig,description="Health for the entity")
     equipment: EquipmentConfig = Field(default_factory=lambda: EquipmentConfig,description="Equipment for the entity")
-    speed: SpeedConfig = Field(default_factory=lambda: SpeedConfig,description="Speed for the entity")
     action_economy: ActionEconomyConfig = Field(default_factory=lambda: ActionEconomyConfig,description="Action economy for the entity")
     proficiency_bonus: int = Field(default=0,description="Proficiency bonus for the entity")
     proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
@@ -59,7 +57,6 @@ class Entity(BaseBlock):
     saving_throws: SavingThrowSet = Field(default_factory=lambda: SavingThrowSet.create(source_entity_uuid=uuid4()))
     health: Health = Field(default_factory=lambda: Health.create(source_entity_uuid=uuid4()))
     equipment: Equipment = Field(default_factory=lambda: Equipment.create(source_entity_uuid=uuid4()))
-    speed: Speed = Field(default_factory=lambda: Speed.create(source_entity_uuid=uuid4()))
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     
@@ -93,7 +90,7 @@ class Entity(BaseBlock):
             saving_throws = SavingThrowSet.create(source_entity_uuid=source_entity_uuid,config=config.saving_throws)
             health = Health.create(source_entity_uuid=source_entity_uuid,config=config.health)
             equipment = Equipment.create(source_entity_uuid=source_entity_uuid,config=config.equipment)
-            speed = Speed.create(source_entity_uuid=source_entity_uuid,config=config.speed)
+            # speed = Speed.create(source_entity_uuid=source_entity_uuid,config=config.speed)
             action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid,config=config.action_economy)
             proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.proficiency_bonus)
             for modifier in config.proficiency_bonus_modifiers:
@@ -108,7 +105,7 @@ class Entity(BaseBlock):
                 saving_throws=saving_throws,
                 health=health,
                 equipment=equipment,
-                speed=speed,
+                # speed=speed,
                 action_economy=action_economy,
                 proficiency_bonus=proficiency_bonus
             )
@@ -257,6 +254,8 @@ class Entity(BaseBlock):
         if weapon is None or isinstance(weapon, Shield):
             weapon_bonus=self.equipment.unarmed_attack_bonus
             attack_bonuses.append(self.equipment.melee_attack_bonus)
+            ability_bonuses.append(strength_bonus)
+            ability_bonuses.append(strength_modifier_bonus)
             range = Range(type=RangeType.REACH,normal=5)
         else:
             weapon_bonus=weapon.attack_bonus
@@ -268,10 +267,14 @@ class Entity(BaseBlock):
                 ability_bonuses.append(dexterity_modifier_bonus)
             elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
                 attack_bonuses.append(self.equipment.melee_attack_bonus)
-                ability_bonuses.append(strength_bonus)
-                ability_bonuses.append(strength_modifier_bonus)
-                ability_bonuses.append(dexterity_bonus)
-                ability_bonuses.append(dexterity_modifier_bonus)
+                combined_strength_bonus = strength_bonus.combine_values([strength_modifier_bonus])
+                combined_dexterity_bonus = dexterity_bonus.combine_values([dexterity_modifier_bonus])
+                if combined_strength_bonus.normalized_score >= combined_dexterity_bonus.normalized_score:
+                    ability_bonuses.append(strength_bonus)
+                    ability_bonuses.append(strength_modifier_bonus)
+                else:
+                    ability_bonuses.append(dexterity_bonus)
+                    ability_bonuses.append(dexterity_modifier_bonus)
             else:
                 attack_bonuses.append(self.equipment.melee_attack_bonus)
                 ability_bonuses.append(strength_bonus)
@@ -310,10 +313,14 @@ class Entity(BaseBlock):
                 ability_bonuses.append(dexterity_modifier_bonus)
             elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
                 damage_bonuses.append(self.equipment.melee_damage_bonus)
-                ability_bonuses.append(strength_bonus)
-                ability_bonuses.append(strength_modifier_bonus)
-                ability_bonuses.append(dexterity_bonus)
-                ability_bonuses.append(dexterity_modifier_bonus)
+                combined_strength_bonus = strength_bonus.combine_values([strength_modifier_bonus])
+                combined_dexterity_bonus = dexterity_bonus.combine_values([dexterity_modifier_bonus])
+                if combined_strength_bonus.normalized_score >= combined_dexterity_bonus.normalized_score:
+                    ability_bonuses.append(strength_bonus)
+                    ability_bonuses.append(strength_modifier_bonus)
+                else:
+                    ability_bonuses.append(dexterity_bonus)
+                    ability_bonuses.append(dexterity_modifier_bonus)
             else:
                 damage_bonuses.append(self.equipment.melee_damage_bonus)
                 ability_bonuses.append(strength_bonus)
@@ -381,4 +388,41 @@ class Entity(BaseBlock):
 
         return total_bonus_source, total_bonus_target
     
+    def ac_bonus(self, target_entity_uuid: Optional[UUID]) -> ModifiableValue:
+        """ missing effects from target attack bonus"""
+        if target_entity_uuid is not None:
+            self.set_target_entity(target_entity_uuid)
+
+        if self.equipment.is_unarmored():
+            unarmored_values = self.equipment.get_unarmored_ac_values()
+            abilities = self.equipment.get_unarmored_abilities()
+            ability_bonuses = [self.ability_scores.get_ability(ability).ability_score for ability in abilities]
+            ability_modifier_bonuses = [self.ability_scores.get_ability(ability).modifier_bonus for ability in abilities]
+            ac_bonus = unarmored_values[0].combine_values(unarmored_values[1:]+ability_bonuses+ability_modifier_bonuses)
+            self.clear_target_entity()
+            return ac_bonus
+        else:
+            armored_values = self.equipment.get_armored_ac_values()
+            max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
+            assert max_dexterity_bonus is not None
+            dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
+            dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
+            combined_dexterity_bonus = dexterity_bonus.combine_values([dexterity_modifier_bonus])
+            if combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
+                combined_dexterity_bonus = max_dexterity_bonus
+            ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus])
+            self.clear_target_entity()
+            return ac_bonus
     
+    
+    def attack_bonus(self, target_entity_uuid: Optional[UUID], weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> ModifiableValue:
+        """ missing effects from target armor bonus"""
+        if target_entity_uuid is not None:
+            self.set_target_entity(target_entity_uuid)
+    
+        proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range = self._get_attack_bonuses(weapon_slot)
+        print("current ability bonuses", ability_bonuses)
+        bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
+        source_attack_bonus = proficiency_bonus.combine_values(bonuses)
+        return source_attack_bonus
+        
