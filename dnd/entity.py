@@ -10,15 +10,18 @@ from dnd.core.modifiers import (
     NumericalModifier, DamageType, ResistanceStatus, 
     ContextAwareCondition, BaseObject
 )
+
+from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue, ContextualValue
+
 from dnd.core.conditions import Condition
-from dnd.core.dice import Dice, RollType, DiceRoll
+from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 
 from dnd.blocks.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores,AbilityName)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health)
-from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield)
+from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield, Damage)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName)
 
@@ -284,48 +287,7 @@ class Entity(BaseBlock):
         return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
       
     
-    def _get_damage_bonuses(self,weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[List[ModifiableValue],List[ModifiableValue],DamageType,int,int]:
-        """ currently not considering extra damage bonuses from weapon"""
-        weapon = self.equipment.weapon_main_hand
-        ability_bonuses : List[ModifiableValue] = []
-        dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
-        dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
-        strength_bonus = self.ability_scores.get_ability("strength").ability_score
-        strength_modifier_bonus = self.ability_scores.get_ability("strength").modifier_bonus
-        damage_bonuses : List[ModifiableValue] = []
-        if weapon is None:
-            weapon_bonus=self.equipment.unarmed_damage_bonus
-            damage_bonuses.append(self.equipment.melee_damage_bonus)
-            damage_type = self.equipment.unarmed_damage_type
-            damage_dice = self.equipment.unarmed_damage_dice
-            num_damage_dice = self.equipment.unarmed_dice_numbers
-            range = Range(type=RangeType.REACH,normal=5)
-        else:
-            weapon_bonus=weapon.attack_bonus
-            damage_dice = weapon.damage_dice
-            num_damage_dice = weapon.dice_numbers
-            range = weapon.range
-            damage_type = weapon.damage_type
-            if range.type == RangeType.RANGE:
 
-                damage_bonuses.append(self.equipment.ranged_damage_bonus)
-                ability_bonuses.append(dexterity_bonus)
-                ability_bonuses.append(dexterity_modifier_bonus)
-            elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
-                damage_bonuses.append(self.equipment.melee_damage_bonus)
-                combined_strength_bonus = strength_bonus.combine_values([strength_modifier_bonus])
-                combined_dexterity_bonus = dexterity_bonus.combine_values([dexterity_modifier_bonus])
-                if combined_strength_bonus.normalized_score >= combined_dexterity_bonus.normalized_score:
-                    ability_bonuses.append(strength_bonus)
-                    ability_bonuses.append(strength_modifier_bonus)
-                else:
-                    ability_bonuses.append(dexterity_bonus)
-                    ability_bonuses.append(dexterity_modifier_bonus)
-            else:
-                damage_bonuses.append(self.equipment.melee_damage_bonus)
-                ability_bonuses.append(strength_bonus)
-                ability_bonuses.append(strength_modifier_bonus)
-        return damage_bonuses, ability_bonuses, damage_type, damage_dice, num_damage_dice
     
     def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName) -> ModifiableValue:
         if target_entity_uuid is not None:
@@ -388,7 +350,7 @@ class Entity(BaseBlock):
 
         return total_bonus_source, total_bonus_target
     
-    def ac_bonus(self, target_entity_uuid: Optional[UUID]) -> ModifiableValue:
+    def ac_bonus(self, target_entity_uuid: Optional[UUID]=None) -> ModifiableValue:
         """ missing effects from target attack bonus"""
         if target_entity_uuid is not None:
             self.set_target_entity(target_entity_uuid)
@@ -399,8 +361,8 @@ class Entity(BaseBlock):
             ability_bonuses = [self.ability_scores.get_ability(ability).ability_score for ability in abilities]
             ability_modifier_bonuses = [self.ability_scores.get_ability(ability).modifier_bonus for ability in abilities]
             ac_bonus = unarmored_values[0].combine_values(unarmored_values[1:]+ability_bonuses+ability_modifier_bonuses)
-            self.clear_target_entity()
-            return ac_bonus
+            
+        
         else:
             armored_values = self.equipment.get_armored_ac_values()
             max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
@@ -411,11 +373,12 @@ class Entity(BaseBlock):
             if combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
                 combined_dexterity_bonus = max_dexterity_bonus
             ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus])
+        if target_entity_uuid is not None:
             self.clear_target_entity()
-            return ac_bonus
+        return ac_bonus
     
     
-    def attack_bonus(self, target_entity_uuid: Optional[UUID], weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> ModifiableValue:
+    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
         """ missing effects from target armor bonus"""
         if target_entity_uuid is not None:
             self.set_target_entity(target_entity_uuid)
@@ -424,5 +387,84 @@ class Entity(BaseBlock):
         print("current ability bonuses", ability_bonuses)
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
+        if target_entity_uuid is not None:
+            self.clear_target_entity()
         return source_attack_bonus
-        
+    
+
+    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
+        if target_entity_uuid is not None:
+            self.set_target_entity(target_entity_uuid)
+        damages = self.equipment.get_damages(weapon_slot, self.ability_scores)
+        if target_entity_uuid is not None:
+            self.clear_target_entity()
+        return damages
+    
+    def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
+        """ From each damage we get the dice and damage type and we roll it """
+        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        print(f"Total Health before taking damage: {self.health.get_total_hit_points(con_modifier.normalized_score)}")
+        rolls = []
+        for damage in damages:
+            dice = damage.get_dice(attack_outcome=attack_outcome)
+            roll = dice.roll
+            rolls.append(roll)
+            print(f"Roll result: {roll.results}, Roll total: {roll.total}")
+            self.health.take_damage(roll.total, damage.damage_type, source_entity_uuid=damage.source_entity_uuid)
+        print(f"Total Health after taking damage: {self.health.get_total_hit_points(con_modifier.normalized_score)}")
+
+        return rolls
+    def get_attack_outcome(self, attack_bonus: ModifiableValue, ac: ModifiableValue) -> Tuple[DiceRoll,AttackOutcome]:
+        """ Returns the dice roll and the attack outcome """
+        attack_dice = Dice(count=1,value=20,bonus=attack_bonus, roll_type=RollType.ATTACK)
+        target_ac = ac.normalized_score
+        print(f"Target AC: {target_ac}")
+        print(f"Attack bonus: {attack_bonus.normalized_score}")
+        roll = attack_dice.roll
+        print(f"Roll result: {roll.results}, Roll total: {roll.total} vs target ac: {target_ac} result: {roll.total >= target_ac}")
+        #first condition to check is auto miss which ovverides everything else
+        #second condition is to check if the roll is a auto hit with two cases (critical and normal based on the roll or critical status)
+        #third condition is to check if the roll is a hit with two cases (critical and normal based on the roll or critical status)
+        #fourth condition is to check if the roll is a roll miss
+        if roll.auto_hit_status == AutoHitStatus.AUTOMISS:
+            return roll, AttackOutcome.MISS
+        elif roll.auto_hit_status == AutoHitStatus.AUTOHIT:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+                return roll, AttackOutcome.CRIT
+            else:
+                return roll, AttackOutcome.HIT
+        elif roll.total >= target_ac:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+                return roll, AttackOutcome.CRIT
+            else:
+                return roll, AttackOutcome.HIT
+        else:
+            return roll, AttackOutcome.MISS
+
+    def attack(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[AttackOutcome,DiceRoll,List[Tuple[Damage, DiceRoll]]]:
+        """ Full method implementing a complete attack returns two objects:
+        This outer methods does not get a copy of the target entity but the actual target entity that will be modified in place
+        each submethod is responsible for getting a copy of the target entity if needed for local computations
+        1) the list of damages and respective dice rolls 
+        2) the attack outcome"""
+        # self.set_target_entity(target_entity_uuid)
+        target_entity = self.get_target_entity(copy=False)
+        assert isinstance(target_entity, Entity)
+        # target_entity.set_target_entity(self.uuid)
+
+        #get attack aggregated bonuses from source
+        attack_bonus = self.attack_bonus(weapon_slot= weapon_slot)
+        #get ac for target
+        ac = target_entity.ac_bonus()
+        dice_roll, attack_outcome = self.get_attack_outcome(attack_bonus, ac)
+        if attack_outcome == AttackOutcome.MISS:
+            # self.clear_target_entity()
+            # target_entity.clear_target_entity()
+            return attack_outcome, dice_roll, []
+        else:
+            damages = self.get_damages(weapon_slot)
+            damage_rolls = target_entity.take_damage(damages, attack_outcome)
+            # self.clear_target_entity()
+            # target_entity.clear_target_entity()
+            return attack_outcome, dice_roll, [(damage, roll) for damage, roll in zip(damages, damage_rolls)]
+
