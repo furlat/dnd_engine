@@ -26,6 +26,14 @@ class BaseBlock(BaseModel):
         target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. Can be None.
         target_entity_name (Optional[str]): Name of the entity that this block targets, if any. Can be None.
         context (Optional[Dict[str, Any]]): Additional context information for this block. Can be None.
+        blocks: Dict[UUID, 'BaseBlock'] = Field(
+            default_factory=dict,
+            description="Dictionary of all BaseBlock instances that are attributes of this class."
+        )
+        values: Dict[UUID, 'ModifiableValue'] = Field(
+            default_factory=dict,
+            description="Dictionary of all ModifiableValue instances that are attributes of this class."
+        )
 
     Class Attributes:
         _registry (ClassVar[Dict[UUID, 'BaseBlock']]): A class-level registry to store all instances.
@@ -110,6 +118,14 @@ class BaseBlock(BaseModel):
         default=None,
         description="Additional context information for this block. Can be None."
     )
+    blocks: Dict[UUID, 'BaseBlock'] = Field(
+        default_factory=dict,
+        description="Dictionary of all BaseBlock instances that are attributes of this class."
+    )
+    values: Dict[UUID, 'ModifiableValue'] = Field(
+        default_factory=dict,
+        description="Dictionary of all ModifiableValue instances that are attributes of this class."
+    )
     
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
@@ -124,14 +140,15 @@ class BaseBlock(BaseModel):
         Args:
             block (BaseBlock): The block to process.
         """
-        for value in block.get_values():
+        # Use the dictionaries directly for better performance
+        for value in block.values.values():
             value.set_source_entity(block.source_entity_uuid, block.source_entity_name)
             if block.context is not None:
                 value.set_context(block.context)
             if block.target_entity_uuid is not None:
                 value.set_target_entity(block.target_entity_uuid, block.target_entity_name)
         
-        for sub_block in block.get_blocks():
+        for sub_block in block.blocks.values():
             sub_block.source_entity_uuid = block.source_entity_uuid
             sub_block.source_entity_name = block.source_entity_name
             if block.context is not None:
@@ -165,17 +182,39 @@ class BaseBlock(BaseModel):
         Raises:
             ValueError: If there is a mismatch in source or target UUIDs.
         """
-        for attr_name, attr_value in self.__dict__.items():
+        # Skip this validation for target entity operations
+        # This validator only makes sense during initialization, not during target propagation
+        
+        # Check all values
+        for uuid, value in self.values.items():
+            if value.source_entity_uuid != self.source_entity_uuid:
+                raise ValueError(f"ModifiableValue '{value.name}' has mismatched source UUID")
+                
+        # Check all blocks
+        for uuid, block in self.blocks.items():
+            if block.source_entity_uuid != self.source_entity_uuid:
+                raise ValueError(f"BaseBlock '{block.name}' has mismatched source UUID")
+                
+        return self
+
+    @model_validator(mode='after')
+    def populate_blocks_and_values(self) -> Self:
+        """
+        Populates the blocks and values dictionaries with all BaseBlock and ModifiableValue
+        instances that are attributes of this class. This is done once during initialization.
+        """
+        for name, field in self.__class__.model_fields.items():
+            attr_value = getattr(self, name)
+            # Skip the dictionaries themselves to avoid recursion
+            if name in ['blocks', 'values']:
+                continue
+                
+            # Use Pydantic field annotations to determine types
             if isinstance(attr_value, ModifiableValue):
-                if attr_value.source_entity_uuid != self.source_entity_uuid:
-                    raise ValueError(f"ModifiableValue '{attr_name}' has mismatched source UUID")
-                if attr_value.target_entity_uuid != self.target_entity_uuid:
-                    raise ValueError(f"ModifiableValue '{attr_name}' has mismatched target UUID")
+                self.values[attr_value.uuid] = attr_value
             elif isinstance(attr_value, BaseBlock):
-                if attr_value.source_entity_uuid != self.source_entity_uuid:
-                    raise ValueError(f"BaseBlock '{attr_name}' has mismatched source UUID")
-                if attr_value.target_entity_uuid != self.target_entity_uuid:
-                    raise ValueError(f"BaseBlock '{attr_name}' has mismatched target UUID")
+                self.blocks[attr_value.uuid] = attr_value
+                
         return self
 
     def __init__(self, **data):
@@ -232,21 +271,17 @@ class BaseBlock(BaseModel):
 
     def get_blocks(self) -> List['BaseBlock']:
         """
-        Searches through attributes and returns all BaseBlock instances that are attributes of this class.
+        Returns all BaseBlock instances that are attributes of this class.
 
         Returns:
-            List[BaseBlock]: A list of BaseBlock instances found in the attributes of this class.
+            List[BaseBlock]: A list of BaseBlock instances.
         """
-        blocks = []
-        for name, field in self.__class__.model_fields.items():
-            if isinstance(field.annotation, type) and issubclass(field.annotation, BaseBlock):
-                blocks.append(getattr(self, name))
-        return blocks
+        return list(self.blocks.values())
 
-    def get_values(self, deep: bool = False) -> List[ModifiableValue]:
+    def get_values(self, deep: bool = False) -> List['ModifiableValue']:
         """
-        Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
-        If deep is True, it also searches through all sub-blocks recursively.
+        Returns all ModifiableValue instances that are attributes of this class.
+        If deep is True, it also includes values from all sub-blocks recursively.
 
         Args:
             deep (bool): If True, search recursively through all sub-blocks. Defaults to False.
@@ -254,13 +289,10 @@ class BaseBlock(BaseModel):
         Returns:
             List[ModifiableValue]: A list of ModifiableValue instances found.
         """
-        values = []
-        for name, field in self.__class__.model_fields.items():
-            attr_value = getattr(self, name)
-            if isinstance(attr_value, ModifiableValue):
-                values.append(attr_value)
-            elif deep and isinstance(attr_value, BaseBlock):
-                values.extend(attr_value.get_values(deep=True))
+        values = list(self.values.values())
+        if deep:
+            for block in self.blocks.values():
+                values.extend(block.get_values(deep=True))
         return values
 
     def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
@@ -277,22 +309,22 @@ class BaseBlock(BaseModel):
         self.target_entity_uuid = target_entity_uuid
         self.target_entity_name = target_entity_name
 
-        for value in self.get_values():
+        # Use dictionaries directly for better performance
+        for value in self.values.values():
             value.set_target_entity(target_entity_uuid, target_entity_name)
 
-        for block in self.get_blocks():
+        for block in self.blocks.values():
             block.set_target_entity(target_entity_uuid, target_entity_name)
 
     def clear_target_entity(self) -> None:
         """
         Clear the target entity for all the values and sub-blocks contained in this Block instance.
         """
-        
-
-        for value in self.get_values():
+        # Use dictionaries directly for better performance
+        for value in self.values.values():
             value.clear_target_entity()
 
-        for block in self.get_blocks():
+        for block in self.blocks.values():
             block.clear_target_entity()
         
         self.target_entity_uuid = None
@@ -303,10 +335,12 @@ class BaseBlock(BaseModel):
         Set the context for all the values contained in this Block instance.
         """
         self.context = context
-        values = self.get_values()
-        for value in values:
+        
+        # Use dictionaries directly for better performance
+        for value in self.values.values():
             value.set_context(context)
-        for block in self.get_blocks():
+            
+        for block in self.blocks.values():
             block.set_context(context)
     
     def clear_context(self) -> None:
@@ -314,10 +348,12 @@ class BaseBlock(BaseModel):
         Clear the context for all the values contained in this Block instance.
         """
         self.context = None
-        values = self.get_values()
-        for value in values:
+        
+        # Use dictionaries directly for better performance
+        for value in self.values.values():
             value.clear_context()
-        for block in self.get_blocks():
+            
+        for block in self.blocks.values():
             block.clear_context()
     
 
@@ -400,10 +436,7 @@ class BaseBlock(BaseModel):
         Returns:
             Optional[ModifiableValue]: The ModifiableValue instance if found, None otherwise.
         """
-        for value in self.get_values():
-            if value.uuid == uuid:
-                return value
-        return None
+        return self.values.get(uuid)
 
     def get_value_from_name(self, name: str) -> Optional[ModifiableValue]:
         """
@@ -415,7 +448,7 @@ class BaseBlock(BaseModel):
         Returns:
             Optional[ModifiableValue]: The ModifiableValue instance if found, None otherwise.
         """
-        for value in self.get_values():
+        for value in self.values.values():
             if value.name == name:
                 return value
         return None
@@ -430,10 +463,7 @@ class BaseBlock(BaseModel):
         Returns:
             Optional[BaseBlock]: The BaseBlock instance if found, None otherwise.
         """
-        for block in self.get_blocks():
-            if block.uuid == uuid:
-                return block
-        return None
+        return self.blocks.get(uuid)
 
     def get_block_from_name(self, name: str) -> Optional['BaseBlock']:
         """
@@ -445,7 +475,7 @@ class BaseBlock(BaseModel):
         Returns:
             Optional[BaseBlock]: The BaseBlock instance if found, None otherwise.
         """
-        for block in self.get_blocks():
+        for block in self.blocks.values():
             if block.name == name:
                 return block
         return None

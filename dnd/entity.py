@@ -450,7 +450,7 @@ class Entity(BaseBlock):
         # self.set_target_entity(target_entity_uuid)
         target_entity = self.get_target_entity(copy=False)
         assert isinstance(target_entity, Entity)
-        # target_entity.set_target_entity(self.uuid)
+        target_entity.set_target_entity(self.uuid)
 
         #get attack aggregated bonuses from source
         attack_bonus = self.attack_bonus(weapon_slot= weapon_slot)
@@ -459,12 +459,12 @@ class Entity(BaseBlock):
         dice_roll, attack_outcome = self.get_attack_outcome(attack_bonus, ac)
         if attack_outcome == AttackOutcome.MISS:
             # self.clear_target_entity()
-            # target_entity.clear_target_entity()
+            target_entity.clear_target_entity()
             return attack_outcome, dice_roll, []
         else:
             damages = self.get_damages(weapon_slot)
             damage_rolls = target_entity.take_damage(damages, attack_outcome)
             # self.clear_target_entity()
-            # target_entity.clear_target_entity()
+            target_entity.clear_target_entity()
             return attack_outcome, dice_roll, [(damage, roll) for damage, roll in zip(damages, damage_rolls)]
 

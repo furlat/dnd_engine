@@ -82,7 +82,7 @@ class Condition(BaseObject):
 
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
-        """ Check if the duration is consistent """
+        """ ensure the the duration ownership is consistent """
         self.duration.set_owned_by_condition(self.uuid)
         return self
     
@@ -108,9 +108,24 @@ class Condition(BaseObject):
         """ Apply the condition full implementation is in the subclass """
         return True
     
+    def _remove(self) -> bool:
+        """ Remove the condition full implementation is in the subclass """
+        return True
+    
     def apply(self) -> bool:
         """ Apply the condition """
         if self.applied or self.duration.is_expired:
             return False
         self.applied = self._apply()
         return self.applied
+    
+    def progress(self) -> bool:
+        """ Progress the duration returns True if the condition is removed """
+        progress_result = self.duration.progress()
+        if progress_result:
+            self._remove()
+        return progress_result
+    
+    def long_rest(self) -> None:
+        """ Set the long rested flag to True """
+        self.duration.long_rest()
