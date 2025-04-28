@@ -115,7 +115,7 @@ class BaseBlock(BaseModel):
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
 
     class Config:
-        validate_assignment = True
+        validate_assignment = False
 
     def _set_values_and_blocks_source(self, block: 'BaseBlock') -> None:
         """
