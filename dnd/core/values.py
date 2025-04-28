@@ -2081,7 +2081,7 @@ class ModifiableValue(BaseValue):
             naming_callable = lambda names: "_".join(names)
         
         for other in others:
-            print(f"Validating others source id {other.source_entity_uuid} against self source {self.source_entity_uuid} for modifer  with name {self.name} and uuid {self.uuid} and type {type(self)} against {type(other)} with name {other.name} and uuid {other.uuid}")
+            # print(f"Validating others source id {other.source_entity_uuid} against self source {self.source_entity_uuid} for modifer  with name {self.name} and uuid {self.uuid} and type {type(self)} against {type(other)} with name {other.name} and uuid {other.uuid}")
             self.validate_source_id(other.source_entity_uuid)
 
         other_from_target_static_values = [other.from_target_static for other in others if other.from_target_static is not None]
