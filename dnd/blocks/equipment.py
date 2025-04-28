@@ -2,6 +2,7 @@ from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Cal
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
+from dnd.core.dice import Dice, DiceRoll, RollType, AttackOutcome
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
 from dnd.blocks.abilities import AbilityName, AbilityScores
 from enum import Enum
@@ -218,6 +219,8 @@ class Damage(BaseBlock):
         description="Type of damage dealt by the weapon"
     )
     
+    def get_dice(self, attack_outcome: AttackOutcome) -> Dice:
+        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome)
 
 class Weapon(BaseBlock):
     name: str = Field(default="Weapon", description="Name of the weapon")
@@ -308,11 +311,11 @@ class Weapon(BaseBlock):
 
         bonuses.append(equipment_block.damage_bonus)
         combined_bonuses= bonuses[0].combine_values(bonuses[1:])
-        return Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=self.damage_dice, dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
+        return Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.damage_dice, dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
     def get_extra_damages(self) -> List[Damage]:
         damages = []
         for i in range(len(self.extra_damage_dices)):
-            damages.append(Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
         return damages
     def get_all_weapon_damages(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> List[Damage]:
         damages = [self.get_main_damage(equipment_block, ability_block)]
@@ -486,7 +489,7 @@ class Equipment(BaseBlock):
             if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
                 ability_bonus = dexterity_bonus
         combined_bonus = unarmed_damage_bonus.combine_values([self.damage_bonus,self.melee_damage_bonus, ability_bonus])
-        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=self.unarmed_damage_dice, dice_numbers=self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=self.unarmed_damage_type)
+        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.unarmed_damage_dice, dice_numbers=self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=self.unarmed_damage_type)
         return unarmed_damage
     
     def _get_main_weapon_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> Optional[Damage]:
@@ -503,7 +506,7 @@ class Equipment(BaseBlock):
     def get_extra_attack_damage(self) -> List[Damage]:
         damages = []
         for dice, dice_numbers, bonus, damage_type in zip(self.extra_attack_damage_dices, self.extra_attack_damage_dices_numbers, self.extra_attack_damage_bonus, self.extra_attack_damage_type):
-            damages.append(Damage(source_entity_uuid=self.source_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
+            damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
         return damages
 
     def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> List[Damage]:
