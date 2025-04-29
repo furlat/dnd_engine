@@ -3,16 +3,19 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
-
+from typing import Literal as TypeLiteral
 from enum import Enum
 from random import randint
 from functools import cached_property
-from typing import Literal as TypeLiteral
-
 
 from dnd.blocks.base_block import BaseBlock
-from dnd.blocks.abilities import AbilityName
-    
+from dnd.core.requests import AbilityName
+
+SavingThrowName = TypeLiteral[
+    'strength_saving_throw', 'dexterity_saving_throw', 'constitution_saving_throw',
+    'intelligence_saving_throw', 'wisdom_saving_throw', 'charisma_saving_throw'
+]
+
 saving_throw_name_to_ability = {
     "strength_saving_throw": "strength",
     "dexterity_saving_throw": "dexterity",
@@ -23,10 +26,6 @@ saving_throw_name_to_ability = {
 }
 
 # Define saving throws as a proper string literal type
-SavingThrowName = TypeLiteral[
-    'strength_saving_throw', 'dexterity_saving_throw', 'constitution_saving_throw',
-    'intelligence_saving_throw', 'wisdom_saving_throw', 'charisma_saving_throw'
-]
 
 # Update the mapping dictionary
 SAVING_THROW_TO_ABILITY: Dict[SavingThrowName, AbilityName] = {
