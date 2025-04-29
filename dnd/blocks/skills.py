@@ -44,6 +44,9 @@ SkillName = TypeLiteral[
     'stealth', 'survival'
 ]
 
+skills_requiring_sight : List[SkillName] = ['perception','investigation', 'sleight_of_hand','stealth']
+skills_requiring_hearing : List[SkillName] = ['perception','insight']
+skills_requiring_speak : List[SkillName] = ['deception','intimidation','persuasion','performance']
 
 class SkillConfig(BaseModel):
     """

@@ -13,7 +13,7 @@ from dnd.core.modifiers import (
 
 from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue, ContextualValue
 
-from dnd.core.conditions import Condition
+from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 
@@ -63,7 +63,7 @@ class Entity(BaseBlock):
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     
-    active_conditions: Dict[str, Condition] = Field(default_factory=dict)
+    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict)
     condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
     contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
     active_conditions_by_source: Dict[str, List[str]] = Field(default_factory=dict)
@@ -132,28 +132,28 @@ class Entity(BaseBlock):
                 return True
         return False
     
-    def add_condition(self, condition: Condition, context: Optional[Dict[str, Any]] = None)  -> bool:
-        if condition.name is None:
-            raise ValueError("Condition name is not set")
-        if condition.target_entity_uuid is None:
-            condition.target_entity_uuid = self.uuid
+    def add_condition(self, BaseCondition: BaseCondition, context: Optional[Dict[str, Any]] = None)  -> bool:
+        if BaseCondition.name is None:
+            raise ValueError("BaseCondition name is not set")
+        if BaseCondition.target_entity_uuid is None:
+            BaseCondition.target_entity_uuid = self.uuid
         if context is not None:
-            condition.set_context(context)
+            BaseCondition.set_context(context)
         
-        if self.check_condition_immunity(condition.name):
+        if self.check_condition_immunity(BaseCondition.name):
             return False
 
-        condition_applied = condition.apply()
+        condition_applied = BaseCondition.apply()
         if condition_applied:
-            self.active_conditions[condition.name] = condition
+            self.active_conditions[BaseCondition.name] = BaseCondition
 
-            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (str(condition.source_entity_uuid), condition.name))
+            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (str(BaseCondition.source_entity_uuid), BaseCondition.name))
         return condition_applied
     
     def _remove_condition_from_dicts(self, condition_name: str) :
-        condition = self.active_conditions.pop(condition_name)
-        assert condition.source_entity_uuid is not None
-        self.active_conditions_by_source[str(condition.source_entity_uuid)].remove(condition_name)
+        BaseCondition = self.active_conditions.pop(condition_name)
+        assert BaseCondition.source_entity_uuid is not None
+        self.active_conditions_by_source[str(BaseCondition.source_entity_uuid)].remove(condition_name)
 
     def add_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
         self.condition_immunities.append((condition_name,immunity_name))
@@ -177,7 +177,7 @@ class Entity(BaseBlock):
     def add_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None, immunity_check: Optional[ContextualConditionImmunity]=None):
         if immunity_check is not None:
             if immunity_name is None:
-                raise ValueError("Immunity name is required when adding a contextual condition immunity")
+                raise ValueError("Immunity name is required when adding a contextual BaseCondition immunity")
             self.add_contextual_condition_immunity(condition_name,immunity_name,immunity_check)
         else:
             self.add_static_condition_immunity(condition_name,immunity_name)
@@ -201,8 +201,8 @@ class Entity(BaseBlock):
         return
 
     def advance_duration_condition(self,condition_name:str) -> bool:
-        condition = self.active_conditions[condition_name]
-        return condition.duration.progress()
+        BaseCondition = self.active_conditions[condition_name]
+        return BaseCondition.duration.progress()
     
     def advance_durations(self) -> List[str]:
         removed_conditions = []
@@ -253,7 +253,7 @@ class Entity(BaseBlock):
         dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
         strength_bonus = self.ability_scores.get_ability("strength").ability_score
         strength_modifier_bonus = self.ability_scores.get_ability("strength").modifier_bonus
-        attack_bonuses : List[ModifiableValue] = []
+        attack_bonuses : List[ModifiableValue] = [self.equipment.attack_bonus]
         if weapon is None or isinstance(weapon, Shield):
             weapon_bonus=self.equipment.unarmed_attack_bonus
             attack_bonuses.append(self.equipment.melee_attack_bonus)
@@ -347,6 +347,9 @@ class Entity(BaseBlock):
 
         self.clear_target_entity()
         target_entity.clear_target_entity()
+        for mod_source, mod_target in zip(skill_bonuses_source, skill_bonuses_target):
+            mod_source.reset_from_target()
+            mod_target.reset_from_target()
 
         return total_bonus_source, total_bonus_target
     
@@ -422,10 +425,15 @@ class Entity(BaseBlock):
         print(f"Attack bonus: {attack_bonus.normalized_score}")
         roll = attack_dice.roll
         print(f"Roll result: {roll.results}, Roll total: {roll.total} vs target ac: {target_ac} result: {roll.total >= target_ac}")
-        #first condition to check is auto miss which ovverides everything else
-        #second condition is to check if the roll is a auto hit with two cases (critical and normal based on the roll or critical status)
-        #third condition is to check if the roll is a hit with two cases (critical and normal based on the roll or critical status)
-        #fourth condition is to check if the roll is a roll miss
+        print(f"Roll auto hit status: {roll.auto_hit_status}")
+        print(f"Roll critical status: {roll.critical_status}")
+        print(f"Attack bonus advantage modifiers: {attack_bonus.advantage}")
+        print(f"Ac advantage modifiers: {ac.advantage}")
+        print(f"Roll Advantage status: {roll.advantage_status}")
+        #first BaseCondition to check is auto miss which ovverides everything else
+        #second BaseCondition is to check if the roll is a auto hit with two cases (critical and normal based on the roll or critical status)
+        #third BaseCondition is to check if the roll is a hit with two cases (critical and normal based on the roll or critical status)
+        #fourth BaseCondition is to check if the roll is a roll miss
         if roll.auto_hit_status == AutoHitStatus.AUTOMISS:
             return roll, AttackOutcome.MISS
         elif roll.auto_hit_status == AutoHitStatus.AUTOHIT:
@@ -447,7 +455,7 @@ class Entity(BaseBlock):
         each submethod is responsible for getting a copy of the target entity if needed for local computations
         1) the list of damages and respective dice rolls 
         2) the attack outcome"""
-        # self.set_target_entity(target_entity_uuid)
+        self.set_target_entity(target_entity_uuid)
         target_entity = self.get_target_entity(copy=False)
         assert isinstance(target_entity, Entity)
         target_entity.set_target_entity(self.uuid)
@@ -456,15 +464,19 @@ class Entity(BaseBlock):
         attack_bonus = self.attack_bonus(weapon_slot= weapon_slot)
         #get ac for target
         ac = target_entity.ac_bonus()
+        ac.set_from_target(attack_bonus)
+        attack_bonus.set_from_target(ac)
         dice_roll, attack_outcome = self.get_attack_outcome(attack_bonus, ac)
+        ac.reset_from_target()
+        attack_bonus.reset_from_target()
         if attack_outcome == AttackOutcome.MISS:
-            # self.clear_target_entity()
+            self.clear_target_entity()
             target_entity.clear_target_entity()
             return attack_outcome, dice_roll, []
         else:
             damages = self.get_damages(weapon_slot)
             damage_rolls = target_entity.take_damage(damages, attack_outcome)
-            # self.clear_target_entity()
+            self.clear_target_entity()
             target_entity.clear_target_entity()
             return attack_outcome, dice_roll, [(damage, roll) for damage, roll in zip(damages, damage_rolls)]
 
