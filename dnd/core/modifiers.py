@@ -52,13 +52,7 @@ class DamageType(str, Enum):
     THUNDER = "Thunder"
 saving_throws = Literal["strength_saving_throw", "dexterity_saving_throw", "constitution_saving_throw", "intelligence_saving_throw", "wisdom_saving_throw", "charisma_saving_throw"]
 
-class SavingThrowRequest(BaseModel):
-    """ A request to make a saving throw """
-    saving_throw: saving_throws
-    dc: int
-    source_entity_uuid: UUID
-    target_entity_uuid: Optional[UUID] = None
-    context: Optional[Dict[str,Any]] = None
+
 
 class BaseObject(BaseModel):
     """
