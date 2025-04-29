@@ -326,6 +326,11 @@ class Entity(BaseBlock):
         
         total_bonus_source = skill_bonuses_source[0].combine_values(list(skill_bonuses_source)[1:]).model_copy(deep=True)
         self.clear_target_entity()
+        if target_entity is not None:
+            target_entity.clear_target_entity() 
+            for mod_source, mod_target in zip(skill_bonuses_source, skill_bonuses_target):
+                mod_source.reset_from_target()
+                mod_target.reset_from_target()
 
         return total_bonus_source
 
@@ -412,11 +417,12 @@ class Entity(BaseBlock):
             dice = damage.get_dice(attack_outcome=attack_outcome)
             roll = dice.roll
             rolls.append(roll)
-            print(f"Roll result: {roll.results}, Roll total: {roll.total}")
+            print(f"Damage Roll result: {roll.results}, Roll total: {roll.total}")
             self.health.take_damage(roll.total, damage.damage_type, source_entity_uuid=damage.source_entity_uuid)
         print(f"Total Health after taking damage: {self.health.get_total_hit_points(con_modifier.normalized_score)}")
 
         return rolls
+    
     def get_attack_outcome(self, attack_bonus: ModifiableValue, ac: Union[int,ModifiableValue]) -> Tuple[DiceRoll,AttackOutcome]:
         """ Returns the dice roll and the attack outcome """
         attack_dice = Dice(count=1,value=20,bonus=attack_bonus, roll_type=RollType.ATTACK)
@@ -424,7 +430,7 @@ class Entity(BaseBlock):
         print(f"Target AC: {target_ac}")
         print(f"Attack bonus: {attack_bonus.normalized_score}")
         roll = attack_dice.roll
-        print(f"Roll result: {roll.results}, Roll total: {roll.total} vs target ac: {target_ac} result: {roll.total >= target_ac}")
+        print(f"Roll result: {roll.results}, Roll total: {roll.total} vs target ac: {target_ac} result: {roll.total >= target_ac} auto hit status: {roll.auto_hit_status} critical status: {roll.critical_status}")
         print(f"Roll auto hit status: {roll.auto_hit_status}")
         print(f"Roll critical status: {roll.critical_status}")
         print(f"Attack bonus advantage modifiers: {attack_bonus.advantage}")
@@ -441,6 +447,8 @@ class Entity(BaseBlock):
                 return roll, AttackOutcome.CRIT
             else:
                 return roll, AttackOutcome.HIT
+        elif roll.results == 1:
+            return roll, AttackOutcome.CRIT_MISS
         elif roll.total >= target_ac:
             if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
                 return roll, AttackOutcome.CRIT
@@ -458,23 +466,32 @@ class Entity(BaseBlock):
             new_dc = ModifiableValue.get(dc)
             if new_dc is None or new_dc.source_entity_uuid != self.uuid:
                 raise ValueError("DC is not coming from self oir not present")
+            new_dc = new_dc.model_copy(deep=True)
+            new_dc.set_target_entity(target_entity_uuid)
+            int_dc = new_dc.normalized_score
         else:
-            new_dc = dc
+            int_dc = dc
         self.clear_target_entity()
-        return SavingThrowRequest(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, ability_name=ability_name, dc=new_dc)
+        return SavingThrowRequest(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, ability_name=ability_name, dc=int_dc)
     
 
     def create_skill_check_request(self, target_entity_uuid: UUID, skill_name: SkillName, dc: Union[int,UUID]) -> SkillCheckRequest:
         """ request a skill check from the target entity """
         if isinstance(dc,UUID):
             self.set_target_entity(dc)
-            new_dc = ModifiableValue.get(dc)
-            if new_dc is None or new_dc.source_entity_uuid != self.uuid:
-                raise ValueError("DC is not coming from self oir not present")
+            dc_modifier = ModifiableValue.get(dc)
+            if dc_modifier is None or dc_modifier.source_entity_uuid != self.uuid:
+                raise ValueError(f"not present {dc_modifier is None} or not coming from self")
+            if target_entity_uuid != dc_modifier.target_entity_uuid:
+                new_dc = dc_modifier.model_copy(deep=True)
+                new_dc.set_target_entity(target_entity_uuid)
+            else:
+                new_dc = dc_modifier
+            int_dc = new_dc.normalized_score
         else:
-            new_dc = dc
+            int_dc = dc
         self.clear_target_entity()
-        return SkillCheckRequest(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, skill_name=skill_name, dc=new_dc)
+        return SkillCheckRequest(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, skill_name=skill_name, dc=int_dc)
     
     def saving_throw(self, request: SavingThrowRequest) -> Tuple[AttackOutcome,DiceRoll,bool]:
         """ make a saving throw"""
@@ -484,25 +501,25 @@ class Entity(BaseBlock):
         #second set the target to the requester source entity
         self.set_target_entity(request.source_entity_uuid)
         #second get the saving throw from the request
-        saving_throw = self.saving_throw_bonus(request.target_entity_uuid, request.ability_name)
+        saving_throw = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
         #third get the dc for the saving throw
         dc = request.get_dc()
         #create the dice
 
         roll,saving_throw_outcome = self.get_attack_outcome(saving_throw,dc)
         self.clear_target_entity()
-        return saving_throw_outcome, roll, True if saving_throw_outcome != AttackOutcome.MISS else False
+        return saving_throw_outcome, roll, True if saving_throw_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
     
     def skill_check(self, request: SkillCheckRequest) -> Tuple[AttackOutcome,DiceRoll,bool]:
         """ make a skill check """
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
         self.set_target_entity(request.source_entity_uuid)
-        skill_check = self.skill_bonus(request.target_entity_uuid, request.skill_name)
+        skill_check = self.skill_bonus(request.source_entity_uuid, request.skill_name)
         dc = request.get_dc()
         roll,skill_check_outcome = self.get_attack_outcome(skill_check,dc)
         self.clear_target_entity()
-        return skill_check_outcome, roll, True if skill_check_outcome != AttackOutcome.MISS else False
+        return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
 
 
     def attack(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[AttackOutcome,DiceRoll,List[Tuple[Damage, DiceRoll]]]:
@@ -525,7 +542,7 @@ class Entity(BaseBlock):
         dice_roll, attack_outcome = self.get_attack_outcome(attack_bonus, ac)
         ac.reset_from_target()
         attack_bonus.reset_from_target()
-        if attack_outcome == AttackOutcome.MISS:
+        if attack_outcome in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS]:
             self.clear_target_entity()
             target_entity.clear_target_entity()
             return attack_outcome, dice_roll, []

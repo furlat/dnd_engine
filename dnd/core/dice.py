@@ -10,6 +10,7 @@ class AttackOutcome(str, Enum):
     HIT = "Hit"
     MISS = "Miss"
     CRIT = "Crit"
+    CRIT_MISS = "Crit Miss"
 
 class RollType(str, Enum):
     DAMAGE = "Damage"
