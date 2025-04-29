@@ -363,6 +363,7 @@ class BaseBlock(BaseModel):
         """
         self.clear_target_entity()
         self.clear_context()
+        
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
