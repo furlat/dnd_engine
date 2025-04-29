@@ -2062,6 +2062,13 @@ class ModifiableValue(BaseValue):
         """
         self.set_from_target_contextual(target_value.to_target_contextual)
         self.set_from_target_static(target_value.to_target_static)
+
+    def reset_from_target(self) -> None:
+        """
+        Reset the from_target components to None.
+        """
+        self.from_target_contextual = None
+        self.from_target_static = None
     
     def combine_values(self, others: List['ModifiableValue'], naming_callable: Optional[naming_callable] = None) -> 'ModifiableValue':
         """

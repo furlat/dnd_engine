@@ -1,9 +1,10 @@
 from uuid import UUID, uuid4
 from pydantic import Field, computed_field
-from typing import Dict, Any, Optional, Self, Union
+from typing import Dict, Any, Optional, Self, Union, List, Tuple
 from pydantic import BaseModel, model_validator
 from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition, SavingThrowRequest, BaseObject
+from dnd.core.values import ModifiableValue
 
 class DurationType(str,Enum):
     ROUNDS = "rounds"
@@ -12,13 +13,13 @@ class DurationType(str,Enum):
     ON_CONDITION = "on_condition"
 
 class Duration(BaseObject):
-    duration : Optional[Union[int,ContextAwareCondition]]
-    duration_type: DurationType = Field(default=DurationType.ROUNDS)
-    source_entity_uuid: UUID
-    target_entity_uuid: UUID
-    context: Optional[Dict[str,Any]] = None
-    long_rested: bool = Field(default=False)
-    owned_by_condition: Optional[UUID] = None
+    duration : Optional[Union[int,ContextAwareCondition]] = Field(default=None,description="The duration of the condition")
+    duration_type: DurationType = Field(default=DurationType.PERMANENT,description="The type of duration")
+    source_entity_uuid: UUID = Field(default_factory=uuid4,description="The UUID of the source entity")
+    target_entity_uuid: UUID = Field(default_factory=uuid4,description="The UUID of the target entity")
+    context: Optional[Dict[str,Any]] = Field(default=None,description="The context of the condition")
+    long_rested: bool = Field(default=False,description="Whether the condition has been long rested")
+    owned_by_condition: Optional[UUID] = Field(default=None,description="The UUID of the condition that owns this duration")
     
 
     def set_owned_by_condition(self,condition_uuid: UUID) -> None:
@@ -73,12 +74,13 @@ class Duration(BaseObject):
         self.long_rested = True
         
 
-class Condition(BaseObject):
+class BaseCondition(BaseObject):
     """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""
-    duration: Duration
+    duration: Duration = Field(default_factory=Duration)
     application_saving_throw: Optional[SavingThrowRequest] = None
     removal_saving_throw: Optional[SavingThrowRequest] = None
     applied:bool = Field(default=False)
+    modifers_uuids: Dict[UUID,List[UUID]] = Field(default_factory=dict,description="keys are ModifiableValues UUID and values are list of modifiers UUIDs applied to those blocks")
 
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
@@ -104,20 +106,44 @@ class Condition(BaseObject):
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
 
-    def _apply(self) -> bool:
-        """ Apply the condition full implementation is in the subclass """
-        return True
+    def _apply(self) -> List[Tuple[UUID,UUID]]:
+        """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass """
+        return []
     
     def _remove(self) -> bool:
-        """ Remove the condition full implementation is in the subclass """
+        """Custom extra Remove the condition full implementation is in the subclass if needed, should try to use the registries if possible"""
         return True
     
     def apply(self) -> bool:
         """ Apply the condition """
         if self.applied or self.duration.is_expired:
             return False
-        self.applied = self._apply()
+        modifers_uuids = self._apply()
+        if len(modifers_uuids) == 0:
+            return False
+        for block_uuid, modifiers_uuids in modifers_uuids:
+            if block_uuid not in self.modifers_uuids:
+                self.modifers_uuids[block_uuid] = []
+            self.modifers_uuids[block_uuid].append(modifiers_uuids)
+        self.applied = True
         return self.applied
+    
+    def remove(self) -> bool:
+        """ Remove the condition """
+        if not self.applied:
+            return False
+        #first apply the remove method
+        remove_result = self._remove()
+        if not remove_result:
+            return False
+        for value_uuid, modifiers_uuids in self.modifers_uuids.items():
+            value = ModifiableValue.get(value_uuid)
+            if value is None:
+                raise ValueError(f"Trying to remove value with UUID {value_uuid} not found")
+            for modifier_uuid in modifiers_uuids:
+                value.remove_modifier(modifier_uuid)
+        self.applied = False
+        return True
     
     def progress(self) -> bool:
         """ Progress the duration returns True if the condition is removed """
