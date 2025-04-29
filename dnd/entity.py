@@ -489,9 +489,9 @@ class Entity(BaseBlock):
         dc = request.get_dc()
         #create the dice
 
-        roll,outcome = self.get_attack_outcome(saving_throw,dc)
+        roll,saving_throw_outcome = self.get_attack_outcome(saving_throw,dc)
         self.clear_target_entity()
-        return outcome, roll, True if outcome != AttackOutcome.MISS else False
+        return saving_throw_outcome, roll, True if saving_throw_outcome != AttackOutcome.MISS else False
     
     def skill_check(self, request: SkillCheckRequest) -> Tuple[AttackOutcome,DiceRoll,bool]:
         """ make a skill check """
@@ -500,9 +500,9 @@ class Entity(BaseBlock):
         self.set_target_entity(request.source_entity_uuid)
         skill_check = self.skill_bonus(request.target_entity_uuid, request.skill_name)
         dc = request.get_dc()
-        roll,outcome = self.get_attack_outcome(skill_check,dc)
+        roll,skill_check_outcome = self.get_attack_outcome(skill_check,dc)
         self.clear_target_entity()
-        return outcome, roll, True if outcome != AttackOutcome.MISS else False
+        return skill_check_outcome, roll, True if skill_check_outcome != AttackOutcome.MISS else False
 
 
     def attack(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[AttackOutcome,DiceRoll,List[Tuple[Damage, DiceRoll]]]:
