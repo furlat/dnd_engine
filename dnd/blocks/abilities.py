@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
-
+from dnd.core.requests import AbilityName
 from enum import Enum
 from random import randint
 from functools import cached_property
@@ -18,10 +18,7 @@ def ability_score_normalizer(score: int) -> int:
 abilities = Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']
 
 # Define abilities as a proper string literal type
-AbilityName = TypeLiteral[
-    'strength', 'dexterity', 'constitution', 
-    'intelligence', 'wisdom', 'charisma'
-]
+
 
 
 class AbilityConfig(BaseModel):

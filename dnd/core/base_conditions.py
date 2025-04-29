@@ -1,10 +1,13 @@
 from uuid import UUID, uuid4
 from pydantic import Field, computed_field
 from typing import Dict, Any, Optional, Self, Union, List, Tuple
+from typing import Literal as TypeLiteral
+
 from pydantic import BaseModel, model_validator
 from enum import Enum
-from dnd.core.modifiers import ContextAwareCondition, SavingThrowRequest, BaseObject
+from dnd.core.modifiers import ContextAwareCondition, BaseObject
 from dnd.core.values import ModifiableValue
+from dnd.core.requests import SavingThrowRequest
 
 class DurationType(str,Enum):
     ROUNDS = "rounds"
@@ -72,7 +75,8 @@ class Duration(BaseObject):
     def long_rest(self) -> None:
         """ Set the long rested flag to True """
         self.long_rested = True
-        
+
+
 
 class BaseCondition(BaseObject):
     """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""

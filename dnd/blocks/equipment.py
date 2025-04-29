@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field, model_validator, computed_field,field_val
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.dice import Dice, DiceRoll, RollType, AttackOutcome
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
-from dnd.blocks.abilities import AbilityName, AbilityScores
+from dnd.blocks.abilities import  AbilityScores
+from dnd.core.requests import AbilityName
 from enum import Enum
 from random import randint
 from functools import cached_property

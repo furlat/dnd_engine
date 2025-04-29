@@ -11,7 +11,7 @@ from typing import Literal as TypeLiteral
 
 
 from dnd.blocks.base_block import BaseBlock
-from dnd.blocks.abilities import AbilityName
+from dnd.core.requests import AbilityName, SkillName
 
 # Update the SKILL_TO_ABILITY mapping
 SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
@@ -36,13 +36,7 @@ SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
 }
 
 # Define skills as a proper string literal type
-SkillName = TypeLiteral[
-    'acrobatics', 'animal_handling', 'arcana', 'athletics', 
-    'deception', 'history', 'insight', 'intimidation', 
-    'investigation', 'medicine', 'nature', 'perception', 
-    'performance', 'persuasion', 'religion', 'sleight_of_hand', 
-    'stealth', 'survival'
-]
+
 
 skills_requiring_sight : List[SkillName] = ['perception','investigation', 'sleight_of_hand','stealth']
 skills_requiring_hearing : List[SkillName] = ['perception','insight']
