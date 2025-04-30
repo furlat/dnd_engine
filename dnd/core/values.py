@@ -1003,8 +1003,9 @@ class ContextualValue(BaseValue):
         """
         if not self.min_constraints:
             return None
-        return min(constraint.callable(self.source_entity_uuid, self.target_entity_uuid, self.context).value 
-                   for constraint in self.min_constraints.values())
+        constraints = [constraint.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)  for constraint in self.min_constraints.values() ]
+        values = [constraint.value for constraint in constraints if constraint is not None]
+        return min(values) if len(values) > 0 else None
     
     @computed_field
     @property
@@ -1017,8 +1018,10 @@ class ContextualValue(BaseValue):
         """
         if not self.max_constraints:
             return None
-        return max(constraint.callable(self.source_entity_uuid, self.target_entity_uuid, self.context).value 
-                   for constraint in self.max_constraints.values())
+        constraints = [constraint.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
+                        for constraint in self.max_constraints.values() ]
+        values = [constraint.value for constraint in constraints if constraint is not None]
+        return max(values) if len(values) > 0 else None
 
     def _score(self,normalized=False) -> int:
         """
@@ -1078,8 +1081,9 @@ class ContextualValue(BaseValue):
         Returns:
             int: The total advantage sum.
         """
-        return sum(modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context).numerical_value 
-                   for modifier in self.advantage_modifiers.values())
+        modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) for modifier in self.advantage_modifiers.values()]
+        values = [modifier.numerical_value for modifier in modifiers if modifier is not None]
+        return sum(values) if len(values) > 0 else 0
 
     @computed_field
     @property
@@ -1108,9 +1112,10 @@ class ContextualValue(BaseValue):
         """
         critical_modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
                               for modifier in self.critical_modifiers.values()]
-        if CriticalStatus.NOCRIT in (mod.value for mod in critical_modifiers):
+        values = [modifier.value for modifier in critical_modifiers if modifier is not None]
+        if CriticalStatus.NOCRIT in values:
             return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in (mod.value for mod in critical_modifiers):
+        elif CriticalStatus.AUTOCRIT in values:
             return CriticalStatus.AUTOCRIT
         else:
             return CriticalStatus.NONE
@@ -1126,9 +1131,10 @@ class ContextualValue(BaseValue):
         """
         auto_hit_modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
                               for modifier in self.auto_hit_modifiers.values()]
-        if AutoHitStatus.AUTOMISS in (mod.value for mod in auto_hit_modifiers):
+        values = [modifier.value for modifier in auto_hit_modifiers if modifier is not None]
+        if AutoHitStatus.AUTOMISS in values:
             return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in (mod.value for mod in auto_hit_modifiers):
+        elif AutoHitStatus.AUTOHIT in values:
             return AutoHitStatus.AUTOHIT
         else:
             return AutoHitStatus.NONE
@@ -1146,11 +1152,11 @@ class ContextualValue(BaseValue):
             return Size.MEDIUM  # Default size if no modifiers
         size_modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
                           for modifier in self.size_modifiers.values()]
-        sizes = [modifier.value for modifier in size_modifiers]
+        sizes = [modifier.value for modifier in size_modifiers if modifier is not None]
         if self.largest_size_priority:
-            return max(sizes, key=lambda s: list(Size).index(s))
+            return max(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
         else:
-            return min(sizes, key=lambda s: list(Size).index(s))
+            return min(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
         
 
     @computed_field
@@ -1168,7 +1174,8 @@ class ContextualValue(BaseValue):
         type_counts = {}
         for modifier in self.damage_type_modifiers.values():
             result = modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
-            type_counts[result.value] = type_counts.get(result.value, 0) + 1
+            if result is not None:
+                type_counts[result.value] = type_counts.get(result.value, 0) + 1
         
         max_count = max(type_counts.values())
         most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
@@ -1201,7 +1208,8 @@ class ContextualValue(BaseValue):
         resistance_sum = {damage_type: 0 for damage_type in DamageType}
         for modifier in self.resistance_modifiers.values():
             result = modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
-            resistance_sum[result.damage_type] += result.numerical_value
+            if result is not None:
+                resistance_sum[result.damage_type] += result.numerical_value
         return resistance_sum
 
     @computed_field
