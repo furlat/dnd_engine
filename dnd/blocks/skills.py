@@ -42,6 +42,8 @@ skills_requiring_sight : List[SkillName] = ['perception','investigation', 'sleig
 skills_requiring_hearing : List[SkillName] = ['perception','insight']
 skills_requiring_speak : List[SkillName] = ['deception','intimidation','persuasion','performance']
 
+skills_social : List[SkillName] = ['deception','intimidation','performance','persuasion']
+all_skills : List[SkillName] = list(SKILL_TO_ABILITY.keys())
 class SkillConfig(BaseModel):
     """
     Configuration for a skill in the D&D 5e game system.

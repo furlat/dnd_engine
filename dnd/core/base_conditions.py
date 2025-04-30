@@ -1,7 +1,6 @@
 from uuid import UUID, uuid4
 from pydantic import Field, computed_field
 from typing import Dict, Any, Optional, Self, Union, List, Tuple
-from typing import Literal as TypeLiteral
 
 from pydantic import BaseModel, model_validator
 from enum import Enum
@@ -55,7 +54,10 @@ class Duration(BaseObject):
             return self.duration >= 0
         elif self.duration_type == DurationType.ON_CONDITION:
             assert isinstance(self.duration,ContextAwareCondition)
-            return self.duration(self.source_entity_uuid,self.target_entity_uuid,self.context)
+            duration = self.duration(self.source_entity_uuid,self.target_entity_uuid,self.context)
+            if duration is None:
+                return False
+            return duration
         elif self.duration_type == DurationType.UNTIL_LONG_REST:
             return self.long_rested
         else:

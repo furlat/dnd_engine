@@ -18,7 +18,7 @@ from typing import Optional
 #realistic scores for a level 4 fighter character with a past in the circus and spiked claws for hands
 # setting up configs
 # Ability scores
-def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0) -> Entity:
+def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="Ganger") -> Entity:
     strength_config = AbilityConfig(ability_score=15, ability_scores_modifiers=[("level 4 talent",1)], modifier_bonus=1, modifier_bonus_modifiers=[])
     dexterity_config = AbilityConfig(ability_score=12)
     constitution_config = AbilityConfig(ability_score=15, ability_scores_modifiers=[("level 4 talent",1)])
@@ -81,7 +81,7 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0) -> Entity:
         )
     
     description = "A level 4 fighter character with a past in the circus and spiked claws for hands"
-    entity = Entity.create(name="Gang Member", source_entity_uuid=source_id, description=description, config=entity_config)
+    entity = Entity.create(name=name, source_entity_uuid=source_id, description=description, config=entity_config)
     
     #here we can equip some gear later
 

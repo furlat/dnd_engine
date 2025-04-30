@@ -6,7 +6,7 @@ from enum import Enum
 
 T_co = TypeVar('T_co', covariant=True)
 
-ContextAwareCallable = Callable[[UUID, Optional[UUID], Optional[Dict[str, Any]]], T_co]
+ContextAwareCallable = Callable[[UUID, Optional[UUID], Optional[Dict[str, Any]]], Optional[T_co]]
 
 class AdvantageStatus(str, Enum):
     NONE = "None"
