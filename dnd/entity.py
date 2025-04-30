@@ -24,6 +24,7 @@ from dnd.blocks.health import (HealthConfig,Health)
 from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield, Damage)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName)
+from dnd.blocks.sensory import Senses
 from dnd.core.requests import AbilityName, SkillName, SavingThrowRequest, SkillCheckRequest
 
 
@@ -48,7 +49,7 @@ class EntityConfig(BaseModel):
     action_economy: ActionEconomyConfig = Field(default_factory=lambda: ActionEconomyConfig,description="Action economy for the entity")
     proficiency_bonus: int = Field(default=0,description="Proficiency bonus for the entity")
     proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
-
+    position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
 
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
@@ -62,7 +63,8 @@ class Entity(BaseBlock):
     equipment: Equipment = Field(default_factory=lambda: Equipment.create(source_entity_uuid=uuid4()))
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
-    
+    senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
+
     active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict)
     condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
     contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
@@ -93,7 +95,7 @@ class Entity(BaseBlock):
             saving_throws = SavingThrowSet.create(source_entity_uuid=source_entity_uuid,config=config.saving_throws)
             health = Health.create(source_entity_uuid=source_entity_uuid,config=config.health)
             equipment = Equipment.create(source_entity_uuid=source_entity_uuid,config=config.equipment)
-            # speed = Speed.create(source_entity_uuid=source_entity_uuid,config=config.speed)
+            senses = Senses.create(source_entity_uuid=source_entity_uuid,position=config.position)
             action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid,config=config.action_economy)
             proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.proficiency_bonus)
             for modifier in config.proficiency_bonus_modifiers:
@@ -108,7 +110,7 @@ class Entity(BaseBlock):
                 saving_throws=saving_throws,
                 health=health,
                 equipment=equipment,
-                # speed=speed,
+                senses=senses,
                 action_economy=action_economy,
                 proficiency_bonus=proficiency_bonus
             )
