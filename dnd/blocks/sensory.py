@@ -8,10 +8,15 @@ from enum import Enum
 from random import randint
 from functools import cached_property
 from typing import Literal as TypeLiteral
-
+import math
 
 from dnd.blocks.base_block import BaseBlock
 
+class SensesType(str, Enum):
+    BLINDSIGHT = "Blindsight"
+    DARKVISION = "Darkvision"
+    TREMORSENSE = "Tremorsense"
+    TRUESIGHT = "Truesight"
 
 class Senses(BaseBlock):
     """ A block that contains the senses of a creature"""
@@ -20,7 +25,16 @@ class Senses(BaseBlock):
     visible: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     walkable: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     paths: Dict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=dict)
+    extra_senses: List[SensesType] = Field(default_factory=list)
 
+    def get_distance(self,position: Tuple[int,int]) -> int:
+        """ get the euclidean distance between the position and the position of the senses"""
+        return int(math.sqrt((self.position[0] - position[0])**2 + (self.position[1] - position[1])**2))
+    
+    def get_feet_distance(self,position: Tuple[int,int]) -> int:
+        """ get the euclidean distance in feet between the position and the position of the senses and then multiply by 5 to obtain the distance in feet"""
+        return self.get_distance(position) * 5
+    
     def get_path_to_entity(self,entity_uuid: UUID, max_path_length: Optional[int] = None) -> List[Tuple[int,int]]:
         """ Get the path to the entity"""
         if entity_uuid not in self.entities:
