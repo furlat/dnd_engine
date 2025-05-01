@@ -5,6 +5,7 @@ from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.dice import Dice, DiceRoll, RollType, AttackOutcome
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
 from dnd.blocks.abilities import  AbilityScores
+from dnd.core.events import Damage, Range, WeaponSlot
 from dnd.core.requests import AbilityName
 from enum import Enum
 from random import randint
@@ -19,9 +20,7 @@ class RingSlot(str, Enum):
     LEFT = "Left Ring"
     RIGHT = "Right Ring"
 
-class WeaponSlot(str, Enum):
-    MAIN_HAND = "Main Hand"
-    OFF_HAND = "Off Hand"
+
 
 class UnarmoredAc(str, Enum):
     BARBARIAN = "Barbarian"
@@ -57,28 +56,7 @@ class BodyPart(str, Enum):
     RING = "Ring"
     CLOAK = "Cloak"
 
-class RangeType(str, Enum):
-    REACH = "Reach"
-    RANGE = "Range"
 
-class Range(BaseModel):
-    type: RangeType = Field(
-        description="The type of range (Reach or Range)"
-    )
-    normal: int = Field(
-        description="Normal range in feet"
-    )
-    long: Optional[int] = Field(
-        default=None,
-        description="Long range in feet, only applicable for ranged weapons"
-    )
-
-    def __str__(self):
-        if self.type == RangeType.REACH:
-            return f"{self.normal} ft."
-        elif self.type == RangeType.RANGE:
-            return f"{self.normal}/{self.long} ft." if self.long else f"{self.normal} ft."
-        
 class Armor(BaseBlock):
     name: str = Field(default="Armor")
     description: Optional[str] = Field(
@@ -204,24 +182,6 @@ class Shield(BaseBlock):
         description="Armor Class bonus provided by the shield"
     )
 
-class Damage(BaseBlock):
-    name: str = Field(default="Damage", description="Name of the damage")
-    damage_dice: Literal[4,6,8,10,12,20] = Field(
-        description="Number of sides on the damage dice (e.g., 6 for d6)"
-    )
-    dice_numbers: int = Field(
-        description="Number of dice to roll for damage (e.g., 2 for 2d6)"
-    )
-    damage_bonus: Optional[ModifiableValue] = Field(
-        default=None,
-        description="Fixed bonus to damage rolls"
-    )
-    damage_type: DamageType = Field(
-        description="Type of damage dealt by the weapon"
-    )
-    
-    def get_dice(self, attack_outcome: AttackOutcome) -> Dice:
-        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome)
 
 class Weapon(BaseBlock):
     name: str = Field(default="Weapon", description="Name of the weapon")
