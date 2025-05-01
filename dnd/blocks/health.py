@@ -348,7 +348,7 @@ class Health(BaseBlock):
         else:
             return 1
     
-    def take_damage(self, damage: int, damage_type: DamageType, source_entity_uuid: UUID) -> None:
+    def take_damage(self, damage: int, damage_type: DamageType, source_entity_uuid: UUID) -> int:
         """
         Apply damage to the entity, considering resistances and temporary hit points.
 
@@ -374,6 +374,9 @@ class Health(BaseBlock):
         self.remove_temporary_hit_points(damage_to_temporaty_hp, source_entity_uuid)
         if residual_damage > 0:
             self.add_damage(residual_damage)
+            return residual_damage
+        else:
+            return 0
     
     def heal(self, heal: int) -> None:
         """
