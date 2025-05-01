@@ -70,6 +70,27 @@ class ActionEconomy(BaseBlock):
         )
     )
 
+    def consume(self, cost_type: Literal["actions", "bonus_actions", "reactions", "movement"], amount: int,cost_name: Optional[str] = None):
+        cost_modifier = NumericalModifier.create(source_entity_uuid=self.source_entity_uuid, name=cost_name+"_cost" if cost_name is not None else "cost", value=-amount)
+        if cost_type == "actions":
+            if self.actions.self_static.normalized_score - amount < 0:
+                raise ValueError(f"Not enough actions to consume {amount} {cost_name if cost_name is not None else 'cost'}")
+            self.actions.self_static.add_value_modifier(cost_modifier)
+        elif cost_type == "bonus_actions":
+            if self.bonus_actions.self_static.normalized_score - amount < 0:
+                raise ValueError(f"Not enough bonus actions to consume {amount} {cost_name if cost_name is not None else 'cost'}")
+            self.bonus_actions.self_static.add_value_modifier(cost_modifier)
+        elif cost_type == "reactions":
+            if self.reactions.self_static.normalized_score - amount < 0:
+                raise ValueError(f"Not enough reactions to consume {amount} {cost_name if cost_name is not None else 'cost'}")
+            self.reactions.self_static.add_value_modifier(cost_modifier)
+        elif cost_type == "movement":
+            if self.movement.self_static.normalized_score - amount < 0:
+                raise ValueError(f"Not enough movement to consume {amount} {cost_name if cost_name is not None else 'cost'}")
+            self.movement.self_static.add_value_modifier(cost_modifier)
+
+
+
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "ActionEconomy", source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
