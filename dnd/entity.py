@@ -21,12 +21,12 @@ from dnd.blocks.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health)
-from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield, Damage)
+from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponProperty, Range, Shield, Damage)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName)
 from dnd.blocks.sensory import Senses
 from dnd.core.requests import AbilityName, SkillName, SavingThrowRequest, SkillCheckRequest
-
+from dnd.core.events import RangeType
 
 def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
     key, value = kv
