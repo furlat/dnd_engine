@@ -15,7 +15,7 @@ from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, Sta
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-
+from dnd.core.events import EventType, EventPhase, Event, AttackEvent
 
 from dnd.blocks.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
@@ -71,6 +71,7 @@ class Entity(BaseBlock):
     active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=dict)
 
     
+
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Entity",description: Optional[str] = None,config: Optional[EntityConfig] = None) -> 'Entity':
         """
@@ -438,40 +439,90 @@ class Entity(BaseBlock):
 
         return rolls
     
+    def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Range:
+        """
+        Get the range of a weapon without calculating attack bonuses.
+        
+        Args:
+            weapon_slot: Which weapon slot to check
+            
+        Returns:
+            Range: The range of the weapon
+        """
+        if weapon_slot == WeaponSlot.MAIN_HAND:
+            weapon = self.equipment.weapon_main_hand
+        elif weapon_slot == WeaponSlot.OFF_HAND:
+            weapon = self.equipment.weapon_off_hand
+            
+        if weapon is None or isinstance(weapon, Shield):
+            return Range(type=RangeType.REACH, normal=5)
+        else:
+            return weapon.range
+            
+    def roll_attack(self, attack_bonus: ModifiableValue) -> DiceRoll:
+        """
+        Roll attack dice based on attack bonus.
+        
+        Args:
+            attack_bonus: The total attack bonus to use
+            
+        Returns:
+            DiceRoll: The result of the attack roll
+        """
+        attack_dice = Dice(count=1, value=20, bonus=attack_bonus, roll_type=RollType.ATTACK)
+        return attack_dice.roll
+        
+    def determine_attack_outcome(self, roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
+        """
+        Determine attack outcome based on roll and AC.
+        
+        Args:
+            roll: The dice roll result
+            ac: The armor class to check against
+            
+        Returns:
+            AttackOutcome: The outcome of the attack
+        """
+        target_ac = ac.normalized_score if isinstance(ac, ModifiableValue) else ac
+        
+        # First check auto miss which overrides everything else
+        if roll.auto_hit_status == AutoHitStatus.AUTOMISS:
+            return AttackOutcome.MISS
+        # Second check if the roll is an auto hit (with critical check)
+        elif roll.auto_hit_status == AutoHitStatus.AUTOHIT:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+                return AttackOutcome.CRIT
+            else:
+                return AttackOutcome.HIT
+        # Check for natural 1 (critical miss)
+        elif roll.results == 1:
+            return AttackOutcome.CRIT_MISS
+        # Check if roll meets or exceeds AC (with critical check)
+        elif roll.total >= target_ac:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+                return AttackOutcome.CRIT
+            else:
+                return AttackOutcome.HIT
+        # Finally, it's a miss
+        else:
+            return AttackOutcome.MISS
+    
     def get_attack_outcome(self, attack_bonus: ModifiableValue, ac: Union[int,ModifiableValue]) -> Tuple[DiceRoll,AttackOutcome]:
         """ Returns the dice roll and the attack outcome """
-        attack_dice = Dice(count=1,value=20,bonus=attack_bonus, roll_type=RollType.ATTACK)
+        roll = self.roll_attack(attack_bonus)
         target_ac = ac.normalized_score if isinstance(ac,ModifiableValue) else ac
+        
         print(f"Target AC: {target_ac}")
         print(f"Attack bonus: {attack_bonus.normalized_score}")
-        roll = attack_dice.roll
         print(f"Roll result: {roll.results}, Roll total: {roll.total} vs target ac: {target_ac} result: {roll.total >= target_ac} auto hit status: {roll.auto_hit_status} critical status: {roll.critical_status}")
         print(f"Roll auto hit status: {roll.auto_hit_status}")
         print(f"Roll critical status: {roll.critical_status}")
         print(f"Attack bonus advantage modifiers: {attack_bonus.advantage}")
         print(f"Ac advantage modifiers: {ac.advantage}" if isinstance(ac,ModifiableValue) else "No advantage modifiers")
         print(f"Roll Advantage status: {roll.advantage_status}")
-        #first BaseCondition to check is auto miss which ovverides everything else
-        #second BaseCondition is to check if the roll is a auto hit with two cases (critical and normal based on the roll or critical status)
-        #third BaseCondition is to check if the roll is a hit with two cases (critical and normal based on the roll or critical status)
-        #fourth BaseCondition is to check if the roll is a roll miss
-        if roll.auto_hit_status == AutoHitStatus.AUTOMISS:
-            return roll, AttackOutcome.MISS
-        elif roll.auto_hit_status == AutoHitStatus.AUTOHIT:
-            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
-                return roll, AttackOutcome.CRIT
-            else:
-                return roll, AttackOutcome.HIT
-        elif roll.results == 1:
-            return roll, AttackOutcome.CRIT_MISS
-        elif roll.total >= target_ac:
-            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
-                return roll, AttackOutcome.CRIT
-            else:
-                return roll, AttackOutcome.HIT
-        else:
-            return roll, AttackOutcome.MISS
         
+        outcome = self.determine_attack_outcome(roll, ac)
+        return roll, outcome
     
     def create_saving_throw_request(self, target_entity_uuid: UUID, ability_name: AbilityName, dc: Union[int,UUID]) -> SavingThrowRequest:
         """ request a saving throw from the target entity """
@@ -568,3 +619,100 @@ class Entity(BaseBlock):
             target_entity.clear_target_entity()
             return attack_outcome, dice_roll, [(damage, roll) for damage, roll in zip(damages, damage_rolls)]
 
+    def attack_event_based(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Optional[AttackEvent]:
+        """
+        Event-based implementation of an attack.
+        This method creates an attack event and processes it through the event system,
+        allowing reactions to modify or cancel the attack at various stages.
+        
+        Returns:
+            Optional[AttackEvent]: The completed attack event, or None if the attack was canceled
+        """
+        self.set_target_entity(target_entity_uuid)
+        target_entity = self.get_target_entity(copy=False)
+        if not target_entity:
+            return None
+        target_entity.set_target_entity(self.uuid)
+        
+        # Get weapon range using the helper method
+        weapon_range = self.get_weapon_range(weapon_slot)
+        
+        # Create initial attack event
+        attack_event = AttackEvent(
+            name=f"{self.name}'s Attack",
+            source_entity_uuid=self.uuid,
+            target_entity_uuid=target_entity_uuid,
+            event_type=EventType.ATTACK,
+            phase=EventPhase.DECLARATION,
+            weapon_slot=weapon_slot,
+            range=weapon_range
+        )
+        
+        # If attack was canceled in DECLARATION, return early
+        if attack_event.canceled:
+            return attack_event
+        
+        # Move to EXECUTION phase
+        # Calculate attack bonus and target's AC
+        attack_bonus = self.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid)
+        ac = target_entity.ac_bonus(self.uuid)
+        ac.set_from_target(attack_bonus)
+        attack_bonus.set_from_target(ac)
+        # Transition to EXECUTION with attack values
+        attack_event = attack_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message="Rolling attack",
+            attack_bonus=attack_bonus,
+            ac=ac
+        )
+        
+        # If attack was canceled during phase transition, return early
+        if attack_event.canceled:
+            return attack_event
+        
+        # Roll attack and post results using the helper methods
+        dice_roll = self.roll_attack(attack_bonus)
+        attack_outcome = self.determine_attack_outcome(dice_roll, ac)
+        
+        attack_event = attack_event.post(
+            dice_roll=dice_roll,
+            attack_outcome=attack_outcome
+        )
+        ac.reset_from_target()
+        attack_bonus.reset_from_target()
+        
+        # Consume action (only if we got this far)
+        self.action_economy.consume(cost_type="actions", amount=1, cost_name="Attack")
+        
+        # If attack was canceled or missed, skip to COMPLETION
+        if attack_event.canceled or attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+            return attack_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Attack {'canceled' if attack_event.canceled else 'missed'}"
+            )
+        
+        # Move to EFFECT phase for damage
+        damages = self.get_damages(weapon_slot, target_entity_uuid)
+        attack_event = attack_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message="Dealing damage",
+            damages=damages
+        )
+        
+        # If attack was canceled during phase transition, return early
+        if attack_event.canceled:
+            return attack_event
+        
+        # Apply damage if there is an attack outcome
+        if attack_event.attack_outcome is not None:
+            damage_rolls = target_entity.take_damage(damages, attack_event.attack_outcome)
+            attack_event = attack_event.post(damage_rolls=damage_rolls)
+        
+        self.clear_target_entity()
+        target_entity.clear_target_entity()
+        
+        # Move to COMPLETION phase
+        return attack_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message="Attack completed"
+        )
