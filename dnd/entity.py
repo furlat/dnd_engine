@@ -28,7 +28,7 @@ from dnd.blocks.sensory import Senses
 from dnd.core.requests import AbilityName, SkillName, SavingThrowRequest, SkillCheckRequest
 
 
-def update_or_concat_to_dict(d: Dict[str, list], kv: Tuple[str, Union[list,Any]]) -> Dict[str, list]:
+def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
     key, value = kv
     if not isinstance(value, list):
         value = [value]
@@ -68,7 +68,7 @@ class Entity(BaseBlock):
     active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict)
     condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
     contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
-    active_conditions_by_source: Dict[str, List[str]] = Field(default_factory=dict)
+    active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=dict)
 
     
     @classmethod
@@ -134,7 +134,7 @@ class Entity(BaseBlock):
                 return True
         return False
     
-    def add_condition(self, BaseCondition: BaseCondition, context: Optional[Dict[str, Any]] = None)  -> bool:
+    def add_condition(self, BaseCondition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True)  -> bool:
         if BaseCondition.name is None:
             raise ValueError("BaseCondition name is not set")
         if BaseCondition.target_entity_uuid is None:
@@ -144,18 +144,21 @@ class Entity(BaseBlock):
         
         if self.check_condition_immunity(BaseCondition.name):
             return False
-
+        if check_save_throw and BaseCondition.application_saving_throw is not None:
+            (outcome,dice_roll,success) = self.saving_throw(BaseCondition.application_saving_throw)
+            if success:
+                return False
         condition_applied = BaseCondition.apply()
         if condition_applied:
             self.active_conditions[BaseCondition.name] = BaseCondition
 
-            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (str(BaseCondition.source_entity_uuid), BaseCondition.name))
+            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (BaseCondition.source_entity_uuid, BaseCondition.name))
         return condition_applied
     
     def _remove_condition_from_dicts(self, condition_name: str) :
         BaseCondition = self.active_conditions.pop(condition_name)
         assert BaseCondition.source_entity_uuid is not None
-        self.active_conditions_by_source[str(BaseCondition.source_entity_uuid)].remove(condition_name)
+        self.active_conditions_by_source[BaseCondition.source_entity_uuid].remove(condition_name)
 
     def add_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
         self.condition_immunities.append((condition_name,immunity_name))
@@ -202,10 +205,20 @@ class Entity(BaseBlock):
         self._remove_contextual_condition_immunity(condition_name)
         return
 
-    def advance_duration_condition(self,condition_name:str) -> bool:
+    def advance_duration_condition(self,condition_name:str, skip_save_throw: bool = False) -> bool:
         BaseCondition = self.active_conditions[condition_name]
-        return BaseCondition.duration.progress()
+        if not skip_save_throw and BaseCondition.removal_saving_throw is not None:
+            (outcome,dice_roll,success) = self.saving_throw(BaseCondition.removal_saving_throw)
+            if success:
+                BaseCondition.remove()
+                self._remove_condition_from_dicts(condition_name)
+                return True
+        removed = BaseCondition.progress()
+        if removed:
+            self._remove_condition_from_dicts(condition_name)
+        return removed
     
+
     def advance_durations(self) -> List[str]:
         removed_conditions = []
         for condition_name in list(self.active_conditions.keys()):
