@@ -155,7 +155,7 @@ class BaseCondition(BaseObject):
         """ Progress the duration returns True if the condition is removed """
         progress_result = self.duration.progress()
         if progress_result:
-            self._remove()
+            self.remove()
         return progress_result
     
     def long_rest(self) -> None:
