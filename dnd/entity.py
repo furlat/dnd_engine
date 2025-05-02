@@ -696,7 +696,9 @@ class Entity(BaseBlock):
         self.action_economy.consume(cost_type="actions", amount=1, cost_name="Attack")
         
         # If attack was canceled or missed, skip to COMPLETION
-        if attack_event.canceled or attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+        if attack_event.canceled:
+            return attack_event
+        if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return attack_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Attack {'canceled' if attack_event.canceled else 'missed'}"
@@ -715,9 +717,11 @@ class Entity(BaseBlock):
             return attack_event
         
         # Apply damage if there is an attack outcome
-        if attack_event.attack_outcome is not None:
+        if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             damage_rolls = target_entity.take_damage(damages, attack_event.attack_outcome)
-            attack_event = attack_event.post(damage_rolls=damage_rolls)
+        else:
+            damage_rolls = None
+            
         
         self.clear_target_entity()
         target_entity.clear_target_entity()
@@ -725,5 +729,6 @@ class Entity(BaseBlock):
         # Move to COMPLETION phase
         return attack_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            status_message="Attack completed"
+            status_message="Attack completed",
+            damage_rolls=damage_rolls
         )
