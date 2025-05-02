@@ -64,7 +64,8 @@ class Entity(BaseBlock):
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
 
-    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict)
+    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition name")
+    active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition UUID")
     condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
     contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
     active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=dict)
@@ -154,6 +155,16 @@ class Entity(BaseBlock):
 
     def remove_event_handler(self, event_handler: EventHandler) -> None:
         event_handler.remove() #this is already handling the removal from the event queue and the dicts
+
+    def _remove_condition_from_dicts(self, condition: BaseCondition) :
+        condition_name = condition.name
+        assert condition.source_entity_uuid is not None and condition_name is not None
+        self.active_conditions_by_source[condition.source_entity_uuid].remove(condition_name)
+
+    def remove_condition(self, condition_name: str) -> None:
+        condition = self.active_conditions.pop(condition_name)
+        condition.remove()
+        self._remove_condition_from_dicts(condition)
     
     def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
         if condition.name is None:
@@ -177,15 +188,15 @@ class Entity(BaseBlock):
                     return None
         condition_applied = condition.apply(event)
         if condition_applied:
+            if condition.name in self.active_conditions:
+                #already present we need to remove the old one and add the new one for now not stackable
+                self.remove_condition(condition.name)
             self.active_conditions[condition.name] = condition
-
+            self.active_conditions_by_uuid[condition.uuid] = condition
             self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (condition.source_entity_uuid, condition.name))
         return condition_applied
     
-    def _remove_condition_from_dicts(self, condition_name: str) :
-        BaseCondition = self.active_conditions.pop(condition_name)
-        assert BaseCondition.source_entity_uuid is not None
-        self.active_conditions_by_source[BaseCondition.source_entity_uuid].remove(condition_name)
+    
 
     def add_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
         self.condition_immunities.append((condition_name,immunity_name))
@@ -233,16 +244,16 @@ class Entity(BaseBlock):
         return
 
     def advance_duration_condition(self,condition_name:str, skip_save_throw: bool = False) -> bool:
-        BaseCondition = self.active_conditions[condition_name]
-        if not skip_save_throw and BaseCondition.removal_saving_throw is not None:
-            (outcome,dice_roll,success) = self.saving_throw(BaseCondition.removal_saving_throw)
+        condition = self.active_conditions[condition_name]
+        if not skip_save_throw and condition.removal_saving_throw is not None:
+            (outcome,dice_roll,success) = self.saving_throw(condition.removal_saving_throw)
             if success:
-                BaseCondition.remove()
-                self._remove_condition_from_dicts(condition_name)
+                self.remove_condition(condition_name)
                 return True
-        removed = BaseCondition.progress()
+        removed = condition.progress()
         if removed:
-            self._remove_condition_from_dicts(condition_name)
+            self.active_conditions.pop(condition_name)
+            self._remove_condition_from_dicts(condition)
         return removed
     
 
