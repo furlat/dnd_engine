@@ -6,7 +6,7 @@ from pydantic import BaseModel, model_validator
 from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition, BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent
+from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler
 class DurationType(str,Enum):
     ROUNDS = "rounds"
     PERMANENT = "permanent"
@@ -95,6 +95,7 @@ class BaseCondition(BaseObject):
     parent_condition: Optional[UUID] = Field(default=None,description="the UUID of the parent condition, if it exists")
     sub_conditions: List[UUID] = Field(default_factory=list,description="list of condition UUIDs that are sub conditions of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the sub conditions will triget sub events ")
     event_handlers_uuids: List[UUID] = Field(default_factory=list,description="list of event handler UUIDs that are event handlers of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the event handlers will trigger event handlers ")
+    
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
         """ ensure the the duration ownership is consistent """
@@ -134,7 +135,7 @@ class BaseCondition(BaseObject):
         
         return [],[],[], event
     
-    def _remove(self) -> Optional[Event]:
+    def _remove(self,event: Optional[Event] = None) -> Optional[Event]:
         """Custom extra Remove the condition full implementation is in the subclass if needed, should try to use the registries if possible"""
         return None
     
@@ -169,14 +170,11 @@ class BaseCondition(BaseObject):
         completed_event = applied_event.phase_to(EventPhase.COMPLETION)
         return completed_event
     
-    def remove(self,skip_parent_removal: bool = False) -> bool:
+    def remove_condition_modifiers(self) -> bool:
         """ Remove the condition """
         if not self.applied:
             return False
-        #first apply the remove method
-        remove_result = self._remove()
-        if not remove_result:
-            return False
+
         for value_uuid, modifiers_uuids in self.modifers_uuids.items():
             value = ModifiableValue.get(value_uuid)
             if value is None:
@@ -184,12 +182,23 @@ class BaseCondition(BaseObject):
             for modifier_uuid in modifiers_uuids:
                 value.remove_modifier(modifier_uuid)
         self.applied = False
+
+        return True
+    
+    def remove_sub_conditions(self) -> bool:
+        """ Remove the sub conditions """
+        if not self.applied:
+            return False
+      
         for sub_condition_uuid in self.sub_conditions:
             sub_condition = BaseCondition.get(sub_condition_uuid)
             if sub_condition is None:
                 raise ValueError(f"Trying to remove sub condition with UUID {sub_condition_uuid} not found sub-condition removal should remove it from the parent reference")
             elif isinstance(sub_condition,BaseCondition):
                 sub_condition.remove(skip_parent_removal=True)
+        return True
+    
+    def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
         
         #remove the condition from the parent
         if self.parent_condition and not skip_parent_removal:
@@ -201,11 +210,39 @@ class BaseCondition(BaseObject):
                
         return True
     
+    def remove_event_handlers(self) -> bool:
+        """ Remove the event handlers from the EventQueue"""
+        if not self.applied:
+            return False
+        for event_handler_uuid in self.event_handlers_uuids:
+            event_handler = EventHandler.get(event_handler_uuid)
+            if event_handler is None:
+                return True #event handler not found, it was already removed
+            elif isinstance(event_handler,EventHandler):
+                event_handler.remove()
+        return True
+
+    def remove(self,skip_parent_removal: bool = False) -> bool:
+        """ Remove the condition """
+        if not self.applied:
+            return False
+        #first apply the remove method
+        self._remove()
+        #second remove the condition modifiers
+        self.remove_condition_modifiers()
+        #third remove the sub conditions
+        self.remove_sub_conditions()
+        #fourth remove the condition from the parent, skipped if running from inside remove_sub_conditions
+        self.remove_condition_from_parent(skip_parent_removal=skip_parent_removal)
+        #fifth remove the event handlers
+        self.remove_event_handlers()
+        return True
+    
     def progress(self) -> bool:
         """ Progress the duration returns True if the condition is removed """
         progress_result = self.duration.progress()
         if progress_result:
-            self.remove()
+            self.remove_condition_modifiers()
         return progress_result
     
     def long_rest(self) -> None:

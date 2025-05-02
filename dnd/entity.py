@@ -25,7 +25,7 @@ from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponPro
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
-from dnd.core.events import AbilityName, SkillName
+from dnd.core.events import AbilityName, SkillName, EventHandler, EventType, EventPhase, Trigger
 
 def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
     key, value = kv
@@ -69,7 +69,9 @@ class Entity(BaseBlock):
     contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
     active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=dict)
 
-    
+    event_handlers: Dict[UUID, EventHandler] = Field(default_factory=dict)
+    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
+    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Entity",description: Optional[str] = None,config: Optional[EntityConfig] = None) -> 'Entity':
@@ -115,6 +117,8 @@ class Entity(BaseBlock):
                 proficiency_bonus=proficiency_bonus
             )
         
+
+        
     def get_target_entity(self,copy: bool = False) -> Optional['Entity']:
         if self.target_entity_uuid is None:
             return None
@@ -133,6 +137,23 @@ class Entity(BaseBlock):
             if immunity_check(self,self.get_target_entity(copy=True),self.context):
                 return True
         return False
+    
+    def add_event_handler(self, event_handler: EventHandler) -> None:
+        self.event_handlers[event_handler.uuid] = event_handler
+        for trigger in event_handler.trigger_conditions:
+            if trigger.is_simple():
+                self.event_handlers_by_simple_trigger[trigger].append(event_handler)
+            self.event_handlers_by_trigger[trigger].append(event_handler)
+
+    def remove_event_handler_from_dicts(self, event_handler: EventHandler) -> None:
+        self.event_handlers.pop(event_handler.uuid)
+        for trigger in event_handler.trigger_conditions:
+            if trigger.is_simple():
+                self.event_handlers_by_simple_trigger[trigger].remove(event_handler)
+            self.event_handlers_by_trigger[trigger].remove(event_handler)
+
+    def remove_event_handler(self, event_handler: EventHandler) -> None:
+        event_handler.remove() #this is already handling the removal from the event queue and the dicts
     
     def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
         if condition.name is None:
@@ -730,5 +751,5 @@ class Entity(BaseBlock):
         return attack_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message="Attack completed",
-            damage_rolls=damage_rolls
+            damage_rolls=damage_rolls,
         )
