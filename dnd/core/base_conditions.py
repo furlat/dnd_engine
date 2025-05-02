@@ -6,7 +6,6 @@ from pydantic import BaseModel, model_validator
 from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition, BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.requests import SavingThrowRequest
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent
 class DurationType(str,Enum):
     ROUNDS = "rounds"

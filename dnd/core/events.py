@@ -51,6 +51,10 @@ SkillName = TypeLiteral[
     'stealth', 'survival'
 ]
 
+
+
+
+
 class WeaponSlot(str, Enum):
     MAIN_HAND = "Main Hand"
     OFF_HAND = "Off Hand"
@@ -61,6 +65,7 @@ class EventType(str, Enum):
     MOVEMENT = "movement"
     ABILITY_CHECK = "ability_check"
     SAVING_THROW = "saving_throw"
+    SKILL_CHECK = "skill_check"
     INFLICT_DAMAGE = "inflicted_damage"
     TAKE_DAMAGE = "take_damage"
     HEAL = "heal"
@@ -456,7 +461,7 @@ class D20Event(Event):
     dc: Optional[Union[int, ModifiableValue]] = Field(default=None,description="The dc of the d20")
     bonus: Optional[Union[int, ModifiableValue]] = Field(default=0,description="The bonus to the d20")
     dice: Optional[Dice] = Field(default=None,description="The dice used to roll the d20")
-    dice_roll: Optional[DiceRoll] = Field(default_factory=DiceRoll,description="The result of the dice roll")
+    dice_roll: Optional[DiceRoll] = Field(default=None,description="The result of the dice roll")
     result: Optional[bool] = Field(default=None,description="Whether the d20 event was successful")
 
     def get_dc(self) -> Optional[int]:
@@ -471,12 +476,13 @@ class SavingThrowEvent(D20Event):
     """An event that represents a saving throw"""
     name: str = Field(default="Saving Throw",description="A saving throw event")
     ability_name: AbilityName = Field(description="The ability that is being saved against")
+    event_type: EventType = Field(default=EventType.SAVING_THROW,description="The type of event")
 
 class SkillCheckEvent(D20Event):
     """An event that represents a skill check"""
     name: str = Field(default="Skill Check",description="A skill check event")
     skill_name: SkillName = Field(description="The skill that is being checked")
-
+    event_type: EventType = Field(default=EventType.SKILL_CHECK,description="The type of event")
 
 class RangeType(str, Enum):
     REACH = "Reach"
@@ -531,7 +537,7 @@ class AttackEvent(Event):
     attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
     damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
-
+    event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
 
 
 

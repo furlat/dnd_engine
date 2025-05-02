@@ -15,7 +15,7 @@ from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, Sta
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-from dnd.core.events import EventType, EventPhase, Event, AttackEvent, RangeType, SavingThrowEvent
+from dnd.core.events import EventType, EventPhase, Event, AttackEvent, RangeType, SavingThrowEvent, SkillCheckEvent
 
 from dnd.blocks.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
@@ -23,9 +23,9 @@ from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,Sav
 from dnd.blocks.health import (HealthConfig,Health)
 from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponProperty, Range, Shield, Damage)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
-from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName)
+from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
-from dnd.core.requests import AbilityName, SkillName, SavingThrowRequest, SkillCheckRequest
+from dnd.core.events import AbilityName, SkillName
 
 def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
     key, value = kv
@@ -529,7 +529,7 @@ class Entity(BaseBlock):
         outcome = self.determine_attack_outcome(roll, ac)
         return roll, outcome
     
-    def create_saving_throw_request(self, target_entity_uuid: UUID, ability_name: AbilityName, dc: Union[int,UUID]) -> SavingThrowRequest:
+    def create_saving_throw_request(self, target_entity_uuid: UUID, ability_name: AbilityName, dc: Union[int,UUID]) -> SavingThrowEvent:
         """ request a saving throw from the target entity """
         #if dc is a uuid get the modifiable value ensure is coming from self (has self.uuid as source entity uuid)
         if isinstance(dc,UUID):
@@ -543,10 +543,10 @@ class Entity(BaseBlock):
         else:
             int_dc = dc
         self.clear_target_entity()
-        return SavingThrowRequest(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, ability_name=ability_name, dc=int_dc)
+        return SavingThrowEvent(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, ability_name=ability_name, dc=int_dc)
     
 
-    def create_skill_check_request(self, target_entity_uuid: UUID, skill_name: SkillName, dc: Union[int,UUID]) -> SkillCheckRequest:
+    def create_skill_check_request(self, target_entity_uuid: UUID, skill_name: SkillName, dc: Union[int,UUID]) -> SkillCheckEvent:
         """ request a skill check from the target entity """
         if isinstance(dc,UUID):
             self.set_target_entity(dc)
@@ -562,7 +562,7 @@ class Entity(BaseBlock):
         else:
             int_dc = dc
         self.clear_target_entity()
-        return SkillCheckRequest(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, skill_name=skill_name, dc=int_dc)
+        return SkillCheckEvent(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, skill_name=skill_name, dc=int_dc)
     
     def saving_throw(self, request: SavingThrowEvent) -> Tuple[AttackOutcome,DiceRoll,bool]:
         """ make a saving throw"""
@@ -585,13 +585,15 @@ class Entity(BaseBlock):
         self.clear_target_entity()
         return saving_throw_outcome, roll, True if saving_throw_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
     
-    def skill_check(self, request: SkillCheckRequest) -> Tuple[AttackOutcome,DiceRoll,bool]:
+    def skill_check(self, request: SkillCheckEvent) -> Tuple[AttackOutcome,DiceRoll,bool]:
         """ make a skill check """
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
         self.set_target_entity(request.source_entity_uuid)
         skill_check = self.skill_bonus(request.source_entity_uuid, request.skill_name)
         dc = request.get_dc()
+        if dc is None:
+            raise ValueError(f"DC is not set for {request.skill_name} skill check with event id {request.uuid}")
         roll,skill_check_outcome = self.get_attack_outcome(skill_check,dc)
         self.clear_target_entity()
         return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
