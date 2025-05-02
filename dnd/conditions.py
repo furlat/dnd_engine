@@ -1,5 +1,5 @@
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
-from dnd.core.requests import AbilityName
+
 from dnd.entity import Entity
 from typing import Dict, Any, Optional, List, Tuple
 from dnd.core.modifiers import ( ContextAwareCondition, BaseObject, AdvantageModifier, ContextAwareAdvantage,
@@ -12,7 +12,7 @@ from dnd.blocks.sensory import SensesType
 from uuid import UUID, uuid4
 from pydantic import Field
 from functools import partial
-from dnd.core.events import Event, EventPhase
+from dnd.core.events import Event, EventPhase, AbilityName, SkillName
 
 class Blinded(BaseCondition):
     name: str = "Blinded"
