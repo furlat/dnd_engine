@@ -12,18 +12,18 @@ from dnd.blocks.sensory import SensesType
 from uuid import UUID, uuid4
 from pydantic import Field
 from functools import partial
-
+from dnd.core.events import Event, EventPhase
 
 class Blinded(BaseCondition):
     name: str = "Blinded"
     description: str = "A blinded creature can't see and automatically fails any ability check that requires sight. Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage."
     
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         
         elif isinstance(target_entity,Entity):
             #the modifier is applied to the target entity henceh the source and target are switched
@@ -38,9 +38,10 @@ class Blinded(BaseCondition):
                
                 modifier_uuid=skill_obj.skill_bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Blinded",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((skill_obj.skill_bonus.uuid,modifier_uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []   
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
         
 
         
@@ -48,12 +49,12 @@ class Charmed(BaseCondition):
     name: str = "Charmed"
     description: str = "A charmed creature can't attack the charmer or target the charmer with harmful abilities or magical effects."
     
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #prevent attacking the charmer
@@ -67,10 +68,10 @@ class Charmed(BaseCondition):
                 skill_obj = target_entity.skill_set.get_skill(skill)
                 to_target_static_condition_uuid = skill_obj.skill_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Charmed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=charmed_skill_check))
                 outs.append((skill_obj.skill_bonus.uuid,to_target_static_condition_uuid))
-            
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
     
 
     @staticmethod
@@ -111,12 +112,12 @@ class Dashing(BaseCondition):
     name: str = "Dashing"
     description: str = "A dashing creature gets a movement bonues equal to it base movement speed"
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             base_speed_modifier = target_entity.action_economy.movement.get_base_modifier()
@@ -127,42 +128,44 @@ class Dashing(BaseCondition):
                 extra_modifier = NumericalModifier(name="Dashing",value=base_speed,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid)
                 target_entity.action_economy.movement.self_static.add_value_modifier(extra_modifier)
                 outs.append((target_entity.action_economy.movement.uuid,extra_modifier.uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
 class Deafened(BaseCondition):
     name: str = "Deafened"
     description: str = "A deafened creature can't hear and automatically fails any ability check that requires hearing."
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             for skill in skills_requiring_hearing:
                 skill_obj = target_entity.skill_set.get_skill(skill)
                 modifier_uuid = skill_obj.skill_bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Deafened",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((skill_obj.skill_bonus.uuid,modifier_uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
 class Dodging(BaseCondition):
     name: str = "Dodging"
     description: str = "A dodging creature has advantage on Dexterity saving throws against being grappled."
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #add disadvantage to attacks against this creature
@@ -172,9 +175,10 @@ class Dodging(BaseCondition):
             dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
             dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((dex_save.bonus.uuid,dex_save.bonus.uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
 class Frightened(BaseCondition):
@@ -182,12 +186,12 @@ class Frightened(BaseCondition):
     name: str = "Frightened"
     description: str = "A frightened creature has disadvantage on attack rolls and ability checks and can not move while the frightener is in sight"
 
-    def _apply(self, context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #add disadvantage to attacks from this creature inside the equipment attack bonus static
@@ -204,9 +208,10 @@ class Frightened(BaseCondition):
             movement_value = target_entity.action_economy.movement
             movement_value.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
             outs.append((movement_value.uuid,movement_value.uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
             
     @staticmethod
     def frightener_in_senses_disadvantage(frightener_uuid: UUID, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
@@ -245,32 +250,33 @@ class Grappled(BaseCondition):
     name: str = "Grappled"
     description: str = "A grappled creature can't move through the space of the grappler"
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             speed_obj = target_entity.action_economy.movement
             speed_obj.self_static.add_max_constraint(constraint=NumericalModifier(name="Grappled",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((speed_obj.uuid,speed_obj.uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 class Incapacitated(BaseCondition):
     """ max actions, bonus actions, movement and reactions are set to 0 in self static"""
     name: str = "Incapacitated"
     description: str = "A incapacitated creature can't take actions"
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #set max actions, bonus actions, and reactions to 0
@@ -284,9 +290,10 @@ class Incapacitated(BaseCondition):
             speed_obj = target_entity.action_economy.movement
             speed_max_constrain_uuid = speed_obj.self_static.add_max_constraint(constraint=NumericalModifier(name="Incapacitated",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((speed_obj.uuid,speed_max_constrain_uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
         
 class Invisible(BaseCondition):
     """ adds advantage to all attacks from this creature against creature that can not see invisible
@@ -294,12 +301,12 @@ class Invisible(BaseCondition):
     name: str = "Invisible"
     description:str = "An invisible creature is impossible to see without the aid of magic or a special sense"
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #add conditional advantage to all attacks from this creature against creature that can not see invisible
@@ -309,10 +316,10 @@ class Invisible(BaseCondition):
             #add conditional disadvantage to all attacks against this creature if the observer can not see invisible
             to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.target_can_not_see_invisible_disadvantage))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
     @staticmethod
     def can_see_invisible(observer: Entity) -> bool:
@@ -347,12 +354,12 @@ class Paralyzed(BaseCondition):
     name: str = "Paralyzed"
     description: str = "A paralyzed creature is incapacitated (see the condition) and can’t move or speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage. Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature."
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #like incapacitated first
@@ -379,9 +386,10 @@ class Paralyzed(BaseCondition):
             #add conditional critical to attacks within 5 feet 
             to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_critical_modifier(modifier=ContextualCriticalModifier(name="Paralyzed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.paralyzed_distance_critical))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
             
     @staticmethod
     def paralyzed_distance_critical(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[CriticalModifier]:
@@ -403,14 +411,14 @@ class Poisoned(BaseCondition):
     name: str = "Poisoned"
     description: str = "A poisoned creature has disadvantage on all ability checks and attack rolls"
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            outs = []
+            outs = []   
             #add disadvantage to all attacks
             self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Poisoned",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_static_attack_uuid))
@@ -419,21 +427,22 @@ class Poisoned(BaseCondition):
                 skill_obj = target_entity.skill_set.get_skill(skill)
                 skill_static_modifier_uuid = skill_obj.skill_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Poisoned",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((skill_obj.skill_bonus.uuid,skill_static_modifier_uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 class Prone(BaseCondition):
     """disadvantage to prone entity attacksa and when targeted add disadvantage to attacks from >5feet and advantage to attacks within 5 feet"""
     name: str = "Prone"
     description: str = "A prone creature has disadvantage on all attack rolls and ability checks. Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage."
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #add disadvantage to all attacks
@@ -443,9 +452,10 @@ class Prone(BaseCondition):
             #add conditional advantage to attacks within 5 feet
             to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Prone",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.prone_distance_advantage))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
     @staticmethod
     def prone_distance_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
@@ -469,12 +479,12 @@ class Stunned(BaseCondition):
     name: str = "Stunned"
     description: str = "A stunned creature is incapacitated (see the condition), can't move, and can't speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage."
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #like incapacitated first
@@ -501,21 +511,22 @@ class Stunned(BaseCondition):
             #add conditional advantage to attacks within 5 feet
             to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Stunned",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
         
 class Restrained(BaseCondition):
     """ can not move, disadvantage to attacks, disadvantage to dex saves, attackers have advantage"""
     name: str = "Restrained"
     description: str = "A restrained creature can't move and has disadvantage on Dexterity saving throws. Attack rolls against the creature have advantage."
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #set max speed to 0
@@ -536,9 +547,10 @@ class Restrained(BaseCondition):
             to_target_static_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_uuid))
 
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
             
             
 class Unconscious(BaseCondition):
@@ -546,12 +558,12 @@ class Unconscious(BaseCondition):
     name: str = "Unconscious"
     description: str = "A unconscious creature is incapacitated (see the condition), can't move, and can't speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage."
 
-    def _apply(self,context: Optional[Dict[str, Any]] = None) -> List[Tuple[UUID,UUID]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             #like incapacitated first
@@ -587,9 +599,10 @@ class Unconscious(BaseCondition):
             to_target_contextual_advantage_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Unconscious",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=Prone.prone_distance_advantage))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_advantage_uuid))
 
-            return outs
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
         else:
-            return []
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
             
             
             
