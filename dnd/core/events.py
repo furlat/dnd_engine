@@ -68,6 +68,7 @@ class EventType(str, Enum):
     ATTACK_MISS = "attack_miss"
     ATTACK_HIT = "attack_hit"
     ATTACK_CRITICAL = "attack_critical"
+    CONDITION_APPLICATION = "condition_application"
     
     #Dice roll events
     DICE_ROLL = "dice_roll"
@@ -105,10 +106,10 @@ class Event(BaseObject):
     
     # Flag to indicate if event should be canceled
     canceled: bool = Field(default=False,description="Flag to indicate if event should be canceled")
-    parent_event: Optional[Tuple[UUID,datetime]] = Field(default=None,description="The parent event of the current event")
+    parent_event: Optional[UUID] = Field(default=None,description="The parent event of the current event")
     status_message: Optional[str] = Field(default=None,description="A status message for the event")
     child_events: List["Event"] = Field(default_factory=list,description="A list of child events")
-    children_events: List[Tuple[UUID,datetime]] = Field(default_factory=list,description="A list of children events")
+    children_events: List[UUID] = Field(default_factory=list,description="A list of children events")
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -180,24 +181,24 @@ class Event(BaseObject):
         but instead the parent event is the event under which the current event is registered
         e.g. a attack_miss event will have as parent the attack event that it is a miss of"""
         
-        self.parent_event = (parent_event.uuid, parent_event.timestamp)
+        self.parent_event = parent_event.uuid
     
     def add_child_event(self, child_event: 'Event'):
         """Add a child event to the current event"""
         if child_event.parent_event is None or child_event.parent_event != (self.uuid, self.timestamp):
             raise ValueError("Child event does not have a valid parent or already has a parent")
 
-        self.children_events.append((child_event.uuid, child_event.timestamp))
+        self.children_events.append(child_event.uuid)
 
     def get_children_events(self) -> List['Event']:
         """Get all children events of the current event"""
-        outs = [EventQueue.get_event_by_uuid(child_event[0]) for child_event in self.children_events]
+        outs = [EventQueue.get_event_by_uuid(child_event) for child_event in self.children_events]
         return [out for out in outs if out is not None]
     
     def get_parent_event(self) -> Optional['Event']:
         """Get the parent event of the current event"""
         if self.parent_event:
-            return EventQueue.get_event_by_uuid(self.parent_event[0])
+            return EventQueue.get_event_by_uuid(self.parent_event)
         return None
     
     def get_history(self) -> List['Event']:
@@ -246,22 +247,22 @@ class Event(BaseObject):
         if not isinstance(result, self.__class__):
             raise TypeError(f"Expected {self.__class__.__name__} but got {result.__class__.__name__}")
             
-        return result  # type: ignore
+        return result  
 
 
 
 class EventQueue:
     """Static registry for events with additional querying and reaction capabilities"""
     # Static registry dictionaries
-    _events_by_lineage: Dict[UUID, List[Event]] = Field(default_factory=lambda: defaultdict(list), description="A dictionary of events list by lineage UUID")
-    _events_by_uuid: Dict[UUID, Event] = Field(default_factory=dict, description="A dictionary of events indexed by UUID")
-    _events_by_timestamp: Dict[datetime, List[Event]] = Field(default_factory=lambda: defaultdict(list), description="A dictionary of events list by timestamp")
-    _events_by_type: Dict[EventType, List[Event]] = Field(default_factory=lambda: defaultdict(list), description="A dictionary of events list by type")
-    _events_by_phase: Dict[EventPhase, List[Event]] = Field(default_factory=lambda: defaultdict(list), description="A dictionary of events list by phase")
-    _events_by_source: Dict[UUID, List[Event]] = Field(default_factory=lambda: defaultdict(list), description="A dictionary of events list by source")
-    _events_by_target: Dict[UUID, List[Event]] = Field(default_factory=lambda: defaultdict(list), description="A dictionary of events list by target")
-    _all_events: List[Event] = []
-    _listeners: Dict[Tuple[Optional[EventType], Optional[EventPhase]], List[Tuple[UUID, EventListener]]] = defaultdict(list)
+    _events_by_lineage = defaultdict(list)  # Dict[UUID, List[Event]]
+    _events_by_uuid = {}  # Dict[UUID, Event]
+    _events_by_timestamp = defaultdict(list)  # Dict[datetime, List[Event]]
+    _events_by_type = defaultdict(list)  # Dict[EventType, List[Event]]
+    _events_by_phase = defaultdict(list)  # Dict[EventPhase, List[Event]]
+    _events_by_source = defaultdict(list)  # Dict[UUID, List[Event]]
+    _events_by_target = defaultdict(list)  # Dict[UUID, List[Event]]
+    _all_events = []  # List[Event]
+    _listeners = defaultdict(list)  # Dict[Tuple[Optional[EventType], Optional[EventPhase]], List[Tuple[UUID, EventListener]]]
     
     @classmethod
     def register(cls, event: Event) -> Event:
@@ -317,9 +318,9 @@ class EventQueue:
 
         # Handle parent-child relationships
         if event.parent_event:
-            parent_uuid = event.parent_event[0]
+            parent_uuid = event.parent_event
             parent_event = cls.get_event_by_uuid(parent_uuid)
-            if parent_event and (event.uuid, event.timestamp) not in parent_event.children_events:
+            if parent_event and parent_event.uuid not in event.children_events:
                 parent_event.add_child_event(event)
 
         # By type
@@ -458,6 +459,14 @@ class D20Event(Event):
     dice_roll: Optional[DiceRoll] = Field(default_factory=DiceRoll,description="The result of the dice roll")
     result: Optional[bool] = Field(default=None,description="Whether the d20 event was successful")
 
+    def get_dc(self) -> Optional[int]:
+        """Get the dc of the d20 event"""
+        if self.dc is None:
+            return None
+        if isinstance(self.dc, ModifiableValue):
+            return self.dc.normalized_score
+        return self.dc
+    
 class SavingThrowEvent(D20Event):
     """An event that represents a saving throw"""
     name: str = Field(default="Saving Throw",description="A saving throw event")
@@ -522,4 +531,7 @@ class AttackEvent(Event):
     attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
     damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
+
+
+
 

@@ -7,7 +7,7 @@ from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition, BaseObject
 from dnd.core.values import ModifiableValue
 from dnd.core.requests import SavingThrowRequest
-
+from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent
 class DurationType(str,Enum):
     ROUNDS = "rounds"
     PERMANENT = "permanent"
@@ -79,15 +79,23 @@ class Duration(BaseObject):
         self.long_rested = True
 
 
+class ConditionApplicationEvent(Event):
+    """An event that represents the application of a condition"""
+    name: str = Field(default="Condition Application",description="A condition application event")
+    condition: 'BaseCondition' = Field(description="The condition that is being applied")
+    event_type: EventType = Field(default=EventType.CONDITION_APPLICATION,description="The type of event")
+
 
 class BaseCondition(BaseObject):
     """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""
     duration: Duration = Field(default_factory=Duration)
-    application_saving_throw: Optional[SavingThrowRequest] = None
-    removal_saving_throw: Optional[SavingThrowRequest] = None
+    application_saving_throw: Optional[SavingThrowEvent] = None
+    removal_saving_throw: Optional[SavingThrowEvent] = None
     applied:bool = Field(default=False)
     modifers_uuids: Dict[UUID,List[UUID]] = Field(default_factory=dict,description="keys are ModifiableValues UUID and values are list of modifiers UUIDs applied to those blocks")
-
+    parent_condition: Optional[UUID] = Field(default=None,description="the UUID of the parent condition, if it exists")
+    sub_conditions: List[UUID] = Field(default_factory=list,description="list of condition UUIDs that are sub conditions of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the sub conditions will triget sub events ")
+    event_handlers_uuids: List[UUID] = Field(default_factory=list,description="list of event handler UUIDs that are event handlers of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the event handlers will trigger event handlers ")
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
         """ ensure the the duration ownership is consistent """
@@ -112,29 +120,57 @@ class BaseCondition(BaseObject):
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
 
-    def _apply(self) -> List[Tuple[UUID,UUID]]:
-        """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass """
-        return []
+    def _declare_event(self, parent_event: Optional[Event] = None) -> Event:
+        """ Declare the event """
+        return ConditionApplicationEvent(condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
+
+    def _apply(self, event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+        """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass 
+        the event is used as parent if subconditions are triggered (e.g. sub conditons application)"""
+        # event is declared in the main apply method
+        
+        event = event.phase_to(EventPhase.EXECUTION) # execution is defined, last chance to modify it
+        event = event.phase_to(EventPhase.EFFECT) # effect is defined reactions to the effect applications
+        #completions happend in main apply method such that 
+        
+        return [],[],[], event
     
-    def _remove(self) -> bool:
+    def _remove(self) -> Optional[Event]:
         """Custom extra Remove the condition full implementation is in the subclass if needed, should try to use the registries if possible"""
-        return True
+        return None
     
-    def apply(self) -> bool:
+    def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
         """ Apply the condition """
         if self.applied or self.duration.is_expired:
-            return False
-        modifers_uuids = self._apply()
-        if len(modifers_uuids) == 0:
-            return False
+            return None
+        #first create the declaration event
+        event = self._declare_event(parent_event)
+        if event.canceled: #check if event was canceled at declaration
+            return None
+        #then apply the condition
+        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, applied_event = self._apply(event)
+        if not applied_event or (len(modifers_uuids) == 0 and len(event_handlers_uuids) == 0 and len(sub_conditions_uuids) == 0):
+            return event.cancel(status_message=f"Condition {self.name} was not applied for some unknown reason, check the implementaiton of _apply method")
+        
+        
         for block_uuid, modifiers_uuids in modifers_uuids:
             if block_uuid not in self.modifers_uuids:
                 self.modifers_uuids[block_uuid] = []
             self.modifers_uuids[block_uuid].append(modifiers_uuids)
+
+        for event_handler_uuid in event_handlers_uuids:
+            if event_handler_uuid not in self.event_handlers_uuids:
+                self.event_handlers_uuids.append(event_handler_uuid)
+        
+        for sub_condition_uuid in sub_conditions_uuids:
+            if sub_condition_uuid not in self.sub_conditions:
+                self.sub_conditions.append(sub_condition_uuid)
+
         self.applied = True
-        return self.applied
+        completed_event = applied_event.phase_to(EventPhase.COMPLETION)
+        return completed_event
     
-    def remove(self) -> bool:
+    def remove(self,skip_parent_removal: bool = False) -> bool:
         """ Remove the condition """
         if not self.applied:
             return False
@@ -149,6 +185,21 @@ class BaseCondition(BaseObject):
             for modifier_uuid in modifiers_uuids:
                 value.remove_modifier(modifier_uuid)
         self.applied = False
+        for sub_condition_uuid in self.sub_conditions:
+            sub_condition = BaseCondition.get(sub_condition_uuid)
+            if sub_condition is None:
+                raise ValueError(f"Trying to remove sub condition with UUID {sub_condition_uuid} not found sub-condition removal should remove it from the parent reference")
+            elif isinstance(sub_condition,BaseCondition):
+                sub_condition.remove(skip_parent_removal=True)
+        
+        #remove the condition from the parent
+        if self.parent_condition and not skip_parent_removal:
+            parent_condition = BaseCondition.get(self.parent_condition)
+            if parent_condition is None:
+                raise ValueError(f"Trying to remove condition with UUID {self.uuid} from parent with UUID {self.parent_condition} not found, parent removal should remove children")
+            elif isinstance(parent_condition,BaseCondition):
+                parent_condition.sub_conditions.remove(self.uuid)
+               
         return True
     
     def progress(self) -> bool:

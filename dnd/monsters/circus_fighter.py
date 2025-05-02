@@ -4,9 +4,10 @@ from dnd.blocks.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores,AbilityName)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health,HitDiceConfig)
-from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,RangeType,WeaponProperty, Range, Shield)
+from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponProperty, Range, Shield)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName,SkillConfig)
+from dnd.core.events import SavingThrowEvent,RangeType
 
 from dnd.entity import Entity, EntityConfig
     
