@@ -4,8 +4,9 @@ it introduces and Event qeueue which is the source of ground truth information f
 
 
 from enum import Enum
+from logging import handlers
 from pydantic import BaseModel, Field
-from typing import Literal as TypeLiteral, Union,List, Optional, Dict, Any, Self, Literal, TypeVar, Protocol
+from typing import Literal as TypeLiteral, Union,List, Optional, Dict, Any, Self, Literal, TypeVar, Protocol, runtime_checkable
 from dnd.core.values import ModifiableValue
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
@@ -17,7 +18,7 @@ from typing import Callable, Tuple
 # Type definition for event listeners
 T = TypeVar('T', bound='Event')
 
-class EventListener(Protocol):
+class EventProcessor(Protocol):
     """Type definition for event listener callables.
     
     EventListeners receive an event and a source entity UUID and can either:
@@ -37,6 +38,18 @@ class TypedEventListener(Protocol[T]):
 class GenericEventModifier(Protocol):
     """A protocol for callables that can modify any event type."""
     def __call__(self, event: 'Event', source_entity_uuid: UUID) -> Optional['Event']: ...
+
+# Protocol for entities that can have event handlers
+@runtime_checkable
+class EntityWithEventHandlers(Protocol):
+    """Protocol defining the expected structure of entities that can have event handlers.
+    This allows for type-safe access to the event_handlers attribute without circular imports.
+    """
+    event_handlers: Dict[UUID, 'EventHandler']
+    
+    def remove_event_handler_from_dicts(self, event_handler: 'EventHandler') -> None:
+        """Remove an event handler from the entity's event handler dictionaries"""
+        ...
 
 AbilityName = TypeLiteral[
     'strength', 'dexterity', 'constitution', 
@@ -115,6 +128,10 @@ class Event(BaseObject):
     status_message: Optional[str] = Field(default=None,description="A status message for the event")
     child_events: List["Event"] = Field(default_factory=list,description="A list of child events")
     children_events: List[UUID] = Field(default_factory=list,description="A list of children events")
+
+    def get_trigger(self) -> 'Trigger':
+        """ get the trigger for the event """
+        return Trigger(event_type=self.event_type, event_phase=self.phase,event_source_entity_uuid=self.source_entity_uuid,event_target_entity_uuid=self.target_entity_uuid)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -253,22 +270,75 @@ class Event(BaseObject):
             raise TypeError(f"Expected {self.__class__.__name__} but got {result.__class__.__name__}")
             
         return result  
+    
+class Trigger(BaseModel):
+    event_type: EventType = Field(description="The type of event to trigger the event handler")
+    event_phase: EventPhase = Field(description="The phase of the event to trigger the event handler")
+    event_source_entity_uuid: Optional[UUID] = Field(default=None,description="The source entity uuid of the event handler")
+    event_target_entity_uuid: Optional[UUID] = Field(default=None,description="The target entity uuid of the event handler")
 
+    def __call__(self, event: Event) -> bool:
+        """ checks if the trigger condition is satisfied by the event, this does not guarantee that the event processor will modify the event as it could apply further freeform python prevalidation """
 
+        if event.event_type == self.event_type and event.phase == self.event_phase:
+            if self.event_source_entity_uuid  and event.source_entity_uuid != self.event_source_entity_uuid:
+                return False
+            if self.event_target_entity_uuid and event.target_entity_uuid != self.event_target_entity_uuid:
+                return False
+            return True
+        return False
+    
+    def is_simple(self) -> bool:
+        """ check if the trigger is simple, i.e. it is only based on the event type and phase """
+        return self.event_source_entity_uuid is None and self.event_target_entity_uuid is None
+    
+    def get_simple_trigger(self) -> 'Trigger':
+        """ get a simple trigger that is only based on the event type and phase """
+        return Trigger(event_type=self.event_type, event_phase=self.event_phase)
+
+class EventHandler(BaseObject):
+    """A class that can handle events"""
+    name: str = Field(default="EventHandler",description="The name of the event handler")
+    trigger_conditions: List[Trigger] = Field(default_factory=list,description="The conditions that trigger the event handler")
+    event_processor: EventProcessor = Field(description="The event processor to handle the event")
+    
+    def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
+        if source_entity_uuid is None:
+            source_entity_uuid = self.source_entity_uuid
+        if any(trigger(event) for trigger in self.trigger_conditions):
+            return self.event_processor(event, source_entity_uuid)
+        return None
+    
+
+    def remove(self) -> bool:
+        """ Remove the event handler from the EventQueue"""
+        if self.uuid not in EventQueue._event_handlers:
+            return False
+        EventQueue.remove_event_handler(self)
+        entity = BaseObject.get(self.source_entity_uuid)
+
+        if entity is not None and hasattr(entity, "event_handlers"):
+            # Use the Protocol to ensure type safety
+            if isinstance(entity, EntityWithEventHandlers):
+                entity.remove_event_handler_from_dicts(self)
+
+        return True
 
 class EventQueue:
     """Static registry for events with additional querying and reaction capabilities"""
     # Static registry dictionaries
-    _events_by_lineage = defaultdict(list)  # Dict[UUID, List[Event]]
-    _events_by_uuid = {}  # Dict[UUID, Event]
-    _events_by_timestamp = defaultdict(list)  # Dict[datetime, List[Event]]
-    _events_by_type = defaultdict(list)  # Dict[EventType, List[Event]]
-    _events_by_phase = defaultdict(list)  # Dict[EventPhase, List[Event]]
-    _events_by_source = defaultdict(list)  # Dict[UUID, List[Event]]
-    _events_by_target = defaultdict(list)  # Dict[UUID, List[Event]]
-    _all_events = []  # List[Event]
-    _listeners = defaultdict(list)  # Dict[Tuple[Optional[EventType], Optional[EventPhase]], List[Tuple[UUID, EventListener]]]
-    
+    _events_by_lineage : Dict[UUID, List[Event]] = Field(default_factory=dict)  
+    _events_by_uuid : Dict[UUID, Event] = Field(default_factory=dict)  
+    _events_by_type : Dict[EventType, List[Event]] = Field(default_factory=dict) 
+    _events_by_timestamp : Dict[datetime, List[Event]] = Field(default_factory=dict) 
+    _events_by_phase : Dict[EventPhase, List[Event]] = Field(default_factory=dict)  
+    _events_by_source : Dict[UUID, List[Event]] = Field(default_factory=dict)  
+    _events_by_target : Dict[UUID, List[Event]] = Field(default_factory=dict)  
+    _all_events : List[Event] = Field(default_factory=list)  
+    _event_handlers : Dict[UUID, EventHandler] = Field(default_factory=dict) 
+    _event_handlers_by_trigger : Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)  
+    _event_handlers_by_simple_trigger : Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)  
+    _event_handlers_by_source_entity_uuid : Dict[UUID, List[EventHandler]] = Field(default_factory=dict) 
     @classmethod
     def register(cls, event: Event) -> Event:
         """Register an event and notify listeners"""
@@ -276,17 +346,17 @@ class EventQueue:
         cls._store_event(event)
         
         # Check for listeners
-        listeners = cls._get_listeners_for_event(event)
+        handlers = cls._get_handlers_for_event(event)
         
         # If no listeners or event is already in completion phase, return as is
-        if not listeners or event.phase == EventPhase.COMPLETION:
+        if not handlers or event.phase == EventPhase.COMPLETION:
             return event
             
         # Process through listeners
         current_event = event
-        for source_uuid, listener in listeners:
-            # Execute listener
-            result = listener(current_event, source_uuid)
+        for handler in handlers:
+            # Executehandler
+            result = handler(current_event)
             
             # If listener returned None or canceled event, stop processing
             if result and result.canceled:
@@ -346,34 +416,25 @@ class EventQueue:
         cls._all_events.sort(key=lambda e: e.timestamp)
     
     @classmethod
-    def _get_listeners_for_event(cls, event: Event) -> List[Tuple[UUID, EventListener]]:
+    def _get_handlers_for_event(cls, event: Event) -> List[EventHandler]:
         """Get all listeners for a specific event"""
-        listeners = []
+
+        trigger_condition = event.get_trigger()
+        if trigger_condition.is_simple():
+            handlers = cls._event_handlers_by_simple_trigger.get(trigger_condition, [])
+        else:
+            handlers = cls._event_handlers_by_trigger.get(trigger_condition, [])
         
-        # Get listeners for specific event type and phase
-        key = (event.event_type, event.phase)
-        if key in cls._listeners:
-            listeners.extend(cls._listeners[key])
         
-        # Get listeners for all events of this type (any phase)
-        key = (event.event_type, None)
-        if key in cls._listeners:
-            listeners.extend(cls._listeners[key])
-        
-        # Get listeners for all events in this phase (any type)
-        key = (None, event.phase)
-        if key in cls._listeners:
-            listeners.extend(cls._listeners[key])
-        
-        return listeners
+        return handlers
     
     @classmethod
-    def add_listener(cls, event_type: Optional[EventType], 
+    def add_event_handler(cls, event_type: Optional[EventType], 
                     event_phase: Optional[EventPhase],
                     source_entity_uuid: UUID,
-                    listener: EventListener) -> None:
+                    event_handler: EventHandler) -> None:
         """
-        Add a listener for events of a specific type and phase
+        Add a handler for events of a specific type and phase
         
         Args:
             event_type: Type of event to listen for (or None for all types)
@@ -381,20 +442,31 @@ class EventQueue:
             source_entity_uuid: UUID of the entity that owns this listener
             listener: The listener function to call when an event matches
         """
-        key = (event_type, event_phase)
-        cls._listeners[key].append((source_entity_uuid, listener))
+        for trigger in event_handler.trigger_conditions:
+            if trigger.is_simple():
+                cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].append(event_handler)
+            cls._event_handlers_by_trigger[trigger].append(event_handler)
+        cls._event_handlers[event_handler.uuid] = event_handler
+        cls._event_handlers_by_source_entity_uuid[source_entity_uuid].append(event_handler)
     
     @classmethod
-    def remove_listener(cls, event_type: Optional[EventType], 
-                       event_phase: Optional[EventPhase],
-                       source_entity_uuid: UUID,
-                       listener: EventListener) -> None:
-        """Remove a listener"""
-        key = (event_type, event_phase)
-        listener_tuple = (source_entity_uuid, listener)
-        if key in cls._listeners and listener_tuple in cls._listeners[key]:
-            cls._listeners[key].remove(listener_tuple)
+    def remove_event_handler(cls, event_handler: EventHandler) -> None:
+        """Remove a handler"""
+        for trigger in event_handler.trigger_conditions:
+            if trigger.is_simple():
+                cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].remove(event_handler)
+            cls._event_handlers_by_trigger[trigger].remove(event_handler)
+            cls._event_handlers.pop(event_handler.uuid)
+        cls._event_handlers_by_source_entity_uuid[event_handler.source_entity_uuid].remove(event_handler)
+
+    @classmethod
+    def remove_event_handlers_by_uuid(cls, uuid: UUID) -> None:
+        """Remove a handler by uuid"""
+        event_handler = cls._event_handlers.get(uuid)
+        if event_handler:
+            cls.remove_event_handler(event_handler)
     
+
     @classmethod
     def get_events_chronological(cls, start_time: Optional[datetime] = None, 
                                end_time: Optional[datetime] = None) -> List[Event]:
