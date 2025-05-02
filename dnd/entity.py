@@ -15,7 +15,7 @@ from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, Sta
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-from dnd.core.events import EventType, EventPhase, Event, AttackEvent
+from dnd.core.events import EventType, EventPhase, Event, AttackEvent, RangeType, SavingThrowEvent
 
 from dnd.blocks.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
@@ -26,7 +26,6 @@ from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillName)
 from dnd.blocks.sensory import Senses
 from dnd.core.requests import AbilityName, SkillName, SavingThrowRequest, SkillCheckRequest
-from dnd.core.events import RangeType
 
 def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
     key, value = kv
@@ -135,25 +134,31 @@ class Entity(BaseBlock):
                 return True
         return False
     
-    def add_condition(self, BaseCondition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True)  -> bool:
-        if BaseCondition.name is None:
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
+        if condition.name is None:
             raise ValueError("BaseCondition name is not set")
-        if BaseCondition.target_entity_uuid is None:
-            BaseCondition.target_entity_uuid = self.uuid
+        if condition.target_entity_uuid is None:
+            condition.target_entity_uuid = self.uuid
         if context is not None:
-            BaseCondition.set_context(context)
+            condition.set_context(context)
         
-        if self.check_condition_immunity(BaseCondition.name):
-            return False
-        if check_save_throw and BaseCondition.application_saving_throw is not None:
-            (outcome,dice_roll,success) = self.saving_throw(BaseCondition.application_saving_throw)
+        if self.check_condition_immunity(condition.name):
+            if event is not None:
+                return event.cancel(status_message=f"Condition {condition.name} is immune")
+            else:
+                return None
+        if check_save_throw and condition.application_saving_throw is not None:
+            (outcome,dice_roll,success) = self.saving_throw(condition.application_saving_throw)
             if success:
-                return False
-        condition_applied = BaseCondition.apply()
+                if event is not None:
+                    return event.cancel(status_message=f"Target passed the {condition.application_saving_throw.ability_name} saving throw with")
+                else:
+                    return None
+        condition_applied = condition.apply(event)
         if condition_applied:
-            self.active_conditions[BaseCondition.name] = BaseCondition
+            self.active_conditions[condition.name] = condition
 
-            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (BaseCondition.source_entity_uuid, BaseCondition.name))
+            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (condition.source_entity_uuid, condition.name))
         return condition_applied
     
     def _remove_condition_from_dicts(self, condition_name: str) :
@@ -559,7 +564,7 @@ class Entity(BaseBlock):
         self.clear_target_entity()
         return SkillCheckRequest(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, skill_name=skill_name, dc=int_dc)
     
-    def saving_throw(self, request: SavingThrowRequest) -> Tuple[AttackOutcome,DiceRoll,bool]:
+    def saving_throw(self, request: SavingThrowEvent) -> Tuple[AttackOutcome,DiceRoll,bool]:
         """ make a saving throw"""
         #first assert that the target of the saving throw is self
         if request.target_entity_uuid != self.uuid:
@@ -569,7 +574,11 @@ class Entity(BaseBlock):
         #second get the saving throw from the request
         saving_throw = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
         #third get the dc for the saving throw
+        
         dc = request.get_dc()
+
+        if dc is None:
+            raise ValueError(f"DC is not set for {request.ability_name} saving throw with event id {request.uuid}")
         #create the dice
 
         roll,saving_throw_outcome = self.get_attack_outcome(saving_throw,dc)
