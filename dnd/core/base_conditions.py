@@ -124,13 +124,13 @@ class BaseCondition(BaseObject):
         """ Declare the event """
         return ConditionApplicationEvent(condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
 
-    def _apply(self, event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass 
         the event is used as parent if subconditions are triggered (e.g. sub conditons application)"""
         # event is declared in the main apply method
         
-        event = event.phase_to(EventPhase.EXECUTION) # execution is defined, last chance to modify it
-        event = event.phase_to(EventPhase.EFFECT) # effect is defined reactions to the effect applications
+        event = event.phase_to(EventPhase.EXECUTION, update={"condition":self}) # execution is defined, last chance to modify it
+        event = event.phase_to(EventPhase.EFFECT, update={"condition":self}) # effect is defined reactions to the effect applications
         #completions happend in main apply method such that 
         
         return [],[],[], event
