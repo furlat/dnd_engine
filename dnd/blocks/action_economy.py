@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
-
+from dnd.core.actions import CostType
 from enum import Enum
 from random import randint
 from functools import cached_property
@@ -70,7 +70,7 @@ class ActionEconomy(BaseBlock):
         )
     )
 
-    def consume(self, cost_type: Literal["actions", "bonus_actions", "reactions", "movement"], amount: int,cost_name: Optional[str] = None):
+    def consume(self, cost_type: CostType, amount: int,cost_name: Optional[str] = None):
         cost_modifier = NumericalModifier.create(source_entity_uuid=self.source_entity_uuid, name=cost_name+"_cost" if cost_name is not None else "cost", value=-amount)
         if cost_type == "actions":
             if self.actions.self_static.normalized_score - amount < 0:
