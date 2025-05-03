@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from dnd.core.events import Event, EventHandler, EventPhase, EventProcessor
 from dnd.core.values import BaseObject
 from typing import Optional, Dict, Callable, OrderedDict, List, Literal
@@ -16,6 +16,8 @@ class Action(BaseObject):
     cost_type: CostType = Field(default="actions",description="The type of cost for the action")
     cost: int = Field(default=0,description="The cost of the action")
     cost_checker: Optional[EventProcessor] = Field(default=None,description="An event processor that will be used to check if the action has the resources to be applied")
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     def _apply_handler(self,event: Event, event_handler: EventHandler) -> Optional[Event]:
         """ Apply the handler to the event """
