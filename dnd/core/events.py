@@ -5,7 +5,7 @@ it introduces and Event qeueue which is the source of ground truth information f
 
 from enum import Enum
 from logging import handlers
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal as TypeLiteral, Union,List, Optional, Dict, Any, Self, Literal, TypeVar, Protocol, runtime_checkable
 from dnd.core.values import ModifiableValue
 from uuid import UUID, uuid4
@@ -18,17 +18,8 @@ from typing import Callable, Tuple
 # Type definition for event listeners
 T = TypeVar('T', bound='Event')
 
-class EventProcessor(Protocol):
-    """Type definition for event listener callables.
-    
-    EventListeners receive an event and a source entity UUID and can either:
-    - Return None to stop processing (no further listeners are called)
-    - Return a modified version of the event for further processing
-    - Return the original event unchanged to continue processing
-
-    If a listener returns an event that is canceled, processing stops immediately.
-    """
-    def __call__(self, event: 'Event', source_entity_uuid: UUID) -> Optional['Event']: ...
+# Replace Protocol with type alias
+EventProcessor = Callable[['Event', UUID], Optional['Event']]
 
 # More specific event listener types
 class TypedEventListener(Protocol[T]):
@@ -128,7 +119,9 @@ class Event(BaseObject):
     status_message: Optional[str] = Field(default=None,description="A status message for the event")
     child_events: List["Event"] = Field(default_factory=list,description="A list of child events")
     children_events: List[UUID] = Field(default_factory=list,description="A list of children events")
-
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     def get_trigger(self) -> 'Trigger':
         """ get the trigger for the event """
         return Trigger(event_type=self.event_type, event_phase=self.phase,event_source_entity_uuid=self.source_entity_uuid,event_target_entity_uuid=self.target_entity_uuid)
@@ -276,6 +269,23 @@ class Trigger(BaseModel):
     event_phase: EventPhase = Field(description="The phase of the event to trigger the event handler")
     event_source_entity_uuid: Optional[UUID] = Field(default=None,description="The source entity uuid of the event handler")
     event_target_entity_uuid: Optional[UUID] = Field(default=None,description="The target entity uuid of the event handler")
+    
+    model_config = ConfigDict(frozen=True)
+    
+    def __hash__(self):
+        """Make the Trigger hashable for use as dictionary keys"""
+        return hash((self.event_type, self.event_phase, 
+                    self.event_source_entity_uuid, 
+                    self.event_target_entity_uuid))
+    
+    def __eq__(self, other):
+        """Define equality for Trigger objects"""
+        if not isinstance(other, Trigger):
+            return False
+        return (self.event_type == other.event_type and
+                self.event_phase == other.event_phase and
+                self.event_source_entity_uuid == other.event_source_entity_uuid and
+                self.event_target_entity_uuid == other.event_target_entity_uuid)
 
     def __call__(self, event: Event) -> bool:
         """ checks if the trigger condition is satisfied by the event, this does not guarantee that the event processor will modify the event as it could apply further freeform python prevalidation """
@@ -327,18 +337,18 @@ class EventHandler(BaseObject):
 class EventQueue:
     """Static registry for events with additional querying and reaction capabilities"""
     # Static registry dictionaries
-    _events_by_lineage : Dict[UUID, List[Event]] = Field(default_factory=dict)  
-    _events_by_uuid : Dict[UUID, Event] = Field(default_factory=dict)  
-    _events_by_type : Dict[EventType, List[Event]] = Field(default_factory=dict) 
-    _events_by_timestamp : Dict[datetime, List[Event]] = Field(default_factory=dict) 
-    _events_by_phase : Dict[EventPhase, List[Event]] = Field(default_factory=dict)  
-    _events_by_source : Dict[UUID, List[Event]] = Field(default_factory=dict)  
-    _events_by_target : Dict[UUID, List[Event]] = Field(default_factory=dict)  
-    _all_events : List[Event] = Field(default_factory=list)  
-    _event_handlers : Dict[UUID, EventHandler] = Field(default_factory=dict) 
-    _event_handlers_by_trigger : Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)  
-    _event_handlers_by_simple_trigger : Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)  
-    _event_handlers_by_source_entity_uuid : Dict[UUID, List[EventHandler]] = Field(default_factory=dict) 
+    _events_by_lineage = defaultdict(list)
+    _events_by_uuid = {}
+    _events_by_type = defaultdict(list)
+    _events_by_timestamp = defaultdict(list)
+    _events_by_phase = defaultdict(list)
+    _events_by_source = defaultdict(list)
+    _events_by_target = defaultdict(list)
+    _all_events = []
+    _event_handlers = {}
+    _event_handlers_by_trigger = defaultdict(list)
+    _event_handlers_by_simple_trigger = defaultdict(list)
+    _event_handlers_by_source_entity_uuid = defaultdict(list)
     @classmethod
     def register(cls, event: Event) -> Event:
         """Register an event and notify listeners"""

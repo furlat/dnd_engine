@@ -84,6 +84,7 @@ class BaseObject(BaseModel):
 
     _registry: ClassVar[Dict[UUID, 'BaseObject']] = {}
     # model_config = ConfigDict(validate_assignment=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: Optional[str] = Field(
         default=None,
