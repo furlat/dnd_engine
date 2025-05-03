@@ -4,5 +4,7 @@ dnd.egg-info/PKG-INFO
 /build
 /dnd.egg-info
 .vscode/settings.json
-/dnd.egg-info
 dnd.egg-info/SOURCES.txt
+/.venv
+
+/ui/node_modules
