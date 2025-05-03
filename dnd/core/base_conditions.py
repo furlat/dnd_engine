@@ -138,7 +138,14 @@ class BaseCondition(BaseObject):
     def _remove(self,event: Optional[Event] = None) -> Optional[Event]:
         """Custom extra Remove the condition full implementation is in the subclass if needed, should try to use the registries if possible"""
         return None
-    
+    def _expire(self,event: Optional[Event] = None) -> Optional[Event]:
+        """Custom extra Expire called during removal from natural expiration the condition full implementation is in the subclass
+          if needed, should try to use the registries if possible
+          eg a sub condition progressing through stages could create the next stage
+        it would of course need to register itself as a sub condition to the parent if 
+        it is to be removed by the parent removal
+        this simplifies the behavior of writing a EventHandler on this specific condition expiration"""
+        return None
     def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
         """ Apply the condition """
         if self.applied or self.duration.is_expired:
@@ -222,10 +229,12 @@ class BaseCondition(BaseObject):
                 event_handler.remove()
         return True
 
-    def remove(self,skip_parent_removal: bool = False) -> bool:
+    def remove(self,expire: bool = False,skip_parent_removal: bool = False) -> bool:
         """ Remove the condition """
         if not self.applied:
             return False
+        if expire:
+            self._expire()
         #first apply the remove method
         self._remove()
         #second remove the condition modifiers
@@ -239,10 +248,12 @@ class BaseCondition(BaseObject):
         return True
     
     def progress(self) -> bool:
-        """ Progress the duration returns True if the condition is removed """
+        """ Progress the duration returns True if the condition is removed 
+        if removed remove will trigger the _expire method
+        """
         progress_result = self.duration.progress()
         if progress_result:
-            self.remove_condition_modifiers()
+            self.remove(expire=True)
         return progress_result
     
     def long_rest(self) -> None:
