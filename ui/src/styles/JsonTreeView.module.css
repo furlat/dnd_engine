@@ -1,0 +1,51 @@
+.node {
+  font-family: monospace;
+  line-height: 1.5;
+}
+
+.toggle {
+  cursor: pointer;
+  color: #888;
+  margin-right: 4px;
+}
+
+.bracket {
+  color: #444;
+}
+
+.label {
+  color: #881391;
+  margin-right: 4px;
+}
+
+.property {
+  margin-left: 16px;
+}
+
+.string {
+  color: #1a8e37;
+}
+
+.number {
+  color: #0000cd;
+}
+
+.boolean {
+  color: #0000cd;
+}
+
+.null {
+  color: #808080;
+}
+
+.undefined {
+  color: #808080;
+}
+
+.empty {
+  color: #444;
+}
+
+.comma {
+  color: #444;
+} 
