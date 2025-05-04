@@ -92,7 +92,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
   return (
     <>
       <Paper
-        sx={{ p: 2, cursor: 'pointer', display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}
+        sx={{ p: 1.5, cursor: 'pointer', display: 'flex', gap: 1.5, alignItems: 'center', mb: 2, minHeight: 90 }}
         elevation={3}
         onClick={() => setOpen(true)}
       >

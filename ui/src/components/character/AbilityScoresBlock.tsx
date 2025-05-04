@@ -408,7 +408,7 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                 elevation={3} 
                 sx={{ 
                   textAlign: 'center', 
-                  p: 2,
+                  p: 1.5,
                   cursor: 'pointer',
                   '&:hover': {
                     bgcolor: theme.palette.action.hover
@@ -419,21 +419,15 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                 <Typography variant="subtitle1" gutterBottom>
                   {label}
                 </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', mb: 1 }}>
-                  <Typography variant="h4">
-                    {abilityScore.score}
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: 0.5 }}>
+                  <Typography variant="h4">{abilityScore.score}</Typography>
+                  <Typography
+                    variant="subtitle1"
+                    color={ability.modifier >= 0 ? 'success.main' : 'error.main'}
+                  >
+                    ({modifierText})
                   </Typography>
-                  {showNormalizedScore && (
-                    <Typography variant="caption" sx={{ ml: 1 }}>
-                      ({abilityScore.normalized_score})
-                    </Typography>
-                  )}
                 </Box>
-                <Chip 
-                  label={modifierText} 
-                  color={ability.modifier >= 0 ? "success" : "error"} 
-                  size="small"
-                />
               </Paper>
             </Grid>
           );
