@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Character, ModifiableValueSnapshot } from '../../models/character';
+import ItemDetailsDialog from './ItemDetailsDialog';
 
 interface Props {
   entity: Character;
@@ -66,8 +67,9 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
   const acCalc = entity.ac_calculation;
   const equipment = entity.equipment;
 
-  // dialog state - must be declared before any early return per hooks rules
+  // dialog states
   const [open, setOpen] = React.useState(false);
+  const [itemDetailsOpen, setItemDetailsOpen] = React.useState<'armor' | 'shield' | null>(null);
 
   if (!acCalc) return null;
 
@@ -77,8 +79,27 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
   const combinedDex = acCalc.combined_dexterity_bonus?.normalized_score;
   const maxDex = acCalc.max_dexterity_bonus?.normalized_score;
 
-  const bodyArmorName = equipment.body_armor ? equipment.body_armor.name : equipment.unarmored_ac_type;
+  const bodyArmorName = equipment.body_armor ? equipment.body_armor.name : 'No Armor';
+  const armorType = equipment.body_armor ? equipment.body_armor.type : 'Unarmored';
   const shieldName = equipment.weapon_off_hand && (equipment.weapon_off_hand as any).ac_bonus ? (equipment.weapon_off_hand as any).name : undefined;
+
+  // Get armor type color
+  const getArmorTypeColor = () => {
+    if (!equipment.body_armor) return 'default';
+    switch (equipment.body_armor.type) {
+      case 'LIGHT': return 'success';
+      case 'MEDIUM': return 'warning';
+      case 'HEAVY': return 'error';
+      case 'CLOTH': return 'info';
+      default: return 'default';
+    }
+  };
+
+  // Format armor type display
+  const formatArmorType = (type: string) => {
+    if (type === 'Unarmored') return type;
+    return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+  };
 
   // Normalize arrays so we avoid optional chaining complaints
   const abilityBonuses = acCalc.ability_bonuses ?? [];
@@ -136,20 +157,56 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
         Armor
       </Typography>
       <Paper
-        sx={{ p: 2, cursor: 'pointer', display: 'flex', gap: 2, alignItems: 'center' }}
+        sx={{ p: 2, cursor: 'pointer', display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
         elevation={3}
         onClick={() => setOpen(true)}
       >
         <Typography variant="h4" color="primary">
           {totalAC}
         </Typography>
-        <Chip label={isUnarmored ? 'Unarmored' : 'Armored'} size="small" color={isUnarmored ? 'default' : 'secondary'} />
-        {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
-          <Chip label={`Dex ${combinedDex}/${maxDex}`} size="small" />
-        )}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Armor Type Chip */}
+          <Chip 
+            label={formatArmorType(armorType)} 
+            size="small" 
+            color={getArmorTypeColor()}
+          />
+          {/* Armor Name Chip */}
+          <Chip 
+            label={bodyArmorName} 
+            size="small" 
+            variant="outlined"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (equipment.body_armor) setItemDetailsOpen('armor');
+            }}
+            sx={{ cursor: equipment.body_armor ? 'pointer' : 'default' }}
+          />
+          {/* Shield Chip if present */}
+          {shieldName && (
+            <Chip 
+              label={shieldName} 
+              size="small" 
+              variant="outlined"
+              color="secondary"
+              onClick={(e) => {
+                e.stopPropagation();
+                setItemDetailsOpen('shield');
+              }}
+              sx={{ cursor: 'pointer' }}
+            />
+          )}
+          {/* Dex bonus chip */}
+          {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
+            <Chip 
+              label={`Dex ${combinedDex}/${maxDex}`} 
+              size="small"
+            />
+          )}
+        </Box>
       </Paper>
 
-      {/* Detail dialog */}
+      {/* AC Details Dialog */}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Armor Details</DialogTitle>
         <DialogContent dividers>
@@ -164,9 +221,26 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
                 <Typography variant="body2" color="text.secondary">
                   Armor Type
                 </Typography>
-                <Typography variant="h6" gutterBottom>
-                  {isUnarmored ? bodyArmorName : bodyArmorName + (shieldName ? ` + ${shieldName}` : '')}
-                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                  <Chip 
+                    label={formatArmorType(armorType)} 
+                    size="small" 
+                    color={getArmorTypeColor()}
+                  />
+                  <Typography variant="h6">
+                    {bodyArmorName}
+                  </Typography>
+                </Box>
+                {shieldName && (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Shield
+                    </Typography>
+                    <Typography variant="h6" gutterBottom>
+                      {shieldName}
+                    </Typography>
+                  </>
+                )}
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="body2" color="text.secondary">
                   Total AC
@@ -212,6 +286,26 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
           <Button onClick={() => setOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Armor Details Dialog */}
+      {equipment.body_armor && (
+        <ItemDetailsDialog
+          open={itemDetailsOpen === 'armor'}
+          onClose={() => setItemDetailsOpen(null)}
+          item={equipment.body_armor}
+          itemType="armor"
+        />
+      )}
+
+      {/* Shield Details Dialog */}
+      {equipment.weapon_off_hand && (equipment.weapon_off_hand as any).ac_bonus && (
+        <ItemDetailsDialog
+          open={itemDetailsOpen === 'shield'}
+          onClose={() => setItemDetailsOpen(null)}
+          item={equipment.weapon_off_hand}
+          itemType="shield"
+        />
+      )}
     </Box>
   );
 };
