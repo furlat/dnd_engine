@@ -20,6 +20,7 @@ import {
   SavingThrowsSection,
   HealthSection,
   ArmorSection,
+  AttackSection,
 } from '../components/character';
 import TabPanel from '../components/common/TabPanel';
 
@@ -137,6 +138,7 @@ const CharacterSheetPage: React.FC = () => {
             <Tab label="Saving Throws" id="tab-2" aria-controls="tabpanel-2" />
             <Tab label="Health" id="tab-3" aria-controls="tabpanel-3" />
             <Tab label="Armor" id="tab-4" aria-controls="tabpanel-4" />
+            <Tab label="Attack" id="tab-5" aria-controls="tabpanel-5" />
           </Tabs>
         </Box>
         
@@ -169,6 +171,11 @@ const CharacterSheetPage: React.FC = () => {
         {/* Armor Tab */}
         <TabPanel value={tabValue} index={4}>
           <ArmorSection entity={character} />
+        </TabPanel>
+
+        {/* Attack Tab */}
+        <TabPanel value={tabValue} index={5}>
+          <AttackSection entity={character} />
         </TabPanel>
       </Box>
     </Box>

@@ -80,6 +80,56 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
   const bodyArmorName = equipment.body_armor ? equipment.body_armor.name : equipment.unarmored_ac_type;
   const shieldName = equipment.weapon_off_hand && (equipment.weapon_off_hand as any).ac_bonus ? (equipment.weapon_off_hand as any).name : undefined;
 
+  // Normalize arrays so we avoid optional chaining complaints
+  const abilityBonuses = acCalc.ability_bonuses ?? [];
+  const abilityModifierBonuses = acCalc.ability_modifier_bonuses ?? [];
+  const unarmoredAbilities = acCalc.unarmored_abilities ?? [];
+
+  // Build arrays for display
+  const unarmoredValues = acCalc.unarmored_values ?? [];
+  const armoredValues = acCalc.armored_values ?? [];
+
+  const leftValues: ModifiableValueSnapshot[] = [];
+  if (isUnarmored) {
+    leftValues.push(...unarmoredValues, ...abilityBonuses, ...abilityModifierBonuses);
+    if (acCalc.max_dexterity_bonus) {
+      leftValues.push(acCalc.max_dexterity_bonus);
+    }
+  } else {
+    leftValues.push(...armoredValues);
+    if (acCalc.combined_dexterity_bonus) leftValues.push(acCalc.combined_dexterity_bonus);
+    if (acCalc.max_dexterity_bonus) leftValues.push(acCalc.max_dexterity_bonus);
+  }
+
+  const breakdownItems: { label: string; mv: ModifiableValueSnapshot }[] = [];
+  if (isUnarmored) {
+    unarmoredValues.forEach((mv) => breakdownItems.push({ label: mv.name, mv }));
+    abilityBonuses.forEach((mv, idx) =>
+      breakdownItems.push({
+        label: unarmoredAbilities[idx] ? `${unarmoredAbilities[idx]} Score` : `Ability Bonus ${idx + 1}`,
+        mv,
+      })
+    );
+    abilityModifierBonuses.forEach((mv, idx) =>
+      breakdownItems.push({
+        label: unarmoredAbilities[idx] ? `${unarmoredAbilities[idx]} Modifier` : `Ability Modifier ${idx + 1}`,
+        mv,
+      })
+    );
+    if (acCalc.max_dexterity_bonus) {
+      breakdownItems.push({ label: 'Max Dex Allowed', mv: acCalc.max_dexterity_bonus });
+    }
+  } else {
+    armoredValues.forEach((mv) => breakdownItems.push({ label: mv.name, mv }));
+    if (acCalc.combined_dexterity_bonus)
+      breakdownItems.push({ label: 'Dexterity Bonus (Capped)', mv: acCalc.combined_dexterity_bonus });
+    if (acCalc.dexterity_bonus) breakdownItems.push({ label: 'Dexterity Score', mv: acCalc.dexterity_bonus });
+    if (acCalc.dexterity_modifier_bonus)
+      breakdownItems.push({ label: 'Dexterity Modifier', mv: acCalc.dexterity_modifier_bonus });
+    if (acCalc.max_dexterity_bonus)
+      breakdownItems.push({ label: 'Max Dex Allowed', mv: acCalc.max_dexterity_bonus });
+  }
+
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
@@ -131,39 +181,19 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
                 Component Values
               </Typography>
               <Paper sx={{ p: 2 }} elevation={1}>
-                {isUnarmored ? (
-                  <>
-                    {acCalc.unarmored_values?.map((mv, i) => (
-                      <React.Fragment key={i}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-                          <Typography variant="body2" color="text.secondary">
-                            {mv.name}
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {format(mv.normalized_score)}
-                          </Typography>
-                        </Box>
-                        {i < (acCalc.unarmored_values?.length ?? 0) - 1 && <Divider sx={{ my: 1 }} />}
-                      </React.Fragment>
-                    ))}
-                  </>
-                ) : (
-                  <>
-                    {acCalc.armored_values?.map((mv, i) => (
-                      <React.Fragment key={i}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-                          <Typography variant="body2" color="text.secondary">
-                            {mv.name}
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {format(mv.normalized_score)}
-                          </Typography>
-                        </Box>
-                        {i < (acCalc.armored_values?.length ?? 0) - 1 && <Divider sx={{ my: 1 }} />}
-                      </React.Fragment>
-                    ))}
-                  </>
-                )}
+                {leftValues.map((mv, idx) => (
+                  <React.Fragment key={idx}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {mv.name}
+                      </Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {format(mv.normalized_score)}
+                      </Typography>
+                    </Box>
+                    {idx < leftValues.length - 1 && <Divider sx={{ my: 1 }} />}
+                  </React.Fragment>
+                ))}
               </Paper>
             </Grid>
 
@@ -172,16 +202,9 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
               <Typography variant="h6" gutterBottom>
                 Modifier Breakdown
               </Typography>
-              {isUnarmored ? (
-                <>
-                  {acCalc.ability_bonuses && <ChannelBreakdown mv={acCalc.ability_bonuses[0]} label="Ability Bonus" />}
-                  {acCalc.ability_modifier_bonuses && <ChannelBreakdown mv={acCalc.ability_modifier_bonuses[0]} label="Ability Modifier Bonus" />}
-                </>
-              ) : (
-                <>
-                  {acCalc.combined_dexterity_bonus && <ChannelBreakdown mv={acCalc.combined_dexterity_bonus} label="Dexterity Bonus" />}
-                </>
-              )}
+              {breakdownItems.map(({ label, mv }, idx) => (
+                <ChannelBreakdown key={idx} mv={mv} label={label} />
+              ))}
             </Grid>
           </Grid>
         </DialogContent>
