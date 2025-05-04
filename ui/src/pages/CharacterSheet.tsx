@@ -20,10 +20,12 @@ import { EntityProvider, useEntity } from '../contexts/EntityContext';
 import TabPanel from '../components/common/TabPanel';
 
 // Import character components and modifiers
-import { 
-  AbilityScoresBlock, 
-  SkillsSection, 
-  EquipmentSection 
+import {
+  AbilityScoresBlock,
+  SkillsSection,
+  ArmorSection,
+  SavingThrowsSection,
+  HealthSection,
 } from '../components/character';
 import { ModifierPanel } from '../components/modifiers';
 
@@ -118,8 +120,9 @@ const CharacterSheetContent: React.FC = () => {
               >
                 <Tab label="Abilities" id="tab-0" aria-controls="tabpanel-0" />
                 <Tab label="Skills" id="tab-1" aria-controls="tabpanel-1" />
-                <Tab label="Equipment" id="tab-2" aria-controls="tabpanel-2" />
-                <Tab label="Combat" id="tab-3" aria-controls="tabpanel-3" />
+                <Tab label="Saving Throws" id="tab-2" aria-controls="tabpanel-2" />
+                <Tab label="Health" id="tab-3" aria-controls="tabpanel-3" />
+                <Tab label="Armor" id="tab-4" aria-controls="tabpanel-4" />
               </Tabs>
             </Box>
             
@@ -128,15 +131,22 @@ const CharacterSheetContent: React.FC = () => {
             </TabPanel>
             
             <TabPanel value={tabValue} index={1}>
-              <SkillsSection />
+              <SkillsSection skillSet={entity.skill_set} skillCalculations={entity.skill_calculations} />
             </TabPanel>
             
             <TabPanel value={tabValue} index={2}>
-              <EquipmentSection />
+              <SavingThrowsSection 
+                savingThrows={entity.saving_throws} 
+                savingThrowCalculations={entity.saving_throw_calculations}
+              />
             </TabPanel>
             
             <TabPanel value={tabValue} index={3}>
-              <Typography>Combat content coming soon</Typography>
+              <HealthSection health={entity.health} />
+            </TabPanel>
+            
+            <TabPanel value={tabValue} index={4}>
+              <ArmorSection entity={entity} />
             </TabPanel>
           </Box>
         </Grid>
