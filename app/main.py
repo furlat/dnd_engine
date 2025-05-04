@@ -1,42 +1,55 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from uuid import UUID
-
-# Import the endpoints
-from app.api.endpoints import values
-
-# For testing, let's import and create a sample entity
-from dnd.monsters.circus_fighter import create_warrior
+import uvicorn
 from uuid import uuid4
+import sys
+import os
+from fastapi.middleware.cors import CORSMiddleware
 
+# Add the parent directory to sys.path to allow importing from dnd package
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import entity registry and entities
+from dnd.entity import Entity
+from dnd.monsters.circus_fighter import create_warrior
+
+# Import API routers
+from app.api.routes.entities import router as entities_router
+
+# Create FastAPI application
 app = FastAPI(
-    title="D&D Engine API",
-    description="API for the D&D 5e game engine",
-    version="0.1.0",
+    title="DnD Engine API", 
+    description="API for accessing the DnD Engine entity registry",
+    version="0.1.0"
 )
 
-# Add CORS middleware for the frontend
+# Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this to your frontend URL
+    allow_origins=["http://localhost:3000"],  # React app origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include the routers
-app.include_router(values.router, prefix="/api", tags=["values"])
+# Include routers
+app.include_router(entities_router, prefix="/api")
 
-# Create a sample entity on startup for testing
+# Initialize test entities
 @app.on_event("startup")
-async def startup_event():
-    # Create a sample entity
-    source_id = uuid4()
-    proficiency_bonus = 2
-    entity = create_warrior(source_id, proficiency_bonus, name="Sample Warrior")
-    print(f"Created sample entity with UUID: {source_id}")
-    print(f"entities attack bonus uuid: {entity.equipment.attack_bonus.uuid} with score: {entity.equipment.attack_bonus.normalized_score}")
-    print(f"entities normalized strenght score uuid: {entity.ability_scores.strength.ability_score.uuid} with score: {entity.ability_scores.strength.ability_score.normalized_score}")
-@app.get("/")
-async def root():
-    return {"message": "Welcome to the D&D Engine API"}
+def initialize_test_entities():
+    """Create test entities on startup"""
+    # Create a warrior from circus_fighter.py
+    warrior_uuid = uuid4()
+    warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Test Warrior")
+    
+    # Create a second entity for testing
+    rogue_uuid = uuid4()
+    rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Test Rogue")
+    
+    print(f"Created test entities with UUIDs:")
+    print(f"- Test Warrior: {warrior_uuid}")
+    print(f"- Test Rogue: {rogue_uuid}")
+
+# Run the app with uvicorn
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
