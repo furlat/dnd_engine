@@ -7,8 +7,8 @@ from dnd.interfaces.abilities import AbilityScoresSnapshot
 from dnd.interfaces.skills import SkillSetSnapshot, SkillBonusCalculationSnapshot
 from dnd.interfaces.equipment import EquipmentSnapshot, AttackBonusCalculationSnapshot, ACBonusCalculationSnapshot
 from dnd.interfaces.values import ModifiableValueSnapshot
-from dnd.core.events import SkillName, WeaponSlot
-from dnd.interfaces.saving_throws import SavingThrowSetSnapshot
+from dnd.core.events import SkillName, WeaponSlot, AbilityName
+from dnd.interfaces.saving_throws import SavingThrowSetSnapshot, SavingThrowBonusCalculationSnapshot
 from dnd.interfaces.health import HealthSnapshot
 
 class EntitySnapshot(BaseModel):
@@ -34,12 +34,13 @@ class EntitySnapshot(BaseModel):
     skill_calculations: Dict[SkillName, SkillBonusCalculationSnapshot] = Field(default_factory=dict)
     attack_calculations: Dict[WeaponSlot, AttackBonusCalculationSnapshot] = Field(default_factory=dict)
     ac_calculation: Optional[ACBonusCalculationSnapshot] = None
+    saving_throw_calculations: Dict[AbilityName, SavingThrowBonusCalculationSnapshot] = Field(default_factory=dict)
     
     # Other important data
     # active_conditions: Dict[str, ConditionSnapshot] = Field(default_factory=dict)
     
     @classmethod
-    def from_engine(cls, entity, include_skill_calculations=False, include_attack_calculations=False, include_ac_calculation=False):
+    def from_engine(cls, entity, include_skill_calculations=False, include_attack_calculations=False, include_ac_calculation=False, include_saving_throw_calculations=False):
         """
         Create a snapshot from an engine Entity object
         
@@ -48,6 +49,7 @@ class EntitySnapshot(BaseModel):
             include_skill_calculations: Whether to include detailed skill calculations
             include_attack_calculations: Whether to include detailed attack calculations
             include_ac_calculation: Whether to include detailed AC calculation
+            include_saving_throw_calculations: Whether to include detailed saving throw calculations
         """
         # Create skill calculations if requested
         skill_calculations = {}
@@ -69,18 +71,27 @@ class EntitySnapshot(BaseModel):
         if include_ac_calculation:
             ac_calculation = ACBonusCalculationSnapshot.from_engine(entity)
         
+        # Create saving throw calculations if requested
+        saving_throw_calculations = {}
+        if include_saving_throw_calculations:
+            ability_names = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+            from dnd.interfaces.saving_throws import SavingThrowBonusCalculationSnapshot
+            for ability_name in ability_names:
+                saving_throw_calculations[ability_name] = SavingThrowBonusCalculationSnapshot.from_engine(entity, ability_name)
+        
         return cls(
             uuid=entity.uuid,
             name=entity.name,
             description=entity.description,
             ability_scores=AbilityScoresSnapshot.from_engine(entity.ability_scores),
             skill_set=SkillSetSnapshot.from_engine(entity.skill_set, entity),
-            equipment=EquipmentSnapshot.from_engine(entity.equipment),
+            equipment=EquipmentSnapshot.from_engine(entity.equipment, entity=entity),
             proficiency_bonus=ModifiableValueSnapshot.from_engine(entity.proficiency_bonus),
             skill_calculations=skill_calculations,
             attack_calculations=attack_calculations,
             ac_calculation=ac_calculation,
             saving_throws=SavingThrowSetSnapshot.from_engine(entity.saving_throws, entity),
             health=HealthSnapshot.from_engine(entity.health, entity),
+            saving_throw_calculations=saving_throw_calculations,
             # Add other blocks as they're implemented
         )

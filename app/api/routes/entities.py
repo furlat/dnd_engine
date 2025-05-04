@@ -52,7 +52,8 @@ async def get_entity_by_uuid(
     entity: Entity = Depends(get_entity), 
     include_skill_calculations: bool = False,
     include_attack_calculations: bool = False,
-    include_ac_calculation: bool = False
+    include_ac_calculation: bool = False,
+    include_saving_throw_calculations: bool = False
 ):
     """Get an entity by UUID and convert to interface model"""
     # Convert the entity to its interface counterpart and return directly
@@ -60,7 +61,8 @@ async def get_entity_by_uuid(
         entity, 
         include_skill_calculations=include_skill_calculations,
         include_attack_calculations=include_attack_calculations,
-        include_ac_calculation=include_ac_calculation
+        include_ac_calculation=include_ac_calculation,
+        include_saving_throw_calculations=include_saving_throw_calculations
     )
 
 @router.get("/{entity_uuid}/health", response_model=HealthSnapshot)
@@ -81,7 +83,7 @@ async def get_entity_skill_set(entity: Entity = Depends(get_entity)):
 @router.get("/{entity_uuid}/equipment", response_model=EquipmentSnapshot)
 async def get_entity_equipment(entity: Entity = Depends(get_entity)):
     """Get entity equipment snapshot"""
-    return EquipmentSnapshot.from_engine(entity.equipment)
+    return EquipmentSnapshot.from_engine(entity.equipment, entity=entity)
 
 @router.get("/{entity_uuid}/saving_throws", response_model=SavingThrowSetSnapshot)
 async def get_entity_saving_throws(entity: Entity = Depends(get_entity)):

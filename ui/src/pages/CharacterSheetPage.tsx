@@ -14,7 +14,13 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { fetchCharacter } from '../api/characterApi';
 import { Character } from '../models/character';
-import AbilityScoresBlock from '../components/character/AbilityScoresBlock';
+import {
+  AbilityScoresBlock,
+  SkillsSection,
+  SavingThrowsSection,
+  HealthSection,
+  ArmorSection,
+} from '../components/character';
 import TabPanel from '../components/common/TabPanel';
 
 // Define the params interface
@@ -128,8 +134,9 @@ const CharacterSheetPage: React.FC = () => {
           >
             <Tab label="Abilities" id="tab-0" aria-controls="tabpanel-0" />
             <Tab label="Skills" id="tab-1" aria-controls="tabpanel-1" />
-            <Tab label="Equipment" id="tab-2" aria-controls="tabpanel-2" />
-            <Tab label="Combat" id="tab-3" aria-controls="tabpanel-3" />
+            <Tab label="Saving Throws" id="tab-2" aria-controls="tabpanel-2" />
+            <Tab label="Health" id="tab-3" aria-controls="tabpanel-3" />
+            <Tab label="Armor" id="tab-4" aria-controls="tabpanel-4" />
           </Tabs>
         </Box>
         
@@ -142,17 +149,26 @@ const CharacterSheetPage: React.FC = () => {
         
         {/* Skills Tab */}
         <TabPanel value={tabValue} index={1}>
-          <Typography>Skills content coming soon</Typography>
+          {character.skill_set && (
+            <SkillsSection skillSet={character.skill_set} skillCalculations={(character as any).skill_calculations} />
+          )}
         </TabPanel>
         
-        {/* Equipment Tab */}
+        {/* Saving Throws Tab */}
         <TabPanel value={tabValue} index={2}>
-          <Typography>Equipment content coming soon</Typography>
+          {character.saving_throws && (
+            <SavingThrowsSection savingThrows={character.saving_throws} savingThrowCalculations={(character as any).saving_throw_calculations} />
+          )}
         </TabPanel>
         
-        {/* Combat Tab */}
+        {/* Health Tab */}
         <TabPanel value={tabValue} index={3}>
-          <Typography>Combat content coming soon</Typography>
+          {character.health && <HealthSection health={character.health} />}
+        </TabPanel>
+
+        {/* Armor Tab */}
+        <TabPanel value={tabValue} index={4}>
+          <ArmorSection entity={character} />
         </TabPanel>
       </Box>
     </Box>
