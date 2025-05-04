@@ -11,4 +11,4 @@ if __name__ == "__main__":
     print("  - Swagger UI: http://localhost:8000/docs")
     print("  - ReDoc: http://localhost:8000/redoc")
     print("\nPress Ctrl+C to stop the server")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, app_dir=os.path.dirname(os.path.abspath(__file__))) 
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, app_dir=os.path.dirname(os.path.abspath(__file__))) 

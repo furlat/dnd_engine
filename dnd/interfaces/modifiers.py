@@ -22,6 +22,7 @@ class ModifierSnapshot(BaseModel):
     @classmethod
     def from_engine(cls, modifier):
         """Create a snapshot from an engine modifier object"""
+        # Access all properties directly
         return cls(
             uuid=modifier.uuid,
             name=modifier.name,
@@ -39,11 +40,16 @@ class NumericalModifierSnapshot(ModifierSnapshot):
     @classmethod
     def from_engine(cls, modifier):
         """Create a snapshot from an engine NumericalModifier"""
-        base = super().from_engine(modifier)
+        # Create the snapshot with all required fields directly from the modifier
         return cls(
-            **base.model_dump(),
+            uuid=modifier.uuid,
+            name=modifier.name,
+            source_entity_uuid=modifier.source_entity_uuid,
+            source_entity_name=modifier.source_entity_name,
+            target_entity_uuid=modifier.target_entity_uuid,
+            target_entity_name=modifier.target_entity_name,
             value=modifier.value,
-            normalized_value=modifier.normalized_value if hasattr(modifier, 'normalized_value') else modifier.value
+            normalized_value=modifier.normalized_value
         )
 
 class AdvantageModifierSnapshot(ModifierSnapshot):
@@ -54,9 +60,14 @@ class AdvantageModifierSnapshot(ModifierSnapshot):
     @classmethod
     def from_engine(cls, modifier):
         """Create a snapshot from an engine AdvantageModifier"""
-        base = super().from_engine(modifier)
+        # Create the snapshot with all required fields directly from the modifier
         return cls(
-            **base.model_dump(),
+            uuid=modifier.uuid,
+            name=modifier.name,
+            source_entity_uuid=modifier.source_entity_uuid,
+            source_entity_name=modifier.source_entity_name,
+            target_entity_uuid=modifier.target_entity_uuid,
+            target_entity_name=modifier.target_entity_name,
             value=modifier.value,
             numerical_value=modifier.numerical_value
         )
@@ -68,9 +79,14 @@ class CriticalModifierSnapshot(ModifierSnapshot):
     @classmethod
     def from_engine(cls, modifier):
         """Create a snapshot from an engine CriticalModifier"""
-        base = super().from_engine(modifier)
+        # Create the snapshot with all required fields directly from the modifier
         return cls(
-            **base.model_dump(),
+            uuid=modifier.uuid,
+            name=modifier.name,
+            source_entity_uuid=modifier.source_entity_uuid,
+            source_entity_name=modifier.source_entity_name,
+            target_entity_uuid=modifier.target_entity_uuid,
+            target_entity_name=modifier.target_entity_name,
             value=modifier.value
         )
 
@@ -81,9 +97,14 @@ class AutoHitModifierSnapshot(ModifierSnapshot):
     @classmethod
     def from_engine(cls, modifier):
         """Create a snapshot from an engine AutoHitModifier"""
-        base = super().from_engine(modifier)
+        # Create the snapshot with all required fields directly from the modifier
         return cls(
-            **base.model_dump(),
+            uuid=modifier.uuid,
+            name=modifier.name,
+            source_entity_uuid=modifier.source_entity_uuid,
+            source_entity_name=modifier.source_entity_name,
+            target_entity_uuid=modifier.target_entity_uuid,
+            target_entity_name=modifier.target_entity_name,
             value=modifier.value
         )
 
@@ -96,9 +117,14 @@ class ResistanceModifierSnapshot(ModifierSnapshot):
     @classmethod
     def from_engine(cls, modifier):
         """Create a snapshot from an engine ResistanceModifier"""
-        base = super().from_engine(modifier)
+        # Create the snapshot with all required fields directly from the modifier
         return cls(
-            **base.model_dump(),
+            uuid=modifier.uuid,
+            name=modifier.name,
+            source_entity_uuid=modifier.source_entity_uuid,
+            source_entity_name=modifier.source_entity_name,
+            target_entity_uuid=modifier.target_entity_uuid,
+            target_entity_name=modifier.target_entity_name,
             value=modifier.value,
             damage_type=modifier.damage_type,
             numerical_value=modifier.numerical_value
@@ -111,8 +137,13 @@ class SizeModifierSnapshot(ModifierSnapshot):
     @classmethod
     def from_engine(cls, modifier):
         """Create a snapshot from an engine SizeModifier"""
-        base = super().from_engine(modifier)
+        # Create the snapshot with all required fields directly from the modifier
         return cls(
-            **base.model_dump(),
+            uuid=modifier.uuid,
+            name=modifier.name,
+            source_entity_uuid=modifier.source_entity_uuid,
+            source_entity_name=modifier.source_entity_name,
+            target_entity_uuid=modifier.target_entity_uuid,
+            target_entity_name=modifier.target_entity_name,
             value=modifier.value
         )

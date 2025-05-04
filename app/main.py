@@ -3,6 +3,7 @@ import uvicorn
 from uuid import uuid4
 import sys
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 # Add the parent directory to sys.path to allow importing from dnd package
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +20,15 @@ app = FastAPI(
     title="DnD Engine API", 
     description="API for accessing the DnD Engine entity registry",
     version="0.1.0"
+)
+
+# Configure CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # React app origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers
