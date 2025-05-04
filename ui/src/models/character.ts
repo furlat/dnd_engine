@@ -25,6 +25,7 @@ export interface AbilityScore {
   modifier: number;
   channels: ModifierChannel[];
   ability_score?: ModifiableValueSnapshot;
+  modifier_bonus?: ModifiableValueSnapshot;
 }
 
 export interface AbilityScoresSnapshot {
