@@ -193,8 +193,11 @@ class EquipmentSnapshot(BaseModel):
     unarmed_dice_numbers: int
     unarmed_properties: List[str] = Field(default_factory=list)  # WeaponProperty values as strings
     
+    # Total Armor Class – computed from the owning entity if available
+    armor_class: Optional[int] = None
+    
     @classmethod
-    def from_engine(cls, equipment):
+    def from_engine(cls, equipment, entity: Optional[Any] = None):
         """Create a snapshot from an engine Equipment object"""
         # Handle optional armor pieces
         helmet = ArmorSnapshot.from_engine(equipment.helmet) if equipment.helmet else None
@@ -219,6 +222,22 @@ class EquipmentSnapshot(BaseModel):
             else:
                 weapon_off_hand = WeaponSnapshot.from_engine(equipment.weapon_off_hand)
         
+        # Calculate final AC if the full Entity is provided (so that ability modifiers and other bonuses
+        # can be taken into account). We purposefully keep this optional so that callers such as the
+        # standalone `/equipment` API or other internal usages that don't have an Entity handy can still
+        # rely on this method.
+
+        final_ac: Optional[int] = None
+        if entity is not None:
+            try:
+                # Entity.ac_bonus returns a ModifiableValue – we need the normalized score only.
+                ac_value = entity.ac_bonus()
+                final_ac = ac_value.normalized_score if hasattr(ac_value, "normalized_score") else None
+            except Exception:
+                # In the unlikely event of an error (for example, the entity is missing required data),
+                # we fall back to None so that API callers still receive a valid response rather than a 500.
+                final_ac = None
+
         return cls(
             uuid=equipment.uuid,
             name=equipment.name,
@@ -249,7 +268,8 @@ class EquipmentSnapshot(BaseModel):
             unarmed_damage_type=equipment.unarmed_damage_type,
             unarmed_damage_dice=equipment.unarmed_damage_dice,
             unarmed_dice_numbers=equipment.unarmed_dice_numbers,
-            unarmed_properties=[prop.value for prop in equipment.unarmed_properties]
+            unarmed_properties=[prop.value for prop in equipment.unarmed_properties],
+            armor_class=final_ac
         )
 
 class AttackBonusCalculationSnapshot(BaseModel):

@@ -1,8 +1,8 @@
 import * as React from 'react';
 import {
   Box,
-  Typography,
   Grid,
+  Typography,
   Paper,
   Chip,
   Dialog,
@@ -20,36 +20,39 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
-  SkillSetSnapshot,
-  Skill,
-  SkillBonusCalculationSnapshot,
+  SavingThrowSetSnapshot,
+  SavingThrowSnapshot,
+  SavingThrowBonusCalculationSnapshot,
 } from '../../models/character';
 
 interface Props {
-  skillSet: SkillSetSnapshot;
-  skillCalculations?: Record<string, SkillBonusCalculationSnapshot>;
+  savingThrows: SavingThrowSetSnapshot;
+  savingThrowCalculations?: Record<string, SavingThrowBonusCalculationSnapshot>;
 }
 
 const formatBonus = (n: number) => `${n}`;
 
-// Helper to render modifier breakdown similar to Ability block
-const ModifierBreakdown: React.FC<{ skill: Skill; calc?: SkillBonusCalculationSnapshot }> = ({ skill, calc }): JSX.Element => {
-  // Gather sections
+// Helper to render modifier breakdown list
+const ModifierBreakdown: React.FC<{ savingThrow: SavingThrowSnapshot; calc?: SavingThrowBonusCalculationSnapshot }> = ({ savingThrow, calc }) => {
+  // Helper to grab channels safely
   const extractChannels = (mv: any) => (mv && mv.channels ? mv.channels : []);
+
   const sections: { label: string; channels: any[] }[] = [];
 
-  // Proficiency Bonus
-  if (calc) sections.push({ label: 'Proficiency Bonus', channels: extractChannels(calc.normalized_proficiency_bonus) });
-  // Ability Bonus
-  if (calc) sections.push({ label: 'Ability Bonus', channels: extractChannels(calc.ability_bonus) });
-  // Ability Modifier Bonus
-  if (calc) sections.push({ label: 'Ability Modifier Bonus', channels: extractChannels(calc.ability_modifier_bonus) });
+  // 1. Proficiency Bonus
+  if (calc) {
+    sections.push({ label: 'Proficiency Bonus', channels: extractChannels(calc.normalized_proficiency_bonus) });
+    sections.push({ label: 'Ability Bonus', channels: extractChannels(calc.ability_bonus) });
+    sections.push({ label: 'Ability Modifier Bonus', channels: extractChannels(calc.ability_modifier_bonus) });
+  }
 
-  // Skill Bonus
-  const skillBonusMV = (skill as any).skill_bonus as any | undefined;
-  sections.push({ label: 'Skill Bonus', channels: extractChannels(skillBonusMV) });
+  // 2. Saving Throw Bonus itself (specific modifiers)
+  const stBonusCh = extractChannels((savingThrow as any).bonus);
+  sections.push({ label: 'Saving Throw Bonus', channels: stBonusCh });
 
+  // Filter out empty groups
   const activeSections = sections.filter((s) => s.channels.length > 0);
+
   if (activeSections.length === 0) {
     return (
       <Paper elevation={1} sx={{ p: 2 }}>
@@ -82,7 +85,11 @@ const ModifierBreakdown: React.FC<{ skill: Skill; calc?: SkillBonusCalculationSn
                         primaryTypographyProps={{ variant: 'body2' }}
                         secondaryTypographyProps={{ variant: 'caption' }}
                       />
-                      <Chip label={formatBonus(mod.value)} size="small" color={mod.value >= 0 ? 'success' : 'error'} />
+                      <Chip
+                        label={formatBonus(mod.value)}
+                        size="small"
+                        color={mod.value >= 0 ? 'success' : 'error'}
+                      />
                     </ListItem>
                   ))}
                 </List>
@@ -95,34 +102,24 @@ const ModifierBreakdown: React.FC<{ skill: Skill; calc?: SkillBonusCalculationSn
   );
 };
 
-const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
-  const [selected, setSelected] = React.useState<Skill | null>(null);
+const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalculations }) => {
+  const [selected, setSelected] = React.useState<SavingThrowSnapshot | null>(null);
 
-  // Group skills by ability and keep D&D ability order
-  const abilityOrder = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-  const grouped = React.useMemo(() => {
-    const map: Record<string, Skill[]> = {};
-    Object.values(skillSet.skills).forEach((s) => {
-      if (!map[s.ability]) map[s.ability] = [];
-      map[s.ability].push(s);
-    });
-    // Ensure consistent ordering
-    return abilityOrder
-      .filter((a) => map[a]?.length)
-      .reduce((acc, ab) => {
-        acc[ab] = map[ab];
-        return acc;
-      }, {} as Record<string, Skill[]>);
-  }, [skillSet]);
+  // Convert map to array ordered by ability typical order
+  const ordered = React.useMemo(() => {
+    const order = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+    return order
+      .map((ability) => savingThrows.saving_throws[ability])
+      .filter(Boolean) as SavingThrowSnapshot[];
+  }, [savingThrows]);
 
-  // Detail dialog component
   const DetailDialog: React.FC = () => {
     if (!selected) return null;
-    const calc = skillCalculations ? skillCalculations[selected.name] : undefined;
+    const calc = savingThrowCalculations ? savingThrowCalculations[selected.ability] : undefined;
 
     return (
       <Dialog open onClose={() => setSelected(null)} maxWidth="md" fullWidth>
-        <DialogTitle>{selected.name.toUpperCase()} Details</DialogTitle>
+        <DialogTitle>{`${selected.ability.toUpperCase()} Saving Throw Details`}</DialogTitle>
         <DialogContent dividers>
           {calc ? (
             <Grid container spacing={2}>
@@ -138,9 +135,7 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
                       <Typography variant="body2" color="text.secondary">
                         Ability
                       </Typography>
-                      <Typography variant="h5">
-                        {calc.ability_name.toUpperCase()}
-                      </Typography>
+                      <Typography variant="h5">{selected.ability.toUpperCase()}</Typography>
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2" color="text.secondary">
@@ -163,7 +158,7 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
                 <Paper sx={{ p: 2 }} elevation={1}>
                   {[
                     { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_score },
-                    { label: 'Skill Bonus', value: calc.skill_bonus.normalized_score },
+                    { label: 'Saving Throw Bonus', value: calc.saving_throw_bonus.normalized_score },
                     { label: 'Ability Bonus', value: calc.ability_bonus.normalized_score },
                     { label: 'Ability Modifier Bonus', value: calc.ability_modifier_bonus.normalized_score },
                   ].map((row, idx, arr) => (
@@ -187,25 +182,19 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
                 <Typography variant="h6" gutterBottom>
                   Modifier Breakdown
                 </Typography>
-                <ModifierBreakdown skill={selected} calc={calc} />
+                <ModifierBreakdown savingThrow={selected} calc={calc} />
               </Grid>
 
-              {/* Debug full width */}
+              {/* Debug */}
               <Grid item xs={12}>
                 <Accordion sx={{ mt: 2 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    Debug JSON
-                  </AccordionSummary>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>Debug JSON</AccordionSummary>
                   <AccordionDetails>
-                    <pre style={{ fontSize: 12 }}>
-                      {JSON.stringify(selected, null, 2)}
-                    </pre>
+                    <pre style={{ fontSize: 12 }}>{JSON.stringify(selected, null, 2)}</pre>
                     {calc && (
                       <>
                         <Divider sx={{ my: 1 }} />
-                        <pre style={{ fontSize: 12 }}>
-                          {JSON.stringify(calc, null, 2)}
-                        </pre>
+                        <pre style={{ fontSize: 12 }}>{JSON.stringify(calc, null, 2)}</pre>
                       </>
                     )}
                   </AccordionDetails>
@@ -226,56 +215,42 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
-        Skills
+        Saving Throws
       </Typography>
-
-      {Object.entries(grouped).map(([ability, list]) => (
-        <Box key={ability} sx={{ mb: 3 }}>
-          <Typography variant="h6" color="primary" sx={{ mb: 1 }}>
-            {ability.toUpperCase()} Skills
-          </Typography>
-          <Grid container spacing={2}>
-            {list.map((skill) => {
-              const bonus = (skill as any).bonus ?? (skill as any).effective_bonus ?? 0;
-              const proficient = (skill as any).proficient;
-              const expertise = (skill as any).expertise;
-              return (
-                <Grid item xs={12} sm={6} md={4} key={skill.name}>
-                  <Paper
-                    elevation={2}
-                    sx={{
-                      p: 2,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      border: proficient ? 2 : 1,
-                      borderColor: expertise ? 'secondary.main' : proficient ? 'primary.main' : 'transparent',
-                    }}
-                    onClick={() => setSelected(skill)}
-                  >
-                    <Box>
-                      <Typography variant="subtitle1">{skill.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {ability}
-                      </Typography>
-                    </Box>
-                    <Box display="flex" alignItems="center">
-                      <Typography variant="h6" color={bonus >= 0 ? 'success.main' : 'error.main'}>
-                        {formatBonus(bonus)}
-                      </Typography>
-                    </Box>
-                  </Paper>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </Box>
-      ))}
-
+      <Grid container spacing={2}>
+        {ordered.map((st) => {
+          const bonus = st.effective_bonus ?? st.bonus?.normalized_score ?? 0;
+          return (
+            <Grid item xs={6} sm={4} md={2} key={st.name}>
+              <Paper
+                elevation={3}
+                sx={{
+                  textAlign: 'center',
+                  p: 2,
+                  cursor: 'pointer',
+                  minHeight: 120,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  border: st.proficiency ? 2 : 1,
+                  borderColor: st.proficiency ? 'primary.main' : 'transparent',
+                }}
+                onClick={() => setSelected(st)}
+              >
+                <Typography variant="subtitle1">{st.ability.toUpperCase()}</Typography>
+                <Typography variant="h5" color={bonus >= 0 ? 'success.main' : 'error.main'}>
+                  {formatBonus(bonus)}
+                </Typography>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
       <DetailDialog />
     </Box>
   );
 };
 
-export default SkillsSection; 
+export default SavingThrowsSection; 

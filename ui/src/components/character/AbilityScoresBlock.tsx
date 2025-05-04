@@ -22,8 +22,7 @@ import {
   CardContent
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { AbilityScoresSnapshot, AbilityScore, ModifierChannel, Modifier } from '../../models/character';
-import { ModifierPanel } from '../modifiers';
+import { AbilityScoresSnapshot, AbilityScore, ModifierChannel } from '../../models/character';
 
 interface AbilityScoresBlockProps {
   abilityScores: AbilityScoresSnapshot;
@@ -162,7 +161,7 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                       <Divider sx={{ my: 1 }} />
                       <Typography variant="body2" color="text.secondary">Ability Modifier</Typography>
                       <Typography variant="h4" color={ability.modifier >= 0 ? "success.main" : "error.main"}>
-                        {ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier}
+                        {ability.modifier}
                       </Typography>
                       
                       {/* Add the modifier calculation breakdown */}
@@ -233,7 +232,7 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                             <Typography variant="body2">{mod.name}</Typography>
                             <Chip 
                               size="small" 
-                              label={mod.value >= 0 ? `+${mod.value}` : mod.value}
+                              label={`${mod.value}`}
                               color={mod.value >= 0 ? "success" : "error"}
                             />
                           </Box>
@@ -262,7 +261,7 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                             <Typography variant="body2">{mod.name}</Typography>
                             <Chip 
                               size="small" 
-                              label={mod.value >= 0 ? `+${mod.value}` : mod.value}
+                              label={`${mod.value}`}
                               color={mod.value >= 0 ? "success" : "error"}
                             />
                           </Box>
@@ -284,42 +283,58 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                 Modifier Breakdown
               </Typography>
               
-              {hasChannels ? (
-                channels.map((channel, idx) => (
-                  <Box key={idx} sx={{ mb: 2 }}>
+              {/* Build accordion sections */}
+              {(() => {
+                const sections: { label: string; channels: ModifierChannel[] }[] = [];
+                if (hasChannels) {
+                  sections.push({ label: 'Ability Score Modifiers', channels });
+                }
+                if (modifierBonus.channels && modifierBonus.channels.length > 0) {
+                  sections.push({ label: 'Modifier Bonus Modifiers', channels: modifierBonus.channels });
+                }
+
+                if (sections.length === 0) {
+                  return (
                     <Paper elevation={1} sx={{ p: 2 }}>
-                      <Typography variant="subtitle1">{channel.name}</Typography>
-                      <Typography variant="h6">
-                        Total: {getTotalValue(channel) >= 0 ? `+${getTotalValue(channel)}` : getTotalValue(channel)}
-                      </Typography>
-                      
-                      <List dense disablePadding>
-                        {channel.value_modifiers.map((mod, modIdx) => (
-                          <ListItem key={modIdx} dense divider={modIdx < channel.value_modifiers.length - 1}>
-                            <ListItemText
-                              primary={mod.name}
-                              secondary={mod.source_entity_name}
-                              primaryTypographyProps={{ variant: 'body2' }}
-                              secondaryTypographyProps={{ variant: 'caption' }}
-                            />
-                            <Chip 
-                              label={mod.value >= 0 ? `+${mod.value}` : mod.value} 
-                              color={mod.value >= 0 ? "success" : "error"} 
-                              size="small"
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
+                      <Typography variant="body2">No detailed modifier breakdown available.</Typography>
                     </Paper>
-                  </Box>
-                ))
-              ) : (
-                <Paper elevation={1} sx={{ p: 2 }}>
-                  <Typography variant="body2">
-                    No detailed modifier breakdown available.
-                  </Typography>
-                </Paper>
-              )}
+                  );
+                }
+
+                return sections.map((section, sIdx) => (
+                  <Accordion key={sIdx} defaultExpanded sx={{ mb: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}> 
+                      <Typography variant="subtitle1">{section.label}</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {section.channels.map((channel, idx) => (
+                        <Box key={idx} sx={{ mb: 2 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            {channel.name} – Total: {getTotalValue(channel)}
+                          </Typography>
+                          <List dense disablePadding>
+                            {channel.value_modifiers.map((mod, mIdx) => (
+                              <ListItem key={mIdx} dense divider={mIdx < channel.value_modifiers.length - 1}>
+                                <ListItemText
+                                  primary={mod.name}
+                                  secondary={mod.source_entity_name}
+                                  primaryTypographyProps={{ variant: 'body2' }}
+                                  secondaryTypographyProps={{ variant: 'caption' }}
+                                />
+                                <Chip
+                                  label={`${mod.value}`}
+                                  color={mod.value >= 0 ? 'success' : 'error'}
+                                  size="small"
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      ))}
+                    </AccordionDetails>
+                  </Accordion>
+                ));
+              })()}
             </Grid>
             
             {/* Debug accordion for raw data inspection */}

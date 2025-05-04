@@ -1,9 +1,13 @@
 import AbilityScoresBlock from './AbilityScoresBlock';
-import EquipmentSection from './EquipmentSection';
 import SkillsSection from './SkillsSection';
+import SavingThrowsSection from './SavingThrowsSection';
+import HealthSection from './HealthSection';
+import ArmorSection from './ArmorSection';
 
 export {
   AbilityScoresBlock,
-  EquipmentSection,
-  SkillsSection
+  ArmorSection,
+  SkillsSection,
+  SavingThrowsSection,
+  HealthSection,
 }; 
