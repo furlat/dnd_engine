@@ -8,8 +8,6 @@ import {
   CircularProgress,
   Alert,
   Button,
-  Tabs,
-  Tab
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { fetchCharacter } from '../api/characterApi';
@@ -22,7 +20,6 @@ import {
   ArmorSection,
   AttackSection,
 } from '../components/character';
-import TabPanel from '../components/common/TabPanel';
 
 // Define the params interface
 type RouteParams = {
@@ -37,7 +34,6 @@ const CharacterSheetPage: React.FC = () => {
   const [character, setCharacter] = React.useState<Character | null>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [tabValue, setTabValue] = React.useState<number>(0);
 
   React.useEffect(() => {
     const loadCharacter = async () => {
@@ -58,10 +54,6 @@ const CharacterSheetPage: React.FC = () => {
 
     loadCharacter();
   }, [characterId]);
-
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number): void => {
-    setTabValue(newValue);
-  };
 
   const handleBack = (): void => {
     navigate('/');
@@ -126,57 +118,41 @@ const CharacterSheetPage: React.FC = () => {
         )}
       </Paper>
 
-      <Box sx={{ width: '100%' }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs 
-            value={tabValue} 
-            onChange={handleTabChange} 
-            aria-label="character sheet tabs"
-          >
-            <Tab label="Abilities" id="tab-0" aria-controls="tabpanel-0" />
-            <Tab label="Skills" id="tab-1" aria-controls="tabpanel-1" />
-            <Tab label="Saving Throws" id="tab-2" aria-controls="tabpanel-2" />
-            <Tab label="Health" id="tab-3" aria-controls="tabpanel-3" />
-            <Tab label="Armor" id="tab-4" aria-controls="tabpanel-4" />
-            <Tab label="Attack" id="tab-5" aria-controls="tabpanel-5" />
-          </Tabs>
-        </Box>
-        
-        {/* Abilities Tab */}
-        <TabPanel value={tabValue} index={0}>
-          {character.ability_scores && (
-            <AbilityScoresBlock abilityScores={character.ability_scores} />
-          )}
-        </TabPanel>
-        
-        {/* Skills Tab */}
-        <TabPanel value={tabValue} index={1}>
-          {character.skill_set && (
-            <SkillsSection skillSet={character.skill_set} skillCalculations={(character as any).skill_calculations} />
-          )}
-        </TabPanel>
-        
-        {/* Saving Throws Tab */}
-        <TabPanel value={tabValue} index={2}>
-          {character.saving_throws && (
-            <SavingThrowsSection savingThrows={character.saving_throws} savingThrowCalculations={(character as any).saving_throw_calculations} />
-          )}
-        </TabPanel>
-        
-        {/* Health Tab */}
-        <TabPanel value={tabValue} index={3}>
-          {character.health && <HealthSection health={character.health} />}
-        </TabPanel>
+      {/* Single-page layout */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Abilities */}
+        {character.ability_scores && (
+          <AbilityScoresBlock abilityScores={character.ability_scores} />
+        )}
 
-        {/* Armor Tab */}
-        <TabPanel value={tabValue} index={4}>
-          <ArmorSection entity={character} />
-        </TabPanel>
+        {/* Saving Throws */}
+        {character.saving_throws && (
+          <SavingThrowsSection
+            savingThrows={character.saving_throws}
+            savingThrowCalculations={(character as any).saving_throw_calculations}
+          />
+        )}
 
-        {/* Attack Tab */}
-        <TabPanel value={tabValue} index={5}>
-          <AttackSection entity={character} />
-        </TabPanel>
+        {/* Health, Armor & Attack side-by-side */}
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {character.health && <HealthSection health={character.health} />}
+              <ArmorSection entity={character} />
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <AttackSection entity={character} />
+          </Grid>
+        </Grid>
+
+        {/* Skills */}
+        {character.skill_set && (
+          <SkillsSection
+            skillSet={character.skill_set}
+            skillCalculations={(character as any).skill_calculations}
+          />
+        )}
       </Box>
     </Box>
   );
