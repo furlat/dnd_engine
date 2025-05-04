@@ -22,6 +22,7 @@ import {
   ListItem,
   ListItemText,
 } from '@mui/material';
+import ItemDetailsDialog from './ItemDetailsDialog';
 
 interface Props {
   entity: Character;
@@ -93,6 +94,7 @@ const buildComponentList = (calc: AttackBonusCalculationSnapshot) => {
 const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusCalculationSnapshot; equipment: EquipmentSnapshot; entity: Character }> = ({ slot, calc, equipment, entity }) => {
   const [open, setOpen] = React.useState(false);
   const [detailMode, setDetailMode] = React.useState<'attack' | 'damage'>('attack');
+  const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false);
 
   if (!calc) return null;
 
@@ -156,6 +158,20 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
   const damageType = weapon ? weapon.damage_type : equipment.unarmed_damage_type;
   const damageTypeLabel = typeof damageType === 'string' ? damageType.charAt(0).toUpperCase() + damageType.slice(1).toLowerCase() : String(damageType);
 
+  // Extra damage expressions
+  const extraDamageExprs = (() => {
+    if (!weapon || !weapon.extra_damages) return [];
+    return weapon.extra_damages.map((extra: any) => {
+      const base = `${extra.dice_numbers}d${extra.damage_dice}`;
+      const bonus = extra.damage_bonus?.normalized_score ?? 0;
+      const expr = bonus !== 0 ? `${base}${bonus > 0 ? '+' : ''}${bonus}` : base;
+      const type = typeof extra.damage_type === 'string' 
+        ? extra.damage_type.charAt(0).toUpperCase() + extra.damage_type.slice(1).toLowerCase() 
+        : String(extra.damage_type);
+      return { expr, type };
+    });
+  })();
+
   // Damage components list builder
   const buildDamageComponents = (): { label: string; mv: ModifiableValueSnapshot }[] => {
     const items: { label: string; mv: ModifiableValueSnapshot }[] = [];
@@ -168,6 +184,17 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
       items.push({ label: 'Ranged Damage Bonus', mv: equipment.ranged_damage_bonus });
     if (!calc.is_ranged && equipment.melee_damage_bonus)
       items.push({ label: 'Melee Damage Bonus', mv: equipment.melee_damage_bonus });
+    // Add extra damage bonuses if they exist
+    if (weapon && weapon.extra_damages) {
+      weapon.extra_damages.forEach((extra: any, idx: number) => {
+        if (extra.damage_bonus) {
+          items.push({ 
+            label: `Extra Damage ${idx + 1} Bonus`, 
+            mv: extra.damage_bonus 
+          });
+        }
+      });
+    }
     return items;
   };
 
@@ -201,17 +228,41 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
           </Typography>
         </Box>
         <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="subtitle1">{weaponName}</Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+              cursor: 'pointer', 
+              '&:hover': { textDecoration: 'underline' },
+              display: 'inline-block'
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (weapon) setItemDetailsOpen(true);
+            }}
+          >
+            {weaponName}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
             {slot === 'MAIN_HAND' ? 'Main Hand' : 'Off Hand'} – {rangeLabel}
           </Typography>
         </Box>
-        {/* Damage expression clickable */}
-        <Chip
-          size="small"
-          label={`${damageExpr} ${damageTypeLabel}`}
-          onClick={(e) => { e.stopPropagation(); setDetailMode('damage'); setOpen(true); }}
-        />
+        {/* Damage expressions */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <Chip
+            size="small"
+            label={`${damageExpr} ${damageTypeLabel}`}
+            onClick={(e) => { e.stopPropagation(); setDetailMode('damage'); setOpen(true); }}
+          />
+          {extraDamageExprs.map((extra, idx) => (
+            <Chip
+              key={idx}
+              size="small"
+              label={`${extra.expr} ${extra.type}`}
+              onClick={(e) => { e.stopPropagation(); setDetailMode('damage'); setOpen(true); }}
+              color="secondary"
+            />
+          ))}
+        </Box>
         {calc.is_ranged && <Chip size="small" label="Ranged" sx={{ ml: 0.5 }} />}
         {calc.properties.includes('Finesse') && <Chip size="small" label="Finesse" sx={{ ml: 0.5 }} />}
       </Paper>
@@ -288,16 +339,29 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
                 </Typography>
                 <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                   <Typography variant="body2" color="text.secondary">
-                    Damage Expression
+                    Base Damage
                   </Typography>
                   <Typography variant="h4" color="primary">
                     {damageExpr}
                   </Typography>
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Damage Type
-                  </Typography>
                   <Typography variant="h6">{damageTypeLabel}</Typography>
+                  
+                  {extraDamageExprs.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        Extra Damage
+                      </Typography>
+                      {extraDamageExprs.map((extra, idx) => (
+                        <Box key={idx} sx={{ mt: 1 }}>
+                          <Typography variant="h5" color="secondary">
+                            {extra.expr}
+                          </Typography>
+                          <Typography variant="subtitle1">{extra.type}</Typography>
+                        </Box>
+                      ))}
+                    </>
+                  )}
                 </Paper>
 
                 <Typography variant="h6" gutterBottom>
@@ -339,6 +403,16 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
           <Button onClick={() => setOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Item Details Dialog */}
+      {weapon && (
+        <ItemDetailsDialog
+          open={itemDetailsOpen}
+          onClose={() => setItemDetailsOpen(false)}
+          item={weapon}
+          itemType="weapon"
+        />
+      )}
     </>
   );
 };
