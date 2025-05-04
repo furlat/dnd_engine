@@ -154,12 +154,12 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
   })();
 
   const damageType = weapon ? weapon.damage_type : equipment.unarmed_damage_type;
-  const damageTypeAbbr = typeof damageType === 'string' ? damageType.slice(0, 3).toUpperCase() : String(damageType).slice(0,3).toUpperCase();
+  const damageTypeLabel = typeof damageType === 'string' ? damageType.charAt(0).toUpperCase() + damageType.slice(1).toLowerCase() : String(damageType);
 
-  // Damage components list for detail view
+  // Damage components list builder
   const buildDamageComponents = (): { label: string; mv: ModifiableValueSnapshot }[] => {
     const items: { label: string; mv: ModifiableValueSnapshot }[] = [];
-    if (weapon && weapon.damage_bonus) items.push({ label: 'Weapon Damage Bonus', mv: weapon.damage_bonus });
+    if (weapon && (weapon as any).damage_bonus) items.push({ label: 'Weapon Damage Bonus', mv: (weapon as any).damage_bonus });
     if (calc.is_unarmed && equipment.unarmed_damage_bonus)
       items.push({ label: 'Unarmed Damage Bonus', mv: equipment.unarmed_damage_bonus });
     // Global equipment bonuses
@@ -171,9 +171,8 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
     return items;
   };
 
-  let damageComponents: { label: string; mv: ModifiableValueSnapshot }[] = [];
-  if (calc) {
-    damageComponents = buildDamageComponents();
+  const damageComponents = (() => {
+    const base = buildDamageComponents();
     const pseudoMV: ModifiableValueSnapshot = {
       name: 'Ability Modifier',
       uuid: '',
@@ -181,8 +180,9 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
       normalized_score: getAbilityModifier(),
       channels: [],
     } as any;
-    damageComponents.push({ label: 'Ability Modifier', mv: pseudoMV });
-  }
+    base.push({ label: 'Ability Modifier', mv: pseudoMV });
+    return base;
+  })();
 
   return (
     <>
@@ -209,7 +209,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
         {/* Damage expression clickable */}
         <Chip
           size="small"
-          label={`${damageExpr} ${damageTypeAbbr}`}
+          label={`${damageExpr} ${damageTypeLabel}`}
           onClick={(e) => { e.stopPropagation(); setDetailMode('damage'); setOpen(true); }}
         />
         {calc.is_ranged && <Chip size="small" label="Ranged" sx={{ ml: 0.5 }} />}
@@ -297,7 +297,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
                   <Typography variant="body2" color="text.secondary">
                     Damage Type
                   </Typography>
-                  <Typography variant="h6">{damageType}</Typography>
+                  <Typography variant="h6">{damageTypeLabel}</Typography>
                 </Paper>
 
                 <Typography variant="h6" gutterBottom>
