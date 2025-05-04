@@ -67,6 +67,15 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
       normalized_score: ability.score,
       base_modifier: undefined
     };
+    
+    // Get the modifier_bonus data
+    const modifierBonus = ability.modifier_bonus || {
+      channels: [],
+      score: 0,
+      normalized_score: 0,
+      base_modifier: undefined
+    };
+    
     const hasChannels = abilityScore.channels && Array.isArray(abilityScore.channels);
     const channels = hasChannels ? abilityScore.channels : [];
     
@@ -76,6 +85,14 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
     // Get actual raw and normalized scores from ability_score if available
     const rawScore = abilityScore.score || ability.score;
     const normalizedScore = abilityScore.normalized_score || ability.normalized_score || ability.score;
+    
+    // Get the normalized_score from the modifier_bonus (usually adds directly to the ability modifier)
+    const modifierBonusValue = modifierBonus.normalized_score || 0;
+    
+    // Calculate the total modifier (normalized ability score + modifier bonus)
+    const calculatedModifier = (normalizedScore || 0) + modifierBonusValue;
+    // Check if our calculation matches the reported modifier
+    const modifierMatches = calculatedModifier === ability.modifier;
 
     // Function to recursively display JSON data in a readable format
     const DisplayJSON = ({ data, name = "Data" }: { data: any, name?: string }) => {
@@ -147,6 +164,27 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                       <Typography variant="h4" color={ability.modifier >= 0 ? "success.main" : "error.main"}>
                         {ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier}
                       </Typography>
+                      
+                      {/* Add the modifier calculation breakdown */}
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption">
+                          Calculated as: {normalizedScore >= 0 ? `+${normalizedScore}` : normalizedScore} 
+                          {modifierBonusValue !== 0 && (
+                            modifierBonusValue > 0 
+                              ? <> + {modifierBonusValue}</> 
+                              : <> - {Math.abs(modifierBonusValue)}</>
+                          )} 
+                          = {calculatedModifier >= 0 ? `+${calculatedModifier}` : calculatedModifier}
+                          {!modifierMatches && (
+                            <Chip 
+                              size="small" 
+                              color="warning" 
+                              label="Calculation mismatch" 
+                              sx={{ ml: 1, height: 16, fontSize: '0.6rem' }} 
+                            />
+                          )}
+                        </Typography>
+                      </Box>
                     </Grid>
                   </Grid>
                 </Paper>
@@ -165,17 +203,61 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                       </Typography>
                     </Box>
                   )}
+                  
+                  {modifierBonus.base_modifier && (
+                    <>
+                      <Divider sx={{ my: 1 }} />
+                      <Typography variant="body2" color="text.secondary">Modifier Bonus</Typography>
+                      <Typography variant="h6">
+                        {modifierBonusValue >= 0 ? `+${modifierBonusValue}` : modifierBonusValue}
+                      </Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Source: {modifierBonus.base_modifier.name}
+                        </Typography>
+                      </Box>
+                    </>
+                  )}
                 </Paper>
 
                 {/* Quick view of main static modifiers if available */}
                 {channels.length > 0 && channels[0].value_modifiers.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2" gutterBottom>
-                      Score Modifiers
+                      Ability Score Modifiers
                     </Typography>
                     <Paper elevation={1} sx={{ p: 2 }}>
                       {channels[0].value_modifiers.map((mod, idx) => (
                         <Box key={idx} sx={{ mb: idx < channels[0].value_modifiers.length - 1 ? 1 : 0 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2">{mod.name}</Typography>
+                            <Chip 
+                              size="small" 
+                              label={mod.value >= 0 ? `+${mod.value}` : mod.value}
+                              color={mod.value >= 0 ? "success" : "error"}
+                            />
+                          </Box>
+                          {mod.source_entity_name && (
+                            <Typography variant="caption" color="text.secondary">
+                              Source: {mod.source_entity_name}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </Paper>
+                  </Box>
+                )}
+                
+                {/* Display modifier bonus modifiers if available */}
+                {modifierBonus.channels && modifierBonus.channels.length > 0 && 
+                 modifierBonus.channels[0].value_modifiers.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Modifier Bonus Modifiers
+                    </Typography>
+                    <Paper elevation={1} sx={{ p: 2 }}>
+                      {modifierBonus.channels[0].value_modifiers.map((mod, idx) => (
+                        <Box key={idx} sx={{ mb: idx < modifierBonus.channels[0].value_modifiers.length - 1 ? 1 : 0 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="body2">{mod.name}</Typography>
                             <Chip 
