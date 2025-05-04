@@ -226,9 +226,9 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                 elevation={3}
                 sx={{
                   textAlign: 'center',
-                  p: 2,
+                  p: 1.5,
                   cursor: 'pointer',
-                  minHeight: 120,
+                  minHeight: 90,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',

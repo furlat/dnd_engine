@@ -98,21 +98,16 @@ const ModifierBreakdown: React.FC<{ skill: Skill; calc?: SkillBonusCalculationSn
 const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
   const [selected, setSelected] = React.useState<Skill | null>(null);
 
-  // Group skills by ability and keep D&D ability order
+  // Flatten skills but keep ordering by ability typical order
   const abilityOrder = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-  const grouped = React.useMemo(() => {
-    const map: Record<string, Skill[]> = {};
-    Object.values(skillSet.skills).forEach((s) => {
-      if (!map[s.ability]) map[s.ability] = [];
-      map[s.ability].push(s);
+  const orderedSkills = React.useMemo(() => {
+    const list: Skill[] = [];
+    abilityOrder.forEach((ab) => {
+      Object.values(skillSet.skills)
+        .filter((s) => s.ability === ab)
+        .forEach((s) => list.push(s));
     });
-    // Ensure consistent ordering
-    return abilityOrder
-      .filter((a) => map[a]?.length)
-      .reduce((acc, ab) => {
-        acc[ab] = map[ab];
-        return acc;
-      }, {} as Record<string, Skill[]>);
+    return list;
   }, [skillSet]);
 
   // Detail dialog component
@@ -229,49 +224,42 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
         Skills
       </Typography>
 
-      {Object.entries(grouped).map(([ability, list]) => (
-        <Box key={ability} sx={{ mb: 3 }}>
-          <Typography variant="h6" color="primary" sx={{ mb: 1 }}>
-            {ability.toUpperCase()} Skills
-          </Typography>
-          <Grid container spacing={2}>
-            {list.map((skill) => {
-              const bonus = (skill as any).bonus ?? (skill as any).effective_bonus ?? 0;
-              const proficient = (skill as any).proficient;
-              const expertise = (skill as any).expertise;
-              return (
-                <Grid item xs={12} sm={6} md={4} key={skill.name}>
-                  <Paper
-                    elevation={2}
-                    sx={{
-                      p: 2,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      border: proficient ? 2 : 1,
-                      borderColor: expertise ? 'secondary.main' : proficient ? 'primary.main' : 'transparent',
-                    }}
-                    onClick={() => setSelected(skill)}
-                  >
-                    <Box>
-                      <Typography variant="subtitle1">{skill.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {ability}
-                      </Typography>
-                    </Box>
-                    <Box display="flex" alignItems="center">
-                      <Typography variant="h6" color={bonus >= 0 ? 'success.main' : 'error.main'}>
-                        {formatBonus(bonus)}
-                      </Typography>
-                    </Box>
-                  </Paper>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </Box>
-      ))}
+      <Grid container spacing={2}>
+        {orderedSkills.map((skill: Skill) => {
+          const bonus = (skill as any).bonus ?? (skill as any).effective_bonus ?? 0;
+          const proficient = (skill as any).proficient;
+          const expertise = (skill as any).expertise;
+          return (
+            <Grid item xs={6} sm={4} md={3} key={skill.name}>
+              <Paper
+                elevation={2}
+                sx={{
+                  p: 1.5,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  border: proficient ? 2 : 1,
+                  borderColor: expertise ? 'secondary.main' : proficient ? 'primary.main' : 'transparent',
+                }}
+                onClick={() => setSelected(skill)}
+              >
+                <Box>
+                  <Typography variant="subtitle1">{skill.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {skill.ability}
+                  </Typography>
+                </Box>
+                <Box display="flex" alignItems="center">
+                  <Typography variant="h6" color={bonus >= 0 ? 'success.main' : 'error.main'}>
+                    {formatBonus(bonus)}
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
 
       <DetailDialog />
     </Box>
