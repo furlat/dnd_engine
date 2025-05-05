@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Character } from '../models/character';
+import { Character, ConditionType, DurationType } from '../models/character';
 import { EquipmentItem } from './types';
 
 // Update to point directly to FastAPI backend
@@ -88,6 +88,35 @@ export const unequipItem = async (characterId: string, slot: string): Promise<Ch
     return response.data;
   } catch (error) {
     console.error('Error unequipping item:', error);
+    throw error;
+  }
+};
+
+// Add condition request type
+interface AddConditionRequest {
+  condition_type: ConditionType;
+  source_entity_uuid: string;
+  duration_type: DurationType;
+  duration_rounds?: number;
+}
+
+// Add condition management functions
+export const addCondition = async (entityId: string, request: AddConditionRequest): Promise<Character> => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/entities/${entityId}/conditions`, request);
+    return response.data;
+  } catch (error) {
+    console.error('Error adding condition:', error);
+    throw error;
+  }
+};
+
+export const removeCondition = async (entityId: string, conditionName: string): Promise<Character> => {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/entities/${entityId}/conditions/${conditionName}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error removing condition:', error);
     throw error;
   }
 }; 

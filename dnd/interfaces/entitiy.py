@@ -11,6 +11,19 @@ from dnd.core.events import SkillName, WeaponSlot, AbilityName
 from dnd.interfaces.saving_throws import SavingThrowSetSnapshot, SavingThrowBonusCalculationSnapshot
 from dnd.interfaces.health import HealthSnapshot
 from dnd.interfaces.action_economy import ActionEconomySnapshot
+from dnd.core.base_conditions import DurationType
+
+# Add a ConditionSnapshot interface
+class ConditionSnapshot(BaseModel):
+    """Interface model for a Condition"""
+    uuid: UUID
+    name: str
+    description: Optional[str]
+    duration_type: DurationType
+    duration_value: Optional[Union[int, str]]  # int for ROUNDS, None for PERMANENT/UNTIL_LONG_REST, str for ON_CONDITION
+    source_entity_name: Optional[str]
+    source_entity_uuid: UUID
+    applied: bool
 
 class EntitySnapshot(BaseModel):
     """Interface model for an Entity snapshot"""
@@ -37,8 +50,8 @@ class EntitySnapshot(BaseModel):
     ac_calculation: Optional[ACBonusCalculationSnapshot] = None
     saving_throw_calculations: Dict[AbilityName, SavingThrowBonusCalculationSnapshot] = Field(default_factory=dict)
     
-    # Other important data
-    # active_conditions: Dict[str, ConditionSnapshot] = Field(default_factory=dict)
+    # Active conditions
+    active_conditions: Dict[str, ConditionSnapshot] = Field(default_factory=dict)
     
     @classmethod
     def from_engine(cls, entity, include_skill_calculations=False, include_attack_calculations=False, include_ac_calculation=False, include_saving_throw_calculations=False):
@@ -79,6 +92,26 @@ class EntitySnapshot(BaseModel):
             from dnd.interfaces.saving_throws import SavingThrowBonusCalculationSnapshot
             for ability_name in ability_names:
                 saving_throw_calculations[ability_name] = SavingThrowBonusCalculationSnapshot.from_engine(entity, ability_name)
+
+        # Create condition snapshots
+        active_conditions = {}
+        for name, condition in entity.active_conditions.items():
+            duration_value = None
+            if condition.duration.duration_type == DurationType.ROUNDS:
+                duration_value = condition.duration.duration
+            elif condition.duration.duration_type == DurationType.ON_CONDITION:
+                duration_value = str(condition.duration.duration)
+            
+            active_conditions[name] = ConditionSnapshot(
+                uuid=condition.uuid,
+                name=condition.name,
+                description=condition.description,
+                duration_type=condition.duration.duration_type,
+                duration_value=duration_value,
+                source_entity_name=condition.source_entity_name,
+                source_entity_uuid=condition.source_entity_uuid,
+                applied=condition.applied
+            )
         
         return cls(
             uuid=entity.uuid,
@@ -95,4 +128,5 @@ class EntitySnapshot(BaseModel):
             health=HealthSnapshot.from_engine(entity.health, entity),
             saving_throw_calculations=saving_throw_calculations,
             action_economy=ActionEconomySnapshot.from_engine(entity.action_economy, entity),
+            active_conditions=active_conditions
         )
