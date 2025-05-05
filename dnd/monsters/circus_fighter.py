@@ -195,7 +195,9 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
 
     #Action economy
     action_economy_config = ActionEconomyConfig(
-        reactions_modifiers=[("a past in the circus", 2)],)
+        reactions_modifiers=[("a past in the circus", 2)],
+        movement_modifiers=[("tired_cost", -5)],  # Updated to include _cost suffix
+    )
 
     #Equipment
     equipment_config = EquipmentConfig(
@@ -203,7 +205,7 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
         unarmed_damage_bonus=1,
         unarmed_damage_type=DamageType.PIERCING,
         unarmed_damage_bonus_modifiers=[("a past in the circus", 1)],
-        )
+    )
 
     #wrapp into entity config
     entity_config = EntityConfig(
