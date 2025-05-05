@@ -46,7 +46,7 @@ def initialize_test_entities():
     
     # Create a second entity for testing
     rogue_uuid = uuid4()
-    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded Clown",blinded=True)
+    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded",blinded=True)
     
     print(f"Created test entities with UUIDs:")
     print(f"- Test Warrior: {warrior_uuid}")
