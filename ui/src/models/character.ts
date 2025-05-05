@@ -13,7 +13,26 @@ export interface ModifierChannel {
   name: string;
   score: number;
   normalized_score: number;
-  value_modifiers: Modifier[];
+  value_modifiers: Array<{
+    name: string;
+    value: number;
+    source_entity_name?: string;
+  }>;
+  advantage_modifiers: Array<{
+    name: string;
+    value: 'ADVANTAGE' | 'DISADVANTAGE' | 'NONE';
+    source_entity_name?: string;
+  }>;
+  critical_modifiers: Array<{
+    name: string;
+    value: 'AUTOCRIT' | 'NOCRIT' | 'NONE';
+    source_entity_name?: string;
+  }>;
+  auto_hit_modifiers: Array<{
+    name: string;
+    value: 'AUTOHIT' | 'AUTOMISS' | 'NONE';
+    source_entity_name?: string;
+  }>;
 }
 
 // Ability scores interfaces
@@ -176,6 +195,9 @@ export interface AttackBonusCalculationSnapshot {
   target_entity_uuid?: UUID;
   total_bonus: ModifiableValueSnapshot;
   final_modifier: number;
+  advantage_status: string;  // 'NONE' | 'ADVANTAGE' | 'DISADVANTAGE'
+  auto_hit_status: string;   // 'NONE' | 'AUTO_HIT' | 'AUTO_MISS'
+  critical_status: string;   // 'NONE' | 'ALWAYS_CRIT' | 'NEVER_CRIT'
 }
 
 // Value interfaces
@@ -186,6 +208,9 @@ export interface ModifiableValueSnapshot {
   normalized_score: number;
   base_modifier?: Modifier;
   channels: ModifierChannel[];
+  advantage: 'None' | 'Advantage' | 'Disadvantage';
+  critical: 'None' | 'Always Crit' | 'Never Crit';
+  auto_hit: 'None' | 'Auto Hit' | 'Auto Miss';
 }
 
 // Health interfaces

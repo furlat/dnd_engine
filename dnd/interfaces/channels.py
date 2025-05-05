@@ -84,21 +84,90 @@ class ModifierChannelSnapshot(BaseModel):
     @classmethod
     def from_engine_contextual(cls, contextual_value, channel_name):
         """Create a snapshot from an engine ContextualValue object"""
-        # For a context value, we need to capture the contextual modifiers with their current resolved values
-        # This is a simplified version that won't include runtime-evaluated values
         is_outgoing = contextual_value.is_outgoing_modifier
         
-        # We'll only take the UUIDs of contextual modifiers since their current values would depend on context
+        # Evaluate contextual modifiers with current context
         value_modifiers = []
-        min_constraints = []
-        max_constraints = []
-        advantage_modifiers = []
-        critical_modifiers = []
-        auto_hit_modifiers = []
-        size_modifiers = []
-        resistance_modifiers = []
+        for modifier in contextual_value.value_modifiers.values():
+            result = modifier.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                value_modifiers.append(NumericalModifierSnapshot.from_engine(result))
         
-        # For a full implementation, we would evaluate each contextual modifier with the current context
+        # Evaluate contextual constraints
+        min_constraints = []
+        for constraint in contextual_value.min_constraints.values():
+            result = constraint.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                min_constraints.append(NumericalModifierSnapshot.from_engine(result))
+        
+        max_constraints = []
+        for constraint in contextual_value.max_constraints.values():
+            result = constraint.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                max_constraints.append(NumericalModifierSnapshot.from_engine(result))
+        
+        # Evaluate other contextual modifiers
+        advantage_modifiers = []
+        for modifier in contextual_value.advantage_modifiers.values():
+            result = modifier.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                advantage_modifiers.append(AdvantageModifierSnapshot.from_engine(result))
+        
+        critical_modifiers = []
+        for modifier in contextual_value.critical_modifiers.values():
+            result = modifier.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                critical_modifiers.append(CriticalModifierSnapshot.from_engine(result))
+        
+        auto_hit_modifiers = []
+        for modifier in contextual_value.auto_hit_modifiers.values():
+            result = modifier.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                auto_hit_modifiers.append(AutoHitModifierSnapshot.from_engine(result))
+        
+        size_modifiers = []
+        for modifier in contextual_value.size_modifiers.values():
+            result = modifier.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                size_modifiers.append(SizeModifierSnapshot.from_engine(result))
+        
+        resistance_modifiers = []
+        for modifier in contextual_value.resistance_modifiers.values():
+            result = modifier.callable(
+                contextual_value.source_entity_uuid,
+                contextual_value.target_entity_uuid,
+                contextual_value.context
+            )
+            if result is not None:
+                resistance_modifiers.append(ResistanceModifierSnapshot.from_engine(result))
         
         return cls(
             name=channel_name,

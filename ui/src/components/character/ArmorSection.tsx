@@ -17,16 +17,28 @@ import {
   ListItem,
   ListItemText,
   Grid,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  CircularProgress,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import DeleteIcon from '@mui/icons-material/Delete';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { Character, ModifiableValueSnapshot } from '../../models/character';
+import { ArmorSnapshot } from '../../api/types';
 import ItemDetailsDialog from './ItemDetailsDialog';
+import { useEntity } from '../../contexts/EntityContext';
+import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterApi';
+import { EquipmentItem } from '../../api/types';
 
 interface Props {
   entity: Character;
 }
 
-const format = (v: number | undefined) => (v ?? 0) >= 0 ? `+${v}` : `${v}`;
+const format = (n: number | undefined) => (n ?? 0) >= 0 ? `+${n}` : `${n}`;
 
 const ChannelBreakdown: React.FC<{ mv: ModifiableValueSnapshot; label: string }> = ({ mv, label }) => {
   if (!mv || !mv.channels) return null;
@@ -41,7 +53,11 @@ const ChannelBreakdown: React.FC<{ mv: ModifiableValueSnapshot; label: string }>
             </Typography>
             <List dense disablePadding>
               {ch.value_modifiers.map((mod, i) => (
-                <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
+                <ListItem
+                  key={i}
+                  dense
+                  divider={i < ch.value_modifiers.length - 1}
+                >
                   <ListItemText
                     primary={mod.name}
                     secondary={mod.source_entity_name}
@@ -64,12 +80,46 @@ const ChannelBreakdown: React.FC<{ mv: ModifiableValueSnapshot; label: string }>
 };
 
 const ArmorSection: React.FC<Props> = ({ entity }) => {
+  const { setEntityData } = useEntity();
   const acCalc = entity.ac_calculation;
   const equipment = entity.equipment;
 
   // dialog states
   const [open, setOpen] = React.useState(false);
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState<'armor' | 'shield' | null>(null);
+  const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [armorSelectOpen, setArmorSelectOpen] = React.useState(false);
+  const [availableArmor, setAvailableArmor] = React.useState<ArmorSnapshot[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  // Fetch available armor when the selection dialog opens
+  React.useEffect(() => {
+    if (armorSelectOpen) {
+      setIsLoading(true);
+      console.log('Fetching equipment for entity:', entity.uuid);
+      fetchAllEquipment(entity.uuid)
+        .then(items => {
+          console.log('All equipment items:', items);
+          // Filter for body armor only
+          const armor = items.filter((item): item is ArmorSnapshot => {
+            console.log('Checking item:', item);
+            // Check if it's an armor item and specifically for the body
+            return 'type' in item && 
+                   'body_part' in item && 
+                   item.body_part === 'Body' &&
+                   ['Light', 'Medium', 'Heavy', 'Cloth'].includes(item.type);
+          });
+          console.log('Filtered armor items:', armor);
+          setAvailableArmor(armor);
+        })
+        .catch(error => {
+          console.error('Failed to fetch armor:', error);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
+  }, [armorSelectOpen, entity.uuid]);
 
   if (!acCalc) return null;
 
@@ -99,6 +149,51 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
   const formatArmorType = (type: string) => {
     if (type === 'Unarmored') return type;
     return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+  };
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();  // Prevent opening armor details
+    setMenuAnchor(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+  };
+
+  const handleUnequip = async () => {
+    handleMenuClose();
+    try {
+      setIsLoading(true);
+      const unequipResult = await unequipItem(entity.uuid, 'Body');
+      setEntityData(unequipResult);
+      setIsLoading(false);
+    } catch (error: any) {
+      console.error('Failed to unequip armor:', error);
+      if (error.response?.data?.message) {
+        alert(error.response.data.message);
+      } else {
+        alert('Failed to unequip armor. Please try again.');
+      }
+      setIsLoading(false);
+    }
+  };
+
+  const handleArmorSelect = async (armorId: string) => {
+    try {
+      setIsLoading(true);
+      const equipResult = await equipItem(entity.uuid, armorId, 'Body');
+      setEntityData(equipResult);
+      setArmorSelectOpen(false);
+    } catch (error: any) {
+      console.error('Failed to equip armor:', error);
+      if (error.response?.data?.detail) {
+        alert(`Failed to equip armor: ${error.response.data.detail}`);
+      } else {
+        alert('Failed to equip armor. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Normalize arrays so we avoid optional chaining complaints
@@ -157,14 +252,14 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
         Armor
       </Typography>
       <Paper
-        sx={{ p: 2, cursor: 'pointer', display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
+        sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
         elevation={3}
         onClick={() => setOpen(true)}
       >
         <Typography variant="h4" color="primary">
           {totalAC}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', flexGrow: 1 }}>
           {/* Armor Type Chip */}
           <Chip 
             label={formatArmorType(armorType)} 
@@ -204,53 +299,81 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
             />
           )}
         </Box>
+
+        {/* Add menu button */}
+        <Box 
+          onClick={(e) => e.stopPropagation()}
+        >
+          <IconButton
+            size="small"
+            onClick={handleMenuClick}
+          >
+            <MoreVertIcon />
+          </IconButton>
+        </Box>
+
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={handleMenuClose}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MenuItem onClick={() => {
+            handleMenuClose();
+            setArmorSelectOpen(true);
+          }}>
+            <ListItemIcon>
+              <SwapHorizIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Change Armor</ListItemText>
+          </MenuItem>
+          <MenuItem 
+            onClick={handleUnequip}
+            disabled={!equipment.body_armor}
+          >
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Unequip</ListItemText>
+          </MenuItem>
+        </Menu>
       </Paper>
 
       {/* AC Details Dialog */}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Armor Details</DialogTitle>
+        <DialogTitle>
+          Armor Class Details
+        </DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             {/* Left column */}
             <Grid item xs={12} md={6}>
-              {/* Overview */}
               <Typography variant="h6" gutterBottom>
                 Overview
               </Typography>
               <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                 <Typography variant="body2" color="text.secondary">
-                  Armor Type
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
-                  <Chip 
-                    label={formatArmorType(armorType)} 
-                    size="small" 
-                    color={getArmorTypeColor()}
-                  />
-                  <Typography variant="h6">
-                    {bodyArmorName}
-                  </Typography>
-                </Box>
-                {shieldName && (
-                  <>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      Shield
-                    </Typography>
-                    <Typography variant="h6" gutterBottom>
-                      {shieldName}
-                    </Typography>
-                  </>
-                )}
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="body2" color="text.secondary">
-                  Total AC
+                  Final AC
                 </Typography>
                 <Typography variant="h4" color="primary">
                   {totalAC}
                 </Typography>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  Armor Type
+                </Typography>
+                <Typography variant="h6">{formatArmorType(armorType)}</Typography>
+                {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
+                  <>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="body2" color="text.secondary">
+                      Dexterity Bonus
+                    </Typography>
+                    <Typography variant="h6">{combinedDex}/{maxDex}</Typography>
+                  </>
+                )}
               </Paper>
 
-              {/* Component values */}
               <Typography variant="h6" gutterBottom>
                 Component Values
               </Typography>
@@ -306,6 +429,56 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
           itemType="shield"
         />
       )}
+
+      {/* Armor Selection Dialog */}
+      <Dialog 
+        open={armorSelectOpen} 
+        onClose={() => !isLoading && setArmorSelectOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Select Armor</DialogTitle>
+        <DialogContent>
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <List>
+              {availableArmor.map((armor) => (
+                <ListItem 
+                  button 
+                  key={armor.uuid}
+                  onClick={() => handleArmorSelect(armor.uuid)}
+                  disabled={isLoading}
+                >
+                  <ListItemText 
+                    primary={armor.name} 
+                    secondary={
+                      'type' in armor ? 
+                        `${formatArmorType(armor.type)} - AC ${armor.ac.normalized_score} (Max Dex ${armor.max_dex_bonus.normalized_score})` : 
+                        undefined
+                    }
+                  />
+                </ListItem>
+              ))}
+              {availableArmor.length === 0 && !isLoading && (
+                <ListItem>
+                  <ListItemText primary="No armor available" />
+                </ListItem>
+              )}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setArmorSelectOpen(false)}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
