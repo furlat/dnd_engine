@@ -217,7 +217,7 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
         proficiency_bonus_modifiers=[("a past in the circus", -1)],
         )
     
-    description = "A level 4 fighter character with a past in the circus and spiked claws for hands"
+    description = """A level 4 fighter character with a past in the circus and spiked claws for hands.\n\nElemental Attuning (Feature).\nThe warrior has advantage on attack rolls made with weapons that deal acid, cold, fire, lightning, poison, or thunder damage.\n\nElemental Affinity.\nYears of performing with enchanted weapons have attuned this warrior to fire, but left them vulnerable to cold. The warrior has resistance to fire damage but vulnerability to cold damage."""
     entity = Entity.create(name=name, source_entity_uuid=source_id, description=description, config=entity_config)
     
     # Create all weapons and armor with the entity's UUID
@@ -242,7 +242,9 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     dual_wielder = create_dual_wielder_ac_modifier(entity.uuid, entity.uuid)
     entity.equipment.ac_bonus.self_contextual.add_value_modifier(dual_wielder)
 
-    # Add elemental advantage to attack bonus with entity's UUID
+    # Elemental Attuning (Feature). Years of performing with enchanted weapons have attuned this warrior to elemental energies.
+    # The warrior has advantage on attack rolls made with weapons that deal acid, cold, fire, lightning, poison, or thunder damage.
+    # Additionally, the warrior has resistance to fire damage but vulnerability to cold damage.
     elemental_adv = create_elemental_advantage_modifier(entity.uuid, entity.uuid)
     entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(elemental_adv)
 

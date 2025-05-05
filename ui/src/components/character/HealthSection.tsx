@@ -96,9 +96,9 @@ const HealthSection: React.FC<Props> = ({ health }) => {
 
   const [open, setOpen] = React.useState(false);
 
-  const imm = health.resistances.filter((r:any)=>r.status==='IMMUNITY').length;
-  const res = health.resistances.filter((r:any)=>r.status==='RESISTANCE').length;
-  const vul = health.resistances.filter((r:any)=>r.status==='VULNERABILITY').length;
+  const imm = health.resistances.filter((r:any)=>r.status==='Immunity').length;
+  const res = health.resistances.filter((r:any)=>r.status==='Resistance').length;
+  const vul = health.resistances.filter((r:any)=>r.status==='Vulnerability').length;
   const dr = health.damage_reduction.normalized_score;
 
   return (
@@ -154,7 +154,33 @@ const HealthSection: React.FC<Props> = ({ health }) => {
                 <Typography variant="body2">Damage Taken</Typography>
                 <Typography variant="h6">{health.damage_taken}</Typography>
               </Paper>
+
+              {/* Resistances / Vulnerabilities / Immunities - Moved here */}
+              {health.resistances && health.resistances.length > 0 && (
+                <Paper sx={{ p: 2, mt: 2 }}>
+                  <Typography variant="h6" gutterBottom>Damage Modifiers</Typography>
+                  <Grid container spacing={1}>
+                    {['Immunity', 'Resistance', 'Vulnerability'].map((status) => (
+                      <Grid item xs={12} key={status}>
+                        <Typography variant="subtitle2" color="text.secondary">{status}</Typography>
+                        {health.resistances.filter((r: any) => r.status === status).length === 0 ? (
+                          <Typography variant="caption">None</Typography>
+                        ) : (
+                          <List dense disablePadding>
+                            {health.resistances.filter((r: any) => r.status === status).map((r: any) => (
+                              <ListItem key={r.damage_type}>
+                                <ListItemText primary={r.damage_type} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        )}
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
+              )}
             </Grid>
+
             <Grid item xs={12} md={8}>
               <Paper sx={{ p: 2, mb: 1 }} elevation={1}>
                 <Typography variant="subtitle2">Constitution Bonus</Typography>
@@ -164,33 +190,6 @@ const HealthSection: React.FC<Props> = ({ health }) => {
               <ValueBreakdown label="Max HP Bonus" mv={health.max_hit_points_bonus} />
               <ValueBreakdown label="Temporary HP" mv={health.temporary_hit_points} />
               <ValueBreakdown label="Damage Reduction" mv={health.damage_reduction} />
-
-              {/* Resistances / Vulnerabilities / Immunities */}
-              {health.resistances && health.resistances.length > 0 && (
-                <Accordion defaultExpanded sx={{ mb: 1 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>Damage Resistances</AccordionSummary>
-                  <AccordionDetails>
-                    <Grid container spacing={1}>
-                      {['IMMUNITY', 'RESISTANCE', 'VULNERABILITY'].map((status) => (
-                        <Grid item xs={12} md={4} key={status}>
-                          <Typography variant="subtitle2">{status}</Typography>
-                          {health.resistances.filter((r: any) => r.status === status).length === 0 ? (
-                            <Typography variant="caption">None</Typography>
-                          ) : (
-                            <List dense>
-                              {health.resistances.filter((r: any) => r.status === status).map((r: any) => (
-                                <ListItem key={r.damage_type}>
-                                  <ListItemText primary={r.damage_type} />
-                                </ListItem>
-                              ))}
-                            </List>
-                          )}
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </AccordionDetails>
-                </Accordion>
-              )}
             </Grid>
           </Grid>
         </DialogContent>
