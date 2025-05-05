@@ -8,6 +8,25 @@ export interface Modifier {
   source_entity_name?: string;
 }
 
+// Define enums to match backend exactly
+export enum AdvantageStatus {
+    NONE = "None",
+    ADVANTAGE = "Advantage",
+    DISADVANTAGE = "Disadvantage"
+}
+
+export enum CriticalStatus {
+    NONE = "None",
+    AUTOCRIT = "Autocrit",
+    NOCRIT = "Critical Immune"
+}
+
+export enum AutoHitStatus {
+    NONE = "None",
+    AUTOHIT = "Autohit",
+    AUTOMISS = "Automiss"
+}
+
 // Channel interfaces
 export interface ModifierChannel {
   name: string;
@@ -20,19 +39,22 @@ export interface ModifierChannel {
   }>;
   advantage_modifiers: Array<{
     name: string;
-    value: 'ADVANTAGE' | 'DISADVANTAGE' | 'NONE';
+    value: AdvantageStatus;
     source_entity_name?: string;
   }>;
+  advantage_status: AdvantageStatus;
   critical_modifiers: Array<{
     name: string;
-    value: 'AUTOCRIT' | 'NOCRIT' | 'NONE';
+    value: CriticalStatus;
     source_entity_name?: string;
   }>;
+  critical_status: CriticalStatus;
   auto_hit_modifiers: Array<{
     name: string;
-    value: 'AUTOHIT' | 'AUTOMISS' | 'NONE';
+    value: AutoHitStatus;
     source_entity_name?: string;
   }>;
+  auto_hit_status: AutoHitStatus;
 }
 
 // Ability scores interfaces
@@ -177,7 +199,9 @@ export interface ACBonusCalculationSnapshot {
   // Final result
   total_bonus: ModifiableValueSnapshot;
   final_ac: number;
-  outgoing_advantage: string;  // 'NONE' | 'ADVANTAGE' | 'DISADVANTAGE'
+  outgoing_advantage: AdvantageStatus;
+  outgoing_critical: CriticalStatus;
+  outgoing_auto_hit: AutoHitStatus;
 }
 
 // Attack calculation snapshot (mirrors backend AttackBonusCalculationSnapshot)
@@ -201,7 +225,7 @@ export interface AttackBonusCalculationSnapshot {
   critical_status: string;   // 'NONE' | 'ALWAYS_CRIT' | 'NEVER_CRIT'
 }
 
-// Value interfaces
+// Update interfaces to use these enums
 export interface ModifiableValueSnapshot {
   name: string;
   uuid: UUID;
@@ -209,9 +233,12 @@ export interface ModifiableValueSnapshot {
   normalized_score: number;
   base_modifier?: Modifier;
   channels: ModifierChannel[];
-  advantage: 'None' | 'Advantage' | 'Disadvantage';
-  critical: 'None' | 'Always Crit' | 'Never Crit';
-  auto_hit: 'None' | 'Auto Hit' | 'Auto Miss';
+  advantage: AdvantageStatus;
+  critical: CriticalStatus;
+  auto_hit: AutoHitStatus;
+  outgoing_advantage: AdvantageStatus;
+  outgoing_critical: CriticalStatus;
+  outgoing_auto_hit: AutoHitStatus;
 }
 
 // Health interfaces

@@ -254,4 +254,3 @@ if __name__ == "__main__":
     source_id = uuid4()
     proficiency_bonus = 2
     entity = create_warrior(source_id,proficiency_bonus)
-    print(entity)

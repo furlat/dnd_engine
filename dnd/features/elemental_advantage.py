@@ -20,7 +20,6 @@ def elemental_advantage(source_uuid: UUID, target_uuid: Optional[UUID], context:
     # Get the source entity (the character with the elemental weapon)
     source_entity = Entity.get(source_uuid)
     if not isinstance(source_entity, Entity):
-        print("DEBUG Elemental: Invalid source entity")
         return None
 
     # Check both weapons for elemental damage
@@ -34,7 +33,6 @@ def elemental_advantage(source_uuid: UUID, target_uuid: Optional[UUID], context:
         if not isinstance(weapon, Weapon):
             continue
 
-        print(f"DEBUG Elemental: Weapon {weapon.name} damage type: {weapon.damage_type}, extra: {weapon.extra_damage_type}")
 
         # Check for elemental damage types
         elemental_types = {
@@ -49,11 +47,9 @@ def elemental_advantage(source_uuid: UUID, target_uuid: Optional[UUID], context:
         # Check main damage type and extra damage types
         has_elemental = (weapon.damage_type in elemental_types or
                         any(dtype in elemental_types for dtype in weapon.extra_damage_type))
-        print(f"DEBUG Elemental: has_elemental: {has_elemental}")
 
         if has_elemental:
             # If we get here, the weapon has elemental damage
-            print("DEBUG Elemental: Creating advantage modifier")
             return AdvantageModifier(
                 source_entity_uuid=source_uuid,
                 target_entity_uuid=target_uuid,

@@ -156,7 +156,6 @@ async def unequip_item(slot: SlotType, entity: Entity = Depends(get_entity)):
     Unequip an item from a specific slot on an entity.
     """
     try:
-        print(f"Unequipping from slot: {slot}, value: {slot.value}")  # Debug log
         
         # First validate that there's actually something equipped in that slot
         if slot in [SlotType.MAIN_HAND, SlotType.OFF_HAND]:
@@ -242,7 +241,6 @@ async def unequip_item(slot: SlotType, entity: Entity = Depends(get_entity)):
                 include_saving_throw_calculations=True
             )
         except Exception as e:
-            print(f"Error during unequip operation: {str(e)}")  # Debug log
             raise HTTPException(
                 status_code=400, 
                 detail={
@@ -255,7 +253,6 @@ async def unequip_item(slot: SlotType, entity: Entity = Depends(get_entity)):
     except HTTPException:
         raise  # Re-raise HTTP exceptions as is
     except Exception as e:
-        print(f"Unexpected error during unequip: {str(e)}")  # Debug log
         raise HTTPException(
             status_code=400, 
             detail={
