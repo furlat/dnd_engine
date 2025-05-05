@@ -320,7 +320,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
   return (
     <>
       <Paper
-        sx={{ p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center', mb: 2, minHeight: 90 }}
+        sx={{ p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center', mb: 2.5, minHeight: 90 }}
         elevation={3}
         onClick={(e) => {
           // Only open details if not clicking menu, weapon name, or damage chips
