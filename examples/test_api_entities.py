@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import entity and interface modules
 from dnd.entity import Entity
 from dnd.monsters.circus_fighter import create_warrior
-from dnd.interfaces.entitiy import EntitySnapshot
+from dnd.interfaces.entity import EntitySnapshot
 
 # Configuration
 API_BASE_URL = "http://localhost:8000/api"
