@@ -8,6 +8,25 @@ export interface Modifier {
   source_entity_name?: string;
 }
 
+// Define enums to match backend exactly
+export enum AdvantageStatus {
+    NONE = "None",
+    ADVANTAGE = "Advantage",
+    DISADVANTAGE = "Disadvantage"
+}
+
+export enum CriticalStatus {
+    NONE = "None",
+    AUTOCRIT = "Autocrit",
+    NOCRIT = "Critical Immune"
+}
+
+export enum AutoHitStatus {
+    NONE = "None",
+    AUTOHIT = "Autohit",
+    AUTOMISS = "Automiss"
+}
+
 // Channel interfaces
 export interface ModifierChannel {
   name: string;
@@ -20,19 +39,22 @@ export interface ModifierChannel {
   }>;
   advantage_modifiers: Array<{
     name: string;
-    value: 'ADVANTAGE' | 'DISADVANTAGE' | 'NONE';
+    value: AdvantageStatus;
     source_entity_name?: string;
   }>;
+  advantage_status: AdvantageStatus;
   critical_modifiers: Array<{
     name: string;
-    value: 'AUTOCRIT' | 'NOCRIT' | 'NONE';
+    value: CriticalStatus;
     source_entity_name?: string;
   }>;
+  critical_status: CriticalStatus;
   auto_hit_modifiers: Array<{
     name: string;
-    value: 'AUTOHIT' | 'AUTOMISS' | 'NONE';
+    value: AutoHitStatus;
     source_entity_name?: string;
   }>;
+  auto_hit_status: AutoHitStatus;
 }
 
 // Ability scores interfaces
@@ -177,6 +199,9 @@ export interface ACBonusCalculationSnapshot {
   // Final result
   total_bonus: ModifiableValueSnapshot;
   final_ac: number;
+  outgoing_advantage: AdvantageStatus;
+  outgoing_critical: CriticalStatus;
+  outgoing_auto_hit: AutoHitStatus;
 }
 
 // Attack calculation snapshot (mirrors backend AttackBonusCalculationSnapshot)
@@ -200,7 +225,7 @@ export interface AttackBonusCalculationSnapshot {
   critical_status: string;   // 'NONE' | 'ALWAYS_CRIT' | 'NEVER_CRIT'
 }
 
-// Value interfaces
+// Update interfaces to use these enums
 export interface ModifiableValueSnapshot {
   name: string;
   uuid: UUID;
@@ -208,9 +233,12 @@ export interface ModifiableValueSnapshot {
   normalized_score: number;
   base_modifier?: Modifier;
   channels: ModifierChannel[];
-  advantage: 'None' | 'Advantage' | 'Disadvantage';
-  critical: 'None' | 'Always Crit' | 'Never Crit';
-  auto_hit: 'None' | 'Auto Hit' | 'Auto Miss';
+  advantage: AdvantageStatus;
+  critical: CriticalStatus;
+  auto_hit: AutoHitStatus;
+  outgoing_advantage: AdvantageStatus;
+  outgoing_critical: CriticalStatus;
+  outgoing_auto_hit: AutoHitStatus;
 }
 
 // Health interfaces
@@ -269,6 +297,84 @@ export interface SavingThrowBonusCalculationSnapshot {
   final_modifier: number;
 }
 
+export interface NumericalModifierSnapshot {
+  uuid: UUID;
+  name: string;
+  value: number;
+  normalized_value: number;
+  source_entity_name?: string;
+}
+
+// Action economy snapshot
+export interface ActionEconomySnapshot {
+  uuid: string;
+  name: string;
+  source_entity_uuid: string;
+  source_entity_name?: string;
+  
+  // Core action values
+  actions: ModifiableValueSnapshot;
+  bonus_actions: ModifiableValueSnapshot;
+  reactions: ModifiableValueSnapshot;
+  movement: ModifiableValueSnapshot;
+  
+  // Base values
+  base_actions: number;
+  base_bonus_actions: number;
+  base_reactions: number;
+  base_movement: number;
+  
+  // Cost modifiers
+  action_costs: NumericalModifierSnapshot[];
+  bonus_action_costs: NumericalModifierSnapshot[];
+  reaction_costs: NumericalModifierSnapshot[];
+  movement_costs: NumericalModifierSnapshot[];
+  
+  // Computed values
+  available_actions: number;
+  available_bonus_actions: number;
+  available_reactions: number;
+  available_movement: number;
+}
+
+// Add the condition interfaces
+export interface ConditionSnapshot {
+  uuid: UUID;
+  name: string;
+  description?: string;
+  duration_type: string;  // 'rounds' | 'permanent' | 'until_long_rest' | 'on_condition'
+  duration_value?: number | string;  // number for rounds, string for on_condition
+  source_entity_name?: string;
+  source_entity_uuid: UUID;
+  applied: boolean;
+}
+
+// Add condition enums
+export enum ConditionType {
+    BLINDED = "BLINDED",
+    CHARMED = "CHARMED",
+    DASHING = "DASHING",
+    DEAFENED = "DEAFENED",
+    DODGING = "DODGING",
+    FRIGHTENED = "FRIGHTENED",
+    GRAPPLED = "GRAPPLED",
+    INCAPACITATED = "INCAPACITATED",
+    INVISIBLE = "INVISIBLE",
+    PARALYZED = "PARALYZED",
+    POISONED = "POISONED",
+    PRONE = "PRONE",
+    RESTRAINED = "RESTRAINED",
+    STUNNED = "STUNNED",
+    UNCONSCIOUS = "UNCONSCIOUS"
+}
+
+export enum DurationType {
+    ROUNDS = "rounds",
+    PERMANENT = "permanent",
+    UNTIL_LONG_REST = "until_long_rest",
+    ON_CONDITION = "on_condition"
+}
+
 // Character interface matching EntitySnapshot
 export interface Character {
   uuid: UUID;
@@ -290,4 +396,8 @@ export interface Character {
   attack_calculations?: Record<string, AttackBonusCalculationSnapshot>;
   saving_throw_calculations?: Record<string, SavingThrowBonusCalculationSnapshot>;
   ac_calculation?: ACBonusCalculationSnapshot;
+  action_economy: ActionEconomySnapshot;
+
+  // Active conditions
+  active_conditions: Record<string, ConditionSnapshot>;
 } 

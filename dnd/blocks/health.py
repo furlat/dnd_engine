@@ -408,10 +408,7 @@ class Health(BaseBlock):
         """
         modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=temporary_hit_points)
         if modifier.value > 0 and modifier.value > self.temporary_hit_points.score:
-            print(f"healths source uuid: {self.source_entity_uuid}")
-            print(f"modifier target uuid: {modifier.target_entity_uuid}")
-            print(f"temporary hit point source uuid: {self.temporary_hit_points.source_entity_uuid}")
-            print(f"tempory hitpoint static source uuid: {self.temporary_hit_points.self_static.source_entity_uuid}")
+           
             self.temporary_hit_points.remove_all_modifiers()
             self.temporary_hit_points.self_static.add_value_modifier(modifier)
     

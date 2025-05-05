@@ -70,8 +70,46 @@ class ActionEconomy(BaseBlock):
         )
     )
 
-    def consume(self, cost_type: CostType, amount: int,cost_name: Optional[str] = None):
-        cost_modifier = NumericalModifier.create(source_entity_uuid=self.source_entity_uuid, name=cost_name+"_cost" if cost_name is not None else "cost", value=-amount)
+    def get_base_value(self, cost_type: CostType) -> int:
+        """Get the base value for a given action type."""
+        if cost_type == "actions":
+            base_mod = self.actions.get_base_modifier()
+        elif cost_type == "bonus_actions":
+            base_mod = self.bonus_actions.get_base_modifier()
+        elif cost_type == "reactions":
+            base_mod = self.reactions.get_base_modifier()
+        elif cost_type == "movement":
+            base_mod = self.movement.get_base_modifier()
+        else:
+            raise ValueError(f"Unknown cost type: {cost_type}")
+        
+        return base_mod.normalized_value if base_mod else 0
+
+    def get_cost_modifiers(self, cost_type: CostType) -> List[NumericalModifier]:
+        """Get all cost modifiers (negative values) for a given action type."""
+        if cost_type == "actions":
+            value = self.actions
+        elif cost_type == "bonus_actions":
+            value = self.bonus_actions
+        elif cost_type == "reactions":
+            value = self.reactions
+        elif cost_type == "movement":
+            value = self.movement
+        else:
+            raise ValueError(f"Unknown cost type: {cost_type}")
+        
+        return [mod for mod in value.self_static.value_modifiers.values() 
+                if mod.normalized_value < 0 and mod.name is not None and "_cost" in mod.name]
+
+    def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None):
+        """Consume an action resource."""
+        modifier_name = f"{cost_name}_cost" if cost_name is not None else "cost"
+        cost_modifier = NumericalModifier.create(
+            source_entity_uuid=self.source_entity_uuid, 
+            name=modifier_name, 
+            value=-amount
+        )
+        
         if cost_type == "actions":
             if self.actions.self_static.normalized_score - amount < 0:
                 raise ValueError(f"Not enough actions to consume {amount} {cost_name if cost_name is not None else 'cost'}")
@@ -89,13 +127,11 @@ class ActionEconomy(BaseBlock):
                 raise ValueError(f"Not enough movement to consume {amount} {cost_name if cost_name is not None else 'cost'}")
             self.movement.self_static.add_value_modifier(cost_modifier)
 
-
-
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "ActionEconomy", source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
                 config: Optional[ActionEconomyConfig] = None) -> 'ActionEconomy':
-
+        """Create a new ActionEconomy instance."""
         if config is None:
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
@@ -103,15 +139,19 @@ class ActionEconomy(BaseBlock):
             actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.actions, value_name="Actions")
             for modifier in config.actions_modifiers:
                 actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            
             bonus_actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus_actions, value_name="Bonus Actions")
             for modifier in config.bonus_actions_modifiers:
                 bonus_actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            
             reactions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.reactions, value_name="Reactions")
             for modifier in config.reactions_modifiers:
                 reactions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+            
             movement = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.movement, value_name="Movement")
             for modifier in config.movement_modifiers:
                 movement.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+            
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        actions=actions, bonus_actions=bonus_actions, reactions=reactions, movement=movement)

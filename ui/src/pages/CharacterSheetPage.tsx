@@ -8,6 +8,7 @@ import {
   CircularProgress,
   Alert,
   Button,
+  Container,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { fetchCharacter } from '../api/characterApi';
@@ -21,6 +22,8 @@ import {
   AttackSection,
 } from '../components/character';
 import { EntityProvider, useEntity } from '../contexts/EntityContext';
+import ActionEconomySection from '../components/character/ActionEconomySection';
+import ActiveConditionsBar from '../components/character/ActiveConditionsBar';
 
 // Define the params interface
 type RouteParams = {
@@ -97,6 +100,9 @@ const CharacterSheetContent: React.FC = () => {
 
       {/* Single-page layout */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Active Conditions Bar */}
+        <ActiveConditionsBar entity={character} />
+
         {/* Abilities */}
         {character.ability_scores && (
           <AbilityScoresBlock abilityScores={character.ability_scores} />
@@ -122,6 +128,9 @@ const CharacterSheetContent: React.FC = () => {
             <AttackSection entity={character} />
           </Grid>
         </Grid>
+
+        {/* Action Economy */}
+        <ActionEconomySection actionEconomy={character.action_economy} />
 
         {/* Skills */}
         {character.skill_set && (

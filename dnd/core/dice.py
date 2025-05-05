@@ -359,9 +359,7 @@ if __name__ == "__main__":
     # Usage example:
     d20 = Dice(count=1, value=20, bonus=some_modifiable_value, roll_type=RollType.ATTACK)
     attack_roll = d20.roll
-    print(f"Attack roll result: {attack_roll.total}")
 
     # Retrieving Dice and DiceRoll objects from registry
     retrieved_dice = Dice.get(d20.uuid)
     retrieved_roll = DiceRoll.get(attack_roll.roll_uuid)
-    print(retrieved_roll)

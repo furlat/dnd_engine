@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Union, Any
 from uuid import UUID, uuid4
 
-from dnd.core.modifiers import DamageType
+from dnd.core.modifiers import DamageType, AdvantageStatus
 from dnd.core.events import RangeType, WeaponSlot
 from dnd.interfaces.values import ModifiableValueSnapshot
 from dnd.interfaces.abilities import AbilityName
@@ -379,6 +379,9 @@ class ACBonusCalculationSnapshot(BaseModel):
     
     # Shortcut to commonly needed values
     final_ac: int
+    outgoing_advantage: AdvantageStatus
+    outgoing_critical: str  # 'NONE' | 'AUTOCRIT' | 'NOCRIT'
+    outgoing_auto_hit: str  # 'NONE' | 'AUTOHIT' | 'AUTOMISS'
     
     @classmethod
     def from_engine(cls, entity):
@@ -451,5 +454,8 @@ class ACBonusCalculationSnapshot(BaseModel):
             has_cross_entity_effects=entity.target_entity_uuid is not None,
             target_entity_uuid=entity.target_entity_uuid,
             total_bonus=ModifiableValueSnapshot.from_engine(total_bonus),
-            final_ac=total_bonus.normalized_score
+            final_ac=total_bonus.normalized_score,
+            outgoing_advantage=total_bonus.outgoing_advantage,
+            outgoing_critical=total_bonus.outgoing_critical,
+            outgoing_auto_hit=total_bonus.outgoing_auto_hit
         )
