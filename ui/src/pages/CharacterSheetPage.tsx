@@ -20,40 +20,17 @@ import {
   ArmorSection,
   AttackSection,
 } from '../components/character';
+import { EntityProvider, useEntity } from '../contexts/EntityContext';
 
 // Define the params interface
 type RouteParams = {
   characterId?: string;
 }
 
-const CharacterSheetPage: React.FC = () => {
-  // Directly access params with correct typing
-  const params = useParams();
-  const characterId = params.characterId;
+// Content component that uses the EntityContext
+const CharacterSheetContent: React.FC = () => {
   const navigate = useNavigate();
-  const [character, setCharacter] = React.useState<Character | null>(null);
-  const [loading, setLoading] = React.useState<boolean>(true);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    const loadCharacter = async () => {
-      if (!characterId) return;
-      
-      try {
-        setLoading(true);
-        const data = await fetchCharacter(characterId);
-        setCharacter(data);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch character:', err);
-        setError('Failed to load character. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCharacter();
-  }, [characterId]);
+  const { entity: character, loading, error } = useEntity();
 
   const handleBack = (): void => {
     navigate('/');
@@ -155,6 +132,24 @@ const CharacterSheetPage: React.FC = () => {
         )}
       </Box>
     </Box>
+  );
+};
+
+// Wrapper component that provides context
+const CharacterSheetPage: React.FC = () => {
+  const { characterId } = useParams<{ characterId: string }>();
+  
+  if (!characterId) {
+    return <Alert severity="error">Character ID is required</Alert>;
+  }
+  
+  return (
+    <EntityProvider
+      entityId={characterId}
+      fetchEntity={fetchCharacter}
+    >
+      <CharacterSheetContent />
+    </EntityProvider>
   );
 };
 
