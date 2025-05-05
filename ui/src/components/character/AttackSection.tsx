@@ -11,17 +11,27 @@ import {
   Button,
   Grid,
   Divider,
-} from '@mui/material';
-import { Character, AttackBonusCalculationSnapshot, ModifiableValueSnapshot, EquipmentSnapshot } from '../../models/character';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import {
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  List,
+  ListItem,
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  List,
-  ListItem,
-  ListItemText,
+  CircularProgress,
 } from '@mui/material';
+import { Character, AttackBonusCalculationSnapshot, ModifiableValueSnapshot, EquipmentSnapshot } from '../../models/character';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import DeleteIcon from '@mui/icons-material/Delete';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import { useEntity } from '../../contexts/EntityContext';
+import ItemDetailsDialog from './ItemDetailsDialog';
+import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterApi';
+import { EquipmentItem } from '../../api/types';
 
 interface Props {
   entity: Character;
@@ -38,6 +48,12 @@ type WeaponSnapshotLite = {
   range?: any;
   extra_damages?: any[];
 };
+
+interface WeaponListItem {
+  uuid: string;
+  name: string;
+  type: string;
+}
 
 const format = (n: number | undefined) => (n ?? 0) >= 0 ? `+${n}` : `${n}`;
 
@@ -92,7 +108,39 @@ const buildComponentList = (calc: AttackBonusCalculationSnapshot) => {
 
 const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusCalculationSnapshot; equipment: EquipmentSnapshot; entity: Character }> = ({ slot, calc, equipment, entity }) => {
   const [open, setOpen] = React.useState(false);
-  const [detailMode, setDetailMode] = React.useState<'attack' | 'damage'>('attack');
+  const [detailMode, setDetailMode] = React.useState<'attack' | 'damage' | 'advantage'>('attack');
+  const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false);
+  const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [weaponSelectOpen, setWeaponSelectOpen] = React.useState(false);
+  const [availableWeapons, setAvailableWeapons] = React.useState<EquipmentItem[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const { refreshEntity, setEntityData } = useEntity();
+
+  // Fetch available weapons when the selection dialog opens
+  React.useEffect(() => {
+    if (weaponSelectOpen) {
+      setIsLoading(true);
+      console.log('Fetching equipment for entity:', entity.uuid);
+      fetchAllEquipment(entity.uuid)
+        .then(items => {
+          console.log('All equipment items:', items);
+          // Filter for weapons only
+          const weapons = items.filter(item => 
+            'damage_dice' in item && 
+            'damage_type' in item &&
+            !('ac_bonus' in item) // Exclude shields which might have damage properties
+          );
+          console.log('Filtered weapon items:', weapons);
+          setAvailableWeapons(weapons);
+        })
+        .catch(error => {
+          console.error('Failed to fetch weapons:', error);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
+  }, [weaponSelectOpen, entity.uuid]);
 
   if (!calc) return null;
 
@@ -106,6 +154,21 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
   const weaponName = calc.is_unarmed ? 'Unarmed Strike' : calc.weapon_name ?? 'Weapon';
   const final = calc.final_modifier;
   const rangeLabel = calc.range.type === 'RANGE' ? `${calc.range.normal}/${calc.range.long ?? ''}` : 'Melee';
+
+  // Get combat statuses from total_bonus
+  const advantage = calc.total_bonus?.advantage ?? 'None';
+  const autoHit = calc.total_bonus?.auto_hit ?? 'None';
+  const critical = calc.total_bonus?.critical ?? 'None';
+
+  console.log('Attack Card Debug:', {
+    weaponName,
+    slot,
+    totalBonus: calc.total_bonus,
+    advantage,
+    autoHit,
+    critical,
+    rawCalc: calc
+  });
 
   const components = buildComponentList(calc);
 
@@ -154,12 +217,26 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
   })();
 
   const damageType = weapon ? weapon.damage_type : equipment.unarmed_damage_type;
-  const damageTypeAbbr = typeof damageType === 'string' ? damageType.slice(0, 3).toUpperCase() : String(damageType).slice(0,3).toUpperCase();
+  const damageTypeLabel = typeof damageType === 'string' ? damageType.charAt(0).toUpperCase() + damageType.slice(1).toLowerCase() : String(damageType);
 
-  // Damage components list for detail view
+  // Extra damage expressions
+  const extraDamageExprs = (() => {
+    if (!weapon || !weapon.extra_damages) return [];
+    return weapon.extra_damages.map((extra: any) => {
+      const base = `${extra.dice_numbers}d${extra.damage_dice}`;
+      const bonus = extra.damage_bonus?.normalized_score ?? 0;
+      const expr = bonus !== 0 ? `${base}${bonus > 0 ? '+' : ''}${bonus}` : base;
+      const type = typeof extra.damage_type === 'string' 
+        ? extra.damage_type.charAt(0).toUpperCase() + extra.damage_type.slice(1).toLowerCase() 
+        : String(extra.damage_type);
+      return { expr, type };
+    });
+  })();
+
+  // Damage components list builder
   const buildDamageComponents = (): { label: string; mv: ModifiableValueSnapshot }[] => {
     const items: { label: string; mv: ModifiableValueSnapshot }[] = [];
-    if (weapon && weapon.damage_bonus) items.push({ label: 'Weapon Damage Bonus', mv: weapon.damage_bonus });
+    if (weapon && (weapon as any).damage_bonus) items.push({ label: 'Weapon Damage Bonus', mv: (weapon as any).damage_bonus });
     if (calc.is_unarmed && equipment.unarmed_damage_bonus)
       items.push({ label: 'Unarmed Damage Bonus', mv: equipment.unarmed_damage_bonus });
     // Global equipment bonuses
@@ -168,12 +245,22 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
       items.push({ label: 'Ranged Damage Bonus', mv: equipment.ranged_damage_bonus });
     if (!calc.is_ranged && equipment.melee_damage_bonus)
       items.push({ label: 'Melee Damage Bonus', mv: equipment.melee_damage_bonus });
+    // Add extra damage bonuses if they exist
+    if (weapon && weapon.extra_damages) {
+      weapon.extra_damages.forEach((extra: any, idx: number) => {
+        if (extra.damage_bonus) {
+          items.push({ 
+            label: `Extra Damage ${idx + 1} Bonus`, 
+            mv: extra.damage_bonus 
+          });
+        }
+      });
+    }
     return items;
   };
 
-  let damageComponents: { label: string; mv: ModifiableValueSnapshot }[] = [];
-  if (calc) {
-    damageComponents = buildDamageComponents();
+  const damageComponents = (() => {
+    const base = buildDamageComponents();
     const pseudoMV: ModifiableValueSnapshot = {
       name: 'Ability Modifier',
       uuid: '',
@@ -181,44 +268,228 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
       normalized_score: getAbilityModifier(),
       channels: [],
     } as any;
-    damageComponents.push({ label: 'Ability Modifier', mv: pseudoMV });
-  }
+    base.push({ label: 'Ability Modifier', mv: pseudoMV });
+    return base;
+  })();
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();  // Prevent opening attack details
+    setMenuAnchor(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+  };
+
+  const handleUnequip = async () => {
+    handleMenuClose();
+    try {
+      setIsLoading(true);
+      const updatedEntity = await unequipItem(entity.uuid, slot);
+      setEntityData(updatedEntity);
+      setIsLoading(false);
+    } catch (error: any) {
+      console.error('Failed to unequip weapon:', error);
+      if (error.response?.data?.message) {
+        alert(error.response.data.message);
+      } else {
+        alert('Failed to unequip weapon. Please try again.');
+      }
+      setIsLoading(false);
+    }
+  };
+
+  const handleWeaponSelect = async (weaponId: string) => {
+    try {
+      setIsLoading(true);
+      const updatedEntity = await equipItem(entity.uuid, weaponId, slot);
+      setEntityData(updatedEntity);
+      setWeaponSelectOpen(false);
+    } catch (error: any) {
+      console.error('Failed to equip weapon:', error);
+      if (error.response?.data?.detail) {
+        alert(`Failed to equip weapon: ${error.response.data.detail}`);
+      } else {
+        alert('Failed to equip weapon. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <>
       <Paper
-        sx={{ p: 1.5, cursor: 'pointer', display: 'flex', gap: 1.5, alignItems: 'center', mb: 2, minHeight: 90 }}
+        sx={{ p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center', mb: 2, minHeight: 90 }}
         elevation={3}
-        onClick={() => {
-          setDetailMode('attack');
-          setOpen(true);
+        onClick={(e) => {
+          // Only open details if not clicking menu, weapon name, or damage chips
+          const target = e.target as HTMLElement;
+          const isClickableElement = target.closest('.clickable-element') || target.closest('.MuiChip-root');
+          if (!isClickableElement) {
+            setDetailMode('attack');
+            setOpen(true);
+          }
         }}
       >
-        {/* Attack modifier clickable */}
-        <Box onClick={(e) => { e.stopPropagation(); setDetailMode('attack'); setOpen(true); }}>
+        {/* Attack bonus */}
+        <Box className="clickable-element" onClick={(e) => { 
+          e.stopPropagation(); 
+          setDetailMode('attack'); 
+          setOpen(true); 
+        }}>
           <Typography variant="h4" color="primary">
             {format(final)}
           </Typography>
         </Box>
+
+        {/* Weapon name and status */}
         <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="subtitle1">{weaponName}</Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Typography 
+              className="clickable-element"
+              variant="subtitle1" 
+              sx={{ 
+                cursor: 'pointer', 
+                '&:hover': { textDecoration: 'underline' }
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (weapon) setItemDetailsOpen(true);
+              }}
+            >
+              {weaponName}
+            </Typography>
+            {/* Combat Status Chips */}
+            {/* Always show advantage status */}
+            {advantage === 'None' ? (
+              <Chip 
+                size="small" 
+                label="N/A" 
+                color="default" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDetailMode('advantage');
+                  setOpen(true);
+                }}
+              />
+            ) : advantage === 'Advantage' ? (
+              <Chip 
+                size="small" 
+                label="Advantage" 
+                color="success" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDetailMode('advantage');
+                  setOpen(true);
+                }}
+              />
+            ) : advantage === 'Disadvantage' ? (
+              <Chip 
+                size="small" 
+                label="Disadvantage" 
+                color="error" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDetailMode('advantage');
+                  setOpen(true);
+                }}
+              />
+            ) : (
+              <Chip 
+                size="small" 
+                label="N/A" 
+                color="default" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDetailMode('advantage');
+                  setOpen(true);
+                }}
+              />
+            )}
+            {autoHit === 'Auto Hit' && (
+              <Chip size="small" label="Auto Hit" color="info" />
+            )}
+            {autoHit === 'Auto Miss' && (
+              <Chip size="small" label="Auto Miss" color="error" />
+            )}
+            {critical === 'Always Crit' && (
+              <Chip size="small" label="Always Crit" color="warning" />
+            )}
+            {critical === 'Never Crit' && (
+              <Chip size="small" label="Never Crit" color="error" />
+            )}
+          </Box>
+          <Typography variant="caption" color="text.secondary" display="block">
             {slot === 'MAIN_HAND' ? 'Main Hand' : 'Off Hand'} – {rangeLabel}
           </Typography>
         </Box>
-        {/* Damage expression clickable */}
-        <Chip
-          size="small"
-          label={`${damageExpr} ${damageTypeAbbr}`}
-          onClick={(e) => { e.stopPropagation(); setDetailMode('damage'); setOpen(true); }}
-        />
-        {calc.is_ranged && <Chip size="small" label="Ranged" sx={{ ml: 0.5 }} />}
-        {calc.properties.includes('Finesse') && <Chip size="small" label="Finesse" sx={{ ml: 0.5 }} />}
+        {/* Damage expressions */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <Chip
+            className="clickable-element"
+            size="small"
+            label={`${damageExpr} ${damageTypeLabel}`}
+            onClick={(e) => { e.stopPropagation(); setDetailMode('damage'); setOpen(true); }}
+          />
+          {extraDamageExprs.map((extra, idx) => (
+            <Chip
+              key={idx}
+              className="clickable-element"
+              size="small"
+              label={`${extra.expr} ${extra.type}`}
+              onClick={(e) => { e.stopPropagation(); setDetailMode('damage'); setOpen(true); }}
+              color="secondary"
+            />
+          ))}
+        </Box>
+        {calc.is_ranged && <Chip className="clickable-element" size="small" label="Ranged" sx={{ ml: 0.5 }} />}
+        {calc.properties.includes('Finesse') && <Chip className="clickable-element" size="small" label="Finesse" sx={{ ml: 0.5 }} />}
+
+        {/* Add menu button */}
+        <Box 
+          className="clickable-element"
+          onClick={(e) => e.stopPropagation()}
+          sx={{ ml: 'auto' }}
+        >
+          <IconButton
+            size="small"
+            onClick={handleMenuClick}
+          >
+            <MoreVertIcon />
+          </IconButton>
+        </Box>
+
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={handleMenuClose}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MenuItem onClick={() => {
+            handleMenuClose();
+            setWeaponSelectOpen(true);
+          }}>
+            <ListItemIcon>
+              <SwapHorizIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Change Weapon</ListItemText>
+          </MenuItem>
+          <MenuItem 
+            onClick={handleUnequip}
+            disabled={calc.is_unarmed}
+          >
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Unequip</ListItemText>
+          </MenuItem>
+        </Menu>
       </Paper>
 
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          {weaponName} {detailMode === 'attack' ? 'Attack' : 'Damage'} Details ({slot === 'MAIN_HAND' ? 'Main Hand' : 'Off Hand'})
+          {weaponName} {detailMode === 'attack' ? 'Attack' : detailMode === 'damage' ? 'Damage' : 'Advantage Status'} Details ({slot === 'MAIN_HAND' ? 'Main Hand' : 'Off Hand'})
         </DialogTitle>
         <DialogContent dividers>
           {detailMode === 'attack' ? (
@@ -275,11 +546,50 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
                   Modifier Breakdown
                 </Typography>
                 {components.map((c, idx) => (
-                  <ChannelBreakdown key={idx} mv={c.mv} label={c.label} />
+                  <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography>{c.label}</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {c.mv.channels.map((ch, chIdx) => (
+                        <Box key={chIdx} sx={{ mb: 1 }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {ch.name}
+                          </Typography>
+                          <List dense disablePadding>
+                            {ch.advantage_modifiers.map((mod, modIdx) => (
+                              <ListItem
+                                key={modIdx}
+                                dense
+                                divider={modIdx < ch.advantage_modifiers.length - 1}
+                              >
+                                <ListItemText
+                                  primary={mod.name}
+                                  secondary={mod.source_entity_name}
+                                  primaryTypographyProps={{ variant: 'body2' }}
+                                  secondaryTypographyProps={{ variant: 'caption' }}
+                                />
+                                <Chip
+                                  label={mod.value}
+                                  size="small"
+                                  color={mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default'}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      ))}
+                      {c.mv.channels.every(ch => ch.advantage_modifiers.length === 0) && (
+                        <Typography variant="body2" color="text.secondary">
+                          No advantage modifiers
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
                 ))}
               </Grid>
             </Grid>
-          ) : (
+          ) : detailMode === 'damage' ? (
             <Grid container spacing={2}>
               {/* Left column for Damage */}
               <Grid item xs={12} md={6}>
@@ -288,16 +598,29 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
                 </Typography>
                 <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                   <Typography variant="body2" color="text.secondary">
-                    Damage Expression
+                    Base Damage
                   </Typography>
                   <Typography variant="h4" color="primary">
                     {damageExpr}
                   </Typography>
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Damage Type
-                  </Typography>
-                  <Typography variant="h6">{damageType}</Typography>
+                  <Typography variant="h6">{damageTypeLabel}</Typography>
+                  
+                  {extraDamageExprs.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        Extra Damage
+                      </Typography>
+                      {extraDamageExprs.map((extra, idx) => (
+                        <Box key={idx} sx={{ mt: 1 }}>
+                          <Typography variant="h5" color="secondary">
+                            {extra.expr}
+                          </Typography>
+                          <Typography variant="subtitle1">{extra.type}</Typography>
+                        </Box>
+                      ))}
+                    </>
+                  )}
                 </Paper>
 
                 <Typography variant="h6" gutterBottom>
@@ -329,7 +652,144 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
                   Modifier Breakdown
                 </Typography>
                 {damageComponents.map((c, idx) => (
-                  <ChannelBreakdown key={idx} mv={c.mv} label={c.label} />
+                  <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography>{c.label}</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {c.mv.channels.map((ch, chIdx) => (
+                        <Box key={chIdx} sx={{ mb: 1 }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {ch.name}
+                          </Typography>
+                          <List dense disablePadding>
+                            {ch.advantage_modifiers.map((mod, modIdx) => (
+                              <ListItem
+                                key={modIdx}
+                                dense
+                                divider={modIdx < ch.advantage_modifiers.length - 1}
+                              >
+                                <ListItemText
+                                  primary={mod.name}
+                                  secondary={mod.source_entity_name}
+                                  primaryTypographyProps={{ variant: 'body2' }}
+                                  secondaryTypographyProps={{ variant: 'caption' }}
+                                />
+                                <Chip
+                                  label={mod.value}
+                                  size="small"
+                                  color={mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default'}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      ))}
+                      {c.mv.channels.every(ch => ch.advantage_modifiers.length === 0) && (
+                        <Typography variant="body2" color="text.secondary">
+                          No advantage modifiers
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </Grid>
+            </Grid>
+          ) : (
+            <Grid container spacing={2}>
+              {/* Left column */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Overview
+                </Typography>
+                <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
+                  <Typography variant="body2" color="text.secondary">
+                    Current Status
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                    {advantage === 'None' ? (
+                      <Chip size="small" label="N/A" color="default" />
+                    ) : advantage === 'Advantage' ? (
+                      <Chip size="small" label="Advantage" color="success" />
+                    ) : advantage === 'Disadvantage' ? (
+                      <Chip size="small" label="Disadvantage" color="error" />
+                    ) : (
+                      <Chip size="small" label="N/A" color="default" />
+                    )}
+                  </Box>
+                  <Typography variant="body1" sx={{ mt: 2 }}>
+                    {advantage === 'Advantage' ? 'Roll twice and take the higher result' :
+                     advantage === 'Disadvantage' ? 'Roll twice and take the lower result' :
+                     'Roll normally'}
+                  </Typography>
+                </Paper>
+
+                <Typography variant="h6" gutterBottom>
+                  Component Values
+                </Typography>
+                <Paper sx={{ p: 2 }} elevation={1}>
+                  {components.map((c, idx) => (
+                    <React.Fragment key={idx}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {c.label}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {c.mv.advantage === 'None' ? 'N/A' : c.mv.advantage}
+                        </Typography>
+                      </Box>
+                      {idx < components.length - 1 && <Divider sx={{ my: 1 }} />}
+                    </React.Fragment>
+                  ))}
+                </Paper>
+              </Grid>
+
+              {/* Right column */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Modifier Breakdown
+                </Typography>
+                {components.map((c, idx) => (
+                  <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography>{c.label}</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {c.mv.channels.map((ch, chIdx) => (
+                        <Box key={chIdx} sx={{ mb: 1 }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {ch.name}
+                          </Typography>
+                          <List dense disablePadding>
+                            {ch.advantage_modifiers.map((mod, modIdx) => (
+                              <ListItem
+                                key={modIdx}
+                                dense
+                                divider={modIdx < ch.advantage_modifiers.length - 1}
+                              >
+                                <ListItemText
+                                  primary={mod.name}
+                                  secondary={mod.source_entity_name}
+                                  primaryTypographyProps={{ variant: 'body2' }}
+                                  secondaryTypographyProps={{ variant: 'caption' }}
+                                />
+                                <Chip
+                                  label={mod.value}
+                                  size="small"
+                                  color={mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default'}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      ))}
+                      {c.mv.channels.every(ch => ch.advantage_modifiers.length === 0) && (
+                        <Typography variant="body2" color="text.secondary">
+                          No advantage modifiers
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
                 ))}
               </Grid>
             </Grid>
@@ -337,6 +797,66 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Item Details Dialog */}
+      {weapon && (
+        <ItemDetailsDialog
+          open={itemDetailsOpen}
+          onClose={() => setItemDetailsOpen(false)}
+          item={weapon}
+          itemType="weapon"
+        />
+      )}
+
+      {/* Weapon Selection Dialog */}
+      <Dialog 
+        open={weaponSelectOpen} 
+        onClose={() => !isLoading && setWeaponSelectOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Select Weapon for {slot === 'MAIN_HAND' ? 'Main Hand' : 'Off Hand'}</DialogTitle>
+        <DialogContent>
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <List>
+              {availableWeapons.map((weapon) => (
+                <ListItem 
+                  button 
+                  key={weapon.uuid}
+                  onClick={() => handleWeaponSelect(weapon.uuid)}
+                  disabled={isLoading}
+                >
+                  <ListItemText 
+                    primary={weapon.name} 
+                    secondary={
+                      'damage_dice' in weapon ? 
+                        `${weapon.dice_numbers}d${weapon.damage_dice} ${weapon.damage_type}` : 
+                        undefined
+                    }
+                  />
+                </ListItem>
+              ))}
+              {availableWeapons.length === 0 && !isLoading && (
+                <ListItem>
+                  <ListItemText primary="No weapons available" />
+                </ListItem>
+              )}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setWeaponSelectOpen(false)}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
         </DialogActions>
       </Dialog>
     </>
@@ -347,22 +867,52 @@ const AttackSection: React.FC<Props> = ({ entity }) => {
   const calcsObj = entity.attack_calculations ?? {};
   const equipment = entity.equipment;
 
-  // Backend uses "Main Hand" / "Off Hand" string values
+  // Backend uses "MAIN_HAND" / "OFF_HAND" string values
   const mainHandCalc = Object.values(calcsObj).find(
-    (c: any) => c && c.weapon_slot === 'Main Hand'
+    (c: any) => c && c.weapon_slot === 'MAIN_HAND'
   ) as AttackBonusCalculationSnapshot | undefined;
 
   const offHandCalc = Object.values(calcsObj).find(
-    (c: any) => c && c.weapon_slot === 'Off Hand'
+    (c: any) => c && c.weapon_slot === 'OFF_HAND'
   ) as AttackBonusCalculationSnapshot | undefined;
+
+  // If calculations are null, create default unarmed attack calculations
+  const defaultUnarmedCalc: AttackBonusCalculationSnapshot = {
+    weapon_slot: 'MAIN_HAND',
+    proficiency_bonus: entity.proficiency_bonus,
+    weapon_bonus: equipment.unarmed_attack_bonus,
+    attack_bonuses: [],
+    ability_bonuses: [],
+    range: { type: 'REACH', normal: 5 },
+    weapon_name: 'Unarmed Strike',
+    is_unarmed: true,
+    is_ranged: false,
+    properties: equipment.unarmed_properties,
+    has_cross_entity_effects: false,
+    total_bonus: equipment.unarmed_attack_bonus,
+    final_modifier: equipment.unarmed_attack_bonus.normalized_score,
+    advantage_status: 'NONE',
+    auto_hit_status: 'NONE',
+    critical_status: 'NONE'
+  };
 
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
         Attack
       </Typography>
-      <AttackCard slot="MAIN_HAND" calc={mainHandCalc} equipment={equipment} entity={entity} />
-      <AttackCard slot="OFF_HAND" calc={offHandCalc} equipment={equipment} entity={entity} />
+      <AttackCard 
+        slot="MAIN_HAND" 
+        calc={mainHandCalc || defaultUnarmedCalc} 
+        equipment={equipment} 
+        entity={entity} 
+      />
+      <AttackCard 
+        slot="OFF_HAND" 
+        calc={offHandCalc || {...defaultUnarmedCalc, weapon_slot: 'OFF_HAND'}} 
+        equipment={equipment} 
+        entity={entity} 
+      />
     </Box>
   );
 };

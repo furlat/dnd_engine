@@ -231,14 +231,16 @@ class Weapon(BaseBlock):
         default_factory=list,
         description="Extra damage type for the weapon")
     
+    
     #validator to ensure both extra damage bonus and extra damage type are of the same length
     @model_validator(mode="after")
     def check_extra_damage_consistency(self) -> Self:
         targets = [self.extra_damage_dices, self.extra_damage_dices_numbers, self.extra_damage_bonus, self.extra_damage_type]
-        for target in targets:
-            for i in range(len(target)):
-                if len(target[i]) != len(targets[0]):
-                    raise ValueError("All extra damage targets must be of the same length")
+        # Compare each list's length with the first list's length
+        first_len = len(targets[0])
+        for target in targets[1:]:
+            if len(target) != first_len:
+                raise ValueError("All extra damage targets must be of the same length")
         return self
     
     def get_main_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> Damage:
@@ -528,6 +530,7 @@ class Equipment(BaseBlock):
         """
         Equip an item in the specified slot. For most items, the slot can be automatically
         determined from the item type. For rings and weapons, the slot must be specified.
+        Updates the item's source_entity_uuid to match the equipment's source_entity_uuid.
 
         Args:
             item: The item to equip
@@ -536,6 +539,18 @@ class Equipment(BaseBlock):
         Raises:
             ValueError: If the slot is invalid or if a ring/weapon is equipped without specifying the slot
         """
+        # Update the item's source_entity_uuid to match the equipment's
+        item.source_entity_uuid = self.source_entity_uuid
+        
+        # Update any ModifiableValue fields to use the new source_entity_uuid
+        for field_name, field_value in item.__dict__.items():
+            if isinstance(field_value, ModifiableValue):
+                field_value.source_entity_uuid = self.source_entity_uuid
+            elif isinstance(field_value, list):
+                for value in field_value:
+                    if isinstance(value, ModifiableValue):
+                        value.source_entity_uuid = self.source_entity_uuid
+
         if isinstance(item, Ring):
             if slot not in (RingSlot.LEFT, RingSlot.RIGHT):
                 raise ValueError("Must specify LEFT or RIGHT slot for rings")
