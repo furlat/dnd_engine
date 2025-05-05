@@ -422,18 +422,19 @@ class Entity(BaseBlock):
             ability_bonuses = [self.ability_scores.get_ability(ability).ability_score for ability in abilities]
             ability_modifier_bonuses = [self.ability_scores.get_ability(ability).modifier_bonus for ability in abilities]
             ac_bonus = unarmored_values[0].combine_values(unarmored_values[1:]+ability_bonuses+ability_modifier_bonuses)
-            
-        
         else:
             armored_values = self.equipment.get_armored_ac_values()
             max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
-            assert max_dexterity_bonus is not None
             dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
             dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
             combined_dexterity_bonus = dexterity_bonus.combine_values([dexterity_modifier_bonus])
-            if combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
+            
+            # Only cap dexterity if there's a max_dexterity_bonus
+            if max_dexterity_bonus is not None and combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
                 combined_dexterity_bonus = max_dexterity_bonus
+            
             ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus])
+        
         if target_entity_uuid is not None:
             self.clear_target_entity()
         return ac_bonus

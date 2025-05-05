@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Character } from '../models/character';
+import { EquipmentItem } from './types';
 
 // Update to point directly to FastAPI backend
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -18,7 +19,14 @@ export const fetchCharacters = async (): Promise<Character[]> => {
 // Fetch a single character by ID
 export const fetchCharacter = async (characterId: string): Promise<Character> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/entities/${characterId}?include_skill_calculations=true&include_saving_throw_calculations=true&include_ac_calculation=true&include_attack_calculations=true`);
+    const response = await axios.get(`${API_BASE_URL}/entities/${characterId}`, {
+      params: {
+        include_skill_calculations: true,
+        include_saving_throw_calculations: true,
+        include_ac_calculation: true,
+        include_attack_calculations: true
+      }
+    });
     return response.data;
   } catch (error) {
     console.error(`Error fetching character ${characterId}:`, error);
@@ -29,10 +37,57 @@ export const fetchCharacter = async (characterId: string): Promise<Character> =>
 // Fetch character ability details (for detailed inspection)
 export const fetchCharacterAbilities = async (characterId: string): Promise<Character> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/entities/${characterId}?include_skill_calculations=true&include_saving_throw_calculations=true&include_ac_calculation=true&include_attack_calculations=true`);
+    const response = await axios.get(`${API_BASE_URL}/entities/${characterId}`, {
+      params: {
+        include_skill_calculations: true,
+        include_saving_throw_calculations: true,
+        include_ac_calculation: true,
+        include_attack_calculations: true
+      }
+    });
     return response.data;
   } catch (error) {
     console.error(`Error fetching character abilities ${characterId}:`, error);
+    throw error;
+  }
+};
+
+// Equipment-related functions
+export const fetchAllEquipment = async (sourceEntityUuid?: string): Promise<EquipmentItem[]> => {
+  try {
+    console.log('Fetching equipment with source entity:', sourceEntityUuid);
+    const response = await axios.get(`${API_BASE_URL}/equipment`, {
+      params: {
+        source_entity_uuid: sourceEntityUuid
+      }
+    });
+    console.log('Equipment API response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching equipment:', error);
+    throw error;
+  }
+};
+
+export const equipItem = async (characterId: string, equipmentId: string, slot: string): Promise<Character> => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/entities/${characterId}/equip`, {
+      equipment_uuid: equipmentId,
+      slot: slot
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error equipping item:', error);
+    throw error;
+  }
+};
+
+export const unequipItem = async (characterId: string, slot: string): Promise<Character> => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/entities/${characterId}/unequip/${slot}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error unequipping item:', error);
     throw error;
   }
 }; 

@@ -309,42 +309,48 @@ class AttackBonusCalculationSnapshot(BaseModel):
             weapon_slot: The weapon slot to calculate for
         """
         # Get all the components using entity._get_attack_bonuses
-        proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range_obj = entity._get_attack_bonuses(weapon_slot)
-        
-        # Determine if this is a weapon attack or unarmed
-        is_unarmed = entity.equipment.is_unarmed(weapon_slot)
-        
-        # Determine if this is a ranged attack
-        is_ranged = entity.equipment.is_ranged(weapon_slot) if not is_unarmed else False
-        
-        # Get weapon properties if applicable
-        properties = []
-        weapon_name = None
-        if not is_unarmed:
-            weapon = entity.equipment.weapon_main_hand if weapon_slot == WeaponSlot.MAIN_HAND else entity.equipment.weapon_off_hand
-            if hasattr(weapon, 'properties'):  # If it's not a shield
-                properties = [prop.value for prop in weapon.properties]
-                weapon_name = weapon.name
-        
-        # Calculate the total bonus
-        total_bonus = entity.attack_bonus(weapon_slot)
-        
-        return cls(
-            weapon_slot=weapon_slot,
-            proficiency_bonus=ModifiableValueSnapshot.from_engine(proficiency_bonus),
-            weapon_bonus=ModifiableValueSnapshot.from_engine(weapon_bonus),
-            attack_bonuses=[ModifiableValueSnapshot.from_engine(bonus) for bonus in attack_bonuses],
-            ability_bonuses=[ModifiableValueSnapshot.from_engine(bonus) for bonus in ability_bonuses],
-            range=RangeSnapshot.from_engine(range_obj),
-            weapon_name=weapon_name,
-            is_unarmed=is_unarmed,
-            is_ranged=is_ranged,
-            properties=properties,
-            has_cross_entity_effects=entity.target_entity_uuid is not None,
-            target_entity_uuid=entity.target_entity_uuid,
-            total_bonus=ModifiableValueSnapshot.from_engine(total_bonus),
-            final_modifier=total_bonus.normalized_score
-        )
+        try:
+            proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range_obj = entity._get_attack_bonuses(weapon_slot)
+            
+            # Determine if this is a weapon attack or unarmed
+            is_unarmed = entity.equipment.is_unarmed(weapon_slot)
+            
+            # Determine if this is a ranged attack
+            is_ranged = entity.equipment.is_ranged(weapon_slot) if not is_unarmed else False
+            
+            # Get weapon properties if applicable
+            properties = []
+            weapon_name = None
+            if not is_unarmed:
+                weapon = entity.equipment.weapon_main_hand if weapon_slot == WeaponSlot.MAIN_HAND else entity.equipment.weapon_off_hand
+                if hasattr(weapon, 'properties'):  # If it's not a shield
+                    properties = [prop.value for prop in weapon.properties]
+                    weapon_name = weapon.name
+            
+            # Calculate the total bonus
+            total_bonus = entity.attack_bonus(weapon_slot)
+            
+            return cls(
+                weapon_slot=weapon_slot,
+                proficiency_bonus=ModifiableValueSnapshot.from_engine(proficiency_bonus),
+                weapon_bonus=ModifiableValueSnapshot.from_engine(weapon_bonus),
+                attack_bonuses=[ModifiableValueSnapshot.from_engine(bonus) for bonus in attack_bonuses],
+                ability_bonuses=[ModifiableValueSnapshot.from_engine(bonus) for bonus in ability_bonuses],
+                range=RangeSnapshot.from_engine(range_obj),
+                weapon_name=weapon_name,
+                is_unarmed=is_unarmed,
+                is_ranged=is_ranged,
+                properties=properties,
+                has_cross_entity_effects=entity.target_entity_uuid is not None,
+                target_entity_uuid=entity.target_entity_uuid,
+                total_bonus=ModifiableValueSnapshot.from_engine(total_bonus),
+                final_modifier=total_bonus.normalized_score
+            )
+        except Exception as e:
+            # If there's an error calculating the attack bonus (e.g. after unequipping),
+            # return None so the frontend can handle it gracefully
+            print(f"Error calculating attack bonus: {str(e)}")
+            return None
 
 class ACBonusCalculationSnapshot(BaseModel):
     """Model representing the detailed calculation of AC bonus"""
