@@ -23,6 +23,9 @@ import {
   SavingThrowSetSnapshot,
   SavingThrowSnapshot,
   SavingThrowBonusCalculationSnapshot,
+  AdvantageStatus,
+  CriticalStatus,
+  AutoHitStatus,
 } from '../../models/character';
 
 interface Props {
@@ -117,6 +120,11 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
     if (!selected) return null;
     const calc = savingThrowCalculations ? savingThrowCalculations[selected.ability] : undefined;
 
+    // Get status from total_bonus if available
+    const advantage = calc?.total_bonus?.advantage ?? AdvantageStatus.NONE;
+    const critical = calc?.total_bonus?.critical ?? CriticalStatus.NONE;
+    const autoHit = calc?.total_bonus?.auto_hit ?? AutoHitStatus.NONE;
+
     return (
       <Dialog open onClose={() => setSelected(null)} maxWidth="md" fullWidth>
         <DialogTitle>{`${selected.ability.toUpperCase()} Saving Throw Details`}</DialogTitle>
@@ -149,13 +157,36 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                       </Typography>
                     </Grid>
                   </Grid>
+
+                  {/* Status Chips */}
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {autoHit === AutoHitStatus.AUTOHIT && (
+                      <Chip size="small" label="Auto Success" color="info" />
+                    )}
+                    {autoHit === AutoHitStatus.AUTOMISS && (
+                      <Chip size="small" label="Auto Fail" color="error" />
+                    )}
+                    {critical === CriticalStatus.AUTOCRIT && (
+                      <Chip size="small" label="Always Crit" color="warning" />
+                    )}
+                    {critical === CriticalStatus.NOCRIT && (
+                      <Chip size="small" label="Never Crit" color="error" />
+                    )}
+                    <Chip 
+                      size="small" 
+                      label={advantage === AdvantageStatus.ADVANTAGE ? 'Advantage' :
+                             advantage === AdvantageStatus.DISADVANTAGE ? 'Disadvantage' : 'Normal'}
+                      color={advantage === AdvantageStatus.ADVANTAGE ? 'success' :
+                             advantage === AdvantageStatus.DISADVANTAGE ? 'error' : 'default'}
+                    />
+                  </Box>
                 </Paper>
 
                 {/* Components */}
                 <Typography variant="h6" gutterBottom>
                   Component Values
                 </Typography>
-                <Paper sx={{ p: 2 }} elevation={1}>
+                <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                   {[
                     { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_score },
                     { label: 'Saving Throw Bonus', value: calc.saving_throw_bonus.normalized_score },
@@ -174,6 +205,32 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                       {idx < arr.length - 1 && <Divider sx={{ my: 1 }} />}
                     </React.Fragment>
                   ))}
+                </Paper>
+
+                {/* Status Details */}
+                <Typography variant="h6" gutterBottom>
+                  Status Effects
+                </Typography>
+                <Paper sx={{ p: 2 }} elevation={1}>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {advantage === AdvantageStatus.ADVANTAGE ? 'Roll twice and take the higher result' :
+                     advantage === AdvantageStatus.DISADVANTAGE ? 'Roll twice and take the lower result' :
+                     'Roll normally'}
+                  </Typography>
+                  {critical !== CriticalStatus.NONE && (
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      {critical === CriticalStatus.AUTOCRIT ? 'Save automatically results in a critical success' :
+                       critical === CriticalStatus.NOCRIT ? 'Save can never be a critical success' :
+                       'Normal critical rules apply'}
+                    </Typography>
+                  )}
+                  {autoHit !== AutoHitStatus.NONE && (
+                    <Typography variant="body1">
+                      {autoHit === AutoHitStatus.AUTOHIT ? 'Save automatically succeeds' :
+                       autoHit === AutoHitStatus.AUTOMISS ? 'Save automatically fails' :
+                       'Normal success rules apply'}
+                    </Typography>
+                  )}
                 </Paper>
               </Grid>
 
