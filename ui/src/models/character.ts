@@ -269,6 +269,46 @@ export interface SavingThrowBonusCalculationSnapshot {
   final_modifier: number;
 }
 
+export interface NumericalModifierSnapshot {
+  uuid: UUID;
+  name: string;
+  value: number;
+  normalized_value: number;
+  source_entity_name?: string;
+}
+
+// Action economy snapshot
+export interface ActionEconomySnapshot {
+  uuid: string;
+  name: string;
+  source_entity_uuid: string;
+  source_entity_name?: string;
+  
+  // Core action values
+  actions: ModifiableValueSnapshot;
+  bonus_actions: ModifiableValueSnapshot;
+  reactions: ModifiableValueSnapshot;
+  movement: ModifiableValueSnapshot;
+  
+  // Base values
+  base_actions: number;
+  base_bonus_actions: number;
+  base_reactions: number;
+  base_movement: number;
+  
+  // Cost modifiers
+  action_costs: NumericalModifierSnapshot[];
+  bonus_action_costs: NumericalModifierSnapshot[];
+  reaction_costs: NumericalModifierSnapshot[];
+  movement_costs: NumericalModifierSnapshot[];
+  
+  // Computed values
+  available_actions: number;
+  available_bonus_actions: number;
+  available_reactions: number;
+  available_movement: number;
+}
+
 // Character interface matching EntitySnapshot
 export interface Character {
   uuid: UUID;
@@ -290,4 +330,5 @@ export interface Character {
   attack_calculations?: Record<string, AttackBonusCalculationSnapshot>;
   saving_throw_calculations?: Record<string, SavingThrowBonusCalculationSnapshot>;
   ac_calculation?: ACBonusCalculationSnapshot;
+  action_economy: ActionEconomySnapshot;
 } 

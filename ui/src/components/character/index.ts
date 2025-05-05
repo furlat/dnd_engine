@@ -4,6 +4,8 @@ import SavingThrowsSection from './SavingThrowsSection';
 import HealthSection from './HealthSection';
 import ArmorSection from './ArmorSection';
 import AttackSection from './AttackSection';
+import EquipmentSection from './EquipmentSection';
+import ActionEconomySection from './ActionEconomySection';
 
 export {
   AbilityScoresBlock,
@@ -12,4 +14,6 @@ export {
   SkillsSection,
   SavingThrowsSection,
   HealthSection,
+  EquipmentSection,
+  ActionEconomySection,
 }; 

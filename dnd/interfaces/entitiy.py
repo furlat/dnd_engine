@@ -10,6 +10,7 @@ from dnd.interfaces.values import ModifiableValueSnapshot
 from dnd.core.events import SkillName, WeaponSlot, AbilityName
 from dnd.interfaces.saving_throws import SavingThrowSetSnapshot, SavingThrowBonusCalculationSnapshot
 from dnd.interfaces.health import HealthSnapshot
+from dnd.interfaces.action_economy import ActionEconomySnapshot
 
 class EntitySnapshot(BaseModel):
     """Interface model for an Entity snapshot"""
@@ -25,7 +26,7 @@ class EntitySnapshot(BaseModel):
     # Add other blocks as they're implemented
     saving_throws: SavingThrowSetSnapshot 
     health: HealthSnapshot
-    # action_economy: ActionEconomySnapshot
+    action_economy: ActionEconomySnapshot
     
     # Core values
     proficiency_bonus: ModifiableValueSnapshot
@@ -93,5 +94,5 @@ class EntitySnapshot(BaseModel):
             saving_throws=SavingThrowSetSnapshot.from_engine(entity.saving_throws, entity),
             health=HealthSnapshot.from_engine(entity.health, entity),
             saving_throw_calculations=saving_throw_calculations,
-            # Add other blocks as they're implemented
+            action_economy=ActionEconomySnapshot.from_engine(entity.action_economy, entity),
         )

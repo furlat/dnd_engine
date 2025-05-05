@@ -8,6 +8,7 @@ import {
   CircularProgress,
   Alert,
   Button,
+  Container,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { fetchCharacter } from '../api/characterApi';
@@ -21,6 +22,7 @@ import {
   AttackSection,
 } from '../components/character';
 import { EntityProvider, useEntity } from '../contexts/EntityContext';
+import ActionEconomySection from '../components/character/ActionEconomySection';
 
 // Define the params interface
 type RouteParams = {
@@ -122,6 +124,9 @@ const CharacterSheetContent: React.FC = () => {
             <AttackSection entity={character} />
           </Grid>
         </Grid>
+
+        {/* Action Economy */}
+        <ActionEconomySection actionEconomy={character.action_economy} />
 
         {/* Skills */}
         {character.skill_set && (
