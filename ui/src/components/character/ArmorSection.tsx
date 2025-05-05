@@ -27,7 +27,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import { Character, ModifiableValueSnapshot } from '../../models/character';
+import { Character, ModifiableValueSnapshot, AdvantageStatus, CriticalStatus, AutoHitStatus } from '../../models/character';
 import { ArmorSnapshot } from '../../api/types';
 import ItemDetailsDialog from './ItemDetailsDialog';
 import { useEntity } from '../../contexts/EntityContext';
@@ -40,7 +40,7 @@ interface Props {
 
 const format = (n: number | undefined) => (n ?? 0) >= 0 ? `+${n}` : `${n}`;
 
-const ChannelBreakdown: React.FC<{ mv: ModifiableValueSnapshot; label: string }> = ({ mv, label }) => {
+const ChannelBreakdown: React.FC<{ mv: ModifiableValueSnapshot; label: string; showAdvantage?: boolean }> = ({ mv, label, showAdvantage = false }) => {
   if (!mv || !mv.channels) return null;
   return (
     <Accordion defaultExpanded sx={{ mb: 1 }}>
@@ -49,14 +49,14 @@ const ChannelBreakdown: React.FC<{ mv: ModifiableValueSnapshot; label: string }>
         {mv.channels.map((ch, idx) => (
           <Box key={idx} sx={{ mb: 1 }}>
             <Typography variant="body2" fontWeight="bold">
-              {ch.name} – Total: {format(ch.normalized_score)}
+              {ch.name} – Total: {showAdvantage ? ch.advantage_status : format(ch.normalized_score)}
             </Typography>
             <List dense disablePadding>
-              {ch.value_modifiers.map((mod, i) => (
+              {(showAdvantage ? ch.advantage_modifiers : ch.value_modifiers).map((mod: any, i: number) => (
                 <ListItem
                   key={i}
                   dense
-                  divider={i < ch.value_modifiers.length - 1}
+                  divider={i < (showAdvantage ? ch.advantage_modifiers.length : ch.value_modifiers.length) - 1}
                 >
                   <ListItemText
                     primary={mod.name}
@@ -65,13 +65,21 @@ const ChannelBreakdown: React.FC<{ mv: ModifiableValueSnapshot; label: string }>
                     secondaryTypographyProps={{ variant: 'caption' }}
                   />
                   <Chip
-                    label={format(mod.value)}
+                    label={showAdvantage ? mod.value : format(mod.value)}
                     size="small"
-                    color={mod.value >= 0 ? 'success' : 'error'}
+                    color={showAdvantage 
+                      ? (mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default')
+                      : (mod.value >= 0 ? 'success' : 'error')
+                    }
                   />
                 </ListItem>
               ))}
             </List>
+            {ch.advantage_modifiers.length === 0 && showAdvantage && (
+              <Typography variant="body2" color="text.secondary">
+                No advantage modifiers
+              </Typography>
+            )}
           </Box>
         ))}
       </AccordionDetails>
@@ -86,6 +94,7 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
 
   // dialog states
   const [open, setOpen] = React.useState(false);
+  const [detailMode, setDetailMode] = React.useState<'armor' | 'advantage' | 'critical' | 'auto_hit'>('armor');
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState<'armor' | 'shield' | null>(null);
   const [menuAnchor, setMenuAnchor] = React.useState<null | HTMLElement>(null);
   const [armorSelectOpen, setArmorSelectOpen] = React.useState(false);
@@ -291,21 +300,30 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
               sx={{ cursor: 'pointer' }}
             />
           )}
-          {/* Dex bonus chip */}
-          {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
+          {/* Combat Status Chips - Only show Advantage */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Chip 
-              label={`Dex ${combinedDex}/${maxDex}`} 
+              label={acCalc.outgoing_advantage === AdvantageStatus.ADVANTAGE ? 'Give Advantage' : 
+                     acCalc.outgoing_advantage === AdvantageStatus.DISADVANTAGE ? 'Give Disadvantage' : 'Normal'}
               size="small"
+              sx={{ 
+                minWidth: '140px',
+                height: '24px',
+                '& .MuiChip-label': { 
+                  px: 2,
+                  fontSize: '0.8125rem'
+                },
+                backgroundColor: acCalc.outgoing_advantage === AdvantageStatus.ADVANTAGE ? '#d32f2f !important' : 
+                                acCalc.outgoing_advantage === AdvantageStatus.DISADVANTAGE ? '#2e7d32 !important' : '#757575 !important',
+                color: '#fff !important'
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDetailMode('advantage');
+                setOpen(true);
+              }}
             />
-          )}
-          {/* Add outgoing advantage chip */}
-          {acCalc.outgoing_advantage !== 'NONE' && (
-            <Chip 
-              label={acCalc.outgoing_advantage === 'ADVANTAGE' ? 'Advantage' : 'Disadvantage'}
-              size="small"
-              color={acCalc.outgoing_advantage === 'ADVANTAGE' ? 'success' : 'error'}
-            />
-          )}
+          </Box>
         </Box>
 
         {/* Add menu button */}
@@ -350,70 +368,293 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
       {/* AC Details Dialog */}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          Armor Class Details
+          {detailMode === 'armor' ? 'Armor Class Details' : 
+           detailMode === 'advantage' ? 'Outgoing Advantage Status' :
+           detailMode === 'critical' ? 'Outgoing Critical Status' :
+           'Outgoing Auto Hit Status'}
         </DialogTitle>
         <DialogContent dividers>
-          <Grid container spacing={2}>
-            {/* Left column */}
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                Overview
-              </Typography>
-              <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
-                <Typography variant="body2" color="text.secondary">
-                  Final AC
+          {detailMode === 'armor' ? (
+            <Grid container spacing={2}>
+              {/* Left column */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Overview
                 </Typography>
-                <Typography variant="h4" color="primary">
-                  {totalAC}
-                </Typography>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="body2" color="text.secondary">
-                  Armor Type
-                </Typography>
-                <Typography variant="h6">{formatArmorType(armorType)}</Typography>
-                {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
-                  <>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      Dexterity Bonus
-                    </Typography>
-                    <Typography variant="h6">{combinedDex}/{maxDex}</Typography>
-                  </>
-                )}
-              </Paper>
-
-              <Typography variant="h6" gutterBottom>
-                Component Values
-              </Typography>
-              <Paper sx={{ p: 2 }} elevation={1}>
-                {leftValues.map((mv, idx) => (
-                  <React.Fragment key={idx}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
+                  <Typography variant="body2" color="text.secondary">
+                    Final AC
+                  </Typography>
+                  <Typography variant="h4" color="primary">
+                    {totalAC}
+                  </Typography>
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Armor Type
+                  </Typography>
+                  <Typography variant="h6">{formatArmorType(armorType)}</Typography>
+                  {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
+                    <>
+                      <Divider sx={{ my: 1 }} />
                       <Typography variant="body2" color="text.secondary">
-                        {mv.name}
+                        Dexterity Bonus
                       </Typography>
-                      <Typography variant="body2" fontWeight="bold">
-                        {format(mv.normalized_score)}
-                      </Typography>
-                    </Box>
-                    {idx < leftValues.length - 1 && <Divider sx={{ my: 1 }} />}
-                  </React.Fragment>
-                ))}
-              </Paper>
-            </Grid>
+                      <Typography variant="h6">{combinedDex}/{maxDex}</Typography>
+                    </>
+                  )}
+                </Paper>
 
-            {/* Right column */}
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                Modifier Breakdown
-              </Typography>
-              {breakdownItems.map(({ label, mv }, idx) => (
-                <ChannelBreakdown key={idx} mv={mv} label={label} />
-              ))}
+                <Typography variant="h6" gutterBottom>
+                  Component Values
+                </Typography>
+                <Paper sx={{ p: 2 }} elevation={1}>
+                  {leftValues.map((mv, idx) => (
+                    <React.Fragment key={idx}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {mv.name}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {format(mv.normalized_score)}
+                        </Typography>
+                      </Box>
+                      {idx < leftValues.length - 1 && <Divider sx={{ my: 1 }} />}
+                    </React.Fragment>
+                  ))}
+                </Paper>
+              </Grid>
+
+              {/* Right column */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Modifier Breakdown
+                </Typography>
+                {breakdownItems.map(({ label, mv }, idx) => (
+                  <ChannelBreakdown key={idx} mv={mv} label={label} />
+                ))}
+              </Grid>
             </Grid>
-          </Grid>
+          ) : (
+            <Grid container spacing={2}>
+              {/* Left column */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Combat Status Overview
+                </Typography>
+                <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
+                  {/* Advantage Status */}
+                  <Typography variant="body2" color="text.secondary">
+                    Advantage Status
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+                    <Chip 
+                      size="small" 
+                      label={acCalc.outgoing_advantage === AdvantageStatus.ADVANTAGE ? 'Give Advantage' :
+                             acCalc.outgoing_advantage === AdvantageStatus.DISADVANTAGE ? 'Give Disadvantage' : 'Normal'}
+                      sx={{ 
+                        minWidth: '120px',
+                        '& .MuiChip-label': { px: 2 },
+                        backgroundColor: acCalc.outgoing_advantage === AdvantageStatus.ADVANTAGE ? '#d32f2f !important' : 
+                                       acCalc.outgoing_advantage === AdvantageStatus.DISADVANTAGE ? '#2e7d32 !important' : '#757575 !important',
+                        color: '#fff !important'
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {acCalc.outgoing_advantage === AdvantageStatus.ADVANTAGE ? 'Attackers have advantage against this target' :
+                     acCalc.outgoing_advantage === AdvantageStatus.DISADVANTAGE ? 'Attackers have disadvantage against this target' :
+                     'Normal attack rolls against this target'}
+                  </Typography>
+
+                  {/* Auto Hit Status */}
+                  <Typography variant="body2" color="text.secondary">
+                    Auto Hit Status
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                    <Chip 
+                      size="small" 
+                      label={acCalc.outgoing_auto_hit === AutoHitStatus.AUTOHIT ? 'Auto Hit' :
+                             acCalc.outgoing_auto_hit === AutoHitStatus.AUTOMISS ? 'Auto Miss' : 'Normal'}
+                      sx={{ 
+                        minWidth: '120px',
+                        '& .MuiChip-label': { px: 2 },
+                        backgroundColor: acCalc.outgoing_auto_hit === AutoHitStatus.AUTOHIT ? '#d32f2f !important' : 
+                                       acCalc.outgoing_auto_hit === AutoHitStatus.AUTOMISS ? '#2e7d32 !important' : '#757575 !important',
+                        color: '#fff !important'
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="body1">
+                    {acCalc.outgoing_auto_hit === AutoHitStatus.AUTOHIT ? 'Attacks against this target automatically hit' :
+                     acCalc.outgoing_auto_hit === AutoHitStatus.AUTOMISS ? 'Attacks against this target automatically miss' :
+                     'Normal hit rules apply'}
+                  </Typography>
+
+                  {/* Critical Status */}
+                  <Typography variant="body2" color="text.secondary">
+                    Critical Status
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                    <Chip 
+                      size="small" 
+                      label={acCalc.outgoing_critical === CriticalStatus.AUTOCRIT ? 'Always Crit' :
+                             acCalc.outgoing_critical === CriticalStatus.NOCRIT ? 'Never Crit' : 'Normal'}
+                      sx={{ 
+                        minWidth: '120px',
+                        '& .MuiChip-label': { px: 2 },
+                        backgroundColor: acCalc.outgoing_critical === CriticalStatus.AUTOCRIT ? '#d32f2f !important' : 
+                                       acCalc.outgoing_critical === CriticalStatus.NOCRIT ? '#2e7d32 !important' : '#757575 !important',
+                        color: '#fff !important'
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="body1">
+                    {acCalc.outgoing_critical === CriticalStatus.AUTOCRIT ? 'Attacks against this target are always critical hits' :
+                     acCalc.outgoing_critical === CriticalStatus.NOCRIT ? 'Attacks against this target can never be critical hits' :
+                     'Normal critical hit rules apply'}
+                  </Typography>
+                </Paper>
+
+                {/* Component Values */}
+                <Typography variant="h6" gutterBottom>
+                  Component Values
+                </Typography>
+                <Paper sx={{ p: 2 }} elevation={1}>
+                  {/* Advantage Values */}
+                  <Typography variant="subtitle2" gutterBottom>Advantage Effects</Typography>
+                  {acCalc.total_bonus.channels.map((ch, idx) => (
+                    <React.Fragment key={idx}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {ch.name}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {ch.advantage_status}
+                        </Typography>
+                      </Box>
+                      {idx < acCalc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
+                    </React.Fragment>
+                  ))}
+
+                  {/* Critical Values */}
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" gutterBottom>Critical Effects</Typography>
+                  {acCalc.total_bonus.channels.map((ch, idx) => (
+                    <React.Fragment key={idx}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {ch.name}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {ch.critical_status}
+                        </Typography>
+                      </Box>
+                      {idx < acCalc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
+                    </React.Fragment>
+                  ))}
+
+                  {/* Auto Hit Values */}
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" gutterBottom>Auto Hit Effects</Typography>
+                  {acCalc.total_bonus.channels.map((ch, idx) => (
+                    <React.Fragment key={idx}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {ch.name}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {ch.auto_hit_status}
+                        </Typography>
+                      </Box>
+                      {idx < acCalc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
+                    </React.Fragment>
+                  ))}
+                </Paper>
+              </Grid>
+
+              {/* Right column */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Modifier Breakdown
+                </Typography>
+                {/* Show appropriate modifiers based on mode */}
+                {acCalc.total_bonus.channels.map((ch, idx) => (
+                  <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography>{ch.name}</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense disablePadding>
+                        {(detailMode === 'advantage' ? ch.advantage_modifiers :
+                          detailMode === 'critical' ? ch.critical_modifiers :
+                          detailMode === 'auto_hit' ? ch.auto_hit_modifiers :
+                          ch.value_modifiers).map((mod: any, modIdx: number) => (
+                          <ListItem
+                            key={modIdx}
+                            dense
+                            divider={modIdx < (detailMode === 'advantage' ? ch.advantage_modifiers.length :
+                                              detailMode === 'critical' ? ch.critical_modifiers.length :
+                                              detailMode === 'auto_hit' ? ch.auto_hit_modifiers.length :
+                                              ch.value_modifiers.length) - 1}
+                          >
+                            <ListItemText
+                              primary={mod.name}
+                              secondary={mod.source_entity_name}
+                              primaryTypographyProps={{ variant: 'body2' }}
+                              secondaryTypographyProps={{ variant: 'caption' }}
+                            />
+                            <Chip
+                              label={mod.value}
+                              size="small"
+                              color={detailMode === 'advantage' ? 
+                                      (mod.value === 'ADVANTAGE' ? 'success' : 
+                                       mod.value === 'DISADVANTAGE' ? 'error' : 'default') :
+                                    detailMode === 'critical' ?
+                                      (mod.value === 'AUTOCRIT' ? 'warning' :
+                                       mod.value === 'NOCRIT' ? 'error' : 'default') :
+                                    detailMode === 'auto_hit' ?
+                                      (mod.value === 'AUTOHIT' ? 'info' :
+                                       mod.value === 'AUTOMISS' ? 'error' : 'default') :
+                                    (mod.value >= 0 ? 'success' : 'error')}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                      {ch.advantage_modifiers.length === 0 && detailMode === 'advantage' && (
+                        <Typography variant="body2" color="text.secondary">
+                          No advantage modifiers
+                        </Typography>
+                      )}
+                      {ch.critical_modifiers.length === 0 && detailMode === 'critical' && (
+                        <Typography variant="body2" color="text.secondary">
+                          No critical modifiers
+                        </Typography>
+                      )}
+                      {ch.auto_hit_modifiers.length === 0 && detailMode === 'auto_hit' && (
+                        <Typography variant="body2" color="text.secondary">
+                          No auto-hit modifiers
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </Grid>
+            </Grid>
+          )}
         </DialogContent>
         <DialogActions>
+          <Button 
+            onClick={() => {
+              setDetailMode(detailMode === 'armor' ? 'advantage' : 
+                          detailMode === 'advantage' ? 'critical' :
+                          detailMode === 'critical' ? 'auto_hit' : 'armor');
+            }}
+            color="primary"
+          >
+            Show {detailMode === 'armor' ? 'Advantage' : 
+                  detailMode === 'advantage' ? 'Critical' :
+                  detailMode === 'critical' ? 'Auto Hit' : 'Armor'} Details
+          </Button>
           <Button onClick={() => setOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>

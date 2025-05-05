@@ -446,7 +446,6 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
     
         proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range = self._get_attack_bonuses(weapon_slot)
-        print("current ability bonuses", ability_bonuses)
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
         if target_entity_uuid is not None:
@@ -465,15 +464,13 @@ class Entity(BaseBlock):
     def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
         """ From each damage we get the dice and damage type and we roll it """
         con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
-        print(f"Total Health before taking damage: {self.health.get_total_hit_points(con_modifier.normalized_score)}")
         rolls = []
         for damage in damages:
             dice = damage.get_dice(attack_outcome=attack_outcome)
             roll = dice.roll
             rolls.append(roll)
-            print(f"Damage Roll result: {roll.results}, Roll total: {roll.total}")
             self.health.take_damage(roll.total, damage.damage_type, source_entity_uuid=damage.source_entity_uuid)
-        print(f"Total Health after taking damage: {self.health.get_total_hit_points(con_modifier.normalized_score)}")
+
 
         return rolls
     
@@ -550,15 +547,7 @@ class Entity(BaseBlock):
         roll = self.roll_attack(attack_bonus)
         target_ac = ac.normalized_score if isinstance(ac,ModifiableValue) else ac
         
-        print(f"Target AC: {target_ac}")
-        print(f"Attack bonus: {attack_bonus.normalized_score}")
-        print(f"Roll result: {roll.results}, Roll total: {roll.total} vs target ac: {target_ac} result: {roll.total >= target_ac} auto hit status: {roll.auto_hit_status} critical status: {roll.critical_status}")
-        print(f"Roll auto hit status: {roll.auto_hit_status}")
-        print(f"Roll critical status: {roll.critical_status}")
-        print(f"Attack bonus advantage modifiers: {attack_bonus.advantage}")
-        print(f"Ac advantage modifiers: {ac.advantage}" if isinstance(ac,ModifiableValue) else "No advantage modifiers")
-        print(f"Roll Advantage status: {roll.advantage_status}")
-        
+      
         outcome = self.determine_attack_outcome(roll, ac)
         return roll, outcome
     

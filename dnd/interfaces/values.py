@@ -25,7 +25,9 @@ class ModifiableValueSnapshot(BaseModel):
     advantage: AdvantageStatus
     outgoing_advantage: AdvantageStatus
     critical: CriticalStatus
+    outgoing_critical: CriticalStatus
     auto_hit: AutoHitStatus
+    outgoing_auto_hit: AutoHitStatus
     
     # Resistance summary for quick reference
     resistances: Dict[DamageType, ResistanceStatus] = Field(default_factory=dict)
@@ -95,7 +97,9 @@ class ModifiableValueSnapshot(BaseModel):
         advantage = modifiable_value.advantage
         outgoing_advantage = modifiable_value.outgoing_advantage
         critical = modifiable_value.critical
+        outgoing_critical = modifiable_value.outgoing_critical
         auto_hit = modifiable_value.auto_hit
+        outgoing_auto_hit = modifiable_value.outgoing_auto_hit
         
         # Get resistances directly
         resistances = {}
@@ -116,7 +120,9 @@ class ModifiableValueSnapshot(BaseModel):
             advantage=advantage,
             outgoing_advantage=outgoing_advantage,
             critical=critical,
+            outgoing_critical=outgoing_critical,
             auto_hit=auto_hit,
+            outgoing_auto_hit=outgoing_auto_hit,
             resistances=resistances,
             base_modifier=base_modifier,
             channels=channels

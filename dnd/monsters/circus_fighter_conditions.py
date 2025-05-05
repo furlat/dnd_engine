@@ -5,7 +5,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import (
     NumericalModifier, AdvantageModifier, AdvantageStatus,
-    AutoHitModifier, AutoHitStatus
+    AutoHitModifier, AutoHitStatus, ResistanceModifier, ResistanceStatus, DamageType
 )
 from dnd.entity import Entity
 from dnd.features.elemental_advantage import create_elemental_advantage_modifier
@@ -64,10 +64,24 @@ class ElementalAffinity(BaseCondition):
         if not target_entity:
             return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            # No modifiers needed - resistances and vulnerabilities are handled directly in the health block
-            # The entity config already sets these up
+            fire_resistance = ResistanceModifier(
+                name="Elemental Affinity",
+                source_entity_uuid=self.target_entity_uuid,
+                target_entity_uuid=self.source_entity_uuid,
+                damage_type=DamageType.FIRE,
+                value=ResistanceStatus.RESISTANCE
+            )
+            cold_vulnerability = ResistanceModifier(
+                name="Elemental Affinity",
+                source_entity_uuid=self.target_entity_uuid,
+                target_entity_uuid=self.source_entity_uuid,
+                damage_type=DamageType.COLD,
+                value=ResistanceStatus.VULNERABILITY
+            )
+            fire_resistance_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(fire_resistance)
+            cold_vulnerability_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(cold_vulnerability)
             effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
-            return [],[],[],effect_event
+            return [],[fire_resistance_uuid,cold_vulnerability_uuid],[],effect_event
         else:
             return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
@@ -186,6 +200,69 @@ class CircusPerformer(BaseCondition):
                 )
             )
             outs.append((target_entity.proficiency_bonus.uuid, prof_mod_uuid))
+
+            effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
+            return outs,[],[],effect_event
+        else:
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}") 
+
+class Tired(BaseCondition):
+    name: str = "Tired"
+    description: str = "You are exhausted from combat or travel, reducing your movement speed and reactions."
+
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity:
+            return [],[],[],event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+        elif isinstance(target_entity,Entity):
+            outs = []
+            
+            # Movement penalty (-10 feet)
+            movement_mod_uuid = target_entity.action_economy.movement.self_static.add_value_modifier(
+                NumericalModifier(
+                    name="Tired",
+                    value=-10,
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid
+                )
+            )
+            outs.append((target_entity.action_economy.movement.uuid, movement_mod_uuid))
+
+            # Reaction penalty (-1)
+            reactions_mod_uuid = target_entity.action_economy.reactions.self_static.add_value_modifier(
+                NumericalModifier(
+                    name="Tired",
+                    value=-1,
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid
+                )
+            )
+            outs.append((target_entity.action_economy.reactions.uuid, reactions_mod_uuid))
+
+            # Add disadvantage on Strength and Dexterity saving throws
+            str_save = target_entity.saving_throws.get_saving_throw("strength")
+            str_adv_uuid = str_save.bonus.self_static.add_advantage_modifier(
+                AdvantageModifier(
+                    name="Tired",
+                    value=AdvantageStatus.DISADVANTAGE,
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid
+                )
+            )
+            outs.append((str_save.bonus.uuid, str_adv_uuid))
+
+            dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
+            dex_adv_uuid = dex_save.bonus.self_static.add_advantage_modifier(
+                AdvantageModifier(
+                    name="Tired",
+                    value=AdvantageStatus.DISADVANTAGE,
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid
+                )
+            )
+            outs.append((dex_save.bonus.uuid, dex_adv_uuid))
 
             effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
             return outs,[],[],effect_event

@@ -25,6 +25,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ReplayIcon from '@mui/icons-material/Replay';
 import StarIcon from '@mui/icons-material/Star';
 import { ActionEconomySnapshot, ModifiableValueSnapshot, NumericalModifierSnapshot } from '../../models/character';
+import { AdvantageStatus } from '../../models/character';
 
 interface ActionEconomySectionProps {
   actionEconomy: ActionEconomySnapshot;
@@ -89,7 +90,7 @@ const ValueBreakdown: React.FC<{ label: string; mv: ModifiableValueSnapshot }> =
                   <Chip 
                     label={mod.value}
                     size="small"
-                    color={mod.value === 'ADVANTAGE' ? 'success' : 'error'} 
+                    color={mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 'error'} 
                   />
                 </ListItem>
               ))}
