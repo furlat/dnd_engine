@@ -298,6 +298,14 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
               size="small"
             />
           )}
+          {/* Add outgoing advantage chip */}
+          {acCalc.outgoing_advantage !== 'NONE' && (
+            <Chip 
+              label={acCalc.outgoing_advantage === 'ADVANTAGE' ? 'Advantage' : 'Disadvantage'}
+              size="small"
+              color={acCalc.outgoing_advantage === 'ADVANTAGE' ? 'success' : 'error'}
+            />
+          )}
         </Box>
 
         {/* Add menu button */}

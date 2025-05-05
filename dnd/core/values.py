@@ -2282,5 +2282,35 @@ class ModifiableValue(BaseValue):
 
         return self
 
+    @computed_field
+    @property
+    def outgoing_advantage_sum(self) -> int:
+        """
+        Calculate the sum of advantage values we give to others (from to_target components only).
+        """
+        sums = []
+        for source in [self.to_target_static, self.to_target_contextual]:
+            if source is not None:
+                sum_val = source.advantage_sum
+                sums.append(sum_val)
+        return sum(sums)
+    
+    @computed_field
+    @property
+    def outgoing_advantage(self) -> AdvantageStatus:
+        """
+        Determine the final advantage status we give to others (from to_target components only).
+
+        Returns:
+            AdvantageStatus: The final advantage status (ADVANTAGE, DISADVANTAGE, or NONE).
+        """
+        total_sum = self.outgoing_advantage_sum
+        if total_sum > 0:
+            return AdvantageStatus.ADVANTAGE
+        elif total_sum < 0:
+            return AdvantageStatus.DISADVANTAGE
+        else:
+            return AdvantageStatus.NONE
+
         
             

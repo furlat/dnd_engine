@@ -17,11 +17,13 @@ import {
   AccordionSummary,
   AccordionDetails,
   Divider,
+  IconButton,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ReplayIcon from '@mui/icons-material/Replay';
+import StarIcon from '@mui/icons-material/Star';
 import { ActionEconomySnapshot, ModifiableValueSnapshot, NumericalModifierSnapshot } from '../../models/character';
 
 interface ActionEconomySectionProps {
@@ -29,37 +31,80 @@ interface ActionEconomySectionProps {
 }
 
 // Reusable component for displaying ModifiableValue breakdowns
-const ValueBreakdown: React.FC<{ label: string; mv: ModifiableValueSnapshot }> = ({ label, mv }) => (
-  <Accordion defaultExpanded sx={{ mb: 1 }}>
-    <AccordionSummary expandIcon={<ExpandMoreIcon />}>{label}</AccordionSummary>
-    <AccordionDetails>
-      {mv.channels.map((ch, idx) => (
-        <Box key={idx} sx={{ mb: 1 }}>
-          <Typography variant="body2" fontWeight="bold">
-            {ch.name} – Total: {ch.normalized_score}
-          </Typography>
-          <List dense disablePadding>
-            {ch.value_modifiers.map((mod, i) => (
-              <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
-                <ListItemText
-                  primary={mod.name}
-                  secondary={mod.source_entity_name}
-                  primaryTypographyProps={{ variant: 'body2' }}
-                  secondaryTypographyProps={{ variant: 'caption' }}
-                />
-                <Chip 
-                  label={mod.value >= 0 ? `+${mod.value}` : mod.value} 
-                  size="small" 
-                  color={mod.value >= 0 ? 'success' : 'error'} 
-                />
-              </ListItem>
-            ))}
-          </List>
+const ValueBreakdown: React.FC<{ label: string; mv: ModifiableValueSnapshot }> = ({ label, mv }) => {
+  const [showAdvantage, setShowAdvantage] = React.useState(false);
+
+  return (
+    <Accordion defaultExpanded sx={{ mb: 1 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+          <Typography>{label}</Typography>
+          <IconButton 
+            size="small" 
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAdvantage(!showAdvantage);
+            }}
+            sx={{ 
+              color: showAdvantage ? 'primary.main' : 'text.secondary',
+              '&:hover': { color: 'primary.main' }
+            }}
+          >
+            <StarIcon />
+          </IconButton>
         </Box>
-      ))}
-    </AccordionDetails>
-  </Accordion>
-);
+      </AccordionSummary>
+      <AccordionDetails>
+        {mv.channels.map((ch, idx) => (
+          <Box key={idx} sx={{ mb: 1 }}>
+            <Typography variant="body2" fontWeight="bold">
+              {ch.name} – Total: {ch.normalized_score}
+            </Typography>
+            <List dense disablePadding>
+              {/* Show value modifiers when not in advantage mode */}
+              {!showAdvantage && ch.value_modifiers.map((mod, i) => (
+                <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
+                  <ListItemText
+                    primary={mod.name}
+                    secondary={mod.source_entity_name}
+                    primaryTypographyProps={{ variant: 'body2' }}
+                    secondaryTypographyProps={{ variant: 'caption' }}
+                  />
+                  <Chip 
+                    label={mod.value >= 0 ? `+${mod.value}` : mod.value} 
+                    size="small" 
+                    color={mod.value >= 0 ? 'success' : 'error'} 
+                  />
+                </ListItem>
+              ))}
+              {/* Show advantage modifiers when in advantage mode */}
+              {showAdvantage && ch.advantage_modifiers.map((mod, i) => (
+                <ListItem key={i} dense divider={i < ch.advantage_modifiers.length - 1}>
+                  <ListItemText
+                    primary={mod.name}
+                    secondary={mod.source_entity_name}
+                    primaryTypographyProps={{ variant: 'body2' }}
+                    secondaryTypographyProps={{ variant: 'caption' }}
+                  />
+                  <Chip 
+                    label={mod.value}
+                    size="small"
+                    color={mod.value === 'ADVANTAGE' ? 'success' : 'error'} 
+                  />
+                </ListItem>
+              ))}
+              {showAdvantage && ch.advantage_modifiers.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                  No advantage modifiers
+                </Typography>
+              )}
+            </List>
+          </Box>
+        ))}
+      </AccordionDetails>
+    </Accordion>
+  );
+};
 
 // Cost Summary component
 const CostSummary: React.FC<{ costs: NumericalModifierSnapshot[] }> = ({ costs }) => (

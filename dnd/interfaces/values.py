@@ -23,6 +23,7 @@ class ModifiableValueSnapshot(BaseModel):
     min_value: Optional[int] = None
     max_value: Optional[int] = None
     advantage: AdvantageStatus
+    outgoing_advantage: AdvantageStatus
     critical: CriticalStatus
     auto_hit: AutoHitStatus
     
@@ -92,6 +93,7 @@ class ModifiableValueSnapshot(BaseModel):
         min_value = modifiable_value.min
         max_value = modifiable_value.max
         advantage = modifiable_value.advantage
+        outgoing_advantage = modifiable_value.outgoing_advantage
         critical = modifiable_value.critical
         auto_hit = modifiable_value.auto_hit
         
@@ -112,6 +114,7 @@ class ModifiableValueSnapshot(BaseModel):
             min_value=min_value,
             max_value=max_value,
             advantage=advantage,
+            outgoing_advantage=outgoing_advantage,
             critical=critical,
             auto_hit=auto_hit,
             resistances=resistances,

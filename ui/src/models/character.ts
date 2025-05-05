@@ -177,6 +177,7 @@ export interface ACBonusCalculationSnapshot {
   // Final result
   total_bonus: ModifiableValueSnapshot;
   final_ac: number;
+  outgoing_advantage: string;  // 'NONE' | 'ADVANTAGE' | 'DISADVANTAGE'
 }
 
 // Attack calculation snapshot (mirrors backend AttackBonusCalculationSnapshot)
@@ -309,6 +310,44 @@ export interface ActionEconomySnapshot {
   available_movement: number;
 }
 
+// Add the condition interfaces
+export interface ConditionSnapshot {
+  uuid: UUID;
+  name: string;
+  description?: string;
+  duration_type: string;  // 'rounds' | 'permanent' | 'until_long_rest' | 'on_condition'
+  duration_value?: number | string;  // number for rounds, string for on_condition
+  source_entity_name?: string;
+  source_entity_uuid: UUID;
+  applied: boolean;
+}
+
+// Add condition enums
+export enum ConditionType {
+    BLINDED = "BLINDED",
+    CHARMED = "CHARMED",
+    DASHING = "DASHING",
+    DEAFENED = "DEAFENED",
+    DODGING = "DODGING",
+    FRIGHTENED = "FRIGHTENED",
+    GRAPPLED = "GRAPPLED",
+    INCAPACITATED = "INCAPACITATED",
+    INVISIBLE = "INVISIBLE",
+    PARALYZED = "PARALYZED",
+    POISONED = "POISONED",
+    PRONE = "PRONE",
+    RESTRAINED = "RESTRAINED",
+    STUNNED = "STUNNED",
+    UNCONSCIOUS = "UNCONSCIOUS"
+}
+
+export enum DurationType {
+    ROUNDS = "rounds",
+    PERMANENT = "permanent",
+    UNTIL_LONG_REST = "until_long_rest",
+    ON_CONDITION = "on_condition"
+}
+
 // Character interface matching EntitySnapshot
 export interface Character {
   uuid: UUID;
@@ -331,4 +370,7 @@ export interface Character {
   saving_throw_calculations?: Record<string, SavingThrowBonusCalculationSnapshot>;
   ac_calculation?: ACBonusCalculationSnapshot;
   action_economy: ActionEconomySnapshot;
+
+  // Active conditions
+  active_conditions: Record<string, ConditionSnapshot>;
 } 
