@@ -79,7 +79,6 @@ class Charmed(BaseCondition):
     def charmed_attack_check(charmer_id: UUID, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AutoHitModifier]:
         """ this function is used to prevent the charmer from attacking the charmed entity this is used by the charmed entity
         hence source is the charmed and target is the charmer"""
-        print(f"charmer_id: {charmer_id}, source_entity_uuid: {source_entity_uuid}, target_entity_uuid: {target_entity_uuid}")
         if  target_entity_uuid:
             entity = Entity.get(target_entity_uuid)
             if entity and entity.uuid == charmer_id:
@@ -96,7 +95,6 @@ class Charmed(BaseCondition):
         """ this function is used to add advantage to the skill check of the charmer if the target is the charmed entity 
         it is stored inside the charmed and passed to the charmer via skill_bonus.to_target_contextual 
         because of this the function will be callsed by the charmer with inverted source and target mantaining the consistenct that the source is the charmed and target is the charmer"""
-        print(f"charmer_id: {charmer_id},charmed_id: {charmed_id}, source_entity_uuid: {source_entity_uuid}, target_entity_uuid: {target_entity_uuid}")
         if charmer_id == target_entity_uuid and charmed_id == source_entity_uuid:
             return AdvantageModifier(name="Charmed",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=source_entity_uuid,target_entity_uuid=target_entity_uuid)
         return None
@@ -174,8 +172,8 @@ class Dodging(BaseCondition):
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_condition_uuid))
             #add advantage to Dexterity saving throws
             dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((dex_save.bonus.uuid,dex_save.bonus.uuid))
+            dex_save_modifier_uuid = dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            outs.append((dex_save.bonus.uuid,dex_save_modifier_uuid))
             effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
             return outs,[],[],effect_event
         else:
@@ -207,8 +205,8 @@ class Frightened(BaseCondition):
 
             #adds max constraint to the movement value when the frightener is in the senses of the target
             movement_value = target_entity.action_economy.movement
-            movement_value.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
-            outs.append((movement_value.uuid,movement_value.uuid))
+            max_movement_constraint_uuid = movement_value.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
+            outs.append((movement_value.uuid,max_movement_constraint_uuid))
             effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
             return outs,[],[],effect_event
         else:
@@ -260,8 +258,8 @@ class Grappled(BaseCondition):
         elif isinstance(target_entity,Entity):
             outs = []
             speed_obj = target_entity.action_economy.movement
-            speed_obj.self_static.add_max_constraint(constraint=NumericalModifier(name="Grappled",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((speed_obj.uuid,speed_obj.uuid))
+            grappled_modifer_uuid = speed_obj.self_static.add_max_constraint(constraint=NumericalModifier(name="Grappled",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+            outs.append((speed_obj.uuid,grappled_modifer_uuid))
             effect_event = event.phase_to(EventPhase.EFFECT, update={"condition":self})
             return outs,[],[],effect_event
         else:

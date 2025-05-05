@@ -380,6 +380,8 @@ class ACBonusCalculationSnapshot(BaseModel):
     # Shortcut to commonly needed values
     final_ac: int
     outgoing_advantage: AdvantageStatus
+    outgoing_critical: str  # 'NONE' | 'AUTOCRIT' | 'NOCRIT'
+    outgoing_auto_hit: str  # 'NONE' | 'AUTOHIT' | 'AUTOMISS'
     
     @classmethod
     def from_engine(cls, entity):
@@ -453,5 +455,7 @@ class ACBonusCalculationSnapshot(BaseModel):
             target_entity_uuid=entity.target_entity_uuid,
             total_bonus=ModifiableValueSnapshot.from_engine(total_bonus),
             final_ac=total_bonus.normalized_score,
-            outgoing_advantage=total_bonus.outgoing_advantage
+            outgoing_advantage=total_bonus.outgoing_advantage,
+            outgoing_critical=total_bonus.outgoing_critical,
+            outgoing_auto_hit=total_bonus.outgoing_auto_hit
         )
