@@ -7,6 +7,7 @@ interface EntityContextType {
   loading: boolean;
   error: string | null;
   refreshEntity: () => Promise<void>;
+  setEntityData: (data: Character) => void;
 }
 
 // Create context with default values
@@ -15,6 +16,7 @@ const EntityContext = React.createContext<EntityContextType>({
   loading: false,
   error: null,
   refreshEntity: async () => {},
+  setEntityData: () => {},
 });
 
 // Context provider component
@@ -53,11 +55,17 @@ export const EntityProvider: React.FC<{
     await loadEntity();
   };
 
+  // Function to update entity data without a full reload
+  const setEntityData = (data: Character) => {
+    setEntity(data);
+  };
+
   const value = {
     entity,
     loading,
     error,
     refreshEntity,
+    setEntityData,
   };
 
   return <EntityContext.Provider value={value}>{children}</EntityContext.Provider>;

@@ -1034,6 +1034,8 @@ class ContextualValue(BaseValue):
         for context_aware_modifier in self.value_modifiers.values():
             try:
                 result = context_aware_modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
+                if result is None:
+                    continue  # Skip None results
                 if not isinstance(result, NumericalModifier):
                     raise ValueError(f"Callable returned unexpected type. Expected NumericalModifier, got {type(result)}")
                 modifier_sum += result.value if not normalized else result.normalized_value
@@ -1804,7 +1806,13 @@ class ModifiableValue(BaseValue):
         """
         Calculate the sum of advantage values from all modifiers.
         """
-        return sum(adv.advantage_sum for adv in [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual] if adv is not None)
+        sums = []
+        for source in [self.self_static, self.from_target_static, self.self_contextual, self.from_target_contextual]:
+            if source is not None:
+                sum_val = source.advantage_sum
+                sums.append(sum_val)
+        total = sum(sums)
+        return total
     
     @computed_field
     @property
@@ -2096,7 +2104,6 @@ class ModifiableValue(BaseValue):
             naming_callable = lambda names: "_".join(names)
         
         for other in others:
-            # print(f"Validating others source id {other.source_entity_uuid} against self source {self.source_entity_uuid} for modifer  with name {self.name} and uuid {self.uuid} and type {type(self)} against {type(other)} with name {other.name} and uuid {other.uuid}")
             self.validate_source_id(other.source_entity_uuid)
 
         other_from_target_static_values = [other.from_target_static for other in others if other.from_target_static is not None]

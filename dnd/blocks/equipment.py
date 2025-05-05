@@ -231,6 +231,7 @@ class Weapon(BaseBlock):
         default_factory=list,
         description="Extra damage type for the weapon")
     
+    
     #validator to ensure both extra damage bonus and extra damage type are of the same length
     @model_validator(mode="after")
     def check_extra_damage_consistency(self) -> Self:
