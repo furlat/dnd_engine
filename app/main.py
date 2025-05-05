@@ -42,7 +42,7 @@ def initialize_test_entities():
     """Create test entities on startup"""
     # Create a warrior from circus_fighter.py
     warrior_uuid = uuid4()
-    warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Test Warrior")
+    warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Spiky Clown")
     
     # Create a second entity for testing
     rogue_uuid = uuid4()
