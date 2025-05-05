@@ -89,7 +89,7 @@ const CharacterSheetContent: React.FC = () => {
           {character.name}
         </Typography>
         {character.description && (
-          <Typography variant="body1" color="text.secondary" paragraph>
+          <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
             {character.description}
           </Typography>
         )}
