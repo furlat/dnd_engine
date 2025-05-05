@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 # Import entity and models
 from dnd.entity import Entity
-from dnd.interfaces.entitiy import EntitySnapshot
+from dnd.interfaces.entitiy import EntitySnapshot, ConditionSnapshot
 from dnd.interfaces.health import HealthSnapshot
 from dnd.interfaces.abilities import AbilityScoresSnapshot
 from dnd.interfaces.skills import SkillSetSnapshot
@@ -15,6 +15,8 @@ from dnd.interfaces.saving_throws import SavingThrowSetSnapshot
 from dnd.interfaces.values import ModifiableValueSnapshot
 from dnd.core.events import WeaponSlot
 from dnd.blocks.equipment import Equipment, BaseBlock, Armor, Weapon, Shield, BodyPart, RingSlot
+from dnd.core.base_conditions import DurationType
+from dnd.core.condition_factory import ConditionType, create_condition
 
 # Import dependencies
 from app.api.deps import get_entity
@@ -262,3 +264,115 @@ async def unequip_item(slot: SlotType, entity: Entity = Depends(get_entity)):
                 "slot": slot.value
             }
         ) 
+
+# Add new models for condition management
+class AddConditionRequest(BaseModel):
+    condition_type: ConditionType
+    source_entity_uuid: UUID
+    duration_type: DurationType = DurationType.PERMANENT
+    duration_rounds: Optional[int] = None
+
+class RemoveConditionRequest(BaseModel):
+    condition_name: str
+
+@router.post("/{entity_uuid}/conditions", response_model=EntitySnapshot)
+async def add_condition(
+    request: AddConditionRequest,
+    entity: Entity = Depends(get_entity)
+):
+    """
+    Add a condition to an entity.
+    The entity_uuid in the path is the target entity.
+    The source_entity_uuid in the request is the entity causing the condition.
+    Returns the full updated entity snapshot.
+    """
+    try:
+        # Create the condition
+        condition = create_condition(
+            condition_type=request.condition_type,
+            source_entity_uuid=request.source_entity_uuid,
+            target_entity_uuid=entity.uuid,
+            duration_type=request.duration_type,
+            duration_rounds=request.duration_rounds
+        )
+        
+        # Add the condition to the entity
+        result = entity.add_condition(condition)
+        if not result:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Failed to apply condition",
+                    "message": "The condition could not be applied. The entity might be immune or have passed a saving throw.",
+                    "condition": request.condition_type
+                }
+            )
+            
+        # Return updated entity snapshot with all calculations
+        return EntitySnapshot.from_engine(
+            entity,
+            include_skill_calculations=True,
+            include_attack_calculations=True,
+            include_ac_calculation=True,
+            include_saving_throw_calculations=True
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to add condition",
+                "message": str(e),
+                "condition": request.condition_type
+            }
+        )
+
+@router.delete("/{entity_uuid}/conditions/{condition_name}", response_model=EntitySnapshot)
+async def remove_condition(
+    condition_name: str,
+    entity: Entity = Depends(get_entity)
+):
+    """
+    Remove a condition from an entity by its name.
+    Returns the full updated entity snapshot.
+    """
+    try:
+        if condition_name not in entity.active_conditions:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "Condition not found",
+                    "message": f"The condition '{condition_name}' is not active on this entity",
+                    "condition": condition_name
+                }
+            )
+            
+        entity.remove_condition(condition_name)
+        
+        # Return updated entity snapshot with all calculations
+        return EntitySnapshot.from_engine(
+            entity,
+            include_skill_calculations=True,
+            include_attack_calculations=True,
+            include_ac_calculation=True,
+            include_saving_throw_calculations=True
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to remove condition",
+                "message": str(e),
+                "condition": condition_name
+            }
+        )
+
+@router.get("/{entity_uuid}/conditions", response_model=Dict[str, ConditionSnapshot])
+async def get_conditions(entity: Entity = Depends(get_entity)):
+    """
+    Get all active conditions on an entity.
+    For just the conditions list, use this endpoint.
+    For full entity state including conditions, use GET /entities/{entity_uuid}
+    """
+    return entity.active_conditions 

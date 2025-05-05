@@ -106,6 +106,62 @@ const buildComponentList = (calc: AttackBonusCalculationSnapshot) => {
   ];
 };
 
+const ModifierBreakdown: React.FC<{ 
+  components: { label: string; mv: ModifiableValueSnapshot }[];
+  showAdvantage?: boolean;
+}> = ({ components, showAdvantage = false }) => (
+  <>
+    <Typography variant="h6" gutterBottom>
+      Modifier Breakdown
+    </Typography>
+    {components.map((c, idx) => (
+      <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography>{c.label}</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          {c.mv.channels.map((ch, chIdx) => (
+            <Box key={chIdx} sx={{ mb: 1 }}>
+              <Typography variant="body2" fontWeight="bold">
+                {ch.name}
+              </Typography>
+              <List dense disablePadding>
+                {(showAdvantage ? ch.advantage_modifiers : ch.value_modifiers).map((mod: any, modIdx: number) => (
+                  <ListItem
+                    key={modIdx}
+                    dense
+                    divider={modIdx < (showAdvantage ? ch.advantage_modifiers.length : ch.value_modifiers.length) - 1}
+                  >
+                    <ListItemText
+                      primary={mod.name}
+                      secondary={mod.source_entity_name}
+                      primaryTypographyProps={{ variant: 'body2' }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                    <Chip
+                      label={showAdvantage ? mod.value : (mod.value >= 0 ? `+${mod.value}` : mod.value)}
+                      size="small"
+                      color={showAdvantage 
+                        ? (mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default')
+                        : (mod.value >= 0 ? 'success' : 'error')
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          ))}
+          {c.mv.channels.every(ch => (showAdvantage ? ch.advantage_modifiers.length : ch.value_modifiers.length) === 0) && (
+            <Typography variant="body2" color="text.secondary">
+              No {showAdvantage ? 'advantage' : 'value'} modifiers
+            </Typography>
+          )}
+        </AccordionDetails>
+      </Accordion>
+    ))}
+  </>
+);
+
 const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusCalculationSnapshot; equipment: EquipmentSnapshot; entity: Character }> = ({ slot, calc, equipment, entity }) => {
   const [open, setOpen] = React.useState(false);
   const [detailMode, setDetailMode] = React.useState<'attack' | 'damage' | 'advantage'>('attack');
@@ -542,51 +598,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
 
               {/* Right column */}
               <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>
-                  Modifier Breakdown
-                </Typography>
-                {components.map((c, idx) => (
-                  <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography>{c.label}</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      {c.mv.channels.map((ch, chIdx) => (
-                        <Box key={chIdx} sx={{ mb: 1 }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {ch.name}
-                          </Typography>
-                          <List dense disablePadding>
-                            {ch.advantage_modifiers.map((mod, modIdx) => (
-                              <ListItem
-                                key={modIdx}
-                                dense
-                                divider={modIdx < ch.advantage_modifiers.length - 1}
-                              >
-                                <ListItemText
-                                  primary={mod.name}
-                                  secondary={mod.source_entity_name}
-                                  primaryTypographyProps={{ variant: 'body2' }}
-                                  secondaryTypographyProps={{ variant: 'caption' }}
-                                />
-                                <Chip
-                                  label={mod.value}
-                                  size="small"
-                                  color={mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default'}
-                                />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Box>
-                      ))}
-                      {c.mv.channels.every(ch => ch.advantage_modifiers.length === 0) && (
-                        <Typography variant="body2" color="text.secondary">
-                          No advantage modifiers
-                        </Typography>
-                      )}
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
+                <ModifierBreakdown components={components} showAdvantage={false} />
               </Grid>
             </Grid>
           ) : detailMode === 'damage' ? (
@@ -648,51 +660,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
 
               {/* Right column for Damage breakdown */}
               <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>
-                  Modifier Breakdown
-                </Typography>
-                {damageComponents.map((c, idx) => (
-                  <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography>{c.label}</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      {c.mv.channels.map((ch, chIdx) => (
-                        <Box key={chIdx} sx={{ mb: 1 }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {ch.name}
-                          </Typography>
-                          <List dense disablePadding>
-                            {ch.advantage_modifiers.map((mod, modIdx) => (
-                              <ListItem
-                                key={modIdx}
-                                dense
-                                divider={modIdx < ch.advantage_modifiers.length - 1}
-                              >
-                                <ListItemText
-                                  primary={mod.name}
-                                  secondary={mod.source_entity_name}
-                                  primaryTypographyProps={{ variant: 'body2' }}
-                                  secondaryTypographyProps={{ variant: 'caption' }}
-                                />
-                                <Chip
-                                  label={mod.value}
-                                  size="small"
-                                  color={mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default'}
-                                />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Box>
-                      ))}
-                      {c.mv.channels.every(ch => ch.advantage_modifiers.length === 0) && (
-                        <Typography variant="body2" color="text.secondary">
-                          No advantage modifiers
-                        </Typography>
-                      )}
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
+                <ModifierBreakdown components={damageComponents} showAdvantage={false} />
               </Grid>
             </Grid>
           ) : (
@@ -746,51 +714,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
 
               {/* Right column */}
               <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>
-                  Modifier Breakdown
-                </Typography>
-                {components.map((c, idx) => (
-                  <Accordion key={idx} defaultExpanded sx={{ mb: 1 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography>{c.label}</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      {c.mv.channels.map((ch, chIdx) => (
-                        <Box key={chIdx} sx={{ mb: 1 }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {ch.name}
-                          </Typography>
-                          <List dense disablePadding>
-                            {ch.advantage_modifiers.map((mod, modIdx) => (
-                              <ListItem
-                                key={modIdx}
-                                dense
-                                divider={modIdx < ch.advantage_modifiers.length - 1}
-                              >
-                                <ListItemText
-                                  primary={mod.name}
-                                  secondary={mod.source_entity_name}
-                                  primaryTypographyProps={{ variant: 'body2' }}
-                                  secondaryTypographyProps={{ variant: 'caption' }}
-                                />
-                                <Chip
-                                  label={mod.value}
-                                  size="small"
-                                  color={mod.value === 'ADVANTAGE' ? 'success' : mod.value === 'DISADVANTAGE' ? 'error' : 'default'}
-                                />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Box>
-                      ))}
-                      {c.mv.channels.every(ch => ch.advantage_modifiers.length === 0) && (
-                        <Typography variant="body2" color="text.secondary">
-                          No advantage modifiers
-                        </Typography>
-                      )}
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
+                <ModifierBreakdown components={components} showAdvantage={true} />
               </Grid>
             </Grid>
           )}
