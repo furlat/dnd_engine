@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 # Import entity and models
 from dnd.entity import Entity
-from dnd.interfaces.entitiy import EntitySnapshot, ConditionSnapshot
+from dnd.interfaces.entity import EntitySnapshot, ConditionSnapshot
 from dnd.interfaces.health import HealthSnapshot
 from dnd.interfaces.abilities import AbilityScoresSnapshot
 from dnd.interfaces.skills import SkillSetSnapshot
