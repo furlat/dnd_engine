@@ -28,6 +28,16 @@ const formatTime = (timestamp: string) => {
   });
 };
 
+// Helper function to sort events recursively
+const sortEventsRecursively = (events: Event[]): Event[] => {
+  return events
+    .map(event => ({
+      ...event,
+      child_events: sortEventsRecursively(event.child_events || [])
+    }))
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+};
+
 // Types for events
 interface Event {
   uuid: string;
@@ -116,10 +126,9 @@ const EventQ: React.FC = () => {
         throw new Error('Failed to fetch events');
       }
       const data = await response.json();
-      // Sort events by timestamp in descending order (newest first)
-      const sortedEvents = [...data].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
+      // Sort events by timestamp in descending order (newest first) at all levels
+      const sortedEvents = sortEventsRecursively([...data])
+        .reverse(); // Reverse top-level events to show newest first
       setEvents(sortedEvents);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
