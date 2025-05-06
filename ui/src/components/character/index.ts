@@ -6,6 +6,7 @@ import ArmorSection from './ArmorSection';
 import AttackSection from './AttackSection';
 import EquipmentSection from './EquipmentSection';
 import ActionEconomySection from './ActionEconomySection';
+import CharacterSheetContent from './CharacterSheetContent';
 
 export {
   AbilityScoresBlock,
@@ -16,4 +17,5 @@ export {
   HealthSection,
   EquipmentSection,
   ActionEconomySection,
+  CharacterSheetContent,
 }; 

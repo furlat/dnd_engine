@@ -663,7 +663,7 @@ class Equipment(BaseBlock):
         
         if event.phase_to(EventPhase.EXECUTION).canceled:
             return
-            
+
         attribute_name = slot_mapping[slot]
         setattr(self, attribute_name, item)
         
@@ -722,7 +722,7 @@ class Equipment(BaseBlock):
         # Process the unequip event
         if event.phase_to(EventPhase.EXECUTION).canceled:
             return
-            
+
         setattr(self, attribute_name, None)
         
         event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
