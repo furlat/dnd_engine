@@ -16,15 +16,15 @@ import { EventQueueProvider } from './contexts/EventQueueContext';
 const App: React.FC = () => {
   return (
     <EventQueueProvider>
-      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<CharacterListPage />} />
-            <Route path="characters/:characterId" element={<CharacterSheetPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
-      </Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<CharacterListPage />} />
+          <Route path="characters/:characterId" element={<CharacterSheetPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </Box>
     </EventQueueProvider>
   );
 };
