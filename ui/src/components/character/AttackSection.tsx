@@ -746,11 +746,11 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
                         <Typography variant="body2" color="text.secondary">
                           {ch.name}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="bold">
+                </Typography>
+                          <Typography variant="body2" fontWeight="bold">
                           {ch.critical_status}
-                        </Typography>
-                      </Box>
+                          </Typography>
+                        </Box>
                       {idx < calc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
                     </React.Fragment>
                   ))}
@@ -770,7 +770,7 @@ const AttackCard: React.FC<{ slot: 'MAIN_HAND' | 'OFF_HAND'; calc?: AttackBonusC
                       </Box>
                       {idx < calc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
                     </React.Fragment>
-                  ))}
+                ))}
                 </Paper>
               </Grid>
 
