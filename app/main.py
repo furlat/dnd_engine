@@ -15,6 +15,7 @@ from dnd.monsters.circus_fighter import create_warrior
 # Import API routers
 from app.api.routes.entities import router as entities_router
 from app.api.routes.equipment import router as equipment_router
+from app.api.routes.events import router as events_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -35,6 +36,7 @@ app.add_middleware(
 # Include routers
 app.include_router(entities_router, prefix="/api")
 app.include_router(equipment_router, prefix="/api")
+app.include_router(events_router, prefix="/api")
 
 # Initialize test entities
 @app.on_event("startup")

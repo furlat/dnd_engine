@@ -78,6 +78,13 @@ class EventType(str, Enum):
     ATTACK_HIT = "attack_hit"
     ATTACK_CRITICAL = "attack_critical"
     CONDITION_APPLICATION = "condition_application"
+    CONDITION_REMOVAL = "condition_removal"
+    WEAPON_EQUIP = "weapon_equip"
+    WEAPON_UNEQUIP = "weapon_unequip"
+    ARMOR_EQUIP = "armor_equip"
+    ARMOR_UNEQUIP = "armor_unequip"
+    SHIELD_EQUIP = "shield_equip"
+    SHIELD_UNEQUIP = "shield_unequip"
     
     #Dice roll events
     DICE_ROLL = "dice_roll"

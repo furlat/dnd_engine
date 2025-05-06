@@ -375,65 +375,65 @@ const ArmorSection: React.FC<Props> = ({ entity }) => {
         </DialogTitle>
         <DialogContent dividers>
           {detailMode === 'armor' ? (
-            <Grid container spacing={2}>
-              {/* Left column */}
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>
-                  Overview
+          <Grid container spacing={2}>
+            {/* Left column */}
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" gutterBottom>
+                Overview
+              </Typography>
+              <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
+                <Typography variant="body2" color="text.secondary">
+                  Final AC
                 </Typography>
-                <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    Final AC
-                  </Typography>
-                  <Typography variant="h4" color="primary">
-                    {totalAC}
-                  </Typography>
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Armor Type
-                  </Typography>
-                  <Typography variant="h6">{formatArmorType(armorType)}</Typography>
-                  {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
-                    <>
-                      <Divider sx={{ my: 1 }} />
+                <Typography variant="h4" color="primary">
+                  {totalAC}
+                </Typography>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  Armor Type
+                </Typography>
+                <Typography variant="h6">{formatArmorType(armorType)}</Typography>
+                {!isUnarmored && combinedDex !== undefined && maxDex !== undefined && (
+                  <>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="body2" color="text.secondary">
+                      Dexterity Bonus
+                    </Typography>
+                    <Typography variant="h6">{combinedDex}/{maxDex}</Typography>
+                  </>
+                )}
+              </Paper>
+
+              <Typography variant="h6" gutterBottom>
+                Component Values
+              </Typography>
+              <Paper sx={{ p: 2 }} elevation={1}>
+                {leftValues.map((mv, idx) => (
+                  <React.Fragment key={idx}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
                       <Typography variant="body2" color="text.secondary">
-                        Dexterity Bonus
+                        {mv.name}
                       </Typography>
-                      <Typography variant="h6">{combinedDex}/{maxDex}</Typography>
-                    </>
-                  )}
-                </Paper>
-
-                <Typography variant="h6" gutterBottom>
-                  Component Values
-                </Typography>
-                <Paper sx={{ p: 2 }} elevation={1}>
-                  {leftValues.map((mv, idx) => (
-                    <React.Fragment key={idx}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {mv.name}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="bold">
-                          {format(mv.normalized_score)}
-                        </Typography>
-                      </Box>
-                      {idx < leftValues.length - 1 && <Divider sx={{ my: 1 }} />}
-                    </React.Fragment>
-                  ))}
-                </Paper>
-              </Grid>
-
-              {/* Right column */}
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>
-                  Modifier Breakdown
-                </Typography>
-                {breakdownItems.map(({ label, mv }, idx) => (
-                  <ChannelBreakdown key={idx} mv={mv} label={label} />
+                      <Typography variant="body2" fontWeight="bold">
+                        {format(mv.normalized_score)}
+                      </Typography>
+                    </Box>
+                    {idx < leftValues.length - 1 && <Divider sx={{ my: 1 }} />}
+                  </React.Fragment>
                 ))}
-              </Grid>
+              </Paper>
             </Grid>
+
+            {/* Right column */}
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" gutterBottom>
+                Modifier Breakdown
+              </Typography>
+              {breakdownItems.map(({ label, mv }, idx) => (
+                <ChannelBreakdown key={idx} mv={mv} label={label} />
+              ))}
+            </Grid>
+          </Grid>
           ) : (
             <Grid container spacing={2}>
               {/* Left column */}

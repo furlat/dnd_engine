@@ -85,6 +85,14 @@ class ConditionApplicationEvent(Event):
     event_type: EventType = Field(default=EventType.CONDITION_APPLICATION,description="The type of event")
 
 
+class ConditionRemovalEvent(Event):
+    """An event that represents the removal of a condition"""
+    name: str = Field(default="Condition Removal", description="A condition removal event")
+    condition: 'BaseCondition' = Field(description="The condition that is being removed")
+    expired: bool = Field(default=False, description="Whether the condition was removed due to expiration")
+    event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="The type of event")
+
+
 class BaseCondition(BaseObject):
     """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""
     duration: Duration = Field(default_factory=Duration)
@@ -124,6 +132,17 @@ class BaseCondition(BaseObject):
         """ Declare the event """
         return ConditionApplicationEvent(condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
 
+    def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
+        """Declare the removal event"""
+        return ConditionRemovalEvent(
+            condition=self,
+            expired=expired,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            phase=EventPhase.DECLARATION,
+            parent_event=parent_event.uuid if parent_event else None
+        )
+
     def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass 
         the event is used as parent if subconditions are triggered (e.g. sub conditons application)"""
@@ -135,17 +154,20 @@ class BaseCondition(BaseObject):
         
         return [],[],[], event
     
-    def _remove(self,event: Optional[Event] = None) -> Optional[Event]:
-        """Custom extra Remove the condition full implementation is in the subclass if needed, should try to use the registries if possible"""
-        return None
-    def _expire(self,event: Optional[Event] = None) -> Optional[Event]:
-        """Custom extra Expire called during removal from natural expiration the condition full implementation is in the subclass
-          if needed, should try to use the registries if possible
-          eg a sub condition progressing through stages could create the next stage
-        it would of course need to register itself as a sub condition to the parent if 
-        it is to be removed by the parent removal
-        this simplifies the behavior of writing a EventHandler on this specific condition expiration"""
-        return None
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Custom extra Remove the condition full implementation is in the subclass if needed"""
+        if event:
+            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
+            event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return event
+
+    def _expire(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Custom extra Expire called during removal from natural expiration"""
+        if event:
+            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
+            event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return event
+
     def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
         """ Apply the condition """
         if self.applied or self.duration.is_expired:
@@ -229,28 +251,42 @@ class BaseCondition(BaseObject):
                 event_handler.remove()
         return True
 
-    def remove(self,expire: bool = False,skip_parent_removal: bool = False) -> bool:
-        """ Remove the condition """
+    def remove(self, expire: bool = False, skip_parent_removal: bool = False, parent_event: Optional[Event] = None) -> bool:
+        """Remove the condition with event handling"""
         if not self.applied:
             return False
+
+        # First declare the removal event
+        event = self._declare_removal_event(expired=expire, parent_event=parent_event)
+        if event.canceled:  # Check if event was canceled at declaration
+            return False
+
+        # Handle expiration if needed
         if expire:
-            self._expire()
-        #first apply the remove method
-        self._remove()
-        #second remove the condition modifiers
+            expired_event = self._expire(event)
+            if expired_event and expired_event.canceled:
+                return False
+
+        # Handle removal
+        removed_event = self._remove(event)
+        if removed_event and removed_event.canceled:
+            return False
+
+        # Proceed with actual removal operations
         self.remove_condition_modifiers()
-        #third remove the sub conditions
         self.remove_sub_conditions()
-        #fourth remove the condition from the parent, skipped if running from inside remove_sub_conditions
-        self.remove_condition_from_parent(skip_parent_removal=skip_parent_removal)
-        #fifth remove the event handlers
+        if not skip_parent_removal:
+            self.remove_condition_from_parent()
         self.remove_event_handlers()
+
+        # Complete the event
+        if event:
+            event.phase_to(EventPhase.COMPLETION)
+
         return True
     
     def progress(self) -> bool:
-        """ Progress the duration returns True if the condition is removed 
-        if removed remove will trigger the _expire method
-        """
+        """Progress the duration returns True if the condition is removed"""
         progress_result = self.duration.progress()
         if progress_result:
             self.remove(expire=True)

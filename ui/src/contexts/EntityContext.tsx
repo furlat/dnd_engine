@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Character } from '../models/character';
+import { useEventQueue } from './EventQueueContext';
 
 // Define the context type
 interface EntityContextType {
@@ -28,6 +29,7 @@ export const EntityProvider: React.FC<{
   const [entity, setEntity] = React.useState<Character | null>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
+  const { refreshEvents } = useEventQueue();
 
   const loadEntity = React.useCallback(async () => {
     if (!entityId) return;
@@ -37,13 +39,14 @@ export const EntityProvider: React.FC<{
       const data = await fetchEntity(entityId);
       setEntity(data);
       setError(null);
+      refreshEvents(); // Refresh events after loading entity
     } catch (err) {
       console.error('Failed to fetch entity:', err);
       setError('Failed to load entity data. Please try again later.');
     } finally {
       setLoading(false);
     }
-  }, [entityId, fetchEntity]);
+  }, [entityId, fetchEntity, refreshEvents]);
 
   // Load entity on mount and when entityId changes
   React.useEffect(() => {
@@ -58,6 +61,7 @@ export const EntityProvider: React.FC<{
   // Function to update entity data without a full reload
   const setEntityData = (data: Character) => {
     setEntity(data);
+    refreshEvents(); // Refresh events after updating entity data
   };
 
   const value = {
