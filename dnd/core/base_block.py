@@ -541,6 +541,10 @@ class BaseBlock(BaseModel):
         if not self.allow_events_conditions:
             return None
         condition = self.active_conditions.pop(condition_name)
+        for sub_condition_uuid in condition.sub_conditions:
+            sub_condition = BaseCondition.get(sub_condition_uuid)
+            if sub_condition is not None and sub_condition.name is not None:
+                self.active_conditions.pop(sub_condition.name)
         condition.remove()
         self._remove_condition_from_dicts(condition)
     
