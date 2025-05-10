@@ -8,7 +8,7 @@ from enum import Enum
 from random import randint
 from functools import cached_property
 
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 from dnd.core.events import AbilityName
 SavingThrowName = TypeLiteral[
     'strength_saving_throw', 'dexterity_saving_throw', 'constitution_saving_throw',

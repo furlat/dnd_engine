@@ -12,7 +12,7 @@ from functools import cached_property
 from typing import Literal as TypeLiteral
 import copy
 
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 
 # Equipment-specific events
 class EquipmentEvent(Event):

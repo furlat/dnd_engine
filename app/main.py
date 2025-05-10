@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import entity registry and entities
 from dnd.entity import Entity
+from dnd.core.events import EventQueue
 from dnd.monsters.circus_fighter import create_warrior
 
 # Import API routers
@@ -42,13 +43,14 @@ app.include_router(events_router, prefix="/api")
 @app.on_event("startup")
 def initialize_test_entities():
     """Create test entities on startup"""
+    q=EventQueue()
     # Create a warrior from circus_fighter.py
     warrior_uuid = uuid4()
     warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Spiky Clown")
     
     # Create a second entity for testing
     rogue_uuid = uuid4()
-    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded",blinded=True)
+    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded Pirate",blinded=True)
     
     print(f"Created test entities with UUIDs:")
     print(f"- Test Warrior: {warrior_uuid}")

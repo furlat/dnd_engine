@@ -124,8 +124,10 @@ class Event(BaseObject):
     canceled: bool = Field(default=False,description="Flag to indicate if event should be canceled")
     parent_event: Optional[UUID] = Field(default=None,description="The parent event of the current event")
     status_message: Optional[str] = Field(default=None,description="A status message for the event")
-    child_events: List["Event"] = Field(default_factory=list,description="A list of child events")
-    children_events: List[UUID] = Field(default_factory=list,description="A list of children events")
+    
+    # Track children events differently
+    lineage_children_events: List[UUID] = Field(default_factory=list,description="All children events that happened throughout this event's lifetime")
+    children_events: List[UUID] = Field(default_factory=list,description="Children events that happened during the current phase")
     
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
@@ -171,6 +173,10 @@ class Event(BaseObject):
         # Add any additional updates
         phase_updates.update(updates)
         
+        # Preserve lineage_children_events but clear children_events for new phase
+        phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
+        phase_updates['children_events'] = []
+        
         # Post the updated event
         return self.post(**phase_updates)
     
@@ -206,11 +212,10 @@ class Event(BaseObject):
         self.parent_event = parent_event.uuid
     
     def add_child_event(self, child_event: 'Event'):
-        """Add a child event to the current event"""
-        if child_event.parent_event is None or child_event.parent_event != (self.uuid, self.timestamp):
-            raise ValueError("Child event does not have a valid parent or already has a parent")
-
+        """Add a child event to both current phase and lineage tracking"""
         self.children_events.append(child_event.uuid)
+        if child_event.uuid not in self.lineage_children_events:
+            self.lineage_children_events.append(child_event.uuid)
 
     def get_children_events(self) -> List['Event']:
         """Get all children events of the current event"""

@@ -2,6 +2,7 @@ from typing import Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tu
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
 from enum import Enum
+from collections import defaultdict
 
 
 
@@ -17,7 +18,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 from dnd.core.events import EventType, EventPhase, Event, AttackEvent, RangeType, SavingThrowEvent, SkillCheckEvent
 
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health)
@@ -26,7 +27,7 @@ from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
 from dnd.core.events import AbilityName, SkillName, EventHandler, EventType, EventPhase, Trigger
-
+from dnd.core.base_block import ContextualConditionImmunity
 def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
     key, value = kv
     if not isinstance(value, list):
@@ -37,7 +38,7 @@ def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any
         d[key] = value
     return d
 
-ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
+# ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
 
 class EntityConfig(BaseModel):
     ability_scores: AbilityScoresConfig = Field(default_factory=lambda: AbilityScoresConfig,description="Ability scores for the entity")
@@ -63,16 +64,7 @@ class Entity(BaseBlock):
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
-
-    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition name")
-    active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition UUID")
-    condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
-    contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
-    active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=dict)
-
-    event_handlers: Dict[UUID, EventHandler] = Field(default_factory=dict)
-    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
-    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
+    allow_events_conditions: bool = Field(default=True,description="If True, events and conditions will be allowed to be added to the block")
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Entity",description: Optional[str] = None,config: Optional[EntityConfig] = None) -> 'Entity':
@@ -84,7 +76,7 @@ class Entity(BaseBlock):
             source_entity_uuid (UUID): The UUID that will be used as both the entity's UUID and source_entity_uuid
             name (str): The name of the entity. Defaults to "Entity"
 
-        Returns:
+        Returns: 
             Entity: The newly created Entity instance
         """
         if config is None:
@@ -139,34 +131,10 @@ class Entity(BaseBlock):
                 return True
         return False
     
-    def add_event_handler(self, event_handler: EventHandler) -> None:
-        self.event_handlers[event_handler.uuid] = event_handler
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].append(event_handler)
-            self.event_handlers_by_trigger[trigger].append(event_handler)
 
-    def remove_event_handler_from_dicts(self, event_handler: EventHandler) -> None:
-        self.event_handlers.pop(event_handler.uuid)
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].remove(event_handler)
-            self.event_handlers_by_trigger[trigger].remove(event_handler)
-
-    def remove_event_handler(self, event_handler: EventHandler) -> None:
-        event_handler.remove() #this is already handling the removal from the event queue and the dicts
-
-    def _remove_condition_from_dicts(self, condition: BaseCondition) :
-        condition_name = condition.name
-        assert condition.source_entity_uuid is not None and condition_name is not None
-        self.active_conditions_by_source[condition.source_entity_uuid].remove(condition_name)
-
-    def remove_condition(self, condition_name: str) -> None:
-        condition = self.active_conditions.pop(condition_name)
-        condition.remove()
-        self._remove_condition_from_dicts(condition)
     
-    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None)  -> Optional[Event]:
+        """ Overrides the base method of BaseBlock to add the saving throw checks"""
         if condition.name is None:
             raise ValueError("BaseCondition name is not set")
         if condition.target_entity_uuid is None:
@@ -174,76 +142,35 @@ class Entity(BaseBlock):
         if context is not None:
             condition.set_context(context)
         
+        declaration_event = condition.declare_event(parent_event)
+
         if self.check_condition_immunity(condition.name):
-            if event is not None:
-                return event.cancel(status_message=f"Condition {condition.name} is immune")
+            if declaration_event is not None:
+                return declaration_event.cancel(status_message=f"Condition {condition.name} is immune")
             else:
                 return None
         if check_save_throw and condition.application_saving_throw is not None:
             (outcome,dice_roll,success) = self.saving_throw(condition.application_saving_throw)
             if success:
-                if event is not None:
-                    return event.cancel(status_message=f"Target passed the {condition.application_saving_throw.ability_name} saving throw with")
+                if declaration_event is not None:
+                    return declaration_event.cancel(status_message=f"Target passed the {condition.application_saving_throw.ability_name} saving throw with")
                 else:
                     return None
-        condition_applied = condition.apply(event)
+        condition_applied = condition.apply(declaration_event=declaration_event)
         if condition_applied:
             if condition.name in self.active_conditions:
                 #already present we need to remove the old one and add the new one for now not stackable
                 self.remove_condition(condition.name)
             self.active_conditions[condition.name] = condition
             self.active_conditions_by_uuid[condition.uuid] = condition
-            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (condition.source_entity_uuid, condition.name))
+            self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
         return condition_applied
     
     
 
-    def add_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
-        self.condition_immunities.append((condition_name,immunity_name))
     
-    def _remove_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
-        for condition_tuple in self.condition_immunities:
-            if condition_tuple[0] == condition_name:
-                if immunity_name is None:
-                    self.condition_immunities.remove(condition_tuple)                
-                else:
-                    if condition_tuple[1] == immunity_name:
-                        self.condition_immunities.remove(condition_tuple)
-                        break
-        return
-    
-    def add_contextual_condition_immunity(self, condition_name: str, immunity_name:str, immunity_check: ContextualConditionImmunity):
-        if condition_name not in self.contextual_condition_immunities:
-            self.contextual_condition_immunities[condition_name] = []
-        self.contextual_condition_immunities[condition_name].append((immunity_name,immunity_check))
-
-    def add_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None, immunity_check: Optional[ContextualConditionImmunity]=None):
-        if immunity_check is not None:
-            if immunity_name is None:
-                raise ValueError("Immunity name is required when adding a contextual BaseCondition immunity")
-            self.add_contextual_condition_immunity(condition_name,immunity_name,immunity_check)
-        else:
-            self.add_static_condition_immunity(condition_name,immunity_name)
-    
-    def _remove_contextual_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None):
-        for self_condition_name in self.contextual_condition_immunities:
-            if self_condition_name == condition_name:
-                if immunity_name is None:
-                    self.contextual_condition_immunities.pop(self_condition_name)
-                    break
-                else:
-                    for immunity_tuple in self.contextual_condition_immunities[self_condition_name]:
-                        if immunity_tuple[0] == immunity_name:
-                            self.contextual_condition_immunities[self_condition_name].remove(immunity_tuple)
-                            break
-
-    
-    def remove_condition_immunity(self, condition_name: str):
-        self._remove_static_condition_immunity(condition_name)
-        self._remove_contextual_condition_immunity(condition_name)
-        return
-
     def advance_duration_condition(self,condition_name:str, skip_save_throw: bool = False) -> bool:
+        """ Overrides the base method of BaseBlock to add the saving throw checks"""
         condition = self.active_conditions[condition_name]
         if not skip_save_throw and condition.removal_saving_throw is not None:
             (outcome,dice_roll,success) = self.saving_throw(condition.removal_saving_throw)
@@ -257,13 +184,6 @@ class Entity(BaseBlock):
         return removed
     
 
-    def advance_durations(self) -> List[str]:
-        removed_conditions = []
-        for condition_name in list(self.active_conditions.keys()):
-            removed = self.advance_duration_condition(condition_name)
-            if removed:
-                removed_conditions.append(condition_name)
-        return removed_conditions
     
     
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
