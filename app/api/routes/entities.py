@@ -6,17 +6,17 @@ from pydantic import BaseModel
 
 # Import entity and models
 from dnd.entity import Entity
-from dnd.interfaces.entity import EntitySnapshot, ConditionSnapshot
-from dnd.interfaces.health import HealthSnapshot
-from dnd.interfaces.abilities import AbilityScoresSnapshot
-from dnd.interfaces.skills import SkillSetSnapshot
-from dnd.interfaces.equipment import EquipmentSnapshot
-from dnd.interfaces.saving_throws import SavingThrowSetSnapshot
-from dnd.interfaces.values import ModifiableValueSnapshot
+from app.models.entity import EntitySnapshot, ConditionSnapshot
+from app.models.health import HealthSnapshot
+from app.models.abilities import AbilityScoresSnapshot
+from app.models.skills import SkillSetSnapshot
+from app.models.equipment import EquipmentSnapshot
+from app.models.saving_throws import SavingThrowSetSnapshot
+from app.models.values import ModifiableValueSnapshot
 from dnd.core.events import WeaponSlot
 from dnd.blocks.equipment import Equipment, BaseBlock, Armor, Weapon, Shield, BodyPart, RingSlot
 from dnd.core.base_conditions import DurationType
-from dnd.core.condition_factory import ConditionType, create_condition
+from dnd.conditions import ConditionType, create_condition
 
 # Import dependencies
 from app.api.deps import get_entity

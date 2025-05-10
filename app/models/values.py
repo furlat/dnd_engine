@@ -5,8 +5,8 @@ from uuid import UUID
 
 from dnd.core.modifiers import AdvantageStatus, CriticalStatus, AutoHitStatus, DamageType, ResistanceStatus
 
-from dnd.interfaces.channels import ModifierChannelSnapshot
-from dnd.interfaces.modifiers import NumericalModifierSnapshot
+from app.models.channels import ModifierChannelSnapshot
+from app.models.modifiers import NumericalModifierSnapshot
 
 class ModifiableValueSnapshot(BaseModel):
     """Interface model for a ModifiableValue"""

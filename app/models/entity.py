@@ -3,14 +3,14 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Union, Any
 from uuid import UUID
 
-from dnd.interfaces.abilities import AbilityScoresSnapshot
-from dnd.interfaces.skills import SkillSetSnapshot, SkillBonusCalculationSnapshot
-from dnd.interfaces.equipment import EquipmentSnapshot, AttackBonusCalculationSnapshot, ACBonusCalculationSnapshot
-from dnd.interfaces.values import ModifiableValueSnapshot
+from app.models.abilities import AbilityScoresSnapshot
+from app.models.skills import SkillSetSnapshot, SkillBonusCalculationSnapshot
+from app.models.equipment import EquipmentSnapshot, AttackBonusCalculationSnapshot, ACBonusCalculationSnapshot
+from app.models.values import ModifiableValueSnapshot
 from dnd.core.events import SkillName, WeaponSlot, AbilityName
-from dnd.interfaces.saving_throws import SavingThrowSetSnapshot, SavingThrowBonusCalculationSnapshot
-from dnd.interfaces.health import HealthSnapshot
-from dnd.interfaces.action_economy import ActionEconomySnapshot
+from app.models.saving_throws import SavingThrowSetSnapshot, SavingThrowBonusCalculationSnapshot
+from app.models.health import HealthSnapshot
+from app.models.action_economy import ActionEconomySnapshot
 from dnd.core.base_conditions import DurationType
 
 # Add a ConditionSnapshot interface
@@ -89,7 +89,7 @@ class EntitySnapshot(BaseModel):
         saving_throw_calculations = {}
         if include_saving_throw_calculations:
             ability_names = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
-            from dnd.interfaces.saving_throws import SavingThrowBonusCalculationSnapshot
+            from app.models.saving_throws import SavingThrowBonusCalculationSnapshot
             for ability_name in ability_names:
                 saving_throw_calculations[ability_name] = SavingThrowBonusCalculationSnapshot.from_engine(entity, ability_name)
 

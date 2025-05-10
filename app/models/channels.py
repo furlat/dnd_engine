@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Union, Any
 from uuid import UUID
 
-from dnd.interfaces.modifiers import (
+from app.models.modifiers import (
     NumericalModifierSnapshot,
     AdvantageModifierSnapshot,
     CriticalModifierSnapshot,

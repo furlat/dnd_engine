@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Union, Any
 from uuid import UUID
 
-from dnd.interfaces.values import ModifiableValueSnapshot
+from app.models.values import ModifiableValueSnapshot
 from dnd.core.modifiers import DamageType, ResistanceStatus
 
 class HitDiceSnapshot(BaseModel):

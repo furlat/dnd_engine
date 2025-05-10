@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union, Any
 from uuid import UUID
 
 from dnd.core.events import AbilityName, SkillName
-from dnd.interfaces.values import ModifiableValueSnapshot
+from app.models.values import ModifiableValueSnapshot
 
 class SkillSnapshot(BaseModel):
     """Interface model for a Skill"""

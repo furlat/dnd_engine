@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 
 from dnd.core.modifiers import DamageType, AdvantageStatus
 from dnd.core.events import RangeType, WeaponSlot
-from dnd.interfaces.values import ModifiableValueSnapshot
-from dnd.interfaces.abilities import AbilityName
+from app.models.values import ModifiableValueSnapshot
+from app.models.abilities import AbilityName
 
 class RangeSnapshot(BaseModel):
     """Interface model for weapon Range"""

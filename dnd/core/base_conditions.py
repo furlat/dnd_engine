@@ -197,10 +197,8 @@ class BaseCondition(BaseObject):
         for event_handler_uuid in event_handlers_uuids:
             if event_handler_uuid not in self.event_handlers_uuids:
                 self.event_handlers_uuids.append(event_handler_uuid)
-        print(f"Sub conditions uuids: {sub_conditions_uuids}")
         for sub_condition_uuid in sub_conditions_uuids:
             if sub_condition_uuid not in self.sub_conditions:
-                print(f"Adding sub condition {sub_condition_uuid} to {self.name} with UUID {self.uuid}")
                 self.sub_conditions.append(sub_condition_uuid)
 
         self.applied = True
@@ -226,16 +224,11 @@ class BaseCondition(BaseObject):
         """ Remove the sub conditions """
         # if not self.applied:
         #     return False
-        print(f"Removing sub conditions for {self.name} with UUID {self.uuid}")
-        if len(self.sub_conditions) == 0:
-            print(f"No sub conditions to remove for {self.name} with UUID {self.uuid}")
-        print(f"Sub conditions to remove: {self.sub_conditions}")
         for sub_condition_uuid in self.sub_conditions:
             sub_condition = BaseCondition.get(sub_condition_uuid)
             if sub_condition is None:
                 raise ValueError(f"Trying to remove sub condition with UUID {sub_condition_uuid} not found sub-condition removal should remove it from the parent reference")
             elif isinstance(sub_condition,BaseCondition):
-                print(f"Removing sub condition {sub_condition.name} with UUID {sub_condition_uuid}")
                 sub_condition.remove(skip_parent_removal=True,parent_event=parent_event)
         return True
     
@@ -267,7 +260,6 @@ class BaseCondition(BaseObject):
         """Remove the condition with event handling"""
         if not self.applied:
             return False
-        print(f"remove has been called for {self.name} with UUID {self.uuid}")
         # First declare the removal event
         event = self._declare_removal_event(expired=expire, parent_event=parent_event)
         if event.canceled:  # Check if event was canceled at declaration
@@ -286,7 +278,6 @@ class BaseCondition(BaseObject):
 
         # Proceed with actual removal operations
         self.remove_condition_modifiers()
-        print("just outside remove sub conditions")
         self.remove_sub_conditions(parent_event=event)
         if not skip_parent_removal:
             self.remove_condition_from_parent()
