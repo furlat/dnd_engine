@@ -3,8 +3,8 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Union, Any
 from uuid import UUID
 
-from dnd.interfaces.values import ModifiableValueSnapshot
-from dnd.interfaces.modifiers import NumericalModifierSnapshot
+from app.models.values import ModifiableValueSnapshot
+from app.models.modifiers import NumericalModifierSnapshot
 from dnd.core.actions import CostType
 
 class ActionEconomySnapshot(BaseModel):
