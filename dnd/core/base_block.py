@@ -3,11 +3,15 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
-
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.events import EventHandler, Trigger, Event
 from enum import Enum
 from random import randint
 from functools import cached_property
 from typing import Literal as TypeLiteral
+from collections import defaultdict
+
+ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'],Optional[dict]], bool]
 
 
 class BaseBlock(BaseModel):
@@ -126,7 +130,20 @@ class BaseBlock(BaseModel):
         default_factory=dict,
         description="Dictionary of all ModifiableValue instances that are attributes of this class."
     )
+
+    position: Tuple[int,int] = Field(default_factory=lambda: (0,0))
+
+    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition name")
+    active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition UUID")
+    condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
+    contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
+    active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=lambda: defaultdict(list),description="Dictionary of active conditions by source entity UUID")
+
+    event_handlers: Dict[UUID, EventHandler] = Field(default_factory=dict)
+    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
+    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
     
+    allow_events_conditions: bool = Field(default=False,description="If True, events and conditions will be allowed to be added to the block")
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
 
@@ -294,6 +311,14 @@ class BaseBlock(BaseModel):
             for block in self.blocks.values():
                 values.extend(block.get_values(deep=True))
         return values
+    
+    def set_position(self, position: Tuple[int,int]) -> None:
+        """
+        Set the position of the block.
+        """
+        self.position = position
+        for block in self.blocks.values():
+            block.set_position(position)
 
     def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
         """
@@ -480,3 +505,121 @@ class BaseBlock(BaseModel):
             if block.name == name:
                 return block
         return None
+    
+    
+    def add_event_handler(self, event_handler: EventHandler) -> None:
+        if not self.allow_events_conditions:
+            return None
+        self.event_handlers[event_handler.uuid] = event_handler
+        for trigger in event_handler.trigger_conditions:
+            if trigger.is_simple():
+                self.event_handlers_by_simple_trigger[trigger].append(event_handler)
+            self.event_handlers_by_trigger[trigger].append(event_handler)
+
+    def remove_event_handler_from_dicts(self, event_handler: EventHandler) -> None:
+        if not self.allow_events_conditions:
+            return None
+        self.event_handlers.pop(event_handler.uuid)
+        for trigger in event_handler.trigger_conditions:
+            if trigger.is_simple():
+                self.event_handlers_by_simple_trigger[trigger].remove(event_handler)
+            self.event_handlers_by_trigger[trigger].remove(event_handler)
+
+    def remove_event_handler(self, event_handler: EventHandler) -> None:
+        if not self.allow_events_conditions:
+            return None
+        event_handler.remove() #this is already handling the removal from the event queue and the dicts
+
+    def _remove_condition_from_dicts(self, condition: BaseCondition) -> None:
+        if not self.allow_events_conditions:
+            return None
+        condition_name = condition.name
+        assert condition.source_entity_uuid is not None and condition_name is not None
+        self.active_conditions_by_source[condition.source_entity_uuid].remove(condition_name)
+
+    def remove_condition(self, condition_name: str) -> None:
+        if not self.allow_events_conditions:
+            return None
+        condition = self.active_conditions.pop(condition_name)
+        condition.remove()
+        self._remove_condition_from_dicts(condition)
+    
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
+        if not self.allow_events_conditions:
+            return None
+        if condition.name is None:
+            raise ValueError("BaseCondition name is not set")
+        if condition.target_entity_uuid is None:
+            condition.target_entity_uuid = self.uuid
+        if context is not None:
+            condition.set_context(context)
+        
+        condition_applied = condition.apply(event)
+        if condition_applied:
+            if condition.name in self.active_conditions:
+                #already present we need to remove the old one and add the new one for now not stackable
+                self.remove_condition(condition.name)
+            self.active_conditions[condition.name] = condition
+            self.active_conditions_by_uuid[condition.uuid] = condition
+            self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
+    
+        return condition_applied
+    
+
+    def add_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
+        if not self.allow_events_conditions:
+            return None
+        self.condition_immunities.append((condition_name,immunity_name))
+    
+    def _remove_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
+        if not self.allow_events_conditions:
+            return None
+        for condition_tuple in self.condition_immunities:
+            if condition_tuple[0] == condition_name:
+                if immunity_name is None:
+                    self.condition_immunities.remove(condition_tuple)                
+                else:
+                    if condition_tuple[1] == immunity_name:
+                        self.condition_immunities.remove(condition_tuple)
+                        break
+        return
+    
+    def add_contextual_condition_immunity(self, condition_name: str, immunity_name:str, immunity_check: ContextualConditionImmunity):
+        if not self.allow_events_conditions:
+            return None
+        if condition_name not in self.contextual_condition_immunities:
+            self.contextual_condition_immunities[condition_name] = []
+        self.contextual_condition_immunities[condition_name].append((immunity_name,immunity_check))
+
+    def add_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None, immunity_check: Optional[ContextualConditionImmunity]=None):
+        if not self.allow_events_conditions:
+            return None
+        if immunity_check is not None:
+            if immunity_name is None:
+                raise ValueError("Immunity name is required when adding a contextual BaseCondition immunity")
+            self.add_contextual_condition_immunity(condition_name,immunity_name,immunity_check)
+        else:
+            self.add_static_condition_immunity(condition_name,immunity_name)
+    
+    def _remove_contextual_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None):
+        if not self.allow_events_conditions:
+            return None
+        for self_condition_name in self.contextual_condition_immunities:
+            if self_condition_name == condition_name:
+                if immunity_name is None:
+                    self.contextual_condition_immunities.pop(self_condition_name)
+                    break
+                else:
+                    for immunity_tuple in self.contextual_condition_immunities[self_condition_name]:
+                        if immunity_tuple[0] == immunity_name:
+                            self.contextual_condition_immunities[self_condition_name].remove(immunity_tuple)
+                            break
+
+    
+    def remove_condition_immunity(self, condition_name: str) -> None:
+        if not self.allow_events_conditions:
+            return None
+        self._remove_static_condition_immunity(condition_name)
+        self._remove_contextual_condition_immunity(condition_name)
+        return
+

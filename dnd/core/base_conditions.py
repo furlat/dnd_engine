@@ -128,13 +128,16 @@ class BaseCondition(BaseObject):
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
 
-    def _declare_event(self, parent_event: Optional[Event] = None) -> Event:
+    def declare_event(self, parent_event: Optional[Event] = None) -> Event:
         """ Declare the event """
-        return ConditionApplicationEvent(condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
+        if not self.name:
+            raise ValueError("Condition name is not set")
+        return ConditionApplicationEvent(name=self.name,condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
 
     def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
         """Declare the removal event"""
         return ConditionRemovalEvent(
+            name=self.name if self.name else "Condition Removal",
             condition=self,
             expired=expired,
             source_entity_uuid=self.source_entity_uuid,
@@ -143,13 +146,13 @@ class BaseCondition(BaseObject):
             parent_event=parent_event.uuid if parent_event else None
         )
 
-    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass 
         the event is used as parent if subconditions are triggered (e.g. sub conditons application)"""
         # event is declared in the main apply method
         
-        event = event.phase_to(EventPhase.EXECUTION, update={"condition":self}) # execution is defined, last chance to modify it
-        event = event.phase_to(EventPhase.EFFECT, update={"condition":self}) # effect is defined reactions to the effect applications
+        event = declaration_event.phase_to(EventPhase.EXECUTION, update={"condition":self}) # execution is defined, last chance to modify it
+        event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self}) # effect is defined reactions to the effect applications
         #completions happend in main apply method such that 
         
         return [],[],[], event
@@ -168,18 +171,22 @@ class BaseCondition(BaseObject):
             event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
         return event
 
-    def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
+    def apply(self, parent_event: Optional[Event] = None,declaration_event: Optional[Event] = None) -> Optional[Event]:
         """ Apply the condition """
         if self.applied or self.duration.is_expired:
             return None
         #first create the declaration event
-        event = self._declare_event(parent_event)
-        if event.canceled: #check if event was canceled at declaration
+        if declaration_event is None:
+            declaration_event = self.declare_event(parent_event)
+     
+        if declaration_event.canceled: #check if event was canceled at declaration
             return None
+        
+        #
         #then apply the condition
-        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, applied_event = self._apply(event)
-        if not applied_event or (len(modifers_uuids) == 0 and len(event_handlers_uuids) == 0 and len(sub_conditions_uuids) == 0):
-            return event.cancel(status_message=f"Condition {self.name} was not applied for some unknown reason, check the implementaiton of _apply method")
+        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, effect_event = self._apply(declaration_event)
+        if not effect_event or (len(modifers_uuids) == 0 and len(event_handlers_uuids) == 0 and len(sub_conditions_uuids) == 0):
+            return declaration_event.cancel(status_message=f"Condition {self.name} was not applied for some unknown reason, check the implementaiton of _apply method")
         
         
         for block_uuid, modifiers_uuids in modifers_uuids:
@@ -196,7 +203,7 @@ class BaseCondition(BaseObject):
                 self.sub_conditions.append(sub_condition_uuid)
 
         self.applied = True
-        completed_event = applied_event.phase_to(EventPhase.COMPLETION)
+        completed_event = effect_event.phase_to(EventPhase.COMPLETION)
         return completed_event
     
     def remove_condition_modifiers(self) -> bool:
