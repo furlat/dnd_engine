@@ -367,7 +367,7 @@ class Paralyzed(BaseCondition):
             return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            sub_conditions_uuids = []
+            sub_conditions_uuids:List[UUID] = []
             #like incapacitated first
             #set max actions, bonus actions, and reactions to 0
             execution_event = declaration_event.phase_to(EventPhase.EXECUTION,update={"condition":self},status_message=f"Applying Incapacitated sub-condition to {target_entity.name}")
