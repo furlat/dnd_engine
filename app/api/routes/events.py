@@ -4,7 +4,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from dnd.core.events import EventQueue
-from dnd.interfaces.events import EventSnapshot
+from app.models.events import EventSnapshot
 
 router = APIRouter(
     prefix="/events",

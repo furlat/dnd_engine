@@ -597,8 +597,15 @@ class Equipment(BaseBlock):
             if slot not in (RingSlot.LEFT, RingSlot.RIGHT):
                 raise ValueError("Must specify LEFT or RIGHT slot for rings")
             
+            #check if the ring is already equipped in case unequip the previous ring
+            if slot == RingSlot.LEFT and self.ring_left is not None:
+                self.unequip(RingSlot.LEFT,)
+            elif slot == RingSlot.RIGHT and self.ring_right is not None:
+                self.unequip(RingSlot.RIGHT)
+            
             # Create and process equip event
             event = ArmorEquipEvent(
+                name=item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 armor=item,
@@ -620,8 +627,15 @@ class Equipment(BaseBlock):
             if slot not in (WeaponSlot.MAIN_HAND, WeaponSlot.OFF_HAND):
                 slot = WeaponSlot.MAIN_HAND
             
+            #check if the weapon is already equipped in case unequip the previous weapon
+            if slot == WeaponSlot.MAIN_HAND and self.weapon_main_hand is not None:
+                self.unequip(WeaponSlot.MAIN_HAND)
+            elif slot == WeaponSlot.OFF_HAND and self.weapon_off_hand is not None:
+                self.unequip(WeaponSlot.OFF_HAND)
+            
             if isinstance(item, Weapon):
                 event = WeaponEquipEvent(
+                    name=item.name,
                     source_entity_uuid=self.source_entity_uuid,
                     target_entity_uuid=self.target_entity_uuid,
                     weapon=item,
@@ -629,6 +643,7 @@ class Equipment(BaseBlock):
                 )
             else:  # Shield
                 event = ShieldEquipEvent(
+                    name=item.name,
                     source_entity_uuid=self.source_entity_uuid,
                     target_entity_uuid=self.target_entity_uuid,
                     shield=item,
@@ -653,8 +668,13 @@ class Equipment(BaseBlock):
         if slot not in slot_mapping:
             raise ValueError(f"Invalid equipment slot: {slot}")
 
+        #check if the armor is already equipped in case unequip the previous armor
+        if slot in slot_mapping and self.body_armor is not None:
+            self.unequip(slot)
+
         # Create and process armor equip event
         event = ArmorEquipEvent(
+            name=item.name,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             armor=item,
@@ -669,7 +689,7 @@ class Equipment(BaseBlock):
         
         event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
 
-    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot]) -> None:
+    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot], parent_event_uuid: Optional[UUID] = None) -> None:
         """
         Unequip the item in the specified slot.
 
@@ -699,24 +719,30 @@ class Equipment(BaseBlock):
         # Create appropriate unequip event based on item type
         if isinstance(current_item, Weapon):
             event = WeaponUnequipEvent(
+                name=current_item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 weapon=current_item,
-                slot=slot
+                slot=slot,
+                parent_event=parent_event_uuid
             )
         elif isinstance(current_item, Shield):
             event = ShieldUnequipEvent(
+                name=current_item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 shield=current_item,
-                slot=slot
+                slot=slot,
+                parent_event=parent_event_uuid
             )
         else:  # Armor
             event = ArmorUnequipEvent(
+                name=current_item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 armor=current_item,
-                slot=slot
+                slot=slot,
+                parent_event=parent_event_uuid
             )
 
         # Process the unequip event

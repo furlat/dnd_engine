@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union, Any
 from uuid import UUID
 
 from dnd.core.events import AbilityName
-from dnd.interfaces.values import ModifiableValueSnapshot
+from app.models.values import ModifiableValueSnapshot
 
 class SavingThrowSnapshot(BaseModel):
     """Interface model for a SavingThrow"""

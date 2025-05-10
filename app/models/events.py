@@ -9,7 +9,7 @@ from dnd.core.events import (
     AbilityName, SkillName
 )
 
-from dnd.interfaces.values import ModifiableValueSnapshot
+from app.models.values import ModifiableValueSnapshot
 from dnd.core.modifiers import DamageType, AdvantageStatus, CriticalStatus, AutoHitStatus
 from dnd.core.dice import DiceRoll, AttackOutcome
 
