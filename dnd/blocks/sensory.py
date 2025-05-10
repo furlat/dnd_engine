@@ -10,7 +10,7 @@ from functools import cached_property
 from typing import Literal as TypeLiteral
 import math
 
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 
 class SensesType(str, Enum):
     BLINDSIGHT = "Blindsight"
@@ -20,7 +20,6 @@ class SensesType(str, Enum):
 
 class Senses(BaseBlock):
     """ A block that contains the senses of a creature"""
-    position: Tuple[int,int] = Field(default_factory=lambda: (0,0))
     entities : Dict[UUID,Tuple[int,int]] = Field(default_factory=dict)
     visible: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     walkable: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
@@ -45,8 +44,7 @@ class Senses(BaseBlock):
         else:
             return []
     
-    def update_senses(self, position: Tuple[int,int], entities: Dict[UUID,Tuple[int,int]], visible: Dict[Tuple[int,int],bool], walkable: Dict[Tuple[int,int],bool],paths: Dict[Tuple[int,int],List[Tuple[int,int]]]):
-        self.position = position
+    def update_senses(self,  entities: Dict[UUID,Tuple[int,int]], visible: Dict[Tuple[int,int],bool], walkable: Dict[Tuple[int,int],bool],paths: Dict[Tuple[int,int],List[Tuple[int,int]]]):
         self.entities = entities
         self.visible = visible
         self.walkable = walkable

@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import Optional, Any
 
 from dnd.entity import Entity
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 
 def get_entity(entity_uuid: UUID) -> Entity:
     """

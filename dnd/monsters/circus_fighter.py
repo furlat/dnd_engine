@@ -1,6 +1,6 @@
 from dnd.core.modifiers import NumericalModifier, DamageType, AdvantageModifier, AdvantageStatus
 from dnd.core.values import ModifiableValue
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health,HitDiceConfig)
