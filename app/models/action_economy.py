@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.models.values import ModifiableValueSnapshot
 from app.models.modifiers import NumericalModifierSnapshot
-from dnd.core.actions import CostType
+from dnd.core.base_actions import CostType
 
 class ActionEconomySnapshot(BaseModel):
     """Interface model for ActionEconomy"""
