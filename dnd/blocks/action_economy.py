@@ -112,7 +112,17 @@ class ActionEconomy(BaseBlock):
         elif cost_type == "movement":
             return self.movement.self_static.normalized_score - amount >= 0
 
-            
+    def reset_all_costs(self):
+        """Reset the cost for a given action type."""
+        all_cost_modifiers = self.get_cost_modifiers("actions") + self.get_cost_modifiers("bonus_actions") + self.get_cost_modifiers("reactions") + self.get_cost_modifiers("movement")
+        for modifier in all_cost_modifiers:
+            self.actions.self_static.remove_value_modifier(modifier.uuid)
+
+            self.bonus_actions.self_static.remove_value_modifier(modifier.uuid)
+    
+            self.reactions.self_static.remove_value_modifier(modifier.uuid)
+            self.movement.self_static.remove_value_modifier(modifier.uuid)
+        
 
     def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None):
         """Consume an action resource."""

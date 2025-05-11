@@ -1,27 +1,14 @@
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost,BaseCost, ActionEvent
 from dnd.core.values import ModifiableValue
 
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier, AutoHitStatus, CriticalStatus
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType,Event, EventType, WeaponSlot, Range, Damage, EventHandler,EventProcessor, EventPhase
 from pydantic import Field
-from typing import Optional, List, TypeVar, Generic
+from typing import Optional, List, TypeVar, Generic, Union
 from uuid import UUID
-from dnd.entity import Entity
+from dnd.entity import Entity, determine_attack_outcome
 from collections import OrderedDict
-
-class AttackEvent(ActionEvent):
-    """An event that represents an attack"""
-    name: str = Field(default="Attack",description="An attack event")
-    weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
-    range: Optional[Range] = Field(default=None,description="The range of the attack")
-    attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")
-    ac: Optional[ModifiableValue] = Field(default=None,description="The ac of the target")
-    dice_roll: Optional[DiceRoll] = Field(default_factory=DiceRoll,description="The result of the dice roll")
-    attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
-    damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
-    damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
-    event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
 
 
 #here we create event processors for the validation of the attack
@@ -68,6 +55,19 @@ def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent,
         status_message=f"Succesfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
     )
 
+class AttackEvent(ActionEvent):
+    """An event that represents an attack"""
+    name: str = Field(default="Attack",description="An attack event")
+    weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
+    range: Optional[Range] = Field(default=None,description="The range of the attack")
+    attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")
+    ac: Optional[ModifiableValue] = Field(default=None,description="The ac of the target")
+    dice_roll: Optional[DiceRoll] = Field(default_factory=DiceRoll,description="The result of the dice roll")
+    attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
+    damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
+    damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
+    event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
+
 
 class Attack(BaseAction):
     """An action that represents an attack using a weapon
@@ -107,7 +107,7 @@ class Attack(BaseAction):
             range=range
         )
     
-
+    
 
     @staticmethod
     def attack_consequences(execution_event: AttackEvent,source_entity_uuid: UUID) -> Optional[AttackEvent]:
@@ -158,8 +158,8 @@ class Attack(BaseAction):
                 return attack_event
             
             # Roll attack and post results using the helper methods
-            dice_roll = source_entity.roll_attack(attack_bonus)
-            attack_outcome = source_entity.determine_attack_outcome(dice_roll, ac)
+            dice_roll = source_entity.roll_d20(attack_bonus,RollType.ATTACK)
+            attack_outcome = determine_attack_outcome(dice_roll, ac)
             
             attack_event = attack_event.post(
                 dice_roll=dice_roll,
