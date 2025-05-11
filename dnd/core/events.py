@@ -17,9 +17,10 @@ from typing import Callable, Tuple
 
 # Type definition for event listeners
 T = TypeVar('T', bound='Event')
+E = TypeVar('E', bound='Event')
 
 # Replace Protocol with type alias
-EventProcessor = Callable[['Event', UUID], Optional['Event']]
+EventProcessor = Callable[[E, UUID], Optional[E]]
 
 # More specific event listener types
 class TypedEventListener(Protocol[T]):
@@ -65,6 +66,7 @@ class WeaponSlot(str, Enum):
 
 class EventType(str, Enum):
     # Core events
+    BASE_ACTION = "base_action"
     ATTACK = "attack"
     MOVEMENT = "movement"
     ABILITY_CHECK = "ability_check"
@@ -618,20 +620,4 @@ class Damage(BaseObject):
     
     def get_dice(self, attack_outcome: AttackOutcome) -> Dice:
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome)
-
-
-class AttackEvent(Event):
-    """An event that represents an attack"""
-    name: str = Field(default="Attack",description="An attack event")
-    weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
-    range: Optional[Range] = Field(default=None,description="The range of the attack")
-    attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")
-    ac: Optional[ModifiableValue] = Field(default=None,description="The ac of the target")
-    dice_roll: Optional[DiceRoll] = Field(default_factory=DiceRoll,description="The result of the dice roll")
-    attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
-    damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
-    damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
-    event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
-
-
 

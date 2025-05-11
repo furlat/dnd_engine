@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
-from dnd.core.actions import CostType
+from dnd.core.base_actions import CostType
 from enum import Enum
 from random import randint
 from functools import cached_property
@@ -100,6 +100,19 @@ class ActionEconomy(BaseBlock):
         
         return [mod for mod in value.self_static.value_modifiers.values() 
                 if mod.normalized_value < 0 and mod.name is not None and "_cost" in mod.name]
+    
+    def can_afford(self, cost_type: CostType, amount: int) -> bool:
+        """Check if the entity can afford a given action type and amount."""
+        if cost_type == "actions":
+            return self.actions.self_static.normalized_score - amount >= 0
+        elif cost_type == "bonus_actions":
+            return self.bonus_actions.self_static.normalized_score - amount >= 0
+        elif cost_type == "reactions":
+            return self.reactions.self_static.normalized_score - amount >= 0
+        elif cost_type == "movement":
+            return self.movement.self_static.normalized_score - amount >= 0
+
+            
 
     def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None):
         """Consume an action resource."""
