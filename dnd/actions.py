@@ -62,7 +62,7 @@ class AttackEvent(ActionEvent):
     range: Optional[Range] = Field(default=None,description="The range of the attack")
     attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")
     ac: Optional[ModifiableValue] = Field(default=None,description="The ac of the target")
-    dice_roll: Optional[DiceRoll] = Field(default_factory=DiceRoll,description="The result of the dice roll")
+    dice_roll: Optional[DiceRoll] = Field(default=None,description="The result of the dice roll")
     attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
     damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
@@ -74,6 +74,7 @@ class Attack(BaseAction):
     validation requires the source entity and target entity to be in range and the target entity to be in the line of sight
     of the source entity"""
     name: str = Field(default="Attack",description="An attack action")
+    description: str = Field(default="An attack action",description="A description of the attack action")
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost",cost_type="actions",cost=1,evaluator=entity_action_economy_cost_evaluator)],description="A list of costs for the action")
     
@@ -163,7 +164,8 @@ class Attack(BaseAction):
             
             attack_event = attack_event.post(
                 dice_roll=dice_roll,
-                attack_outcome=attack_outcome
+                attack_outcome=attack_outcome,
+                status_message=f"Attack rolled {dice_roll.total} and {attack_outcome}"
             )
             ac.reset_from_target()
             attack_bonus.reset_from_target()

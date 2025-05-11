@@ -46,12 +46,13 @@ def initialize_test_entities():
     q=EventQueue()
     # Create a warrior from circus_fighter.py
     warrior_uuid = uuid4()
-    warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Spiky Clown")
+    warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Spiky Clown", position=(0,0))
     
     # Create a second entity for testing
     rogue_uuid = uuid4()
-    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded Pirate",blinded=True)
-    
+    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded Pirate",blinded=True, position=(1,1))
+    warrior.senses.add_entity(rogue_uuid,blinded_rogue.senses.position)
+    blinded_rogue.senses.add_entity(warrior_uuid,warrior.senses.position)
     print(f"Created test entities with UUIDs:")
     print(f"- Test Warrior: {warrior_uuid}")
     print(f"- Test Rogue: {rogue_uuid}")
