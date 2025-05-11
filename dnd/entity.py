@@ -16,7 +16,7 @@ from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, Sta
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-from dnd.core.events import EventType, EventPhase, Event, AttackEvent, RangeType, SavingThrowEvent, SkillCheckEvent
+from dnd.core.events import EventType, EventPhase, Event, RangeType, SavingThrowEvent, SkillCheckEvent
 
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
@@ -28,15 +28,7 @@ from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
 from dnd.core.events import AbilityName, SkillName, EventHandler, EventType, EventPhase, Trigger
 from dnd.core.base_block import ContextualConditionImmunity
-def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
-    key, value = kv
-    if not isinstance(value, list):
-        value = [value]
-    if key in d:
-        d[key] += value
-    else:
-        d[key] = value
-    return d
+
 
 # ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
 
@@ -572,105 +564,105 @@ class Entity(BaseBlock):
             target_entity.clear_target_entity()
             return attack_outcome, dice_roll, [(damage, roll) for damage, roll in zip(damages, damage_rolls)]
 
-    def attack_event_based(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Optional[AttackEvent]:
-        """
-        Event-based implementation of an attack.
-        This method creates an attack event and processes it through the event system,
-        allowing reactions to modify or cancel the attack at various stages.
+    # def attack_event_based(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Optional[AttackEvent]:
+    #     """
+    #     Event-based implementation of an attack.
+    #     This method creates an attack event and processes it through the event system,
+    #     allowing reactions to modify or cancel the attack at various stages.
         
-        Returns:
-            Optional[AttackEvent]: The completed attack event, or None if the attack was canceled
-        """
-        self.set_target_entity(target_entity_uuid)
-        target_entity = self.get_target_entity(copy=False)
-        if not target_entity:
-            return None
-        target_entity.set_target_entity(self.uuid)
+    #     Returns:
+    #         Optional[AttackEvent]: The completed attack event, or None if the attack was canceled
+    #     """
+    #     self.set_target_entity(target_entity_uuid)
+    #     target_entity = self.get_target_entity(copy=False)
+    #     if not target_entity:
+    #         return None
+    #     target_entity.set_target_entity(self.uuid)
         
-        # Get weapon range using the helper method
-        weapon_range = self.get_weapon_range(weapon_slot)
+    #     # Get weapon range using the helper method
+    #     weapon_range = self.get_weapon_range(weapon_slot)
         
-        # Create initial attack event
-        attack_event = AttackEvent(
-            name=f"{self.name}'s Attack",
-            source_entity_uuid=self.uuid,
-            target_entity_uuid=target_entity_uuid,
-            event_type=EventType.ATTACK,
-            phase=EventPhase.DECLARATION,
-            weapon_slot=weapon_slot,
-            range=weapon_range
-        )
+    #     # Create initial attack event
+    #     attack_event = AttackEvent(
+    #         name=f"{self.name}'s Attack",
+    #         source_entity_uuid=self.uuid,
+    #         target_entity_uuid=target_entity_uuid,
+    #         event_type=EventType.ATTACK,
+    #         phase=EventPhase.DECLARATION,
+    #         weapon_slot=weapon_slot,
+    #         range=weapon_range
+    #     )
         
-        # If attack was canceled in DECLARATION, return early
-        if attack_event.canceled:
-            return attack_event
+    #     # If attack was canceled in DECLARATION, return early
+    #     if attack_event.canceled:
+    #         return attack_event
         
-        # Move to EXECUTION phase
-        # Calculate attack bonus and target's AC
-        attack_bonus = self.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid)
-        ac = target_entity.ac_bonus(self.uuid)
-        ac.set_from_target(attack_bonus)
-        attack_bonus.set_from_target(ac)
-        # Transition to EXECUTION with attack values
-        attack_event = attack_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Rolling attack",
-            attack_bonus=attack_bonus,
-            ac=ac
-        )
+    #     # Move to EXECUTION phase
+    #     # Calculate attack bonus and target's AC
+    #     attack_bonus = self.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid)
+    #     ac = target_entity.ac_bonus(self.uuid)
+    #     ac.set_from_target(attack_bonus)
+    #     attack_bonus.set_from_target(ac)
+    #     # Transition to EXECUTION with attack values
+    #     attack_event = attack_event.phase_to(
+    #         new_phase=EventPhase.EXECUTION,
+    #         status_message="Rolling attack",
+    #         attack_bonus=attack_bonus,
+    #         ac=ac
+    #     )
         
-        # If attack was canceled during phase transition, return early
-        if attack_event.canceled:
-            return attack_event
+    #     # If attack was canceled during phase transition, return early
+    #     if attack_event.canceled:
+    #         return attack_event
         
-        # Roll attack and post results using the helper methods
-        dice_roll = self.roll_attack(attack_bonus)
-        attack_outcome = self.determine_attack_outcome(dice_roll, ac)
+    #     # Roll attack and post results using the helper methods
+    #     dice_roll = self.roll_attack(attack_bonus)
+    #     attack_outcome = self.determine_attack_outcome(dice_roll, ac)
         
-        attack_event = attack_event.post(
-            dice_roll=dice_roll,
-            attack_outcome=attack_outcome
-        )
-        ac.reset_from_target()
-        attack_bonus.reset_from_target()
+    #     attack_event = attack_event.post(
+    #         dice_roll=dice_roll,
+    #         attack_outcome=attack_outcome
+    #     )
+    #     ac.reset_from_target()
+    #     attack_bonus.reset_from_target()
         
-        # Consume action (only if we got this far)
-        self.action_economy.consume(cost_type="actions", amount=1, cost_name="Attack")
+    #     # Consume action (only if we got this far)
+    #     self.action_economy.consume(cost_type="actions", amount=1, cost_name="Attack")
         
-        # If attack was canceled or missed, skip to COMPLETION
-        if attack_event.canceled:
-            return attack_event
-        if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-            return attack_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
-                status_message=f"Attack {'canceled' if attack_event.canceled else 'missed'}"
-            )
+    #     # If attack was canceled or missed, skip to COMPLETION
+    #     if attack_event.canceled:
+    #         return attack_event
+    #     if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+    #         return attack_event.phase_to(
+    #             new_phase=EventPhase.COMPLETION,
+    #             status_message=f"Attack {'canceled' if attack_event.canceled else 'missed'}"
+    #         )
         
-        # Move to EFFECT phase for damage
-        damages = self.get_damages(weapon_slot, target_entity_uuid)
-        attack_event = attack_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message="Dealing damage",
-            damages=damages
-        )
+    #     # Move to EFFECT phase for damage
+    #     damages = self.get_damages(weapon_slot, target_entity_uuid)
+    #     attack_event = attack_event.phase_to(
+    #         new_phase=EventPhase.EFFECT,
+    #         status_message="Dealing damage",
+    #         damages=damages
+    #     )
         
-        # If attack was canceled during phase transition, return early
-        if attack_event.canceled:
-            return attack_event
+    #     # If attack was canceled during phase transition, return early
+    #     if attack_event.canceled:
+    #         return attack_event
         
-        # Apply damage if there is an attack outcome
-        if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-            damage_rolls = target_entity.take_damage(damages, attack_event.attack_outcome)
-        else:
-            damage_rolls = None
+    #     # Apply damage if there is an attack outcome
+    #     if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+    #         damage_rolls = target_entity.take_damage(damages, attack_event.attack_outcome)
+    #     else:
+    #         damage_rolls = None
             
         
-        self.clear_target_entity()
-        target_entity.clear_target_entity()
+    #     self.clear_target_entity()
+    #     target_entity.clear_target_entity()
         
-        # Move to COMPLETION phase
-        return attack_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message="Attack completed",
-            damage_rolls=damage_rolls,
-        )
+    #     # Move to COMPLETION phase
+    #     return attack_event.phase_to(
+    #         new_phase=EventPhase.COMPLETION,
+    #         status_message="Attack completed",
+    #         damage_rolls=damage_rolls,
+    #     )
