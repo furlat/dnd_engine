@@ -132,9 +132,14 @@ class Entity(BaseBlock):
                 equipment=equipment,
                 senses=senses,
                 action_economy=action_economy,
-                proficiency_bonus=proficiency_bonus
+                proficiency_bonus=proficiency_bonus,
+                position=config.position
             )
         
+    def move(self,new_position: Tuple[int,int]):
+        """ move the entity to a new position """
+        self.position = new_position
+        self.senses.position = new_position
 
         
     def get_target_entity(self,copy: bool = False) -> Optional['Entity']:
@@ -408,7 +413,7 @@ class Entity(BaseBlock):
     
     def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
         """ From each damage we get the dice and damage type and we roll it """
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        
         rolls = []
         for damage in damages:
             dice = damage.get_dice(attack_outcome=attack_outcome)
@@ -418,6 +423,11 @@ class Entity(BaseBlock):
 
 
         return rolls
+    
+    def get_hp(self) -> int:
+        """ total health of the entity """
+        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
     
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Range:
         """

@@ -26,6 +26,11 @@ class Senses(BaseBlock):
     paths: Dict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=dict)
     extra_senses: List[SensesType] = Field(default_factory=list)
 
+
+    def add_entity(self,entity_uuid: UUID,position: Tuple[int,int]):
+        """ add an entity to the senses"""
+        self.entities[entity_uuid] = position
+
     def get_distance(self,position: Tuple[int,int]) -> int:
         """ get the euclidean distance between the position and the position of the senses"""
         return int(math.sqrt((self.position[0] - position[0])**2 + (self.position[1] - position[1])**2))
