@@ -97,13 +97,13 @@ class ActionEconomy(BaseBlock):
             value = self.movement
         else:
             raise ValueError(f"Unknown cost type: {cost_type}")
-        
         return [mod for mod in value.self_static.value_modifiers.values() 
-                if mod.normalized_value < 0 and mod.name is not None and "_cost" in mod.name]
+                if mod.name is not None and "cost" in mod.name]
     
     def can_afford(self, cost_type: CostType, amount: int) -> bool:
         """Check if the entity can afford a given action type and amount."""
         if cost_type == "actions":
+            print("actions cazzo minchia",self.actions.self_static.normalized_score,amount)
             return self.actions.self_static.normalized_score - amount >= 0
         elif cost_type == "bonus_actions":
             return self.bonus_actions.self_static.normalized_score - amount >= 0

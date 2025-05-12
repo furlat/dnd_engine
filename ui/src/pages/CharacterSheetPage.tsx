@@ -7,11 +7,13 @@ import {
   CircularProgress,
   Alert,
   Button,
+  Grid,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { fetchCharacter } from '../api/characterApi';
 import { EntityProvider, useEntity } from '../contexts/EntityContext';
-import { CharacterSheetContent } from '../components/character';
+import CharacterSheetContent from '../components/character/CharacterSheetContent';
+import ActionBar from '../components/character/ActionBar';
 
 // Define the params interface
 type RouteParams = {
@@ -75,16 +77,23 @@ const CharacterSheetContentWrapper: React.FC = () => {
         Back to Characters
       </Button>
       
-      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          {character.name}
-        </Typography>
-        {character.description && (
-          <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
-            {character.description}
-          </Typography>
-        )}
-      </Paper>
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6}>
+          <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h4" component="h1" gutterBottom>
+              {character.name}
+            </Typography>
+            {character.description && (
+              <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                {character.description}
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <ActionBar character={character} />
+        </Grid>
+      </Grid>
 
       <CharacterSheetContent character={character} />
     </Box>
