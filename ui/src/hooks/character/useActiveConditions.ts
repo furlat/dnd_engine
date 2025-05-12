@@ -2,6 +2,7 @@ import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
 import { characterStore, characterActions } from '../../store/characterStore';
 import { removeCondition, addCondition } from '../../api/characterApi';
+import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
   ReadonlyConditionSnapshot,
   ReadonlyCharacter
@@ -81,6 +82,9 @@ export function useActiveConditions(): ActiveConditionsData {
       console.time('Remove Condition Store Update');
       characterActions.setCharacter(updatedCharacter);
       console.timeEnd('Remove Condition Store Update');
+
+      // Trigger event queue refresh
+      eventQueueActions.refresh();
     } catch (error) {
       console.error('Failed to remove condition:', error);
       setError(error instanceof Error ? error.message : 'Failed to remove condition');
@@ -109,6 +113,9 @@ export function useActiveConditions(): ActiveConditionsData {
       console.time('Add Condition Store Update');
       characterActions.setCharacter(updatedCharacter);
       console.timeEnd('Add Condition Store Update');
+
+      // Trigger event queue refresh
+      eventQueueActions.refresh();
     } catch (err) {
       console.error('Failed to add condition:', err);
       setError(err instanceof Error ? err.message : 'Failed to add condition');

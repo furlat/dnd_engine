@@ -1,6 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
 import { characterStore, characterActions } from '../../store/characterStore';
+import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
   ReadonlyAttackBonusCalculation,
   ReadonlyEquipmentSnapshot,
@@ -113,6 +114,8 @@ export function useAttack(): AttackData {
       setWeaponSelectOpen(false);
       const updatedEntity = await equipItem(snap.character.uuid, weaponId, slot);
       characterActions.setCharacter(updatedEntity);
+      // Trigger event queue refresh after equipping weapon
+      eventQueueActions.refresh();
     } catch (error: any) {
       console.error('Failed to equip weapon:', error);
       setError(error.response?.data?.detail ?? 'Failed to equip weapon');
@@ -126,6 +129,8 @@ export function useAttack(): AttackData {
       const updatedEntity = await unequipItem(snap.character.uuid, slot);
       characterActions.setCharacter(updatedEntity);
       handleMenuClose();
+      // Trigger event queue refresh after unequipping weapon
+      eventQueueActions.refresh();
     } catch (error: any) {
       console.error('Failed to unequip weapon:', error);
       setError(error.response?.data?.message ?? 'Failed to unequip weapon');

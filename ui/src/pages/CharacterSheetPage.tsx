@@ -130,7 +130,7 @@ const CharacterSheetPage: React.FC = () => {
             width: SIDEBAR_WIDTH,
             height: '100%',
             overflowY: 'auto',
-            transform: isCollapsed ? `translateX(-${SIDEBAR_WIDTH}) translateX(${COLLAPSED_WIDTH})` : 'none',
+            transform: isCollapsed ? `translateX(-${SIDEBAR_WIDTH})` : 'none',
             transition: 'transform 0.3s ease-in-out',
             borderRight: 1,
             borderColor: 'divider',
@@ -155,7 +155,7 @@ const CharacterSheetPage: React.FC = () => {
         <Paper
           sx={{
             position: 'absolute',
-            right: -40,
+            right: isCollapsed ? 0 : -40,
             top: '50%',
             transform: 'translateY(-50%)',
             width: COLLAPSED_WIDTH,
@@ -169,6 +169,8 @@ const CharacterSheetPage: React.FC = () => {
             borderTopLeftRadius: '0',
             borderBottomLeftRadius: '0',
             zIndex: 1,
+            boxShadow: 2,
+            transition: 'right 0.3s ease-in-out'
           }}
           onClick={() => setIsCollapsed(!isCollapsed)}
         >

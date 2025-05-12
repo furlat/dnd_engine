@@ -1,6 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback, useEffect } from 'react';
 import { characterStore, characterActions } from '../../store/characterStore';
+import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
   ReadonlyACBonusCalculation,
   ReadonlyEquipmentSnapshot,
@@ -117,6 +118,8 @@ export function useArmor(): ArmorData {
       setArmorSelectOpen(false);
       const equipResult = await equipItem(snap.character.uuid, armorId, 'Body');
       characterActions.setCharacter(equipResult);
+      // Trigger event queue refresh after equipping armor
+      eventQueueActions.refresh();
     } catch (error: any) {
       console.error('Failed to equip armor:', error);
       setError(error.response?.data?.detail ?? 'Failed to equip armor');
@@ -130,6 +133,8 @@ export function useArmor(): ArmorData {
       const unequipResult = await unequipItem(snap.character.uuid, 'Body');
       characterActions.setCharacter(unequipResult);
       handleMenuClose();
+      // Trigger event queue refresh after unequipping armor
+      eventQueueActions.refresh();
     } catch (error: any) {
       console.error('Failed to unequip armor:', error);
       setError(error.response?.data?.message ?? 'Failed to unequip armor');
