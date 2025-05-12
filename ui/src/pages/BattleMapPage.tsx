@@ -3,15 +3,12 @@ import { Box, useTheme } from '@mui/material';
 import CharacterSheetPage from './CharacterSheetPage';
 import EventQ from '../components/events/EventQ';
 import BattleMapCanvas from '../components/battlemap/BattleMapCanvas';
-
-const DEFAULT_MAP_SIZE = {
-  width: 30,
-  height: 20
-};
+import { fetchGridSnapshot } from '../api/tileApi';
 
 const BattleMapPage: React.FC = () => {
   const theme = useTheme();
   const [containerSize, setContainerSize] = React.useState({ width: 0, height: 0 });
+  const [gridSize, setGridSize] = React.useState({ width: 30, height: 20 }); // Default size
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   // Update container size when window resizes
@@ -30,6 +27,20 @@ const BattleMapPage: React.FC = () => {
     // Add resize listener
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  // Fetch grid dimensions from backend
+  React.useEffect(() => {
+    const fetchGridDimensions = async () => {
+      try {
+        const grid = await fetchGridSnapshot();
+        setGridSize({ width: grid.width, height: grid.height });
+      } catch (error) {
+        console.error('Error fetching grid dimensions:', error);
+      }
+    };
+
+    fetchGridDimensions();
   }, []);
 
   return (
@@ -59,8 +70,8 @@ const BattleMapPage: React.FC = () => {
       >
         {containerSize.width > 0 && containerSize.height > 0 && (
           <BattleMapCanvas 
-            width={DEFAULT_MAP_SIZE.width}
-            height={DEFAULT_MAP_SIZE.height}
+            width={gridSize.width}
+            height={gridSize.height}
             tileSize={32}
           />
         )}
