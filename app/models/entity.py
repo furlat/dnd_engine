@@ -23,7 +23,7 @@ class EntitySummary(BaseModel):
     armor_class: Optional[int] = None
     target_entity_uuid: Optional[UUID] = None
     position: Tuple[int,int]
-
+    sprite_name: Optional[str] = None
     @classmethod
     def from_engine(cls, entity):
         """Create a summary from an engine Entity object"""
@@ -46,7 +46,8 @@ class EntitySummary(BaseModel):
             max_hp=max_hp,
             armor_class=ac,
             target_entity_uuid=entity.target_entity_uuid,
-            position=entity.position
+            position=entity.position,
+            sprite_name=entity.sprite_name
         )
 
 # Add a ConditionSnapshot interface
@@ -69,6 +70,7 @@ class EntitySnapshot(BaseModel):
     target_entity_uuid: Optional[UUID] = None
     target_summary: Optional[EntitySummary] = None
     position: Tuple[int,int]
+    sprite_name: Optional[str] = None
     # Main blocks
     ability_scores: AbilityScoresSnapshot
     skill_set: SkillSetSnapshot
@@ -179,5 +181,6 @@ class EntitySnapshot(BaseModel):
             saving_throw_calculations=saving_throw_calculations,
             action_economy=ActionEconomySnapshot.from_engine(entity.action_economy, entity),
             active_conditions=active_conditions,
-            position=entity.position
+            position=entity.position,
+            sprite_name=entity.sprite_name
         )

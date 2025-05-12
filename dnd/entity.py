@@ -75,7 +75,7 @@ class EntityConfig(BaseModel):
     proficiency_bonus: int = Field(default=0,description="Proficiency bonus for the entity")
     proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
-
+    sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
     require interactions between blocks """
@@ -90,6 +90,7 @@ class Entity(BaseBlock):
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
     allow_events_conditions: bool = Field(default=True,description="If True, events and conditions will be allowed to be added to the block")
+    sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
     _entity_by_position: ClassVar[DefaultDict[Tuple[int,int], List['Entity']]] = defaultdict(list)
 
@@ -168,7 +169,8 @@ class Entity(BaseBlock):
                 senses=senses,
                 action_economy=action_economy,
                 proficiency_bonus=proficiency_bonus,
-                position=config.position
+                position=config.position,
+                sprite_name=config.sprite_name
             )
 
     def _set_position(self,new_position: Tuple[int,int]):

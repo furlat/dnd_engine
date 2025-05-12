@@ -47,11 +47,11 @@ def initialize_test_entities():
     
     # Create a warrior from circus_fighter.py
     warrior_uuid = uuid4()
-    warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Spiky Clown", position=(0,0))
+    warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Spiky Clown", position=(16,8),sprite_name="death_knight.png")
     
     # Create a second entity for testing
     rogue_uuid = uuid4()
-    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded Pirate",blinded=True, position=(1,1))
+    blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded Pirate",blinded=True, position=(17,9),sprite_name="deep_elf_fighter_new.png")
     warrior.senses.add_entity(rogue_uuid,blinded_rogue.senses.position)
     
     blinded_rogue.senses.add_entity(warrior_uuid,warrior.senses.position)
