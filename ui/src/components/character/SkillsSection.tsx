@@ -1,8 +1,10 @@
+/// <reference types="react" />
 import * as React from 'react';
+import type { ReactElement } from 'react';
 import {
   Box,
   Typography,
-  Grid,
+  GridLegacy as Grid,
   Paper,
   Chip,
   Dialog,
@@ -17,6 +19,9 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  IconButton,
+  CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { AdvantageStatus, CriticalStatus, AutoHitStatus } from '../../models/character';
@@ -30,7 +35,7 @@ const ModifierBreakdown: React.FC<{
   skill: ReadonlySkill; 
   calc?: any;
   showAdvantage?: boolean;
-}> = ({ skill, calc, showAdvantage = false }): JSX.Element => {
+}> = ({ skill, calc, showAdvantage = false }): ReactElement => {
   // Gather sections
   const extractChannels = (mv: any) => (mv && mv.channels ? mv.channels : []);
   const sections: { label: string; channels: any[] }[] = [];
@@ -125,14 +130,14 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
         {calc ? (
           <Grid container spacing={2}>
             {/* Left column */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} component="div">
               {/* Overview */}
               <Typography variant="h6" gutterBottom>
                 Overview
               </Typography>
               <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                 <Grid container spacing={2}>
-                  <Grid item xs={6}>
+                  <Grid item xs={6} component="div">
                     <Typography variant="body2" color="text.secondary">
                       Ability
                     </Typography>
@@ -140,7 +145,7 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
                       {calc.ability_name.toUpperCase()}
                     </Typography>
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={6} component="div">
                     <Typography variant="body2" color="text.secondary">
                       Final Modifier
                     </Typography>
@@ -230,7 +235,7 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
             </Grid>
 
             {/* Right column */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} component="div">
               <Typography variant="h6" gutterBottom>
                 Modifier Breakdown
               </Typography>
@@ -238,7 +243,7 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
             </Grid>
 
             {/* Debug full width */}
-            <Grid item xs={12}>
+            <Grid item xs={12} component="div">
               <Accordion sx={{ mt: 2 }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   Debug JSON
@@ -301,7 +306,7 @@ const SkillsSection: React.FC = () => {
           const proficient = isSkillProficient(skill);
           const expertise = hasSkillExpertise(skill);
           return (
-            <Grid item xs={6} sm={4} md={3} key={skill.name}>
+            <Grid item xs={6} sm={4} md={3} key={skill.name} component="div">
               <Paper
                 elevation={2}
                 sx={{

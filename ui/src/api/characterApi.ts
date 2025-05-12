@@ -5,6 +5,9 @@ import { EquipmentItem } from './types';
 // Update to point directly to FastAPI backend
 const API_BASE_URL = 'http://localhost:8000/api';
 
+// Position type
+export type Position = [number, number];
+
 // Common params for character fetching
 const DEFAULT_INCLUDE_PARAMS = {
   include_skill_calculations: true,
@@ -21,6 +24,32 @@ export const fetchEntitySummaries = async (): Promise<EntitySummary[]> => {
     return response.data;
   } catch (error) {
     console.error('Error fetching entity summaries:', error);
+    throw error;
+  }
+};
+
+// Fetch entities at a specific position
+export const fetchEntitiesAtPosition = async (x: number, y: number): Promise<EntitySummary[]> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/entities/position/${x}/${y}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching entities at position:', error);
+    throw error;
+  }
+};
+
+// Move entity to a new position
+export const moveEntity = async (entityId: string, position: Position): Promise<Character> => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/entities/${entityId}/move`,
+      { position },
+      { params: DEFAULT_INCLUDE_PARAMS }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error moving entity:', error);
     throw error;
   }
 };
