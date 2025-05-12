@@ -3,7 +3,7 @@ import {
   Box,
   Paper,
   Typography,
-  Grid,
+  GridLegacy as Grid,
   Dialog,
   DialogTitle,
   DialogContent,

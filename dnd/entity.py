@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable
+from typing import DefaultDict, Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
 from enum import Enum
@@ -91,6 +91,7 @@ class Entity(BaseBlock):
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
     allow_events_conditions: bool = Field(default=True,description="If True, events and conditions will be allowed to be added to the block")
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
+    _entity_by_position: ClassVar[DefaultDict[Tuple[int,int], List['Entity']]] = defaultdict(list)
 
     def __init__(self, **data):
         """
@@ -101,10 +102,25 @@ class Entity(BaseBlock):
         """
         super().__init__(**data)
         self.__class__._entity_registry[self.uuid] = self
+        self.__class__._entity_by_position[self.position].append(self)
+
+    @classmethod
+    def update_entity_position(cls, entity: 'Entity',new_position: Tuple[int,int]):
+        cls._entity_by_position[entity.position].remove(entity)
+        cls._entity_by_position[new_position].append(entity)
+        entity._set_position(new_position)
+
+    @classmethod
+    def register_entity(cls, entity: 'Entity'):
+        cls._entity_registry[entity.uuid] = entity
 
     @classmethod
     def get_all_entities(cls) -> List['Entity']:
         return list(cls._entity_registry.values())
+    
+    @classmethod
+    def get_all_entities_at_position(cls, position: Tuple[int,int]) -> List['Entity']:
+        return cls._entity_by_position[position]
     
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Entity']:
@@ -154,12 +170,16 @@ class Entity(BaseBlock):
                 proficiency_bonus=proficiency_bonus,
                 position=config.position
             )
-        
+
+    def _set_position(self,new_position: Tuple[int,int]):
+        """ move the entity to a new position without updating the registry  - should not be used directly"""
+        self.position = new_position
+        self.senses.position = new_position 
+
     def move(self,new_position: Tuple[int,int]):
         """ move the entity to a new position """
-        self.position = new_position
-        self.senses.position = new_position
-
+        
+        Entity.update_entity_position(self,new_position)
         
     def get_target_entity(self,copy: bool = False) -> Optional['Entity']:
         if self.target_entity_uuid is None:

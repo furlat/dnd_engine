@@ -12,6 +12,7 @@ import {
   IconButton,
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
   Tooltip,
 } from '@mui/material';
@@ -88,16 +89,15 @@ const ActiveConditionsBar: React.FC = () => {
           )}
           <List>
             {CONDITIONS_LIST.map(condition => (
-              <ListItem
+              <ListItemButton
                 key={condition.type}
-                button
                 onClick={() => handleAddCondition(condition.type)}
               >
                 <ListItemText 
                   primary={condition.name}
                   secondary={condition.description}
                 />
-              </ListItem>
+              </ListItemButton>
             ))}
           </List>
         </DialogContent>
