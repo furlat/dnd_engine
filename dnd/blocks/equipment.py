@@ -505,12 +505,25 @@ class Equipment(BaseBlock):
             return None
 
         return damage
+    
+    def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:
+        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
+            return self.weapon_main_hand.get_extra_damages()
+        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
+            return self.weapon_off_hand.get_extra_damages()
+        else:
+            return []
+    
  
-    def get_extra_attack_damage(self) -> List[Damage]:
-        damages = []
+    def get_extra_attack_damage(self, weapon_slot: Optional[WeaponSlot] = None) -> List[Damage]:
+        damages: List[Damage] = []
         for dice, dice_numbers, bonus, damage_type in zip(self.extra_attack_damage_dices, self.extra_attack_damage_dices_numbers, self.extra_attack_damage_bonus, self.extra_attack_damage_type):
             damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
-        return damages
+        print(f"len damages: {len(damages)} get_extra_attack_damage before returning")
+        if weapon_slot is not None:
+            return damages+self._get_extra_weapon_damages(weapon_slot)
+        else:
+            return damages
 
     def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> List[Damage]:
         if self.is_unarmed(weapon_slot):
@@ -520,7 +533,7 @@ class Equipment(BaseBlock):
             main_damage = self._get_main_weapon_damage(weapon_slot, ability_block)
             if main_damage is not None:
                 outs.append(main_damage)
-            outs.extend(self.get_extra_attack_damage())
+            outs.extend(self.get_extra_attack_damage(weapon_slot))
             return outs
         
     def get_main_damage_type(self, weapon_slot: WeaponSlot) -> DamageType:

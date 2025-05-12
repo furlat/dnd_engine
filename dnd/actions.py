@@ -187,9 +187,9 @@ class Attack(BaseAction):
             
             # Move to EFFECT phase for damage
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid)
-            attack_event = attack_event.phase_to(
+            attack_event = attack_event.post(
                 new_phase=EventPhase.EFFECT,
-                status_message="Dealing damage",
+                status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.damage_bonus.normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
                 damages=damages
             )
             
@@ -200,6 +200,11 @@ class Attack(BaseAction):
             # Apply damage if there is an attack outcome
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
                 damage_rolls = target_entity.take_damage(damages, attack_event.attack_outcome)
+                attack_event = attack_event.phase_to(
+                    new_phase=EventPhase.EFFECT,
+                    damage_rolls=damage_rolls,
+                    status_message=f"Damages taken: {[damage.total for damage in damage_rolls]}"
+                )
             else:
                 damage_rolls = None
                 
