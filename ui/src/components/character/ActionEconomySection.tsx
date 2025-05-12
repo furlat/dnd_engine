@@ -18,21 +18,23 @@ import {
   AccordionDetails,
   Divider,
   IconButton,
+  CircularProgress,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ReplayIcon from '@mui/icons-material/Replay';
 import StarIcon from '@mui/icons-material/Star';
-import { ActionEconomySnapshot, ModifiableValueSnapshot, NumericalModifierSnapshot } from '../../models/character';
-import { AdvantageStatus } from '../../models/character';
-
-interface ActionEconomySectionProps {
-  actionEconomy: ActionEconomySnapshot;
-}
+import RefreshIcon from '@mui/icons-material/Refresh';
+import type { ReadonlyModifiableValueSnapshot, ReadonlyModifier } from '../../models/readonly';
+import { AdvantageStatus } from '../../models/modifiers';
+import { useActionEconomy } from '../../hooks/character/useActionEconomy';
 
 // Reusable component for displaying ModifiableValue breakdowns
-const ValueBreakdown: React.FC<{ label: string; mv: ModifiableValueSnapshot }> = ({ label, mv }) => {
+const ValueBreakdown: React.FC<{ 
+  label: string; 
+  mv: ReadonlyModifiableValueSnapshot 
+}> = ({ label, mv }) => {
   const [showAdvantage, setShowAdvantage] = React.useState(false);
 
   return (
@@ -108,7 +110,7 @@ const ValueBreakdown: React.FC<{ label: string; mv: ModifiableValueSnapshot }> =
 };
 
 // Cost Summary component
-const CostSummary: React.FC<{ costs: NumericalModifierSnapshot[] }> = ({ costs }) => (
+const CostSummary: React.FC<{ costs: ReadonlyArray<ReadonlyModifier> }> = ({ costs }) => (
   <List dense>
     {costs.map((cost, idx) => (
       <ListItem key={idx}>
@@ -127,20 +129,19 @@ const CostSummary: React.FC<{ costs: NumericalModifierSnapshot[] }> = ({ costs }
   </List>
 );
 
-// Helper to calculate total cost
-const calculateTotalCost = (costs: NumericalModifierSnapshot[]): number => {
-  return costs.reduce((sum, cost) => sum + cost.value, 0);
-};
-
 // Movement Block Component
-const MovementBlock: React.FC<{ 
-  movement: ModifiableValueSnapshot; 
-  available: number;
-  base: number;
-  costs: NumericalModifierSnapshot[];
-}> = ({ movement, available, base, costs }) => {
-  const [open, setOpen] = React.useState(false);
-  const totalCost = calculateTotalCost(costs);
+const MovementBlock: React.FC = () => {
+  const { 
+    actionEconomy,
+    dialogState,
+    handleOpenDialog,
+    handleCloseDialog,
+    getMovementDetails
+  } = useActionEconomy();
+
+  if (!actionEconomy) return null;
+  const details = getMovementDetails();
+  if (!details) return null;
 
   return (
     <>
@@ -154,45 +155,50 @@ const MovementBlock: React.FC<{
           minWidth: '200px'
         }}
         elevation={3}
-        onClick={() => setOpen(true)}
+        onClick={() => handleOpenDialog('movement')}
       >
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <DirectionsRunIcon sx={{ mr: 1 }} />
           <Box>
             <Typography variant="subtitle2">Movement</Typography>
-            <Typography variant="h5">{available}/{base} ft.</Typography>
+            <Typography variant="h5">{details.available}/{details.base} ft.</Typography>
           </Box>
         </Box>
       </Paper>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={dialogState.movement} 
+        onClose={() => handleCloseDialog('movement')} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>Movement Details</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">Current / Base</Typography>
-                <Typography variant="h4">{available}/{base} ft.</Typography>
-                {totalCost !== 0 && (
+                <Typography variant="h4">{details.available}/{details.base} ft.</Typography>
+                {details.totalCost !== 0 && (
                   <Typography variant="h6" color="error" sx={{ mt: 1 }}>
-                    Total Cost: {totalCost}
+                    Total Cost: {details.totalCost}
                   </Typography>
                 )}
-                {costs.length > 0 && (
+                {actionEconomy.movement_costs.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2" color="text.secondary">Active Costs</Typography>
-                    <CostSummary costs={costs} />
+                    <CostSummary costs={actionEconomy.movement_costs} />
                   </Box>
                 )}
               </Box>
             </Grid>
             <Grid item xs={12} md={8}>
-              <ValueBreakdown label="Movement Modifiers" mv={movement} />
+              <ValueBreakdown label="Movement Modifiers" mv={actionEconomy.movement} />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Close</Button>
+          <Button onClick={() => handleCloseDialog('movement')}>Close</Button>
         </DialogActions>
       </Dialog>
     </>
@@ -200,24 +206,18 @@ const MovementBlock: React.FC<{
 };
 
 // Actions Block Component
-const ActionsBlock: React.FC<{ 
-  actions: ModifiableValueSnapshot;
-  bonusActions: ModifiableValueSnapshot;
-  availableActions: number;
-  availableBonusActions: number;
-  baseActions: number;
-  baseBonusActions: number;
-  actionCosts: NumericalModifierSnapshot[];
-  bonusActionCosts: NumericalModifierSnapshot[];
-}> = ({ 
-  actions, bonusActions, 
-  availableActions, availableBonusActions,
-  baseActions, baseBonusActions,
-  actionCosts, bonusActionCosts
-}) => {
-  const [open, setOpen] = React.useState(false);
-  const totalActionCost = calculateTotalCost(actionCosts);
-  const totalBonusActionCost = calculateTotalCost(bonusActionCosts);
+const ActionsBlock: React.FC = () => {
+  const { 
+    actionEconomy,
+    dialogState,
+    handleOpenDialog,
+    handleCloseDialog,
+    getActionsDetails
+  } = useActionEconomy();
+
+  if (!actionEconomy) return null;
+  const details = getActionsDetails();
+  if (!details) return null;
 
   return (
     <>
@@ -231,68 +231,81 @@ const ActionsBlock: React.FC<{
           minWidth: '200px'
         }}
         elevation={3}
-        onClick={() => setOpen(true)}
+        onClick={() => handleOpenDialog('actions')}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
           <PlayArrowIcon sx={{ mr: 1 }} />
           <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
             <Box>
               <Typography variant="subtitle2">Actions</Typography>
-              <Typography variant="h5">{availableActions}/{baseActions}</Typography>
+              <Typography variant="h5">
+                {details.availableActions}/{details.baseActions}
+              </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
               <Typography variant="subtitle2">Bonus Actions</Typography>
-              <Typography variant="h5">{availableBonusActions}/{baseBonusActions}</Typography>
+              <Typography variant="h5">
+                {details.availableBonusActions}/{details.baseBonusActions}
+              </Typography>
             </Box>
           </Box>
         </Box>
       </Paper>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={dialogState.actions} 
+        onClose={() => handleCloseDialog('actions')} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>Actions Details</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">Actions (Current / Base)</Typography>
-                <Typography variant="h4">{availableActions}/{baseActions}</Typography>
-                {totalActionCost !== 0 && (
+                <Typography variant="h4">
+                  {details.availableActions}/{details.baseActions}
+                </Typography>
+                {details.totalActionCost !== 0 && (
                   <Typography variant="h6" color="error" sx={{ mt: 1 }}>
-                    Total Cost: {totalActionCost}
+                    Total Cost: {details.totalActionCost}
                   </Typography>
                 )}
-                {actionCosts.length > 0 && (
+                {actionEconomy.action_costs.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2" color="text.secondary">Active Costs</Typography>
-                    <CostSummary costs={actionCosts} />
+                    <CostSummary costs={actionEconomy.action_costs} />
                   </Box>
                 )}
 
                 <Divider sx={{ my: 2 }} />
 
                 <Typography variant="subtitle2" color="text.secondary">Bonus Actions (Current / Base)</Typography>
-                <Typography variant="h4">{availableBonusActions}/{baseBonusActions}</Typography>
-                {totalBonusActionCost !== 0 && (
+                <Typography variant="h4">
+                  {details.availableBonusActions}/{details.baseBonusActions}
+                </Typography>
+                {details.totalBonusActionCost !== 0 && (
                   <Typography variant="h6" color="error" sx={{ mt: 1 }}>
-                    Total Cost: {totalBonusActionCost}
+                    Total Cost: {details.totalBonusActionCost}
                   </Typography>
                 )}
-                {bonusActionCosts.length > 0 && (
+                {actionEconomy.bonus_action_costs.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2" color="text.secondary">Active Costs</Typography>
-                    <CostSummary costs={bonusActionCosts} />
+                    <CostSummary costs={actionEconomy.bonus_action_costs} />
                   </Box>
                 )}
               </Box>
             </Grid>
             <Grid item xs={12} md={8}>
-              <ValueBreakdown label="Action Modifiers" mv={actions} />
-              <ValueBreakdown label="Bonus Action Modifiers" mv={bonusActions} />
+              <ValueBreakdown label="Action Modifiers" mv={actionEconomy.actions} />
+              <ValueBreakdown label="Bonus Action Modifiers" mv={actionEconomy.bonus_actions} />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Close</Button>
+          <Button onClick={() => handleCloseDialog('actions')}>Close</Button>
         </DialogActions>
       </Dialog>
     </>
@@ -300,14 +313,18 @@ const ActionsBlock: React.FC<{
 };
 
 // Reactions Block Component
-const ReactionsBlock: React.FC<{ 
-  reactions: ModifiableValueSnapshot; 
-  available: number;
-  base: number;
-  costs: NumericalModifierSnapshot[];
-}> = ({ reactions, available, base, costs }) => {
-  const [open, setOpen] = React.useState(false);
-  const totalCost = calculateTotalCost(costs);
+const ReactionsBlock: React.FC = () => {
+  const { 
+    actionEconomy,
+    dialogState,
+    handleOpenDialog,
+    handleCloseDialog,
+    getReactionsDetails
+  } = useActionEconomy();
+
+  if (!actionEconomy) return null;
+  const details = getReactionsDetails();
+  if (!details) return null;
 
   return (
     <>
@@ -321,45 +338,50 @@ const ReactionsBlock: React.FC<{
           minWidth: '200px'
         }}
         elevation={3}
-        onClick={() => setOpen(true)}
+        onClick={() => handleOpenDialog('reactions')}
       >
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <ReplayIcon sx={{ mr: 1 }} />
           <Box>
             <Typography variant="subtitle2">Reactions</Typography>
-            <Typography variant="h5">{available}/{base}</Typography>
+            <Typography variant="h5">{details.available}/{details.base}</Typography>
           </Box>
         </Box>
       </Paper>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={dialogState.reactions} 
+        onClose={() => handleCloseDialog('reactions')} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>Reactions Details</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">Current / Base</Typography>
-                <Typography variant="h4">{available}/{base}</Typography>
-                {totalCost !== 0 && (
+                <Typography variant="h4">{details.available}/{details.base}</Typography>
+                {details.totalCost !== 0 && (
                   <Typography variant="h6" color="error" sx={{ mt: 1 }}>
-                    Total Cost: {totalCost}
+                    Total Cost: {details.totalCost}
                   </Typography>
                 )}
-                {costs.length > 0 && (
+                {actionEconomy.reaction_costs.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2" color="text.secondary">Active Costs</Typography>
-                    <CostSummary costs={costs} />
+                    <CostSummary costs={actionEconomy.reaction_costs} />
                   </Box>
                 )}
               </Box>
             </Grid>
             <Grid item xs={12} md={8}>
-              <ValueBreakdown label="Reaction Modifiers" mv={reactions} />
+              <ValueBreakdown label="Reaction Modifiers" mv={actionEconomy.reactions} />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Close</Button>
+          <Button onClick={() => handleCloseDialog('reactions')}>Close</Button>
         </DialogActions>
       </Dialog>
     </>
@@ -367,44 +389,36 @@ const ReactionsBlock: React.FC<{
 };
 
 // Main Action Economy Section
-const ActionEconomySection: React.FC<ActionEconomySectionProps> = ({ actionEconomy }) => {
+const ActionEconomySection: React.FC = () => {
+  const { actionEconomy, isRefreshing, handleRefreshActionEconomy } = useActionEconomy();
+
+  if (!actionEconomy) return null;
+
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>
-        Action Economy
-      </Typography>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+        <Typography variant="h5">Action Economy</Typography>
+        <IconButton 
+          onClick={handleRefreshActionEconomy} 
+          disabled={isRefreshing}
+          color="primary"
+        >
+          {isRefreshing ? <CircularProgress size={24} /> : <RefreshIcon />}
+        </IconButton>
+      </Box>
       <Grid container spacing={2} alignItems="stretch">
         <Grid item xs={12} md={4}>
-          <MovementBlock 
-            movement={actionEconomy.movement} 
-            available={actionEconomy.available_movement}
-            base={actionEconomy.base_movement}
-            costs={actionEconomy.movement_costs}
-          />
+          <MovementBlock />
         </Grid>
         <Grid item xs={12} md={4}>
-          <ActionsBlock 
-            actions={actionEconomy.actions}
-            bonusActions={actionEconomy.bonus_actions}
-            availableActions={actionEconomy.available_actions}
-            availableBonusActions={actionEconomy.available_bonus_actions}
-            baseActions={actionEconomy.base_actions}
-            baseBonusActions={actionEconomy.base_bonus_actions}
-            actionCosts={actionEconomy.action_costs}
-            bonusActionCosts={actionEconomy.bonus_action_costs}
-          />
+          <ActionsBlock />
         </Grid>
         <Grid item xs={12} md={4}>
-          <ReactionsBlock 
-            reactions={actionEconomy.reactions} 
-            available={actionEconomy.available_reactions}
-            base={actionEconomy.base_reactions}
-            costs={actionEconomy.reaction_costs}
-          />
+          <ReactionsBlock />
         </Grid>
       </Grid>
     </Box>
   );
 };
 
-export default ActionEconomySection; 
+export default React.memo(ActionEconomySection); 
