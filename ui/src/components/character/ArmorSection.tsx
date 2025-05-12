@@ -15,14 +15,17 @@ import {
   AccordionDetails,
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
-  Grid,
+  GridLegacy as Grid,
   IconButton,
   Menu,
   MenuItem,
   ListItemIcon,
   Alert,
-  Snackbar
+  Snackbar,
+  CircularProgress,
+  Tooltip
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -267,7 +270,7 @@ const ArmorSection: React.FC = () => {
         <DialogContent dividers>
           <Grid container spacing={2}>
             {/* Left column */}
-            <Grid item xs={12} md={6}>
+            <Grid item container xs={12} md={6}>
               <Typography variant="h6" gutterBottom>
                 Overview
               </Typography>
@@ -315,7 +318,7 @@ const ArmorSection: React.FC = () => {
             </Grid>
 
             {/* Right column */}
-            <Grid item xs={12} md={6}>
+            <Grid item container xs={12} md={6}>
               <Typography variant="h6" gutterBottom>
                 Modifier Breakdown
               </Typography>
@@ -363,8 +366,7 @@ const ArmorSection: React.FC = () => {
           )}
             <List>
               {availableArmor.map((armor) => (
-                <ListItem 
-                  button 
+                <ListItemButton 
                   key={armor.uuid}
                   onClick={() => handleArmorSelect(armor.uuid)}
                 >
@@ -376,9 +378,9 @@ const ArmorSection: React.FC = () => {
                         undefined
                     }
                   />
-                </ListItem>
+                </ListItemButton>
               ))}
-            {availableArmor.length === 0 && (
+              {availableArmor.length === 0 && (
                 <ListItem>
                   <ListItemText primary="No armor available" />
                 </ListItem>

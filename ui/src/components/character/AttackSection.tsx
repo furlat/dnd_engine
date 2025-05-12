@@ -9,7 +9,7 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  Grid,
+  GridLegacy as Grid,
   Divider,
   IconButton,
   Menu,
@@ -17,12 +17,15 @@ import {
   ListItemIcon,
   ListItemText,
   List,
-  ListItem,
+  ListItemButton,
   Accordion,
   AccordionSummary,
   AccordionDetails,
   Alert,
   Snackbar,
+  ListItem,
+  CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -549,11 +552,7 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
           )}
             <List>
               {availableWeapons.map((weapon) => (
-                <ListItem 
-                  button 
-                  key={weapon.uuid}
-                onClick={() => handleWeaponSelect(weapon.uuid, slot)}
-                >
+                <ListItemButton key={weapon.uuid} onClick={() => handleWeaponSelect(weapon.uuid, slot)}>
                   <ListItemText 
                     primary={weapon.name} 
                     secondary={
@@ -562,12 +561,12 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                         undefined
                     }
                   />
-                </ListItem>
+                </ListItemButton>
               ))}
             {availableWeapons.length === 0 && (
-                <ListItem>
+                <ListItemButton>
                   <ListItemText primary="No weapons available" />
-                </ListItem>
+                </ListItemButton>
               )}
             </List>
         </DialogContent>

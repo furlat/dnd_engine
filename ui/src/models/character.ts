@@ -23,6 +23,9 @@ export type {
   ModifiableValueSnapshot
 };
 
+// Position type
+export type Position = [number, number];
+
 // Lightweight entity summary for combat UI
 export interface EntitySummary {
     uuid: UUID;
@@ -31,6 +34,7 @@ export interface EntitySummary {
     max_hp: number;
     armor_class?: number;
     target_entity_uuid?: UUID;
+    position: Position;
 }
 
 // Channel interfaces
@@ -343,6 +347,7 @@ export interface Character {
   description?: string;
   target_entity_uuid?: UUID;
   target_summary?: EntitySummary;
+  position: Position;
   
   // Main blocks
   ability_scores: AbilityScoresSnapshot;

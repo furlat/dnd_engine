@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import List, Dict, Optional, Union, Literal
+from typing import List, Dict, Optional, Union, Literal, Tuple
 from uuid import UUID
 from enum import Enum
 from pydantic import BaseModel
@@ -22,6 +22,14 @@ from dnd.actions import Attack
 
 # Import dependencies
 from app.api.deps import get_entity
+
+# Position-related models
+class Position(BaseModel):
+    x: int
+    y: int
+
+class MoveRequest(BaseModel):
+    position: Tuple[int, int]
 
 # Create router
 router = APIRouter(
@@ -489,3 +497,48 @@ async def execute_attack(
             include_target_summary=True
         )
     } 
+
+@router.get("/position/{x}/{y}", response_model=List[EntitySummary])
+async def get_entities_at_position(x: int, y: int):
+    """Get all entities at a specific position"""
+    try:
+        entities = Entity.get_all_entities_at_position((x, y))
+        return [EntitySummary.from_engine(entity) for entity in entities]
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to get entities at position",
+                "message": str(e),
+                "position": (x, y)
+            }
+        )
+
+@router.post("/{entity_uuid}/move", response_model=EntitySnapshot)
+async def move_entity(
+    request: MoveRequest,
+    entity: Entity = Depends(get_entity),
+    include_skill_calculations: bool = False,
+    include_attack_calculations: bool = False,
+    include_ac_calculation: bool = False,
+    include_saving_throw_calculations: bool = False
+):
+    """Move an entity to a new position"""
+    try:
+        entity.move(request.position)
+        return EntitySnapshot.from_engine(
+            entity,
+            include_skill_calculations=include_skill_calculations,
+            include_attack_calculations=include_attack_calculations,
+            include_ac_calculation=include_ac_calculation,
+            include_saving_throw_calculations=include_saving_throw_calculations
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to move entity",
+                "message": str(e),
+                "position": request.position
+            }
+        ) 

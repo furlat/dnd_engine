@@ -1,6 +1,6 @@
 # dnd/interfaces/entity.py (updated for equipment)
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Tuple
 from uuid import UUID
 
 from app.models.abilities import AbilityScoresSnapshot
@@ -22,6 +22,7 @@ class EntitySummary(BaseModel):
     max_hp: int
     armor_class: Optional[int] = None
     target_entity_uuid: Optional[UUID] = None
+    position: Tuple[int,int]
 
     @classmethod
     def from_engine(cls, entity):
@@ -44,7 +45,8 @@ class EntitySummary(BaseModel):
             current_hp=current_hp,
             max_hp=max_hp,
             armor_class=ac,
-            target_entity_uuid=entity.target_entity_uuid
+            target_entity_uuid=entity.target_entity_uuid,
+            position=entity.position
         )
 
 # Add a ConditionSnapshot interface
@@ -66,7 +68,7 @@ class EntitySnapshot(BaseModel):
     description: Optional[str] = None
     target_entity_uuid: Optional[UUID] = None
     target_summary: Optional[EntitySummary] = None
-    
+    position: Tuple[int,int]
     # Main blocks
     ability_scores: AbilityScoresSnapshot
     skill_set: SkillSetSnapshot
@@ -176,5 +178,6 @@ class EntitySnapshot(BaseModel):
             health=HealthSnapshot.from_engine(entity.health, entity),
             saving_throw_calculations=saving_throw_calculations,
             action_economy=ActionEconomySnapshot.from_engine(entity.action_economy, entity),
-            active_conditions=active_conditions
+            active_conditions=active_conditions,
+            position=entity.position
         )
