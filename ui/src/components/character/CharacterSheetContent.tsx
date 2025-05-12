@@ -20,43 +20,39 @@ const CharacterSheetContent: React.FC = () => {
       </Fade>
 
       {/* Abilities */}
-        <Fade in={true} timeout={150}>
-          <div>
+      <Fade in={true} timeout={150}>
+        <div>
           <AbilityScoresBlock />
-          </div>
-        </Fade>
+        </div>
+      </Fade>
 
       {/* Saving Throws */}
-        <Fade in={true} timeout={150}>
-          <div>
+      <Fade in={true} timeout={150}>
+        <div>
           <SavingThrowsSection />
-          </div>
-        </Fade>
+        </div>
+      </Fade>
 
-      {/* Health, Armor & Attack side-by-side */}
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <Fade in={true} timeout={150}>
-                <div>
-                <HealthSection />
-                </div>
-              </Fade>
-            <Fade in={true} timeout={150}>
-              <div>
-                <ArmorSection />
-              </div>
-            </Fade>
-          </Box>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Fade in={true} timeout={150}>
-            <div>
-              <AttackSection />
-            </div>
-          </Fade>
-        </Grid>
-      </Grid>
+      {/* Health */}
+      <Fade in={true} timeout={150}>
+        <div>
+          <HealthSection />
+        </div>
+      </Fade>
+
+      {/* Armor */}
+      <Fade in={true} timeout={150}>
+        <div>
+          <ArmorSection />
+        </div>
+      </Fade>
+
+      {/* Attack */}
+      <Fade in={true} timeout={150}>
+        <div>
+          <AttackSection />
+        </div>
+      </Fade>
 
       {/* Action Economy */}
       <Fade in={true} timeout={150}>
@@ -66,11 +62,11 @@ const CharacterSheetContent: React.FC = () => {
       </Fade>
 
       {/* Skills */}
-        <Fade in={true} timeout={150}>
-          <div>
+      <Fade in={true} timeout={150}>
+        <div>
           <SkillsSection />
-          </div>
-        </Fade>
+        </div>
+      </Fade>
     </Box>
   );
 };

@@ -24,7 +24,7 @@ type RouteParams = {
   characterId?: string;
 }
 
-const SIDEBAR_WIDTH = '970px';
+const SIDEBAR_WIDTH = '922px';
 const COLLAPSED_WIDTH = '40px';
 
 const CharacterSheetPage: React.FC = () => {
