@@ -178,18 +178,18 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
               {weaponName}
             </Typography>
             {/* Combat Status Chips */}
-            <Chip 
-              size="small" 
+              <Chip 
+                size="small" 
               label={calc.total_bonus.advantage === AdvantageStatus.ADVANTAGE ? 'Advantage' :
                      calc.total_bonus.advantage === AdvantageStatus.DISADVANTAGE ? 'Disadvantage' : 'N/A'}
               color={calc.total_bonus.advantage === AdvantageStatus.ADVANTAGE ? 'success' :
                      calc.total_bonus.advantage === AdvantageStatus.DISADVANTAGE ? 'error' : 'default'}
-              onClick={(e) => {
-                e.stopPropagation();
+                onClick={(e) => {
+                  e.stopPropagation();
                 handleDetailModeChange('advantage');
                 handleOpenDialog();
-              }}
-            />
+                }}
+              />
             {calc.total_bonus.auto_hit === AutoHitStatus.AUTOHIT && (
               <Chip size="small" label="Auto Hit" color="info" />
             )}
@@ -254,31 +254,31 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
       </Paper>
 
       {/* Menu */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={handleMenuClose}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <MenuItem onClick={() => {
-          handleMenuClose();
-          handleWeaponSelectOpen();
-        }}>
-          <ListItemIcon>
-            <SwapHorizIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Change Weapon</ListItemText>
-        </MenuItem>
-        <MenuItem 
-          onClick={() => handleUnequipWeapon(slot)}
-          disabled={calc.is_unarmed}
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={handleMenuClose}
+          onClick={(e) => e.stopPropagation()}
         >
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Unequip</ListItemText>
-        </MenuItem>
-      </Menu>
+          <MenuItem onClick={() => {
+            handleMenuClose();
+          handleWeaponSelectOpen();
+          }}>
+            <ListItemIcon>
+              <SwapHorizIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Change Weapon</ListItemText>
+          </MenuItem>
+          <MenuItem 
+          onClick={() => handleUnequipWeapon(slot)}
+            disabled={calc.is_unarmed}
+          >
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Unequip</ListItemText>
+          </MenuItem>
+        </Menu>
 
       {/* Attack Details Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
@@ -483,11 +483,11 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
                         <Typography variant="body2" color="text.secondary">
                           {ch.name}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="bold">
+                </Typography>
+                          <Typography variant="body2" fontWeight="bold">
                           {ch.critical_status}
-                        </Typography>
-                      </Box>
+                          </Typography>
+                        </Box>
                       {idx < calc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
                     </React.Fragment>
                   ))}
@@ -507,7 +507,7 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                       </Box>
                       {idx < calc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
                     </React.Fragment>
-                  ))}
+                ))}
                 </Paper>
               </Grid>
 
@@ -547,29 +547,29 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
               {error}
             </Typography>
           )}
-          <List>
-            {availableWeapons.map((weapon) => (
-              <ListItem 
-                button 
-                key={weapon.uuid}
+            <List>
+              {availableWeapons.map((weapon) => (
+                <ListItem 
+                  button 
+                  key={weapon.uuid}
                 onClick={() => handleWeaponSelect(weapon.uuid, slot)}
-              >
-                <ListItemText 
-                  primary={weapon.name} 
-                  secondary={
-                    'damage_dice' in weapon ? 
-                      `${weapon.dice_numbers}d${weapon.damage_dice} ${weapon.damage_type}` : 
-                      undefined
-                  }
-                />
-              </ListItem>
-            ))}
+                >
+                  <ListItemText 
+                    primary={weapon.name} 
+                    secondary={
+                      'damage_dice' in weapon ? 
+                        `${weapon.dice_numbers}d${weapon.damage_dice} ${weapon.damage_type}` : 
+                        undefined
+                    }
+                  />
+                </ListItem>
+              ))}
             {availableWeapons.length === 0 && (
-              <ListItem>
-                <ListItemText primary="No weapons available" />
-              </ListItem>
-            )}
-          </List>
+                <ListItem>
+                  <ListItemText primary="No weapons available" />
+                </ListItem>
+              )}
+            </List>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleWeaponSelectClose}>

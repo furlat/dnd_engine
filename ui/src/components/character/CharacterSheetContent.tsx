@@ -20,28 +20,28 @@ const CharacterSheetContent: React.FC = () => {
       </Fade>
 
       {/* Abilities */}
-      <Fade in={true} timeout={150}>
-        <div>
+        <Fade in={true} timeout={150}>
+          <div>
           <AbilityScoresBlock />
-        </div>
-      </Fade>
+          </div>
+        </Fade>
 
       {/* Saving Throws */}
-      <Fade in={true} timeout={150}>
-        <div>
+        <Fade in={true} timeout={150}>
+          <div>
           <SavingThrowsSection />
-        </div>
-      </Fade>
+          </div>
+        </Fade>
 
       {/* Health, Armor & Attack side-by-side */}
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <Fade in={true} timeout={150}>
-              <div>
+              <Fade in={true} timeout={150}>
+                <div>
                 <HealthSection />
-              </div>
-            </Fade>
+                </div>
+              </Fade>
             <Fade in={true} timeout={150}>
               <div>
                 <ArmorSection />
@@ -66,11 +66,11 @@ const CharacterSheetContent: React.FC = () => {
       </Fade>
 
       {/* Skills */}
-      <Fade in={true} timeout={150}>
-        <div>
+        <Fade in={true} timeout={150}>
+          <div>
           <SkillsSection />
-        </div>
-      </Fade>
+          </div>
+        </Fade>
     </Box>
   );
 };

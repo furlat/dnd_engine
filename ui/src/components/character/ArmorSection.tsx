@@ -230,31 +230,31 @@ const ArmorSection: React.FC = () => {
       </Paper>
 
       {/* Menu */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={handleMenuClose}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <MenuItem onClick={() => {
-          handleMenuClose();
-          handleArmorSelectOpen();
-        }}>
-          <ListItemIcon>
-            <SwapHorizIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Change Armor</ListItemText>
-        </MenuItem>
-        <MenuItem 
-          onClick={handleUnequipArmor}
-          disabled={!equipment.body_armor}
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={handleMenuClose}
+          onClick={(e) => e.stopPropagation()}
         >
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Unequip</ListItemText>
-        </MenuItem>
-      </Menu>
+          <MenuItem onClick={() => {
+            handleMenuClose();
+          handleArmorSelectOpen();
+          }}>
+            <ListItemIcon>
+              <SwapHorizIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Change Armor</ListItemText>
+          </MenuItem>
+          <MenuItem 
+          onClick={handleUnequipArmor}
+            disabled={!equipment.body_armor}
+          >
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Unequip</ListItemText>
+          </MenuItem>
+        </Menu>
 
       {/* AC Details Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
@@ -334,8 +334,8 @@ const ArmorSection: React.FC = () => {
           <Button 
             onClick={() => {
               handleDetailModeChange(detailMode === 'armor' ? 'advantage' : 
-                                  detailMode === 'advantage' ? 'critical' :
-                                  detailMode === 'critical' ? 'auto_hit' : 'armor');
+                          detailMode === 'advantage' ? 'critical' :
+                          detailMode === 'critical' ? 'auto_hit' : 'armor');
             }}
             color="primary"
           >
@@ -361,29 +361,29 @@ const ArmorSection: React.FC = () => {
               {error}
             </Typography>
           )}
-          <List>
-            {availableArmor.map((armor) => (
-              <ListItem 
-                button 
-                key={armor.uuid}
-                onClick={() => handleArmorSelect(armor.uuid)}
-              >
-                <ListItemText 
-                  primary={armor.name} 
-                  secondary={
-                    'type' in armor ? 
-                      `${formatArmorType(armor.type)} - AC ${armor.ac.normalized_score} (Max Dex ${armor.max_dex_bonus.normalized_score})` : 
-                      undefined
-                  }
-                />
-              </ListItem>
-            ))}
+            <List>
+              {availableArmor.map((armor) => (
+                <ListItem 
+                  button 
+                  key={armor.uuid}
+                  onClick={() => handleArmorSelect(armor.uuid)}
+                >
+                  <ListItemText 
+                    primary={armor.name} 
+                    secondary={
+                      'type' in armor ? 
+                        `${formatArmorType(armor.type)} - AC ${armor.ac.normalized_score} (Max Dex ${armor.max_dex_bonus.normalized_score})` : 
+                        undefined
+                    }
+                  />
+                </ListItem>
+              ))}
             {availableArmor.length === 0 && (
-              <ListItem>
-                <ListItemText primary="No armor available" />
-              </ListItem>
-            )}
-          </List>
+                <ListItem>
+                  <ListItemText primary="No armor available" />
+                </ListItem>
+              )}
+            </List>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleArmorSelectClose}>
