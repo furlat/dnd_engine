@@ -12,6 +12,40 @@ from app.models.saving_throws import SavingThrowSetSnapshot, SavingThrowBonusCal
 from app.models.health import HealthSnapshot
 from app.models.action_economy import ActionEconomySnapshot
 from dnd.core.base_conditions import DurationType
+from dnd.entity import Entity
+
+class EntitySummary(BaseModel):
+    """Lightweight summary of an entity's core stats"""
+    uuid: UUID
+    name: str
+    current_hp: int
+    max_hp: int
+    armor_class: Optional[int] = None
+    target_entity_uuid: Optional[UUID] = None
+
+    @classmethod
+    def from_engine(cls, entity):
+        """Create a summary from an engine Entity object"""
+        # Get current and max HP
+        con_modifier = entity.ability_scores.get_ability("constitution").get_combined_values()
+        current_hp = entity.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
+        max_hp = entity.health.get_max_hit_dices_points(constitution_modifier=con_modifier.normalized_score) + entity.health.max_hit_points_bonus.score
+        
+        # Get AC using the proper calculation method
+        try:
+            ac_value = entity.ac_bonus()
+            ac = ac_value.normalized_score if hasattr(ac_value, "normalized_score") else None
+        except Exception:
+            ac = None
+        
+        return cls(
+            uuid=entity.uuid,
+            name=entity.name,
+            current_hp=current_hp,
+            max_hp=max_hp,
+            armor_class=ac,
+            target_entity_uuid=entity.target_entity_uuid
+        )
 
 # Add a ConditionSnapshot interface
 class ConditionSnapshot(BaseModel):
@@ -31,6 +65,7 @@ class EntitySnapshot(BaseModel):
     name: str
     description: Optional[str] = None
     target_entity_uuid: Optional[UUID] = None
+    target_summary: Optional[EntitySummary] = None
     
     # Main blocks
     ability_scores: AbilityScoresSnapshot
@@ -55,7 +90,9 @@ class EntitySnapshot(BaseModel):
     active_conditions: Dict[str, ConditionSnapshot] = Field(default_factory=dict)
     
     @classmethod
-    def from_engine(cls, entity, include_skill_calculations=False, include_attack_calculations=False, include_ac_calculation=False, include_saving_throw_calculations=False):
+    def from_engine(cls, entity, include_skill_calculations=False, include_attack_calculations=False, 
+                   include_ac_calculation=False, include_saving_throw_calculations=False,
+                   include_target_summary=False):
         """
         Create a snapshot from an engine Entity object
         
@@ -65,6 +102,7 @@ class EntitySnapshot(BaseModel):
             include_attack_calculations: Whether to include detailed attack calculations
             include_ac_calculation: Whether to include detailed AC calculation
             include_saving_throw_calculations: Whether to include detailed saving throw calculations
+            include_target_summary: Whether to include target entity summary
         """
         # Create skill calculations if requested
         skill_calculations = {}
@@ -113,12 +151,20 @@ class EntitySnapshot(BaseModel):
                 source_entity_uuid=condition.source_entity_uuid,
                 applied=condition.applied
             )
+
+        # Get target summary if requested
+        target_summary = None
+        if include_target_summary and entity.target_entity_uuid:
+            target_entity = Entity.get(entity.target_entity_uuid)
+            if target_entity:
+                target_summary = EntitySummary.from_engine(target_entity)
         
         return cls(
             uuid=entity.uuid,
             name=entity.name,
             description=entity.description,
             target_entity_uuid=entity.target_entity_uuid,
+            target_summary=target_summary,
             ability_scores=AbilityScoresSnapshot.from_engine(entity.ability_scores),
             skill_set=SkillSetSnapshot.from_engine(entity.skill_set, entity),
             equipment=EquipmentSnapshot.from_engine(entity.equipment, entity=entity),
@@ -131,37 +177,4 @@ class EntitySnapshot(BaseModel):
             saving_throw_calculations=saving_throw_calculations,
             action_economy=ActionEconomySnapshot.from_engine(entity.action_economy, entity),
             active_conditions=active_conditions
-        )
-
-class EntitySummary(BaseModel):
-    """Lightweight summary of an entity's core stats"""
-    uuid: UUID
-    name: str
-    current_hp: int
-    max_hp: int
-    armor_class: Optional[int] = None
-    target_entity_uuid: Optional[UUID] = None
-
-    @classmethod
-    def from_engine(cls, entity):
-        """Create a summary from an engine Entity object"""
-        # Get current and max HP
-        con_modifier = entity.ability_scores.get_ability("constitution").get_combined_values()
-        current_hp = entity.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
-        max_hp = entity.health.get_max_hit_dices_points(constitution_modifier=con_modifier.normalized_score) + entity.health.max_hit_points_bonus.score
-        
-        # Get AC using the proper calculation method
-        try:
-            ac_value = entity.ac_bonus()
-            ac = ac_value.normalized_score if hasattr(ac_value, "normalized_score") else None
-        except Exception:
-            ac = None
-        
-        return cls(
-            uuid=entity.uuid,
-            name=entity.name,
-            current_hp=current_hp,
-            max_hp=max_hp,
-            armor_class=ac,
-            target_entity_uuid=entity.target_entity_uuid
         )

@@ -1,23 +1,26 @@
 import axios from 'axios';
-import { Character, EntitySummary } from '../models/character';
+import { Character } from '../models/character';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
+// Common params for character fetching
+const DEFAULT_INCLUDE_PARAMS = {
+  include_skill_calculations: true,
+  include_saving_throw_calculations: true,
+  include_ac_calculation: true,
+  include_attack_calculations: true,
+  include_target_summary: true
+};
+
 export interface AttackResult {
   attacker: Character;
-  target: EntitySummary;
   event: any; // The event details
 }
 
 export const setEntityTarget = async (entityId: string, targetId: string): Promise<Character> => {
   try {
     const response = await axios.post(`${API_BASE_URL}/entities/${entityId}/target/${targetId}`, null, {
-      params: {
-        include_skill_calculations: true,
-        include_saving_throw_calculations: true,
-        include_ac_calculation: true,
-        include_attack_calculations: true
-      }
+      params: DEFAULT_INCLUDE_PARAMS
     });
     return response.data;
   } catch (error) {
@@ -34,14 +37,13 @@ export const executeAttack = async (
 ): Promise<AttackResult> => {
   try {
     const response = await axios.post(
-      `${API_BASE_URL}/events/entity/${entityId}/attack/${targetId}`,
+      `${API_BASE_URL}/entities/${entityId}/attack/${targetId}`,
       null,
       {
         params: {
-          weaponSlot,
-          attackName,
-          include_attacker: true,
-          include_target: true
+          ...DEFAULT_INCLUDE_PARAMS,
+          weapon_slot: weaponSlot,
+          attack_name: attackName
         }
       }
     );

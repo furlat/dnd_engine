@@ -1,4 +1,27 @@
-import { UUID } from './common';
+import {
+  AdvantageStatus,
+  CriticalStatus,
+  AutoHitStatus
+} from './modifiers';
+
+import type {
+  Modifier,
+  ModifierChannel,
+  ModifiableValueSnapshot
+} from './modifiers';
+
+// Type alias for UUID
+export type UUID = string;
+
+// Re-export enums as values
+export { AdvantageStatus, CriticalStatus, AutoHitStatus };
+
+// Re-export types from modifiers
+export type {
+  Modifier,
+  ModifierChannel,
+  ModifiableValueSnapshot
+};
 
 // Lightweight entity summary for combat UI
 export interface EntitySummary {
@@ -10,64 +33,8 @@ export interface EntitySummary {
     target_entity_uuid?: UUID;
 }
 
-// Modifier interfaces
-export interface Modifier {
-  uuid: UUID;
-  name: string;
-  value: number;
-  source_entity_name?: string;
-}
-
-// Define enums to match backend exactly
-export enum AdvantageStatus {
-    NONE = "None",
-    ADVANTAGE = "Advantage",
-    DISADVANTAGE = "Disadvantage"
-}
-
-export enum CriticalStatus {
-    NONE = "None",
-    AUTOCRIT = "Autocrit",
-    NOCRIT = "Critical Immune"
-}
-
-export enum AutoHitStatus {
-    NONE = "None",
-    AUTOHIT = "Autohit",
-    AUTOMISS = "Automiss"
-}
-
 // Channel interfaces
-export interface ModifierChannel {
-  name: string;
-  score: number;
-  normalized_score: number;
-  value_modifiers: Array<{
-    name: string;
-    value: number;
-    source_entity_name?: string;
-  }>;
-  advantage_modifiers: Array<{
-    name: string;
-    value: AdvantageStatus;
-    source_entity_name?: string;
-  }>;
-  advantage_status: AdvantageStatus;
-  critical_modifiers: Array<{
-    name: string;
-    value: CriticalStatus;
-    source_entity_name?: string;
-  }>;
-  critical_status: CriticalStatus;
-  auto_hit_modifiers: Array<{
-    name: string;
-    value: AutoHitStatus;
-    source_entity_name?: string;
-  }>;
-  auto_hit_status: AutoHitStatus;
-}
-
-// Ability scores interfaces
+// AbilityScore interfaces
 export interface AbilityScore {
   name: string;
   score: number;
@@ -230,25 +197,9 @@ export interface AttackBonusCalculationSnapshot {
   target_entity_uuid?: UUID;
   total_bonus: ModifiableValueSnapshot;
   final_modifier: number;
-  advantage_status: string;  // 'NONE' | 'ADVANTAGE' | 'DISADVANTAGE'
-  auto_hit_status: string;   // 'NONE' | 'AUTO_HIT' | 'AUTO_MISS'
-  critical_status: string;   // 'NONE' | 'ALWAYS_CRIT' | 'NEVER_CRIT'
-}
-
-// Update interfaces to use these enums
-export interface ModifiableValueSnapshot {
-  name: string;
-  uuid: UUID;
-  score: number;
-  normalized_score: number;
-  base_modifier?: Modifier;
-  channels: ModifierChannel[];
-  advantage: AdvantageStatus;
-  critical: CriticalStatus;
-  auto_hit: AutoHitStatus;
-  outgoing_advantage: AdvantageStatus;
-  outgoing_critical: CriticalStatus;
-  outgoing_auto_hit: AutoHitStatus;
+  advantage_status: AdvantageStatus;
+  auto_hit_status: AutoHitStatus;
+  critical_status: CriticalStatus;
 }
 
 // Health interfaces
@@ -391,6 +342,7 @@ export interface Character {
   name: string;
   description?: string;
   target_entity_uuid?: UUID;
+  target_summary?: EntitySummary;
   
   // Main blocks
   ability_scores: AbilityScoresSnapshot;
