@@ -293,13 +293,16 @@ class Entity(BaseBlock):
 
     
     def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName) -> ModifiableValue:
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
         target_entity = None
         if self.target_entity_uuid:
             target_entity = self.get_target_entity(copy=True)
             assert isinstance(target_entity, Entity)
-            target_entity.set_target_entity(self.uuid)
+            if target_entity.target_entity_uuid != self.uuid:
+                target_entity.set_target_entity(self.uuid)
             saving_throw_bonuses_target = target_entity._get_bonuses_for_saving_throw(ability_name)
 
         saving_throw_bonuses_source =self._get_bonuses_for_saving_throw(ability_name)
@@ -307,19 +310,24 @@ class Entity(BaseBlock):
             for mod_source,mod_target in zip(saving_throw_bonuses_source,saving_throw_bonuses_target):
                 mod_source.set_from_target(mod_target)    
         total_bonus_source = saving_throw_bonuses_source[0].combine_values(list(saving_throw_bonuses_source)[1:]).model_copy(deep=True)
-        self.clear_target_entity()
+        
+        if should_clear_target:
+            self.clear_target_entity()
 
         return total_bonus_source
 
     def skill_bonus(self, target_entity_uuid: Optional[UUID], skill_name: SkillName) -> ModifiableValue:
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
         
         target_entity = None
         if self.target_entity_uuid:
             target_entity = self.get_target_entity(copy=True)
             assert isinstance(target_entity, Entity)
-            target_entity.set_target_entity(self.uuid)
+            if target_entity.target_entity_uuid != self.uuid:
+                target_entity.set_target_entity(self.uuid)
             skill_bonuses_target = target_entity._get_bonuses_for_skill(skill_name)
 
         skill_bonuses_source = self._get_bonuses_for_skill(skill_name)
@@ -328,9 +336,11 @@ class Entity(BaseBlock):
                 mod_source.set_from_target(mod_target)
         
         total_bonus_source = skill_bonuses_source[0].combine_values(list(skill_bonuses_source)[1:]).model_copy(deep=True)
-        self.clear_target_entity()
-        if target_entity is not None:
-            target_entity.clear_target_entity() 
+        
+        if should_clear_target:
+            self.clear_target_entity()
+            if target_entity is not None:
+                target_entity.clear_target_entity() 
             for mod_source, mod_target in zip(skill_bonuses_source, skill_bonuses_target):
                 mod_source.reset_from_target()
                 mod_target.reset_from_target()
@@ -338,10 +348,15 @@ class Entity(BaseBlock):
         return total_bonus_source
 
     def skill_bonus_cross(self, target_entity_uuid: UUID, skill_name: SkillName) -> Tuple[ModifiableValue, ModifiableValue]:
-        self.set_target_entity(target_entity_uuid)
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
+            self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
+        
         target_entity = self.get_target_entity(copy=True)
         assert isinstance(target_entity, Entity)
-        target_entity.set_target_entity(self.uuid)
+        if target_entity.target_entity_uuid != self.uuid:
+            target_entity.set_target_entity(self.uuid)
 
         skill_bonuses_source = self._get_bonuses_for_skill(skill_name)
         skill_bonuses_target = target_entity._get_bonuses_for_skill(skill_name)
@@ -353,8 +368,9 @@ class Entity(BaseBlock):
         total_bonus_source = skill_bonuses_source[0].combine_values(list(skill_bonuses_source)[1:]).model_copy(deep=True)
         total_bonus_target = skill_bonuses_target[0].combine_values(list(skill_bonuses_target)[1:]).model_copy(deep=True)
 
-        self.clear_target_entity()
-        target_entity.clear_target_entity()
+        if should_clear_target:
+            self.clear_target_entity()
+            target_entity.clear_target_entity()
         for mod_source, mod_target in zip(skill_bonuses_source, skill_bonuses_target):
             mod_source.reset_from_target()
             mod_target.reset_from_target()
@@ -363,8 +379,10 @@ class Entity(BaseBlock):
     
     def ac_bonus(self, target_entity_uuid: Optional[UUID]=None) -> ModifiableValue:
         """ missing effects from target attack bonus"""
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
 
         if self.equipment.is_unarmored():
             unarmored_values = self.equipment.get_unarmored_ac_values()
@@ -385,29 +403,34 @@ class Entity(BaseBlock):
             
             ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus])
         
-        if target_entity_uuid is not None:
+        if should_clear_target:
             self.clear_target_entity()
         return ac_bonus
     
     
     def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
         """ missing effects from target armor bonus"""
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
     
         proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range = self._get_attack_bonuses(weapon_slot)
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
-        if target_entity_uuid is not None:
+        
+        if should_clear_target:
             self.clear_target_entity()
         return source_attack_bonus
     
 
     def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
         damages = self.equipment.get_damages(weapon_slot, self.ability_scores)
-        if target_entity_uuid is not None:
+        if should_clear_target:
             self.clear_target_entity()
         return damages
     
@@ -469,6 +492,7 @@ class Entity(BaseBlock):
         """ request a saving throw from the target entity """
         #if dc is a uuid get the modifiable value ensure is coming from self (has self.uuid as source entity uuid)
         if isinstance(dc,UUID):
+            
             self.set_target_entity(dc)
             new_dc = ModifiableValue.get(dc)
             if new_dc is None or new_dc.source_entity_uuid != self.uuid:

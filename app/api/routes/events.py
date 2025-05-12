@@ -3,7 +3,9 @@ from fastapi import APIRouter, HTTPException, Query, Path
 from typing import List, Optional
 from uuid import UUID
 
-from dnd.core.events import EventQueue
+from dnd.core.events import EventQueue, WeaponSlot
+from dnd.actions import Attack
+from dnd.entity import Entity
 from app.models.events import EventSnapshot
 
 router = APIRouter(
@@ -67,4 +69,34 @@ async def get_latest_events(
             collect_child_uuids(snapshot)
             result.append(snapshot)
     
-    return result 
+    return result
+
+@router.post("/entity/{entity_uuid}/attack/{target_uuid}", response_model=EventSnapshot)
+async def execute_attack(
+    entity_uuid: UUID,
+    target_uuid: UUID,
+    weapon_slot: WeaponSlot = Query(WeaponSlot.MAIN_HAND, description="Which weapon slot to use for the attack"),
+    attack_name: str = Query("Attack", description="Name of the attack")
+):
+    """Execute an attack from one entity to another"""
+    entity = Entity.get(entity_uuid)
+    target = Entity.get(target_uuid)
+    
+    if not entity:
+        raise HTTPException(status_code=404, detail="Source entity not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target entity not found")
+    
+    # Create and execute the attack
+    attack = Attack(
+        name=attack_name,
+        source_entity_uuid=entity_uuid,
+        target_entity_uuid=target_uuid,
+        weapon_slot=weapon_slot
+    )
+    
+    result_event = attack.apply()
+    if not result_event:
+        raise HTTPException(status_code=400, detail="Attack could not be executed")
+        
+    return EventSnapshot.from_engine(result_event, include_children=True) 
