@@ -485,8 +485,6 @@ class Entity(BaseBlock):
         attack_dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
         return attack_dice.roll
         
-
-
     
     def create_saving_throw_request(self, target_entity_uuid: UUID, ability_name: AbilityName, dc: Union[int,UUID]) -> SavingThrowEvent:
         """ request a saving throw from the target entity """
@@ -561,37 +559,3 @@ class Entity(BaseBlock):
         skill_check_outcome = determine_attack_outcome(roll,dc)
         self.clear_target_entity()
         return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
-
-
-    # def attack(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[AttackOutcome,DiceRoll,List[Tuple[Damage, DiceRoll]]]:
-    #     """ Full method implementing a complete attack returns two objects:
-    #     This outer methods does not get a copy of the target entity but the actual target entity that will be modified in place
-    #     each submethod is responsible for getting a copy of the target entity if needed for local computations
-    #     1) the list of damages and respective dice rolls 
-    #     2) the attack outcome"""
-    #     self.set_target_entity(target_entity_uuid)
-    #     target_entity = self.get_target_entity(copy=False)
-    #     assert isinstance(target_entity, Entity)
-    #     target_entity.set_target_entity(self.uuid)
-
-    #     #get attack aggregated bonuses from source
-    #     attack_bonus = self.attack_bonus(weapon_slot= weapon_slot)
-    #     #get ac for target
-    #     ac = target_entity.ac_bonus()
-    #     ac.set_from_target(attack_bonus)
-    #     attack_bonus.set_from_target(ac)
-    #     dice_roll, attack_outcome = Attack.get_attack_outcome(attack_bonus, ac)
-    #     ac.reset_from_target()
-    #     attack_bonus.reset_from_target()
-    #     if attack_outcome in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS]:
-    #         self.clear_target_entity()
-    #         target_entity.clear_target_entity()
-    #         return attack_outcome, dice_roll, []
-    #     else:
-    #         damages = self.get_damages(weapon_slot)
-    #         damage_rolls = target_entity.take_damage(damages, attack_outcome)
-    #         self.clear_target_entity()
-    #         target_entity.clear_target_entity()
-    #         return attack_outcome, dice_roll, [(damage, roll) for damage, roll in zip(damages, damage_rolls)]
-
-    
