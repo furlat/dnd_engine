@@ -19,26 +19,16 @@ import {
   AccordionDetails,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import {
-  SkillSetSnapshot,
-  Skill,
-  SkillBonusCalculationSnapshot,
-  AdvantageStatus,
-  CriticalStatus,
-  AutoHitStatus,
-} from '../../models/character';
-
-interface Props {
-  skillSet: SkillSetSnapshot;
-  skillCalculations?: Record<string, SkillBonusCalculationSnapshot>;
-}
+import { AdvantageStatus, CriticalStatus, AutoHitStatus } from '../../models/character';
+import { useSkills } from '../../hooks/character/useSkills';
+import type { ReadonlySkill } from '../../models/readonly';
 
 const formatBonus = (n: number) => `${n}`;
 
 // Helper to render modifier breakdown similar to Ability block
 const ModifierBreakdown: React.FC<{ 
-  skill: Skill; 
-  calc?: SkillBonusCalculationSnapshot;
+  skill: ReadonlySkill; 
+  calc?: any;
   showAdvantage?: boolean;
 }> = ({ skill, calc, showAdvantage = false }): JSX.Element => {
   // Gather sections
@@ -115,51 +105,53 @@ const ModifierBreakdown: React.FC<{
 };
 
 interface DetailDialogProps {
-  selected: Skill;
-  setSelected: (skill: Skill | null) => void;
-  calc?: SkillBonusCalculationSnapshot;
+  calc?: any;
 }
 
-const DetailDialog: React.FC<DetailDialogProps> = ({ selected, setSelected, calc }) => {
+const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
   const [detailMode, setDetailMode] = React.useState<'values' | 'advantage'>('values');
+  const { selectedSkill, handleSelectSkill } = useSkills();
+  
+  if (!selectedSkill) return null;
+
   const advantage = calc?.total_bonus?.advantage ?? AdvantageStatus.NONE;
   const critical = calc?.total_bonus?.critical ?? CriticalStatus.NONE;
   const autoHit = calc?.total_bonus?.auto_hit ?? AutoHitStatus.NONE;
 
-    return (
-      <Dialog open onClose={() => setSelected(null)} maxWidth="md" fullWidth>
-        <DialogTitle>{selected.name.toUpperCase()} Details</DialogTitle>
-        <DialogContent dividers>
-          {calc ? (
-            <Grid container spacing={2}>
-              {/* Left column */}
-              <Grid item xs={12} md={6}>
-                {/* Overview */}
-                <Typography variant="h6" gutterBottom>
-                  Overview
-                </Typography>
-                <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Ability
-                      </Typography>
-                      <Typography variant="h5">
-                        {calc.ability_name.toUpperCase()}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Final Modifier
-                      </Typography>
-                      <Typography
-                        variant="h4"
-                        color={calc.final_modifier >= 0 ? 'success.main' : 'error.main'}
-                      >
-                        {formatBonus(calc.final_modifier)}
-                      </Typography>
-                    </Grid>
+  return (
+    <Dialog open onClose={() => handleSelectSkill(null)} maxWidth="md" fullWidth>
+      <DialogTitle>{selectedSkill.name.toUpperCase()} Details</DialogTitle>
+      <DialogContent dividers>
+        {calc ? (
+          <Grid container spacing={2}>
+            {/* Left column */}
+            <Grid item xs={12} md={6}>
+              {/* Overview */}
+              <Typography variant="h6" gutterBottom>
+                Overview
+              </Typography>
+              <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Ability
+                    </Typography>
+                    <Typography variant="h5">
+                      {calc.ability_name.toUpperCase()}
+                    </Typography>
                   </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Final Modifier
+                    </Typography>
+                    <Typography
+                      variant="h4"
+                      color={calc.final_modifier >= 0 ? 'success.main' : 'error.main'}
+                    >
+                      {formatBonus(calc.final_modifier)}
+                    </Typography>
+                  </Grid>
+                </Grid>
 
                 {/* Status Chips */}
                 <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -183,32 +175,32 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ selected, setSelected, calc
                            advantage === AdvantageStatus.DISADVANTAGE ? 'error' : 'default'}
                   />
                 </Box>
-                </Paper>
+              </Paper>
 
               {/* Component Values */}
-                <Typography variant="h6" gutterBottom>
-                  Component Values
-                </Typography>
+              <Typography variant="h6" gutterBottom>
+                Component Values
+              </Typography>
               <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
-                  {[
-                    { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_score },
-                    { label: 'Skill Bonus', value: calc.skill_bonus.normalized_score },
-                    { label: 'Ability Bonus', value: calc.ability_bonus.normalized_score },
-                    { label: 'Ability Modifier Bonus', value: calc.ability_modifier_bonus.normalized_score },
-                  ].map((row, idx, arr) => (
-                    <React.Fragment key={row.label}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {row.label}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="bold">
-                          {formatBonus(row.value)}
-                        </Typography>
-                      </Box>
-                      {idx < arr.length - 1 && <Divider sx={{ my: 1 }} />}
-                    </React.Fragment>
-                  ))}
-                </Paper>
+                {[
+                  { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_score },
+                  { label: 'Skill Bonus', value: calc.skill_bonus.normalized_score },
+                  { label: 'Ability Bonus', value: calc.ability_bonus.normalized_score },
+                  { label: 'Ability Modifier Bonus', value: calc.ability_modifier_bonus.normalized_score },
+                ].map((row, idx, arr) => (
+                  <React.Fragment key={row.label}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {row.label}
+                      </Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {formatBonus(row.value)}
+                      </Typography>
+                    </Box>
+                    {idx < arr.length - 1 && <Divider sx={{ my: 1 }} />}
+                  </React.Fragment>
+                ))}
+              </Paper>
 
               {/* Status Details */}
               <Typography variant="h6" gutterBottom>
@@ -235,69 +227,67 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ selected, setSelected, calc
                   </Typography>
                 )}
               </Paper>
-              </Grid>
-
-              {/* Right column */}
-              <Grid item xs={12} md={6}>
-                <Typography variant="h6" gutterBottom>
-                  Modifier Breakdown
-                </Typography>
-              <ModifierBreakdown skill={selected} calc={calc} showAdvantage={detailMode === 'advantage'} />
-              </Grid>
-
-              {/* Debug full width */}
-              <Grid item xs={12}>
-                <Accordion sx={{ mt: 2 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    Debug JSON
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <pre style={{ fontSize: 12 }}>
-                      {JSON.stringify(selected, null, 2)}
-                    </pre>
-                    {calc && (
-                      <>
-                        <Divider sx={{ my: 1 }} />
-                        <pre style={{ fontSize: 12 }}>
-                          {JSON.stringify(calc, null, 2)}
-                        </pre>
-                      </>
-                    )}
-                  </AccordionDetails>
-                </Accordion>
-              </Grid>
             </Grid>
-          ) : (
-            <Typography variant="body2">No calculation snapshot available.</Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
+
+            {/* Right column */}
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" gutterBottom>
+                Modifier Breakdown
+              </Typography>
+              <ModifierBreakdown skill={selectedSkill} calc={calc} showAdvantage={detailMode === 'advantage'} />
+            </Grid>
+
+            {/* Debug full width */}
+            <Grid item xs={12}>
+              <Accordion sx={{ mt: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  Debug JSON
+                </AccordionSummary>
+                <AccordionDetails>
+                  <pre style={{ fontSize: 12 }}>
+                    {JSON.stringify(selectedSkill, null, 2)}
+                  </pre>
+                  {calc && (
+                    <>
+                      <Divider sx={{ my: 1 }} />
+                      <pre style={{ fontSize: 12 }}>
+                        {JSON.stringify(calc, null, 2)}
+                      </pre>
+                    </>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            </Grid>
+          </Grid>
+        ) : (
+          <Typography variant="body2">No calculation snapshot available.</Typography>
+        )}
+      </DialogContent>
+      <DialogActions>
         <Button 
           onClick={() => setDetailMode(detailMode === 'values' ? 'advantage' : 'values')}
           color="primary"
         >
           Show {detailMode === 'values' ? 'Advantage' : 'Values'} Details
         </Button>
-          <Button onClick={() => setSelected(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
+        <Button onClick={() => handleSelectSkill(null)}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
-const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
-  const [selected, setSelected] = React.useState<Skill | null>(null);
+const SkillsSection: React.FC = () => {
+  const { 
+    calculations,
+    selectedSkill,
+    handleSelectSkill,
+    getOrderedSkills,
+    getSkillBonus,
+    isSkillProficient,
+    hasSkillExpertise
+  } = useSkills();
 
-  // Flatten skills but keep ordering by ability typical order
-  const abilityOrder = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-  const orderedSkills = React.useMemo(() => {
-    const list: Skill[] = [];
-    abilityOrder.forEach((ability) => {
-      Object.values(skillSet.skills)
-        .filter((skill) => skill.ability === ability)
-        .forEach((skill) => list.push(skill));
-    });
-    return list;
-  }, [skillSet]);
+  const orderedSkills = React.useMemo(() => getOrderedSkills(), [getOrderedSkills]);
 
   return (
     <Box>
@@ -306,10 +296,10 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
       </Typography>
 
       <Grid container spacing={2}>
-        {orderedSkills.map((skill: Skill) => {
-          const bonus = (skill as any).bonus ?? (skill as any).effective_bonus ?? 0;
-          const proficient = (skill as any).proficient;
-          const expertise = (skill as any).expertise;
+        {orderedSkills.map((skill) => {
+          const bonus = getSkillBonus(skill);
+          const proficient = isSkillProficient(skill);
+          const expertise = hasSkillExpertise(skill);
           return (
             <Grid item xs={6} sm={4} md={3} key={skill.name}>
               <Paper
@@ -323,7 +313,7 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
                   border: proficient ? 2 : 1,
                   borderColor: expertise ? 'secondary.main' : proficient ? 'primary.main' : 'transparent',
                 }}
-                onClick={() => setSelected(skill)}
+                onClick={() => handleSelectSkill(skill)}
               >
                 <Box>
                   <Typography variant="subtitle1">{skill.name}</Typography>
@@ -342,13 +332,7 @@ const SkillsSection: React.FC<Props> = ({ skillSet, skillCalculations }) => {
         })}
       </Grid>
 
-      {selected && (
-        <DetailDialog 
-          selected={selected} 
-          setSelected={setSelected} 
-          calc={skillCalculations?.[selected.name]} 
-        />
-      )}
+      <DetailDialog calc={selectedSkill ? calculations?.[selectedSkill.name] : undefined} />
     </Box>
   );
 };

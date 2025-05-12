@@ -13,10 +13,12 @@ from app.models.skills import SkillSetSnapshot
 from app.models.equipment import EquipmentSnapshot
 from app.models.saving_throws import SavingThrowSetSnapshot
 from app.models.values import ModifiableValueSnapshot
+from app.models.events import EventSnapshot
 from dnd.core.events import WeaponSlot
 from dnd.blocks.equipment import Equipment, BaseBlock, Armor, Weapon, Shield, BodyPart, RingSlot
 from dnd.core.base_conditions import DurationType
 from dnd.conditions import ConditionType, create_condition
+from dnd.actions import Attack
 
 # Import dependencies
 from app.api.deps import get_entity
@@ -437,3 +439,53 @@ async def set_entity_target(
         include_ac_calculation=include_ac_calculation,
         include_saving_throw_calculations=include_saving_throw_calculations
     ) 
+
+@router.post("/{entity_uuid}/attack/{target_uuid}")
+async def execute_attack(
+    entity_uuid: UUID,
+    target_uuid: UUID,
+    weapon_slot: WeaponSlot = Query(WeaponSlot.MAIN_HAND, description="Which weapon slot to use for the attack"),
+    attack_name: str = Query("Attack", description="Name of the attack"),
+    include_skill_calculations: bool = Query(False, description="Whether to include skill calculations in response"),
+    include_attack_calculations: bool = Query(True, description="Whether to include attack calculations in response"),
+    include_ac_calculation: bool = Query(True, description="Whether to include AC calculation in response"),
+    include_saving_throw_calculations: bool = Query(False, description="Whether to include saving throw calculations in response")
+):
+    """Execute an attack from one entity to another"""
+    entity = Entity.get(entity_uuid)
+    target = Entity.get(target_uuid)
+    
+    if not entity:
+        raise HTTPException(status_code=404, detail="Source entity not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target entity not found")
+    
+    # Create and execute the attack
+    attack = Attack(
+        name=attack_name,
+        source_entity_uuid=entity_uuid,
+        target_entity_uuid=target_uuid,
+        weapon_slot=weapon_slot
+    )
+    
+    result_event = attack.apply()
+    if not result_event:
+        raise HTTPException(status_code=400, detail="Attack could not be executed")
+    
+    # Get fresh copy of attacker after the attack
+    updated_attacker = Entity.get(entity_uuid)
+    if not updated_attacker:
+        raise HTTPException(status_code=404, detail="Entity not found after attack")
+    
+    # Return the full updated attacker state with target summary included
+    return {
+        "event": EventSnapshot.from_engine(result_event, include_children=True),
+        "attacker": EntitySnapshot.from_engine(
+            updated_attacker,
+            include_skill_calculations=include_skill_calculations,
+            include_attack_calculations=include_attack_calculations,
+            include_ac_calculation=include_ac_calculation,
+            include_saving_throw_calculations=include_saving_throw_calculations,
+            include_target_summary=True
+        )
+    } 
