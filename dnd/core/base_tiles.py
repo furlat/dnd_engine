@@ -52,8 +52,9 @@ class Tile(BaseObject):
         return max(tile.position[0] for tile in cls.get_all_tiles()) + 1, max(tile.position[1] for tile in cls.get_all_tiles()) + 1
     
     @classmethod
-    def create(cls, position: Tuple[int,int], sprite_name: Optional[str] = None, can_walk: bool = True, can_see: bool = True) -> 'Tile':
-        return cls(uuid=uuid4(), position=position, sprite_name=sprite_name, can_walk=can_walk, can_see=can_see)
+    def create(cls, position: Tuple[int,int], sprite_name: Optional[str] = None, can_walk: bool = True, can_see: bool = True,name:str = "Floor") -> 'Tile':
+        tile_uuid = uuid4()
+        return cls(uuid=tile_uuid,source_entity_uuid=tile_uuid,target_entity_uuid=tile_uuid, position=position, sprite_name=sprite_name, walkable=can_walk, visible=can_see,name=name)
 
     @classmethod
     def is_visible(cls, position: Tuple[int,int]) -> bool:
@@ -117,13 +118,13 @@ class Tile(BaseObject):
 
 
 def floor_factory(position: Tuple[int,int]) -> Tile:
-    return Tile.create(position, sprite_name="floor", can_walk=True, can_see=True)
+    return Tile.create(position, sprite_name="floor.png", can_walk=True, can_see=True)
 
 def wall_factory(position: Tuple[int,int]) -> Tile:
-    return Tile.create(position, sprite_name="wall", can_walk=False, can_see=False)
+    return Tile.create(position, sprite_name="wall.png", can_walk=False, can_see=False)
 
 def water_factory(position: Tuple[int,int]) -> Tile:
-    return Tile.create(position, sprite_name="water", can_walk=False, can_see=True)
+    return Tile.create(position, sprite_name="water.png", can_walk=False, can_see=True)
 
 
 
