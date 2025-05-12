@@ -1,14 +1,32 @@
 import axios from 'axios';
-import { Character, ConditionType, DurationType } from '../models/character';
+import { Character, ConditionType, DurationType, EntitySummary } from '../models/character';
 import { EquipmentItem } from './types';
 
 // Update to point directly to FastAPI backend
 const API_BASE_URL = 'http://localhost:8000/api';
 
+// Fetch all entity summaries (lightweight version)
+export const fetchEntitySummaries = async (): Promise<EntitySummary[]> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/entities/summaries`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching entity summaries:', error);
+    throw error;
+  }
+};
+
 // Fetch all characters
 export const fetchCharacters = async (): Promise<Character[]> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/entities`);
+    const response = await axios.get(`${API_BASE_URL}/entities`, {
+      params: {
+        include_skill_calculations: true,
+        include_saving_throw_calculations: true,
+        include_ac_calculation: true,
+        include_attack_calculations: true
+      }
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching characters:', error);
@@ -107,6 +125,24 @@ export const addCondition = async (entityId: string, request: AddConditionReques
     return response.data;
   } catch (error) {
     console.error('Error adding condition:', error);
+    throw error;
+  }
+};
+
+export const refreshActionEconomy = async (entityId: string): Promise<Character> => {
+  console.log('Calling refresh action economy API for entity:', entityId);
+  try {
+    const response = await axios.post(`${API_BASE_URL}/entities/${entityId}/action-economy/refresh`, null, {
+      params: {
+        include_skill_calculations: true,
+        include_saving_throw_calculations: true,
+        include_ac_calculation: true,
+        include_attack_calculations: true
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error refreshing action economy:', error);
     throw error;
   }
 };

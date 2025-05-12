@@ -1,5 +1,15 @@
 import { UUID } from './common';
 
+// Lightweight entity summary for combat UI
+export interface EntitySummary {
+    uuid: UUID;
+    name: string;
+    current_hp: number;
+    max_hp: number;
+    armor_class?: number;
+    target_entity_uuid?: UUID;
+}
+
 // Modifier interfaces
 export interface Modifier {
   uuid: UUID;
@@ -380,6 +390,7 @@ export interface Character {
   uuid: UUID;
   name: string;
   description?: string;
+  target_entity_uuid?: UUID;
   
   // Main blocks
   ability_scores: AbilityScoresSnapshot;

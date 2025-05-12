@@ -134,10 +134,15 @@ class Attack(BaseAction):
                 return execution_event.cancel(status_message=f"Target entity not found for {execution_event.name}")
             if not isinstance(target_entity, Entity):
                 return execution_event.cancel(status_message=f"Target entity not found for {execution_event.name}")
-
-
-            source_entity.set_target_entity(target_entity_uuid)
-            target_entity.set_target_entity(source_entity.uuid)
+            should_clear_source_target = False
+            should_clear_target_target = False
+            if source_entity.target_entity_uuid != target_entity_uuid:
+                should_clear_source_target = True
+                source_entity.set_target_entity(target_entity_uuid)
+            if target_entity.target_entity_uuid != source_entity_uuid:
+                should_clear_target_target = True
+                target_entity.set_target_entity(source_entity_uuid)
+            
             
             
             # Move to EXECUTION phase
@@ -198,9 +203,10 @@ class Attack(BaseAction):
             else:
                 damage_rolls = None
                 
-            
-            source_entity.clear_target_entity()
-            target_entity.clear_target_entity()
+            if should_clear_source_target:
+                source_entity.clear_target_entity()
+            if should_clear_target_target:
+                target_entity.clear_target_entity()
             
             # Move to COMPLETION phase
             return attack_event.phase_to(

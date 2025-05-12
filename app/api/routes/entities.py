@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 # Import entity and models
 from dnd.entity import Entity
-from app.models.entity import EntitySnapshot, ConditionSnapshot
+from app.models.entity import EntitySnapshot, ConditionSnapshot, EntitySummary
 from app.models.health import HealthSnapshot
 from app.models.abilities import AbilityScoresSnapshot
 from app.models.skills import SkillSetSnapshot
@@ -67,6 +67,25 @@ async def list_entities():
     
     # Convert to a list of basic info
     return [EntityListItem(uuid=entity.uuid, name=entity.name) for entity in entities]
+
+@router.get("/summaries", response_model=List[EntitySummary])
+async def list_entity_summaries():
+    """List all entities with their summary information (name, HP, AC, target)"""
+    # Get all entities from the registry
+    entities = [entity for entity in Entity._registry.values() if isinstance(entity, Entity)]
+    
+    # Convert to a list of summaries with proper error handling
+    summaries = []
+    for entity in entities:
+        try:
+            summary = EntitySummary.from_engine(entity)
+            print(f"Summary for entity {entity.uuid}: {summary} with target {entity.target_entity_uuid}")
+            summaries.append(summary)
+        except Exception as e:
+            print(f"Error creating summary for entity {entity.uuid}: {str(e)}")
+            continue
+    
+    return summaries
 
 @router.get("/{entity_uuid}", response_model=EntitySnapshot)
 async def get_entity_by_uuid(
@@ -373,3 +392,48 @@ async def get_conditions(entity: Entity = Depends(get_entity)):
     For full entity state including conditions, use GET /entities/{entity_uuid}
     """
     return entity.active_conditions 
+
+@router.post("/{entity_uuid}/action-economy/refresh", response_model=EntitySnapshot)
+async def refresh_action_economy(
+    entity: Entity = Depends(get_entity),
+    include_skill_calculations: bool = False,
+    include_attack_calculations: bool = False,
+    include_ac_calculation: bool = False,
+    include_saving_throw_calculations: bool = False
+):
+    """Reset all action economy costs for an entity"""
+    entity.action_economy.reset_all_costs()
+    return EntitySnapshot.from_engine(
+        entity,
+        include_skill_calculations=include_skill_calculations,
+        include_attack_calculations=include_attack_calculations,
+        include_ac_calculation=include_ac_calculation,
+        include_saving_throw_calculations=include_saving_throw_calculations
+    ) 
+
+@router.post("/{entity_uuid}/target/{target_uuid}", response_model=EntitySnapshot)
+async def set_entity_target(
+    entity_uuid: UUID,
+    target_uuid: UUID,
+    include_skill_calculations: bool = False,
+    include_attack_calculations: bool = False,
+    include_ac_calculation: bool = False,
+    include_saving_throw_calculations: bool = False
+):
+    """Set an entity's target"""
+    entity = Entity.get(entity_uuid)
+    target = Entity.get(target_uuid)
+    
+    if not entity:
+        raise HTTPException(status_code=404, detail="Source entity not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target entity not found")
+        
+    entity.set_target_entity(target_uuid)
+    return EntitySnapshot.from_engine(
+        entity,
+        include_skill_calculations=include_skill_calculations,
+        include_attack_calculations=include_attack_calculations,
+        include_ac_calculation=include_ac_calculation,
+        include_saving_throw_calculations=include_saving_throw_calculations
+    ) 

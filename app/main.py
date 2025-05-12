@@ -44,6 +44,7 @@ app.include_router(events_router, prefix="/api")
 def initialize_test_entities():
     """Create test entities on startup"""
     q=EventQueue()
+    
     # Create a warrior from circus_fighter.py
     warrior_uuid = uuid4()
     warrior = create_warrior(source_id=warrior_uuid, proficiency_bonus=2, name="Spiky Clown", position=(0,0))
@@ -52,10 +53,13 @@ def initialize_test_entities():
     rogue_uuid = uuid4()
     blinded_rogue = create_warrior(source_id=rogue_uuid, proficiency_bonus=3, name="Blinded Pirate",blinded=True, position=(1,1))
     warrior.senses.add_entity(rogue_uuid,blinded_rogue.senses.position)
+    
     blinded_rogue.senses.add_entity(warrior_uuid,warrior.senses.position)
+    warrior.set_target_entity(blinded_rogue.uuid)
+    blinded_rogue.set_target_entity(warrior.uuid)
     print(f"Created test entities with UUIDs:")
-    print(f"- Test Warrior: {warrior_uuid}")
-    print(f"- Test Rogue: {rogue_uuid}")
+    print(f"- Test Warrior: {warrior_uuid} with target {warrior.target_entity_uuid}")
+    print(f"- Test Rogue: {rogue_uuid} with target {blinded_rogue.target_entity_uuid}")
 
 # Run the app with uvicorn
 if __name__ == "__main__":

@@ -30,6 +30,7 @@ class EntitySnapshot(BaseModel):
     uuid: UUID
     name: str
     description: Optional[str] = None
+    target_entity_uuid: Optional[UUID] = None
     
     # Main blocks
     ability_scores: AbilityScoresSnapshot
@@ -117,6 +118,7 @@ class EntitySnapshot(BaseModel):
             uuid=entity.uuid,
             name=entity.name,
             description=entity.description,
+            target_entity_uuid=entity.target_entity_uuid,
             ability_scores=AbilityScoresSnapshot.from_engine(entity.ability_scores),
             skill_set=SkillSetSnapshot.from_engine(entity.skill_set, entity),
             equipment=EquipmentSnapshot.from_engine(entity.equipment, entity=entity),
@@ -129,4 +131,37 @@ class EntitySnapshot(BaseModel):
             saving_throw_calculations=saving_throw_calculations,
             action_economy=ActionEconomySnapshot.from_engine(entity.action_economy, entity),
             active_conditions=active_conditions
+        )
+
+class EntitySummary(BaseModel):
+    """Lightweight summary of an entity's core stats"""
+    uuid: UUID
+    name: str
+    current_hp: int
+    max_hp: int
+    armor_class: Optional[int] = None
+    target_entity_uuid: Optional[UUID] = None
+
+    @classmethod
+    def from_engine(cls, entity):
+        """Create a summary from an engine Entity object"""
+        # Get current and max HP
+        con_modifier = entity.ability_scores.get_ability("constitution").get_combined_values()
+        current_hp = entity.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
+        max_hp = entity.health.get_max_hit_dices_points(constitution_modifier=con_modifier.normalized_score) + entity.health.max_hit_points_bonus.score
+        
+        # Get AC using the proper calculation method
+        try:
+            ac_value = entity.ac_bonus()
+            ac = ac_value.normalized_score if hasattr(ac_value, "normalized_score") else None
+        except Exception:
+            ac = None
+        
+        return cls(
+            uuid=entity.uuid,
+            name=entity.name,
+            current_hp=current_hp,
+            max_hp=max_hp,
+            armor_class=ac,
+            target_entity_uuid=entity.target_entity_uuid
         )

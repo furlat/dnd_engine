@@ -38,12 +38,16 @@ class BaseAction(BaseObject):
     costs: List[Cost] = Field(default_factory=list,description="A list of costs for the action")
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    def check_costs(self) -> bool:
+        for cost in self.costs:
+                print(f"cost {cost.cost_type} {cost.cost} {cost.evaluator}")
+                if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid,cost.cost_type,cost.cost):
+                    return False
+        return True
 
     def _create_declaration_event(self,parent_event: Optional[Event] = None) -> Optional[ActionEvent]:
         """Create the declaration event for this action. Override in subclasses if needed."""
-        for cost in self.costs:
-                if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid,cost.cost_type,cost.cost):
-                    return None
+        
         return ActionEvent.from_costs(self.costs,self.source_entity_uuid,self.target_entity_uuid,parent_event)
 
     
@@ -80,6 +84,8 @@ class BaseAction(BaseObject):
     def apply(self,parent_event: Optional[Event] = None) -> Optional[Event]:
         """Main entry point for applying an action. This method orchestrates the flow
         through declaration, validation, and application phases."""
+        if not self.check_costs():
+            return None
         # Create declaration event
         declaration_event = self._create_declaration_event(parent_event)
         if declaration_event is None:
