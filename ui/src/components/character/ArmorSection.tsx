@@ -203,11 +203,11 @@ const ArmorSection: React.FC = () => {
                      acCalc.outgoing_advantage === AdvantageStatus.DISADVANTAGE ? 'Give Disadvantage' : 'Normal'}
               size="small"
               sx={{ 
-                minWidth: '140px',
                 height: '24px',
                 '& .MuiChip-label': { 
-                  px: 2,
-                  fontSize: '0.8125rem'
+                  px: 1,
+                  fontSize: '0.75rem',
+                  whiteSpace: 'nowrap'
                 },
                 backgroundColor: acCalc.outgoing_advantage === AdvantageStatus.ADVANTAGE ? '#d32f2f !important' : 
                                 acCalc.outgoing_advantage === AdvantageStatus.DISADVANTAGE ? '#2e7d32 !important' : '#757575 !important',

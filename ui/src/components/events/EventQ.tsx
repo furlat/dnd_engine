@@ -21,6 +21,9 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { useEventQueue } from '../../contexts/EventQueueContext';
 
+const SIDEBAR_WIDTH = '350px';
+const COLLAPSED_WIDTH = '40px';
+
 // Helper function to format time
 const formatTime = (timestamp: string) => {
   const date = new Date(timestamp);
@@ -324,118 +327,35 @@ const EventQ: React.FC = () => {
   }, [fetchEntityOptions]);
 
   return (
-    <Box sx={{ position: 'relative', height: '100vh' }}>
-      <Slide direction="left" in={!isCollapsed} mountOnEnter unmountOnExit>
-        <Paper
-          sx={{
-            height: '100vh',
-            width: '350px',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            position: 'relative',
-          }}
-        >
-          <Box sx={{ 
-            minHeight: {
-              xs: 56,  // mobile height
-              sm: 64   // desktop height
-            },
-            px: 2,     // horizontal padding
-            borderBottom: 1, 
-            borderColor: 'divider', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            flexDirection: 'column',
-            py: 1
-          }}>
-            <Box sx={{ 
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <Typography variant="h6">Event Queue</Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Tooltip title="Refresh events">
-                  <IconButton onClick={handleRefreshClick} disabled={loading}>
-                    <RefreshIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Collapse">
-                  <IconButton onClick={() => setIsCollapsed(true)}>
-                    <ChevronRightIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            </Box>
-            
-            <FormControl fullWidth size="small" sx={{ mt: 1 }}>
-              <InputLabel>Filter by Entity</InputLabel>
-              <Select
-                value={selectedEntity}
-                onChange={(e) => setSelectedEntity(e.target.value)}
-                label="Filter by Entity"
-              >
-                <MenuItem value="">
-                  <em>All Events</em>
-                </MenuItem>
-                {entityOptions.map((entity) => (
-                  <MenuItem key={entity.uuid} value={entity.uuid}>
-                    {entity.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-          
-          {error && (
-            <Box sx={{ p: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
-              <Typography>{error}</Typography>
-            </Box>
-          )}
-          
-          <List
-            sx={{
-              flex: 1,
-              overflow: 'auto',
-              '& .MuiListItem-root': {
-                borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
-              },
-            }}
-          >
-            {loading && filteredEvents.length === 0 ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : (
-              filteredEvents.map((event) => (
-                <EventItem key={event.uuid} event={event} />
-              ))
-            )}
-          </List>
-        </Paper>
-      </Slide>
-
-      {/* Collapsed state button */}
+    <Box
+      sx={{
+        position: 'fixed',
+        top: 64,
+        right: 0,
+        height: 'calc(100vh - 64px)',
+        width: isCollapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH,
+        transition: 'width 0.3s ease-in-out',
+        display: 'flex',
+        zIndex: 1200,
+      }}
+    >
+      {/* Toggle button */}
       <Paper
         sx={{
           position: 'absolute',
-          right: isCollapsed ? 0 : '-40px',
+          left: -40,
           top: '50%',
           transform: 'translateY(-50%)',
-          width: '40px',
+          width: COLLAPSED_WIDTH,
           height: '80px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          transition: 'right 0.3s ease-in-out',
           borderTopLeftRadius: '8px',
           borderBottomLeftRadius: '8px',
-          borderTopRightRadius: '0px',
-          borderBottomRightRadius: '0px',
+          borderTopRightRadius: '0',
+          borderBottomRightRadius: '0',
           zIndex: 1,
         }}
         onClick={() => setIsCollapsed(!isCollapsed)}
@@ -443,6 +363,97 @@ const EventQ: React.FC = () => {
         <IconButton>
           {isCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
         </IconButton>
+      </Paper>
+
+      <Paper
+        sx={{
+          width: SIDEBAR_WIDTH,
+          height: '100%',
+          transform: isCollapsed ? `translateX(${SIDEBAR_WIDTH}) translateX(-${COLLAPSED_WIDTH})` : 'none',
+          transition: 'transform 0.3s ease-in-out',
+          borderLeft: 1,
+          borderColor: 'divider',
+          borderRadius: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: 'background.paper',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: 'grey.400',
+            borderRadius: '4px',
+          },
+        }}
+      >
+        <Box sx={{ 
+          p: 2,
+          borderBottom: 1, 
+          borderColor: 'divider',
+          position: 'sticky',
+          top: 0,
+          bgcolor: 'background.paper',
+          zIndex: 1,
+        }}>
+          <Box sx={{ 
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 2
+          }}>
+            <Typography variant="h6">Event Queue</Typography>
+            <Tooltip title="Refresh events">
+              <IconButton onClick={handleRefreshClick} disabled={loading}>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          
+          <FormControl fullWidth size="small">
+            <InputLabel>Filter by Entity</InputLabel>
+            <Select
+              value={selectedEntity}
+              onChange={(e) => setSelectedEntity(e.target.value)}
+              label="Filter by Entity"
+            >
+              <MenuItem value="">
+                <em>All Events</em>
+              </MenuItem>
+              {entityOptions.map((entity) => (
+                <MenuItem key={entity.uuid} value={entity.uuid}>
+                  {entity.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+        
+        {error && (
+          <Box sx={{ p: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
+            <Typography>{error}</Typography>
+          </Box>
+        )}
+        
+        <List
+          sx={{
+            '& .MuiListItem-root': {
+              borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
+            },
+          }}
+        >
+          {loading && filteredEvents.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            filteredEvents.map((event) => (
+              <EventItem key={event.uuid} event={event} />
+            ))
+          )}
+        </List>
       </Paper>
     </Box>
   );
