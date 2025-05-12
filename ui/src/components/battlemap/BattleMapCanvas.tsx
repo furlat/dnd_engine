@@ -9,6 +9,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { fetchEntitySummaries } from '../../api/characterApi';
 import { EntitySummary } from '../../models/character';
+import { fetchGridSnapshot, TileSummary } from '../../api/tileApi';
 
 // Initialize PixiJS Assets
 Assets.init({
@@ -184,6 +185,88 @@ const EntitySprite: React.FC<EntitySpriteProps> = ({ entity, width, height, grid
   );
 };
 
+interface TileSpriteProps {
+  tile: TileSummary;
+  width: number;
+  height: number;
+  gridSize: {
+    rows: number;
+    cols: number;
+  };
+  tileSize: number;
+}
+
+const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, tileSize }) => {
+  const [texture, setTexture] = useState<Texture | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadTexture = async () => {
+      if (tile.sprite_name) {
+        try {
+          const spritePath = `/tiles/${tile.sprite_name}`;
+          let loadedTexture = Assets.get(spritePath);
+          
+          if (!loadedTexture) {
+            loadedTexture = await Assets.load(spritePath);
+          }
+          
+          setTexture(loadedTexture);
+          setLoadError(null);
+        } catch (error) {
+          console.error(`Error loading tile sprite:`, error);
+          setLoadError(error instanceof Error ? error.message : 'Failed to load sprite');
+          setTexture(null);
+        }
+      }
+    };
+    loadTexture();
+  }, [tile.sprite_name]);
+
+  if (loadError || !texture || !tile.sprite_name) {
+    // For tiles without sprites or with errors, draw a colored rectangle
+    const color = tile.walkable ? 0x333333 : 0x666666;
+    const offsetX = (width - (gridSize.cols * tileSize)) / 2;
+    const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+    const [x, y] = tile.position;
+    
+    return (
+      <pixiGraphics
+        draw={useCallback((g: PixiGraphics) => {
+          g.clear();
+          g.setFillStyle({
+            color: color,
+            alpha: 1
+          });
+          g.rect(
+            offsetX + (x * tileSize),
+            offsetY + (y * tileSize),
+            tileSize,
+            tileSize
+          );
+          g.fill();
+        }, [color, offsetX, offsetY, x, y, tileSize])}
+      />
+    );
+  }
+
+  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
+  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+  const [x, y] = tile.position;
+  const pixelX = offsetX + (x * tileSize);
+  const pixelY = offsetY + (y * tileSize);
+
+  return (
+    <pixiSprite
+      texture={texture}
+      x={pixelX}
+      y={pixelY}
+      width={tileSize}
+      height={tileSize}
+    />
+  );
+};
+
 interface BattleMapCanvasProps {
   width: number;
   height: number;
@@ -204,6 +287,8 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isLocked, setIsLocked] = useState(false);
   const [entities, setEntities] = useState<EntitySummary[]>([]);
+  const [tiles, setTiles] = useState<Record<string, TileSummary>>({});
+  const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
   const MOVEMENT_SPEED = 8;
 
   // Preload all sprites
@@ -234,6 +319,31 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     preloadSprites();
   }, []);
 
+  // Preload tile sprites
+  useEffect(() => {
+    const preloadSprites = async () => {
+      try {
+        const tileSprites = [
+          'floor.png',
+          'wall.png',
+          'water.png'
+        ];
+
+        const loadPromises = tileSprites.map(sprite => {
+          const spritePath = `/tiles/${sprite}`;
+          return Assets.load(spritePath);
+        });
+
+        await Promise.all(loadPromises);
+        console.log('All tile sprites preloaded successfully');
+      } catch (error) {
+        console.error('Error preloading tile sprites:', error);
+      }
+    };
+
+    preloadSprites();
+  }, []);
+
   // Fetch entities
   useEffect(() => {
     const fetchEntities = async () => {
@@ -255,6 +365,45 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     // Set up polling for entity updates
     const interval = setInterval(fetchEntities, 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Fetch grid data
+  useEffect(() => {
+    const fetchGrid = async () => {
+      try {
+        const grid = await fetchGridSnapshot();
+        setTiles(grid.tiles);
+        setGridDimensions({ width: grid.width, height: grid.height });
+      } catch (error) {
+        console.error('Error fetching grid:', error);
+      }
+    };
+
+    fetchGrid();
+    const interval = setInterval(fetchGrid, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Optimize entity fetching
+  useEffect(() => {
+    let isMounted = true;
+    const fetchEntitiesData = async () => {
+      try {
+        const summaries = await fetchEntitySummaries();
+        if (isMounted) {
+          setEntities(summaries);
+        }
+      } catch (error) {
+        console.error('Error fetching entities:', error);
+      }
+    };
+
+    fetchEntitiesData();
+    const interval = setInterval(fetchEntitiesData, 200); // More frequent updates for entities
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Calculate the canvas size
@@ -429,6 +578,18 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                 gridSize={{ rows: gridHeight, cols: gridWidth }}
                 tileSize={tileSize}
               />
+              
+              {/* Tiles */}
+              {Object.values(tiles).map(tile => (
+                <TileSprite
+                  key={tile.uuid}
+                  tile={tile}
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  gridSize={{ rows: gridHeight, cols: gridWidth }}
+                  tileSize={tileSize}
+                />
+              ))}
               
               {/* Hovered Cell Highlight */}
               <CellHighlight 
