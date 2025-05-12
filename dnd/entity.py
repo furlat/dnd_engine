@@ -90,7 +90,26 @@ class Entity(BaseBlock):
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
     allow_events_conditions: bool = Field(default=True,description="If True, events and conditions will be allowed to be added to the block")
+    _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
 
+    def __init__(self, **data):
+        """
+        Initialize the BaseBlock and register it in the class registry.
+
+        Args:
+            **data: Keyword arguments to initialize the BaseBlock attributes.
+        """
+        super().__init__(**data)
+        self.__class__._entity_registry[self.uuid] = self
+
+    @classmethod
+    def get_all_entities(cls) -> List['Entity']:
+        return list(cls._entity_registry.values())
+    
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['Entity']:
+        return cls._entity_registry.get(uuid)
+    
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Entity",description: Optional[str] = None,config: Optional[EntityConfig] = None) -> 'Entity':
         """

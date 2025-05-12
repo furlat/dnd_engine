@@ -63,7 +63,7 @@ class EquipRequest(BaseModel):
 async def list_entities():
     """List all entities in the registry"""
     # Get all entities from the registry
-    entities = [entity for entity in Entity._registry.values() if isinstance(entity, Entity)]
+    entities = Entity.get_all_entities()
     
     # Convert to a list of basic info
     return [EntityListItem(uuid=entity.uuid, name=entity.name) for entity in entities]
@@ -72,7 +72,7 @@ async def list_entities():
 async def list_entity_summaries():
     """List all entities with their summary information (name, HP, AC, target)"""
     # Get all entities from the registry
-    entities = [entity for entity in Entity._registry.values() if isinstance(entity, Entity)]
+    entities = Entity.get_all_entities()
     
     # Convert to a list of summaries with proper error handling
     summaries = []
