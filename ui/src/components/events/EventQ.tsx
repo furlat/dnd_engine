@@ -343,7 +343,7 @@ const EventQ: React.FC = () => {
       <Paper
         sx={{
           position: 'absolute',
-          left: -40,
+          left: isCollapsed ? 0 : -40,
           top: '50%',
           transform: 'translateY(-50%)',
           width: COLLAPSED_WIDTH,
@@ -357,6 +357,8 @@ const EventQ: React.FC = () => {
           borderTopRightRadius: '0',
           borderBottomRightRadius: '0',
           zIndex: 1,
+          boxShadow: 2,
+          transition: 'left 0.3s ease-in-out'
         }}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
@@ -369,7 +371,7 @@ const EventQ: React.FC = () => {
         sx={{
           width: SIDEBAR_WIDTH,
           height: '100%',
-          transform: isCollapsed ? `translateX(${SIDEBAR_WIDTH}) translateX(-${COLLAPSED_WIDTH})` : 'none',
+          transform: isCollapsed ? `translateX(${SIDEBAR_WIDTH})` : 'none',
           transition: 'transform 0.3s ease-in-out',
           borderLeft: 1,
           borderColor: 'divider',

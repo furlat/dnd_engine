@@ -1,6 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback, useMemo } from 'react';
 import { characterStore, characterActions } from '../../store/characterStore';
+import { eventQueueActions } from '../../store/eventQueueStore';
 import { executeAttack, setEntityTarget } from '../../api/combatApi';
 import { refreshActionEconomy } from '../../api/characterApi';
 import type { ReadonlyCharacter, ReadonlyEntitySummary } from '../../models/readonly';
@@ -54,6 +55,8 @@ export function useActionBar(): ActionBarData {
     try {
       const updatedCharacter = await setEntityTarget(snap.character.uuid, targetId);
       characterActions.setCharacter(updatedCharacter);
+      // Trigger event queue refresh after target change
+      eventQueueActions.refresh();
     } catch (error) {
       console.error('Failed to set target:', error);
       setError(error instanceof Error ? error.message : 'Failed to set target');
@@ -66,6 +69,8 @@ export function useActionBar(): ActionBarData {
     try {
       const result = await executeAttack(snap.character.uuid, snap.character.target_entity_uuid, weaponSlot);
       characterActions.setCharacter(result.attacker);
+      // Trigger event queue refresh after attack
+      eventQueueActions.refresh();
     } catch (error) {
       console.error('Failed to execute attack:', error);
       setError(error instanceof Error ? error.message : 'Failed to execute attack');
@@ -78,6 +83,8 @@ export function useActionBar(): ActionBarData {
     try {
       const updatedCharacter = await refreshActionEconomy(snap.character.uuid);
       characterActions.setCharacter(updatedCharacter);
+      // Trigger event queue refresh after action economy refresh
+      eventQueueActions.refresh();
     } catch (error) {
       console.error('Failed to refresh action economy:', error);
       setError(error instanceof Error ? error.message : 'Failed to refresh action economy');
