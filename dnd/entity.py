@@ -28,6 +28,7 @@ from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
 from dnd.core.events import AbilityName, SkillName, EventHandler, EventType, EventPhase, Trigger
 from dnd.core.base_block import ContextualConditionImmunity
+from dnd.core.base_tiles import Tile
 
 
 def determine_attack_outcome(roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
@@ -601,3 +602,40 @@ class Entity(BaseBlock):
         skill_check_outcome = determine_attack_outcome(roll,dc)
         self.clear_target_entity()
         return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
+
+    def update_entity_senses(self, max_distance: int = 10):
+        """
+        Update the entity's senses using shadowcasting and pathfinding.
+        This computes:
+        - Visible cells within max_distance using shadowcast
+        - Paths to visible cells using dijkstra
+        - Entities present in visible cells
+        
+        Args:
+            max_distance: Maximum view/movement distance (default 10)
+        """
+        # Get visible cells using shadowcast
+        visible_positions = Tile.get_fov(self.position, max_distance)
+        visible_dict = {pos: True for pos in visible_positions}
+        
+        # Get walkable paths using dijkstra
+        distances, paths = Tile.get_paths(self.position, max_distance)
+        
+        # Filter paths to only include visible positions
+        filtered_paths = {pos: path for pos, path in paths.items() if pos in visible_dict}
+        
+        # Get entities at visible positions
+        visible_entities = {}
+        for pos in visible_positions:
+            entities = Entity.get_all_entities_at_position(pos)
+            for entity in entities:
+                if entity.uuid != self.uuid:  # Don't include self
+                    visible_entities[entity.uuid] = pos
+        
+        # Update the senses block
+        self.senses.update_senses(
+            entities=visible_entities,
+            visible=visible_dict,
+            walkable={pos: Tile.is_walkable(pos) for pos in visible_positions},
+            paths=filtered_paths
+        )
