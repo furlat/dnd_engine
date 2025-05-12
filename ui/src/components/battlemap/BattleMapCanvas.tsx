@@ -1,15 +1,22 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Application, extend } from '@pixi/react';
-import { Graphics as PixiGraphics, Container, FederatedPointerEvent } from 'pixi.js';
+import { Graphics as PixiGraphics, Container, FederatedPointerEvent, Sprite, Assets, Texture } from 'pixi.js';
 import { Box, Paper, Typography, IconButton } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import { fetchEntitySummaries } from '../../api/characterApi';
+import { EntitySummary } from '../../models/character';
+
+// Initialize PixiJS Assets
+Assets.init({
+  basePath: '/',
+});
 
 // Extend must be called at the module level
-extend({ Container, Graphics: PixiGraphics });
+extend({ Container, Graphics: PixiGraphics, Sprite });
 
 interface Position {
   x: number;
@@ -98,6 +105,85 @@ const CellHighlight: React.FC<CellHighlightProps> = ({ x, y, width, height, grid
   return <pixiGraphics draw={drawHighlight} />;
 };
 
+interface EntitySpriteProps {
+  entity: EntitySummary;
+  width: number;
+  height: number;
+  gridSize: {
+    rows: number;
+    cols: number;
+  };
+  tileSize: number;
+}
+
+// EntitySprite component that renders a sprite at the entity's position
+const EntitySprite: React.FC<EntitySpriteProps> = ({ entity, width, height, gridSize, tileSize }) => {
+  const [texture, setTexture] = useState<Texture | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadTexture = async () => {
+      if (entity.sprite_name) {
+        try {
+          const spritePath = `/sprites/${entity.sprite_name}`;
+          console.log(`Loading sprite for entity ${entity.name} at path:`, spritePath);
+          
+          // First check if the texture is already loaded
+          let loadedTexture = Assets.get(spritePath);
+          
+          if (!loadedTexture) {
+            // If not loaded, load it directly
+            loadedTexture = await Assets.load(spritePath);
+          }
+          
+          console.log(`Successfully loaded texture for ${entity.name} from ${spritePath}`);
+          setTexture(loadedTexture);
+          setLoadError(null);
+        } catch (error) {
+          console.error(`Error loading sprite for ${entity.name}:`, error);
+          setLoadError(error instanceof Error ? error.message : 'Failed to load sprite');
+          setTexture(null);
+        }
+      }
+    };
+    loadTexture();
+  }, [entity.sprite_name, entity.name]);
+
+  if (loadError) {
+    console.warn(`Failed to load sprite for ${entity.name}:`, loadError);
+    return null;
+  }
+
+  if (!texture || !entity.sprite_name) {
+    console.log(`No texture or sprite name for entity ${entity.name}`);
+    return null;
+  }
+
+  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
+  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+  const [x, y] = entity.position;
+  const pixelX = offsetX + (x * tileSize) + (tileSize / 2);
+  const pixelY = offsetY + (y * tileSize) + (tileSize / 2);
+
+  console.log(`Drawing sprite for ${entity.name}:`, {
+    position: entity.position,
+    pixelCoords: { x: pixelX, y: pixelY },
+    tileSize,
+    gridOffset: { x: offsetX, y: offsetY }
+  });
+
+  return (
+    <pixiSprite
+      texture={texture}
+      x={pixelX}
+      y={pixelY}
+      width={tileSize}
+      height={tileSize}
+      anchor={0.5}
+    />
+  );
+};
+
 interface BattleMapCanvasProps {
   width: number;
   height: number;
@@ -117,7 +203,59 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   const [tileSize, setTileSize] = useState(initialTileSize);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isLocked, setIsLocked] = useState(false);
+  const [entities, setEntities] = useState<EntitySummary[]>([]);
   const MOVEMENT_SPEED = 8;
+
+  // Preload all sprites
+  useEffect(() => {
+    const preloadSprites = async () => {
+      try {
+        // List of all available sprites
+        const spriteFiles = [
+          'death_knight.png',
+          'deep_elf_fighter_new.png',
+          'hell_knight_new.png'
+        ];
+
+        // Load all sprites
+        const loadPromises = spriteFiles.map(sprite => {
+          const spritePath = `/sprites/${sprite}`;
+          console.log(`Preloading sprite: ${spritePath}`);
+          return Assets.load(spritePath);
+        });
+
+        await Promise.all(loadPromises);
+        console.log('All sprites preloaded successfully');
+      } catch (error) {
+        console.error('Error preloading sprites:', error);
+      }
+    };
+
+    preloadSprites();
+  }, []);
+
+  // Fetch entities
+  useEffect(() => {
+    const fetchEntities = async () => {
+      try {
+        const summaries = await fetchEntitySummaries();
+        console.log('Fetched entities with full payload:', summaries.map(e => ({
+          name: e.name,
+          sprite_name: e.sprite_name,
+          position: e.position,
+          full: e
+        })));
+        setEntities(summaries);
+      } catch (error) {
+        console.error('Error fetching entities:', error);
+      }
+    };
+    fetchEntities();
+
+    // Set up polling for entity updates
+    const interval = setInterval(fetchEntities, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Calculate the canvas size
   const canvasSize = useMemo(() => {
@@ -292,11 +430,6 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                 tileSize={tileSize}
               />
               
-              {/* Game Objects Container */}
-              <pixiContainer>
-                {/* TODO: Add game objects here */}
-              </pixiContainer>
-              
               {/* Hovered Cell Highlight */}
               <CellHighlight 
                 x={hoveredCell.x}
@@ -306,6 +439,21 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                 gridSize={{ rows: gridHeight, cols: gridWidth }}
                 tileSize={tileSize}
               />
+
+              {/* Game Objects Container - Now after grid and highlight */}
+              {entities.map(entity => {
+                console.log('Rendering entity:', entity);
+                return (
+                  <EntitySprite
+                    key={entity.uuid}
+                    entity={entity}
+                    width={canvasSize.width}
+                    height={canvasSize.height}
+                    gridSize={{ rows: gridHeight, cols: gridWidth }}
+                    tileSize={tileSize}
+                  />
+                );
+              })}
             </pixiContainer>
           </pixiContainer>
         </Application>

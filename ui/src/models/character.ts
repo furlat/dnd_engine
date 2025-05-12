@@ -35,6 +35,7 @@ export interface EntitySummary {
     armor_class?: number;
     target_entity_uuid?: UUID;
     position: Position;
+    sprite_name?: string;
 }
 
 // Channel interfaces

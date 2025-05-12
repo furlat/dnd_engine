@@ -171,7 +171,7 @@ def create_morningstar(source_id: UUID) -> Weapon:
 #realistic scores for a level 4 fighter character with a past in the circus and spiked claws for hands
 # setting up configs
 # Ability scores
-def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="Ganger",blinded: bool=False, position: Tuple[int,int]=(0,0)) -> Entity:
+def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="Ganger",blinded: bool=False, position: Tuple[int,int]=(0,0),sprite_name: Optional[str]=None) -> Entity:
     """Creates a level 4 fighter character with a past in the circus and spiked claws for hands"""
     # Ability scores
     strength_config = AbilityConfig(ability_score=15, ability_scores_modifiers=[("level 4 talent",1)], modifier_bonus=1, modifier_bonus_modifiers=[])
@@ -217,6 +217,8 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
         equipment=equipment_config,
         action_economy=action_economy_config,
         proficiency_bonus=proficiency_bonus,
+        sprite_name=sprite_name,
+        position=position
         )
     
     description = """A level 4 fighter character with a past in the circus and spiked claws for hands."""
