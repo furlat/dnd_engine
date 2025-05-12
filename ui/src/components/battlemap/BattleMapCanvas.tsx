@@ -10,6 +10,7 @@ import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { fetchEntitySummaries } from '../../api/characterApi';
 import { EntitySummary } from '../../models/character';
 import { fetchGridSnapshot, TileSummary } from '../../api/tileApi';
+import { TileType } from './TileEditor';
 
 // Initialize PixiJS Assets
 Assets.init({
@@ -122,22 +123,24 @@ const EntitySprite: React.FC<EntitySpriteProps> = ({ entity, width, height, grid
   const [texture, setTexture] = useState<Texture | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Calculate the offset to center the grid
+  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
+  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+  const [x, y] = entity.position;
+  const pixelX = offsetX + (x * tileSize) + (tileSize / 2);
+  const pixelY = offsetY + (y * tileSize) + (tileSize / 2);
+
   useEffect(() => {
     const loadTexture = async () => {
       if (entity.sprite_name) {
         try {
           const spritePath = `/sprites/${entity.sprite_name}`;
-          console.log(`Loading sprite for entity ${entity.name} at path:`, spritePath);
-          
-          // First check if the texture is already loaded
           let loadedTexture = Assets.get(spritePath);
           
           if (!loadedTexture) {
-            // If not loaded, load it directly
             loadedTexture = await Assets.load(spritePath);
           }
           
-          console.log(`Successfully loaded texture for ${entity.name} from ${spritePath}`);
           setTexture(loadedTexture);
           setLoadError(null);
         } catch (error) {
@@ -159,19 +162,6 @@ const EntitySprite: React.FC<EntitySpriteProps> = ({ entity, width, height, grid
     console.log(`No texture or sprite name for entity ${entity.name}`);
     return null;
   }
-
-  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
-  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
-  const [x, y] = entity.position;
-  const pixelX = offsetX + (x * tileSize) + (tileSize / 2);
-  const pixelY = offsetY + (y * tileSize) + (tileSize / 2);
-
-  console.log(`Drawing sprite for ${entity.name}:`, {
-    position: entity.position,
-    pixelCoords: { x: pixelX, y: pixelY },
-    tileSize,
-    gridOffset: { x: offsetX, y: offsetY }
-  });
 
   return (
     <pixiSprite
@@ -199,6 +189,28 @@ interface TileSpriteProps {
 const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, tileSize }) => {
   const [texture, setTexture] = useState<Texture | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  
+  // Calculate the offset to center the grid
+  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
+  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+  const [x, y] = tile.position;
+
+  // Always define the draw callback with useCallback
+  const drawFallback = useCallback((g: PixiGraphics) => {
+    const color = tile.walkable ? 0x333333 : 0x666666;
+    g.clear();
+    g.setFillStyle({
+      color: color,
+      alpha: 1
+    });
+    g.rect(
+      offsetX + (x * tileSize),
+      offsetY + (y * tileSize),
+      tileSize,
+      tileSize
+    );
+    g.fill();
+  }, [tile.walkable, offsetX, offsetY, x, y, tileSize]);
 
   useEffect(() => {
     const loadTexture = async () => {
@@ -224,43 +236,16 @@ const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, 
   }, [tile.sprite_name]);
 
   if (loadError || !texture || !tile.sprite_name) {
-    // For tiles without sprites or with errors, draw a colored rectangle
-    const color = tile.walkable ? 0x333333 : 0x666666;
-    const offsetX = (width - (gridSize.cols * tileSize)) / 2;
-    const offsetY = (height - (gridSize.rows * tileSize)) / 2;
-    const [x, y] = tile.position;
-    
     return (
-      <pixiGraphics
-        draw={useCallback((g: PixiGraphics) => {
-          g.clear();
-          g.setFillStyle({
-            color: color,
-            alpha: 1
-          });
-          g.rect(
-            offsetX + (x * tileSize),
-            offsetY + (y * tileSize),
-            tileSize,
-            tileSize
-          );
-          g.fill();
-        }, [color, offsetX, offsetY, x, y, tileSize])}
-      />
+      <pixiGraphics draw={drawFallback} />
     );
   }
-
-  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
-  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
-  const [x, y] = tile.position;
-  const pixelX = offsetX + (x * tileSize);
-  const pixelY = offsetY + (y * tileSize);
 
   return (
     <pixiSprite
       texture={texture}
-      x={pixelX}
-      y={pixelY}
+      x={offsetX + (x * tileSize)}
+      y={offsetY + (y * tileSize)}
       width={tileSize}
       height={tileSize}
     />
@@ -271,21 +256,32 @@ interface BattleMapCanvasProps {
   width: number;
   height: number;
   tileSize?: number;
+  onCellClick?: (x: number, y: number, handleOptimisticUpdate: (newTile: TileSummary) => void) => void;
+  isEditing?: boolean;
+  isLocked?: boolean;
+  onLockChange?: (locked: boolean) => void;
+  containerWidth: number;
+  containerHeight: number;
 }
 
-const MIN_TILE_SIZE = 16;
-const MAX_TILE_SIZE = 64;
-const TILE_SIZE_STEP = 8;
+const MIN_TILE_SIZE = 8;
+const MAX_TILE_SIZE = 128;
+const TILE_SIZE_STEP = 16;
 
 const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({ 
   width: gridWidth, 
   height: gridHeight,
-  tileSize: initialTileSize = 32
+  tileSize: initialTileSize = 32,
+  onCellClick,
+  isEditing = false,
+  isLocked = false,
+  onLockChange,
+  containerWidth,
+  containerHeight
 }) => {
   const [hoveredCell, setHoveredCell] = useState({ x: -1, y: -1 });
   const [tileSize, setTileSize] = useState(initialTileSize);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isLocked, setIsLocked] = useState(false);
   const [entities, setEntities] = useState<EntitySummary[]>([]);
   const [tiles, setTiles] = useState<Record<string, TileSummary>>({});
   const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
@@ -380,7 +376,8 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     };
 
     fetchGrid();
-    const interval = setInterval(fetchGrid, 1000);
+    // Reduced polling frequency since we have optimistic updates
+    const interval = setInterval(fetchGrid, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -406,15 +403,81 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     };
   }, []);
 
-  // Calculate the canvas size
-  const canvasSize = useMemo(() => {
-    const minWidth = (gridWidth * tileSize) + (tileSize * 4);
-    const minHeight = (gridHeight * tileSize) + (tileSize * 4);
-    return {
-      width: Math.max(800, minWidth),
-      height: Math.max(600, minHeight)
-    };
-  }, [gridWidth, gridHeight, tileSize]);
+  // Calculate the canvas size to fill the container
+  const canvasSize = useMemo(() => ({
+    width: containerWidth,
+    height: containerHeight
+  }), [containerWidth, containerHeight]);
+
+  // Calculate base tile size to fit the grid in the container
+  const baseTileSize = useMemo(() => {
+    const horizontalFit = containerWidth / gridWidth;
+    const verticalFit = containerHeight / gridHeight;
+    return Math.floor(Math.min(horizontalFit, verticalFit));
+  }, [containerWidth, containerHeight, gridWidth, gridHeight]);
+
+  // Handle pointer move with corrected calculations
+  const handlePointerMove = useCallback((event: FederatedPointerEvent) => {
+    const mousePosition = event.global;
+    
+    // Calculate the offset to center the grid
+    const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
+    const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
+
+    // Convert mouse position to grid coordinates
+    const gridX = Math.floor((mousePosition.x - offsetX - offset.x) / tileSize);
+    const gridY = Math.floor((mousePosition.y - offsetY - offset.y) / tileSize);
+    
+    // Update hover state if within grid bounds
+    if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
+      setHoveredCell({ x: gridX, y: gridY });
+    } else {
+      setHoveredCell({ x: -1, y: -1 });
+    }
+  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, offset]);
+
+  // Handle pointer down with the same calculations
+  const handlePointerDown = useCallback((event: FederatedPointerEvent) => {
+    if (!isEditing || isLocked || !onCellClick) return;
+
+    const mousePosition = event.global;
+    const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
+    const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
+    
+    // Convert mouse position to grid coordinates
+    const gridX = Math.floor((mousePosition.x - offsetX - offset.x) / tileSize);
+    const gridY = Math.floor((mousePosition.y - offsetY - offset.y) / tileSize);
+    
+    // Only trigger if within grid bounds
+    if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
+      const handleOptimisticUpdate = (newTile: TileSummary) => {
+        setTiles(prev => ({
+          ...prev,
+          [newTile.uuid]: newTile
+        }));
+      };
+      
+      onCellClick(gridX, gridY, handleOptimisticUpdate);
+    }
+  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, offset, onCellClick, isEditing, isLocked]);
+
+  const handleZoomIn = useCallback(() => {
+    setTileSize(prev => Math.min(prev + TILE_SIZE_STEP, MAX_TILE_SIZE));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setTileSize(prev => Math.max(prev - TILE_SIZE_STEP, MIN_TILE_SIZE));
+  }, []);
+
+  const handleResetView = useCallback(() => {
+    setTileSize(initialTileSize);
+    setOffset({ x: 0, y: 0 });
+  }, [initialTileSize]);
+
+  const toggleLock = useCallback(() => {
+    const newLockState = !isLocked;
+    onLockChange?.(newLockState);
+  }, [isLocked, onLockChange]);
 
   // Handle WASD movement
   useEffect(() => {
@@ -440,42 +503,6 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLocked]);
-
-  const handlePointerMove = useCallback((event: FederatedPointerEvent) => {
-    const mousePosition = event.global;
-    
-    // Calculate grid offsets including the movement offset
-    const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
-    const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
-
-    // Convert mouse position to grid coordinates, subtracting the offset
-    const gridX = Math.floor((mousePosition.x - offsetX - offset.x) / tileSize);
-    const gridY = Math.floor((mousePosition.y - offsetY - offset.y) / tileSize);
-    
-    // Update hover state if within grid bounds
-    if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
-      setHoveredCell({ x: gridX, y: gridY });
-    } else {
-      setHoveredCell({ x: -1, y: -1 });
-    }
-  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, offset]);
-
-  const handleZoomIn = useCallback(() => {
-    setTileSize(prev => Math.min(prev + TILE_SIZE_STEP, MAX_TILE_SIZE));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setTileSize(prev => Math.max(prev - TILE_SIZE_STEP, MIN_TILE_SIZE));
-  }, []);
-
-  const handleResetView = useCallback(() => {
-    setTileSize(initialTileSize);
-    setOffset({ x: 0, y: 0 });
-  }, [initialTileSize]);
-
-  const toggleLock = useCallback(() => {
-    setIsLocked(prev => !prev);
-  }, []);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -552,11 +579,12 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
             {/* Draw a background to ensure we can see the canvas */}
             <pixiGraphics
               eventMode="static"
-              cursor="pointer"
+              cursor={isEditing ? "crosshair" : "pointer"}
               interactive={true}
               onPointerEnter={() => {}}
               onPointerLeave={() => setHoveredCell({ x: -1, y: -1 })}
               onPointerMove={handlePointerMove}
+              onPointerDown={handlePointerDown}
               draw={useCallback((g: PixiGraphics) => {
                 g.clear();
                 g.setFillStyle({

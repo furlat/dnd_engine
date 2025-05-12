@@ -3,13 +3,16 @@ import { Box, useTheme } from '@mui/material';
 import CharacterSheetPage from './CharacterSheetPage';
 import EventQ from '../components/events/EventQ';
 import BattleMapCanvas from '../components/battlemap/BattleMapCanvas';
-import { fetchGridSnapshot } from '../api/tileApi';
+import TileEditor, { useTileEditor } from '../components/battlemap/TileEditor';
+import { fetchGridSnapshot, TileSummary } from '../api/tileApi';
 
 const BattleMapPage: React.FC = () => {
   const theme = useTheme();
   const [containerSize, setContainerSize] = React.useState({ width: 0, height: 0 });
   const [gridSize, setGridSize] = React.useState({ width: 30, height: 20 }); // Default size
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const [isLocked, setIsLocked] = React.useState(false);
+  const { handleCellClick, TileEditor, isEditing } = useTileEditor();
 
   // Update container size when window resizes
   React.useEffect(() => {
@@ -68,11 +71,20 @@ const BattleMapPage: React.FC = () => {
           bgcolor: '#000000'
         }}
       >
+        {/* Tile Editor */}
+        <TileEditor isLocked={isLocked} />
+
         {containerSize.width > 0 && containerSize.height > 0 && (
           <BattleMapCanvas 
             width={gridSize.width}
             height={gridSize.height}
             tileSize={32}
+            onCellClick={(x, y, onOptimisticUpdate) => handleCellClick(x, y, onOptimisticUpdate, isLocked)}
+            isEditing={isEditing}
+            onLockChange={setIsLocked}
+            isLocked={isLocked}
+            containerWidth={containerSize.width}
+            containerHeight={containerSize.height}
           />
         )}
       </Box>
