@@ -10,7 +10,6 @@ import {
   useTheme
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import EventQ from '../events/EventQ';
 
 const Layout: React.FC = () => {
   const theme = useTheme();
@@ -23,7 +22,6 @@ const Layout: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'auto',
-        maxWidth: 'calc(100vw - 350px)' // Account for EventQ width
       }}>
         <AppBar position="static">
           <Toolbar>
@@ -75,19 +73,6 @@ const Layout: React.FC = () => {
             </Typography>
           </Container>
         </Box>
-      </Box>
-      
-      {/* Event Queue */}
-      <Box sx={{ 
-        width: '350px',
-        borderLeft: 1,
-        borderColor: 'divider',
-        position: 'fixed',
-        right: 0,
-        top: 0,
-        bottom: 0,
-      }}>
-        <EventQ />
       </Box>
     </Box>
   );
