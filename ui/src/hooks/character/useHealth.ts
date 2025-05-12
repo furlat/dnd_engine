@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback, useMemo } from 'react';
-import { characterStore } from '../../store/characterStore';
+import { characterStore, characterActions } from '../../store/characterStore';
 import type { 
   ReadonlyHealthSnapshot, 
   ReadonlyModifiableValueSnapshot,
@@ -8,7 +8,6 @@ import type {
   ReadonlyDamageResistanceSnapshot
 } from '../../models/readonly';
 import { modifyHealth, applyTemporaryHP } from '../../api/characterApi';
-import { useEntity } from '../../contexts/EntityContext';
 
 interface HealthStats {
   current: number;
@@ -44,7 +43,6 @@ interface HealthData {
 
 export function useHealth(): HealthData {
   const snap = useSnapshot(characterStore);
-  const { setEntityData } = useEntity();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
 
@@ -59,23 +57,23 @@ export function useHealth(): HealthData {
     if (!snap.character?.uuid) return;
     try {
       const result = await modifyHealth(snap.character.uuid, amount);
-      setEntityData(result);
+      characterActions.setCharacter(result);
       setModifyDialogOpen(false);
     } catch (error) {
       console.error('Failed to modify health:', error);
     }
-  }, [snap.character?.uuid, setEntityData]);
+  }, [snap.character?.uuid]);
 
   const handleApplyTempHP = useCallback(async (amount: number) => {
     if (!snap.character?.uuid) return;
     try {
       const result = await applyTemporaryHP(snap.character.uuid, amount);
-      setEntityData(result);
+      characterActions.setCharacter(result);
       setModifyDialogOpen(false);
     } catch (error) {
       console.error('Failed to apply temporary HP:', error);
     }
-  }, [snap.character?.uuid, setEntityData]);
+  }, [snap.character?.uuid]);
 
   // Computed values
   const stats = useMemo((): HealthStats | null => {
