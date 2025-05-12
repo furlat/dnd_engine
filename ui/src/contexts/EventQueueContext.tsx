@@ -1,13 +1,11 @@
-import React, { createContext, useContext, useCallback, useRef } from 'react';
+import React, { createContext, useContext } from 'react';
+import { useEventQueue as useEventQueueStore } from '../hooks/useEventQueue';
 
 interface EventQueueContextType {
   refreshEvents: () => void;
   setRefreshEvents: (callback: () => Promise<void>) => void;
   isRefreshing: boolean;
 }
-
-// Create a no-op function that returns a resolved promise
-const noopAsync = () => Promise.resolve();
 
 const EventQueueContext = createContext<EventQueueContextType>({
   refreshEvents: () => {},
@@ -16,48 +14,14 @@ const EventQueueContext = createContext<EventQueueContextType>({
 });
 
 export const EventQueueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const refreshTimeoutRef = useRef<NodeJS.Timeout>();
-  const refreshCallbackRef = useRef<() => Promise<void>>(noopAsync);
-
-  // Debounced refresh to prevent multiple rapid refreshes
-  const debouncedRefresh = useCallback(() => {
-    if (refreshTimeoutRef.current) {
-      clearTimeout(refreshTimeoutRef.current);
-    }
-    
-    refreshTimeoutRef.current = setTimeout(() => {
-      if (!isRefreshing) {
-        setIsRefreshing(true);
-        refreshCallbackRef.current().finally(() => {
-          setIsRefreshing(false);
-        });
-      }
-    }, 100); // Small delay to batch rapid updates
-  }, [isRefreshing]);
-
-  const setRefreshEvents = useCallback((callback: () => Promise<void>) => {
-    refreshCallbackRef.current = callback || noopAsync;
-  }, []);
-
-  // Cleanup timeout on unmount
-  React.useEffect(() => {
-    return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
-    };
-  }, []);
+  const eventQueue = useEventQueueStore();
 
   return (
-    <EventQueueContext.Provider value={{ 
-      refreshEvents: debouncedRefresh, 
-      setRefreshEvents,
-      isRefreshing 
-    }}>
+    <EventQueueContext.Provider value={eventQueue}>
       {children}
     </EventQueueContext.Provider>
   );
 };
 
+// Keep this for backward compatibility
 export const useEventQueue = () => useContext(EventQueueContext); 
