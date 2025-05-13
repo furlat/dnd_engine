@@ -1,7 +1,8 @@
-from typing import Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable
+from typing import DefaultDict, Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
 from enum import Enum
+from collections import defaultdict
 
 
 
@@ -15,9 +16,9 @@ from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, Sta
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-from dnd.core.events import EventType, EventPhase, Event, AttackEvent, RangeType, SavingThrowEvent, SkillCheckEvent
+from dnd.core.events import EventType, EventPhase, Event, RangeType, SavingThrowEvent, SkillCheckEvent
 
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health)
@@ -26,19 +27,45 @@ from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
 from dnd.core.events import AbilityName, SkillName, EventHandler, EventType, EventPhase, Trigger
+from dnd.core.base_block import ContextualConditionImmunity
+from dnd.core.base_tiles import Tile
 
-def update_or_concat_to_dict(d: Dict[UUID, list], kv: Tuple[UUID, Union[list,Any]]) -> Dict[UUID, list]:
-    key, value = kv
-    if not isinstance(value, list):
-        value = [value]
-    if key in d:
-        d[key] += value
-    else:
-        d[key] = value
-    return d
 
-ContextualConditionImmunity = Callable[['Entity', Optional['Entity'],Optional[dict]], bool]
-
+def determine_attack_outcome(roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
+        """
+        Determine attack outcome based on roll and AC.
+        
+        Args:
+            roll: The dice roll result
+            ac: The armor class to check against
+            
+        Returns:
+            AttackOutcome: The outcome of the attack
+        """
+        target_ac = ac.normalized_score if isinstance(ac, ModifiableValue) else ac
+        
+        # First check auto miss which overrides everything else
+        if roll.auto_hit_status == AutoHitStatus.AUTOMISS:
+            return AttackOutcome.MISS
+        # Second check if the roll is an auto hit (with critical check)
+        elif roll.auto_hit_status == AutoHitStatus.AUTOHIT:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+                return AttackOutcome.CRIT
+            else:
+                return AttackOutcome.HIT
+        # Check for natural 1 (critical miss)
+        elif roll.results == 1:
+            return AttackOutcome.CRIT_MISS
+        # Check if roll meets or exceeds AC (with critical check)
+        elif roll.total >= target_ac:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+                return AttackOutcome.CRIT
+            else:
+                return AttackOutcome.HIT
+        # Finally, it's a miss
+        else:
+            return AttackOutcome.MISS
+        
 class EntityConfig(BaseModel):
     ability_scores: AbilityScoresConfig = Field(default_factory=lambda: AbilityScoresConfig,description="Ability scores for the entity")
     skill_set: SkillSetConfig = Field(default_factory=lambda: SkillSetConfig,description="Skill set for the entity")
@@ -49,7 +76,7 @@ class EntityConfig(BaseModel):
     proficiency_bonus: int = Field(default=0,description="Proficiency bonus for the entity")
     proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
-
+    sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
     require interactions between blocks """
@@ -63,17 +90,44 @@ class Entity(BaseBlock):
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
+    allow_events_conditions: bool = Field(default=True,description="If True, events and conditions will be allowed to be added to the block")
+    sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
+    _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
+    _entity_by_position: ClassVar[DefaultDict[Tuple[int,int], List['Entity']]] = defaultdict(list)
 
-    active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition name")
-    active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition UUID")
-    condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
-    contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
-    active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=dict)
+    def __init__(self, **data):
+        """
+        Initialize the BaseBlock and register it in the class registry.
 
-    event_handlers: Dict[UUID, EventHandler] = Field(default_factory=dict)
-    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
-    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
+        Args:
+            **data: Keyword arguments to initialize the BaseBlock attributes.
+        """
+        super().__init__(**data)
+        self.__class__._entity_registry[self.uuid] = self
+        self.__class__._entity_by_position[self.position].append(self)
 
+    @classmethod
+    def update_entity_position(cls, entity: 'Entity',new_position: Tuple[int,int]):
+        cls._entity_by_position[entity.position].remove(entity)
+        cls._entity_by_position[new_position].append(entity)
+        entity._set_position(new_position)
+
+    @classmethod
+    def register_entity(cls, entity: 'Entity'):
+        cls._entity_registry[entity.uuid] = entity
+
+    @classmethod
+    def get_all_entities(cls) -> List['Entity']:
+        return list(cls._entity_registry.values())
+    
+    @classmethod
+    def get_all_entities_at_position(cls, position: Tuple[int,int]) -> List['Entity']:
+        return cls._entity_by_position[position]
+    
+    @classmethod
+    def get(cls, uuid: UUID) -> Optional['Entity']:
+        return cls._entity_registry.get(uuid)
+    
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Entity",description: Optional[str] = None,config: Optional[EntityConfig] = None) -> 'Entity':
         """
@@ -84,7 +138,7 @@ class Entity(BaseBlock):
             source_entity_uuid (UUID): The UUID that will be used as both the entity's UUID and source_entity_uuid
             name (str): The name of the entity. Defaults to "Entity"
 
-        Returns:
+        Returns: 
             Entity: The newly created Entity instance
         """
         if config is None:
@@ -115,10 +169,20 @@ class Entity(BaseBlock):
                 equipment=equipment,
                 senses=senses,
                 action_economy=action_economy,
-                proficiency_bonus=proficiency_bonus
+                proficiency_bonus=proficiency_bonus,
+                position=config.position,
+                sprite_name=config.sprite_name
             )
-        
 
+    def _set_position(self,new_position: Tuple[int,int]):
+        """ move the entity to a new position without updating the registry  - should not be used directly"""
+        self.position = new_position
+        self.senses.position = new_position 
+
+    def move(self,new_position: Tuple[int,int]):
+        """ move the entity to a new position """
+        
+        Entity.update_entity_position(self,new_position)
         
     def get_target_entity(self,copy: bool = False) -> Optional['Entity']:
         if self.target_entity_uuid is None:
@@ -139,34 +203,10 @@ class Entity(BaseBlock):
                 return True
         return False
     
-    def add_event_handler(self, event_handler: EventHandler) -> None:
-        self.event_handlers[event_handler.uuid] = event_handler
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].append(event_handler)
-            self.event_handlers_by_trigger[trigger].append(event_handler)
 
-    def remove_event_handler_from_dicts(self, event_handler: EventHandler) -> None:
-        self.event_handlers.pop(event_handler.uuid)
-        for trigger in event_handler.trigger_conditions:
-            if trigger.is_simple():
-                self.event_handlers_by_simple_trigger[trigger].remove(event_handler)
-            self.event_handlers_by_trigger[trigger].remove(event_handler)
-
-    def remove_event_handler(self, event_handler: EventHandler) -> None:
-        event_handler.remove() #this is already handling the removal from the event queue and the dicts
-
-    def _remove_condition_from_dicts(self, condition: BaseCondition) :
-        condition_name = condition.name
-        assert condition.source_entity_uuid is not None and condition_name is not None
-        self.active_conditions_by_source[condition.source_entity_uuid].remove(condition_name)
-
-    def remove_condition(self, condition_name: str) -> None:
-        condition = self.active_conditions.pop(condition_name)
-        condition.remove()
-        self._remove_condition_from_dicts(condition)
     
-    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None)  -> Optional[Event]:
+        """ Overrides the base method of BaseBlock to add the saving throw checks"""
         if condition.name is None:
             raise ValueError("BaseCondition name is not set")
         if condition.target_entity_uuid is None:
@@ -174,76 +214,35 @@ class Entity(BaseBlock):
         if context is not None:
             condition.set_context(context)
         
+        declaration_event = condition.declare_event(parent_event)
+
         if self.check_condition_immunity(condition.name):
-            if event is not None:
-                return event.cancel(status_message=f"Condition {condition.name} is immune")
+            if declaration_event is not None:
+                return declaration_event.cancel(status_message=f"Condition {condition.name} is immune")
             else:
                 return None
         if check_save_throw and condition.application_saving_throw is not None:
             (outcome,dice_roll,success) = self.saving_throw(condition.application_saving_throw)
             if success:
-                if event is not None:
-                    return event.cancel(status_message=f"Target passed the {condition.application_saving_throw.ability_name} saving throw with")
+                if declaration_event is not None:
+                    return declaration_event.cancel(status_message=f"Target passed the {condition.application_saving_throw.ability_name} saving throw with")
                 else:
                     return None
-        condition_applied = condition.apply(event)
+        condition_applied = condition.apply(declaration_event=declaration_event)
         if condition_applied:
             if condition.name in self.active_conditions:
                 #already present we need to remove the old one and add the new one for now not stackable
                 self.remove_condition(condition.name)
             self.active_conditions[condition.name] = condition
             self.active_conditions_by_uuid[condition.uuid] = condition
-            self.active_conditions_by_source = update_or_concat_to_dict(self.active_conditions_by_source, (condition.source_entity_uuid, condition.name))
+            self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
         return condition_applied
     
     
 
-    def add_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
-        self.condition_immunities.append((condition_name,immunity_name))
     
-    def _remove_static_condition_immunity(self, condition_name: str,immunity_name: Optional[str]=None):
-        for condition_tuple in self.condition_immunities:
-            if condition_tuple[0] == condition_name:
-                if immunity_name is None:
-                    self.condition_immunities.remove(condition_tuple)                
-                else:
-                    if condition_tuple[1] == immunity_name:
-                        self.condition_immunities.remove(condition_tuple)
-                        break
-        return
-    
-    def add_contextual_condition_immunity(self, condition_name: str, immunity_name:str, immunity_check: ContextualConditionImmunity):
-        if condition_name not in self.contextual_condition_immunities:
-            self.contextual_condition_immunities[condition_name] = []
-        self.contextual_condition_immunities[condition_name].append((immunity_name,immunity_check))
-
-    def add_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None, immunity_check: Optional[ContextualConditionImmunity]=None):
-        if immunity_check is not None:
-            if immunity_name is None:
-                raise ValueError("Immunity name is required when adding a contextual BaseCondition immunity")
-            self.add_contextual_condition_immunity(condition_name,immunity_name,immunity_check)
-        else:
-            self.add_static_condition_immunity(condition_name,immunity_name)
-    
-    def _remove_contextual_condition_immunity(self, condition_name: str, immunity_name: Optional[str]=None):
-        for self_condition_name in self.contextual_condition_immunities:
-            if self_condition_name == condition_name:
-                if immunity_name is None:
-                    self.contextual_condition_immunities.pop(self_condition_name)
-                    break
-                else:
-                    for immunity_tuple in self.contextual_condition_immunities[self_condition_name]:
-                        if immunity_tuple[0] == immunity_name:
-                            self.contextual_condition_immunities[self_condition_name].remove(immunity_tuple)
-                            break
-
-    
-    def remove_condition_immunity(self, condition_name: str):
-        self._remove_static_condition_immunity(condition_name)
-        self._remove_contextual_condition_immunity(condition_name)
-        return
-
     def advance_duration_condition(self,condition_name:str, skip_save_throw: bool = False) -> bool:
+        """ Overrides the base method of BaseBlock to add the saving throw checks"""
         condition = self.active_conditions[condition_name]
         if not skip_save_throw and condition.removal_saving_throw is not None:
             (outcome,dice_roll,success) = self.saving_throw(condition.removal_saving_throw)
@@ -257,13 +256,6 @@ class Entity(BaseBlock):
         return removed
     
 
-    def advance_durations(self) -> List[str]:
-        removed_conditions = []
-        for condition_name in list(self.active_conditions.keys()):
-            removed = self.advance_duration_condition(condition_name)
-            if removed:
-                removed_conditions.append(condition_name)
-        return removed_conditions
     
     
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
@@ -343,13 +335,16 @@ class Entity(BaseBlock):
 
     
     def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName) -> ModifiableValue:
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
         target_entity = None
         if self.target_entity_uuid:
             target_entity = self.get_target_entity(copy=True)
             assert isinstance(target_entity, Entity)
-            target_entity.set_target_entity(self.uuid)
+            if target_entity.target_entity_uuid != self.uuid:
+                target_entity.set_target_entity(self.uuid)
             saving_throw_bonuses_target = target_entity._get_bonuses_for_saving_throw(ability_name)
 
         saving_throw_bonuses_source =self._get_bonuses_for_saving_throw(ability_name)
@@ -357,19 +352,24 @@ class Entity(BaseBlock):
             for mod_source,mod_target in zip(saving_throw_bonuses_source,saving_throw_bonuses_target):
                 mod_source.set_from_target(mod_target)    
         total_bonus_source = saving_throw_bonuses_source[0].combine_values(list(saving_throw_bonuses_source)[1:]).model_copy(deep=True)
-        self.clear_target_entity()
+        
+        if should_clear_target:
+            self.clear_target_entity()
 
         return total_bonus_source
 
     def skill_bonus(self, target_entity_uuid: Optional[UUID], skill_name: SkillName) -> ModifiableValue:
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
         
         target_entity = None
         if self.target_entity_uuid:
             target_entity = self.get_target_entity(copy=True)
             assert isinstance(target_entity, Entity)
-            target_entity.set_target_entity(self.uuid)
+            if target_entity.target_entity_uuid != self.uuid:
+                target_entity.set_target_entity(self.uuid)
             skill_bonuses_target = target_entity._get_bonuses_for_skill(skill_name)
 
         skill_bonuses_source = self._get_bonuses_for_skill(skill_name)
@@ -378,9 +378,11 @@ class Entity(BaseBlock):
                 mod_source.set_from_target(mod_target)
         
         total_bonus_source = skill_bonuses_source[0].combine_values(list(skill_bonuses_source)[1:]).model_copy(deep=True)
-        self.clear_target_entity()
-        if target_entity is not None:
-            target_entity.clear_target_entity() 
+        
+        if should_clear_target:
+            self.clear_target_entity()
+            if target_entity is not None:
+                target_entity.clear_target_entity() 
             for mod_source, mod_target in zip(skill_bonuses_source, skill_bonuses_target):
                 mod_source.reset_from_target()
                 mod_target.reset_from_target()
@@ -388,10 +390,15 @@ class Entity(BaseBlock):
         return total_bonus_source
 
     def skill_bonus_cross(self, target_entity_uuid: UUID, skill_name: SkillName) -> Tuple[ModifiableValue, ModifiableValue]:
-        self.set_target_entity(target_entity_uuid)
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
+            self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
+        
         target_entity = self.get_target_entity(copy=True)
         assert isinstance(target_entity, Entity)
-        target_entity.set_target_entity(self.uuid)
+        if target_entity.target_entity_uuid != self.uuid:
+            target_entity.set_target_entity(self.uuid)
 
         skill_bonuses_source = self._get_bonuses_for_skill(skill_name)
         skill_bonuses_target = target_entity._get_bonuses_for_skill(skill_name)
@@ -403,8 +410,9 @@ class Entity(BaseBlock):
         total_bonus_source = skill_bonuses_source[0].combine_values(list(skill_bonuses_source)[1:]).model_copy(deep=True)
         total_bonus_target = skill_bonuses_target[0].combine_values(list(skill_bonuses_target)[1:]).model_copy(deep=True)
 
-        self.clear_target_entity()
-        target_entity.clear_target_entity()
+        if should_clear_target:
+            self.clear_target_entity()
+            target_entity.clear_target_entity()
         for mod_source, mod_target in zip(skill_bonuses_source, skill_bonuses_target):
             mod_source.reset_from_target()
             mod_target.reset_from_target()
@@ -413,8 +421,10 @@ class Entity(BaseBlock):
     
     def ac_bonus(self, target_entity_uuid: Optional[UUID]=None) -> ModifiableValue:
         """ missing effects from target attack bonus"""
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
 
         if self.equipment.is_unarmored():
             unarmored_values = self.equipment.get_unarmored_ac_values()
@@ -435,47 +445,55 @@ class Entity(BaseBlock):
             
             ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus])
         
-        if target_entity_uuid is not None:
+        if should_clear_target:
             self.clear_target_entity()
         return ac_bonus
     
     
     def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
         """ missing effects from target armor bonus"""
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
     
         proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range = self._get_attack_bonuses(weapon_slot)
-        print("current ability bonuses", ability_bonuses)
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
-        if target_entity_uuid is not None:
+        
+        if should_clear_target:
             self.clear_target_entity()
         return source_attack_bonus
     
 
     def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
-        if target_entity_uuid is not None:
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
         damages = self.equipment.get_damages(weapon_slot, self.ability_scores)
-        if target_entity_uuid is not None:
+        print(f"len damages: {len(damages)} inside entity")
+        if should_clear_target:
             self.clear_target_entity()
         return damages
     
     def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
         """ From each damage we get the dice and damage type and we roll it """
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
-        print(f"Total Health before taking damage: {self.health.get_total_hit_points(con_modifier.normalized_score)}")
+        
         rolls = []
         for damage in damages:
             dice = damage.get_dice(attack_outcome=attack_outcome)
             roll = dice.roll
             rolls.append(roll)
-            print(f"Damage Roll result: {roll.results}, Roll total: {roll.total}")
             self.health.take_damage(roll.total, damage.damage_type, source_entity_uuid=damage.source_entity_uuid)
-        print(f"Total Health after taking damage: {self.health.get_total_hit_points(con_modifier.normalized_score)}")
+
 
         return rolls
+    
+    def get_hp(self) -> int:
+        """ total health of the entity """
+        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
     
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Range:
         """
@@ -497,75 +515,25 @@ class Entity(BaseBlock):
         else:
             return weapon.range
             
-    def roll_attack(self, attack_bonus: ModifiableValue) -> DiceRoll:
+    def roll_d20(self, bonus: ModifiableValue,roll_type: RollType = RollType.ATTACK) -> DiceRoll:
         """
         Roll attack dice based on attack bonus.
-        
+
         Args:
             attack_bonus: The total attack bonus to use
             
         Returns:
             DiceRoll: The result of the attack roll
         """
-        attack_dice = Dice(count=1, value=20, bonus=attack_bonus, roll_type=RollType.ATTACK)
+        attack_dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
         return attack_dice.roll
         
-    def determine_attack_outcome(self, roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
-        """
-        Determine attack outcome based on roll and AC.
-        
-        Args:
-            roll: The dice roll result
-            ac: The armor class to check against
-            
-        Returns:
-            AttackOutcome: The outcome of the attack
-        """
-        target_ac = ac.normalized_score if isinstance(ac, ModifiableValue) else ac
-        
-        # First check auto miss which overrides everything else
-        if roll.auto_hit_status == AutoHitStatus.AUTOMISS:
-            return AttackOutcome.MISS
-        # Second check if the roll is an auto hit (with critical check)
-        elif roll.auto_hit_status == AutoHitStatus.AUTOHIT:
-            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
-                return AttackOutcome.CRIT
-            else:
-                return AttackOutcome.HIT
-        # Check for natural 1 (critical miss)
-        elif roll.results == 1:
-            return AttackOutcome.CRIT_MISS
-        # Check if roll meets or exceeds AC (with critical check)
-        elif roll.total >= target_ac:
-            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
-                return AttackOutcome.CRIT
-            else:
-                return AttackOutcome.HIT
-        # Finally, it's a miss
-        else:
-            return AttackOutcome.MISS
-    
-    def get_attack_outcome(self, attack_bonus: ModifiableValue, ac: Union[int,ModifiableValue]) -> Tuple[DiceRoll,AttackOutcome]:
-        """ Returns the dice roll and the attack outcome """
-        roll = self.roll_attack(attack_bonus)
-        target_ac = ac.normalized_score if isinstance(ac,ModifiableValue) else ac
-        
-        print(f"Target AC: {target_ac}")
-        print(f"Attack bonus: {attack_bonus.normalized_score}")
-        print(f"Roll result: {roll.results}, Roll total: {roll.total} vs target ac: {target_ac} result: {roll.total >= target_ac} auto hit status: {roll.auto_hit_status} critical status: {roll.critical_status}")
-        print(f"Roll auto hit status: {roll.auto_hit_status}")
-        print(f"Roll critical status: {roll.critical_status}")
-        print(f"Attack bonus advantage modifiers: {attack_bonus.advantage}")
-        print(f"Ac advantage modifiers: {ac.advantage}" if isinstance(ac,ModifiableValue) else "No advantage modifiers")
-        print(f"Roll Advantage status: {roll.advantage_status}")
-        
-        outcome = self.determine_attack_outcome(roll, ac)
-        return roll, outcome
     
     def create_saving_throw_request(self, target_entity_uuid: UUID, ability_name: AbilityName, dc: Union[int,UUID]) -> SavingThrowEvent:
         """ request a saving throw from the target entity """
         #if dc is a uuid get the modifiable value ensure is coming from self (has self.uuid as source entity uuid)
         if isinstance(dc,UUID):
+            
             self.set_target_entity(dc)
             new_dc = ModifiableValue.get(dc)
             if new_dc is None or new_dc.source_entity_uuid != self.uuid:
@@ -613,8 +581,10 @@ class Entity(BaseBlock):
         if dc is None:
             raise ValueError(f"DC is not set for {request.ability_name} saving throw with event id {request.uuid}")
         #create the dice
+        roll = self.roll_d20(saving_throw,RollType.SAVE)
 
-        roll,saving_throw_outcome = self.get_attack_outcome(saving_throw,dc)
+        saving_throw_outcome = determine_attack_outcome(roll,dc)
+
         self.clear_target_entity()
         return saving_throw_outcome, roll, True if saving_throw_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
     
@@ -627,141 +597,45 @@ class Entity(BaseBlock):
         dc = request.get_dc()
         if dc is None:
             raise ValueError(f"DC is not set for {request.skill_name} skill check with event id {request.uuid}")
-        roll,skill_check_outcome = self.get_attack_outcome(skill_check,dc)
+        #create the dice
+        roll = self.roll_d20(skill_check,RollType.CHECK)
+        skill_check_outcome = determine_attack_outcome(roll,dc)
         self.clear_target_entity()
         return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
 
-
-    def attack(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[AttackOutcome,DiceRoll,List[Tuple[Damage, DiceRoll]]]:
-        """ Full method implementing a complete attack returns two objects:
-        This outer methods does not get a copy of the target entity but the actual target entity that will be modified in place
-        each submethod is responsible for getting a copy of the target entity if needed for local computations
-        1) the list of damages and respective dice rolls 
-        2) the attack outcome"""
-        self.set_target_entity(target_entity_uuid)
-        target_entity = self.get_target_entity(copy=False)
-        assert isinstance(target_entity, Entity)
-        target_entity.set_target_entity(self.uuid)
-
-        #get attack aggregated bonuses from source
-        attack_bonus = self.attack_bonus(weapon_slot= weapon_slot)
-        #get ac for target
-        ac = target_entity.ac_bonus()
-        ac.set_from_target(attack_bonus)
-        attack_bonus.set_from_target(ac)
-        dice_roll, attack_outcome = self.get_attack_outcome(attack_bonus, ac)
-        ac.reset_from_target()
-        attack_bonus.reset_from_target()
-        if attack_outcome in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS]:
-            self.clear_target_entity()
-            target_entity.clear_target_entity()
-            return attack_outcome, dice_roll, []
-        else:
-            damages = self.get_damages(weapon_slot)
-            damage_rolls = target_entity.take_damage(damages, attack_outcome)
-            self.clear_target_entity()
-            target_entity.clear_target_entity()
-            return attack_outcome, dice_roll, [(damage, roll) for damage, roll in zip(damages, damage_rolls)]
-
-    def attack_event_based(self, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Optional[AttackEvent]:
+    def update_entity_senses(self, max_distance: int = 10):
         """
-        Event-based implementation of an attack.
-        This method creates an attack event and processes it through the event system,
-        allowing reactions to modify or cancel the attack at various stages.
+        Update the entity's senses using shadowcasting and pathfinding.
+        This computes:
+        - Visible cells within max_distance using shadowcast
+        - Paths to visible cells using dijkstra
+        - Entities present in visible cells
         
-        Returns:
-            Optional[AttackEvent]: The completed attack event, or None if the attack was canceled
+        Args:
+            max_distance: Maximum view/movement distance (default 10)
         """
-        self.set_target_entity(target_entity_uuid)
-        target_entity = self.get_target_entity(copy=False)
-        if not target_entity:
-            return None
-        target_entity.set_target_entity(self.uuid)
+        # Get visible cells using shadowcast
+        visible_positions = Tile.get_fov(self.position, max_distance)
+        visible_dict = {pos: True for pos in visible_positions}
         
-        # Get weapon range using the helper method
-        weapon_range = self.get_weapon_range(weapon_slot)
+        # Get walkable paths using dijkstra
+        distances, paths = Tile.get_paths(self.position, max_distance)
         
-        # Create initial attack event
-        attack_event = AttackEvent(
-            name=f"{self.name}'s Attack",
-            source_entity_uuid=self.uuid,
-            target_entity_uuid=target_entity_uuid,
-            event_type=EventType.ATTACK,
-            phase=EventPhase.DECLARATION,
-            weapon_slot=weapon_slot,
-            range=weapon_range
-        )
+        # Filter paths to only include visible positions
+        filtered_paths = {pos: path for pos, path in paths.items() if pos in visible_dict}
         
-        # If attack was canceled in DECLARATION, return early
-        if attack_event.canceled:
-            return attack_event
+        # Get entities at visible positions
+        visible_entities = {}
+        for pos in visible_positions:
+            entities = Entity.get_all_entities_at_position(pos)
+            for entity in entities:
+                if entity.uuid != self.uuid:  # Don't include self
+                    visible_entities[entity.uuid] = pos
         
-        # Move to EXECUTION phase
-        # Calculate attack bonus and target's AC
-        attack_bonus = self.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid)
-        ac = target_entity.ac_bonus(self.uuid)
-        ac.set_from_target(attack_bonus)
-        attack_bonus.set_from_target(ac)
-        # Transition to EXECUTION with attack values
-        attack_event = attack_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Rolling attack",
-            attack_bonus=attack_bonus,
-            ac=ac
-        )
-        
-        # If attack was canceled during phase transition, return early
-        if attack_event.canceled:
-            return attack_event
-        
-        # Roll attack and post results using the helper methods
-        dice_roll = self.roll_attack(attack_bonus)
-        attack_outcome = self.determine_attack_outcome(dice_roll, ac)
-        
-        attack_event = attack_event.post(
-            dice_roll=dice_roll,
-            attack_outcome=attack_outcome
-        )
-        ac.reset_from_target()
-        attack_bonus.reset_from_target()
-        
-        # Consume action (only if we got this far)
-        self.action_economy.consume(cost_type="actions", amount=1, cost_name="Attack")
-        
-        # If attack was canceled or missed, skip to COMPLETION
-        if attack_event.canceled:
-            return attack_event
-        if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-            return attack_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
-                status_message=f"Attack {'canceled' if attack_event.canceled else 'missed'}"
-            )
-        
-        # Move to EFFECT phase for damage
-        damages = self.get_damages(weapon_slot, target_entity_uuid)
-        attack_event = attack_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message="Dealing damage",
-            damages=damages
-        )
-        
-        # If attack was canceled during phase transition, return early
-        if attack_event.canceled:
-            return attack_event
-        
-        # Apply damage if there is an attack outcome
-        if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-            damage_rolls = target_entity.take_damage(damages, attack_event.attack_outcome)
-        else:
-            damage_rolls = None
-            
-        
-        self.clear_target_entity()
-        target_entity.clear_target_entity()
-        
-        # Move to COMPLETION phase
-        return attack_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message="Attack completed",
-            damage_rolls=damage_rolls,
+        # Update the senses block
+        self.senses.update_senses(
+            entities=visible_entities,
+            visible=visible_dict,
+            walkable={pos: Tile.is_walkable(pos) for pos in visible_positions},
+            paths=filtered_paths
         )

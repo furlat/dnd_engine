@@ -5,15 +5,56 @@ from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.dice import Dice, DiceRoll, RollType, AttackOutcome
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
 from dnd.blocks.abilities import  AbilityScores
-from dnd.core.events import Damage, Range, WeaponSlot, AbilityName, SkillName
+from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, SkillName, Damage
 from enum import Enum
 from random import randint
 from functools import cached_property
 from typing import Literal as TypeLiteral
 import copy
 
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 
+# Equipment-specific events
+class EquipmentEvent(Event):
+    """Base class for equipment-related events"""
+    name: str = Field(default="Equipment Event", description="An equipment event")
+    slot: Union['BodyPart', 'RingSlot', 'WeaponSlot'] = Field(description="The slot being affected")
+
+class WeaponEquipEvent(EquipmentEvent):
+    """Event for equipping a weapon"""
+    name: str = Field(default="Weapon Equip", description="A weapon equip event")
+    event_type: EventType = Field(default=EventType.WEAPON_EQUIP, description="The type of event")
+    weapon: 'Weapon' = Field(description="The weapon being equipped")
+
+class WeaponUnequipEvent(EquipmentEvent):
+    """Event for unequipping a weapon"""
+    name: str = Field(default="Weapon Unequip", description="A weapon unequip event")
+    event_type: EventType = Field(default=EventType.WEAPON_UNEQUIP, description="The type of event")
+    weapon: 'Weapon' = Field(description="The weapon being unequipped")
+
+class ArmorEquipEvent(EquipmentEvent):
+    """Event for equipping armor"""
+    name: str = Field(default="Armor Equip", description="An armor equip event")
+    event_type: EventType = Field(default=EventType.ARMOR_EQUIP, description="The type of event")
+    armor: 'Armor' = Field(description="The armor being equipped")
+
+class ArmorUnequipEvent(EquipmentEvent):
+    """Event for unequipping armor"""
+    name: str = Field(default="Armor Unequip", description="An armor unequip event")
+    event_type: EventType = Field(default=EventType.ARMOR_UNEQUIP, description="The type of event")
+    armor: 'Armor' = Field(description="The armor being unequipped")
+
+class ShieldEquipEvent(EquipmentEvent):
+    """Event for equipping a shield"""
+    name: str = Field(default="Shield Equip", description="A shield equip event")
+    event_type: EventType = Field(default=EventType.SHIELD_EQUIP, description="The type of event")
+    shield: 'Shield' = Field(description="The shield being equipped")
+
+class ShieldUnequipEvent(EquipmentEvent):
+    """Event for unequipping a shield"""
+    name: str = Field(default="Shield Unequip", description="A shield unequip event")
+    event_type: EventType = Field(default=EventType.SHIELD_UNEQUIP, description="The type of event")
+    shield: 'Shield' = Field(description="The shield being unequipped")
 
 class RingSlot(str, Enum):
     LEFT = "Left Ring"
@@ -464,12 +505,25 @@ class Equipment(BaseBlock):
             return None
 
         return damage
+    
+    def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:
+        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
+            return self.weapon_main_hand.get_extra_damages()
+        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
+            return self.weapon_off_hand.get_extra_damages()
+        else:
+            return []
+    
  
-    def get_extra_attack_damage(self) -> List[Damage]:
-        damages = []
+    def get_extra_attack_damage(self, weapon_slot: Optional[WeaponSlot] = None) -> List[Damage]:
+        damages: List[Damage] = []
         for dice, dice_numbers, bonus, damage_type in zip(self.extra_attack_damage_dices, self.extra_attack_damage_dices_numbers, self.extra_attack_damage_bonus, self.extra_attack_damage_type):
             damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
-        return damages
+        print(f"len damages: {len(damages)} get_extra_attack_damage before returning")
+        if weapon_slot is not None:
+            return damages+self._get_extra_weapon_damages(weapon_slot)
+        else:
+            return damages
 
     def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> List[Damage]:
         if self.is_unarmed(weapon_slot):
@@ -479,7 +533,7 @@ class Equipment(BaseBlock):
             main_damage = self._get_main_weapon_damage(weapon_slot, ability_block)
             if main_damage is not None:
                 outs.append(main_damage)
-            outs.extend(self.get_extra_attack_damage())
+            outs.extend(self.get_extra_attack_damage(weapon_slot))
             return outs
         
     def get_main_damage_type(self, weapon_slot: WeaponSlot) -> DamageType:
@@ -551,24 +605,73 @@ class Equipment(BaseBlock):
                     if isinstance(value, ModifiableValue):
                         value.source_entity_uuid = self.source_entity_uuid
 
+        # Handle rings
         if isinstance(item, Ring):
             if slot not in (RingSlot.LEFT, RingSlot.RIGHT):
                 raise ValueError("Must specify LEFT or RIGHT slot for rings")
+            
+            #check if the ring is already equipped in case unequip the previous ring
+            if slot == RingSlot.LEFT and self.ring_left is not None:
+                self.unequip(RingSlot.LEFT,)
+            elif slot == RingSlot.RIGHT and self.ring_right is not None:
+                self.unequip(RingSlot.RIGHT)
+            
+            # Create and process equip event
+            event = ArmorEquipEvent(
+                name=item.name,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                armor=item,
+                slot=slot
+            )
+            if event.phase_to(EventPhase.EXECUTION).canceled:
+                return
+            
             if slot == RingSlot.LEFT:
                 self.ring_left = item
             else:
                 self.ring_right = item
+                
+            event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
             return
 
+        # Handle weapons and shields
         if isinstance(item, (Weapon, Shield)):
             if slot not in (WeaponSlot.MAIN_HAND, WeaponSlot.OFF_HAND):
-                # Default to main hand if not specified
                 slot = WeaponSlot.MAIN_HAND
+            
+            #check if the weapon is already equipped in case unequip the previous weapon
+            if slot == WeaponSlot.MAIN_HAND and self.weapon_main_hand is not None:
+                self.unequip(WeaponSlot.MAIN_HAND)
+            elif slot == WeaponSlot.OFF_HAND and self.weapon_off_hand is not None:
+                self.unequip(WeaponSlot.OFF_HAND)
+            
+            if isinstance(item, Weapon):
+                event = WeaponEquipEvent(
+                    name=item.name,
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=self.target_entity_uuid,
+                    weapon=item,
+                    slot=slot
+                )
+            else:  # Shield
+                event = ShieldEquipEvent(
+                    name=item.name,
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=self.target_entity_uuid,
+                    shield=item,
+                    slot=slot
+                )
+            
+            if event.phase_to(EventPhase.EXECUTION).canceled:
+                return
             
             if slot == WeaponSlot.MAIN_HAND and isinstance(item, Weapon):
                 self.weapon_main_hand = item
             else:
                 self.weapon_off_hand = item
+                
+            event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
             return
 
         # For armor pieces, get the slot from the item's body_part if not specified
@@ -578,10 +681,28 @@ class Equipment(BaseBlock):
         if slot not in slot_mapping:
             raise ValueError(f"Invalid equipment slot: {slot}")
 
+        #check if the armor is already equipped in case unequip the previous armor
+        if slot in slot_mapping and self.body_armor is not None:
+            self.unequip(slot)
+
+        # Create and process armor equip event
+        event = ArmorEquipEvent(
+            name=item.name,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            armor=item,
+            slot=slot
+        )
+        
+        if event.phase_to(EventPhase.EXECUTION).canceled:
+            return
+
         attribute_name = slot_mapping[slot]
         setattr(self, attribute_name, item)
+        
+        event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
 
-    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot]) -> None:
+    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot], parent_event_uuid: Optional[UUID] = None) -> None:
         """
         Unequip the item in the specified slot.
 
@@ -591,6 +712,7 @@ class Equipment(BaseBlock):
         Raises:
             ValueError: If the slot is invalid
         """
+        # Determine the attribute name and current item
         if isinstance(slot, RingSlot):
             attribute_name = "ring_left" if slot == RingSlot.LEFT else "ring_right"
         elif isinstance(slot, WeaponSlot):
@@ -602,7 +724,47 @@ class Equipment(BaseBlock):
         else:
             raise ValueError(f"Invalid equipment slot: {slot}")
 
+        # Get the current item
+        current_item = getattr(self, attribute_name)
+        if current_item is None:
+            return
+
+        # Create appropriate unequip event based on item type
+        if isinstance(current_item, Weapon):
+            event = WeaponUnequipEvent(
+                name=current_item.name,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                weapon=current_item,
+                slot=slot,
+                parent_event=parent_event_uuid
+            )
+        elif isinstance(current_item, Shield):
+            event = ShieldUnequipEvent(
+                name=current_item.name,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                shield=current_item,
+                slot=slot,
+                parent_event=parent_event_uuid
+            )
+        else:  # Armor
+            event = ArmorUnequipEvent(
+                name=current_item.name,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                armor=current_item,
+                slot=slot,
+                parent_event=parent_event_uuid
+            )
+
+        # Process the unequip event
+        if event.phase_to(EventPhase.EXECUTION).canceled:
+            return
+
         setattr(self, attribute_name, None)
+        
+        event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
     
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Equipped", source_entity_name: Optional[str] = None, 

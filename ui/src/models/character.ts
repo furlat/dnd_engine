@@ -1,41 +1,45 @@
-import { UUID } from './common';
+import {
+  AdvantageStatus,
+  CriticalStatus,
+  AutoHitStatus
+} from './modifiers';
 
-// Modifier interfaces
-export interface Modifier {
-  uuid: UUID;
-  name: string;
-  value: number;
-  source_entity_name?: string;
+import type {
+  Modifier,
+  ModifierChannel,
+  ModifiableValueSnapshot
+} from './modifiers';
+
+// Type alias for UUID
+export type UUID = string;
+
+// Re-export enums as values
+export { AdvantageStatus, CriticalStatus, AutoHitStatus };
+
+// Re-export types from modifiers
+export type {
+  Modifier,
+  ModifierChannel,
+  ModifiableValueSnapshot
+};
+
+// Position type
+export type Position = [number, number];
+
+// Lightweight entity summary for combat UI
+export interface EntitySummary {
+    uuid: UUID;
+    name: string;
+    current_hp: number;
+    max_hp: number;
+    armor_class?: number;
+    target_entity_uuid?: UUID;
+    position: Position;
+    sprite_name?: string;
 }
 
 // Channel interfaces
-export interface ModifierChannel {
-  name: string;
-  score: number;
-  normalized_score: number;
-  value_modifiers: Array<{
-    name: string;
-    value: number;
-    source_entity_name?: string;
-  }>;
-  advantage_modifiers: Array<{
-    name: string;
-    value: 'ADVANTAGE' | 'DISADVANTAGE' | 'NONE';
-    source_entity_name?: string;
-  }>;
-  critical_modifiers: Array<{
-    name: string;
-    value: 'AUTOCRIT' | 'NOCRIT' | 'NONE';
-    source_entity_name?: string;
-  }>;
-  auto_hit_modifiers: Array<{
-    name: string;
-    value: 'AUTOHIT' | 'AUTOMISS' | 'NONE';
-    source_entity_name?: string;
-  }>;
-}
-
-// Ability scores interfaces
+// AbilityScore interfaces
 export interface AbilityScore {
   name: string;
   score: number;
@@ -177,6 +181,9 @@ export interface ACBonusCalculationSnapshot {
   // Final result
   total_bonus: ModifiableValueSnapshot;
   final_ac: number;
+  outgoing_advantage: AdvantageStatus;
+  outgoing_critical: CriticalStatus;
+  outgoing_auto_hit: AutoHitStatus;
 }
 
 // Attack calculation snapshot (mirrors backend AttackBonusCalculationSnapshot)
@@ -195,22 +202,9 @@ export interface AttackBonusCalculationSnapshot {
   target_entity_uuid?: UUID;
   total_bonus: ModifiableValueSnapshot;
   final_modifier: number;
-  advantage_status: string;  // 'NONE' | 'ADVANTAGE' | 'DISADVANTAGE'
-  auto_hit_status: string;   // 'NONE' | 'AUTO_HIT' | 'AUTO_MISS'
-  critical_status: string;   // 'NONE' | 'ALWAYS_CRIT' | 'NEVER_CRIT'
-}
-
-// Value interfaces
-export interface ModifiableValueSnapshot {
-  name: string;
-  uuid: UUID;
-  score: number;
-  normalized_score: number;
-  base_modifier?: Modifier;
-  channels: ModifierChannel[];
-  advantage: 'None' | 'Advantage' | 'Disadvantage';
-  critical: 'None' | 'Always Crit' | 'Never Crit';
-  auto_hit: 'None' | 'Auto Hit' | 'Auto Miss';
+  advantage_status: AdvantageStatus;
+  auto_hit_status: AutoHitStatus;
+  critical_status: CriticalStatus;
 }
 
 // Health interfaces
@@ -269,11 +263,92 @@ export interface SavingThrowBonusCalculationSnapshot {
   final_modifier: number;
 }
 
+export interface NumericalModifierSnapshot {
+  uuid: UUID;
+  name: string;
+  value: number;
+  normalized_value: number;
+  source_entity_name?: string;
+}
+
+// Action economy snapshot
+export interface ActionEconomySnapshot {
+  uuid: string;
+  name: string;
+  source_entity_uuid: string;
+  source_entity_name?: string;
+  
+  // Core action values
+  actions: ModifiableValueSnapshot;
+  bonus_actions: ModifiableValueSnapshot;
+  reactions: ModifiableValueSnapshot;
+  movement: ModifiableValueSnapshot;
+  
+  // Base values
+  base_actions: number;
+  base_bonus_actions: number;
+  base_reactions: number;
+  base_movement: number;
+  
+  // Cost modifiers
+  action_costs: NumericalModifierSnapshot[];
+  bonus_action_costs: NumericalModifierSnapshot[];
+  reaction_costs: NumericalModifierSnapshot[];
+  movement_costs: NumericalModifierSnapshot[];
+  
+  // Computed values
+  available_actions: number;
+  available_bonus_actions: number;
+  available_reactions: number;
+  available_movement: number;
+}
+
+// Add the condition interfaces
+export interface ConditionSnapshot {
+  uuid: UUID;
+  name: string;
+  description?: string;
+  duration_type: string;  // 'rounds' | 'permanent' | 'until_long_rest' | 'on_condition'
+  duration_value?: number | string;  // number for rounds, string for on_condition
+  source_entity_name?: string;
+  source_entity_uuid: UUID;
+  applied: boolean;
+}
+
+// Add condition enums
+export enum ConditionType {
+    BLINDED = "BLINDED",
+    CHARMED = "CHARMED",
+    DASHING = "DASHING",
+    DEAFENED = "DEAFENED",
+    DODGING = "DODGING",
+    FRIGHTENED = "FRIGHTENED",
+    GRAPPLED = "GRAPPLED",
+    INCAPACITATED = "INCAPACITATED",
+    INVISIBLE = "INVISIBLE",
+    PARALYZED = "PARALYZED",
+    POISONED = "POISONED",
+    PRONE = "PRONE",
+    RESTRAINED = "RESTRAINED",
+    STUNNED = "STUNNED",
+    UNCONSCIOUS = "UNCONSCIOUS"
+}
+
+export enum DurationType {
+    ROUNDS = "rounds",
+    PERMANENT = "permanent",
+    UNTIL_LONG_REST = "until_long_rest",
+    ON_CONDITION = "on_condition"
+}
+
 // Character interface matching EntitySnapshot
 export interface Character {
   uuid: UUID;
   name: string;
   description?: string;
+  target_entity_uuid?: UUID;
+  target_summary?: EntitySummary;
+  position: Position;
   
   // Main blocks
   ability_scores: AbilityScoresSnapshot;
@@ -290,4 +365,8 @@ export interface Character {
   attack_calculations?: Record<string, AttackBonusCalculationSnapshot>;
   saving_throw_calculations?: Record<string, SavingThrowBonusCalculationSnapshot>;
   ac_calculation?: ACBonusCalculationSnapshot;
+  action_economy: ActionEconomySnapshot;
+
+  // Active conditions
+  active_conditions: Record<string, ConditionSnapshot>;
 } 

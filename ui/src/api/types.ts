@@ -86,4 +86,9 @@ export interface Entity {
   uuid: string;
   name: string;
   type: string;
-} 
+}
+
+// Common types used across the API
+export type Position = [number, number];
+
+// Add other common types here as needed 

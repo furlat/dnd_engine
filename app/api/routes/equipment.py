@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import List, Union, Optional
 
 from dnd.blocks.equipment import Equipment, Weapon, Shield, Armor, BaseBlock
-from dnd.interfaces.equipment import (
+from app.models.equipment import (
     WeaponSnapshot,
     ArmorSnapshot,
     ShieldSnapshot,

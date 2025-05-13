@@ -17,9 +17,10 @@ from typing import Callable, Tuple
 
 # Type definition for event listeners
 T = TypeVar('T', bound='Event')
+E = TypeVar('E', bound='Event')
 
 # Replace Protocol with type alias
-EventProcessor = Callable[['Event', UUID], Optional['Event']]
+EventProcessor = Callable[[E, UUID], Optional[E]]
 
 # More specific event listener types
 class TypedEventListener(Protocol[T]):
@@ -65,6 +66,7 @@ class WeaponSlot(str, Enum):
 
 class EventType(str, Enum):
     # Core events
+    BASE_ACTION = "base_action"
     ATTACK = "attack"
     MOVEMENT = "movement"
     ABILITY_CHECK = "ability_check"
@@ -78,6 +80,13 @@ class EventType(str, Enum):
     ATTACK_HIT = "attack_hit"
     ATTACK_CRITICAL = "attack_critical"
     CONDITION_APPLICATION = "condition_application"
+    CONDITION_REMOVAL = "condition_removal"
+    WEAPON_EQUIP = "weapon_equip"
+    WEAPON_UNEQUIP = "weapon_unequip"
+    ARMOR_EQUIP = "armor_equip"
+    ARMOR_UNEQUIP = "armor_unequip"
+    SHIELD_EQUIP = "shield_equip"
+    SHIELD_UNEQUIP = "shield_unequip"
     
     #Dice roll events
     DICE_ROLL = "dice_roll"
@@ -117,8 +126,10 @@ class Event(BaseObject):
     canceled: bool = Field(default=False,description="Flag to indicate if event should be canceled")
     parent_event: Optional[UUID] = Field(default=None,description="The parent event of the current event")
     status_message: Optional[str] = Field(default=None,description="A status message for the event")
-    child_events: List["Event"] = Field(default_factory=list,description="A list of child events")
-    children_events: List[UUID] = Field(default_factory=list,description="A list of children events")
+    
+    # Track children events differently
+    lineage_children_events: List[UUID] = Field(default_factory=list,description="All children events that happened throughout this event's lifetime")
+    children_events: List[UUID] = Field(default_factory=list,description="Children events that happened during the current phase")
     
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
@@ -164,6 +175,10 @@ class Event(BaseObject):
         # Add any additional updates
         phase_updates.update(updates)
         
+        # Preserve lineage_children_events but clear children_events for new phase
+        phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
+        phase_updates['children_events'] = []
+        
         # Post the updated event
         return self.post(**phase_updates)
     
@@ -199,11 +214,10 @@ class Event(BaseObject):
         self.parent_event = parent_event.uuid
     
     def add_child_event(self, child_event: 'Event'):
-        """Add a child event to the current event"""
-        if child_event.parent_event is None or child_event.parent_event != (self.uuid, self.timestamp):
-            raise ValueError("Child event does not have a valid parent or already has a parent")
-
+        """Add a child event to both current phase and lineage tracking"""
         self.children_events.append(child_event.uuid)
+        if child_event.uuid not in self.lineage_children_events:
+            self.lineage_children_events.append(child_event.uuid)
 
     def get_children_events(self) -> List['Event']:
         """Get all children events of the current event"""
@@ -606,20 +620,4 @@ class Damage(BaseObject):
     
     def get_dice(self, attack_outcome: AttackOutcome) -> Dice:
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome)
-
-
-class AttackEvent(Event):
-    """An event that represents an attack"""
-    name: str = Field(default="Attack",description="An attack event")
-    weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
-    range: Optional[Range] = Field(default=None,description="The range of the attack")
-    attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")
-    ac: Optional[ModifiableValue] = Field(default=None,description="The ac of the target")
-    dice_roll: Optional[DiceRoll] = Field(default_factory=DiceRoll,description="The result of the dice roll")
-    attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
-    damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
-    damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
-    event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
-
-
 

@@ -7,20 +7,23 @@ import Layout from './components/common/Layout';
 
 // Pages
 import CharacterListPage from './pages/CharacterListPage';
-import CharacterSheetPage from './pages/CharacterSheetPage';
+import BattleMapPage from './pages/BattleMapPage';
 import NotFoundPage from './pages/NotFoundPage';
+
+// Context
+import { EventQueueProvider } from './contexts/EventQueueContext';
 
 const App: React.FC = () => {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <EventQueueProvider>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<CharacterListPage />} />
-          <Route path="characters/:characterId" element={<CharacterSheetPage />} />
+          <Route path="characters/:characterId" element={<BattleMapPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
-    </Box>
+    </EventQueueProvider>
   );
 };
 
