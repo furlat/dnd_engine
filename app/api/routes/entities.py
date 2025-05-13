@@ -1,23 +1,35 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import List, Dict, Optional, Union, Literal
+from typing import List, Dict, Optional, Union, Literal, Tuple
 from uuid import UUID
 from enum import Enum
 from pydantic import BaseModel
 
 # Import entity and models
 from dnd.entity import Entity
-from dnd.interfaces.entitiy import EntitySnapshot
-from dnd.interfaces.health import HealthSnapshot
-from dnd.interfaces.abilities import AbilityScoresSnapshot
-from dnd.interfaces.skills import SkillSetSnapshot
-from dnd.interfaces.equipment import EquipmentSnapshot
-from dnd.interfaces.saving_throws import SavingThrowSetSnapshot
-from dnd.interfaces.values import ModifiableValueSnapshot
+from app.models.entity import EntitySnapshot, ConditionSnapshot, EntitySummary
+from app.models.health import HealthSnapshot
+from app.models.abilities import AbilityScoresSnapshot
+from app.models.skills import SkillSetSnapshot
+from app.models.equipment import EquipmentSnapshot
+from app.models.saving_throws import SavingThrowSetSnapshot
+from app.models.values import ModifiableValueSnapshot
+from app.models.events import EventSnapshot
 from dnd.core.events import WeaponSlot
 from dnd.blocks.equipment import Equipment, BaseBlock, Armor, Weapon, Shield, BodyPart, RingSlot
+from dnd.core.base_conditions import DurationType
+from dnd.conditions import ConditionType, create_condition
+from dnd.actions import Attack
 
 # Import dependencies
 from app.api.deps import get_entity
+
+# Position-related models
+class Position(BaseModel):
+    x: int
+    y: int
+
+class MoveRequest(BaseModel):
+    position: Tuple[int, int]
 
 # Create router
 router = APIRouter(
@@ -61,10 +73,29 @@ class EquipRequest(BaseModel):
 async def list_entities():
     """List all entities in the registry"""
     # Get all entities from the registry
-    entities = [entity for entity in Entity._registry.values() if isinstance(entity, Entity)]
+    entities = Entity.get_all_entities()
     
     # Convert to a list of basic info
     return [EntityListItem(uuid=entity.uuid, name=entity.name) for entity in entities]
+
+@router.get("/summaries", response_model=List[EntitySummary])
+async def list_entity_summaries():
+    """List all entities with their summary information (name, HP, AC, target)"""
+    # Get all entities from the registry
+    entities = Entity.get_all_entities()
+    
+    # Convert to a list of summaries with proper error handling
+    summaries = []
+    for entity in entities:
+        try:
+            summary = EntitySummary.from_engine(entity)
+            print(f"Summary for entity {entity.uuid}: {summary} with target {entity.target_entity_uuid}")
+            summaries.append(summary)
+        except Exception as e:
+            print(f"Error creating summary for entity {entity.uuid}: {str(e)}")
+            continue
+    
+    return summaries
 
 @router.get("/{entity_uuid}", response_model=EntitySnapshot)
 async def get_entity_by_uuid(
@@ -154,7 +185,6 @@ async def unequip_item(slot: SlotType, entity: Entity = Depends(get_entity)):
     Unequip an item from a specific slot on an entity.
     """
     try:
-        print(f"Unequipping from slot: {slot}, value: {slot.value}")  # Debug log
         
         # First validate that there's actually something equipped in that slot
         if slot in [SlotType.MAIN_HAND, SlotType.OFF_HAND]:
@@ -240,7 +270,6 @@ async def unequip_item(slot: SlotType, entity: Entity = Depends(get_entity)):
                 include_saving_throw_calculations=True
             )
         except Exception as e:
-            print(f"Error during unequip operation: {str(e)}")  # Debug log
             raise HTTPException(
                 status_code=400, 
                 detail={
@@ -253,12 +282,263 @@ async def unequip_item(slot: SlotType, entity: Entity = Depends(get_entity)):
     except HTTPException:
         raise  # Re-raise HTTP exceptions as is
     except Exception as e:
-        print(f"Unexpected error during unequip: {str(e)}")  # Debug log
         raise HTTPException(
             status_code=400, 
             detail={
                 "error": "Unexpected error",
                 "message": str(e),
                 "slot": slot.value
+            }
+        ) 
+
+# Add new models for condition management
+class AddConditionRequest(BaseModel):
+    condition_type: ConditionType
+    source_entity_uuid: UUID
+    duration_type: DurationType = DurationType.PERMANENT
+    duration_rounds: Optional[int] = None
+
+class RemoveConditionRequest(BaseModel):
+    condition_name: str
+
+@router.post("/{entity_uuid}/conditions", response_model=EntitySnapshot)
+async def add_condition(
+    request: AddConditionRequest,
+    entity: Entity = Depends(get_entity)
+):
+    """
+    Add a condition to an entity.
+    The entity_uuid in the path is the target entity.
+    The source_entity_uuid in the request is the entity causing the condition.
+    Returns the full updated entity snapshot.
+    """
+    try:
+        # Create the condition
+        condition = create_condition(
+            condition_type=request.condition_type,
+            source_entity_uuid=request.source_entity_uuid,
+            target_entity_uuid=entity.uuid,
+            duration_type=request.duration_type,
+            duration_rounds=request.duration_rounds
+        )
+        
+        # Add the condition to the entity
+        result = entity.add_condition(condition)
+        if not result:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Failed to apply condition",
+                    "message": "The condition could not be applied. The entity might be immune or have passed a saving throw.",
+                    "condition": request.condition_type
+                }
+            )
+            
+        # Return updated entity snapshot with all calculations
+        return EntitySnapshot.from_engine(
+            entity,
+            include_skill_calculations=True,
+            include_attack_calculations=True,
+            include_ac_calculation=True,
+            include_saving_throw_calculations=True
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to add condition",
+                "message": str(e),
+                "condition": request.condition_type
+            }
+        )
+
+@router.delete("/{entity_uuid}/conditions/{condition_name}", response_model=EntitySnapshot)
+async def remove_condition(
+    condition_name: str,
+    entity: Entity = Depends(get_entity)
+):
+    """
+    Remove a condition from an entity by its name.
+    Returns the full updated entity snapshot.
+    """
+    try:
+        if condition_name not in entity.active_conditions:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "Condition not found",
+                    "message": f"The condition '{condition_name}' is not active on this entity",
+                    "condition": condition_name
+                }
+            )
+            
+        entity.remove_condition(condition_name)
+        
+        # Return updated entity snapshot with all calculations
+        return EntitySnapshot.from_engine(
+            entity,
+            include_skill_calculations=True,
+            include_attack_calculations=True,
+            include_ac_calculation=True,
+            include_saving_throw_calculations=True
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to remove condition",
+                "message": str(e),
+                "condition": condition_name
+            }
+        )
+
+@router.get("/{entity_uuid}/conditions", response_model=Dict[str, ConditionSnapshot])
+async def get_conditions(entity: Entity = Depends(get_entity)):
+    """
+    Get all active conditions on an entity.
+    For just the conditions list, use this endpoint.
+    For full entity state including conditions, use GET /entities/{entity_uuid}
+    """
+    return entity.active_conditions 
+
+@router.post("/{entity_uuid}/action-economy/refresh", response_model=EntitySnapshot)
+async def refresh_action_economy(
+    entity: Entity = Depends(get_entity),
+    include_skill_calculations: bool = False,
+    include_attack_calculations: bool = False,
+    include_ac_calculation: bool = False,
+    include_saving_throw_calculations: bool = False
+):
+    """Reset all action economy costs for an entity"""
+    entity.action_economy.reset_all_costs()
+    return EntitySnapshot.from_engine(
+        entity,
+        include_skill_calculations=include_skill_calculations,
+        include_attack_calculations=include_attack_calculations,
+        include_ac_calculation=include_ac_calculation,
+        include_saving_throw_calculations=include_saving_throw_calculations
+    ) 
+
+@router.post("/{entity_uuid}/target/{target_uuid}", response_model=EntitySnapshot)
+async def set_entity_target(
+    entity_uuid: UUID,
+    target_uuid: UUID,
+    include_skill_calculations: bool = False,
+    include_attack_calculations: bool = False,
+    include_ac_calculation: bool = False,
+    include_saving_throw_calculations: bool = False
+):
+    """Set an entity's target"""
+    entity = Entity.get(entity_uuid)
+    target = Entity.get(target_uuid)
+    
+    if not entity:
+        raise HTTPException(status_code=404, detail="Source entity not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target entity not found")
+        
+    entity.set_target_entity(target_uuid)
+    return EntitySnapshot.from_engine(
+        entity,
+        include_skill_calculations=include_skill_calculations,
+        include_attack_calculations=include_attack_calculations,
+        include_ac_calculation=include_ac_calculation,
+        include_saving_throw_calculations=include_saving_throw_calculations
+    ) 
+
+@router.post("/{entity_uuid}/attack/{target_uuid}")
+async def execute_attack(
+    entity_uuid: UUID,
+    target_uuid: UUID,
+    weapon_slot: WeaponSlot = Query(WeaponSlot.MAIN_HAND, description="Which weapon slot to use for the attack"),
+    attack_name: str = Query("Attack", description="Name of the attack"),
+    include_skill_calculations: bool = Query(False, description="Whether to include skill calculations in response"),
+    include_attack_calculations: bool = Query(True, description="Whether to include attack calculations in response"),
+    include_ac_calculation: bool = Query(True, description="Whether to include AC calculation in response"),
+    include_saving_throw_calculations: bool = Query(False, description="Whether to include saving throw calculations in response")
+):
+    """Execute an attack from one entity to another"""
+    entity = Entity.get(entity_uuid)
+    target = Entity.get(target_uuid)
+    
+    if not entity:
+        raise HTTPException(status_code=404, detail="Source entity not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target entity not found")
+    
+    # Create and execute the attack
+    attack = Attack(
+        name=attack_name,
+        source_entity_uuid=entity_uuid,
+        target_entity_uuid=target_uuid,
+        weapon_slot=weapon_slot
+    )
+    
+    result_event = attack.apply()
+    if not result_event:
+        raise HTTPException(status_code=400, detail="Attack could not be executed")
+    
+    # Get fresh copy of attacker after the attack
+    updated_attacker = Entity.get(entity_uuid)
+    if not updated_attacker:
+        raise HTTPException(status_code=404, detail="Entity not found after attack")
+    
+    # Return the full updated attacker state with target summary included
+    return {
+        "event": EventSnapshot.from_engine(result_event, include_children=True),
+        "attacker": EntitySnapshot.from_engine(
+            updated_attacker,
+            include_skill_calculations=include_skill_calculations,
+            include_attack_calculations=include_attack_calculations,
+            include_ac_calculation=include_ac_calculation,
+            include_saving_throw_calculations=include_saving_throw_calculations,
+            include_target_summary=True
+        )
+    } 
+
+@router.get("/position/{x}/{y}", response_model=List[EntitySummary])
+async def get_entities_at_position(x: int, y: int):
+    """Get all entities at a specific position"""
+    try:
+        entities = Entity.get_all_entities_at_position((x, y))
+        return [EntitySummary.from_engine(entity) for entity in entities]
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to get entities at position",
+                "message": str(e),
+                "position": (x, y)
+            }
+        )
+
+@router.post("/{entity_uuid}/move", response_model=EntitySnapshot)
+async def move_entity(
+    request: MoveRequest,
+    entity: Entity = Depends(get_entity),
+    include_skill_calculations: bool = False,
+    include_attack_calculations: bool = False,
+    include_ac_calculation: bool = False,
+    include_saving_throw_calculations: bool = False
+):
+    """Move an entity to a new position"""
+    try:
+        entity.move(request.position)
+        return EntitySnapshot.from_engine(
+            entity,
+            include_skill_calculations=include_skill_calculations,
+            include_attack_calculations=include_attack_calculations,
+            include_ac_calculation=include_ac_calculation,
+            include_saving_throw_calculations=include_saving_throw_calculations
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Failed to move entity",
+                "message": str(e),
+                "position": request.position
             }
         ) 

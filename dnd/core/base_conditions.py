@@ -85,6 +85,14 @@ class ConditionApplicationEvent(Event):
     event_type: EventType = Field(default=EventType.CONDITION_APPLICATION,description="The type of event")
 
 
+class ConditionRemovalEvent(Event):
+    """An event that represents the removal of a condition"""
+    name: str = Field(default="Condition Removal", description="A condition removal event")
+    condition: 'BaseCondition' = Field(description="The condition that is being removed")
+    expired: bool = Field(default=False, description="Whether the condition was removed due to expiration")
+    event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="The type of event")
+
+
 class BaseCondition(BaseObject):
     """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""
     duration: Duration = Field(default_factory=Duration)
@@ -120,44 +128,65 @@ class BaseCondition(BaseObject):
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
 
-    def _declare_event(self, parent_event: Optional[Event] = None) -> Event:
+    def declare_event(self, parent_event: Optional[Event] = None) -> Event:
         """ Declare the event """
-        return ConditionApplicationEvent(condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
+        if not self.name:
+            raise ValueError("Condition name is not set")
+        return ConditionApplicationEvent(name=self.name,condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
 
-    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
+        """Declare the removal event"""
+        return ConditionRemovalEvent(
+            name=self.name if self.name else "Condition Removal",
+            condition=self,
+            expired=expired,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            phase=EventPhase.DECLARATION,
+            parent_event=parent_event.uuid if parent_event else None
+        )
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
         """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass 
         the event is used as parent if subconditions are triggered (e.g. sub conditons application)"""
         # event is declared in the main apply method
         
-        event = event.phase_to(EventPhase.EXECUTION, update={"condition":self}) # execution is defined, last chance to modify it
-        event = event.phase_to(EventPhase.EFFECT, update={"condition":self}) # effect is defined reactions to the effect applications
+        event = declaration_event.phase_to(EventPhase.EXECUTION, update={"condition":self}) # execution is defined, last chance to modify it
+        event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self}) # effect is defined reactions to the effect applications
         #completions happend in main apply method such that 
         
         return [],[],[], event
     
-    def _remove(self,event: Optional[Event] = None) -> Optional[Event]:
-        """Custom extra Remove the condition full implementation is in the subclass if needed, should try to use the registries if possible"""
-        return None
-    def _expire(self,event: Optional[Event] = None) -> Optional[Event]:
-        """Custom extra Expire called during removal from natural expiration the condition full implementation is in the subclass
-          if needed, should try to use the registries if possible
-          eg a sub condition progressing through stages could create the next stage
-        it would of course need to register itself as a sub condition to the parent if 
-        it is to be removed by the parent removal
-        this simplifies the behavior of writing a EventHandler on this specific condition expiration"""
-        return None
-    def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Custom extra Remove the condition full implementation is in the subclass if needed"""
+        if event:
+            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
+            event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return event
+
+    def _expire(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Custom extra Expire called during removal from natural expiration"""
+        if event:
+            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
+            event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return event
+
+    def apply(self, parent_event: Optional[Event] = None,declaration_event: Optional[Event] = None) -> Optional[Event]:
         """ Apply the condition """
         if self.applied or self.duration.is_expired:
             return None
         #first create the declaration event
-        event = self._declare_event(parent_event)
-        if event.canceled: #check if event was canceled at declaration
+        if declaration_event is None:
+            declaration_event = self.declare_event(parent_event)
+     
+        if declaration_event.canceled: #check if event was canceled at declaration
             return None
+        
+        #
         #then apply the condition
-        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, applied_event = self._apply(event)
-        if not applied_event or (len(modifers_uuids) == 0 and len(event_handlers_uuids) == 0 and len(sub_conditions_uuids) == 0):
-            return event.cancel(status_message=f"Condition {self.name} was not applied for some unknown reason, check the implementaiton of _apply method")
+        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, effect_event = self._apply(declaration_event)
+        if not effect_event or (len(modifers_uuids) == 0 and len(event_handlers_uuids) == 0 and len(sub_conditions_uuids) == 0):
+            return declaration_event.cancel(status_message=f"Condition {self.name} was not applied for some unknown reason, check the implementaiton of _apply method")
         
         
         for block_uuid, modifiers_uuids in modifers_uuids:
@@ -168,13 +197,12 @@ class BaseCondition(BaseObject):
         for event_handler_uuid in event_handlers_uuids:
             if event_handler_uuid not in self.event_handlers_uuids:
                 self.event_handlers_uuids.append(event_handler_uuid)
-        
         for sub_condition_uuid in sub_conditions_uuids:
             if sub_condition_uuid not in self.sub_conditions:
                 self.sub_conditions.append(sub_condition_uuid)
 
         self.applied = True
-        completed_event = applied_event.phase_to(EventPhase.COMPLETION)
+        completed_event = effect_event.phase_to(EventPhase.COMPLETION)
         return completed_event
     
     def remove_condition_modifiers(self) -> bool:
@@ -192,17 +220,16 @@ class BaseCondition(BaseObject):
 
         return True
     
-    def remove_sub_conditions(self) -> bool:
+    def remove_sub_conditions(self,parent_event: Optional[Event] = None) -> bool:
         """ Remove the sub conditions """
-        if not self.applied:
-            return False
-      
+        # if not self.applied:
+        #     return False
         for sub_condition_uuid in self.sub_conditions:
             sub_condition = BaseCondition.get(sub_condition_uuid)
             if sub_condition is None:
                 raise ValueError(f"Trying to remove sub condition with UUID {sub_condition_uuid} not found sub-condition removal should remove it from the parent reference")
             elif isinstance(sub_condition,BaseCondition):
-                sub_condition.remove(skip_parent_removal=True)
+                sub_condition.remove(skip_parent_removal=True,parent_event=parent_event)
         return True
     
     def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
@@ -229,28 +256,41 @@ class BaseCondition(BaseObject):
                 event_handler.remove()
         return True
 
-    def remove(self,expire: bool = False,skip_parent_removal: bool = False) -> bool:
-        """ Remove the condition """
+    def remove(self, expire: bool = False, skip_parent_removal: bool = False, parent_event: Optional[Event] = None) -> bool:
+        """Remove the condition with event handling"""
         if not self.applied:
             return False
+        # First declare the removal event
+        event = self._declare_removal_event(expired=expire, parent_event=parent_event)
+        if event.canceled:  # Check if event was canceled at declaration
+            return False
+
+        # Handle expiration if needed
         if expire:
-            self._expire()
-        #first apply the remove method
-        self._remove()
-        #second remove the condition modifiers
+            expired_event = self._expire(event)
+            if expired_event and expired_event.canceled:
+                return False
+
+        # Handle removal
+        removed_event = self._remove(event)
+        if removed_event and removed_event.canceled:
+            return False
+
+        # Proceed with actual removal operations
         self.remove_condition_modifiers()
-        #third remove the sub conditions
-        self.remove_sub_conditions()
-        #fourth remove the condition from the parent, skipped if running from inside remove_sub_conditions
-        self.remove_condition_from_parent(skip_parent_removal=skip_parent_removal)
-        #fifth remove the event handlers
+        self.remove_sub_conditions(parent_event=event)
+        if not skip_parent_removal:
+            self.remove_condition_from_parent()
         self.remove_event_handlers()
+
+        # Complete the event
+        if event:
+            event.phase_to(EventPhase.COMPLETION)
+
         return True
     
     def progress(self) -> bool:
-        """ Progress the duration returns True if the condition is removed 
-        if removed remove will trigger the _expire method
-        """
+        """Progress the duration returns True if the condition is removed"""
         progress_result = self.duration.progress()
         if progress_result:
             self.remove(expire=True)

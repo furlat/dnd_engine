@@ -17,7 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import entity creation and snapshot functionality
 from dnd.monsters.circus_fighter import create_warrior
-from dnd.interfaces.entitiy import EntitySnapshot
+from dnd.interfaces.entity import EntitySnapshot
 from dnd.core.modifiers import NumericalModifier, AdvantageStatus, CriticalStatus, AutoHitStatus
 
 # Function to inspect attributes of an object

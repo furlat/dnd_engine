@@ -1,6 +1,6 @@
 from dnd.core.modifiers import NumericalModifier, DamageType, AdvantageModifier, AdvantageStatus
 from dnd.core.values import ModifiableValue
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health,HitDiceConfig)
@@ -8,13 +8,15 @@ from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponPro
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillConfig)
 from dnd.core.events import SavingThrowEvent,RangeType, AbilityName, SkillName
-from dnd.features.dual_wielder import create_dual_wielder_ac_modifier
-from dnd.features.elemental_advantage import create_elemental_advantage_modifier
+from dnd.conditions import Blinded
+from dnd.monsters.circus_fighter_conditions import (
+    DualWielder, ElementalWeaponMastery, ElementalAffinity, CircusPerformer
+)
 
 from dnd.entity import Entity, EntityConfig
     
 from uuid import uuid4, UUID
-from typing import Optional
+from typing import Optional, Tuple
 
 def create_dagger(source_id: UUID) -> Weapon:
     """Creates a rusty dagger weapon with disadvantage"""
@@ -132,6 +134,13 @@ def create_longsword_plus_one(source_id: UUID) -> Weapon:
     )
     return weapon
 
+def create_self_blinded(source_id: UUID) -> Blinded:
+    blinded = Blinded(source_entity_uuid=source_id, target_entity_uuid=source_id)
+    return blinded
+
+    
+
+
 def create_morningstar(source_id: UUID) -> Weapon:
     """Creates a morningstar with necrotic damage"""
     return Weapon(
@@ -162,7 +171,9 @@ def create_morningstar(source_id: UUID) -> Weapon:
 #realistic scores for a level 4 fighter character with a past in the circus and spiked claws for hands
 # setting up configs
 # Ability scores
-def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="Ganger") -> Entity:
+def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="Ganger",blinded: bool=False, position: Tuple[int,int]=(0,0),sprite_name: Optional[str]=None) -> Entity:
+    """Creates a level 4 fighter character with a past in the circus and spiked claws for hands"""
+    # Ability scores
     strength_config = AbilityConfig(ability_score=15, ability_scores_modifiers=[("level 4 talent",1)], modifier_bonus=1, modifier_bonus_modifiers=[])
     dexterity_config = AbilityConfig(ability_score=12)
     constitution_config = AbilityConfig(ability_score=15, ability_scores_modifiers=[("level 4 talent",1)])
@@ -171,41 +182,33 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     charisma_config = AbilityConfig(ability_score=10)
     ability_scores_config = AbilityScoresConfig(strength=strength_config, dexterity=dexterity_config, constitution=constitution_config, intelligence=intelligence_config, wisdom=wisdom_config, charisma=charisma_config)
 
-    # Skills
-    acrobatics_config = SkillConfig(skill_bonus = 0, skill_bonus_modifiers=[("a past in the circus", 7)],expertise = True, proficiency = True)
-    history_config = SkillConfig(skill_bonus = 0, skill_bonus_modifiers=[("a past in the circus", -2)],expertise = False, proficiency = False)
+    # Skills - only keep proficiency settings, modifiers will come from CircusPerformer condition
+    acrobatics_config = SkillConfig(expertise=True, proficiency=True)
+    history_config = SkillConfig(expertise=False, proficiency=False)
     skill_set_config = SkillSetConfig(acrobatics=acrobatics_config, history=history_config)
 
-    # Saving throws
-    strength_st_config = SavingThrowConfig(bonus_modifiers=[("a past in the circus", 1)],proficiency=True)
-    intelligence_st_config = SavingThrowConfig(bonus_modifiers=[("a past in the circus", -1)])
-
+    # Saving throws - only keep proficiency settings, modifiers will come from CircusPerformer condition
+    strength_st_config = SavingThrowConfig(proficiency=True)
+    intelligence_st_config = SavingThrowConfig()
     saving_throw_set_config = SavingThrowSetConfig(strength_saving_throw=strength_st_config, intelligence_saving_throw=intelligence_st_config)
 
-    #Health
+    # Health
     warrior_hitpoints_config = HitDiceConfig(hit_dice_value=10,hit_dice_count=4,mode="average", ignore_first_level=False)
     gang_hitpoints_config = HitDiceConfig(hit_dice_value=8,hit_dice_count=1,mode="average", ignore_first_level=True)
-
     health_config = HealthConfig(hit_dices=[warrior_hitpoints_config,gang_hitpoints_config],
                                 damage_reduction=1,
-                                resistances=[DamageType.FIRE],
-                                vulnerabilities=[DamageType.COLD],
                                 temporary_hit_points_modifiers=[("permanentfalse_life", 10)],
                                 )
 
-    #Action economy
-    action_economy_config = ActionEconomyConfig(
-        reactions_modifiers=[("a past in the circus", 2)],)
+    # Action economy - base values only, modifiers will come from CircusPerformer condition
+    action_economy_config = ActionEconomyConfig()
 
-    #Equipment
+    # Equipment - base values only, modifiers will come from CircusPerformer condition
     equipment_config = EquipmentConfig(
-        ac_bonus_modifiers=[("a past in the circus", 1)],
-        unarmed_damage_bonus=1,
         unarmed_damage_type=DamageType.PIERCING,
-        unarmed_damage_bonus_modifiers=[("a past in the circus", 1)],
-        )
+    )
 
-    #wrapp into entity config
+    # Entity config - no modifiers here, they'll come from conditions
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         skill_set=skill_set_config,
@@ -214,39 +217,38 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
         equipment=equipment_config,
         action_economy=action_economy_config,
         proficiency_bonus=proficiency_bonus,
-        proficiency_bonus_modifiers=[("a past in the circus", -1)],
+        sprite_name=sprite_name,
+        position=position
         )
     
-    description = """A level 4 fighter character with a past in the circus and spiked claws for hands.\n\nElemental Attuning (Feature).\nThe warrior has advantage on attack rolls made with weapons that deal acid, cold, fire, lightning, poison, or thunder damage.\n\nElemental Affinity.\nYears of performing with enchanted weapons have attuned this warrior to fire, but left them vulnerable to cold. The warrior has resistance to fire damage but vulnerability to cold damage."""
+    description = """A level 4 fighter character with a past in the circus and spiked claws for hands."""
     entity = Entity.create(name=name, source_entity_uuid=source_id, description=description, config=entity_config)
     
-    # Create all weapons and armor with the entity's UUID
+    # Create and equip weapons and armor
     dagger = create_dagger(entity.uuid)
     flaming_scimitar = create_flaming_scimitar(entity.uuid)
     light_armor = create_light_armor(entity.uuid)
-    #add itself as source entity uuid for all the weapons and armor
-    dagger.source_entity_uuid = entity.uuid
-    flaming_scimitar.source_entity_uuid = entity.uuid
-    light_armor.source_entity_uuid = entity.uuid
-    # Create but don't equip the additional weapons, also with entity's UUID
-    longsword = create_longsword_plus_one(entity.uuid)  # This registers in BaseBlock._registry
-    morningstar = create_morningstar(entity.uuid)       # This registers in BaseBlock._registry
-    longsword.source_entity_uuid = entity.uuid
-    morningstar.source_entity_uuid = entity.uuid
-    # Equip the original items
-    entity.equipment.equip(light_armor)  # Equip the light armor
-    entity.equipment.equip(flaming_scimitar, WeaponSlot.MAIN_HAND)  # Equip the scimitar in main hand
-    entity.equipment.equip(dagger, WeaponSlot.OFF_HAND)  # Equip the dagger in off hand
+    longsword = create_longsword_plus_one(entity.uuid)
+    morningstar = create_morningstar(entity.uuid)
 
-    # Add dual wielder AC bonus with entity's UUID
-    dual_wielder = create_dual_wielder_ac_modifier(entity.uuid, entity.uuid)
-    entity.equipment.ac_bonus.self_contextual.add_value_modifier(dual_wielder)
+    entity.equipment.equip(light_armor)
+    entity.equipment.equip(flaming_scimitar, WeaponSlot.MAIN_HAND)
+    entity.equipment.equip(dagger, WeaponSlot.OFF_HAND)
 
-    # Elemental Attuning (Feature). Years of performing with enchanted weapons have attuned this warrior to elemental energies.
-    # The warrior has advantage on attack rolls made with weapons that deal acid, cold, fire, lightning, poison, or thunder damage.
-    # Additionally, the warrior has resistance to fire damage but vulnerability to cold damage.
-    elemental_adv = create_elemental_advantage_modifier(entity.uuid, entity.uuid)
-    entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(elemental_adv)
+    # Add conditions
+    dual_wielder = DualWielder(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
+    elemental_mastery = ElementalWeaponMastery(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
+    elemental_affinity = ElementalAffinity(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
+    circus_performer = CircusPerformer(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
+
+    entity.add_condition(dual_wielder)
+    entity.add_condition(elemental_mastery)
+    entity.add_condition(elemental_affinity)
+    entity.add_condition(circus_performer)
+
+    if blinded:
+        blinded_condition = Blinded(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
+        entity.add_condition(blinded_condition)
 
     return entity
 
@@ -254,4 +256,3 @@ if __name__ == "__main__":
     source_id = uuid4()
     proficiency_bonus = 2
     entity = create_warrior(source_id,proficiency_bonus)
-    print(entity)

@@ -22,78 +22,16 @@ import {
   CardContent
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { AbilityScoresSnapshot, AbilityScore, ModifierChannel } from '../../models/character';
-
-interface AbilityScoresBlockProps {
-  abilityScores: AbilityScoresSnapshot;
-}
+import type { ReadonlyAbilityScoresSnapshot, ReadonlyAbilityScore, ReadonlyModifierChannel, ReadonlyModifiableValueSnapshot } from '../../models/readonly';
+import { useAbilityScores } from '../../hooks/character/useAbilityScores';
 
 interface AbilityDetailDialogProps {
   open: boolean;
   onClose: () => void;
-  ability: AbilityScore | null;
+  ability: ReadonlyAbilityScore | null;
 }
 
-const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
-  const { abilityScores } = props;
-  const theme = useTheme();
-  const [selectedAbility, setSelectedAbility] = React.useState<AbilityScore | null>(null);
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-
-  const handleAbilityClick = (ability: AbilityScore) => {
-    setSelectedAbility(ability);
-    setDialogOpen(true);
-  };
-
-  const handleCloseDialog = () => {
-    setDialogOpen(false);
-  };
-
-  const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
-    const { open, onClose, ability } = props;
-    if (!ability) return null;
-
-    console.log('Ability data:', ability);
-
-    const getTotalValue = (channel: ModifierChannel) => {
-      return channel.value_modifiers.reduce((sum, mod) => sum + mod.value, 0);
-    };
-
-    // Check for channels in the correct location - ability.ability_score.channels
-    const abilityScore = ability.ability_score || { 
-      channels: [], 
-      score: ability.score, 
-      normalized_score: ability.score,
-      base_modifier: undefined
-    };
-    
-    // Get the modifier_bonus data
-    const modifierBonus = ability.modifier_bonus || {
-      channels: [],
-      score: 0,
-      normalized_score: 0,
-      base_modifier: undefined
-    };
-    
-    const hasChannels = abilityScore.channels && Array.isArray(abilityScore.channels);
-    const channels = hasChannels ? abilityScore.channels : [];
-    
-    // Check for base_modifier in ability.ability_score
-    const baseModifier = abilityScore.base_modifier;
-
-    // Get actual raw and normalized scores from ability_score if available
-    const rawScore = abilityScore.score || ability.score;
-    const normalizedScore = abilityScore.normalized_score || ability.normalized_score || ability.score;
-    
-    // Get the normalized_score from the modifier_bonus (usually adds directly to the ability modifier)
-    const modifierBonusValue = modifierBonus.normalized_score || 0;
-    
-    // Calculate the total modifier (normalized ability score + modifier bonus)
-    const calculatedModifier = (normalizedScore || 0) + modifierBonusValue;
-    // Check if our calculation matches the reported modifier
-    const modifierMatches = calculatedModifier === ability.modifier;
-
-    // Function to recursively display JSON data in a readable format
+// Helper component to display JSON data recursively
     const DisplayJSON = ({ data, name = "Data" }: { data: any, name?: string }) => {
       return (
         <div>
@@ -135,6 +73,48 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
       );
     };
 
+const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
+  const { open, onClose, ability } = props;
+  if (!ability) return null;
+
+  const getTotalValue = (channel: ReadonlyModifierChannel) => {
+    return channel.value_modifiers.reduce((sum, mod) => sum + mod.value, 0);
+  };
+
+  // Access ability_score if available
+  const abilityScore = ability.ability_score || { 
+    channels: [], 
+    score: ability.score, 
+    normalized_score: ability.score,
+    base_modifier: undefined
+  };
+  
+  // Get the modifier_bonus data
+  const modifierBonus = ability.modifier_bonus || {
+    channels: [],
+    score: 0,
+    normalized_score: 0,
+    base_modifier: undefined
+  };
+  
+  const hasChannels = abilityScore.channels && Array.isArray(abilityScore.channels);
+  const channels: ReadonlyModifierChannel[] = hasChannels ? abilityScore.channels : [];
+  
+  // Check for base_modifier in ability.ability_score
+  const baseModifier = abilityScore.base_modifier;
+
+  // Get actual raw and normalized scores from ability_score if available
+  const rawScore = abilityScore.score || ability.score;
+  const normalizedScore = abilityScore.normalized_score || ability.normalized_score || ability.score;
+  
+  // Get the normalized_score from the modifier_bonus (usually adds directly to the ability modifier)
+  const modifierBonusValue = modifierBonus.normalized_score || 0;
+
+  // The normalized_score is already in modifier range, so we use it directly
+  const baseCalculation = normalizedScore;
+  const calculatedModifier = baseCalculation + modifierBonusValue;
+  const modifierMatches = calculatedModifier === ability.modifier;
+
     return (
       <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
         <DialogTitle>
@@ -161,13 +141,12 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                       <Divider sx={{ my: 1 }} />
                       <Typography variant="body2" color="text.secondary">Ability Modifier</Typography>
                       <Typography variant="h4" color={ability.modifier >= 0 ? "success.main" : "error.main"}>
-                        {ability.modifier}
+                      {ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier}
                       </Typography>
                       
-                      {/* Add the modifier calculation breakdown */}
                       <Box sx={{ mt: 1 }}>
                         <Typography variant="caption">
-                          Calculated as: {normalizedScore >= 0 ? `+${normalizedScore}` : normalizedScore} 
+                        Calculated as: {baseCalculation >= 0 ? `+${baseCalculation}` : baseCalculation} 
                           {modifierBonusValue !== 0 && (
                             modifierBonusValue > 0 
                               ? <> + {modifierBonusValue}</> 
@@ -285,7 +264,7 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
               
               {/* Build accordion sections */}
               {(() => {
-                const sections: { label: string; channels: ModifierChannel[] }[] = [];
+              const sections: { label: string; channels: readonly ReadonlyModifierChannel[] }[] = [];
                 if (hasChannels) {
                   sections.push({ label: 'Ability Score Modifiers', channels });
                 }
@@ -378,13 +357,25 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
     );
   };
 
+const AbilityScoresBlock: React.FC = () => {
+  const theme = useTheme();
+  const { 
+    abilityScores,
+    selectedAbility,
+    dialogOpen,
+    handleAbilityClick,
+    handleCloseDialog
+  } = useAbilityScores();
+
+  if (!abilityScores) return null;
+
   const abilityCards = [
-    { key: 'strength', label: 'STR' },
-    { key: 'dexterity', label: 'DEX' },
-    { key: 'constitution', label: 'CON' },
-    { key: 'intelligence', label: 'INT' },
-    { key: 'wisdom', label: 'WIS' },
-    { key: 'charisma', label: 'CHA' }
+    { key: 'strength', label: 'Strength' },
+    { key: 'dexterity', label: 'Dexterity' },
+    { key: 'constitution', label: 'Constitution' },
+    { key: 'intelligence', label: 'Intelligence' },
+    { key: 'wisdom', label: 'Wisdom' },
+    { key: 'charisma', label: 'Charisma' }
   ];
 
   return (
@@ -394,7 +385,7 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
       </Typography>
       <Grid container spacing={2}>
         {abilityCards.map(({ key, label }) => {
-          const ability = abilityScores[key as keyof AbilityScoresSnapshot];
+          const ability = abilityScores[key as keyof ReadonlyAbilityScoresSnapshot];
           const modifierText = ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier;
           
           // Access ability_score if available
@@ -428,6 +419,11 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
                     ({modifierText})
                   </Typography>
                 </Box>
+                {showNormalizedScore && (
+                  <Typography variant="caption" color="text.secondary">
+                    Normalized: {abilityScore.normalized_score}
+                  </Typography>
+                )}
               </Paper>
             </Grid>
           );
@@ -443,4 +439,4 @@ const AbilityScoresBlock: React.FC<AbilityScoresBlockProps> = (props) => {
   );
 };
 
-export default AbilityScoresBlock; 
+export default React.memo(AbilityScoresBlock); 

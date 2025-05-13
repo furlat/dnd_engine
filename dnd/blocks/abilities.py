@@ -9,7 +9,7 @@ from functools import cached_property
 from typing import Literal as TypeLiteral
 from dnd.core.events import AbilityName
 
-from dnd.blocks.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock
 
 def ability_score_normalizer(score: int) -> int:
     """ Normalizes the ability score to obtain the modifier with: (score - 10) // 2 """
