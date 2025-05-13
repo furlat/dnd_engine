@@ -11,6 +11,10 @@ import { fetchEntitySummaries } from '../../api/characterApi';
 import { EntitySummary } from '../../models/character';
 import { fetchGridSnapshot, TileSummary } from '../../api/tileApi';
 import { TileType } from './TileEditor';
+import { characterStore, characterActions } from '../../store/characterStore';
+import { useSnapshot } from 'valtio';
+import { ReadonlyEntitySummary } from '../../models/readonly';
+import type { DeepReadonly } from '../../models/readonly';
 
 // Initialize PixiJS Assets
 Assets.init({
@@ -108,7 +112,7 @@ const CellHighlight: React.FC<CellHighlightProps> = ({ x, y, width, height, grid
 };
 
 interface EntitySpriteProps {
-  entity: EntitySummary;
+  entity: EntitySummary | ReadonlyEntitySummary;
   width: number;
   height: number;
   gridSize: {
@@ -176,7 +180,7 @@ const EntitySprite: React.FC<EntitySpriteProps> = ({ entity, width, height, grid
 };
 
 interface TileSpriteProps {
-  tile: TileSummary;
+  tile: TileSummary | DeepReadonly<TileSummary>;
   width: number;
   height: number;
   gridSize: {
@@ -282,124 +286,19 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   const [hoveredCell, setHoveredCell] = useState({ x: -1, y: -1 });
   const [tileSize, setTileSize] = useState(initialTileSize);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [entities, setEntities] = useState<EntitySummary[]>([]);
-  const [tiles, setTiles] = useState<Record<string, TileSummary>>({});
   const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
   const MOVEMENT_SPEED = 8;
+  
+  // Use the store for entities and tiles
+  const snap = useSnapshot(characterStore);
+  const entities = Object.values(snap.summaries);
+  const tiles = snap.tiles;
 
-  // Preload all sprites
+  // Start polling when component mounts
   useEffect(() => {
-    const preloadSprites = async () => {
-      try {
-        // List of all available sprites
-        const spriteFiles = [
-          'death_knight.png',
-          'deep_elf_fighter_new.png',
-          'hell_knight_new.png'
-        ];
-
-        // Load all sprites
-        const loadPromises = spriteFiles.map(sprite => {
-          const spritePath = `/sprites/${sprite}`;
-          console.log(`Preloading sprite: ${spritePath}`);
-          return Assets.load(spritePath);
-        });
-
-        await Promise.all(loadPromises);
-        console.log('All sprites preloaded successfully');
-      } catch (error) {
-        console.error('Error preloading sprites:', error);
-      }
-    };
-
-    preloadSprites();
-  }, []);
-
-  // Preload tile sprites
-  useEffect(() => {
-    const preloadSprites = async () => {
-      try {
-        const tileSprites = [
-          'floor.png',
-          'wall.png',
-          'water.png'
-        ];
-
-        const loadPromises = tileSprites.map(sprite => {
-          const spritePath = `/tiles/${sprite}`;
-          return Assets.load(spritePath);
-        });
-
-        await Promise.all(loadPromises);
-        console.log('All tile sprites preloaded successfully');
-      } catch (error) {
-        console.error('Error preloading tile sprites:', error);
-      }
-    };
-
-    preloadSprites();
-  }, []);
-
-  // Fetch entities
-  useEffect(() => {
-    const fetchEntities = async () => {
-      try {
-        const summaries = await fetchEntitySummaries();
-        console.log('Fetched entities with full payload:', summaries.map(e => ({
-          name: e.name,
-          sprite_name: e.sprite_name,
-          position: e.position,
-          full: e
-        })));
-        setEntities(summaries);
-      } catch (error) {
-        console.error('Error fetching entities:', error);
-      }
-    };
-    fetchEntities();
-
-    // Set up polling for entity updates
-    const interval = setInterval(fetchEntities, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch grid data
-  useEffect(() => {
-    const fetchGrid = async () => {
-      try {
-        const grid = await fetchGridSnapshot();
-        setTiles(grid.tiles);
-        setGridDimensions({ width: grid.width, height: grid.height });
-      } catch (error) {
-        console.error('Error fetching grid:', error);
-      }
-    };
-
-    fetchGrid();
-    // Reduced polling frequency since we have optimistic updates
-    const interval = setInterval(fetchGrid, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Optimize entity fetching
-  useEffect(() => {
-    let isMounted = true;
-    const fetchEntitiesData = async () => {
-      try {
-        const summaries = await fetchEntitySummaries();
-        if (isMounted) {
-          setEntities(summaries);
-        }
-      } catch (error) {
-        console.error('Error fetching entities:', error);
-      }
-    };
-
-    fetchEntitiesData();
-    const interval = setInterval(fetchEntitiesData, 200); // More frequent updates for entities
+    characterActions.startPolling();
     return () => {
-      isMounted = false;
-      clearInterval(interval);
+      characterActions.stopPolling();
     };
   }, []);
 
@@ -434,7 +333,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     } else {
       setHoveredCell({ x: -1, y: -1 });
     }
-  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, offset]);
+  }, [canvasSize?.width, canvasSize?.height, gridWidth, gridHeight, tileSize, offset]);
 
   // Handle pointer down with the same calculations
   const handlePointerDown = useCallback((event: FederatedPointerEvent) => {
@@ -450,16 +349,11 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     
     // Only trigger if within grid bounds
     if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
-      const handleOptimisticUpdate = (newTile: TileSummary) => {
-        setTiles(prev => ({
-          ...prev,
-          [newTile.uuid]: newTile
-        }));
-      };
-      
-      onCellClick(gridX, gridY, handleOptimisticUpdate);
+      onCellClick(gridX, gridY, (newTile: TileSummary) => {
+        characterActions.fetchTiles(); // Refresh tiles after update
+      });
     }
-  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, offset, onCellClick, isEditing, isLocked]);
+  }, [canvasSize?.width, canvasSize?.height, gridWidth, gridHeight, tileSize, offset, onCellClick, isEditing, isLocked]);
 
   const handleZoomIn = useCallback(() => {
     setTileSize(prev => Math.min(prev + TILE_SIZE_STEP, MAX_TILE_SIZE));
@@ -595,10 +489,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
               }, [canvasSize.width, canvasSize.height])}
             />
             
-            <pixiContainer
-              x={offset.x}
-              y={offset.y}
-            >
+            <pixiContainer x={offset.x} y={offset.y}>
               {/* Grid Lines */}
               <Grid 
                 width={canvasSize.width}
@@ -629,20 +520,17 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                 tileSize={tileSize}
               />
 
-              {/* Game Objects Container - Now after grid and highlight */}
-              {entities.map(entity => {
-                console.log('Rendering entity:', entity);
-                return (
-                  <EntitySprite
-                    key={entity.uuid}
-                    entity={entity}
-                    width={canvasSize.width}
-                    height={canvasSize.height}
-                    gridSize={{ rows: gridHeight, cols: gridWidth }}
-                    tileSize={tileSize}
-                  />
-                );
-              })}
+              {/* Game Objects Container */}
+              {entities.map(entity => (
+                <EntitySprite
+                  key={entity.uuid}
+                  entity={entity}
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  gridSize={{ rows: gridHeight, cols: gridWidth }}
+                  tileSize={tileSize}
+                />
+              ))}
             </pixiContainer>
           </pixiContainer>
         </Application>
