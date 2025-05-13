@@ -77,6 +77,7 @@ class EntityConfig(BaseModel):
     proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
     sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
+
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
     require interactions between blocks """
@@ -639,3 +640,9 @@ class Entity(BaseBlock):
             walkable={pos: Tile.is_walkable(pos) for pos in visible_positions},
             paths=filtered_paths
         )
+
+    @classmethod
+    def update_all_entities_senses(cls, max_distance: int = 10):
+        """ Update the senses for all entities """
+        for entity in cls.get_all_entities():
+            entity.update_entity_senses(max_distance)
