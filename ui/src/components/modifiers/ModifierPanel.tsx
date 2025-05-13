@@ -13,7 +13,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CloseIcon from '@mui/icons-material/Close';
-import { useEntity } from '../../contexts/EntityContext';
+import { useModifiableValue } from '../../hooks/character/useModifiableValue';
 
 interface ModifierPanelProps {
   valuePath: string | null;
@@ -33,29 +33,14 @@ const ModifierPanel: React.FC<ModifierPanelProps> = ({
   onClose
 }) => {
   const theme = useTheme();
-  const { entity } = useEntity();
   const [expanded, setExpanded] = React.useState(!compact);
+  const { details } = useModifiableValue(valuePath);
 
-  if (!entity || !valuePath) {
+  if (!details) {
     return null;
   }
 
-  // Get value details - this would be replaced with actual logic to retrieve from entity
-  const getValueDetails = (path: string) => {
-    // In a real implementation, this would navigate the entity to find the value at the given path
-    return {
-      name: path.split('.').pop() || path,
-      value: "5",
-      baseValue: "3",
-      modifiers: [
-        { source: "Ability Modifier", value: "+2" },
-        { source: "Proficiency", value: "+2" }
-      ]
-    };
-  };
-
-  const valueDetails = getValueDetails(valuePath);
-  const displayTitle = title || valueDetails.name;
+  const displayTitle = title || details.name;
 
   return (
     <Paper elevation={1} sx={{ p: 1, mb: 1 }}>
@@ -67,7 +52,7 @@ const ModifierPanel: React.FC<ModifierPanelProps> = ({
         }}
       >
         <Typography variant="subtitle2" sx={{ cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
-          {displayTitle} ({valueDetails.value})
+          {displayTitle} ({details.value})
         </Typography>
         <Box>
           {expanded ? 
@@ -89,11 +74,11 @@ const ModifierPanel: React.FC<ModifierPanelProps> = ({
       <Collapse in={expanded}>
         <Box sx={{ mt: 1 }}>
           <Typography variant="caption" color="text.secondary">
-            Base Value: {valueDetails.baseValue}
+            Base Value: {details.baseValue}
           </Typography>
           
           <List dense disablePadding>
-            {valueDetails.modifiers.map((mod, index) => (
+            {details.modifiers.map((mod, index) => (
               <ListItem key={index} dense sx={{ py: 0.5 }}>
                 <ListItemText
                   primary={`${mod.source}: ${mod.value}`}

@@ -3,7 +3,6 @@ import {
   Box,
   Paper,
   Typography,
-  Divider,
   List,
   ListItem,
   ListItemText,
@@ -13,7 +12,7 @@ import {
   useMediaQuery
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { useEntity } from '../../contexts/EntityContext';
+import { useModifiableValue } from '../../hooks/character/useModifiableValue';
 
 interface ModifierExplorerProps {
   valuePath?: string | null;
@@ -28,9 +27,8 @@ const ModifierExplorer: React.FC<ModifierExplorerProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { entity } = useEntity();
   
-  // Since EntityContext doesn't have selectedValuePath yet, we'll use props or internal state
+  // Since we might not have a valuePath yet, we'll use internal state
   const [internalValuePath, setInternalValuePath] = React.useState<string | null>(null);
   
   // Use either external valuePath (from props) or internal state
@@ -39,35 +37,20 @@ const ModifierExplorer: React.FC<ModifierExplorerProps> = ({
   // If external onClose wasn't provided, create a default one
   const handleClose = externalOnClose || (() => setInternalValuePath(null));
 
+  // Use the new hook
+  const { details, value } = useModifiableValue(valuePath);
+
   if (!valuePath) {
     return null;
   }
 
-  if (!entity) {
+  if (!value || !details) {
     return (
       <Paper sx={{ p: 2 }}>
-        <Typography>No entity loaded</Typography>
+        <Typography>No value found</Typography>
       </Paper>
     );
   }
-
-  // Get value details
-  const getValueDetails = (path: string) => {
-    // This is a stub for now - in a real implementation, 
-    // this would navigate the entity to find the value at the given path
-    return {
-      name: path.split('.').pop() || path,
-      value: "5",
-      baseValue: "3",
-      modifiers: [
-        { source: "Ability Modifier", value: "+2" },
-        { source: "Proficiency", value: "+2" },
-        { source: "Magic Item", value: "+1" }
-      ]
-    };
-  };
-
-  const valueDetails = getValueDetails(valuePath);
 
   const content = (
     <Box sx={{ p: 2, width: '100%', maxWidth: 500, maxHeight: '80vh', overflow: 'auto' }}>
@@ -80,13 +63,13 @@ const ModifierExplorer: React.FC<ModifierExplorerProps> = ({
 
       <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1">
-          {valueDetails.name}
+          {details.name}
         </Typography>
         <Typography variant="h4" sx={{ mb: 1 }}>
-          {valueDetails.value}
+          {details.value}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          Base Value: {valueDetails.baseValue}
+          Base Value: {details.baseValue}
         </Typography>
       </Paper>
 
@@ -94,7 +77,7 @@ const ModifierExplorer: React.FC<ModifierExplorerProps> = ({
         Modifiers
       </Typography>
       <List disablePadding>
-        {valueDetails.modifiers.map((mod, index) => (
+        {details.modifiers.map((mod, index) => (
           <ListItem key={index} divider>
             <ListItemText
               primary={mod.source}

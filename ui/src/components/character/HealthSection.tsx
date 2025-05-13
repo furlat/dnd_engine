@@ -3,7 +3,7 @@ import {
   Box,
   Paper,
   Typography,
-  Grid,
+  GridLegacy as Grid,
   Chip,
   Dialog,
   DialogTitle,
@@ -17,17 +17,26 @@ import {
   List,
   ListItem,
   ListItemText,
+  TextField,
+  IconButton,
+  CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { HealthSnapshot, HitDiceSnapshot, ModifiableValueSnapshot } from '../../models/character';
-
-interface Props {
-  health: HealthSnapshot;
-}
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
+import type { 
+  ReadonlyModifiableValueSnapshot, 
+  ReadonlyHitDiceSnapshot 
+} from '../../models/readonly';
+import { useHealth } from '../../hooks/character/useHealth';
 
 const format = (v: number) => `${v}`;
 
-const ValueBreakdown: React.FC<{ label: string; mv: ModifiableValueSnapshot }> = ({ label, mv }) => (
+const ValueBreakdown: React.FC<{ 
+  label: string; 
+  mv: ReadonlyModifiableValueSnapshot 
+}> = ({ label, mv }) => (
   <Accordion defaultExpanded sx={{ mb: 1 }}>
     <AccordionSummary expandIcon={<ExpandMoreIcon />}>{label}</AccordionSummary>
     <AccordionDetails>
@@ -55,7 +64,9 @@ const ValueBreakdown: React.FC<{ label: string; mv: ModifiableValueSnapshot }> =
   </Accordion>
 );
 
-const HitDiceList: React.FC<{ hitDices: HitDiceSnapshot[] }> = ({ hitDices }) => (
+const HitDiceList: React.FC<{ 
+  hitDices: ReadonlyArray<ReadonlyHitDiceSnapshot> 
+}> = ({ hitDices }) => (
   <Accordion defaultExpanded sx={{ mb: 1 }}>
     <AccordionSummary expandIcon={<ExpandMoreIcon />}>Hit Dice</AccordionSummary>
     <AccordionDetails>
@@ -73,33 +84,119 @@ const HitDiceList: React.FC<{ hitDices: HitDiceSnapshot[] }> = ({ hitDices }) =>
   </Accordion>
 );
 
-const HealthSection: React.FC<Props> = ({ health }) => {
-  const current = health.current_hit_points ?? 0;
-  const max = health.max_hit_points ?? health.hit_dices_total_hit_points + health.max_hit_points_bonus.normalized_score;
+const ModifyHealthDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onModify: (amount: number) => Promise<void>;
+  onApplyTemp: (amount: number) => Promise<void>;
+}> = ({ open, onClose, onModify, onApplyTemp }) => {
+  const [amount, setAmount] = React.useState(0);
+  const [tempAmount, setTempAmount] = React.useState(0);
 
-  const conMod = health.max_hit_points ? max - health.hit_dices_total_hit_points - health.max_hit_points_bonus.normalized_score : 0;
+  const handleModify = React.useCallback(() => {
+    onModify(amount);
+    setAmount(0);
+  }, [amount, onModify]);
 
-  const totalDice = health.total_hit_dices_number;
-  const conPerLevel = totalDice > 0 ? conMod / totalDice : 0;
+  const handleApplyTemp = React.useCallback(() => {
+    onApplyTemp(tempAmount);
+    setTempAmount(0);
+  }, [tempAmount, onApplyTemp]);
 
-  const hitDiceStr = React.useMemo(() => {
-    const groups: Record<string, number> = {};
-    health.hit_dices.forEach((hd:any)=>{
-      const sides = hd.hit_dice_value.score;
-      groups[sides] = (groups[sides]||0)+ hd.hit_dice_count.score;
-    });
-    return Object.entries(groups)
-      .sort((a,b)=>Number(a[0])-Number(b[0]))
-      .map(([sides, cnt])=>`${cnt}d${sides}`)
-      .join(' + ');
-  }, [health]);
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Modify Health</DialogTitle>
+      <DialogContent dividers>
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>Modify Current HP</Typography>
+          <Grid container spacing={1} alignItems="center">
+            <Grid item>
+              <IconButton size="small" onClick={() => setAmount(prev => prev - 1)}>
+                <RemoveIcon />
+              </IconButton>
+            </Grid>
+            <Grid item xs>
+              <TextField
+                fullWidth
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                size="small"
+              />
+            </Grid>
+            <Grid item>
+              <IconButton size="small" onClick={() => setAmount(prev => prev + 1)}>
+                <AddIcon />
+              </IconButton>
+            </Grid>
+          </Grid>
+          <Button 
+            fullWidth 
+            variant="contained" 
+            onClick={handleModify} 
+            sx={{ mt: 1 }}
+            color={amount >= 0 ? "primary" : "error"}
+          >
+            {amount >= 0 ? "Heal" : "Damage"}
+          </Button>
+        </Box>
+        <Divider />
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>Apply Temporary HP</Typography>
+          <Grid container spacing={1} alignItems="center">
+            <Grid item>
+              <IconButton size="small" onClick={() => setTempAmount(prev => Math.max(0, prev - 1))}>
+                <RemoveIcon />
+              </IconButton>
+            </Grid>
+            <Grid item xs>
+              <TextField
+                fullWidth
+                type="number"
+                value={tempAmount}
+                onChange={(e) => setTempAmount(Math.max(0, Number(e.target.value)))}
+                size="small"
+              />
+            </Grid>
+            <Grid item>
+              <IconButton size="small" onClick={() => setTempAmount(prev => prev + 1)}>
+                <AddIcon />
+              </IconButton>
+            </Grid>
+          </Grid>
+          <Button 
+            fullWidth 
+            variant="contained" 
+            onClick={handleApplyTemp} 
+            sx={{ mt: 1 }}
+          >
+            Apply Temp HP
+          </Button>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
-  const [open, setOpen] = React.useState(false);
+const HealthSection: React.FC = () => {
+  const { 
+    health, 
+    stats,
+    dialogOpen, 
+    modifyDialogOpen,
+    handleOpenDialog, 
+    handleCloseDialog,
+    handleOpenModifyDialog,
+    handleCloseModifyDialog,
+    handleModifyHealth,
+    handleApplyTempHP,
+    getResistancesByType
+  } = useHealth();
 
-  const imm = health.resistances.filter((r:any)=>r.status==='Immunity').length;
-  const res = health.resistances.filter((r:any)=>r.status==='Resistance').length;
-  const vul = health.resistances.filter((r:any)=>r.status==='Vulnerability').length;
-  const dr = health.damage_reduction.normalized_score;
+  if (!health || !stats) return null;
 
   return (
     <Box>
@@ -107,55 +204,62 @@ const HealthSection: React.FC<Props> = ({ health }) => {
       <Paper
         sx={{ p: 2, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
         elevation={3}
-        onClick={() => setOpen(true)}
+        onClick={handleOpenDialog}
       >
-        <Box sx={{ mr:2 }}>
+        <Box sx={{ mr: 2 }}>
           <Typography variant="subtitle1">HP</Typography>
-          <Typography variant="h4">{current}/{max}</Typography>
+          <Typography variant="h4">{stats.current}/{stats.max}</Typography>
         </Box>
-        <Box sx={{ flexGrow:1, display:'flex', alignItems:'center', gap:0.5, flexWrap:'wrap' }}>
-          {imm>0 && <Chip size="small" label={`Imm ${imm}`} color="success" />}
-          {res>0 && <Chip size="small" label={`Res ${res}`} color="primary" />}
-          {vul>0 && <Chip size="small" label={`Vul ${vul}`} color="error" />}
+        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+          {stats.immunities > 0 && <Chip size="small" label={`Imm ${stats.immunities}`} color="success" />}
+          {stats.resistances > 0 && <Chip size="small" label={`Res ${stats.resistances}`} color="primary" />}
+          {stats.vulnerabilities > 0 && <Chip size="small" label={`Vul ${stats.vulnerabilities}`} color="error" />}
         </Box>
-        <Box sx={{ ml: 2, display:'flex', flexDirection:'row', alignItems:'center', gap:2 }}>
+        <Box sx={{ ml: 2, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <Box textAlign="center">
             <Typography variant="subtitle2">Hit Dice</Typography>
-            <Typography>{hitDiceStr}</Typography>
+            <Typography>{stats.hitDiceString}</Typography>
           </Box>
           <Box textAlign="center">
             <Typography variant="subtitle2">CON</Typography>
-            <Typography>{conPerLevel >= 0 ? `+${conPerLevel}` : conPerLevel}</Typography>
+            <Typography>{stats.conPerLevel >= 0 ? `+${stats.conPerLevel}` : stats.conPerLevel}</Typography>
           </Box>
-          {dr>0 && (
+          {stats.damageReduction > 0 && (
             <Box textAlign="center">
               <Typography variant="subtitle2">DR</Typography>
-              <Typography>{dr}</Typography>
+              <Typography>{stats.damageReduction}</Typography>
             </Box>
           )}
         </Box>
       </Paper>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Health Details</DialogTitle>
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography>Health Details</Typography>
+            <Button variant="contained" onClick={handleOpenModifyDialog}>
+              Modify HP
+            </Button>
+          </Box>
+        </DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
-              <Paper sx={{ p:2 }}>
+              <Paper sx={{ p: 2 }}>
                 <Typography variant="body2">Current HP</Typography>
-                <Typography variant="h5">{current}</Typography>
-                <Divider sx={{ my:1 }}/>
+                <Typography variant="h5">{stats.current}</Typography>
+                <Divider sx={{ my: 1 }} />
                 <Typography variant="body2">Max HP</Typography>
-                <Typography variant="h5">{max}</Typography>
-                <Divider sx={{ my:1 }}/>
+                <Typography variant="h5">{stats.max}</Typography>
+                <Divider sx={{ my: 1 }} />
                 <Typography variant="body2">Temporary HP</Typography>
                 <Typography variant="h6">{health.temporary_hit_points.normalized_score}</Typography>
-                <Divider sx={{ my:1 }}/>
+                <Divider sx={{ my: 1 }} />
                 <Typography variant="body2">Damage Taken</Typography>
                 <Typography variant="h6">{health.damage_taken}</Typography>
               </Paper>
 
-              {/* Resistances / Vulnerabilities / Immunities - Moved here */}
+              {/* Resistances / Vulnerabilities / Immunities */}
               {health.resistances && health.resistances.length > 0 && (
                 <Paper sx={{ p: 2, mt: 2 }}>
                   <Typography variant="h6" gutterBottom>Damage Modifiers</Typography>
@@ -163,11 +267,11 @@ const HealthSection: React.FC<Props> = ({ health }) => {
                     {['Immunity', 'Resistance', 'Vulnerability'].map((status) => (
                       <Grid item xs={12} key={status}>
                         <Typography variant="subtitle2" color="text.secondary">{status}</Typography>
-                        {health.resistances.filter((r: any) => r.status === status).length === 0 ? (
+                        {getResistancesByType(status as any).length === 0 ? (
                           <Typography variant="caption">None</Typography>
                         ) : (
                           <List dense disablePadding>
-                            {health.resistances.filter((r: any) => r.status === status).map((r: any) => (
+                            {getResistancesByType(status as any).map((r) => (
                               <ListItem key={r.damage_type}>
                                 <ListItemText primary={r.damage_type} />
                               </ListItem>
@@ -184,7 +288,11 @@ const HealthSection: React.FC<Props> = ({ health }) => {
             <Grid item xs={12} md={8}>
               <Paper sx={{ p: 2, mb: 1 }} elevation={1}>
                 <Typography variant="subtitle2">Constitution Bonus</Typography>
-                <Typography>{health.total_hit_dices_number > 0 ? `${conMod / health.total_hit_dices_number} per level, Total: ${conMod}` : conMod}</Typography>
+                <Typography>
+                  {stats.totalDice > 0 
+                    ? `${stats.conPerLevel} per level, Total: ${stats.conModifier}` 
+                    : stats.conModifier}
+                </Typography>
               </Paper>
               <HitDiceList hitDices={health.hit_dices} />
               <ValueBreakdown label="Max HP Bonus" mv={health.max_hit_points_bonus} />
@@ -194,11 +302,18 @@ const HealthSection: React.FC<Props> = ({ health }) => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Close</Button>
+          <Button onClick={handleCloseDialog}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <ModifyHealthDialog
+        open={modifyDialogOpen}
+        onClose={handleCloseModifyDialog}
+        onModify={handleModifyHealth}
+        onApplyTemp={handleApplyTempHP}
+      />
     </Box>
   );
 };
 
-export default HealthSection; 
+export default React.memo(HealthSection); 

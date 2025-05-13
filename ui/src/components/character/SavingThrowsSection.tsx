@@ -19,25 +19,23 @@ import {
   AccordionDetails,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import {
-  SavingThrowSetSnapshot,
-  SavingThrowSnapshot,
-  SavingThrowBonusCalculationSnapshot,
-} from '../../models/character';
-
-interface Props {
-  savingThrows: SavingThrowSetSnapshot;
-  savingThrowCalculations?: Record<string, SavingThrowBonusCalculationSnapshot>;
-}
-
-const formatBonus = (n: number) => `${n}`;
+import type {
+  ReadonlySavingThrowSnapshot,
+  ReadonlySavingThrowBonusCalculation,
+  ReadonlyModifierChannel
+} from '../../models/readonly';
+import { AdvantageStatus, CriticalStatus, AutoHitStatus } from '../../models/character';
+import { useSavingThrows } from '../../hooks/character/useSavingThrows';
 
 // Helper to render modifier breakdown list
-const ModifierBreakdown: React.FC<{ savingThrow: SavingThrowSnapshot; calc?: SavingThrowBonusCalculationSnapshot }> = ({ savingThrow, calc }) => {
+const ModifierBreakdown: React.FC<{ 
+  savingThrow: ReadonlySavingThrowSnapshot; 
+  calc?: ReadonlySavingThrowBonusCalculation 
+}> = ({ savingThrow, calc }) => {
   // Helper to grab channels safely
   const extractChannels = (mv: any) => (mv && mv.channels ? mv.channels : []);
 
-  const sections: { label: string; channels: any[] }[] = [];
+  const sections: { label: string; channels: ReadonlyModifierChannel[] }[] = [];
 
   // 1. Proficiency Bonus
   if (calc) {
@@ -61,7 +59,7 @@ const ModifierBreakdown: React.FC<{ savingThrow: SavingThrowSnapshot; calc?: Sav
     );
   }
 
-  const getTotal = (ch: any) => ch.value_modifiers.reduce((s: number, m: any) => s + m.value, 0);
+  const getTotal = (ch: ReadonlyModifierChannel) => ch.value_modifiers.reduce((s, m) => s + m.value, 0);
 
   return (
     <>
@@ -71,13 +69,13 @@ const ModifierBreakdown: React.FC<{ savingThrow: SavingThrowSnapshot; calc?: Sav
             <Typography variant="subtitle1">{section.label}</Typography>
           </AccordionSummary>
           <AccordionDetails>
-            {section.channels.map((ch: any, idx: number) => (
+            {section.channels.map((ch, idx) => (
               <Box key={idx} sx={{ mb: 2 }}>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                   {ch.name} – Total: {formatBonus(getTotal(ch))}
                 </Typography>
                 <List dense disablePadding>
-                  {ch.value_modifiers.map((mod: any, i: number) => (
+                  {ch.value_modifiers.map((mod, i) => (
                     <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
                       <ListItemText
                         primary={mod.name}
@@ -102,24 +100,24 @@ const ModifierBreakdown: React.FC<{ savingThrow: SavingThrowSnapshot; calc?: Sav
   );
 };
 
-const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalculations }) => {
-  const [selected, setSelected] = React.useState<SavingThrowSnapshot | null>(null);
+const formatBonus = (n: number) => `${n}`;
 
-  // Convert map to array ordered by ability typical order
-  const ordered = React.useMemo(() => {
-    const order = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-    return order
-      .map((ability) => savingThrows.saving_throws[ability])
-      .filter(Boolean) as SavingThrowSnapshot[];
-  }, [savingThrows]);
+const DetailDialog: React.FC<{
+  savingThrow: ReadonlySavingThrowSnapshot | null;
+  calc?: ReadonlySavingThrowBonusCalculation;
+  onClose: () => void;
+  open: boolean;
+}> = ({ savingThrow, calc, onClose, open }) => {
+  if (!savingThrow) return null;
 
-  const DetailDialog: React.FC = () => {
-    if (!selected) return null;
-    const calc = savingThrowCalculations ? savingThrowCalculations[selected.ability] : undefined;
+    // Get status from total_bonus if available
+    const advantage = calc?.total_bonus?.advantage ?? AdvantageStatus.NONE;
+    const critical = calc?.total_bonus?.critical ?? CriticalStatus.NONE;
+    const autoHit = calc?.total_bonus?.auto_hit ?? AutoHitStatus.NONE;
 
     return (
-      <Dialog open onClose={() => setSelected(null)} maxWidth="md" fullWidth>
-        <DialogTitle>{`${selected.ability.toUpperCase()} Saving Throw Details`}</DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>{`${savingThrow.ability.toUpperCase()} Saving Throw Details`}</DialogTitle>
         <DialogContent dividers>
           {calc ? (
             <Grid container spacing={2}>
@@ -135,7 +133,7 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                       <Typography variant="body2" color="text.secondary">
                         Ability
                       </Typography>
-                      <Typography variant="h5">{selected.ability.toUpperCase()}</Typography>
+                    <Typography variant="h5">{savingThrow.ability.toUpperCase()}</Typography>
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2" color="text.secondary">
@@ -149,13 +147,36 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                       </Typography>
                     </Grid>
                   </Grid>
+
+                  {/* Status Chips */}
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {autoHit === AutoHitStatus.AUTOHIT && (
+                      <Chip size="small" label="Auto Success" color="info" />
+                    )}
+                    {autoHit === AutoHitStatus.AUTOMISS && (
+                      <Chip size="small" label="Auto Fail" color="error" />
+                    )}
+                    {critical === CriticalStatus.AUTOCRIT && (
+                      <Chip size="small" label="Always Crit" color="warning" />
+                    )}
+                    {critical === CriticalStatus.NOCRIT && (
+                      <Chip size="small" label="Never Crit" color="error" />
+                    )}
+                    <Chip 
+                      size="small" 
+                      label={advantage === AdvantageStatus.ADVANTAGE ? 'Advantage' :
+                             advantage === AdvantageStatus.DISADVANTAGE ? 'Disadvantage' : 'Normal'}
+                      color={advantage === AdvantageStatus.ADVANTAGE ? 'success' :
+                             advantage === AdvantageStatus.DISADVANTAGE ? 'error' : 'default'}
+                    />
+                  </Box>
                 </Paper>
 
                 {/* Components */}
                 <Typography variant="h6" gutterBottom>
                   Component Values
                 </Typography>
-                <Paper sx={{ p: 2 }} elevation={1}>
+                <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                   {[
                     { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_score },
                     { label: 'Saving Throw Bonus', value: calc.saving_throw_bonus.normalized_score },
@@ -175,6 +196,32 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                     </React.Fragment>
                   ))}
                 </Paper>
+
+                {/* Status Details */}
+                <Typography variant="h6" gutterBottom>
+                  Status Effects
+                </Typography>
+                <Paper sx={{ p: 2 }} elevation={1}>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {advantage === AdvantageStatus.ADVANTAGE ? 'Roll twice and take the higher result' :
+                     advantage === AdvantageStatus.DISADVANTAGE ? 'Roll twice and take the lower result' :
+                     'Roll normally'}
+                  </Typography>
+                  {critical !== CriticalStatus.NONE && (
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      {critical === CriticalStatus.AUTOCRIT ? 'Save automatically results in a critical success' :
+                       critical === CriticalStatus.NOCRIT ? 'Save can never be a critical success' :
+                       'Normal critical rules apply'}
+                    </Typography>
+                  )}
+                  {autoHit !== AutoHitStatus.NONE && (
+                    <Typography variant="body1">
+                      {autoHit === AutoHitStatus.AUTOHIT ? 'Save automatically succeeds' :
+                       autoHit === AutoHitStatus.AUTOMISS ? 'Save automatically fails' :
+                       'Normal success rules apply'}
+                    </Typography>
+                  )}
+                </Paper>
               </Grid>
 
               {/* Right column */}
@@ -182,7 +229,7 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                 <Typography variant="h6" gutterBottom>
                   Modifier Breakdown
                 </Typography>
-                <ModifierBreakdown savingThrow={selected} calc={calc} />
+              <ModifierBreakdown savingThrow={savingThrow} calc={calc} />
               </Grid>
 
               {/* Debug */}
@@ -190,7 +237,7 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                 <Accordion sx={{ mt: 2 }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>Debug JSON</AccordionSummary>
                   <AccordionDetails>
-                    <pre style={{ fontSize: 12 }}>{JSON.stringify(selected, null, 2)}</pre>
+                  <pre style={{ fontSize: 12 }}>{JSON.stringify(savingThrow, null, 2)}</pre>
                     {calc && (
                       <>
                         <Divider sx={{ my: 1 }} />
@@ -206,11 +253,33 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSelected(null)}>Close</Button>
+        <Button onClick={onClose}>Close</Button>
         </DialogActions>
       </Dialog>
     );
   };
+
+const SavingThrowsSection: React.FC = () => {
+  const {
+    savingThrows,
+    calculations,
+    selectedSavingThrow,
+    dialogOpen,
+    handleSavingThrowClick,
+    handleCloseDialog
+  } = useSavingThrows();
+
+  // Move useMemo outside the conditional and handle null case inside
+  const ordered = React.useMemo(() => {
+    if (!savingThrows) return [];
+    
+    const order = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+    return order
+      .map((ability) => savingThrows.saving_throws[ability])
+      .filter(Boolean) as ReadonlySavingThrowSnapshot[];
+  }, [savingThrows]);
+
+  if (!savingThrows) return null;
 
   return (
     <Box>
@@ -237,7 +306,7 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
                   border: st.proficiency ? 2 : 1,
                   borderColor: st.proficiency ? 'primary.main' : 'transparent',
                 }}
-                onClick={() => setSelected(st)}
+                onClick={() => handleSavingThrowClick(st)}
               >
                 <Typography variant="subtitle1">{st.ability.toUpperCase()}</Typography>
                 <Typography variant="h5" color={bonus >= 0 ? 'success.main' : 'error.main'}>
@@ -248,9 +317,14 @@ const SavingThrowsSection: React.FC<Props> = ({ savingThrows, savingThrowCalcula
           );
         })}
       </Grid>
-      <DetailDialog />
+      <DetailDialog 
+        savingThrow={selectedSavingThrow}
+        calc={selectedSavingThrow ? calculations?.[selectedSavingThrow.ability] : undefined}
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+      />
     </Box>
   );
 };
 
-export default SavingThrowsSection; 
+export default React.memo(SavingThrowsSection); 
