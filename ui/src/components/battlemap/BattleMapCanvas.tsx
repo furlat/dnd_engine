@@ -429,8 +429,6 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
 
   // Handle pointer down with the same calculations
   const handlePointerDown = useCallback((event: FederatedPointerEvent) => {
-    if (!isEditing || isLocked || !onCellClick) return;
-
     const mousePosition = event.global;
     const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
     const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
@@ -439,13 +437,53 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     const gridX = Math.floor((mousePosition.x - offsetX - offset.x) / tileSize);
     const gridY = Math.floor((mousePosition.y - offsetY - offset.y) / tileSize);
     
-    // Only trigger if within grid bounds
+    // Only proceed if within grid bounds
     if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
-      onCellClick(gridX, gridY, (newTile: TileSummary) => {
-        characterActions.fetchTiles(); // Refresh tiles after update
-      });
+      // Handle left click for tile editing
+      if (event.button === 0 && isEditing && !isLocked && onCellClick) {
+        onCellClick(gridX, gridY, (newTile: TileSummary) => {
+          characterActions.fetchTiles(); // Refresh tiles after update
+        });
+      }
+      
+      // Handle right click for movement
+      if (event.button === 2 && selectedEntity && !isLocked) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // Check if the position is walkable
+        const posKey = `${gridX},${gridY}`;
+        const isWalkable = tiles[posKey]?.walkable ?? false;
+        
+        // Only check path if movement highlight is enabled
+        if (isWalkable && (!isMovementHighlightEnabled || selectedEntity.senses.paths[posKey])) {
+          characterActions.moveEntity(selectedEntity.uuid, [gridX, gridY]);
+        }
+      }
     }
-  }, [canvasSize?.width, canvasSize?.height, gridWidth, gridHeight, tileSize, offset, onCellClick, isEditing, isLocked]);
+  }, [
+    canvasSize?.width,
+    canvasSize?.height,
+    gridWidth,
+    gridHeight,
+    tileSize,
+    offset,
+    onCellClick,
+    isEditing,
+    isLocked,
+    selectedEntity,
+    tiles
+  ]);
+
+  // Prevent context menu on right click
+  useEffect(() => {
+    const preventDefault = (e: Event) => e.preventDefault();
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      canvas.addEventListener('contextmenu', preventDefault);
+      return () => canvas.removeEventListener('contextmenu', preventDefault);
+    }
+  }, []);
 
   const handleZoomIn = useCallback(() => {
     setTileSize(prev => Math.min(prev + TILE_SIZE_STEP, MAX_TILE_SIZE));
