@@ -26,6 +26,24 @@ export type {
 // Position type
 export type Position = [number, number];
 
+// Add SensesType enum
+export enum SensesType {
+    BLINDSIGHT = "Blindsight",
+    DARKVISION = "Darkvision",
+    TREMORSENSE = "Tremorsense",
+    TRUESIGHT = "Truesight"
+}
+
+// Add SensesSnapshot interface
+export interface SensesSnapshot {
+    entities: Record<UUID, Position>;
+    visible: Record<string, boolean>;  // Using string for tuple key since TypeScript doesn't support tuple as key
+    walkable: Record<string, boolean>;
+    paths: Record<string, Position[]>;
+    extra_senses: SensesType[];
+    position: Position;
+}
+
 // Lightweight entity summary for combat UI
 export interface EntitySummary {
     uuid: UUID;
@@ -36,6 +54,7 @@ export interface EntitySummary {
     target_entity_uuid?: UUID;
     position: Position;
     sprite_name?: string;
+    senses: SensesSnapshot;
 }
 
 // Channel interfaces
@@ -349,11 +368,13 @@ export interface Character {
   target_entity_uuid?: UUID;
   target_summary?: EntitySummary;
   position: Position;
+  sprite_name?: string;
   
   // Main blocks
   ability_scores: AbilityScoresSnapshot;
   skill_set: SkillSetSnapshot;
   equipment: EquipmentSnapshot;
+  senses: SensesSnapshot;
   
   // Other blocks
   saving_throws: SavingThrowSetSnapshot;

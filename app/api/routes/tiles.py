@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from dnd.core.base_tiles import Tile, floor_factory, wall_factory, water_factory
 from app.models.tile import TileSnapshot, TileSummary, GridSnapshot
-
+from dnd.entity import Entity
 # Create router
 router = APIRouter(
     prefix="/tiles",
@@ -64,16 +64,16 @@ async def get_tile_by_uuid(tile_uuid: UUID):
 async def create_tile(request: CreateTileRequest):
     """Create a new tile at the specified position using the specified factory"""
     # Check if position is already occupied
-    existing_tile = Tile.get_tile_at_position(request.position)
-    if existing_tile:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "Position occupied",
-                "message": f"A tile already exists at position {request.position}",
-                "position": request.position
-            }
-        )
+    # existing_tile = Tile.get_tile_at_position(request.position)
+    # if existing_tile:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail={
+    #             "error": "Position occupied",
+    #             "message": f"A tile already exists at position {request.position}",
+    #             "position": request.position
+    #         }
+    #     )
 
     # Create tile using appropriate factory
     try:
@@ -85,7 +85,7 @@ async def create_tile(request: CreateTileRequest):
             tile = water_factory(request.position)
         else:
             raise ValueError(f"Invalid tile type: {request.tile_type}")
-
+        Entity.update_all_entities_senses()
         return TileSnapshot.from_engine(tile)
 
     except Exception as e:

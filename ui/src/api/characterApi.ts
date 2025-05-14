@@ -17,6 +17,21 @@ const DEFAULT_INCLUDE_PARAMS = {
   include_target_summary: true
 };
 
+// Set target entity
+export const setTargetEntity = async (characterId: string, targetId: string | null): Promise<Character> => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/entities/${characterId}/target`,
+      { target_entity_uuid: targetId },
+      { params: DEFAULT_INCLUDE_PARAMS }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error setting target entity:', error);
+    throw error;
+  }
+};
+
 // Fetch all entity summaries (lightweight version)
 export const fetchEntitySummaries = async (): Promise<EntitySummary[]> => {
   try {

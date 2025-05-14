@@ -1,16 +1,27 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Application, extend } from '@pixi/react';
-import { Graphics as PixiGraphics, Container, FederatedPointerEvent, Sprite, Assets, Texture } from 'pixi.js';
-import { Box, Paper, Typography, IconButton } from '@mui/material';
+import * as PIXI from 'pixi.js';
+import { Graphics as PixiGraphics, Container, FederatedPointerEvent, Sprite, Assets, Texture, BLEND_MODES } from 'pixi.js';
+import { Box, Paper, Typography, IconButton, Tooltip, Divider } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import GridOnIcon from '@mui/icons-material/GridOn';
+import GridOffIcon from '@mui/icons-material/GridOff';
+import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import { fetchEntitySummaries } from '../../api/characterApi';
 import { EntitySummary } from '../../models/character';
 import { fetchGridSnapshot, TileSummary } from '../../api/tileApi';
 import { TileType } from './TileEditor';
+import { characterStore, characterActions } from '../../store/characterStore';
+import { useSnapshot } from 'valtio';
+import { ReadonlyEntitySummary } from '../../models/readonly';
+import type { DeepReadonly } from '../../models/readonly';
+import { SensesType } from '../../models/character';
 
 // Initialize PixiJS Assets
 Assets.init({
@@ -108,7 +119,7 @@ const CellHighlight: React.FC<CellHighlightProps> = ({ x, y, width, height, grid
 };
 
 interface EntitySpriteProps {
-  entity: EntitySummary;
+  entity: EntitySummary | ReadonlyEntitySummary;
   width: number;
   height: number;
   gridSize: {
@@ -176,7 +187,7 @@ const EntitySprite: React.FC<EntitySpriteProps> = ({ entity, width, height, grid
 };
 
 interface TileSpriteProps {
-  tile: TileSummary;
+  tile: TileSummary | DeepReadonly<TileSummary>;
   width: number;
   height: number;
   gridSize: {
@@ -252,6 +263,67 @@ const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, 
   );
 };
 
+interface MovementHighlightProps {
+  selectedEntity: ReadonlyEntitySummary | undefined;
+  width: number;
+  height: number;
+  gridSize: {
+    rows: number;
+    cols: number;
+  };
+  tileSize: number;
+}
+
+const MovementHighlight: React.FC<MovementHighlightProps> = ({
+  selectedEntity,
+  width,
+  height,
+  gridSize,
+  tileSize
+}) => {
+  const drawHighlight = useCallback((g: PixiGraphics) => {
+    if (!selectedEntity) {
+      console.log('No selected entity for movement highlight');
+      return;
+    }
+
+    console.log('Drawing movement highlight for entity:', selectedEntity.name);
+    console.log('Path data:', selectedEntity.senses.paths);
+
+    g.clear();
+
+    // Calculate grid offset
+    const offsetX = (width - (gridSize.cols * tileSize)) / 2;
+    const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+
+    // Draw highlights only for terminal positions of paths with length ≤ 6
+    for (let x = 0; x < gridSize.cols; x++) {
+      for (let y = 0; y < gridSize.rows; y++) {
+        const posKey = `${x},${y}`;
+        const path = selectedEntity.senses.paths[posKey];
+        
+        if (path && path.length <= 6) {
+          console.log(`Found valid path at ${posKey}, length: ${path.length}`);
+          g.setFillStyle({
+            color: 0x00ff00,
+            alpha: 0.5
+          });
+
+          g.rect(
+            offsetX + (x * tileSize),
+            offsetY + (y * tileSize),
+            tileSize,
+            tileSize
+          );
+          g.fill();
+        }
+      }
+    }
+  }, [selectedEntity, width, height, gridSize, tileSize]);
+
+  return <pixiGraphics draw={drawHighlight} />;
+};
+
 interface BattleMapCanvasProps {
   width: number;
   height: number;
@@ -282,124 +354,43 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   const [hoveredCell, setHoveredCell] = useState({ x: -1, y: -1 });
   const [tileSize, setTileSize] = useState(initialTileSize);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [entities, setEntities] = useState<EntitySummary[]>([]);
-  const [tiles, setTiles] = useState<Record<string, TileSummary>>({});
   const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
   const MOVEMENT_SPEED = 8;
+  const [isVisibilityEnabled, setIsVisibilityEnabled] = useState(true);
+  const [isGridEnabled, setIsGridEnabled] = useState(true);
+  const [isMovementHighlightEnabled, setIsMovementHighlightEnabled] = useState(false);
+  
+  // Use the store for entities and tiles
+  const snap = useSnapshot(characterStore);
+  const entities = Object.values(snap.summaries);
+  const tiles = snap.tiles;
 
-  // Preload all sprites
+  // Get selected entity's senses
+  const selectedEntity = snap.selectedEntityId ? snap.summaries[snap.selectedEntityId] : undefined;
+  const entitySenses = selectedEntity?.senses.extra_senses || [];
+
+  // Function to get visibility tooltip text
+  const getVisibilityTooltip = useCallback(() => {
+    if (!selectedEntity) return "Select an entity to toggle visibility";
+    
+    const sensesList = entitySenses.length > 0 
+      ? `\nSenses: ${entitySenses.join(', ')}`
+      : '';
+      
+    return `Toggle visibility for ${selectedEntity.name}${sensesList}`;
+  }, [selectedEntity, entitySenses]);
+
+  // Get movement highlight tooltip text
+  const getMovementTooltip = useCallback(() => {
+    if (!selectedEntity) return "Select an entity to show movement range";
+    return `Show movement range for ${selectedEntity.name}\nGreen: ≤30ft (6 squares)\nRed: >30ft`;
+  }, [selectedEntity]);
+
+  // Start polling when component mounts
   useEffect(() => {
-    const preloadSprites = async () => {
-      try {
-        // List of all available sprites
-        const spriteFiles = [
-          'death_knight.png',
-          'deep_elf_fighter_new.png',
-          'hell_knight_new.png'
-        ];
-
-        // Load all sprites
-        const loadPromises = spriteFiles.map(sprite => {
-          const spritePath = `/sprites/${sprite}`;
-          console.log(`Preloading sprite: ${spritePath}`);
-          return Assets.load(spritePath);
-        });
-
-        await Promise.all(loadPromises);
-        console.log('All sprites preloaded successfully');
-      } catch (error) {
-        console.error('Error preloading sprites:', error);
-      }
-    };
-
-    preloadSprites();
-  }, []);
-
-  // Preload tile sprites
-  useEffect(() => {
-    const preloadSprites = async () => {
-      try {
-        const tileSprites = [
-          'floor.png',
-          'wall.png',
-          'water.png'
-        ];
-
-        const loadPromises = tileSprites.map(sprite => {
-          const spritePath = `/tiles/${sprite}`;
-          return Assets.load(spritePath);
-        });
-
-        await Promise.all(loadPromises);
-        console.log('All tile sprites preloaded successfully');
-      } catch (error) {
-        console.error('Error preloading tile sprites:', error);
-      }
-    };
-
-    preloadSprites();
-  }, []);
-
-  // Fetch entities
-  useEffect(() => {
-    const fetchEntities = async () => {
-      try {
-        const summaries = await fetchEntitySummaries();
-        console.log('Fetched entities with full payload:', summaries.map(e => ({
-          name: e.name,
-          sprite_name: e.sprite_name,
-          position: e.position,
-          full: e
-        })));
-        setEntities(summaries);
-      } catch (error) {
-        console.error('Error fetching entities:', error);
-      }
-    };
-    fetchEntities();
-
-    // Set up polling for entity updates
-    const interval = setInterval(fetchEntities, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch grid data
-  useEffect(() => {
-    const fetchGrid = async () => {
-      try {
-        const grid = await fetchGridSnapshot();
-        setTiles(grid.tiles);
-        setGridDimensions({ width: grid.width, height: grid.height });
-      } catch (error) {
-        console.error('Error fetching grid:', error);
-      }
-    };
-
-    fetchGrid();
-    // Reduced polling frequency since we have optimistic updates
-    const interval = setInterval(fetchGrid, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Optimize entity fetching
-  useEffect(() => {
-    let isMounted = true;
-    const fetchEntitiesData = async () => {
-      try {
-        const summaries = await fetchEntitySummaries();
-        if (isMounted) {
-          setEntities(summaries);
-        }
-      } catch (error) {
-        console.error('Error fetching entities:', error);
-      }
-    };
-
-    fetchEntitiesData();
-    const interval = setInterval(fetchEntitiesData, 200); // More frequent updates for entities
+    characterActions.startPolling();
     return () => {
-      isMounted = false;
-      clearInterval(interval);
+      characterActions.stopPolling();
     };
   }, []);
 
@@ -434,7 +425,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     } else {
       setHoveredCell({ x: -1, y: -1 });
     }
-  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, offset]);
+  }, [canvasSize?.width, canvasSize?.height, gridWidth, gridHeight, tileSize, offset]);
 
   // Handle pointer down with the same calculations
   const handlePointerDown = useCallback((event: FederatedPointerEvent) => {
@@ -450,16 +441,11 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     
     // Only trigger if within grid bounds
     if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
-      const handleOptimisticUpdate = (newTile: TileSummary) => {
-        setTiles(prev => ({
-          ...prev,
-          [newTile.uuid]: newTile
-        }));
-      };
-      
-      onCellClick(gridX, gridY, handleOptimisticUpdate);
+      onCellClick(gridX, gridY, (newTile: TileSummary) => {
+        characterActions.fetchTiles(); // Refresh tiles after update
+      });
     }
-  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, offset, onCellClick, isEditing, isLocked]);
+  }, [canvasSize?.width, canvasSize?.height, gridWidth, gridHeight, tileSize, offset, onCellClick, isEditing, isLocked]);
 
   const handleZoomIn = useCallback(() => {
     setTileSize(prev => Math.min(prev + TILE_SIZE_STEP, MAX_TILE_SIZE));
@@ -504,6 +490,50 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLocked]);
 
+  // Add debug log for movement highlight toggle
+  const handleMovementHighlightToggle = useCallback(() => {
+    const newState = !isMovementHighlightEnabled;
+    console.log('Toggling movement highlight:', newState);
+    if (newState && selectedEntity) {
+      console.log('Selected entity for movement:', selectedEntity.name);
+      console.log('Path data available:', Object.keys(selectedEntity.senses.paths).length);
+    }
+    setIsMovementHighlightEnabled(newState);
+  }, [isMovementHighlightEnabled, selectedEntity]);
+
+  // Create a memoized map of valid path positions
+  const validPathPositions = useMemo(() => {
+    if (!selectedEntity || !isMovementHighlightEnabled) return {};
+    
+    const positions: Record<string, boolean> = {};
+    Object.entries(selectedEntity.senses.paths).forEach(([posKey, path]) => {
+      if (path && path.length <= 6) {
+        positions[posKey] = true;
+      }
+    });
+    return positions;
+  }, [selectedEntity, isMovementHighlightEnabled]);
+
+  // Draw callback for path highlights
+  const drawPathHighlight = useCallback((g: PixiGraphics, position: readonly [number, number]) => {
+    const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
+    const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
+    const posKey = `${position[0]},${position[1]}`;
+    
+    g.clear();
+    g.setFillStyle({
+      color: validPathPositions[posKey] ? 0x00ff00 : 0xff0000,
+      alpha: validPathPositions[posKey] ? 0.3 : 0.3  // Reduced alpha values
+    });
+    g.rect(
+      offsetX + (position[0] * tileSize),
+      offsetY + (position[1] * tileSize),
+      tileSize,
+      tileSize
+    );
+    g.fill();
+  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, validPathPositions]);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Position Display and Controls */}
@@ -528,6 +558,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
         <Typography variant="body2">
           Position: ({hoveredCell.x}, {hoveredCell.y})
         </Typography>
+        <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <IconButton 
             size="small" 
@@ -550,6 +581,10 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
           >
             <AddIcon />
           </IconButton>
+
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
+
+          {/* Lock Button */}
           <IconButton
             size="small"
             onClick={toggleLock}
@@ -557,6 +592,52 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
           >
             {isLocked ? <LockIcon /> : <LockOpenIcon />}
           </IconButton>
+
+          {/* Grid Toggle */}
+          <Tooltip title="Toggle Grid">
+            <IconButton
+              size="small"
+              onClick={() => setIsGridEnabled(!isGridEnabled)}
+              sx={{ color: 'white' }}
+            >
+              {isGridEnabled ? <GridOnIcon /> : <GridOffIcon />}
+            </IconButton>
+          </Tooltip>
+
+          {/* Visibility Toggle */}
+          <Tooltip title={getVisibilityTooltip()}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => setIsVisibilityEnabled(!isVisibilityEnabled)}
+                sx={{ 
+                  color: 'white',
+                  opacity: selectedEntity ? 1 : 0.5
+                }}
+                disabled={!selectedEntity}
+              >
+                {isVisibilityEnabled ? <VisibilityIcon /> : <VisibilityOffIcon />}
+              </IconButton>
+            </span>
+          </Tooltip>
+
+          {/* Movement Range Toggle with updated handler */}
+          <Tooltip title={getMovementTooltip()}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={handleMovementHighlightToggle}
+                sx={{ 
+                  color: 'white',
+                  opacity: selectedEntity ? 1 : 0.5,
+                  backgroundColor: isMovementHighlightEnabled ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+                }}
+                disabled={!selectedEntity}
+              >
+                <DirectionsRunIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
         </Box>
       </Paper>
 
@@ -595,43 +676,54 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
               }, [canvasSize.width, canvasSize.height])}
             />
             
-            <pixiContainer
-              x={offset.x}
-              y={offset.y}
-            >
-              {/* Grid Lines */}
-              <Grid 
-                width={canvasSize.width}
-                height={canvasSize.height}
-                gridSize={{ rows: gridHeight, cols: gridWidth }}
-                tileSize={tileSize}
-              />
-              
-              {/* Tiles */}
-              {Object.values(tiles).map(tile => (
-                <TileSprite
-                  key={tile.uuid}
-                  tile={tile}
+            <pixiContainer x={offset.x} y={offset.y}>
+              {/* Grid Lines - Now conditional */}
+              {isGridEnabled && (
+                <Grid 
                   width={canvasSize.width}
                   height={canvasSize.height}
                   gridSize={{ rows: gridHeight, cols: gridWidth }}
                   tileSize={tileSize}
                 />
-              ))}
+              )}
               
-              {/* Hovered Cell Highlight */}
-              <CellHighlight 
-                x={hoveredCell.x}
-                y={hoveredCell.y}
-                width={canvasSize.width}
-                height={canvasSize.height}
-                gridSize={{ rows: gridHeight, cols: gridWidth }}
-                tileSize={tileSize}
-              />
+              {/* Tiles - Now showing all with path highlights */}
+              {Object.values(tiles).map(tile => {
+                const posKey = `${tile.position[0]},${tile.position[1]}`;
+                const isVisible = !isVisibilityEnabled || 
+                  !selectedEntity || 
+                  selectedEntity.senses.visible[posKey];
+                
+                // Normal visibility check
+                if (!isVisible) return null;
 
-              {/* Game Objects Container - Now after grid and highlight */}
+                return (
+                  <React.Fragment key={tile.uuid}>
+                    <TileSprite
+                      tile={tile}
+                      width={canvasSize.width}
+                      height={canvasSize.height}
+                      gridSize={{ rows: gridHeight, cols: gridWidth }}
+                      tileSize={tileSize}
+                    />
+                    {isMovementHighlightEnabled && (
+                      <pixiGraphics
+                        draw={(g) => drawPathHighlight(g, tile.position)}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+              
+              {/* Entities - With visibility check */}
               {entities.map(entity => {
-                console.log('Rendering entity:', entity);
+                const isVisible = !isVisibilityEnabled ||
+                  !selectedEntity ||
+                  entity.uuid === selectedEntity.uuid ||
+                  selectedEntity.senses.entities[entity.uuid];
+                
+                if (!isVisible) return null;
+
                 return (
                   <EntitySprite
                     key={entity.uuid}
@@ -643,6 +735,18 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                   />
                 );
               })}
+              
+              {/* Cell Highlight */}
+              {isGridEnabled && (
+                <CellHighlight 
+                  x={hoveredCell.x}
+                  y={hoveredCell.y}
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  gridSize={{ rows: gridHeight, cols: gridWidth }}
+                  tileSize={tileSize}
+                />
+              )}
             </pixiContainer>
           </pixiContainer>
         </Application>

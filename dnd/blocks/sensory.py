@@ -50,6 +50,12 @@ class Senses(BaseBlock):
             return []
     
     def update_senses(self,  entities: Dict[UUID,Tuple[int,int]], visible: Dict[Tuple[int,int],bool], walkable: Dict[Tuple[int,int],bool],paths: Dict[Tuple[int,int],List[Tuple[int,int]]]):
+        #sets all to empty dicts
+        self.entities = {}
+        self.visible = {}
+        self.walkable = {}
+        self.paths = {}
+        #sets all to the new values
         self.entities = entities
         self.visible = visible
         self.walkable = walkable
