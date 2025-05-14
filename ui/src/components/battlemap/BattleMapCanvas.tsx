@@ -195,9 +195,10 @@ interface TileSpriteProps {
     cols: number;
   };
   tileSize: number;
+  alpha?: number;
 }
 
-const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, tileSize }) => {
+const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, tileSize, alpha = 1 }) => {
   const [texture, setTexture] = useState<Texture | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   
@@ -259,6 +260,7 @@ const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, 
       y={offsetY + (y * tileSize)}
       width={tileSize}
       height={tileSize}
+      alpha={alpha}
     />
   );
 };
@@ -456,7 +458,8 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
         const isWalkable = tiles[posKey]?.walkable ?? false;
         
         // Only check path if movement highlight is enabled
-        if (isWalkable && (!isMovementHighlightEnabled || selectedEntity.senses.paths[posKey])) {
+        if (isWalkable && (!isMovementHighlightEnabled || 
+            (selectedEntity.senses.paths[posKey] && selectedEntity.senses.paths[posKey].length <= 6))) {
           characterActions.moveEntity(selectedEntity.uuid, [gridX, gridY]);
         }
       }
@@ -725,15 +728,43 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                 />
               )}
               
-              {/* Tiles - Now showing all with path highlights */}
+              {/* Tiles - Now with fog of war effect */}
               {Object.values(tiles).map(tile => {
-                const posKey = `${tile.position[0]},${tile.position[1]}`;
-                const isVisible = !isVisibilityEnabled || 
-                  !selectedEntity || 
-                  selectedEntity.senses.visible[posKey];
-                
-                // Normal visibility check
-                if (!isVisible) return null;
+                // Skip visibility checks if toggle is off
+                if (!isVisibilityEnabled) {
+                  return (
+                    <React.Fragment key={tile.uuid}>
+                      <TileSprite
+                        tile={tile}
+                        width={canvasSize.width}
+                        height={canvasSize.height}
+                        gridSize={{ rows: gridHeight, cols: gridWidth }}
+                        tileSize={tileSize}
+                      />
+                      {isMovementHighlightEnabled && (
+                        <pixiGraphics
+                          draw={(g) => drawPathHighlight(g, tile.position)}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                }
+
+                // With visibility enabled, check visibility and seen status
+                if (!selectedEntity) return null;
+
+                const [x, y] = tile.position;
+                const posKey = `${x},${y}`;
+                const isVisible = selectedEntity.senses.visible[posKey];
+                const hasBeenSeen = selectedEntity.senses.seen.some(
+                  ([seenX, seenY]) => seenX === x && seenY === y
+                );
+
+                // If neither visible nor seen, don't render
+                if (!isVisible && !hasBeenSeen) return null;
+
+                const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
+                const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
 
                 return (
                   <React.Fragment key={tile.uuid}>
@@ -743,8 +774,28 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                       height={canvasSize.height}
                       gridSize={{ rows: gridHeight, cols: gridWidth }}
                       tileSize={tileSize}
+                      alpha={isVisible ? 1 : 0.5} // Dim previously seen tiles
                     />
-                    {isMovementHighlightEnabled && (
+                    {/* Add fog of war overlay for seen but not visible tiles */}
+                    {hasBeenSeen && !isVisible && (
+                      <pixiGraphics
+                        draw={(g) => {
+                          g.clear();
+                          g.setFillStyle({
+                            color: 0x000000,
+                            alpha: 0.5
+                          });
+                          g.rect(
+                            offsetX + (x * tileSize),
+                            offsetY + (y * tileSize),
+                            tileSize,
+                            tileSize
+                          );
+                          g.fill();
+                        }}
+                      />
+                    )}
+                    {isMovementHighlightEnabled && isVisible && (
                       <pixiGraphics
                         draw={(g) => drawPathHighlight(g, tile.position)}
                       />
@@ -755,9 +806,24 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
               
               {/* Entities - With visibility check */}
               {entities.map(entity => {
-                const isVisible = !isVisibilityEnabled ||
-                  !selectedEntity ||
-                  entity.uuid === selectedEntity.uuid ||
+                // Show all entities if visibility is disabled
+                if (!isVisibilityEnabled) {
+                  return (
+                    <EntitySprite
+                      key={entity.uuid}
+                      entity={entity}
+                      width={canvasSize.width}
+                      height={canvasSize.height}
+                      gridSize={{ rows: gridHeight, cols: gridWidth }}
+                      tileSize={tileSize}
+                    />
+                  );
+                }
+
+                // With visibility enabled, only show visible entities
+                if (!selectedEntity) return null;
+
+                const isVisible = entity.uuid === selectedEntity.uuid ||
                   selectedEntity.senses.entities[entity.uuid];
                 
                 if (!isVisible) return null;
