@@ -100,13 +100,14 @@ const TileEditor: React.FC<TileEditorProps> = ({
         position: 'absolute',
         top: 8,
         left: '50%',
-        marginLeft: '180px',
+        marginLeft: '250px',
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
         color: 'white',
         zIndex: 1,
         display: 'flex',
         flexDirection: 'column',
         minWidth: '120px',
+        // maxWidth: '140px',
       }}
     >
       <Box sx={{ 
