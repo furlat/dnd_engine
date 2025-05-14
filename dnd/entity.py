@@ -180,10 +180,12 @@ class Entity(BaseBlock):
         self.position = new_position
         self.senses.position = new_position 
 
-    def move(self,new_position: Tuple[int,int]):
+    def move(self,new_position: Tuple[int,int], update_senses: bool = True):
         """ move the entity to a new position """
         
         Entity.update_entity_position(self,new_position)
+        if update_senses:
+            Entity.update_all_entities_senses()
         
     def get_target_entity(self,copy: bool = False) -> Optional['Entity']:
         if self.target_entity_uuid is None:

@@ -514,25 +514,15 @@ async def get_entities_at_position(x: int, y: int):
             }
         )
 
-@router.post("/{entity_uuid}/move", response_model=EntitySnapshot)
+@router.post("/{entity_uuid}/move", response_model=EntitySummary)
 async def move_entity(
     request: MoveRequest,
-    entity: Entity = Depends(get_entity),
-    include_skill_calculations: bool = False,
-    include_attack_calculations: bool = False,
-    include_ac_calculation: bool = False,
-    include_saving_throw_calculations: bool = False
+    entity: Entity = Depends(get_entity)
 ):
-    """Move an entity to a new position"""
+    """Move an entity to a new position and return its updated summary"""
     try:
         entity.move(request.position)
-        return EntitySnapshot.from_engine(
-            entity,
-            include_skill_calculations=include_skill_calculations,
-            include_attack_calculations=include_attack_calculations,
-            include_ac_calculation=include_ac_calculation,
-            include_saving_throw_calculations=include_saving_throw_calculations
-        )
+        return EntitySummary.from_engine(entity)
     except Exception as e:
         raise HTTPException(
             status_code=400,

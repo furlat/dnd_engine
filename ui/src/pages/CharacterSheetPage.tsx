@@ -122,72 +122,72 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
   };
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        top: 64,
-        left: 0,
-        height: 'calc(100vh - 64px)',
-        width: isCollapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH,
-        transition: 'width 0.3s ease-in-out',
-        display: 'flex',
-        zIndex: 1200,
-      }}
-    >
-      <Paper
+      <Box
         sx={{
-          width: SIDEBAR_WIDTH,
-          height: '100%',
-          overflowY: 'auto',
-          transform: isCollapsed ? `translateX(-${SIDEBAR_WIDTH})` : 'none',
-          transition: 'transform 0.3s ease-in-out',
-          borderRight: 1,
-          borderColor: 'divider',
-          borderRadius: 0,
-          p: 2,
-          '&::-webkit-scrollbar': {
-            width: '8px',
-          },
-          '&::-webkit-scrollbar-track': {
-            backgroundColor: 'background.paper',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: 'grey.400',
-            borderRadius: '4px',
-          },
-        }}
-      >
-        {renderContent()}
-      </Paper>
-
-      {/* Toggle button */}
-      <Paper
-        sx={{
-          position: 'absolute',
-          right: isCollapsed ? 0 : -40,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: COLLAPSED_WIDTH,
-          height: '80px',
+          position: 'fixed',
+          top: 64,
+          left: 0,
+          height: 'calc(100vh - 64px)',
+          width: isCollapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH,
+          transition: 'width 0.3s ease-in-out',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          borderTopRightRadius: '8px',
-          borderBottomRightRadius: '8px',
-          borderTopLeftRadius: '0',
-          borderBottomLeftRadius: '0',
-          zIndex: 1,
-          boxShadow: 2,
-          transition: 'right 0.3s ease-in-out'
+          zIndex: 1200,
         }}
-        onClick={onToggleCollapse}
       >
-        <IconButton>
-          {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-        </IconButton>
-      </Paper>
-    </Box>
+        <Paper
+          sx={{
+            width: SIDEBAR_WIDTH,
+            height: '100%',
+            overflowY: 'auto',
+            transform: isCollapsed ? `translateX(-${SIDEBAR_WIDTH})` : 'none',
+            transition: 'transform 0.3s ease-in-out',
+            borderRight: 1,
+            borderColor: 'divider',
+            borderRadius: 0,
+            p: 2,
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              backgroundColor: 'background.paper',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: 'grey.400',
+              borderRadius: '4px',
+            },
+          }}
+        >
+          {renderContent()}
+        </Paper>
+
+        {/* Toggle button */}
+        <Paper
+          sx={{
+            position: 'absolute',
+            right: isCollapsed ? 0 : -40,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: COLLAPSED_WIDTH,
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            borderTopRightRadius: '8px',
+            borderBottomRightRadius: '8px',
+            borderTopLeftRadius: '0',
+            borderBottomLeftRadius: '0',
+            zIndex: 1,
+            boxShadow: 2,
+            transition: 'right 0.3s ease-in-out'
+          }}
+        onClick={onToggleCollapse}
+        >
+          <IconButton>
+            {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+          </IconButton>
+        </Paper>
+      </Box>
   );
 };
 

@@ -176,6 +176,45 @@ const characterActions = {
     } catch (err) {
       console.error('Error fetching summaries:', err);
     }
+  },
+
+  // Move entity to a new position
+  moveEntity: async (entityId: string, position: [number, number]) => {
+    try {
+      // Optimistically update the position
+      const entity = characterStore.summaries[entityId];
+      if (entity) {
+        const updatedEntity = { ...entity, position };
+        characterStore.summaries = {
+          ...characterStore.summaries,
+          [entityId]: updatedEntity
+        };
+      }
+
+      // Make API call
+      const response = await fetch(`/api/entities/${entityId}/move`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ position }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to move entity');
+      }
+
+      // Update with server response
+      const updatedSummary = await response.json();
+      characterStore.summaries = {
+        ...characterStore.summaries,
+        [entityId]: updatedSummary
+      };
+    } catch (err) {
+      console.error('Error moving entity:', err);
+      // Refresh summaries to ensure consistent state
+      await characterActions.fetchSummaries();
+    }
   }
 };
 
