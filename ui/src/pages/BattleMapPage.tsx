@@ -4,7 +4,10 @@ import CharacterSheetPage from './CharacterSheetPage';
 import EventQ from '../components/events/EventQ';
 import BattleMapCanvas from '../components/battlemap/BattleMapCanvas';
 import TileEditor, { useTileEditor } from '../components/battlemap/TileEditor';
-import { fetchGridSnapshot, TileSummary } from '../api/tileApi';
+import EntitySummaryOverlay from '../components/battlemap/EntitySummaryOverlay';
+import { fetchGridSnapshot } from '../api/tileApi';
+import { characterStore, characterActions } from '../store/characterStore';
+import { useSnapshot } from 'valtio';
 
 const BattleMapPage: React.FC = () => {
   const theme = useTheme();
@@ -13,6 +16,10 @@ const BattleMapPage: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [isLocked, setIsLocked] = React.useState(false);
   const { handleCellClick, TileEditor, isEditing } = useTileEditor();
+  const snap = useSnapshot(characterStore);
+
+  // Panel states
+  const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(false);
 
   // Update container size when window resizes
   React.useEffect(() => {
@@ -34,17 +41,26 @@ const BattleMapPage: React.FC = () => {
 
   // Fetch grid dimensions from backend
   React.useEffect(() => {
-    const fetchGridDimensions = async () => {
+    const fetchData = async () => {
       try {
         const grid = await fetchGridSnapshot();
         setGridSize({ width: grid.width, height: grid.height });
+        await characterActions.fetchSummaries();
       } catch (error) {
-        console.error('Error fetching grid dimensions:', error);
+        console.error('Error fetching initial data:', error);
       }
     };
 
-    fetchGridDimensions();
+    fetchData();
   }, []);
+
+  // Handle target selection
+  const handleTargetSelect = (entityId: string) => {
+    characterActions.setSelectedEntity(entityId);
+    characterActions.setDisplayedEntity(entityId);
+  };
+
+  const entities = Object.values(snap.summaries);
 
   return (
     <Box sx={{ 
@@ -57,8 +73,12 @@ const BattleMapPage: React.FC = () => {
       display: 'flex',
       overflow: 'hidden'
     }}>
-      {/* Character Sheet Sidebar */}
-      <CharacterSheetPage />
+      {/* Character Sheet Panel */}
+      <CharacterSheetPage 
+        isCollapsed={isCharacterSheetCollapsed}
+        onToggleCollapse={() => setIsCharacterSheetCollapsed(!isCharacterSheetCollapsed)}
+        onSwitchToEntities={() => {}}
+      />
 
       {/* Main content area */}
       <Box 
@@ -68,7 +88,7 @@ const BattleMapPage: React.FC = () => {
           display: 'flex',
           position: 'relative',
           overflow: 'hidden',
-          bgcolor: '#000000'
+          bgcolor: '#000000',
         }}
       >
         {/* Tile Editor */}
@@ -87,6 +107,18 @@ const BattleMapPage: React.FC = () => {
             containerHeight={containerSize.height}
           />
         )}
+
+        {/* Entity Summary Overlays */}
+        {entities.map((entity, index) => (
+          <EntitySummaryOverlay
+            key={entity.uuid}
+            entity={entity}
+            isSelected={entity.uuid === snap.selectedEntityId}
+            isDisplayed={entity.uuid === snap.displayedEntityId}
+            onSelectTarget={handleTargetSelect}
+            index={index}
+          />
+        ))}
       </Box>
 
       {/* Event Queue */}

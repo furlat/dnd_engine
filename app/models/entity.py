@@ -11,6 +11,7 @@ from dnd.core.events import SkillName, WeaponSlot, AbilityName
 from app.models.saving_throws import SavingThrowSetSnapshot, SavingThrowBonusCalculationSnapshot
 from app.models.health import HealthSnapshot
 from app.models.action_economy import ActionEconomySnapshot
+from app.models.sensory import SensesSnapshot
 from dnd.core.base_conditions import DurationType
 from dnd.entity import Entity
 
@@ -24,6 +25,8 @@ class EntitySummary(BaseModel):
     target_entity_uuid: Optional[UUID] = None
     position: Tuple[int,int]
     sprite_name: Optional[str] = None
+    senses: SensesSnapshot
+
     @classmethod
     def from_engine(cls, entity):
         """Create a summary from an engine Entity object"""
@@ -47,7 +50,8 @@ class EntitySummary(BaseModel):
             armor_class=ac,
             target_entity_uuid=entity.target_entity_uuid,
             position=entity.position,
-            sprite_name=entity.sprite_name
+            sprite_name=entity.sprite_name,
+            senses=SensesSnapshot.from_engine(entity.senses)
         )
 
 # Add a ConditionSnapshot interface
@@ -75,6 +79,7 @@ class EntitySnapshot(BaseModel):
     ability_scores: AbilityScoresSnapshot
     skill_set: SkillSetSnapshot
     equipment: EquipmentSnapshot
+    senses: SensesSnapshot
     
     # Add other blocks as they're implemented
     saving_throws: SavingThrowSetSnapshot 
@@ -182,5 +187,6 @@ class EntitySnapshot(BaseModel):
             action_economy=ActionEconomySnapshot.from_engine(entity.action_economy, entity),
             active_conditions=active_conditions,
             position=entity.position,
-            sprite_name=entity.sprite_name
+            sprite_name=entity.sprite_name,
+            senses=SensesSnapshot.from_engine(entity.senses)
         )
