@@ -63,11 +63,16 @@ def initialize_test_entities():
     print(f"Created test entities with UUIDs:")
     print(f"- Test Warrior: {warrior_uuid} with target {warrior.target_entity_uuid}")
     print(f"- Test Rogue: {rogue_uuid} with target {blinded_rogue.target_entity_uuid}")
+    floor_14_8 = floor_factory((14,8))
+    floor_14_9 = floor_factory((14,9))
+    wall_15_8 = wall_factory((15,8))
+    wall_15_9 = wall_factory((15,9))
     floor_16_8 = floor_factory((16,8))
     floor_17_9 = floor_factory((17,9))
     floor_16_9 = floor_factory((16,9))
     floor_17_8 = floor_factory((17,8))
     wall_25_25 = wall_factory((32,32))
+    Entity.update_all_entities_senses()
 # Run the app with uvicorn
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
