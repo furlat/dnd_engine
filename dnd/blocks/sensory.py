@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable, Tuple
+from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
@@ -25,6 +25,7 @@ class Senses(BaseBlock):
     walkable: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     paths: Dict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=dict)
     extra_senses: List[SensesType] = Field(default_factory=list)
+    seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
 
 
     def add_entity(self,entity_uuid: UUID,position: Tuple[int,int]):
@@ -49,6 +50,12 @@ class Senses(BaseBlock):
         else:
             return []
     
+    def update_seen(self, visible: Dict[Tuple[int,int],bool]):
+        """ update the seen list"""
+        visible_positions = set([key for key,value in visible.items() if value])
+        self.seen.update(visible_positions)
+
+    
     def update_senses(self,  entities: Dict[UUID,Tuple[int,int]], visible: Dict[Tuple[int,int],bool], walkable: Dict[Tuple[int,int],bool],paths: Dict[Tuple[int,int],List[Tuple[int,int]]]):
         #sets all to empty dicts
         self.entities = {}
@@ -58,6 +65,7 @@ class Senses(BaseBlock):
         #sets all to the new values
         self.entities = entities
         self.visible = visible
+        self.update_seen(visible)
         self.walkable = walkable
         self.paths = paths
 

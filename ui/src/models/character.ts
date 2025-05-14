@@ -42,6 +42,7 @@ export interface SensesSnapshot {
     paths: Record<string, Position[]>;
     extra_senses: SensesType[];
     position: Position;
+    seen: Position[];  // Add seen property to match Python implementation
 }
 
 // Lightweight entity summary for combat UI
