@@ -282,6 +282,7 @@ class Event(BaseObject):
         return result  
     
 class Trigger(BaseModel):
+    name: str = Field(default="Trigger",description="The name of the trigger")
     event_type: EventType = Field(description="The type of event to trigger the event handler")
     event_phase: EventPhase = Field(description="The phase of the event to trigger the event handler")
     event_source_entity_uuid: Optional[UUID] = Field(default=None,description="The source entity uuid of the event handler")
@@ -338,7 +339,7 @@ class EventHandler(BaseObject):
     
     def get_declaration_event(self, parent_event: Optional[Event] = None) -> Event:
         """ get the declaration event for the event handler """
-        return Event(event_type=EventType.TRIGGER_EVENT, event_phase=EventPhase.DECLARATION, source_entity_uuid=self.source_entity_uuid, status_message=f"Triggering event handler {self.name}", parent_event=parent_event.uuid if parent_event else None)
+        return Event(name=self.name,event_type=EventType.TRIGGER_EVENT, event_phase=EventPhase.DECLARATION, source_entity_uuid=self.source_entity_uuid, status_message=f"Triggering event handler {self.name}", parent_event=parent_event.uuid if parent_event else None)
     
 
     def remove(self) -> bool:
