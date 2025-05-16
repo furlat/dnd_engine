@@ -475,7 +475,6 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
         damages = self.equipment.get_damages(weapon_slot, self.ability_scores)
-        print(f"len damages: {len(damages)} inside entity")
         if should_clear_target:
             self.clear_target_entity()
         return damages
