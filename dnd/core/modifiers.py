@@ -103,7 +103,7 @@ class BaseObject(BaseModel):
         description="Name of the entity that is the source of this object. Can be None."
     )
     target_entity_uuid: Optional[UUID] = Field(
-        ...,
+        default=None,
         description="UUID of the entity that this object targets. Required."
     )
     target_entity_name: Optional[str] = Field(

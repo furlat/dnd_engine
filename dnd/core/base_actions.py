@@ -40,7 +40,6 @@ class BaseAction(BaseObject):
 
     def check_costs(self) -> bool:
         for cost in self.costs:
-                print(f"cost {cost.cost_type} {cost.cost} {cost.evaluator}")
                 if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid,cost.cost_type,cost.cost):
                     return False
         return True

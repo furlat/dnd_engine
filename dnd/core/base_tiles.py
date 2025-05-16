@@ -49,7 +49,10 @@ class Tile(BaseObject):
     
     @classmethod
     def grid_size(cls) -> Tuple[int,int]:
-        return max(tile.position[0] for tile in cls.get_all_tiles()) + 1, max(tile.position[1] for tile in cls.get_all_tiles()) + 1
+        tiles = cls.get_all_tiles()
+        if len(tiles) == 0:
+            return (0,0)
+        return max(tile.position[0] for tile in tiles) + 1, max(tile.position[1] for tile in tiles) + 1
     
     @classmethod
     def create(cls, position: Tuple[int,int], sprite_name: Optional[str] = None, can_walk: bool = True, can_see: bool = True,name:str = "Floor") -> 'Tile':
