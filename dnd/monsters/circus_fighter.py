@@ -17,6 +17,18 @@ from dnd.entity import Entity, EntityConfig
     
 from uuid import uuid4, UUID
 from typing import Optional, Tuple
+from dnd.core.events import EventHandler, Trigger, EventType, EventPhase
+from dnd.actions import AttackEvent
+
+def attack_processor(event: AttackEvent, source_entity_uuid: UUID ) -> Optional[AttackEvent]:
+        print(f"Simple Attack event received for {source_entity_uuid} with target {event.target_entity_uuid} in phase {event.phase}")
+        return event
+
+attack_trigger = Trigger(name="Attack Trigger",
+                         event_type=EventType.ATTACK,
+                         event_phase=EventPhase.DECLARATION)
+
+
 
 def create_dagger(source_id: UUID) -> Weapon:
     """Creates a rusty dagger weapon with disadvantage"""
@@ -249,6 +261,12 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     if blinded:
         blinded_condition = Blinded(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
         entity.add_condition(blinded_condition)
+
+        attack_handler = EventHandler(name="Attack Handler",
+                                trigger_conditions=[attack_trigger],
+                                event_processor=attack_processor,
+                                source_entity_uuid=entity.uuid)
+        entity.add_event_handler(attack_handler)
 
     return entity
 
