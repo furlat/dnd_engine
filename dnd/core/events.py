@@ -142,7 +142,8 @@ class Event(BaseObject):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        EventQueue.register(self)
+        if self.use_register:
+            EventQueue.register(self)
     
 
     def set_target_entity(self, target_entity_uuid: UUID):
@@ -273,7 +274,10 @@ class Event(BaseObject):
         updated_event = self.model_copy(update=updates)
         
         # Rebroadcast event through queue
-        result = EventQueue.register(updated_event)
+        if updated_event.use_register:
+            result = EventQueue.register(updated_event)
+        else:
+            result = updated_event
         
         # Make sure we have the right type
         if not isinstance(result, self.__class__):

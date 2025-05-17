@@ -120,13 +120,11 @@ class Movement(BaseAction):
                     status_message=f"Validated path for {declaration_event.name}"
                 )
             
-    def _create_declaration_event(self,parent_event: Optional[Event] = None) -> Optional[Event]:
+    def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the movement action"""
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity or not isinstance(source_entity, Entity):
             return None
-
-        
 
         return MovementEvent(
             name=f"{self.name}",
@@ -135,7 +133,8 @@ class Movement(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             start_position=source_entity.position,
             end_position=self.end_position,
-            path=self.path
+            path=self.path,
+            use_register=use_register
         )
     
     def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
@@ -359,7 +358,7 @@ class Attack(BaseAction):
                 damage_rolls=damage_rolls,
             )
 
-    def _create_declaration_event(self,parent_event: Optional[Event] = None) -> Optional[Event]:
+    def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """ Create the declaration event for the attack action"""
         return AttackEvent(
             name=f"{self.name}",
@@ -368,8 +367,8 @@ class Attack(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             weapon_slot=self.weapon_slot,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs]
-            
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register
         )
     
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
