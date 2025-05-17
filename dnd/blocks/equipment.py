@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.dice import Dice, DiceRoll, RollType, AttackOutcome
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
 from dnd.blocks.abilities import  AbilityScores
 from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, SkillName, Damage
 

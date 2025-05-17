@@ -11,10 +11,10 @@ from dnd.core.values import ModifiableValue
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import datetime
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
 from collections import defaultdict
 from typing import Callable, Tuple
-
+from dnd.core.base_object import BaseObject
 # Type definition for event listeners
 T = TypeVar('T', bound='Event')
 E = TypeVar('E', bound='Event')
