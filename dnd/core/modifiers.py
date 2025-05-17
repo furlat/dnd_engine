@@ -69,6 +69,7 @@ class BaseObject(BaseModel):
         source_entity_name (Optional[str]): Name of the entity that is the source of this object. Can be None.
         target_entity_uuid (UUID): UUID of the entity that this object targets. Required.
         target_entity_name (Optional[str]): Name of the entity that this object targets. Can be None.
+        use_register (bool): Whether to register this object in the class registry. Defaults to True.
 
     Class Attributes:
         _registry (ClassVar[Dict[UUID, 'BaseObject']]): A class-level registry to store all instances.
@@ -80,6 +81,12 @@ class BaseObject(BaseModel):
             Register a BaseObject instance in the class registry.
         unregister(cls, uuid: UUID) -> None:
             Remove a BaseObject instance from the class registry.
+        add_to_register(self) -> None:
+            Add this object to the class registry if it wasn't registered before.
+        remove_from_register(self) -> None:
+            Remove this object from the class registry.
+        remove_objects(cls, uuids: List[UUID], permanent_delete: bool = False) -> None:
+            Remove multiple objects from the registry with optional permanent deletion.
     """
 
     _registry: ClassVar[Dict[UUID, 'BaseObject']] = {}
@@ -114,16 +121,21 @@ class BaseObject(BaseModel):
         default=None,
         description="Additional context information for this object."
     )
+    use_register: bool = Field(
+        default=True,
+        description="Whether to register this object in the class registry."
+    )
 
     def __init__(self, **data):
         """
-        Initialize the BaseModifier and register it in the class registry.
+        Initialize the BaseModifier and register it in the class registry if use_register is True.
 
         Args:
             **data: Keyword arguments to initialize the BaseModifier attributes.
         """
         super().__init__(**data)
-        self.__class__._registry[self.uuid] = self
+        if self.use_register:
+            self.__class__._registry[self.uuid] = self
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['BaseObject']:
@@ -165,6 +177,48 @@ class BaseObject(BaseModel):
             uuid (UUID): The UUID of the object to unregister.
         """
         cls._registry.pop(uuid, None)
+
+    def add_to_register(self) -> None:
+        """
+        Add this object to the class registry if it wasn't registered before.
+        
+        Raises:
+            ValueError: If the object is already registered or use_register is True.
+        """
+        if self.use_register:
+            raise ValueError("Object is already set to use registry")
+        if self.uuid in self.__class__._registry:
+            raise ValueError("Object is already in registry")
+        self.use_register = True
+        self.__class__._registry[self.uuid] = self
+
+    def remove_from_register(self) -> None:
+        """
+        Remove this object from the class registry and set use_register to False.
+        """
+        if self.uuid in self.__class__._registry:
+            self.__class__._registry.pop(self.uuid)
+        self.use_register = False
+
+    @classmethod
+    def remove_objects(cls, uuids: List[UUID], permanent_delete: bool = False) -> None:
+        """
+        Remove multiple objects from the registry with optional permanent deletion.
+        If not permanently deleted, the objects will have their use_register set to False.
+
+        Args:
+            uuids (List[UUID]): List of UUIDs of objects to remove.
+            permanent_delete (bool): Whether to permanently delete the objects. Defaults to False.
+        """
+        for uuid in uuids:
+            obj = cls._registry.get(uuid)
+            if obj is not None:
+                if permanent_delete:
+                    cls._registry.pop(uuid)
+                    del obj
+                else:
+                    obj.remove_from_register()
+
     def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str]=None) -> None:
         """
         Set the source entity for this value and its components.
