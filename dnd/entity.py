@@ -622,11 +622,12 @@ class Entity(BaseBlock):
         
         # Get walkable paths using dijkstra
         distances, paths = Tile.get_paths(self.position, max_distance)
+        print(f"paths before filtering: {paths}")
         
         # Filter paths to only include those where:
         # 1. The destination is currently visible
         # 2. All positions in the path have been seen before
-        filtered_paths = {}
+        filtered_paths = defaultdict(list)
         for pos, path in paths.items():
             # Check if destination is visible and all path positions are in seen
             if pos in visible_dict and all(step in self.senses.seen for step in path):
