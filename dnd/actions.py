@@ -65,7 +65,7 @@ class MovementEvent(ActionEvent):
     end_position: Tuple[int,int] = Field(description="The end position of the movement")
     path: Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
 
-class Movement(BaseAction):
+class Move(BaseAction):
     """An action that represents a movement with a path it will automatically compute the path from the source entity position to the end position
     the cost is automatically computed from the path length and the use_movement_cost flag is true
     
@@ -92,8 +92,6 @@ class Movement(BaseAction):
             if source_entity is None or not isinstance(source_entity, Entity):
                 return None
             self.path = source_entity.senses.paths[self.end_position]
-            
-        
 
     @staticmethod
     def validate_path(declaration_event: MovementEvent,source_entity_uuid: UUID) -> MovementEvent:
@@ -139,7 +137,7 @@ class Movement(BaseAction):
     
     def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
         """Validate the movement action"""
-        validated_event = Movement.validate_path(declaration_event,self.source_entity_uuid)
+        validated_event = Move.validate_path(declaration_event,self.source_entity_uuid)
         if not validated_event.canceled:
             return validated_event.phase_to(
                 new_phase=EventPhase.EXECUTION,

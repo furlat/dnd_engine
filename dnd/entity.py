@@ -9,7 +9,7 @@ from collections import defaultdict
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import (
     NumericalModifier, DamageType, ResistanceStatus, 
-    ContextAwareCondition, BaseObject
+    ContextAwareCondition
 )
 
 from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue, ContextualValue

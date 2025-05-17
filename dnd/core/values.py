@@ -3,8 +3,9 @@ from typing import List, Optional, Dict, Any, Callable, Protocol, TypeVar, Class
 import uuid
 from uuid import UUID, uuid4
 from enum import Enum
+from dnd.core.base_object import BaseObject
 from dnd.core.modifiers import (
-    BaseObject,
+    
     naming_callable,
     NumericalModifier,
     AdvantageModifier,
