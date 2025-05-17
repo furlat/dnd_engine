@@ -1,3 +1,4 @@
+from tkinter import NO
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost,BaseCost, ActionEvent
 from dnd.core.values import ModifiableValue
 
@@ -5,7 +6,7 @@ from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus,
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType,Event, EventType, WeaponSlot, Range, Damage, EventHandler,EventProcessor, EventPhase
 from pydantic import Field
-from typing import Optional, List, TypeVar, Generic, Union
+from typing import Optional, List, TypeVar, Generic, Union, Tuple
 from uuid import UUID
 from dnd.entity import Entity, determine_attack_outcome
 from collections import OrderedDict
@@ -55,6 +56,143 @@ def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent,
         status_message=f"Succesfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
     )
 
+
+class MovementEvent(ActionEvent):
+    """An event that represents a movement"""
+    name: str = Field(default="Movement",description="A movement event")
+    event_type: EventType = Field(default=EventType.MOVEMENT,description="The type of event")
+    start_position: Tuple[int,int] = Field(description="The start position of the movement")
+    end_position: Tuple[int,int] = Field(description="The end position of the movement")
+    path: Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
+
+class Movement(BaseAction):
+    """An action that represents a movement with a path it will automatically compute the path from the source entity position to the end position
+    the cost is automatically computed from the path length and the use_movement_cost flag is true
+    
+    This is a simplified implmenetation that does not move the character through the path, hence not triggering any movement specific"""
+    name: str = Field(default="Movement",description="A movement action")
+    description: str = Field(default="A movement action",description="A description of the movement action")
+    end_position: Tuple[int,int] = Field(description="The end position of the movement")
+    path:Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
+    use_movement_cost: bool = Field(default=True,description="Whether to use the movement cost")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._setup_path()
+        self._setup_costs_from_path()
+
+    def _setup_costs_from_path(self):
+        if self.path is not None and self.use_movement_cost:
+            self.costs.append(Cost(name="Movement Cost",cost_type="movement",cost=len(self.path),evaluator=entity_action_economy_cost_evaluator))
+
+    def _setup_path(self):
+        """Check if the costs of the action are valid and sets up the path and the costs"""
+        if self.path is None:
+            source_entity = Entity.get(self.source_entity_uuid)
+            if source_entity is None or not isinstance(source_entity, Entity):
+                return None
+            self.path = source_entity.senses.paths[self.end_position]
+            
+        
+
+    @staticmethod
+    def validate_path(declaration_event: MovementEvent,source_entity_uuid: UUID) -> MovementEvent:
+        """Validate the path of the movement"""
+        source_entity = Entity.get(source_entity_uuid)
+        if not source_entity or not isinstance(source_entity, Entity):
+            return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
+        if declaration_event.path is None or len(declaration_event.path) == 0:
+            #get the path from the source entity to the end position
+            return declaration_event.cancel(status_message=f"No valid path found for {declaration_event.name}")
+           
+        else:
+            if declaration_event.path == source_entity.senses.paths[declaration_event.end_position]:
+                return declaration_event.post(
+                    status_message=f"Validated path for {declaration_event.name}"
+                )
+            else:
+                #we must check that all the positions in the path have a valid path
+                for path_position in declaration_event.path:
+                    if path_position not in source_entity.senses.paths:
+                        return declaration_event.cancel(status_message=f"Invalid path for {declaration_event.name} at position {path_position}")
+                    
+                return declaration_event.post(
+                    status_message=f"Validated path for {declaration_event.name}"
+                )
+            
+    def _create_declaration_event(self,parent_event: Optional[Event] = None) -> Optional[Event]:
+        """Create the declaration event for the movement action"""
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not source_entity or not isinstance(source_entity, Entity):
+            return None
+
+        
+
+        return MovementEvent(
+            name=f"{self.name}",
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            start_position=source_entity.position,
+            end_position=self.end_position,
+            path=self.path
+        )
+    
+    def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
+        """Validate the movement action"""
+        validated_event = Movement.validate_path(declaration_event,self.source_entity_uuid)
+        if not validated_event.canceled:
+            return validated_event.phase_to(
+                new_phase=EventPhase.EXECUTION,
+                status_message=f"Validated  {declaration_event.name}"
+            )
+        else:
+            return validated_event
+        
+    def _apply(self, execution_event: MovementEvent) -> MovementEvent:
+        """Apply the movement action"""
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not source_entity or not isinstance(source_entity, Entity):
+            return execution_event.cancel(status_message=f"Source entity not found for {execution_event.name}")
+
+        ## first check if we have path and if not it means there are no costs for it
+        if self.path is None and execution_event.path is None:
+            return execution_event.cancel(status_message=f"No path found for {execution_event.name}")
+        elif self.path is None and execution_event.path is not None:
+            self.path = execution_event.path
+            if self.use_movement_cost:
+                self._setup_costs_from_path()
+            execution_event = execution_event.post(
+                path=self.path,
+                status_message=f"Added paths to {execution_event.uuid}"
+            )
+        #now we add the costs to the event
+        execution_event = execution_event.post(
+            costs=self.costs,
+            status_message=f"Added costs to {execution_event.uuid}"
+        )
+
+        Entity.update_entity_position(source_entity,execution_event.end_position)
+        Entity.update_all_entities_senses() #later we will only update the senses of the entities that are affected by the movement 
+        
+        if source_entity.position != execution_event.end_position:
+            # here is a good opportunity to recompute the cost if for some resason the movement failed
+            return execution_event.cancel(status_message=f"Failed to move to {execution_event.end_position} for {execution_event.name}")
+        else:
+            effect_event = execution_event.post(
+                status_message=f"Moved to {execution_event.end_position} for {execution_event.name}"
+            )
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Applied movement for {execution_event.name}"
+        )
+    
+    def _apply_costs(self, completion_event: MovementEvent) -> Optional[MovementEvent]:
+        """Apply the costs of the action"""
+        return entity_action_economy_cost_applier(completion_event,self.source_entity_uuid)
+        
+
 class AttackEvent(ActionEvent):
     """An event that represents an attack"""
     name: str = Field(default="Attack",description="An attack event")
@@ -67,6 +205,7 @@ class AttackEvent(ActionEvent):
     damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
     event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
+
 
 
 class Attack(BaseAction):
