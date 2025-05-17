@@ -2,7 +2,8 @@ from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Cal
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.base_object import BaseObject
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import EventHandler, Trigger, Event
 from enum import Enum

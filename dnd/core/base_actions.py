@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from dnd.core.events import Event,EventType, EventHandler, EventPhase, EventProcessor
-from dnd.core.values import BaseObject
+from dnd.core.base_object import BaseObject
 from typing import Optional, Dict, Callable, OrderedDict, List, Literal
 from uuid import UUID
 
