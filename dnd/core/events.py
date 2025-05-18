@@ -383,7 +383,6 @@ class EventQueue:
         
         # Check for listeners
         handlers = cls._get_handlers_for_event(event)
-    
         # If no listeners or event is already in completion phase, return as is
         if not handlers or event.phase == EventPhase.COMPLETION:
             return event
@@ -462,8 +461,7 @@ class EventQueue:
             simple_trigger = trigger_condition.get_simple_trigger()
             simple_handlers = cls._event_handlers_by_simple_trigger.get(simple_trigger, [])
             complex_handlers = cls._event_handlers_by_trigger.get(trigger_condition, [])
-            # print(f"Simple handlers: {simple_handlers}")
-            # print(f"Complex handlers: {complex_handlers}")
+   
             all_handlers = simple_handlers + complex_handlers
         else:
              all_handlers = cls._event_handlers_by_trigger.get(trigger_condition, [])
