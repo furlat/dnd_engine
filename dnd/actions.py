@@ -132,6 +132,7 @@ class Move(BaseAction):
             start_position=source_entity.position,
             end_position=self.end_position,
             path=self.path,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
             use_register=use_register
         )
     
@@ -163,22 +164,29 @@ class Move(BaseAction):
                 path=self.path,
                 status_message=f"Added paths to {execution_event.uuid}"
             )
-        #now we add the costs to the event
-        execution_event = execution_event.post(
-            costs=self.costs,
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
             status_message=f"Added costs to {execution_event.uuid}"
         )
 
         Entity.update_entity_position(source_entity,execution_event.end_position)
         Entity.update_all_entities_senses() #later we will only update the senses of the entities that are affected by the movement 
+        #now we declare the application of the effect
         
-        if source_entity.position != execution_event.end_position:
+
+        if source_entity.position == execution_event.start_position:
             # here is a good opportunity to recompute the cost if for some resason the movement failed
-            return execution_event.cancel(status_message=f"Failed to move to {execution_event.end_position} for {execution_event.name}")
-        else:
-            effect_event = execution_event.post(
-                status_message=f"Moved to {execution_event.end_position} for {execution_event.name}"
+            return effect_event.cancel(status_message=f"Failed to move to {execution_event.end_position} for {execution_event.name}")
+        elif source_entity.position != execution_event.start_position and source_entity.position != execution_event.end_position:
+            # here we have a movement that failed
+            return  execution_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Failed to move to {execution_event.end_position} for {execution_event.name}, moved to {source_entity.position} instead",
+                end_position=source_entity.position
             )
+            
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -375,11 +383,13 @@ class Attack(BaseAction):
         if range_validated_event is None:
             return declaration_event.cancel(status_message=f"Range validation returned None for {self.name}")
         elif range_validated_event.canceled:
+            print(f"Range validation canceled for {self.name} with status message {range_validated_event.status_message}")
             return range_validated_event
         line_of_sight_validated_event = validate_line_of_sight(range_validated_event,self.source_entity_uuid)
         if line_of_sight_validated_event is None:
             return declaration_event.cancel(status_message=f"Line of sight validation returned None for {self.name}")
         elif line_of_sight_validated_event.canceled:
+            print(f"Line of sight validation canceled for {self.name} with status message {line_of_sight_validated_event.status_message}")
             return line_of_sight_validated_event
         return line_of_sight_validated_event.phase_to(
             new_phase=EventPhase.EXECUTION,
