@@ -391,7 +391,7 @@ class EventQueue:
         current_event = event
         for handler in handlers:
             #declare the reaction event
-            reaction_event = handler.get_declaration_event(current_event)
+            # reaction_event = handler.get_declaration_event(current_event)
             # Executehandler
             result = handler(current_event)
             
