@@ -331,6 +331,7 @@ interface BattleMapCanvasProps {
   height: number;
   tileSize?: number;
   onCellClick?: (x: number, y: number, handleOptimisticUpdate: (newTile: TileSummary) => void) => void;
+  onEntityClick?: (entityId: string, x: number, y: number, tileSize: number) => void;
   isEditing?: boolean;
   isLocked?: boolean;
   onLockChange?: (locked: boolean) => void;
@@ -347,6 +348,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   height: gridHeight,
   tileSize: initialTileSize = 32,
   onCellClick,
+  onEntityClick,
   isEditing = false,
   isLocked = false,
   onLockChange,
@@ -446,6 +448,21 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
         onCellClick(gridX, gridY, (newTile: TileSummary) => {
           characterActions.fetchTiles(); // Refresh tiles after update
         });
+      } else if (event.button === 0 && selectedEntity && !isLocked && onEntityClick) {
+        // Check if there's an entity at the clicked position
+        const entitiesAtPosition = Object.values(snap.summaries).filter(entity => 
+          entity.position[0] === gridX && entity.position[1] === gridY
+        );
+
+        const targetEntity = entitiesAtPosition.find(entity => entity.uuid !== selectedEntity.uuid);
+        if (targetEntity) {
+          // Calculate pixel position for animation, taking into account offset and scaling
+          const pixelX = offsetX + (gridX * tileSize) + (tileSize / 2) + offset.x;
+          const pixelY = offsetY + (gridY * tileSize) + (tileSize / 2) + offset.y;
+
+          // Trigger the attack via the passed callback
+          onEntityClick(targetEntity.uuid, pixelX, pixelY, tileSize);
+        }
       }
       
       // Handle right click for movement
@@ -472,10 +489,13 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     tileSize,
     offset,
     onCellClick,
+    onEntityClick,
     isEditing,
     isLocked,
     selectedEntity,
-    tiles
+    tiles,
+    snap.summaries,
+    isMovementHighlightEnabled
   ]);
 
   // Prevent context menu on right click
