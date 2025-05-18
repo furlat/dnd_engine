@@ -331,7 +331,7 @@ interface BattleMapCanvasProps {
   height: number;
   tileSize?: number;
   onCellClick?: (x: number, y: number, handleOptimisticUpdate: (newTile: TileSummary) => void) => void;
-  onEntityClick?: (entityId: string, x: number, y: number, tileSize: number) => void;
+  onEntityClick?: (entityId: string, x: number, y: number, tileSize: number, mapState: { offsetX: number; offsetY: number; gridOffsetX: number; gridOffsetY: number; actualTileSize: number }) => void;
   isEditing?: boolean;
   isLocked?: boolean;
   onLockChange?: (locked: boolean) => void;
@@ -460,8 +460,20 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
           const pixelX = offsetX + (gridX * tileSize) + (tileSize / 2) + offset.x;
           const pixelY = offsetY + (gridY * tileSize) + (tileSize / 2) + offset.y;
 
-          // Trigger the attack via the passed callback
-          onEntityClick(targetEntity.uuid, pixelX, pixelY, tileSize);
+          // Pass the current map state to the callback
+          onEntityClick(
+            targetEntity.uuid, 
+            pixelX, 
+            pixelY, 
+            tileSize,
+            {
+              offsetX: offsetX + offset.x,
+              offsetY: offsetY + offset.y,
+              gridOffsetX: offset.x,
+              gridOffsetY: offset.y,
+              actualTileSize: tileSize
+            }
+          );
         }
       }
       

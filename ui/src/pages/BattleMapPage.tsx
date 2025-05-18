@@ -23,7 +23,18 @@ const BattleMapPage: React.FC = () => {
   const [isLocked, setIsLocked] = React.useState(false);
   const { handleCellClick, TileEditor, isEditing } = useTileEditor();
   const snap = useSnapshot(characterStore);
-  const [attackAnimation, setAttackAnimation] = React.useState<{x: number, y: number, scale: number} | null>(null);
+  const [attackAnimation, setAttackAnimation] = React.useState<{
+    x: number, 
+    y: number, 
+    scale: number,
+    angle?: number,
+    flipX?: boolean,
+    isHit: boolean,
+    sourceX?: number,
+    sourceY?: number,
+    targetX?: number,
+    targetY?: number
+  } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   // Panel states
@@ -69,7 +80,19 @@ const BattleMapPage: React.FC = () => {
   };
 
   // Handle attack on entity
-  const handleAttack = (targetId: string, targetX: number, targetY: number, tileSize: number) => {
+  const handleAttack = (
+    targetId: string, 
+    targetX: number, 
+    targetY: number, 
+    tileSize: number,
+    mapState?: { 
+      offsetX: number; 
+      offsetY: number; 
+      gridOffsetX: number; 
+      gridOffsetY: number; 
+      actualTileSize: number
+    }
+  ) => {
     const selectedEntity = snap.selectedEntityId ? snap.summaries[snap.selectedEntityId] : undefined;
     
     if (!selectedEntity) {
@@ -106,16 +129,140 @@ const BattleMapPage: React.FC = () => {
       return response.json();
     })
     .then(data => {
-      // Only show animation if attack was successful
+      // Animation is shown for both hits and misses
       const animationStartTime = performance.now();
       console.log(`[Attack Timing] Starting animation at ${animationStartTime - clickTime}ms from click`);
       
+      // Log the entire event data for debugging
+      console.log('Attack event data:', data.event);
+
+      // Get detailed data about the hit property
+      console.log('[HIT DEBUG] Raw hit value:', data.event.hit);
+      console.log('[HIT DEBUG] Type of hit value:', typeof data.event.hit);
+      console.log('[HIT DEBUG] JSON of hit data:', JSON.stringify(data.event, null, 2));
+
+        // Determine if the attack was a hit based on event data
+  // Look for AttackOutcome in the event status message or check the completion message
+  const statusMsg = data.event.status_message || '';
+  const isHit = !statusMsg.includes('MISS') && !statusMsg.includes('missed');
+  console.log(`[Attack Result] Attack ${isHit ? 'hit' : 'missed'} (isHit=${isHit}) based on status message: "${statusMsg}"`);
+
+      // Find the target entity data
+      const targetEntity = Object.values(snap.summaries).find(entity => entity.uuid === targetId);
+      if (!targetEntity) {
+        console.error("Could not find target entity for animation");
+        return;
+      }
+      
+      // Use the actual tile size and offsets from the map state if available
+      const actualTileSize = mapState?.actualTileSize || tileSize;
+      const offsetX = mapState?.offsetX || ((containerSize.width - (gridSize.width * actualTileSize)) / 2);
+      const offsetY = mapState?.offsetY || ((containerSize.height - (gridSize.height * actualTileSize)) / 2);
+      
+      // Try to get the source position from the event data, fall back to selected entity
+      let sourceGridX, sourceGridY;
+      if (data.event.source && Array.isArray(data.event.source.position) && data.event.source.position.length === 2) {
+        // Use position from event data (server authoritative)
+        [sourceGridX, sourceGridY] = data.event.source.position;
+        console.log('Using source position from event data:', [sourceGridX, sourceGridY]);
+      } else {
+        // Fall back to client-side selected entity
+        [sourceGridX, sourceGridY] = selectedEntity.position;
+        console.log('Falling back to selected entity position:', [sourceGridX, sourceGridY]);
+      }
+      
+      // Calculate the source entity position in screen coordinates using event data
+      const sourceX = offsetX + (sourceGridX * actualTileSize) + (actualTileSize / 2);
+      const sourceY = offsetY + (sourceGridY * actualTileSize) + (actualTileSize / 2);
+      
+      // Log positioning details
+      console.log('[Attack Positioning]', {
+        mapState,
+        sourceEntity: selectedEntity.position,
+        targetEntity: targetEntity.position,
+        sourceScreen: [sourceX, sourceY],
+        targetScreen: [targetX, targetY],
+      });
+      
+      // Simply calculate the midpoint between the two entities
+      const midX = (sourceX + targetX) / 2;
+      const midY = (sourceY + targetY) / 2;
+      
       // Calculate animation scale based on tile size
-      const scale = tileSize / 32;
-      setAttackAnimation({ x: targetX, y: targetY, scale });
+      const scale = actualTileSize / 32;
+      
+      // Calculate the difference between the source and target positions
+      const dx = targetX - sourceX;
+      const dy = targetY - sourceY;
+
+      // Calculate the rotation angle based on the direction
+      let rotation = 0;
+      let direction = "";
+
+      // Cardinal and diagonal directions using only rotation
+      if (dx > 0 && dy > 0) {
+        // Southeast (attacker is northwest of target)
+        rotation = Math.PI / 4; // 45 degrees
+        direction = "SE";
+      } else if (dx > 0 && dy < 0) {
+        // Northeast (attacker is southwest of target)
+        rotation = -Math.PI / 4; // -45 degrees
+        direction = "NE";
+      } else if (dx < 0 && dy > 0) {
+        // Southwest (attacker is northeast of target)
+        rotation = 3 * Math.PI / 4; // 135 degrees
+        direction = "SW";
+      } else if (dx < 0 && dy < 0) {
+        // Northwest (attacker is southeast of target)
+        rotation = -3 * Math.PI / 4; // -135 degrees
+        direction = "NW";
+      } else if (Math.abs(dx) < Math.abs(dy)) {
+        // Vertical direction is primary
+        if (dy > 0) {
+          // South (attacker is north of target)
+          rotation = Math.PI / 2; // 90 degrees
+          direction = "S";
+        } else {
+          // North (attacker is south of target)
+          rotation = -Math.PI / 2; // -90 degrees
+          direction = "N";
+        }
+      } else {
+        // Horizontal direction is primary
+        if (dx > 0) {
+          // East (attacker is west of target)
+          rotation = 0;
+          direction = "E";
+        } else {
+          // West (attacker is east of target)
+          rotation = Math.PI; // 180 degrees
+          direction = "W";
+        }
+      }
+
+      // Generate helpful debug info
+      console.log('[Attack Direction]', {
+        sourcePos: [sourceX, sourceY],
+        targetPos: [targetX, targetY],
+        dx,
+        dy,
+        direction,
+        rotation: rotation * (180 / Math.PI), // Log in degrees for readability
+        isHit
+      });
+
+      // Animation state with hit/miss status
+      setAttackAnimation({ 
+        x: midX, 
+        y: midY, 
+        scale,
+        angle: rotation,
+        flipX: false,
+        isHit
+      });
       
       // Log success event
-      console.log('Attack successful:', data.event);
+      console.log('Attack executed:', data.event);
     })
     .catch(error => {
       console.error('Error executing attack:', error.message);
@@ -192,7 +339,7 @@ const BattleMapPage: React.FC = () => {
               isLocked={isLocked}
               containerWidth={containerSize.width}
               containerHeight={containerSize.height}
-              onEntityClick={(targetId, x, y, tileSize) => handleAttack(targetId, x, y, tileSize)}
+              onEntityClick={(targetId, x, y, tileSize, mapState) => handleAttack(targetId, x, y, tileSize, mapState)}
             />
 
             {/* Attack Animation Container */}
@@ -215,6 +362,9 @@ const BattleMapPage: React.FC = () => {
                     x={attackAnimation.x}
                     y={attackAnimation.y}
                     scale={attackAnimation.scale}
+                    flipX={attackAnimation.flipX}
+                    angle={attackAnimation.angle}
+                    isHit={attackAnimation.isHit}
                     onComplete={() => setAttackAnimation(null)}
                   />
                 </Application>
