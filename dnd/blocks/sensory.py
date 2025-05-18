@@ -29,6 +29,7 @@ class Senses(BaseBlock):
     seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
 
 
+
     def add_entity(self,entity_uuid: UUID,position: Tuple[int,int]):
         """ add an entity to the senses"""
         self.entities[entity_uuid] = position
@@ -69,6 +70,20 @@ class Senses(BaseBlock):
         self.update_seen(visible)
         self.walkable = walkable
         self.paths = paths
+
+    def get_threathened_positions(self) -> List[Tuple[int,int]]:
+        """ given a position we get all neighbors (also diagonals), we use sets to do quickly and check they are in both visible dict and a path exist"""
+        position = self.position
+        neighbors = set([(position[0]+1,position[1]),
+                        (position[0]-1,position[1]),
+                        (position[0],position[1]+1),
+                        (position[0],position[1]-1),
+                        (position[0]+1,position[1]+1),
+                        (position[0]-1,position[1]-1)])
+        visible_set = set(self.visible.keys())
+        path_set = set(self.paths.keys())
+        return list(neighbors & visible_set & path_set)
+        
 
     @classmethod
     def create(cls,source_entity_uuid: UUID,name: str = "Senses", source_entity_name: Optional[str] = None, target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, position: Tuple[int,int] = (0,0)) -> Self:
