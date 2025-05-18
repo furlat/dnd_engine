@@ -164,13 +164,13 @@ class Move(BaseAction):
                 path=self.path,
                 status_message=f"Added paths to {execution_event.uuid}"
             )
-
+        
+        costs = [BaseCost.model_validate(cost) for cost in self.costs]
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=costs,
             status_message=f"Added costs to {execution_event.uuid}"
         )
-
         Entity.update_entity_position(source_entity,execution_event.end_position)
         Entity.update_all_entities_senses() #later we will only update the senses of the entities that are affected by the movement 
         #now we declare the application of the effect
@@ -383,13 +383,11 @@ class Attack(BaseAction):
         if range_validated_event is None:
             return declaration_event.cancel(status_message=f"Range validation returned None for {self.name}")
         elif range_validated_event.canceled:
-            print(f"Range validation canceled for {self.name} with status message {range_validated_event.status_message}")
             return range_validated_event
         line_of_sight_validated_event = validate_line_of_sight(range_validated_event,self.source_entity_uuid)
         if line_of_sight_validated_event is None:
             return declaration_event.cancel(status_message=f"Line of sight validation returned None for {self.name}")
         elif line_of_sight_validated_event.canceled:
-            print(f"Line of sight validation canceled for {self.name} with status message {line_of_sight_validated_event.status_message}")
             return line_of_sight_validated_event
         return line_of_sight_validated_event.phase_to(
             new_phase=EventPhase.EXECUTION,

@@ -622,7 +622,6 @@ class Entity(BaseBlock):
         
         # Get walkable paths using dijkstra
         distances, paths = Tile.get_paths(self.position, max_distance)
-        print(f"paths before filtering: {paths}")
         
         # Filter paths to only include those where:
         # 1. The destination is currently visible

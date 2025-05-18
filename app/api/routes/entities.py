@@ -18,7 +18,7 @@ from dnd.core.events import WeaponSlot
 from dnd.blocks.equipment import Equipment, BaseBlock, Armor, Weapon, Shield, BodyPart, RingSlot
 from dnd.core.base_conditions import DurationType
 from dnd.conditions import ConditionType, create_condition
-from dnd.actions import Attack
+from dnd.actions import Attack, Move
 
 # Import dependencies
 from app.api.deps import get_entity
@@ -521,7 +521,9 @@ async def move_entity(
 ):
     """Move an entity to a new position and return its updated summary"""
     try:
-        entity.move(request.position)
+        Entity.update_entity_senses(entity)
+        movement_action = Move(name=f"{entity.name} moves to {request.position}",source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid,end_position=request.position)
+        movement_event = movement_action.apply()
         return EntitySummary.from_engine(entity)
     except Exception as e:
         raise HTTPException(

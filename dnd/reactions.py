@@ -16,6 +16,9 @@ def opportunity_attack_processor(event: MovementEvent, source_entity_uuid: UUID)
     event_source_entity = Entity.get(event.source_entity_uuid)
     if reaction_source_entity is None or event_source_entity is None:
         return event
+    
+    if reaction_source_entity.uuid == event_source_entity.uuid:
+        return event
     threathened_positions = reaction_source_entity.senses.get_threathened_positions()
 
 
@@ -30,14 +33,11 @@ def opportunity_attack_processor(event: MovementEvent, source_entity_uuid: UUID)
                                  costs=[Cost(name="Opportunity Attack Cost",cost_type="reactions",cost=1,evaluator=entity_action_economy_cost_evaluator)]
         )
         if reaction_attack.pre_validate():
-            print(f"Opportunity attack {reaction_attack.name} validated")
             reaction_attack.add_to_register() 
             reaction_attack.apply(parent_event=event)
-            return event
 
         
         
-        return event
     return event
 
 
