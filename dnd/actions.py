@@ -383,6 +383,7 @@ class Attack(BaseAction):
         if range_validated_event is None:
             return declaration_event.cancel(status_message=f"Range validation returned None for {self.name}")
         elif range_validated_event.canceled:
+            
             return range_validated_event
         line_of_sight_validated_event = validate_line_of_sight(range_validated_event,self.source_entity_uuid)
         if line_of_sight_validated_event is None:
