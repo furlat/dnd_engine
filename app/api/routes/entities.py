@@ -31,6 +31,15 @@ class Position(BaseModel):
 class MoveRequest(BaseModel):
     position: Tuple[int, int]
 
+# Create a specific model for attack results
+class AttackResult(BaseModel):
+    event: EventSnapshot
+
+# Create a specific model for movement results
+class MoveResult(BaseModel):
+    event: EventSnapshot
+    position: Tuple[int, int]
+
 # Create router
 router = APIRouter(
     prefix="/entities",
@@ -448,7 +457,7 @@ async def set_entity_target(
         include_saving_throw_calculations=include_saving_throw_calculations
     ) 
 
-@router.post("/{entity_uuid}/attack/{target_uuid}")
+@router.post("/{entity_uuid}/attack/{target_uuid}", response_model=AttackResult)
 async def execute_attack(
     entity_uuid: UUID,
     target_uuid: UUID,
@@ -480,23 +489,10 @@ async def execute_attack(
     if not result_event:
         raise HTTPException(status_code=400, detail="Attack could not be executed")
     
-    # Get fresh copy of attacker after the attack
-    updated_attacker = Entity.get(entity_uuid)
-    if not updated_attacker:
-        raise HTTPException(status_code=404, detail="Entity not found after attack")
-    
-    # Return the full updated attacker state with target summary included
+    # Return only the event data to improve performance
     return {
-        "event": EventSnapshot.from_engine(result_event, include_children=True),
-        "attacker": EntitySnapshot.from_engine(
-            updated_attacker,
-            include_skill_calculations=include_skill_calculations,
-            include_attack_calculations=include_attack_calculations,
-            include_ac_calculation=include_ac_calculation,
-            include_saving_throw_calculations=include_saving_throw_calculations,
-            include_target_summary=True
-        )
-    } 
+        "event": EventSnapshot.from_engine(result_event, include_children=True)
+    }
 
 @router.get("/position/{x}/{y}", response_model=List[EntitySummary])
 async def get_entities_at_position(x: int, y: int):
@@ -514,7 +510,7 @@ async def get_entities_at_position(x: int, y: int):
             }
         )
 
-@router.post("/{entity_uuid}/move", response_model=EntitySummary)
+@router.post("/{entity_uuid}/move", response_model=MoveResult)
 async def move_entity(
     request: MoveRequest,
     entity: Entity = Depends(get_entity)
@@ -524,7 +520,10 @@ async def move_entity(
         Entity.update_entity_senses(entity)
         movement_action = Move(name=f"{entity.name} moves to {request.position}",source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid,end_position=request.position)
         movement_event = movement_action.apply()
-        return EntitySummary.from_engine(entity)
+        return {
+            "event": EventSnapshot.from_engine(movement_event, include_children=True),
+            "position": request.position
+        }
     except Exception as e:
         raise HTTPException(
             status_code=400,

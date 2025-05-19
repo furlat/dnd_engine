@@ -419,21 +419,6 @@ export const DirectionalEntitySprite: React.FC<DirectionalEntitySpriteProps> = (
         scale={scale}
         y={verticalOffset} // Positive offset to move south
       />
-      {selected && (
-        <pixiGraphics
-          draw={(g) => {
-            g.clear();
-            g.setStrokeStyle({
-              width: 2,
-              color: 0xffff00,
-              alpha: 0.8
-            });
-            const radius = mapSnap.tileSize * 0.6;
-            g.circle(0, 0, radius);
-            g.stroke();
-          }}
-        />
-      )}
     </pixiContainer>
   );
 }; 

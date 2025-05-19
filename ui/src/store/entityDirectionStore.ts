@@ -46,17 +46,21 @@ export const createEntityDirectionState = (): EntityDirectionState => {
     // Calculate angle in degrees (0 is east, 90 is south)
     let angle = Math.atan2(dy, dx) * (180 / Math.PI);
     if (angle < 0) angle += 360;
-
+    
     // Map angle to direction (0-7)
     // Direction enum: SW = 0, W = 1, NW = 2, N = 3, NE = 4, E = 5, SE = 6, S = 7
-    if (angle >= 0 && angle < 45) return Direction.E;
-    if (angle >= 45 && angle < 90) return Direction.SE;
-    if (angle >= 90 && angle < 135) return Direction.S;
-    if (angle >= 135 && angle < 180) return Direction.SW;
-    if (angle >= 180 && angle < 225) return Direction.W;
-    if (angle >= 225 && angle < 270) return Direction.NW;
-    if (angle >= 270 && angle < 315) return Direction.N;
-    return Direction.NE;
+    let calculatedDirection: Direction;
+    
+    if (angle >= 0 && angle < 45) calculatedDirection = Direction.E;
+    else if (angle >= 45 && angle < 90) calculatedDirection = Direction.SE;
+    else if (angle >= 90 && angle < 135) calculatedDirection = Direction.S;
+    else if (angle >= 135 && angle < 180) calculatedDirection = Direction.SW;
+    else if (angle >= 180 && angle < 225) calculatedDirection = Direction.W;
+    else if (angle >= 225 && angle < 270) calculatedDirection = Direction.NW;
+    else if (angle >= 270 && angle < 315) calculatedDirection = Direction.N;
+    else calculatedDirection = Direction.NE;
+    
+    return calculatedDirection;
   };
 
   return {

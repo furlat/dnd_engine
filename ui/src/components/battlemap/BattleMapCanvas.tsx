@@ -418,7 +418,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     const containerElement = document.querySelector('.MuiBox-root');
     if (containerElement) {
       console.log('[RESIZE] Setting up ResizeObserver for container element');
-      
+  
       // Create observer to handle layout changes (like console opening)
       const resizeObserver = new ResizeObserver((entries) => {
         // Only update if there's a significant change
@@ -684,7 +684,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
           
           // We have a selected entity different from the target - this is an attack
           console.log(`[ENTITY-TARGET] Attacking: source=${currentSelected}, target=${targetEntity.uuid}`);
-          
+
           // First ensure the displayed entity is updated to the target
           characterActions.setDisplayedEntity(targetEntity.uuid);
           
@@ -1155,8 +1155,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                       <DirectionalEntitySprite
                       key={entity.uuid}
                       entity={entity}
-                        direction={direction}
-                        selected={entity.uuid === charSnap.selectedEntityId}
+                      direction={direction}
                     />
                   );
                 }
@@ -1186,8 +1185,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                     <DirectionalEntitySprite
                     key={entity.uuid}
                     entity={entity}
-                      direction={entityDirections[entity.uuid]}
-                      selected={entity.uuid === charSnap.selectedEntityId}
+                    direction={entityDirections[entity.uuid]}
                   />
                 );
               })}
