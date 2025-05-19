@@ -12,18 +12,21 @@ import NotFoundPage from './pages/NotFoundPage';
 
 // Context
 import { EventQueueProvider } from './contexts/EventQueueContext';
+import { SoundSettingsProvider } from './contexts/SoundSettingsContext';
 
 const App: React.FC = () => {
   return (
-    <EventQueueProvider>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<CharacterListPage />} />
-          <Route path="characters/:characterId" element={<BattleMapPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-      </Routes>
-    </EventQueueProvider>
+    <SoundSettingsProvider>
+      <EventQueueProvider>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<CharacterListPage />} />
+            <Route path="characters/:characterId" element={<BattleMapPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </EventQueueProvider>
+    </SoundSettingsProvider>
   );
 };
 

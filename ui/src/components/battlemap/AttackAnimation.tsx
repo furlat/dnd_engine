@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Assets, Spritesheet, Rectangle, Texture, AnimatedSprite as PixiAnimatedSprite, Graphics } from 'pixi.js';
 import { sound } from '@pixi/sound';
+import { useSoundSettings } from '../../contexts/SoundSettingsContext';
 
 interface AttackAnimationProps {
   x: number;
@@ -22,7 +23,7 @@ const ANIMATION_PATH = '/assets/animations/weapons_combat_animations.png';
 // Fixed naming: use consistent names matching the actual file names
 const SWORD_SWING_SOUND_PATH = '/sounds/sword-swing.mp3';
 const SWORD_MISS_SOUND_PATH = '/sounds/sword-miss.mp3';
-const MISS_SOUND_DURATION = 0.7; // Play only 0.5 seconds of the miss sound
+const MISS_SOUND_DURATION = 0.7; // Play only 0.7 seconds of the miss sound
 
 // Create promises to track sound loading similar to spritesheets
 let soundSwingPromise: Promise<void> | null = null;
@@ -136,6 +137,7 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
   isHit = true,
   onComplete 
 }) => {
+  const { getEffectiveVolume } = useSoundSettings();
   const [frames, setFrames] = React.useState<Texture[]>([]);
   const [currentFrame, setCurrentFrame] = React.useState(0);
   const [isPlaying, setIsPlaying] = React.useState(true);
@@ -173,6 +175,10 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
         console.log('[SOUND DEBUG] isHit value in AttackAnimation:', isHit);
         console.log('[SOUND DEBUG] isHit type:', typeof isHit);
         
+        // Get the effective volume for sound effects from context
+        const effectsVolume = getEffectiveVolume('effects');
+        console.log(`[SOUND DEBUG] Effect volume from settings: ${effectsVolume}`);
+        
         const soundName = isHit ? 'sword-swing' : 'sword-miss';
         console.log(`[SOUND DEBUG] Selected sound name: "${soundName}"`);
         
@@ -183,11 +189,14 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
         
         // Play the sound with appropriate options
         if (isHit) {
-          // For hit, play the full sound
-          soundInstanceRef.current = sound.play('sword-swing');
+          // For hit, play the full sound with volume from settings
+          soundInstanceRef.current = sound.play('sword-swing', {
+            volume: effectsVolume
+          });
         } else {
-          // For miss, play only the first half-second
+          // For miss, play only part of the sound with volume from settings
           soundInstanceRef.current = sound.play('sword-miss', {
+            volume: effectsVolume,
             complete: () => {
               console.log('[Sound] Miss sound completed');
             }
@@ -202,7 +211,7 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
           }, MISS_SOUND_DURATION * 1000);
         }
         
-        console.log(`[Attack Sound] Playing ${soundName} sound effect`);
+        console.log(`[Attack Sound] Playing ${soundName} sound effect at volume ${effectsVolume}`);
         soundPlayed.current = true;
       } catch (error) {
         console.error('Error playing attack sound:', error);
@@ -230,7 +239,7 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
     }, FRAME_INTERVAL); // Animation speed - adjust as needed
 
     return () => clearInterval(interval);
-  }, [isPlaying, frames.length, onComplete, isHit]);
+  }, [isPlaying, frames.length, onComplete, isHit, getEffectiveVolume]);
 
   // Reset sound played status when component re-renders
   React.useEffect(() => {
