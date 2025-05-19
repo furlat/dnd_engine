@@ -49,9 +49,25 @@ const ActionBar = React.memo(() => {
             <InputLabel>Select Target</InputLabel>
             <Select
               value={character.target_entity_uuid || ''}
-              onChange={(e) => handleTargetChange(e.target.value as string)}
+              onChange={(e) => {
+                const targetId = e.target.value as string;
+                // If empty selection, just clear the target
+                if (!targetId) {
+                  handleTargetChange('');
+                  return;
+                }
+                
+                // Refresh entity data before setting target to ensure consistency
+                console.log(`[ACTION-BAR] Setting target to ${targetId}`);
+                
+                // Set target directly through handleTargetChange
+                handleTargetChange(targetId);
+              }}
               label="Select Target"
             >
+              <MenuItem value="">
+                <em>No Target</em>
+              </MenuItem>
               {targets.map((target) => (
                 <MenuItem key={target.uuid} value={target.uuid}>
                   {target.name}

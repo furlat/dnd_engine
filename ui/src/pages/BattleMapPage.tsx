@@ -13,6 +13,8 @@ import { Application, extend } from '@pixi/react';
 import { Container, AnimatedSprite } from 'pixi.js';
 import BackgroundMusicPlayer from '../components/music/BackgroundMusicPlayer';
 import { Direction } from '../components/battlemap/DirectionalEntitySprite';
+import { mapStore, mapActions } from '../store/mapStore';
+import { entityDirectionState } from '../store/entityDirectionStore';
 
 // Extend the PixiJS components
 extend({ Container, AnimatedSprite });
@@ -20,26 +22,18 @@ extend({ Container, AnimatedSprite });
 const BattleMapPage: React.FC = () => {
   const theme = useTheme();
   const [containerSize, setContainerSize] = React.useState({ width: 0, height: 0 });
-  const [gridSize, setGridSize] = React.useState({ width: 30, height: 20 }); // Default size
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const [isLocked, setIsLocked] = React.useState(false);
   const { handleCellClick, TileEditor, isEditing } = useTileEditor();
   const snap = useSnapshot(characterStore);
+  const mapSnap = useSnapshot(mapStore);
   const [redrawCounter, setRedrawCounter] = React.useState(0);
   const [attackAnimation, setAttackAnimation] = React.useState<{
-    x: number, 
-    y: number, 
-    scale: number,
-    angle?: number,
-    flipX?: boolean,
     isHit: boolean,
     sourceEntityId: string,
     targetEntityId: string
   } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [musicPlayerMinimized, setMusicPlayerMinimized] = React.useState(true);
-
-  // Panel states
   const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(false);
 
   // Toggle music player size
@@ -54,6 +48,7 @@ const BattleMapPage: React.FC = () => {
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
         setContainerSize({ width, height });
+        mapActions.setContainerSize(width, height);
       }
     };
 
@@ -70,7 +65,7 @@ const BattleMapPage: React.FC = () => {
     const fetchData = async () => {
       try {
         const grid = await fetchGridSnapshot();
-        setGridSize({ width: grid.width, height: grid.height });
+        mapActions.setGridDimensions(grid.width, grid.height);
         await characterActions.fetchSummaries();
       } catch (error) {
         console.error('Error fetching initial data:', error);
@@ -81,224 +76,118 @@ const BattleMapPage: React.FC = () => {
   }, []);
 
   // Handle target selection
-  const handleTargetSelect = (entityId: string) => {
+  const handleTargetSelect = async (entityId: string) => {
+    // The selected entity should be the one clicked on
+    console.log(`[TARGET-SELECT] Entity clicked: ${entityId}`);
+    
+    if (!entityId) {
+      return; // Ignore empty selections
+    }
+    
+    // Simply set this entity as the selected entity
     characterActions.setSelectedEntity(entityId);
     characterActions.setDisplayedEntity(entityId);
+    
+    // No need to set targets at this stage - just select the entity
+    console.log(`[TARGET-SELECT] Set ${entityId} as selected entity`);
   };
 
   // Handle attack on entity
-  const handleAttack = (
-    targetId: string, 
-    targetX: number, 
-    targetY: number, 
-    tileSize: number,
-    mapState?: { 
-      offsetX: number; 
-      offsetY: number; 
-      gridOffsetX: number; 
-      gridOffsetY: number; 
-      actualTileSize: number
-    }
+  const handleAttack = async (
+    targetId: string
   ) => {
-    const selectedEntity = snap.selectedEntityId ? snap.summaries[snap.selectedEntityId] : undefined;
+    // Skip using the snapshot and access store directly
+    const selectedEntityId = characterStore.selectedEntityId;
+    const selectedEntity = selectedEntityId ? characterStore.summaries[selectedEntityId] : undefined;
     
-    if (!selectedEntity) {
-      setError("No entity selected to perform attack");
+    // Log state for debugging
+    console.log(`[ATTACK-FLOW] Selected entity ID: ${selectedEntityId}, Target ID: ${targetId}`);
+    console.log(`[ATTACK-FLOW] Entity summaries:`, Object.keys(characterStore.summaries));
+    
+    if (!selectedEntityId || !selectedEntity) {
+      console.error("[ATTACK-FLOW] No valid source entity found in state");
+      
+      // Try to force a refresh and report the error to the user
+      try {
+        await characterActions.forceRefresh();
+        const refreshedSelectedId = characterStore.selectedEntityId;
+        const refreshedEntity = refreshedSelectedId ? characterStore.summaries[refreshedSelectedId] : undefined;
+        
+        if (!refreshedEntity) {
+          setError("No entity selected to perform attack");
+          return;
+        }
+        
+        // Continue with refreshed entity data
+        console.log(`[ATTACK-FLOW] Recovered after refresh with entity ${refreshedEntity.uuid}`);
+      } catch (err) {
+        setError("No entity selected to perform attack");
+        return;
+      }
+    }
+    
+    // Re-check after potential refresh
+    const attackerEntityId = characterStore.selectedEntityId;
+    const attackerEntity = attackerEntityId ? characterStore.summaries[attackerEntityId] : undefined;
+    
+    if (!attackerEntityId || !attackerEntity) {
+      setError("Could not determine attacking entity");
       return;
     }
 
     // Start timing measurement
     const clickTime = performance.now();
-    console.log(`[Attack Timing] Click detected at ${clickTime}ms`);
+    console.log(`[ATTACK-FLOW] Attack initiated at ${clickTime.toFixed(2)}ms - Source: ${attackerEntity.uuid}, Target: ${targetId}`);
     
-    // Execute attack on the target entity
-    const params = new URLSearchParams({
-      weapon_slot: 'MAIN_HAND',
-      attack_name: 'Attack'
-    });
-    
-    console.log(`[Attack Timing] Sending attack request at ${performance.now() - clickTime}ms from click`);
-    
-    fetch(`/api/entities/${selectedEntity.uuid}/attack/${targetId}?${params}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
-    .then(async response => {
-      const responseTime = performance.now();
-      console.log(`[Attack Timing] Received server response at ${responseTime - clickTime}ms from click`);
+    try {
+      // We can directly use the combatApi without refresh since the attack API will get fresh data
+      console.log(`[ATTACK-FLOW] Executing attack - Source: ${attackerEntity.uuid}, Target: ${targetId}`);
+
+      // Use the combatApi module for attack
+      const { executeAttack } = await import('../api/combatApi');
+      const result = await executeAttack(attackerEntity.uuid, targetId, 'MAIN_HAND', 'Attack');
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail?.message || 'Attack failed');
-      }
-      return response.json();
-    })
-    .then(data => {
       // Check if the event was canceled
-      if (data.event.canceled) {
-        console.log('[Attack Result] Attack was canceled:', data.event.status_message);
+      if (result.event.canceled) {
+        console.log('[ATTACK-FLOW] Attack was canceled:', result.event.status_message);
         return; // Don't play animation for canceled attacks
       }
 
-      // Animation is shown for both hits and misses
-      const animationStartTime = performance.now();
-      console.log(`[Attack Timing] Starting animation at ${animationStartTime - clickTime}ms from click`);
-      
-      // Log the entire event data for debugging
-      console.log('Attack event data:', data.event);
-
-      // Get detailed data about the hit property
-      console.log('[HIT DEBUG] Raw hit value:', data.event.hit);
-      console.log('[HIT DEBUG] Type of hit value:', typeof data.event.hit);
-      console.log('[HIT DEBUG] JSON of hit data:', JSON.stringify(data.event, null, 2));
-
       // Determine if the attack was a hit based on event data
-      const statusMsg = data.event.status_message || '';
+      const statusMsg = result.event.status_message || '';
       const isHit = !statusMsg.includes('MISS') && !statusMsg.includes('missed');
-      console.log(`[Attack Result] Attack ${isHit ? 'hit' : 'missed'} (isHit=${isHit}) based on status message: "${statusMsg}"`);
+      console.log(`[ATTACK-FLOW] Attack result: ${isHit ? 'HIT' : 'MISS'} - ${statusMsg}`);
 
-      // Get fresh references to entities from store to ensure latest positions
-      const currentSelectedEntity = snap.summaries[selectedEntity.uuid];
-      const currentTargetEntity = snap.summaries[targetId];
-      
-      if (!currentSelectedEntity || !currentTargetEntity) {
-        console.error("Could not find entities for animation");
-        return;
-      }
-
-      // Calculate the offset to center the grid (same as DirectionalEntitySprite)
-      const actualTileSize = mapState?.actualTileSize || tileSize;
-      const offsetX = (containerSize.width - (gridSize.width * actualTileSize)) / 2 + (mapState?.gridOffsetX || 0);
-      const offsetY = (containerSize.height - (gridSize.height * actualTileSize)) / 2 + (mapState?.gridOffsetY || 0);
-
-      // Get current positions from the store
-      const [sourceGridX, sourceGridY] = currentSelectedEntity.position;
-      const [targetGridX, targetGridY] = currentTargetEntity.position;
-      
-      // Calculate screen coordinates using the same formula as DirectionalEntitySprite
-      const sourceX = offsetX + (sourceGridX * actualTileSize) + (actualTileSize / 2);
-      const sourceY = offsetY + (sourceGridY * actualTileSize) + (actualTileSize / 2);
-      const targetX = offsetX + (targetGridX * actualTileSize) + (actualTileSize / 2);
-      const targetY = offsetY + (targetGridY * actualTileSize) + (actualTileSize / 2);
-      
-      // Calculate the midpoint between the two entities
-      const midX = (sourceX + targetX) / 2;
-      const midY = (sourceY + targetY) / 2;
-      
-      // Calculate animation scale based on tile size
-      const scale = actualTileSize / 32;
-
-      // Calculate the difference between the source and target positions
-      const dx = targetX - sourceX;
-      const dy = targetY - sourceY;
-
-      // Calculate the rotation angle based on the direction
-      let rotation = 0;
-      let direction = "";
-
-      // Cardinal and diagonal directions using only rotation
-      if (dx > 0 && dy > 0) {
-        // Southeast (attacker is northwest of target)
-        rotation = Math.PI / 4; // 45 degrees
-        direction = "SE";
-      } else if (dx > 0 && dy < 0) {
-        // Northeast (attacker is southwest of target)
-        rotation = -Math.PI / 4; // -45 degrees
-        direction = "NE";
-      } else if (dx < 0 && dy > 0) {
-        // Southwest (attacker is northeast of target)
-        rotation = 3 * Math.PI / 4; // 135 degrees
-        direction = "SW";
-      } else if (dx < 0 && dy < 0) {
-        // Northwest (attacker is southeast of target)
-        rotation = -3 * Math.PI / 4; // -135 degrees
-        direction = "NW";
-      } else if (Math.abs(dx) < Math.abs(dy)) {
-        // Vertical direction is primary
-        if (dy > 0) {
-          // South (attacker is north of target)
-          rotation = Math.PI / 2; // 90 degrees
-          direction = "S";
-        } else {
-          // North (attacker is south of target)
-          rotation = -Math.PI / 2; // -90 degrees
-          direction = "N";
-        }
-      } else {
-        // Horizontal direction is primary
-        if (dx > 0) {
-          // East (attacker is west of target)
-          rotation = 0;
-          direction = "E";
-        } else {
-          // West (attacker is east of target)
-          rotation = Math.PI; // 180 degrees
-          direction = "W";
-        }
-      }
-
-      // Map direction string to Direction enum
-      let entityDirection;
-      switch (direction) {
-        case "N": entityDirection = Direction.N; break;
-        case "NE": entityDirection = Direction.NE; break;
-        case "E": entityDirection = Direction.E; break;
-        case "SE": entityDirection = Direction.SE; break;
-        case "S": entityDirection = Direction.S; break;
-        case "SW": entityDirection = Direction.SW; break;
-        case "W": entityDirection = Direction.W; break;
-        case "NW": entityDirection = Direction.NW; break;
-        default: entityDirection = Direction.S; // Default to south if something goes wrong
-      }
+      // Compute direction based on entity positions - use spreading to handle readonly arrays
+      const direction = entityDirectionState.computeDirection(
+        [...attackerEntity.position] as [number, number],
+        [...characterStore.summaries[targetId].position] as [number, number]
+      );
 
       // Update entity direction before starting animation
-      characterActions.updateEntityDirection(currentSelectedEntity.uuid, entityDirection);
-      // Force a re-render of the entity
-      setRedrawCounter(prev => prev + 1);
+      entityDirectionState.setDirection(attackerEntity.uuid, direction);
 
-      // Generate helpful debug info
-      console.log('[Attack Direction]', {
-        sourcePos: [sourceX, sourceY],
-        targetPos: [targetX, targetY],
-        dx,
-        dy,
-        direction,
-        entityDirection,
-        rotation: rotation * (180 / Math.PI), // Log in degrees for readability
-        isHit
-      });
-
-      // Animation state with hit/miss status
+      // Start animation
       setAttackAnimation({ 
-        x: midX, 
-        y: midY, 
-        scale,
-        angle: rotation,
-        flipX: false,
         isHit,
-        sourceEntityId: currentSelectedEntity.uuid,
-        targetEntityId: currentTargetEntity.uuid
+        sourceEntityId: attackerEntity.uuid,
+        targetEntityId: targetId
       });
       
-      // Log success event
-      console.log('Attack executed:', data.event);
-    })
-    .catch(error => {
-      console.error('Error executing attack:', error.message);
+      console.log(`[ATTACK-FLOW] Attack animation started - Hit: ${isHit}`);
+    } catch (error) {
+      console.error('[ATTACK-FLOW] Error executing attack:', error);
       
       // Show error in UI
-      const errorMessage = error.message === 'Failed to fetch' 
-        ? 'Network error - could not reach server'
-        : error.message;
+      const errorMessage = error instanceof Error
+        ? (error.message === 'Failed to fetch'
+            ? 'Network error - could not reach server'
+            : error.message)
+        : 'Unknown error occurred';
         
       setError(errorMessage);
-      console.log(`[Attack Timing] Attack failed at ${performance.now() - clickTime}ms from click:`, errorMessage);
-    });
+    }
   };
-
-  const entities = Object.values(snap.summaries);
 
   return (
     <Box sx={{ 
@@ -346,21 +235,21 @@ const BattleMapPage: React.FC = () => {
         }}
       >
         {/* Tile Editor */}
-        <TileEditor isLocked={isLocked} />
+        <TileEditor isLocked={mapSnap.isLocked} />
 
         {containerSize.width > 0 && containerSize.height > 0 && (
           <>
             <BattleMapCanvas 
-              width={gridSize.width}
-              height={gridSize.height}
-              tileSize={32}
-              onCellClick={(x, y, onOptimisticUpdate) => handleCellClick(x, y, onOptimisticUpdate, isLocked)}
+              width={mapSnap.gridWidth}
+              height={mapSnap.gridHeight}
+              tileSize={mapSnap.tileSize}
+              onCellClick={(x, y, onOptimisticUpdate) => handleCellClick(x, y, onOptimisticUpdate, mapSnap.isLocked)}
               isEditing={isEditing}
-              onLockChange={setIsLocked}
-              isLocked={isLocked}
+              onLockChange={mapActions.toggleLock}
+              isLocked={mapSnap.isLocked}
               containerWidth={containerSize.width}
               containerHeight={containerSize.height}
-              onEntityClick={(targetId, x, y, tileSize, mapState) => handleAttack(targetId, x, y, tileSize, mapState)}
+              onEntityClick={(targetId) => handleAttack(targetId)}
               redrawCounter={redrawCounter}
             />
 
@@ -381,12 +270,9 @@ const BattleMapPage: React.FC = () => {
                   backgroundAlpha={0}
                 >
                   <AttackAnimation
-                    x={attackAnimation.x}
-                    y={attackAnimation.y}
-                    scale={attackAnimation.scale}
-                    flipX={attackAnimation.flipX}
-                    angle={attackAnimation.angle}
                     isHit={attackAnimation.isHit}
+                    sourceEntityId={attackAnimation.sourceEntityId}
+                    targetEntityId={attackAnimation.targetEntityId}
                     onComplete={() => setAttackAnimation(null)}
                   />
                 </Application>
@@ -396,7 +282,7 @@ const BattleMapPage: React.FC = () => {
         )}
 
         {/* Entity Summary Overlays */}
-        {entities.map((entity, index) => (
+        {Object.values(snap.summaries).map((entity, index) => (
           <EntitySummaryOverlay
             key={entity.uuid}
             entity={entity}

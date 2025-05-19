@@ -9,6 +9,8 @@ import {
 import { EntitySummary } from '../../models/character';
 import { ReadonlyEntitySummary } from '../../models/readonly';
 import TargetIcon from '@mui/icons-material/RadioButtonChecked';
+import ShieldIcon from '@mui/icons-material/Shield';
+import SwordIcon from '@mui/icons-material/Gavel';
 import { characterActions } from '../../store/characterStore';
 
 interface EntitySummaryOverlayProps {
@@ -26,6 +28,22 @@ const EntitySummaryOverlay: React.FC<EntitySummaryOverlayProps> = ({
   onSelectTarget,
   index
 }) => {
+  // Check if this entity is targeting another entity
+  const hasTarget = !!entity.target_entity_uuid;
+  
+  // Handle selecting this entity
+  const handleSelectEntity = async () => {
+    console.log(`[ENTITY-OVERLAY] Selecting entity: ${entity.uuid}`);
+    
+    // First select the entity and update the store
+    await characterActions.setSelectedEntity(entity.uuid);
+    
+    // Then notify parent component
+    if (onSelectTarget) {
+      onSelectTarget(entity.uuid);
+    }
+  };
+  
   return (
     <Paper
       elevation={0}
@@ -49,7 +67,7 @@ const EntitySummaryOverlay: React.FC<EntitySummaryOverlayProps> = ({
             ? '1px solid rgba(255, 255, 255, 0.3)'
             : '1px solid rgba(255, 255, 255, 0.1)',
       }}
-      onClick={() => onSelectTarget(entity.uuid)}
+      onClick={handleSelectEntity}
     >
       <Box sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
         {/* Entity Icon/Avatar */}
@@ -57,7 +75,7 @@ const EntitySummaryOverlay: React.FC<EntitySummaryOverlayProps> = ({
           sx={{
             width: 40,
             height: 40,
-            backgroundColor: 'primary.main',
+            backgroundColor: isSelected ? 'primary.main' : 'rgba(255,255,255,0.2)',
           }}
           src={entity.sprite_name ? `/sprites/${entity.sprite_name}` : undefined}
         >
@@ -71,8 +89,18 @@ const EntitySummaryOverlay: React.FC<EntitySummaryOverlayProps> = ({
               {entity.name}
             </Typography>
             {isSelected && (
+              <Tooltip title="Selected Attacker">
+                <SwordIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+              </Tooltip>
+            )}
+            {isDisplayed && !isSelected && (
               <Tooltip title="Selected Target">
-                <TargetIcon sx={{ fontSize: 14, color: 'primary.main' }} />
+                <TargetIcon sx={{ fontSize: 14, color: 'error.main' }} />
+              </Tooltip>
+            )}
+            {hasTarget && (
+              <Tooltip title="Has Target">
+                <ShieldIcon sx={{ fontSize: 14, color: 'warning.main' }} />
               </Tooltip>
             )}
           </Box>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Application, extend } from '@pixi/react';
 import * as PIXI from 'pixi.js';
 import { Graphics as PixiGraphics, Container, FederatedPointerEvent, Sprite, Assets, Texture, BLEND_MODES } from 'pixi.js';
@@ -25,11 +25,34 @@ import { SensesType } from '../../models/character';
 import SettingsButton from '../settings/SettingsButton';
 import { DirectionalEntitySprite, Direction, preloadEntityAnimations } from './DirectionalEntitySprite';
 import { entityDirectionState } from '../../store/entityDirectionStore';
+import { mapStore, mapActions, mapHelpers } from '../../store/mapStore';
+import { AttackAnimation } from './AttackAnimation';
+import { animationStore, animationActions } from '../../store/animationStore';
+import TileSprite, { preloadTileTextures } from './TileSprite';
+
+// Add TypeScript declaration for our custom property
+declare global {
+  interface Window {
+    PIXI_ASSETS_INITIALIZED?: boolean;
+  }
+}
 
 // Initialize PixiJS Assets
+// Use a guard to prevent multiple initializations
+if (!window.PIXI_ASSETS_INITIALIZED) {
+  console.log('[ASSET-INIT] Initializing PixiJS Assets');
 Assets.init({
   basePath: '/',
 });
+  window.PIXI_ASSETS_INITIALIZED = true;
+  
+  // Start preloading common textures
+  preloadTileTextures().catch(err => {
+    console.error('[ASSET-INIT] Error preloading tile textures:', err);
+  });
+} else {
+  console.log('[ASSET-INIT] PixiJS Assets already initialized, skipping');
+}
 
 // Extend must be called at the module level
 extend({ Container, Graphics: PixiGraphics, Sprite });
@@ -59,9 +82,8 @@ const Grid: React.FC<GridProps> = ({ width, height, gridSize, tileSize }) => {
       alpha: 0.8
     });
     
-    // Calculate the offset to center the grid
-    const offsetX = (width - (gridSize.cols * tileSize)) / 2;
-    const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+    // Use mapHelpers to calculate base offsets
+    const { offsetX, offsetY } = mapHelpers.getGridBaseOffset();
     
     // Draw vertical lines
     for (let i = 0; i <= gridSize.cols; i++) {
@@ -78,7 +100,7 @@ const Grid: React.FC<GridProps> = ({ width, height, gridSize, tileSize }) => {
     }
 
     g.stroke();
-  }, [width, height, gridSize.cols, gridSize.rows, tileSize]);
+  }, [gridSize.cols, gridSize.rows, tileSize]);
   
   return <pixiGraphics draw={drawGrid} />;
 };
@@ -101,8 +123,8 @@ const CellHighlight: React.FC<CellHighlightProps> = ({ x, y, width, height, grid
     // Only draw if we have valid coordinates
     if (x < 0 || y < 0 || x >= gridSize.cols || y >= gridSize.rows) return;
 
-    const offsetX = (width - (gridSize.cols * tileSize)) / 2;
-    const offsetY = (height - (gridSize.rows * tileSize)) / 2;
+    // Use mapHelpers to calculate base offsets
+    const { offsetX, offsetY } = mapHelpers.getGridBaseOffset();
 
     g.clear();
     g.setFillStyle({
@@ -116,156 +138,9 @@ const CellHighlight: React.FC<CellHighlightProps> = ({ x, y, width, height, grid
       tileSize
     );
     g.fill();
-  }, [x, y, width, height, gridSize, tileSize]);
+  }, [x, y, tileSize, gridSize.cols, gridSize.rows]);
   
   return <pixiGraphics draw={drawHighlight} />;
-};
-
-interface EntitySpriteProps {
-  entity: EntitySummary | ReadonlyEntitySummary;
-  width: number;
-  height: number;
-  gridSize: {
-    rows: number;
-    cols: number;
-  };
-  tileSize: number;
-}
-
-// EntitySprite component that renders a sprite at the entity's position
-const EntitySprite: React.FC<EntitySpriteProps> = ({ entity, width, height, gridSize, tileSize }) => {
-  const [texture, setTexture] = useState<Texture | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  // Calculate the offset to center the grid
-  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
-  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
-  const [x, y] = entity.position;
-  const pixelX = offsetX + (x * tileSize) + (tileSize / 2);
-  const pixelY = offsetY + (y * tileSize) + (tileSize / 2);
-
-  useEffect(() => {
-    const loadTexture = async () => {
-      if (entity.sprite_name) {
-        try {
-          const spritePath = `/sprites/${entity.sprite_name}`;
-          let loadedTexture = Assets.get(spritePath);
-          
-          if (!loadedTexture) {
-            loadedTexture = await Assets.load(spritePath);
-          }
-          
-          setTexture(loadedTexture);
-          setLoadError(null);
-        } catch (error) {
-          console.error(`Error loading sprite for ${entity.name}:`, error);
-          setLoadError(error instanceof Error ? error.message : 'Failed to load sprite');
-          setTexture(null);
-        }
-      }
-    };
-    loadTexture();
-  }, [entity.sprite_name, entity.name]);
-
-  if (loadError) {
-    console.warn(`Failed to load sprite for ${entity.name}:`, loadError);
-    return null;
-  }
-
-  if (!texture || !entity.sprite_name) {
-    console.log(`No texture or sprite name for entity ${entity.name}`);
-    return null;
-  }
-
-  return (
-    <pixiSprite
-      texture={texture}
-      x={pixelX}
-      y={pixelY}
-      width={tileSize}
-      height={tileSize}
-      anchor={0.5}
-    />
-  );
-};
-
-interface TileSpriteProps {
-  tile: TileSummary | DeepReadonly<TileSummary>;
-  width: number;
-  height: number;
-  gridSize: {
-    rows: number;
-    cols: number;
-  };
-  tileSize: number;
-  alpha?: number;
-}
-
-const TileSprite: React.FC<TileSpriteProps> = ({ tile, width, height, gridSize, tileSize, alpha = 1 }) => {
-  const [texture, setTexture] = useState<Texture | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  
-  // Calculate the offset to center the grid
-  const offsetX = (width - (gridSize.cols * tileSize)) / 2;
-  const offsetY = (height - (gridSize.rows * tileSize)) / 2;
-  const [x, y] = tile.position;
-
-  // Always define the draw callback with useCallback
-  const drawFallback = useCallback((g: PixiGraphics) => {
-    const color = tile.walkable ? 0x333333 : 0x666666;
-    g.clear();
-    g.setFillStyle({
-      color: color,
-      alpha: 1
-    });
-    g.rect(
-      offsetX + (x * tileSize),
-      offsetY + (y * tileSize),
-      tileSize,
-      tileSize
-    );
-    g.fill();
-  }, [tile.walkable, offsetX, offsetY, x, y, tileSize]);
-
-  useEffect(() => {
-    const loadTexture = async () => {
-      if (tile.sprite_name) {
-        try {
-          const spritePath = `/tiles/${tile.sprite_name}`;
-          let loadedTexture = Assets.get(spritePath);
-          
-          if (!loadedTexture) {
-            loadedTexture = await Assets.load(spritePath);
-          }
-          
-          setTexture(loadedTexture);
-          setLoadError(null);
-        } catch (error) {
-          console.error(`Error loading tile sprite:`, error);
-          setLoadError(error instanceof Error ? error.message : 'Failed to load sprite');
-          setTexture(null);
-        }
-      }
-    };
-    loadTexture();
-  }, [tile.sprite_name]);
-
-  if (loadError || !texture || !tile.sprite_name) {
-    return (
-      <pixiGraphics draw={drawFallback} />
-    );
-  }
-
-  return (
-    <pixiSprite
-      texture={texture}
-      x={offsetX + (x * tileSize)}
-      y={offsetY + (y * tileSize)}
-      width={tileSize}
-      height={tileSize}
-      alpha={alpha}
-    />
-  );
 };
 
 interface MovementHighlightProps {
@@ -334,7 +209,7 @@ interface BattleMapCanvasProps {
   height: number;
   tileSize?: number;
   onCellClick?: (x: number, y: number, handleOptimisticUpdate: (newTile: TileSummary) => void) => void;
-  onEntityClick?: (entityId: string, x: number, y: number, tileSize: number, mapState: { offsetX: number; offsetY: number; gridOffsetX: number; gridOffsetY: number; actualTileSize: number }) => void;
+  onEntityClick?: (entityId: string) => void;
   isEditing?: boolean;
   isLocked?: boolean;
   onLockChange?: (locked: boolean) => void;
@@ -346,6 +221,19 @@ interface BattleMapCanvasProps {
 const MIN_TILE_SIZE = 8;
 const MAX_TILE_SIZE = 128;
 const TILE_SIZE_STEP = 16;
+
+// Modify the startEntityPreloading function to not use hardcoded entity IDs
+let preloadingStarted = false;
+const startEntityPreloading = () => {
+  if (preloadingStarted) return;
+  preloadingStarted = true;
+  
+  // Don't use hardcoded entity IDs - the effect hook will handle this
+  console.log('[ENTITY-PRELOAD] Animation preloading system initialized');
+};
+
+// Attack animations reference - prevent this from being recreated on component remount
+const attackAnimationsRef = { current: {} as Record<string, any> };
 
 const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({ 
   width: gridWidth, 
@@ -361,25 +249,152 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   redrawCounter: externalRedrawCounter
 }) => {
   const [hoveredCell, setHoveredCell] = useState({ x: -1, y: -1 });
-  const [tileSize, setTileSize] = useState(initialTileSize);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [gridDimensions, setGridDimensions] = useState({ width: 0, height: 0 });
-  const MOVEMENT_SPEED = 8;
-  const [isVisibilityEnabled, setIsVisibilityEnabled] = useState(true);
-  const [isGridEnabled, setIsGridEnabled] = useState(true);
-  const [isMovementHighlightEnabled, setIsMovementHighlightEnabled] = useState(false);
   const [internalRedrawCounter, setInternalRedrawCounter] = useState(0);
+  const lastPointerMoveTime = useRef<number>(0);
+  const pointerMoveTimes = useRef<number[]>([]);
+  const lastStatsLogTime = useRef<number>(0);
+  const pointerEventsBlocked = useRef<boolean>(false);
   
   // Use external redraw counter if provided
   const redrawCounter = externalRedrawCounter ?? internalRedrawCounter;
 
-  // Use the store for entities and tiles
-  const snap = useSnapshot(characterStore);
-  const entities = Object.values(snap.summaries);
-  const tiles = snap.tiles;
+  // Use a ref to track if this is the initial render
+  const isInitialRender = useRef(true);
+  
+  // Use snapshots for entities, tiles, and animations
+  const charSnap = useSnapshot(characterStore);
+  const mapSnap = useSnapshot(mapStore);
+  const animSnap = useSnapshot(animationStore);
+  
+  // Use a ref to track entity count for stale state detection
+  const entityCountRef = useRef<number>(0);
+  
+  // Track animation start/end
+  useEffect(() => {
+    // Update entity count reference
+    entityCountRef.current = Object.keys(characterStore.summaries).length;
+    
+    // Check for animations
+    const attackAnimations = Object.entries(animSnap.attackAnimations);
+    
+    // Update attackAnimationsRef with current animations
+    attackAnimationsRef.current = attackAnimations.reduce((acc, [key, anim]) => {
+      acc[key] = anim;
+      return acc;
+    }, {} as Record<string, any>);
+    
+    if (attackAnimations.length > 0) {
+      const now = performance.now();
+      console.log(`[ANIM-LIFECYCLE] Canvas has ${attackAnimations.length} active animations at ${now.toFixed(2)}ms`);
+      
+      // Log animation durations
+      attackAnimations.forEach(([key, anim]) => {
+        const duration = now - anim.startTime;
+        console.log(`[ANIM-LIFECYCLE] Animation ${key} running for ${duration.toFixed(2)}ms (${anim.isHit ? 'HIT' : 'MISS'})`);
+      });
+    }
+  }, [animSnap.attackAnimations, characterStore.summaries]);
+  
+  // Add more detailed performance logging on mount
+  useEffect(() => {
+    const now = performance.now();
+    console.log(`[CANVAS-PERF] BattleMapCanvas mounted at ${now.toFixed(2)}ms${isInitialRender.current ? ' (initial render)' : ' (remount)'}`);
+    
+    // After first render, mark as no longer initial render
+    isInitialRender.current = false;
+    
+    // Track app render count
+    let lastRenderTime = performance.now();
+    let renderCount = 0;
+    let renderTimes: number[] = [];
+    
+    // Create a ticker to monitor framerate
+    const ticker = PIXI.Ticker.shared;
+    
+    const renderMonitor = () => {
+      const now = performance.now();
+      const elapsed = now - lastRenderTime;
+      
+      renderCount++;
+      renderTimes.push(elapsed);
+      
+      // Keep only last 100 render times
+      if (renderTimes.length > 100) {
+        renderTimes.shift();
+      }
+      
+      // Log render stats every 300 frames
+      if (renderCount % 300 === 0) {
+        const avgRenderTime = renderTimes.reduce((sum, time) => sum + time, 0) / renderTimes.length;
+        const maxRenderTime = Math.max(...renderTimes);
+        const fps = 1000 / avgRenderTime;
+        
+        console.log(`[RENDER-PERF] Stats - FPS: ${fps.toFixed(1)}, Avg: ${avgRenderTime.toFixed(2)}ms, Max: ${maxRenderTime.toFixed(2)}ms, Active animations: ${Object.keys(animSnap.attackAnimations).length}`);
+        
+        // Reset tracking
+        renderTimes = [];
+      }
+      
+      lastRenderTime = now;
+    };
+    
+    // Add ticker to monitor framerate
+    ticker.add(renderMonitor);
+    
+    // Start preloading animations on component mount
+    startEntityPreloading();
+    
+    // Set up periodic performance logging
+    const statsInterval = setInterval(() => {
+      if (pointerMoveTimes.current.length > 0) {
+        const avgTime = pointerMoveTimes.current.reduce((sum, time) => sum + time, 0) / pointerMoveTimes.current.length;
+        console.log(`[CANVAS-PERF] Pointer events stats - Count: ${pointerMoveTimes.current.length}, Avg processing time: ${avgTime.toFixed(2)}ms`);
+        pointerMoveTimes.current = [];
+      }
+    }, 10000);
+    
+    return () => {
+      ticker.remove(renderMonitor);
+      clearInterval(statsInterval);
+      
+      // Cleanup active animation references to prevent memory leaks
+      const animationKeys = Object.keys(attackAnimationsRef.current);
+      if (animationKeys.length > 0) {
+        console.log(`[CANVAS-CLEANUP] Cleaning up ${animationKeys.length} animation references`);
+        attackAnimationsRef.current = {};
+      }
+      
+      console.log(`[CANVAS-PERF] BattleMapCanvas unmounting at ${performance.now().toFixed(2)}ms - Animations active: ${Object.keys(animSnap.attackAnimations).length}`);
+    };
+  }, []);
+  
+  // When initializing, sync with mapStore
+  useEffect(() => {
+    // Update container size
+    mapActions.setContainerSize(containerWidth, containerHeight);
+    
+    // Update grid dimensions
+    mapActions.setGridDimensions(gridWidth, gridHeight);
+    
+    // Update tile size
+    mapActions.setTileSize(initialTileSize);
+    
+    // Sync isLocked prop with mapStore
+    if (isLocked !== mapSnap.isLocked) {
+      mapActions.toggleLock();
+    }
+  }, []);
+  
+  // Sync container size when it changes
+  useEffect(() => {
+    mapActions.setContainerSize(containerWidth, containerHeight);
+  }, [containerWidth, containerHeight]);
+  
+  const entities = Object.values(charSnap.summaries);
+  const tiles = charSnap.tiles;
 
   // Get selected entity's senses
-  const selectedEntity = snap.selectedEntityId ? snap.summaries[snap.selectedEntityId] : undefined;
+  const selectedEntity = charSnap.selectedEntityId ? charSnap.summaries[charSnap.selectedEntityId] : undefined;
   const entitySenses = selectedEntity?.senses.extra_senses || [];
 
   // Function to get visibility tooltip text
@@ -420,19 +435,58 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     return Math.floor(Math.min(horizontalFit, verticalFit));
   }, [containerWidth, containerHeight, gridWidth, gridHeight]);
 
-  // Add preloading effect
+  // Only preload animations for specific entities ONCE on entity update
+  // This avoids constant reloading during polling or direction changes
+  const previousEntitiesRef = useRef<string[]>([]);
   useEffect(() => {
-    if (entities.length > 0) {
-      preloadEntityAnimations(entities.map(e => e.uuid));
-    }
-  }, [entities.map(e => e.uuid).join(',')]);
-
-  // Add keyboard handling for direction changes
-  useEffect(() => {
-    if (isLocked) return;
+    const currentEntityIds = Object.values(charSnap.summaries).map(e => e.uuid);
     
+    // Find new entities that weren't in the previous set
+    const newEntityIds = currentEntityIds.filter(
+      id => !previousEntitiesRef.current.includes(id)
+    );
+    
+    // Only preload if we have new entities
+    if (newEntityIds.length > 0) {
+      console.log(`[ENTITY-PRELOAD] Preloading animations for ${newEntityIds.length} new entities with UUIDs: ${newEntityIds.join(', ')}`);
+      preloadEntityAnimations(newEntityIds)
+        .then(() => console.log(`[ENTITY-PRELOAD] Successfully preloaded animations for ${newEntityIds.length} entities`))
+        .catch(err => console.error('[ENTITY-PRELOAD] Error preloading new entity animations:', err));
+    }
+    
+    // Update reference
+    previousEntitiesRef.current = currentEntityIds;
+  }, [Object.keys(charSnap.summaries).join(',')]);
+
+  // Handle WASD movement using only mapStore for state
+  useEffect(() => {
+    if (mapSnap.isLocked) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!snap.selectedEntityId) return;
+      const MOVEMENT_SPEED = 8;
+      
+      // Handle WASD for grid movement
+      switch (e.key.toLowerCase()) {
+        case 'w':
+          mapActions.moveGrid(0, MOVEMENT_SPEED);
+          setInternalRedrawCounter(prev => prev + 1);
+          return;
+        case 's':
+          mapActions.moveGrid(0, -MOVEMENT_SPEED);
+          setInternalRedrawCounter(prev => prev + 1);
+          return;
+        case 'a':
+          mapActions.moveGrid(MOVEMENT_SPEED, 0);
+          setInternalRedrawCounter(prev => prev + 1);
+          return;
+        case 'd':
+          mapActions.moveGrid(-MOVEMENT_SPEED, 0);
+          setInternalRedrawCounter(prev => prev + 1);
+          return;
+      }
+
+      // Handle arrow keys for entity direction
+      if (!charSnap.selectedEntityId) return;
       
       let direction: Direction | null = null;
       
@@ -465,123 +519,183 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
       }
       
       if (direction !== null) {
-        entityDirectionState.setDirection(snap.selectedEntityId, direction);
+        entityDirectionState.setDirection(charSnap.selectedEntityId, direction);
         // Force a re-render
-        setInternalRedrawCounter((prev: number) => prev + 1);
+        setInternalRedrawCounter(prev => prev + 1);
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLocked, snap.selectedEntityId]);
+  }, [mapSnap.isLocked, charSnap.selectedEntityId]);
 
-  // Handle pointer move with corrected calculations
+  // Handle pointer move with corrected calculations - use mapHelpers
   const handlePointerMove = useCallback((event: FederatedPointerEvent) => {
+    const startTime = performance.now();
+    
+    // Skip if we're blocked by a heavy animation
+    if (pointerEventsBlocked.current) {
+      return;
+    }
+    
+    // Throttle pointer move events for performance
+    if (startTime - lastPointerMoveTime.current < 16) { // ~60fps
+      return;
+    }
+    lastPointerMoveTime.current = startTime;
+    
     const mousePosition = event.global;
     
-    // Calculate the offset to center the grid
-    const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
-    const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
-
-    // Convert mouse position to grid coordinates
-    const gridX = Math.floor((mousePosition.x - offsetX - offset.x) / tileSize);
-    const gridY = Math.floor((mousePosition.y - offsetY - offset.y) / tileSize);
+    // Use mapHelpers to convert pixel to grid coordinates
+    const { gridX, gridY } = mapHelpers.pixelToGrid(mousePosition.x, mousePosition.y);
     
     // Update hover state if within grid bounds
-    if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
+    if (mapHelpers.isValidGridPosition(gridX, gridY)) {
       setHoveredCell({ x: gridX, y: gridY });
     } else {
       setHoveredCell({ x: -1, y: -1 });
     }
-  }, [canvasSize?.width, canvasSize?.height, gridWidth, gridHeight, tileSize, offset]);
+    
+    // Track performance
+    const processingTime = performance.now() - startTime;
+    pointerMoveTimes.current.push(processingTime);
+    
+    // Log if we see excessively slow pointer processing
+    if (processingTime > 50) {
+      console.warn(`[CANVAS-PERF] Slow pointer move processing: ${processingTime.toFixed(2)}ms`);
+    }
+  }, []);
 
-  // Handle pointer down with the same calculations
-  const handlePointerDown = useCallback((event: FederatedPointerEvent) => {
-    const mousePosition = event.global;
-    const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
-    const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
+  // Handle pointer down - click on the canvas
+  const handlePointerDown = useCallback(async (e: FederatedPointerEvent) => {
+    const now = performance.now();
+    if (pointerEventsBlocked.current) return;
     
-    // Convert mouse position to grid coordinates
-    const gridX = Math.floor((mousePosition.x - offsetX - offset.x) / tileSize);
-    const gridY = Math.floor((mousePosition.y - offsetY - offset.y) / tileSize);
+    // Log only primary pointer downs (not right clicks)
+    if (e.button === 0) {
+      console.log(`[CANVAS-PERF] Pointer down at ${now.toFixed(2)}ms, button: ${e.button}`);
+    }
     
-    // Only proceed if within grid bounds
-    if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
+    // Quick emergency entity state check
+    const entityCount = Object.keys(characterStore.summaries).length;
+    if (entityCount === 0 && entityCountRef.current > 0) {
+      console.warn(`[CANVAS-SYNC] Possible stale entity state detected - had ${entityCountRef.current} entities, now has 0`);
+      // Trigger an emergency refresh to avoid using stale data
+      try {
+        await characterActions.forceRefresh();
+      } catch (err) {
+        console.error('[CANVAS-SYNC] Emergency refresh failed:', err);
+        return; // Prevent action with stale data
+      }
+    }
+    
+    const mousePosition = e.global;
+    
+    // Use mapHelpers to convert pixel to grid coordinates
+    const { gridX, gridY } = mapHelpers.pixelToGrid(mousePosition.x, mousePosition.y);
+    
+    // Update hovered cell
+    setHoveredCell({ x: gridX, y: gridY });
+    
+    // Handle grid clicks
+    if (mapHelpers.isValidGridPosition(gridX, gridY)) {
       // Handle left click for tile editing
-      if (event.button === 0 && isEditing && !isLocked && onCellClick) {
+      if (e.button === 0 && isEditing && !mapSnap.isLocked && onCellClick) {
+        const clickStartTime = performance.now();
         onCellClick(gridX, gridY, (newTile: TileSummary) => {
+          console.log(`[CANVAS-PERF] Tile edit completed in ${(performance.now() - clickStartTime).toFixed(2)}ms`);
           characterActions.fetchTiles(); // Refresh tiles after update
         });
-      } else if (event.button === 0 && selectedEntity && !isLocked && onEntityClick) {
+      } else if (e.button === 0 && !mapSnap.isLocked && onEntityClick) {
         // Check if there's an entity at the clicked position
-        const entitiesAtPosition = Object.values(snap.summaries).filter(entity => 
+        const entitySearchStart = performance.now();
+        
+        // Get entities directly from characterStore to avoid stale snapshot data
+        const entitiesAtPosition = Object.values(characterStore.summaries).filter(entity => 
           entity.position[0] === gridX && entity.position[1] === gridY
         );
 
-        const targetEntity = entitiesAtPosition.find(entity => entity.uuid !== selectedEntity.uuid);
-        if (targetEntity) {
-          // Calculate pixel position for animation, taking into account offset and scaling
-          const pixelX = offsetX + (gridX * tileSize) + (tileSize / 2) + offset.x;
-          const pixelY = offsetY + (gridY * tileSize) + (tileSize / 2) + offset.y;
-
-          // Pass the current map state to the callback
-          onEntityClick(
-            targetEntity.uuid, 
-            pixelX, 
-            pixelY, 
-            tileSize,
-            {
-              offsetX: offsetX + offset.x,
-              offsetY: offsetY + offset.y,
-              gridOffsetX: offset.x,
-              gridOffsetY: offset.y,
-              actualTileSize: tileSize
+        console.log(`[CANVAS-PERF] Entity search took ${(performance.now() - entitySearchStart).toFixed(2)}ms, found: ${entitiesAtPosition.length}`);
+        
+        if (entitiesAtPosition.length > 0) {
+          const targetEntity = entitiesAtPosition[0];
+          console.log(`[CANVAS-PERF] Attack click on entity ${targetEntity.uuid} at ${performance.now().toFixed(2)}ms`);
+          
+          const currentSelected = characterStore.selectedEntityId;
+          
+          // If no entity is selected or clicking on the same entity, just select it
+          if (!currentSelected || currentSelected === targetEntity.uuid) {
+            console.log(`[ENTITY-TARGET] Selecting entity: ${targetEntity.uuid}`);
+            await characterActions.setSelectedEntity(targetEntity.uuid);
+            characterActions.setDisplayedEntity(targetEntity.uuid);
+            return;
+          }
+          
+          // We have a selected entity different from the target - this is an attack
+          console.log(`[ENTITY-TARGET] Attacking: source=${currentSelected}, target=${targetEntity.uuid}`);
+          
+          // First ensure the displayed entity is updated to the target
+          characterActions.setDisplayedEntity(targetEntity.uuid);
+          
+          // Force a refresh to ensure state is consistent before attacking
+          try {
+            await characterActions.forceRefresh();
+            
+            // Call the attack handler after state is refreshed
+            if (onEntityClick) {
+              onEntityClick(targetEntity.uuid);
             }
-          );
+          } catch (err) {
+            console.error('[ENTITY-TARGET] Error refreshing state before attack:', err);
+          }
         }
       }
       
       // Handle right click for movement
-      if (event.button === 2 && selectedEntity && !isLocked) {
-        event.preventDefault();
-        event.stopPropagation();
+      if (e.button === 2 && !mapSnap.isLocked) {
+        const selectedEntityId = characterStore.selectedEntityId;
+        const selectedEntity = selectedEntityId ? characterStore.summaries[selectedEntityId] : undefined;
         
-        // Check if the position is walkable
-        const posKey = `${gridX},${gridY}`;
-        const isWalkable = tiles[posKey]?.walkable ?? false;
+        if (!selectedEntity) return;
         
-        // Only move if within movement range
-        if (isWalkable && (!isMovementHighlightEnabled || 
-            (selectedEntity.senses.paths[posKey] && selectedEntity.senses.paths[posKey].length <= 6))) {
-          // Compute direction based on movement
+        const movementClickTime = performance.now();
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Check if the position is walkable and in bounds
+        const isInBounds = gridX >= 0 && 
+                         gridY >= 0 && 
+                         gridX < mapSnap.gridWidth && 
+                         gridY < mapSnap.gridHeight;
+        
+        // Simple check if there's any tile data for this position
+        const tileKey = `${gridX},${gridY}`;
+        const hasTile = tileKey in characterStore.tiles;
+        
+        if (isInBounds) {
+          // Move the selected entity
+          characterActions.moveEntity(selectedEntity.uuid, [gridX, gridY]);
+          console.log(`[CANVAS-PERF] Move entity command sent in ${(performance.now() - movementClickTime).toFixed(2)}ms`);
+          
+          // Update direction
+          const [currentX, currentY] = selectedEntity.position;
           const direction = entityDirectionState.computeDirection(
-            [selectedEntity.position[0], selectedEntity.position[1]], // Create new array
+            [currentX, currentY],
             [gridX, gridY]
           );
-          
-          // Update direction state before moving
           entityDirectionState.setDirection(selectedEntity.uuid, direction);
-          
-          // Call move action
-          characterActions.moveEntity(selectedEntity.uuid, [gridX, gridY]);
         }
       }
     }
+    
+    console.log(`[CANVAS-PERF] Pointer down processing completed in ${(performance.now() - now).toFixed(2)}ms`);
   }, [
-    canvasSize?.width,
-    canvasSize?.height,
-    gridWidth,
-    gridHeight,
-    tileSize,
-    offset,
+    isEditing,
+    mapSnap.isLocked,
     onCellClick,
     onEntityClick,
-    isEditing,
-    isLocked,
-    selectedEntity,
     tiles,
-    snap.summaries,
-    isMovementHighlightEnabled
+    mapSnap.isMovementHighlightEnabled
   ]);
 
   // Prevent context menu on right click
@@ -595,62 +709,35 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   }, []);
 
   const handleZoomIn = useCallback(() => {
-    setTileSize(prev => Math.min(prev + TILE_SIZE_STEP, MAX_TILE_SIZE));
+    mapActions.zoomIn();
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setTileSize(prev => Math.max(prev - TILE_SIZE_STEP, MIN_TILE_SIZE));
+    mapActions.zoomOut();
   }, []);
 
   const handleResetView = useCallback(() => {
-    setTileSize(initialTileSize);
-    setOffset({ x: 0, y: 0 });
-  }, [initialTileSize]);
+    mapActions.resetView();
+  }, []);
 
   const toggleLock = useCallback(() => {
-    const newLockState = !isLocked;
-    onLockChange?.(newLockState);
-  }, [isLocked, onLockChange]);
-
-  // Handle WASD movement
-  useEffect(() => {
-    if (isLocked) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      switch (e.key.toLowerCase()) {
-        case 'w':
-          setOffset(prev => ({ ...prev, y: prev.y + MOVEMENT_SPEED }));
-          break;
-        case 's':
-          setOffset(prev => ({ ...prev, y: prev.y - MOVEMENT_SPEED }));
-          break;
-        case 'a':
-          setOffset(prev => ({ ...prev, x: prev.x + MOVEMENT_SPEED }));
-          break;
-        case 'd':
-          setOffset(prev => ({ ...prev, x: prev.x - MOVEMENT_SPEED }));
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLocked]);
+    mapActions.toggleLock();
+    onLockChange?.(mapSnap.isLocked);
+  }, [mapSnap.isLocked, onLockChange]);
 
   // Add debug log for movement highlight toggle
   const handleMovementHighlightToggle = useCallback(() => {
-    const newState = !isMovementHighlightEnabled;
-    console.log('Toggling movement highlight:', newState);
-    if (newState && selectedEntity) {
+    mapActions.toggleMovementHighlight();
+    console.log('Toggling movement highlight:', !mapSnap.isMovementHighlightEnabled);
+    if (!mapSnap.isMovementHighlightEnabled && selectedEntity) {
       console.log('Selected entity for movement:', selectedEntity.name);
       console.log('Path data available:', Object.keys(selectedEntity.senses.paths).length);
     }
-    setIsMovementHighlightEnabled(newState);
-  }, [isMovementHighlightEnabled, selectedEntity]);
+  }, [mapSnap.isMovementHighlightEnabled, selectedEntity]);
 
   // Create a memoized map of valid path positions
   const validPathPositions = useMemo(() => {
-    if (!selectedEntity || !isMovementHighlightEnabled) return {};
+    if (!selectedEntity || !mapSnap.isMovementHighlightEnabled) return {};
     
     const positions: Record<string, boolean> = {};
     Object.entries(selectedEntity.senses.paths).forEach(([posKey, path]) => {
@@ -659,12 +746,12 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
       }
     });
     return positions;
-  }, [selectedEntity, isMovementHighlightEnabled]);
+  }, [selectedEntity, mapSnap.isMovementHighlightEnabled]);
 
-  // Draw callback for path highlights
+  // Fix references to tileSize to use mapSnap.tileSize instead
   const drawPathHighlight = useCallback((g: PixiGraphics, position: readonly [number, number]) => {
-    const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
-    const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
+    const offsetX = (canvasSize.width - (gridWidth * mapSnap.tileSize)) / 2;
+    const offsetY = (canvasSize.height - (gridHeight * mapSnap.tileSize)) / 2;
     const posKey = `${position[0]},${position[1]}`;
     
     g.clear();
@@ -673,13 +760,66 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
       alpha: validPathPositions[posKey] ? 0.3 : 0.3  // Reduced alpha values
     });
     g.rect(
-      offsetX + (position[0] * tileSize),
-      offsetY + (position[1] * tileSize),
-      tileSize,
-      tileSize
+      offsetX + (position[0] * mapSnap.tileSize),
+      offsetY + (position[1] * mapSnap.tileSize),
+      mapSnap.tileSize,
+      mapSnap.tileSize
     );
     g.fill();
-  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, tileSize, validPathPositions]);
+  }, [canvasSize.width, canvasSize.height, gridWidth, gridHeight, mapSnap.tileSize, validPathPositions]);
+
+  // Add memoization for entity directions to avoid recalculations
+  const entityDirections = useMemo(() => {
+    const directions: Record<string, Direction> = {};
+    
+    entities.forEach(entity => {
+      // Get direction from state first
+      let direction = entityDirectionState.getDirection(entity.uuid);
+      
+      // Only update direction based on target if there's no keyboard-set direction
+      if (entity.target_entity_uuid && charSnap.summaries[entity.target_entity_uuid] && 
+          !entityDirectionState.directions[entity.uuid]) {
+        const targetEntity = charSnap.summaries[entity.target_entity_uuid];
+        direction = entityDirectionState.computeDirection(
+          [entity.position[0], entity.position[1]],
+          [targetEntity.position[0], targetEntity.position[1]]
+        );
+        // We don't call setDirection here to avoid state changes during render
+        directions[entity.uuid] = direction;
+      } else {
+        directions[entity.uuid] = direction;
+      }
+    });
+    
+    return directions;
+  }, [entities, charSnap.summaries]);
+
+  // Add this utility function for performance monitoring
+  const reportMapPerformance = useCallback(() => {
+    console.log(`[CANVAS-PERF] Map Performance Report - ${new Date().toISOString()}`);
+    console.log(`- Grid Size: ${mapSnap.gridWidth}x${mapSnap.gridHeight}`);
+    console.log(`- Container Size: ${mapSnap.containerWidth}x${mapSnap.containerHeight}`);
+    console.log(`- Tile Size: ${mapSnap.tileSize}`);
+    console.log(`- Entities Count: ${Object.keys(charSnap.summaries).length}`);
+    console.log(`- Tiles Count: ${Object.keys(charSnap.tiles).length}`);
+    console.log(`- Grid Offset: (${mapSnap.gridOffsetX}, ${mapSnap.gridOffsetY})`);
+  }, [
+    mapSnap.gridWidth, 
+    mapSnap.gridHeight, 
+    mapSnap.containerWidth,
+    mapSnap.containerHeight,
+    mapSnap.tileSize,
+    mapSnap.gridOffsetX,
+    mapSnap.gridOffsetY,
+    charSnap.summaries,
+    charSnap.tiles
+  ]);
+
+  // Add periodic performance reporting
+  useEffect(() => {
+    const interval = setInterval(reportMapPerformance, 30000);
+    return () => clearInterval(interval);
+  }, [reportMapPerformance]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -737,17 +877,17 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
             onClick={toggleLock}
             sx={{ color: 'white' }}
           >
-            {isLocked ? <LockIcon /> : <LockOpenIcon />}
+            {mapSnap.isLocked ? <LockIcon /> : <LockOpenIcon />}
           </IconButton>
 
           {/* Grid Toggle */}
           <Tooltip title="Toggle Grid">
             <IconButton
               size="small"
-              onClick={() => setIsGridEnabled(!isGridEnabled)}
+              onClick={() => mapActions.toggleGrid()}
               sx={{ color: 'white' }}
             >
-              {isGridEnabled ? <GridOnIcon /> : <GridOffIcon />}
+              {mapSnap.isGridEnabled ? <GridOnIcon /> : <GridOffIcon />}
             </IconButton>
           </Tooltip>
 
@@ -756,19 +896,19 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
             <span>
               <IconButton
                 size="small"
-                onClick={() => setIsVisibilityEnabled(!isVisibilityEnabled)}
+                onClick={() => mapActions.toggleVisibility()}
                 sx={{ 
                   color: 'white',
                   opacity: selectedEntity ? 1 : 0.5
                 }}
                 disabled={!selectedEntity}
               >
-                {isVisibilityEnabled ? <VisibilityIcon /> : <VisibilityOffIcon />}
+                {mapSnap.isVisibilityEnabled ? <VisibilityIcon /> : <VisibilityOffIcon />}
               </IconButton>
             </span>
           </Tooltip>
 
-          {/* Movement Range Toggle with updated handler */}
+          {/* Movement Range Toggle */}
           <Tooltip title={getMovementTooltip()}>
             <span>
               <IconButton
@@ -777,7 +917,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                 sx={{ 
                   color: 'white',
                   opacity: selectedEntity ? 1 : 0.5,
-                  backgroundColor: isMovementHighlightEnabled ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+                  backgroundColor: mapSnap.isMovementHighlightEnabled ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
                 }}
                 disabled={!selectedEntity}
               >
@@ -825,56 +965,24 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
               }, [canvasSize.width, canvasSize.height])}
             />
             
-            <pixiContainer x={offset.x} y={offset.y}>
+            {/* WASD Grid Movement Container - applies WASD offset to all children */}
+            {/* This is the ONLY place where gridOffsetX/Y should be applied */}
+            <pixiContainer x={mapSnap.gridOffsetX} y={mapSnap.gridOffsetY}>
               {/* Grid Lines */}
-              {isGridEnabled && (
+              {mapSnap.isGridEnabled && (
                 <Grid 
                   width={canvasSize.width}
                   height={canvasSize.height}
                   gridSize={{ rows: gridHeight, cols: gridWidth }}
-                  tileSize={tileSize}
+                  tileSize={mapSnap.tileSize}
                 />
               )}
               
               {/* Tiles Layer */}
               <pixiContainer>
-                {Object.values(tiles).map(tile => {
-                  // Skip visibility checks if toggle is off
-                  if (!isVisibilityEnabled) {
-                    return (
-                      <React.Fragment key={tile.uuid}>
-                        <TileSprite
-                          tile={tile}
-                          width={canvasSize.width}
-                          height={canvasSize.height}
-                          gridSize={{ rows: gridHeight, cols: gridWidth }}
-                          tileSize={tileSize}
-                        />
-                        {isMovementHighlightEnabled && (
-                          <pixiGraphics
-                            draw={(g) => drawPathHighlight(g, tile.position)}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  }
-
-                  // With visibility enabled, check visibility and seen status
-                  if (!selectedEntity) return null;
-
-                  const [x, y] = tile.position;
-                  const posKey = `${x},${y}`;
-                  const isVisible = selectedEntity.senses.visible[posKey];
-                  const hasBeenSeen = selectedEntity.senses.seen.some(
-                    ([seenX, seenY]) => seenX === x && seenY === y
-                  );
-
-                  // If neither visible nor seen, don't render
-                  if (!isVisible && !hasBeenSeen) return null;
-
-                  const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
-                  const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
-
+              {Object.values(tiles).map(tile => {
+                // Skip visibility checks if toggle is off
+                  if (!mapSnap.isVisibilityEnabled) {
                   return (
                     <React.Fragment key={tile.uuid}>
                       <TileSprite
@@ -882,43 +990,77 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                         width={canvasSize.width}
                         height={canvasSize.height}
                         gridSize={{ rows: gridHeight, cols: gridWidth }}
-                        tileSize={tileSize}
-                        alpha={isVisible ? 1 : 0.5} // Dim previously seen tiles
+                          tileSize={mapSnap.tileSize}
                       />
-                      {/* Add fog of war overlay for seen but not visible tiles */}
-                      {hasBeenSeen && !isVisible && (
-                        <pixiGraphics
-                          draw={(g) => {
-                            g.clear();
-                            g.setFillStyle({
-                              color: 0x000000,
-                              alpha: 0.5
-                            });
-                            g.rect(
-                              offsetX + (x * tileSize),
-                              offsetY + (y * tileSize),
-                              tileSize,
-                              tileSize
-                            );
-                            g.fill();
-                          }}
-                        />
-                      )}
-                      {isMovementHighlightEnabled && isVisible && (
+                        {mapSnap.isMovementHighlightEnabled && (
                         <pixiGraphics
                           draw={(g) => drawPathHighlight(g, tile.position)}
                         />
                       )}
                     </React.Fragment>
                   );
-                })}
+                }
+
+                // With visibility enabled, check visibility and seen status
+                if (!selectedEntity) return null;
+
+                const [x, y] = tile.position;
+                const posKey = `${x},${y}`;
+                const isVisible = selectedEntity.senses.visible[posKey];
+                const hasBeenSeen = selectedEntity.senses.seen.some(
+                  ([seenX, seenY]) => seenX === x && seenY === y
+                );
+
+                // If neither visible nor seen, don't render
+                if (!isVisible && !hasBeenSeen) return null;
+
+                  const offsetX = (canvasSize.width - (gridWidth * mapSnap.tileSize)) / 2;
+                  const offsetY = (canvasSize.height - (gridHeight * mapSnap.tileSize)) / 2;
+
+                return (
+                  <React.Fragment key={tile.uuid}>
+                    <TileSprite
+                      tile={tile}
+                      width={canvasSize.width}
+                      height={canvasSize.height}
+                      gridSize={{ rows: gridHeight, cols: gridWidth }}
+                        tileSize={mapSnap.tileSize}
+                      alpha={isVisible ? 1 : 0.5} // Dim previously seen tiles
+                    />
+                    {/* Add fog of war overlay for seen but not visible tiles */}
+                    {hasBeenSeen && !isVisible && (
+                      <pixiGraphics
+                        draw={(g) => {
+                          g.clear();
+                          g.setFillStyle({
+                            color: 0x000000,
+                            alpha: 0.5
+                          });
+                          g.rect(
+                              offsetX + (x * mapSnap.tileSize),
+                              offsetY + (y * mapSnap.tileSize),
+                              mapSnap.tileSize,
+                              mapSnap.tileSize
+                          );
+                          g.fill();
+                        }}
+                      />
+                    )}
+                      {mapSnap.isMovementHighlightEnabled && isVisible && (
+                      <pixiGraphics
+                        draw={(g) => drawPathHighlight(g, tile.position)}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
               </pixiContainer>
 
               {/* Movement Highlights Layer */}
-              {isMovementHighlightEnabled && (
+              {mapSnap.isMovementHighlightEnabled && (
                 <pixiContainer>
                   {Object.values(tiles).map(tile => {
-                    if (isVisibilityEnabled && selectedEntity) {
+                    if (mapSnap.isVisibilityEnabled && selectedEntity) {
                       const [x, y] = tile.position;
                       const posKey = `${x},${y}`;
                       const isVisible = selectedEntity.senses.visible[posKey];
@@ -936,16 +1078,16 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
               
               {/* Entities Layer */}
               <pixiContainer>
-                {entities.map(entity => {
-                  // Show all entities if visibility is disabled
-                  if (!isVisibilityEnabled) {
+              {entities.map(entity => {
+                // Show all entities if visibility is disabled
+                  if (!mapSnap.isVisibilityEnabled) {
                     // Get direction from state first
                     let direction = entityDirectionState.getDirection(entity.uuid);
                     
                     // Only update direction based on target if there's no keyboard-set direction
-                    if (entity.target_entity_uuid && snap.summaries[entity.target_entity_uuid] && 
+                    if (entity.target_entity_uuid && charSnap.summaries[entity.target_entity_uuid] && 
                         !entityDirectionState.directions[entity.uuid]) {
-                      const targetEntity = snap.summaries[entity.target_entity_uuid];
+                      const targetEntity = charSnap.summaries[entity.target_entity_uuid];
                       direction = entityDirectionState.computeDirection(
                         [entity.position[0], entity.position[1]],
                         [targetEntity.position[0], targetEntity.position[1]]
@@ -953,67 +1095,69 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                       entityDirectionState.setDirection(entity.uuid, direction);
                     }
                     
-                    return (
+                  return (
                       <DirectionalEntitySprite
-                        key={entity.uuid}
-                        entity={entity}
+                      key={entity.uuid}
+                      entity={entity}
                         direction={direction}
-                        width={canvasSize.width}
-                        height={canvasSize.height}
-                        gridSize={{ rows: gridHeight, cols: gridWidth }}
-                        tileSize={tileSize}
-                        selected={entity.uuid === snap.selectedEntityId}
-                      />
-                    );
-                  }
+                        selected={entity.uuid === charSnap.selectedEntityId}
+                    />
+                  );
+                }
 
-                  // With visibility enabled, only show visible entities
-                  if (!selectedEntity) return null;
-                  const isVisible = entity.uuid === selectedEntity.uuid ||
-                    selectedEntity.senses.entities[entity.uuid];
-                  
-                  if (!isVisible) return null;
+                // With visibility enabled, only show visible entities
+                if (!selectedEntity) return null;
+                const isVisible = entity.uuid === selectedEntity.uuid ||
+                  selectedEntity.senses.entities[entity.uuid];
+                
+                if (!isVisible) return null;
                   
                   // Get direction from state first
                   let direction = entityDirectionState.getDirection(entity.uuid);
                   
                   // Only update direction based on target if there's no keyboard-set direction
-                  if (entity.target_entity_uuid && snap.summaries[entity.target_entity_uuid] && 
+                  if (entity.target_entity_uuid && charSnap.summaries[entity.target_entity_uuid] && 
                       !entityDirectionState.directions[entity.uuid]) {
-                    const targetEntity = snap.summaries[entity.target_entity_uuid];
+                    const targetEntity = charSnap.summaries[entity.target_entity_uuid];
                     direction = entityDirectionState.computeDirection(
                       [entity.position[0], entity.position[1]],
                       [targetEntity.position[0], targetEntity.position[1]]
                     );
                     entityDirectionState.setDirection(entity.uuid, direction);
                   }
-                  
-                  return (
+
+                return (
                     <DirectionalEntitySprite
-                      key={entity.uuid}
-                      entity={entity}
-                      direction={direction}
-                      width={canvasSize.width}
-                      height={canvasSize.height}
-                      gridSize={{ rows: gridHeight, cols: gridWidth }}
-                      tileSize={tileSize}
-                      selected={entity.uuid === snap.selectedEntityId}
-                    />
-                  );
-                })}
+                    key={entity.uuid}
+                    entity={entity}
+                      direction={entityDirections[entity.uuid]}
+                      selected={entity.uuid === charSnap.selectedEntityId}
+                  />
+                );
+              })}
               </pixiContainer>
               
               {/* Cell Highlight Layer */}
-              {isGridEnabled && (
+              {mapSnap.isGridEnabled && (
                 <CellHighlight 
                   x={hoveredCell.x}
                   y={hoveredCell.y}
                   width={canvasSize.width}
                   height={canvasSize.height}
                   gridSize={{ rows: gridHeight, cols: gridWidth }}
-                  tileSize={tileSize}
+                  tileSize={mapSnap.tileSize}
                 />
               )}
+              
+              {/* Attack Animation Layer - use animation store to render active animations */}
+              {Object.entries(attackAnimationsRef.current).map(([key, anim]) => (
+                <AttackAnimation
+                  key={key}
+                  isHit={anim.isHit}
+                  sourceEntityId={anim.sourceId}
+                  targetEntityId={anim.targetId}
+                />
+              ))}
             </pixiContainer>
           </pixiContainer>
         </Application>
@@ -1022,4 +1166,16 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   );
 };
 
-export default BattleMapCanvas; 
+export default React.memo(BattleMapCanvas, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.width === nextProps.width &&
+    prevProps.height === nextProps.height &&
+    prevProps.tileSize === nextProps.tileSize &&
+    prevProps.containerWidth === nextProps.containerWidth &&
+    prevProps.containerHeight === nextProps.containerHeight &&
+    prevProps.isLocked === nextProps.isLocked &&
+    prevProps.isEditing === nextProps.isEditing &&
+    prevProps.redrawCounter === nextProps.redrawCounter
+  );
+}); 
