@@ -136,6 +136,12 @@ const BattleMapPage: React.FC = () => {
       return response.json();
     })
     .then(data => {
+      // Check if the event was canceled
+      if (data.event.canceled) {
+        console.log('[Attack Result] Attack was canceled:', data.event.status_message);
+        return; // Don't play animation for canceled attacks
+      }
+
       // Animation is shown for both hits and misses
       const animationStartTime = performance.now();
       console.log(`[Attack Timing] Starting animation at ${animationStartTime - clickTime}ms from click`);
