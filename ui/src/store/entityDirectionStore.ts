@@ -1,4 +1,5 @@
 import { Direction } from '../components/battlemap/DirectionalEntitySprite';
+import { animationActions } from './animationStore';
 
 export interface EntityDirectionState {
   directions: Record<string, Direction>;
@@ -11,7 +12,17 @@ export const createEntityDirectionState = (): EntityDirectionState => {
   const directions: Record<string, Direction> = {};
 
   const setDirection = (entityId: string, direction: Direction) => {
-    directions[entityId] = direction;
+    const previousDirection = directions[entityId];
+    
+    // Only update if the direction has changed
+    if (previousDirection !== direction) {
+      directions[entityId] = direction;
+      
+      // Notify the animation system of the direction change
+      animationActions.updateEntityAnimation(entityId, direction);
+      
+      console.log(`[DIRECTION] Entity ${entityId} direction changed from ${previousDirection} to ${direction}`);
+    }
   };
 
   const getDirection = (entityId: string): Direction => {

@@ -292,11 +292,19 @@ const EventQ: React.FC = () => {
       const response = await fetch('/api/entities');
       if (!response.ok) throw new Error('Failed to fetch entities');
       const data = await response.json();
+      
+      // Store the fetched options
       setEntityOptions(data);
+      
+      // If the currently selected entity is not in the options list, reset the selection
+      if (selectedEntity && !data.some((entity: EntityOption) => entity.uuid === selectedEntity)) {
+        console.log(`[EVENT-FILTER] Resetting entity filter - selected entity ${selectedEntity} not in options list`);
+        setSelectedEntity('');
+      }
     } catch (err) {
       console.error('Failed to fetch entity options:', err);
     }
-  }, []);
+  }, [selectedEntity]);
 
   // Add entity filter to events
   const filteredEvents = React.useMemo(() => {
@@ -306,6 +314,15 @@ const EventQ: React.FC = () => {
       event.target_entity_uuid === selectedEntity
     );
   }, [events, selectedEntity]);
+
+  // Reset entity filter if no matching entity in options
+  React.useEffect(() => {
+    if (selectedEntity && entityOptions.length > 0 && 
+        !entityOptions.some(entity => entity.uuid === selectedEntity)) {
+      console.log(`[EVENT-FILTER] Selected entity ${selectedEntity} not in options list, resetting filter`);
+      setSelectedEntity('');
+    }
+  }, [selectedEntity, entityOptions]);
 
   // Register the fetchEvents function with the context
   React.useEffect(() => {
