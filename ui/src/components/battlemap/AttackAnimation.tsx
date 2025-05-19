@@ -1,7 +1,10 @@
 import * as React from 'react';
 import { Assets, Spritesheet, Rectangle, Texture, AnimatedSprite as PixiAnimatedSprite, Graphics } from 'pixi.js';
-import { sound } from '@pixi/sound';
+import { sound, IMediaInstance } from '@pixi/sound';
 import { useSoundSettings } from '../../contexts/SoundSettingsContext';
+import { useRef, useEffect } from 'react';
+import { useSnapshot } from 'valtio';
+import { characterStore } from '../../store/characterStore';
 
 interface AttackAnimationProps {
   x: number;
@@ -10,6 +13,8 @@ interface AttackAnimationProps {
   flipX?: boolean;
   angle?: number;
   isHit?: boolean;
+  sourceEntityId?: string;
+  targetEntityId?: string;
   onComplete?: () => void;
 }
 
@@ -135,6 +140,8 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
   flipX = false,
   angle = 0,
   isHit = true,
+  sourceEntityId,
+  targetEntityId,
   onComplete 
 }) => {
   const { getEffectiveVolume } = useSoundSettings();
@@ -143,7 +150,34 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
   const [isPlaying, setIsPlaying] = React.useState(true);
   const startTimeRef = React.useRef<number>(0);
   const soundPlayed = React.useRef<boolean>(false);
-  const soundInstanceRef = React.useRef<any>(null);
+  const soundInstanceRef = useRef<IMediaInstance | null>(null);
+  const snap = useSnapshot(characterStore);
+
+  // Calculate animation position based on source and target entities from store
+  const animationPosition = React.useMemo(() => {
+    if (sourceEntityId && targetEntityId) {
+      const sourceEntity = snap.summaries[sourceEntityId];
+      const targetEntity = snap.summaries[targetEntityId];
+      
+      if (sourceEntity && targetEntity) {
+        // Get grid positions from store
+        const [sourceGridX, sourceGridY] = sourceEntity.position;
+        const [targetGridX, targetGridY] = targetEntity.position;
+
+        // Calculate screen coordinates using the same formula as DirectionalEntitySprite
+        const sourceX = x + (sourceGridX * scale * 32) + ((scale * 32) / 2);
+        const sourceY = y + (sourceGridY * scale * 32) + ((scale * 32) / 2);
+        const targetX = x + (targetGridX * scale * 32) + ((scale * 32) / 2);
+        const targetY = y + (targetGridY * scale * 32) + ((scale * 32) / 2);
+
+        // Calculate midpoint between source and target
+        const midX = (sourceX + targetX) / 2;
+        const midY = (sourceY + targetY) / 2;
+        return { x: midX, y: midY };
+      }
+    }
+    return { x, y };
+  }, [x, y, sourceEntityId, targetEntityId, snap.summaries, scale]);
 
   React.useEffect(() => {
     const loadFrames = async () => {
@@ -175,47 +209,45 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
         console.log('[SOUND DEBUG] isHit value in AttackAnimation:', isHit);
         console.log('[SOUND DEBUG] isHit type:', typeof isHit);
         
-        // Get the effective volume for sound effects from context
-        const effectsVolume = getEffectiveVolume('effects');
-        console.log(`[SOUND DEBUG] Effect volume from settings: ${effectsVolume}`);
+        const effectVolume = getEffectiveVolume('effects');
+        console.log('[SOUND DEBUG] Effect volume from settings:', effectVolume);
         
-        // Only play sound if we have a valid hit/miss state
-        if (typeof isHit === 'boolean') {
-          const soundName = isHit ? 'sword-swing' : 'sword-miss';
-          console.log(`[SOUND DEBUG] Selected sound name: "${soundName}"`);
-          
-          // Check if sounds are properly loaded
-          console.log('[SOUND DEBUG] Sound exists check:',
-            'sword-swing exists:', sound.exists('sword-swing'),
-            'sword-miss exists:', sound.exists('sword-miss'));
-          
-          // Play the sound with appropriate options
-          if (isHit) {
-            // For hit, play the full sound with volume from settings
-            soundInstanceRef.current = sound.play('sword-swing', {
-              volume: effectsVolume
-            });
-          } else {
-            // For miss, play only part of the sound with volume from settings
-            soundInstanceRef.current = sound.play('sword-miss', {
-              volume: effectsVolume,
-              complete: () => {
-                console.log('[Sound] Miss sound completed');
-              }
+        // Select appropriate sound
+        const soundName = isHit ? "sword-swing" : "sword-miss";
+        console.log('[SOUND DEBUG] Selected sound name:', `"${soundName}"`);
+        
+        // Check if sounds exist
+        console.log('[SOUND DEBUG] Sound exists check:', 
+          'sword-swing exists:', sound.exists('sword-swing'),
+          'sword-miss exists:', sound.exists('sword-miss')
+        );
+        
+        // Play sound if it exists
+        if (sound.exists(soundName)) {
+          try {
+            const instance = sound.play(soundName, {
+              volume: effectVolume,
+              loop: false
             });
             
-            // Set a timer to stop the miss sound after MISS_SOUND_DURATION seconds
-            setTimeout(() => {
-              if (soundInstanceRef.current) {
-                soundInstanceRef.current.stop();
-                console.log(`[Sound] Miss sound stopped after ${MISS_SOUND_DURATION}s`);
-              }
-            }, MISS_SOUND_DURATION * 1000);
+            // Handle both Promise and direct instance
+            if (instance instanceof Promise) {
+              instance.then(mediaInstance => {
+                soundInstanceRef.current = mediaInstance;
+              }).catch(err => {
+                console.error('Error playing sound:', err);
+              });
+            } else {
+              soundInstanceRef.current = instance;
+            }
+            
+            console.log('[Attack Sound] Playing', soundName, 'sound effect at volume', effectVolume);
+          } catch (err) {
+            console.error('Error playing sound:', err);
           }
-          
-          console.log(`[Attack Sound] Playing ${soundName} sound effect at volume ${effectsVolume}`);
-          soundPlayed.current = true;
         }
+        
+        soundPlayed.current = true;
       } catch (error) {
         console.error('Error playing attack sound:', error);
       }
@@ -250,18 +282,24 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
     
     // Cleanup function to stop any playing sounds when component unmounts
     return () => {
+      // Clean up sound if it exists
       if (soundInstanceRef.current) {
-        soundInstanceRef.current.stop();
+        try {
+          soundInstanceRef.current.stop();
+        } catch (err) {
+          console.warn('Error stopping sound:', err);
+        }
       }
+      soundInstanceRef.current = null;
     };
-  }, []);
+  }, [isPlaying, frames.length, onComplete, isHit, getEffectiveVolume]);
 
   if (frames.length === 0) return null;
 
   return (
     <pixiContainer 
-      x={x}
-      y={y}
+      x={animationPosition.x}
+      y={animationPosition.y}
       rotation={angle}
     >
       <pixiSprite
