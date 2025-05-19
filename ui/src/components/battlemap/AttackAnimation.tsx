@@ -1,8 +1,8 @@
-import * as React from 'react';
-import { Assets, Rectangle, Texture, AnimatedSprite } from 'pixi.js';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import * as PIXI from 'pixi.js';
+import { Container, Graphics, Sprite, Assets, Texture } from 'pixi.js';
 import { sound, IMediaInstance } from '@pixi/sound';
 import { useSoundSettings } from '../../contexts/SoundSettingsContext';
-import { useRef, useEffect, useState, useCallback } from 'react';
 import { useSnapshot } from 'valtio';
 import { characterStore } from '../../store/characterStore';
 import { mapStore, mapHelpers } from '../../store/mapStore';
@@ -21,7 +21,7 @@ const FRAMES_PER_ROW = 10; // Assuming 64px sprites with some spacing
 const ANIMATION_PATH = '/assets/animations/weapons_combat_animations.png';
 
 // Constants for sounds
-const SWORD_SWING_SOUND_PATH = '/sounds/sword-swing.mp3';
+const SWORD_HIT_SOUND_PATH = '/sounds/sword-hit.mp3';
 const SWORD_MISS_SOUND_PATH = '/sounds/sword-miss.mp3';
 
 // Add a constant for maximum animation duration to prevent extremely long animations
@@ -56,9 +56,9 @@ class SoundManager {
       console.log('[SOUND-PERF] Starting sound preloading');
       const startTime = performance.now();
 
-      // Preload all sounds at once
+      // Preload all sounds at once - no more draw-sword
       const promises = [
-        this.loadSound('sword-swing', SWORD_SWING_SOUND_PATH),
+        this.loadSound('sword-hit', SWORD_HIT_SOUND_PATH),
         this.loadSound('sword-miss', SWORD_MISS_SOUND_PATH)
       ];
       
@@ -112,7 +112,7 @@ class SoundManager {
         console.log(`[SOUND-PERF] Sound ${id} not loaded yet, loading on demand`);
         
         // Use the loadSound method instead of direct sound.add to maintain consistency
-        const soundPath = id === 'sword-swing' ? SWORD_SWING_SOUND_PATH : SWORD_MISS_SOUND_PATH;
+        const soundPath = id === 'sword-hit' ? SWORD_HIT_SOUND_PATH : SWORD_MISS_SOUND_PATH;
         this.loadSound(id, soundPath)
           .then(() => {
             const loadTime = performance.now() - playStartTime;
@@ -151,7 +151,7 @@ class SoundManager {
         console.log(`[SOUND-PERF] Sound ${id} started playing in ${(performance.now() - now).toFixed(2)}ms`);
       }).catch(err => {
         console.error(`[SOUND-PERF] Error playing sound ${id}:`, err);
-});
+      });
     } else {
       this.activeInstances[id] = instance;
       console.log(`[SOUND-PERF] Sound ${id} started playing in ${(performance.now() - now).toFixed(2)}ms`);
@@ -162,6 +162,7 @@ class SoundManager {
     if (this.activeInstances[id]) {
       try {
         this.activeInstances[id].stop();
+        console.log(`[SOUND-PERF] Stopped sound ${id}`);
       } catch (err) {
         // Ignore errors from stopping
       }
@@ -174,6 +175,109 @@ class SoundManager {
   }
 }
 
+// Sound playback cache to avoid reloading
+const soundCache: Record<string, HTMLAudioElement> = {};
+// Track currently playing attack sound instances for cleanup
+const activeAttackSounds: Record<string, HTMLAudioElement> = {};
+// Track if sounds are already stopped to prevent redundant calls
+let soundsCurrentlyStopped = false;
+
+// Load a sound if not already loaded
+const loadSound = async (soundName: string): Promise<HTMLAudioElement> => {
+  const soundPath = `/sounds/${soundName}.mp3`;
+  
+  // Use cached sound if available
+  if (soundCache[soundName]) {
+    return soundCache[soundName];
+  }
+  
+  console.log(`[SOUND-PERF] Loading sound ${soundName} from ${soundPath}`);
+  const startLoadTime = performance.now();
+  
+  // Create new audio object
+  const audio = new Audio(soundPath);
+  
+  // Wait for audio to load
+  return new Promise((resolve, reject) => {
+    audio.addEventListener('canplaythrough', () => {
+      const loadTime = performance.now() - startLoadTime;
+      console.log(`[SOUND-PERF] Sound ${soundName} loaded in ${loadTime.toFixed(2)}ms`);
+      soundCache[soundName] = audio;
+      resolve(audio);
+    }, { once: true });
+    
+    audio.addEventListener('error', (err) => {
+      console.error(`[SOUND-PERF] Error loading sound ${soundName}:`, err);
+      reject(err);
+    }, { once: true });
+    
+    // Start loading
+    audio.load();
+  });
+};
+
+// Preload all sounds at module initialization to avoid first-load delay
+export const preloadAllSounds = async (): Promise<void> => {
+  console.log('[SOUND-PRELOAD] Preloading all attack sounds');
+  const start = performance.now();
+  
+  try {
+    // Load all sounds in parallel - no more draw-sword sound
+    const [hitSound, missSound] = await Promise.all([
+      loadSound('sword-hit'),
+      loadSound('sword-miss')
+    ]);
+    
+    // Force sound activation by playing at zero volume and immediately stopping
+    // This ensures browsers will permit subsequent autoplay
+    const activateSounds = () => {
+      const sounds = [hitSound, missSound];
+      
+      console.log('[SOUND-PRELOAD] Activating sounds for autoplay on user interaction');
+      
+      for (const sound of sounds) {
+        try {
+          // Clone to avoid affecting the cached instance
+          const tempSound = sound.cloneNode() as HTMLAudioElement;
+          tempSound.volume = 0; // Silent
+          tempSound.play()
+            .then(() => {
+              // Immediately stop
+              setTimeout(() => {
+                tempSound.pause();
+                tempSound.currentTime = 0;
+              }, 10);
+            })
+            .catch(e => {
+              // Ignore - expected if no user interaction yet
+            });
+        } catch (e) {
+          // Ignore errors during activation
+        }
+      }
+    };
+    
+    // Try to activate, but it will likely only work after user interaction
+    activateSounds();
+    
+    // Add a listener to try again on first user interaction
+    const handleUserInteraction = () => {
+      activateSounds();
+      // Remove listener after first interaction
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    // Add listeners for user interaction
+    document.addEventListener('click', handleUserInteraction, { once: true });
+    document.addEventListener('keydown', handleUserInteraction, { once: true });
+    
+    console.log(`[SOUND-PRELOAD] All sounds preloaded in ${(performance.now() - start).toFixed(2)}ms`);
+  } catch (err) {
+    console.error('[SOUND-PRELOAD] Error preloading sounds:', err);
+  }
+};
+
 // Create a global cache for attack animation textures
 const attackTextureCache: {
   textures: Texture[] | null;
@@ -184,7 +288,7 @@ const attackTextureCache: {
 };
 
 // Preload the animation frames
-const preloadAnimationFrames = async (): Promise<Texture[]> => {
+export const preloadAnimationFrames = async (): Promise<Texture[]> => {
   // Return cached textures if available
   if (attackTextureCache.textures) {
     return attackTextureCache.textures;
@@ -199,7 +303,7 @@ const preloadAnimationFrames = async (): Promise<Texture[]> => {
   attackTextureCache.loading = (async () => {
     try {
       console.log('[ANIM-PERF] Loading weapon animation textures');
-  const startTime = performance.now();
+      const startTime = performance.now();
   
       // Load the spritesheet
       await Assets.load({ src: ANIMATION_PATH, alias: 'weaponAnimations' });
@@ -210,14 +314,14 @@ const preloadAnimationFrames = async (): Promise<Texture[]> => {
       
       // Create frames from the spritesheet
       const frames = Array.from({ length: FRAMES_PER_ROW }, (_, i) => {
-        const frame = new Rectangle(
+        const frame = new PIXI.Rectangle(
           i * SPRITE_SIZE,
           yPosition,
           SPRITE_SIZE,
           SPRITE_SIZE
         );
         // Create a new texture with the frame
-        return new Texture({
+        return new PIXI.Texture({
           source: baseTexture,
           frame
         });
@@ -240,10 +344,98 @@ const preloadAnimationFrames = async (): Promise<Texture[]> => {
   return attackTextureCache.loading;
 };
 
-// Start preloading as soon as this module is imported
-preloadAnimationFrames().catch(error => {
-  console.error('Failed to preload attack animation:', error);
-});
+// Eagerly start preloading as soon as this module is imported
+// Use an IIFE to ensure it runs immediately
+(() => {
+  console.log('[ANIM-INIT] Eagerly preloading attack animation assets');
+  // Don't wait for the promise - let it load in the background
+  preloadAnimationFrames().catch(error => {
+    console.error('[ANIM-INIT] Failed to preload attack animation:', error);
+  });
+  
+  // Immediately preload sounds too
+  preloadAllSounds().catch(error => {
+    console.error('[ANIM-INIT] Failed to preload attack sounds:', error);
+  });
+})();
+
+// Play a sound with volume control - but don't wait for it to finish
+const playSound = async (soundName: string, volume: number = 0.6): Promise<HTMLAudioElement> => {
+  try {
+    // Reset stopped flag when playing new sounds
+    soundsCurrentlyStopped = false;
+    
+    // Stop any existing attack sounds without redundant logging
+    stopAttackSounds();
+    
+    const startTime = performance.now();
+    const audio = await loadSound(soundName);
+    
+    // Create a new instance to allow overlapping sounds
+    const soundInstance = audio.cloneNode() as HTMLAudioElement;
+    soundInstance.volume = volume;
+    
+    // Store the active instance
+    activeAttackSounds[soundName] = soundInstance;
+    
+    // Play the sound but don't await completion
+    const playPromise = soundInstance.play();
+    
+    // Handle play promise (needed for some browsers)
+    if (playPromise !== undefined) {
+      playPromise.catch(err => {
+        console.error(`[SOUND-PERF] Error starting sound ${soundName}:`, err);
+      });
+    }
+    
+    console.log(`[SOUND-PERF] Sound ${soundName} started playing in ${(performance.now() - startTime).toFixed(2)}ms`);
+    return soundInstance;
+  } catch (err) {
+    console.error(`[SOUND-PERF] Failed to play ${soundName}:`, err);
+    throw err;
+  }
+};
+
+// Simplified sound API - just play hit or miss - but don't block
+export const playAttackResultSound = async (isHit: boolean = true): Promise<void> => {
+  // Stop any existing attack sound first (like draw-sword)
+  stopAttackSounds();
+  
+  // Play the correct result sound
+  const soundName = isHit ? 'sword-hit' : 'sword-miss';
+  console.log(`[SOUND-CTRL] Playing attack result sound: ${soundName}`);
+  
+  // Fire and forget - don't wait for the sound to load or play
+  playSound(soundName, isHit ? 0.7 : 0.5).catch(err => {
+    console.error(`[SOUND-CTRL] Error playing ${soundName}:`, err);
+  });
+};
+
+// Stop all playing attack sounds (without affecting background music)
+export const stopAttackSounds = (): void => {
+  // If sounds are already stopped, don't do anything
+  if (soundsCurrentlyStopped) {
+    return;
+  }
+  
+  // Mark as stopped before stopping to prevent recursive stops
+  soundsCurrentlyStopped = true;
+  
+  // Stop all active attack sounds
+  Object.values(activeAttackSounds).forEach(sound => {
+    try {
+      sound.pause();
+      sound.currentTime = 0;
+    } catch (err) {
+      // Ignore errors during cleanup
+    }
+  });
+  // Clear the active sounds record
+  Object.keys(activeAttackSounds).forEach(key => {
+    delete activeAttackSounds[key];
+  });
+  console.log('[SOUND-CTRL] Stopped all active attack sounds');
+};
 
 export const AttackAnimation: React.FC<AttackAnimationProps> = ({ 
   isHit = true,
@@ -255,7 +447,7 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
   const [textures, setTextures] = useState<Texture[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const animatedSpriteRef = useRef<AnimatedSprite | null>(null);
+  const animatedSpriteRef = useRef<PIXI.AnimatedSprite | null>(null);
   const soundManager = React.useMemo(() => SoundManager.getInstance(), []);
   const animationStartTime = useRef(performance.now());
   
@@ -292,7 +484,9 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
       return { x: 0, y: 0, angle: 0 };
     }
 
-    // Use mapHelpers to get pixel positions (WITHOUT adding grid offset since parent container handles it)
+    // The attack animation should use the same positioning system as entities
+    // Use mapHelpers to calculate pixel positions without adding grid offset
+    // Since the BattleMapCanvas will position this within the offset container
     const sourcePos = mapHelpers.gridToPixel(sourceEntity.position[0], sourceEntity.position[1]);
     const targetPos = mapHelpers.gridToPixel(targetEntity.position[0], targetEntity.position[1]);
     
@@ -342,22 +536,30 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
     return { x: midX, y: midY, angle };
   }, [sourceEntityId, targetEntityId, charSnap.summaries]);
 
-  // Load frames once at component mount
+  // Load frames once at component mount - do not play sound here
   useEffect(() => {
     console.log(`[ANIM-PERF] Attack animation initializing for ${sourceEntityId} → ${targetEntityId}, hit: ${isHit}`);
     let isMounted = true;
     
     const setup = async () => {
       try {
-        // Start sound playback immediately without waiting for textures
-        // This creates the perception of faster response time
-        const soundStartTime = performance.now();
-        const effectVolume = getEffectiveVolume('effects');
-        const soundName = isHit ? "sword-swing" : "sword-miss";
-        soundManager.play(soundName, { volume: effectVolume });
-        console.log(`[ANIM-PERF] Sound playback initiated in ${(performance.now() - soundStartTime).toFixed(2)}ms`);
+        // Use already loaded textures immediately if available
+        if (attackTextureCache.textures) {
+          if (!isMounted) return;
+          console.log('[ANIM-PERF] Using cached attack textures (no loading needed)');
+          
+          // Update state and start animation
+          setTextures(attackTextureCache.textures);
+          setIsLoaded(true);
+          setIsPlaying(true);
+          
+          // Reset animation start time for accurate metrics
+          animationStartTime.current = performance.now();
+          console.log('[ANIM-PERF] Animation started with cached textures');
+          return;
+        }
         
-        // Load animation textures (measure time)
+        // Need to load textures
         const textureStartTime = performance.now();
         const loadedTextures = await preloadAnimationFrames();
         const textureLoadTime = performance.now() - textureStartTime;
@@ -370,6 +572,8 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
         setIsLoaded(true);
         setIsPlaying(true);
         
+        // Reset animation start time for accurate metrics
+        animationStartTime.current = performance.now();
         console.log(`[ANIM-PERF] Attack animation loaded and playing - Total setup: ${(performance.now() - textureStartTime).toFixed(2)}ms`);
       } catch (error) {
         console.error('[ANIM-PERF] Error setting up attack animation:', error);
@@ -380,16 +584,17 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
     
     return () => {
       isMounted = false;
-      soundManager.stopAll();
+      
+      // We no longer need to stop sounds here as they're managed at the page level
       console.log(`[ANIM-PERF] Attack animation component unmounted`);
     };
-  }, [isHit, sourceEntityId, targetEntityId, getEffectiveVolume, soundManager]);
+  }, [isHit, sourceEntityId, targetEntityId]);
 
   // Handle animation completion - improve to capture time metrics
   const handleAnimationComplete = useCallback(() => {
     const duration = performance.now() - animationStartTime.current;
     console.log(`[ANIM-PERF] Attack animation complete after ${duration.toFixed(2)}ms`);
-          setIsPlaying(false);
+    setIsPlaying(false);
           
     // Notify animation store about completion
     if (sourceEntityId && targetEntityId) {
@@ -403,14 +608,15 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
   }, [sourceEntityId, targetEntityId, onComplete]);
 
   // Set up the AnimatedSprite ref callback to configure it when created
-  const spriteRef = useCallback((sprite: AnimatedSprite | null) => {
+  const spriteRef = useCallback((sprite: PIXI.AnimatedSprite | null) => {
     if (!sprite) return;
     
     // Store the reference and configure
     animatedSpriteRef.current = sprite;
     
-    // Configure the sprite with faster animation for better performance
-    sprite.animationSpeed = animationStore.settings.attackAnimationSpeed * 1.5; // Make animations faster
+    // Configure the sprite with MUCH faster animation for better performance
+    // Increase speed by 2.5x for snappier animations
+    sprite.animationSpeed = animationStore.settings.attackAnimationSpeed * 2.5;
     sprite.loop = false;
     sprite.onComplete = handleAnimationComplete;
     
@@ -436,8 +642,7 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
       y={y}
       rotation={angle}
     >
-      {/* Note: This animation component is a child of the pixiContainer that applies the grid offset,
-          so we don't need to add gridOffsetX/Y to our position - the parent container handles it */}
+      {/* Animation sprite centered at the midpoint */}
       <pixiAnimatedSprite
         ref={spriteRef}
         textures={textures}

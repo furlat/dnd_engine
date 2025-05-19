@@ -48,7 +48,19 @@ const ActionBar = React.memo(() => {
           <FormControl fullWidth>
             <InputLabel>Select Target</InputLabel>
             <Select
-              value={character.target_entity_uuid || ''}
+              value={(() => {
+                // Ensure current value is in the available targets list or empty
+                const currentValue = character.target_entity_uuid || '';
+                const isValidOption = !currentValue || targets.some(t => t.uuid === currentValue);
+                
+                if (currentValue && !isValidOption) {
+                  console.warn(`[ACTION-BAR] Target value ${currentValue} is not in available options, defaulting to empty`);
+                  // Don't change store value here, just return empty for display
+                  return '';
+                }
+                
+                return currentValue;
+              })()}
               onChange={(e) => {
                 const targetId = e.target.value as string;
                 // If empty selection, just clear the target

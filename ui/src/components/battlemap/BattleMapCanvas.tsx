@@ -344,6 +344,30 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     // Start preloading animations on component mount
     startEntityPreloading();
     
+    // Preload attack animations and sounds
+    const preloadAttackAssets = async () => {
+      try {
+        console.log('[ASSET-PRELOAD] Preloading attack animations and sounds');
+        const startTime = performance.now();
+        
+        // Import and preload attack animations
+        const { preloadAnimationFrames, preloadAllSounds } = await import('./AttackAnimation');
+        
+        // Preload both in parallel
+        await Promise.all([
+          preloadAnimationFrames(),
+          preloadAllSounds()
+        ]);
+        
+        console.log(`[ASSET-PRELOAD] Attack assets preloaded in ${(performance.now() - startTime).toFixed(2)}ms`);
+      } catch (err) {
+        console.error('[ASSET-PRELOAD] Error preloading attack assets:', err);
+      }
+    };
+    
+    // Start preloading attack assets
+    preloadAttackAssets();
+    
     // Set up periodic performance logging
     const statsInterval = setInterval(() => {
       if (pointerMoveTimes.current.length > 0) {
@@ -387,7 +411,34 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   
   // Sync container size when it changes
   useEffect(() => {
+    // Update container size
     mapActions.setContainerSize(containerWidth, containerHeight);
+    
+    // Set up a ResizeObserver to detect changes (like console opening)
+    const containerElement = document.querySelector('.MuiBox-root');
+    if (containerElement) {
+      console.log('[RESIZE] Setting up ResizeObserver for container element');
+      
+      // Create observer to handle layout changes (like console opening)
+      const resizeObserver = new ResizeObserver((entries) => {
+        // Only update if there's a significant change
+        const [entry] = entries;
+        const { width, height } = entry.contentRect;
+        
+        if (Math.abs(width - containerWidth) > 10 || Math.abs(height - containerHeight) > 10) {
+          console.log(`[RESIZE] Layout changed: ${width}x${height} (previous: ${containerWidth}x${containerHeight})`);
+          
+          // Force redraw by updating the counter
+          setInternalRedrawCounter(prev => prev + 1);
+        }
+      });
+      
+      resizeObserver.observe(containerElement);
+      
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
   }, [containerWidth, containerHeight]);
   
   const entities = Object.values(charSnap.summaries);
@@ -637,22 +688,27 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
           // First ensure the displayed entity is updated to the target
           characterActions.setDisplayedEntity(targetEntity.uuid);
           
-          // Force a refresh to ensure state is consistent before attacking
-          try {
-            await characterActions.forceRefresh();
-            
-            // Call the attack handler after state is refreshed
-            if (onEntityClick) {
-              onEntityClick(targetEntity.uuid);
+          // Check if the source entity still exists in the store
+          const sourceEntity = characterStore.summaries[currentSelected];
+          if (!sourceEntity) {
+            console.error(`[ENTITY-TARGET] Source entity ${currentSelected} not found in store, forcing refresh`);
+            try {
+              await characterActions.forceRefresh();
+            } catch (err) {
+              console.error('[ENTITY-TARGET] Error refreshing state before attack:', err);
+              return;
             }
-          } catch (err) {
-            console.error('[ENTITY-TARGET] Error refreshing state before attack:', err);
+          }
+          
+          // Execute attack without waiting for refresh completion
+          if (onEntityClick) {
+            onEntityClick(targetEntity.uuid);
           }
         }
       }
       
       // Handle right click for movement
-      if (e.button === 2 && !mapSnap.isLocked) {
+      if ((e.button as number) === 2 && !mapSnap.isLocked) {
         const selectedEntityId = characterStore.selectedEntityId;
         const selectedEntity = selectedEntityId ? characterStore.summaries[selectedEntityId] : undefined;
         
