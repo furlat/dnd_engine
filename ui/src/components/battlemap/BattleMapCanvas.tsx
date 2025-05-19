@@ -23,6 +23,8 @@ import { ReadonlyEntitySummary } from '../../models/readonly';
 import type { DeepReadonly } from '../../models/readonly';
 import { SensesType } from '../../models/character';
 import SettingsButton from '../settings/SettingsButton';
+import { DirectionalEntitySprite, Direction, preloadEntityAnimations } from './DirectionalEntitySprite';
+import { entityDirectionState } from '../../store/entityDirectionStore';
 
 // Initialize PixiJS Assets
 Assets.init({
@@ -338,6 +340,7 @@ interface BattleMapCanvasProps {
   onLockChange?: (locked: boolean) => void;
   containerWidth: number;
   containerHeight: number;
+  redrawCounter?: number;
 }
 
 const MIN_TILE_SIZE = 8;
@@ -354,7 +357,8 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   isLocked = false,
   onLockChange,
   containerWidth,
-  containerHeight
+  containerHeight,
+  redrawCounter: externalRedrawCounter
 }) => {
   const [hoveredCell, setHoveredCell] = useState({ x: -1, y: -1 });
   const [tileSize, setTileSize] = useState(initialTileSize);
@@ -364,7 +368,11 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
   const [isVisibilityEnabled, setIsVisibilityEnabled] = useState(true);
   const [isGridEnabled, setIsGridEnabled] = useState(true);
   const [isMovementHighlightEnabled, setIsMovementHighlightEnabled] = useState(false);
+  const [internalRedrawCounter, setInternalRedrawCounter] = useState(0);
   
+  // Use external redraw counter if provided
+  const redrawCounter = externalRedrawCounter ?? internalRedrawCounter;
+
   // Use the store for entities and tiles
   const snap = useSnapshot(characterStore);
   const entities = Object.values(snap.summaries);
@@ -411,6 +419,61 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
     const verticalFit = containerHeight / gridHeight;
     return Math.floor(Math.min(horizontalFit, verticalFit));
   }, [containerWidth, containerHeight, gridWidth, gridHeight]);
+
+  // Add preloading effect
+  useEffect(() => {
+    if (entities.length > 0) {
+      preloadEntityAnimations(entities.map(e => e.uuid));
+    }
+  }, [entities.map(e => e.uuid).join(',')]);
+
+  // Add keyboard handling for direction changes
+  useEffect(() => {
+    if (isLocked) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!snap.selectedEntityId) return;
+      
+      let direction: Direction | null = null;
+      
+      switch (e.key) {
+        case 'ArrowUp':
+          direction = Direction.N;
+          break;
+        case 'ArrowDown':
+          direction = Direction.S;
+          break;
+        case 'ArrowLeft':
+          direction = Direction.W;
+          break;
+        case 'ArrowRight':
+          direction = Direction.E;
+          break;
+        // Diagonals
+        case 'Home': // NumPad 7
+          direction = Direction.NW;
+          break;
+        case 'PageUp': // NumPad 9
+          direction = Direction.NE;
+          break;
+        case 'End': // NumPad 1
+          direction = Direction.SW;
+          break;
+        case 'PageDown': // NumPad 3
+          direction = Direction.SE;
+          break;
+      }
+      
+      if (direction !== null) {
+        entityDirectionState.setDirection(snap.selectedEntityId, direction);
+        // Force a re-render
+        setInternalRedrawCounter((prev: number) => prev + 1);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLocked, snap.selectedEntityId]);
 
   // Handle pointer move with corrected calculations
   const handlePointerMove = useCallback((event: FederatedPointerEvent) => {
@@ -487,9 +550,19 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
         const posKey = `${gridX},${gridY}`;
         const isWalkable = tiles[posKey]?.walkable ?? false;
         
-        // Only check path if movement highlight is enabled
+        // Only move if within movement range
         if (isWalkable && (!isMovementHighlightEnabled || 
             (selectedEntity.senses.paths[posKey] && selectedEntity.senses.paths[posKey].length <= 6))) {
+          // Compute direction based on movement
+          const direction = entityDirectionState.computeDirection(
+            [selectedEntity.position[0], selectedEntity.position[1]], // Create new array
+            [gridX, gridY]
+          );
+          
+          // Update direction state before moving
+          entityDirectionState.setDirection(selectedEntity.uuid, direction);
+          
+          // Call move action
           characterActions.moveEntity(selectedEntity.uuid, [gridX, gridY]);
         }
       }
@@ -733,7 +806,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
           antialias={true}
         >
           <pixiContainer>
-            {/* Draw a background to ensure we can see the canvas */}
+            {/* Background */}
             <pixiGraphics
               eventMode="static"
               cursor={isEditing ? "crosshair" : "pointer"}
@@ -753,7 +826,7 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
             />
             
             <pixiContainer x={offset.x} y={offset.y}>
-              {/* Grid Lines - Now conditional */}
+              {/* Grid Lines */}
               {isGridEnabled && (
                 <Grid 
                   width={canvasSize.width}
@@ -763,10 +836,45 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                 />
               )}
               
-              {/* Tiles - Now with fog of war effect */}
-              {Object.values(tiles).map(tile => {
-                // Skip visibility checks if toggle is off
-                if (!isVisibilityEnabled) {
+              {/* Tiles Layer */}
+              <pixiContainer>
+                {Object.values(tiles).map(tile => {
+                  // Skip visibility checks if toggle is off
+                  if (!isVisibilityEnabled) {
+                    return (
+                      <React.Fragment key={tile.uuid}>
+                        <TileSprite
+                          tile={tile}
+                          width={canvasSize.width}
+                          height={canvasSize.height}
+                          gridSize={{ rows: gridHeight, cols: gridWidth }}
+                          tileSize={tileSize}
+                        />
+                        {isMovementHighlightEnabled && (
+                          <pixiGraphics
+                            draw={(g) => drawPathHighlight(g, tile.position)}
+                          />
+                        )}
+                      </React.Fragment>
+                    );
+                  }
+
+                  // With visibility enabled, check visibility and seen status
+                  if (!selectedEntity) return null;
+
+                  const [x, y] = tile.position;
+                  const posKey = `${x},${y}`;
+                  const isVisible = selectedEntity.senses.visible[posKey];
+                  const hasBeenSeen = selectedEntity.senses.seen.some(
+                    ([seenX, seenY]) => seenX === x && seenY === y
+                  );
+
+                  // If neither visible nor seen, don't render
+                  if (!isVisible && !hasBeenSeen) return null;
+
+                  const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
+                  const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
+
                   return (
                     <React.Fragment key={tile.uuid}>
                       <TileSprite
@@ -775,107 +883,127 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
                         height={canvasSize.height}
                         gridSize={{ rows: gridHeight, cols: gridWidth }}
                         tileSize={tileSize}
+                        alpha={isVisible ? 1 : 0.5} // Dim previously seen tiles
                       />
-                      {isMovementHighlightEnabled && (
+                      {/* Add fog of war overlay for seen but not visible tiles */}
+                      {hasBeenSeen && !isVisible && (
+                        <pixiGraphics
+                          draw={(g) => {
+                            g.clear();
+                            g.setFillStyle({
+                              color: 0x000000,
+                              alpha: 0.5
+                            });
+                            g.rect(
+                              offsetX + (x * tileSize),
+                              offsetY + (y * tileSize),
+                              tileSize,
+                              tileSize
+                            );
+                            g.fill();
+                          }}
+                        />
+                      )}
+                      {isMovementHighlightEnabled && isVisible && (
                         <pixiGraphics
                           draw={(g) => drawPathHighlight(g, tile.position)}
                         />
                       )}
                     </React.Fragment>
                   );
-                }
+                })}
+              </pixiContainer>
 
-                // With visibility enabled, check visibility and seen status
-                if (!selectedEntity) return null;
-
-                const [x, y] = tile.position;
-                const posKey = `${x},${y}`;
-                const isVisible = selectedEntity.senses.visible[posKey];
-                const hasBeenSeen = selectedEntity.senses.seen.some(
-                  ([seenX, seenY]) => seenX === x && seenY === y
-                );
-
-                // If neither visible nor seen, don't render
-                if (!isVisible && !hasBeenSeen) return null;
-
-                const offsetX = (canvasSize.width - (gridWidth * tileSize)) / 2;
-                const offsetY = (canvasSize.height - (gridHeight * tileSize)) / 2;
-
-                return (
-                  <React.Fragment key={tile.uuid}>
-                    <TileSprite
-                      tile={tile}
-                      width={canvasSize.width}
-                      height={canvasSize.height}
-                      gridSize={{ rows: gridHeight, cols: gridWidth }}
-                      tileSize={tileSize}
-                      alpha={isVisible ? 1 : 0.5} // Dim previously seen tiles
-                    />
-                    {/* Add fog of war overlay for seen but not visible tiles */}
-                    {hasBeenSeen && !isVisible && (
+              {/* Movement Highlights Layer */}
+              {isMovementHighlightEnabled && (
+                <pixiContainer>
+                  {Object.values(tiles).map(tile => {
+                    if (isVisibilityEnabled && selectedEntity) {
+                      const [x, y] = tile.position;
+                      const posKey = `${x},${y}`;
+                      const isVisible = selectedEntity.senses.visible[posKey];
+                      if (!isVisible) return null;
+                    }
+                    return (
                       <pixiGraphics
-                        draw={(g) => {
-                          g.clear();
-                          g.setFillStyle({
-                            color: 0x000000,
-                            alpha: 0.5
-                          });
-                          g.rect(
-                            offsetX + (x * tileSize),
-                            offsetY + (y * tileSize),
-                            tileSize,
-                            tileSize
-                          );
-                          g.fill();
-                        }}
-                      />
-                    )}
-                    {isMovementHighlightEnabled && isVisible && (
-                      <pixiGraphics
+                        key={tile.uuid}
                         draw={(g) => drawPathHighlight(g, tile.position)}
                       />
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                    );
+                  })}
+                </pixiContainer>
+              )}
               
-              {/* Entities - With visibility check */}
-              {entities.map(entity => {
-                // Show all entities if visibility is disabled
-                if (!isVisibilityEnabled) {
+              {/* Entities Layer */}
+              <pixiContainer>
+                {entities.map(entity => {
+                  // Show all entities if visibility is disabled
+                  if (!isVisibilityEnabled) {
+                    // Get direction from state first
+                    let direction = entityDirectionState.getDirection(entity.uuid);
+                    
+                    // Only update direction based on target if there's no keyboard-set direction
+                    if (entity.target_entity_uuid && snap.summaries[entity.target_entity_uuid] && 
+                        !entityDirectionState.directions[entity.uuid]) {
+                      const targetEntity = snap.summaries[entity.target_entity_uuid];
+                      direction = entityDirectionState.computeDirection(
+                        [entity.position[0], entity.position[1]],
+                        [targetEntity.position[0], targetEntity.position[1]]
+                      );
+                      entityDirectionState.setDirection(entity.uuid, direction);
+                    }
+                    
+                    return (
+                      <DirectionalEntitySprite
+                        key={entity.uuid}
+                        entity={entity}
+                        direction={direction}
+                        width={canvasSize.width}
+                        height={canvasSize.height}
+                        gridSize={{ rows: gridHeight, cols: gridWidth }}
+                        tileSize={tileSize}
+                        selected={entity.uuid === snap.selectedEntityId}
+                      />
+                    );
+                  }
+
+                  // With visibility enabled, only show visible entities
+                  if (!selectedEntity) return null;
+                  const isVisible = entity.uuid === selectedEntity.uuid ||
+                    selectedEntity.senses.entities[entity.uuid];
+                  
+                  if (!isVisible) return null;
+                  
+                  // Get direction from state first
+                  let direction = entityDirectionState.getDirection(entity.uuid);
+                  
+                  // Only update direction based on target if there's no keyboard-set direction
+                  if (entity.target_entity_uuid && snap.summaries[entity.target_entity_uuid] && 
+                      !entityDirectionState.directions[entity.uuid]) {
+                    const targetEntity = snap.summaries[entity.target_entity_uuid];
+                    direction = entityDirectionState.computeDirection(
+                      [entity.position[0], entity.position[1]],
+                      [targetEntity.position[0], targetEntity.position[1]]
+                    );
+                    entityDirectionState.setDirection(entity.uuid, direction);
+                  }
+                  
                   return (
-                    <EntitySprite
+                    <DirectionalEntitySprite
                       key={entity.uuid}
                       entity={entity}
+                      direction={direction}
                       width={canvasSize.width}
                       height={canvasSize.height}
                       gridSize={{ rows: gridHeight, cols: gridWidth }}
                       tileSize={tileSize}
+                      selected={entity.uuid === snap.selectedEntityId}
                     />
                   );
-                }
-
-                // With visibility enabled, only show visible entities
-                if (!selectedEntity) return null;
-
-                const isVisible = entity.uuid === selectedEntity.uuid ||
-                  selectedEntity.senses.entities[entity.uuid];
-                
-                if (!isVisible) return null;
-
-                return (
-                  <EntitySprite
-                    key={entity.uuid}
-                    entity={entity}
-                    width={canvasSize.width}
-                    height={canvasSize.height}
-                    gridSize={{ rows: gridHeight, cols: gridWidth }}
-                    tileSize={tileSize}
-                  />
-                );
-              })}
+                })}
+              </pixiContainer>
               
-              {/* Cell Highlight */}
+              {/* Cell Highlight Layer */}
               {isGridEnabled && (
                 <CellHighlight 
                   x={hoveredCell.x}

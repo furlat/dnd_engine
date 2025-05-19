@@ -1,0 +1,177 @@
+{
+	"frames": [
+		{
+			"frame": {
+				"x": 0,
+				"y": 0,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 256,
+				"y": 0,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 512,
+				"y": 0,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 768,
+				"y": 0,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 1024,
+				"y": 0,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 0,
+				"y": 256,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 256,
+				"y": 256,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 512,
+				"y": 256,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 768,
+				"y": 256,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 1024,
+				"y": 256,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 0,
+				"y": 512,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 256,
+				"y": 512,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 512,
+				"y": 512,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 768,
+				"y": 512,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 1024,
+				"y": 512,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 0,
+				"y": 768,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		},
+		{
+			"frame": {
+				"x": 256,
+				"y": 768,
+				"w": 256,
+				"h": 256
+			},
+			"duration": 142
+		}
+	],
+	"meta": {
+		"app": "https://pixelover.io",
+		"version": "0.14.4",
+		"filepath": "C:/Users/joeyi/Desktop/IntroUnreal5/knight/Knight/Idle/Knight_Idle_dir7.png",
+		"frameAnimations": [
+			{
+				"name": "Idle",
+				"fps": 7,
+				"speed_scale": 1,
+				"from": 0,
+				"to": 16
+			}
+		],
+		"size": {
+			"w": 1280,
+			"h": 1024
+		},
+		"view": "Preview",
+		"direction": 6
+	}
+}
