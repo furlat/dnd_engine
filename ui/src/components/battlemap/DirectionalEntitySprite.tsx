@@ -243,7 +243,11 @@ export const DirectionalEntitySprite: React.FC<DirectionalEntitySpriteProps> = (
   const pixelPosition = mapHelpers.gridToPixel(x, y);
   
   // Map 0-7 direction to 1-8 filename
-  const dirFileIndex = direction + 1;
+  // The direction should map properly to the actual sprite files
+  // Direction enum: SW = 0, W = 1, NW = 2, N = 3, NE = 4, E = 5, SE = 6, S = 7
+  // Files are named: 1=SW, 2=W, 3=NW, 4=N, 5=NE, 6=E, 7=SE, 8=S
+  const dirToFileMap = [1, 2, 3, 4, 5, 6, 7, 8];
+  const dirFileIndex = dirToFileMap[direction];
 
   // Animation state
   const [textures, setTextures] = useState<Texture[]>([]);
