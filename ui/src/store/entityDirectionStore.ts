@@ -43,24 +43,50 @@ export const createEntityDirectionState = (): EntityDirectionState => {
     // If no movement, return current direction
     if (dx === 0 && dy === 0) return Direction.S;
 
+    // For clarity, here's what each direction means:
+    // Direction.SW (0): Target is southwest of source (bottom-left)
+    // Direction.W  (1): Target is west of source (left)
+    // Direction.NW (2): Target is northwest of source (top-left)
+    // Direction.N  (3): Target is north of source (top)
+    // Direction.NE (4): Target is northeast of source (top-right)
+    // Direction.E  (5): Target is east of source (right)
+    // Direction.SE (6): Target is southeast of source (bottom-right)
+    // Direction.S  (7): Target is south of source (bottom)
+
     // Calculate angle in degrees (0 is east, 90 is south)
+    // This matches the coordinate system in our grid (east is 0°, clockwise)
     let angle = Math.atan2(dy, dx) * (180 / Math.PI);
     if (angle < 0) angle += 360;
     
-    // Map angle to direction (0-7)
-    // Direction enum: SW = 0, W = 1, NW = 2, N = 3, NE = 4, E = 5, SE = 6, S = 7
-    let calculatedDirection: Direction;
+    // Debug logging to help diagnose direction issues
+    console.debug(`[DIR-DEBUG] Direction from [${sx},${sy}] to [${tx},${ty}], dx=${dx}, dy=${dy}, angle=${angle.toFixed(1)}°`);
     
-    if (angle >= 0 && angle < 45) calculatedDirection = Direction.E;
-    else if (angle >= 45 && angle < 90) calculatedDirection = Direction.SE;
-    else if (angle >= 90 && angle < 135) calculatedDirection = Direction.S;
-    else if (angle >= 135 && angle < 180) calculatedDirection = Direction.SW;
-    else if (angle >= 180 && angle < 225) calculatedDirection = Direction.W;
-    else if (angle >= 225 && angle < 270) calculatedDirection = Direction.NW;
-    else if (angle >= 270 && angle < 315) calculatedDirection = Direction.N;
-    else calculatedDirection = Direction.NE;
-    
-    return calculatedDirection;
+    // Map angles to directions - use 45° wedges centered on the cardinal directions
+    if (angle >= 337.5 || angle < 22.5) {
+      // 0° - East
+      return Direction.E; // 5
+    } else if (angle >= 22.5 && angle < 67.5) {
+      // 45° - Southeast
+      return Direction.SE; // 6
+    } else if (angle >= 67.5 && angle < 112.5) {
+      // 90° - South
+      return Direction.S; // 7
+    } else if (angle >= 112.5 && angle < 157.5) {
+      // 135° - Southwest
+      return Direction.SW; // 0
+    } else if (angle >= 157.5 && angle < 202.5) {
+      // 180° - West
+      return Direction.W; // 1
+    } else if (angle >= 202.5 && angle < 247.5) {
+      // 225° - Northwest
+      return Direction.NW; // 2
+    } else if (angle >= 247.5 && angle < 292.5) {
+      // 270° - North
+      return Direction.N; // 3
+    } else { // angle >= 292.5 && angle < 337.5
+      // 315° - Northeast
+      return Direction.NE; // 4
+    }
   };
 
   return {

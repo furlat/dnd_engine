@@ -483,38 +483,11 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
     
     let angle = 0;
     
-    // Cardinal and diagonal directions using only rotation
-    if (dx > 0 && dy > 0) {
-      // Southeast (attacker is northwest of target)
-      angle = Math.PI / 4; // 45 degrees
-    } else if (dx > 0 && dy < 0) {
-      // Northeast (attacker is southwest of target)
-      angle = -Math.PI / 4; // -45 degrees
-    } else if (dx < 0 && dy > 0) {
-      // Southwest (attacker is northeast of target)
-      angle = 3 * Math.PI / 4; // 135 degrees
-    } else if (dx < 0 && dy < 0) {
-      // Northwest (attacker is southeast of target)
-      angle = -3 * Math.PI / 4; // -135 degrees
-    } else if (Math.abs(dx) < Math.abs(dy)) {
-      // Vertical direction is primary
-      if (dy > 0) {
-        // South (attacker is north of target)
-        angle = Math.PI / 2; // 90 degrees
-      } else {
-        // North (attacker is south of target)
-        angle = -Math.PI / 2; // -90 degrees
-      }
-    } else {
-      // Horizontal direction is primary
-      if (dx > 0) {
-        // East (attacker is west of target)
-        angle = 0;
-        } else {
-        // West (attacker is east of target)
-        angle = Math.PI; // 180 degrees
-      }
-    }
+    // Use the same angle calculation as in entityDirectionStore
+    // 0° = east, 90° = south, 180° = west, 270° = north
+    angle = Math.atan2(dy, dx);
+    
+    // No need for complex direction mapping, we can use the angle directly for rotation
     
     // Calculate midpoint for animation
     const midX = (sourcePos.x + targetPos.x) / 2;

@@ -543,29 +543,29 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
       
       switch (e.key) {
         case 'ArrowUp':
-          direction = Direction.N;
+          direction = Direction.N; // 3
           break;
         case 'ArrowDown':
-          direction = Direction.S;
+          direction = Direction.S; // 7
           break;
         case 'ArrowLeft':
-          direction = Direction.W;
+          direction = Direction.W; // 1
           break;
         case 'ArrowRight':
-          direction = Direction.E;
+          direction = Direction.E; // 5
           break;
         // Diagonals
         case 'Home': // NumPad 7
-          direction = Direction.NW;
+          direction = Direction.NW; // 2
           break;
         case 'PageUp': // NumPad 9
-          direction = Direction.NE;
+          direction = Direction.NE; // 4
           break;
         case 'End': // NumPad 1
-          direction = Direction.SW;
+          direction = Direction.SW; // 0
           break;
         case 'PageDown': // NumPad 3
-          direction = Direction.SE;
+          direction = Direction.SE; // 6
           break;
       }
       
