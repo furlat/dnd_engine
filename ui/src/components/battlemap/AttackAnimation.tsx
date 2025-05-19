@@ -179,40 +179,43 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
         const effectsVolume = getEffectiveVolume('effects');
         console.log(`[SOUND DEBUG] Effect volume from settings: ${effectsVolume}`);
         
-        const soundName = isHit ? 'sword-swing' : 'sword-miss';
-        console.log(`[SOUND DEBUG] Selected sound name: "${soundName}"`);
-        
-        // Check if sounds are properly loaded
-        console.log('[SOUND DEBUG] Sound exists check:',
-          'sword-swing exists:', sound.exists('sword-swing'),
-          'sword-miss exists:', sound.exists('sword-miss'));
-        
-        // Play the sound with appropriate options
-        if (isHit) {
-          // For hit, play the full sound with volume from settings
-          soundInstanceRef.current = sound.play('sword-swing', {
-            volume: effectsVolume
-          });
-        } else {
-          // For miss, play only part of the sound with volume from settings
-          soundInstanceRef.current = sound.play('sword-miss', {
-            volume: effectsVolume,
-            complete: () => {
-              console.log('[Sound] Miss sound completed');
-            }
-          });
+        // Only play sound if we have a valid hit/miss state
+        if (typeof isHit === 'boolean') {
+          const soundName = isHit ? 'sword-swing' : 'sword-miss';
+          console.log(`[SOUND DEBUG] Selected sound name: "${soundName}"`);
           
-          // Set a timer to stop the miss sound after MISS_SOUND_DURATION seconds
-          setTimeout(() => {
-            if (soundInstanceRef.current) {
-              soundInstanceRef.current.stop();
-              console.log(`[Sound] Miss sound stopped after ${MISS_SOUND_DURATION}s`);
-            }
-          }, MISS_SOUND_DURATION * 1000);
+          // Check if sounds are properly loaded
+          console.log('[SOUND DEBUG] Sound exists check:',
+            'sword-swing exists:', sound.exists('sword-swing'),
+            'sword-miss exists:', sound.exists('sword-miss'));
+          
+          // Play the sound with appropriate options
+          if (isHit) {
+            // For hit, play the full sound with volume from settings
+            soundInstanceRef.current = sound.play('sword-swing', {
+              volume: effectsVolume
+            });
+          } else {
+            // For miss, play only part of the sound with volume from settings
+            soundInstanceRef.current = sound.play('sword-miss', {
+              volume: effectsVolume,
+              complete: () => {
+                console.log('[Sound] Miss sound completed');
+              }
+            });
+            
+            // Set a timer to stop the miss sound after MISS_SOUND_DURATION seconds
+            setTimeout(() => {
+              if (soundInstanceRef.current) {
+                soundInstanceRef.current.stop();
+                console.log(`[Sound] Miss sound stopped after ${MISS_SOUND_DURATION}s`);
+              }
+            }, MISS_SOUND_DURATION * 1000);
+          }
+          
+          console.log(`[Attack Sound] Playing ${soundName} sound effect at volume ${effectsVolume}`);
+          soundPlayed.current = true;
         }
-        
-        console.log(`[Attack Sound] Playing ${soundName} sound effect at volume ${effectsVolume}`);
-        soundPlayed.current = true;
       } catch (error) {
         console.error('Error playing attack sound:', error);
       }
