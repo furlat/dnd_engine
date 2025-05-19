@@ -335,29 +335,60 @@ const characterActions = {
   // Move entity to a new position
   moveEntity: async (entityId: string, position: [number, number]) => {
     try {
-      // Make API call
-      const response = await fetch(`/api/entities/${entityId}/move`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ position }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to move entity');
+      const startTime = performance.now();
+      
+      // Log movement attempt
+      console.log(`[MOVE-FLOW] Moving entity ${entityId} to position [${position}]`);
+      
+      // Use the dedicated moveApi module
+      const { moveEntity } = await import('../api/moveApi');
+      const moveResult = await moveEntity(entityId, position);
+      
+      // Log response timing
+      const apiTime = performance.now() - startTime;
+      console.log(`[MOVE-PERF] Move API call completed in ${apiTime.toFixed(2)}ms`);
+      
+      // Apply optimistic update - immediately update position in local state
+      const existingEntity = characterStore.summaries[entityId];
+      if (existingEntity) {
+        characterStore.summaries = {
+          ...characterStore.summaries,
+          [entityId]: {
+            ...existingEntity,
+            position: position
+          }
+        };
       }
-
-      // Update with server response
-      const updatedSummary = await response.json();
-      characterStore.summaries = {
-        ...characterStore.summaries,
-        [entityId]: updatedSummary
-      };
+      
+      // Refresh summaries in the background to get any derived state changes
+      characterActions.fetchSummaries();
+      
+      // Calculate appropriate direction based on movement
+      if (existingEntity) {
+        const oldPosition = existingEntity.position;
+        const dx = position[0] - oldPosition[0];
+        const dy = position[1] - oldPosition[1];
+        
+        // Only update direction if there was actual movement
+        if (dx !== 0 || dy !== 0) {
+          // Import and use the direction calculation without a circular dependency
+          import('../store/entityDirectionStore').then(({ entityDirectionState }) => {
+            const direction = entityDirectionState.computeDirection(
+              [...oldPosition] as [number, number],
+              position
+            );
+            entityDirectionState.setDirection(entityId, direction);
+          });
+        }
+      }
+      
+      // Return the event data from the movement
+      return moveResult.event;
     } catch (err) {
       console.error('Error moving entity:', err);
       // Refresh summaries to ensure consistent state
       await characterActions.fetchSummaries();
+      throw err;
     }
   },
 

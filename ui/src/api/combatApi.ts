@@ -12,9 +12,23 @@ const DEFAULT_INCLUDE_PARAMS = {
   include_target_summary: true
 };
 
+// Define a proper type for the event
+export interface EventData {
+  id: string;
+  name: string;
+  event_type: string;
+  source_entity_uuid: string;
+  target_entity_uuid: string;
+  status_message: string;
+  canceled: boolean;
+  damage?: number;
+  hit?: boolean;
+  critical?: boolean;
+  children?: EventData[];
+}
+
 export interface AttackResult {
-  attacker: Character;
-  event: any; // The event details
+  event: EventData; // The event details
 }
 
 export const setEntityTarget = async (entityId: string, targetId: string): Promise<Character> => {

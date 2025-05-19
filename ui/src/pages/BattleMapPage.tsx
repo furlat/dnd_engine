@@ -139,6 +139,11 @@ const BattleMapPage: React.FC = () => {
     // Mark attack as in progress
     attackInProgressRef.current = true;
     
+    // Performance tracking
+    const startTime = performance.now();
+    let apiCallStartTime = 0;
+    let apiCallEndTime = 0;
+    
     try {
       // Skip using the snapshot and access store directly
       const selectedEntityId = characterStore.selectedEntityId;
@@ -150,6 +155,8 @@ const BattleMapPage: React.FC = () => {
       
       // Start timing measurement
       const clickTime = performance.now();
+      const frontendPreparationTime = clickTime - startTime;
+      console.log(`[ATTACK-PERF] Frontend preparation took ${frontendPreparationTime.toFixed(2)}ms`);
       
       if (!selectedEntityId || !selectedEntity) {
         console.error("[ATTACK-FLOW] No valid source entity found in state");
@@ -195,24 +202,67 @@ const BattleMapPage: React.FC = () => {
         return;
       }
       
+      // Get fresh positions directly from store to avoid stale data
+      const freshAttackerEntity = characterStore.summaries[attackerEntityId];
+      const freshTargetEntity = characterStore.summaries[targetId];
+      
+      if (!freshAttackerEntity || !freshTargetEntity) {
+        console.error('[ATTACK-FLOW] Could not find fresh entity data, using cached values');
+      }
+      
+      // Always use the most up-to-date positions for direction calculation
+      const sourcePosition = freshAttackerEntity ? 
+        [...freshAttackerEntity.position] as [number, number] : 
+        [...attackerEntity.position] as [number, number];
+        
+      const targetPosition = freshTargetEntity ? 
+        [...freshTargetEntity.position] as [number, number] : 
+        [...targetEntity.position] as [number, number];
+      
       // Compute direction based on entity positions immediately
-      const direction = entityDirectionState.computeDirection(
-        [...attackerEntity.position] as [number, number],
-        [...targetEntity.position] as [number, number]
-      );
+      const direction = entityDirectionState.computeDirection(sourcePosition, targetPosition);
 
       // Update entity direction immediately
-      entityDirectionState.setDirection(attackerEntity.uuid, direction);
+      console.log(`[ATTACK-FLOW] Setting attacker direction to ${Direction[direction]} (${direction})`);
+      entityDirectionState.setDirection(attackerEntityId, direction);
       
       // Import sound functions - but we'll only use them after getting API response
       const { playAttackResultSound } = await import('../components/battlemap/AttackAnimation');
       
       // Execute attack API call
       console.log(`[ATTACK-FLOW] Executing attack - Source: ${attackerEntity.uuid}, Target: ${targetId}`);
+      
+      // Import combat API
       const { executeAttack } = await import('../api/combatApi');
       
-      // Execute attack - this is the main API call that we have to wait for
-      const result = await executeAttack(attackerEntity.uuid, targetId, 'MAIN_HAND', 'Attack');
+      // Create variables for tracking result outside the condition
+      let result;
+      let apiCallDuration = 0;
+      
+      // Only execute once
+      if (!apiCallStartTime) { // Only proceed if we haven't started the API call yet
+        // Record API call start time
+        apiCallStartTime = performance.now();
+        console.log(`[ATTACK-PERF] Starting API call at ${(apiCallStartTime - startTime).toFixed(2)}ms from click`);
+        
+        // Execute attack - this is the main API call that we have to wait for
+        result = await executeAttack(attackerEntity.uuid, targetId, 'MAIN_HAND', 'Attack');
+        
+        // Record API call end time
+        apiCallEndTime = performance.now();
+        apiCallDuration = apiCallEndTime - apiCallStartTime;
+        console.log(`[ATTACK-PERF] API call completed in ${apiCallDuration.toFixed(2)}ms`);
+      } else {
+        console.warn(`[ATTACK-FLOW] API call already in progress, skipping duplicate executeAttack call`);
+        return; // Exit early if we've already started the API call
+      }
+      
+      // Check if the result exists (it should if we made the API call)
+      if (!result) {
+        console.error('[ATTACK-FLOW] No result from API call, this should not happen');
+        attackInProgressRef.current = false;
+        return;
+      }
       
       // Check if the event was canceled
       if (result.event.canceled) {
@@ -228,6 +278,7 @@ const BattleMapPage: React.FC = () => {
       console.log(`[ATTACK-FLOW] Attack result: ${isHit ? 'HIT' : 'MISS'} - ${statusMsg}`);
       
       // Play hit/miss sound immediately upon getting result
+      const soundStartTime = performance.now();
       playAttackResultSound(isHit);
       
       // Show animation immediately
@@ -237,7 +288,13 @@ const BattleMapPage: React.FC = () => {
         targetEntityId: targetId
       });
       
+      const uiUpdateTime = performance.now() - apiCallEndTime;
+      console.log(`[ATTACK-PERF] UI update after API response took ${uiUpdateTime.toFixed(2)}ms`);
       console.log(`[ATTACK-FLOW] Attack animation started - Hit: ${isHit}`);
+      
+      // Total time from click to animation start
+      const totalTimeToAnimation = performance.now() - startTime;
+      console.log(`[ATTACK-PERF] Total time from click to animation: ${totalTimeToAnimation.toFixed(2)}ms (Backend: ${apiCallDuration.toFixed(2)}ms, Frontend: ${(totalTimeToAnimation - apiCallDuration).toFixed(2)}ms)`);
     } catch (err) {
       // Stop any playing sounds on error
       const { stopAttackSounds } = await import('../components/battlemap/AttackAnimation');

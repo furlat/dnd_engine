@@ -349,7 +349,7 @@ export const preloadAnimationFrames = async (): Promise<Texture[]> => {
 (() => {
   console.log('[ANIM-INIT] Eagerly preloading attack animation assets');
   // Don't wait for the promise - let it load in the background
-  preloadAnimationFrames().catch(error => {
+preloadAnimationFrames().catch(error => {
     console.error('[ANIM-INIT] Failed to preload attack animation:', error);
   });
   
@@ -456,19 +456,6 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
   const mapSnap = useSnapshot(mapStore);
   const animSnap = useSnapshot(animationStore);
 
-  // Add a safety timeout to ensure animation completes
-  useEffect(() => {
-    if (!isPlaying || !sourceEntityId || !targetEntityId) return;
-    
-    // Set a timeout to force animation completion after MAX_ANIMATION_DURATION
-    const timeoutId = setTimeout(() => {
-      console.log(`[ANIM-PERF] Safety timeout forcing attack animation completion after ${MAX_ANIMATION_DURATION}ms`);
-      handleAnimationComplete();
-    }, MAX_ANIMATION_DURATION);
-    
-    return () => clearTimeout(timeoutId);
-  }, [isPlaying, sourceEntityId, targetEntityId]);
-
   // Calculate animation position based on entity positions
   const animationPosition = React.useMemo(() => {
     // If we don't have entity IDs, we can't calculate the position
@@ -536,6 +523,36 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
     return { x: midX, y: midY, angle };
   }, [sourceEntityId, targetEntityId, charSnap.summaries]);
 
+  // Handle animation completion - improve to capture time metrics
+  const handleAnimationComplete = useCallback(() => {
+    const duration = performance.now() - animationStartTime.current;
+    console.log(`[ANIM-PERF] Attack animation complete after ${duration.toFixed(2)}ms`);
+    setIsPlaying(false);
+          
+    // Notify animation store about completion
+    if (sourceEntityId && targetEntityId) {
+      animationActions.completeAttackAnimation(sourceEntityId, targetEntityId);
+    }
+    
+    // Call callback if provided
+    if (onComplete) {
+      onComplete();
+    }
+  }, [sourceEntityId, targetEntityId, onComplete]);
+
+  // Add a safety timeout to ensure animation completes
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    // Set a timeout to force animation completion after MAX_ANIMATION_DURATION
+    const timeoutId = setTimeout(() => {
+      console.log(`[ANIM-SAFETY] Forcing attack animation completion after ${MAX_ANIMATION_DURATION}ms`);
+      handleAnimationComplete();
+    }, MAX_ANIMATION_DURATION);
+    
+    return () => clearTimeout(timeoutId);
+  }, [isPlaying, handleAnimationComplete]);
+
   // Load frames once at component mount - do not play sound here
   useEffect(() => {
     console.log(`[ANIM-PERF] Attack animation initializing for ${sourceEntityId} → ${targetEntityId}, hit: ${isHit}`);
@@ -589,23 +606,6 @@ export const AttackAnimation: React.FC<AttackAnimationProps> = ({
       console.log(`[ANIM-PERF] Attack animation component unmounted`);
     };
   }, [isHit, sourceEntityId, targetEntityId]);
-
-  // Handle animation completion - improve to capture time metrics
-  const handleAnimationComplete = useCallback(() => {
-    const duration = performance.now() - animationStartTime.current;
-    console.log(`[ANIM-PERF] Attack animation complete after ${duration.toFixed(2)}ms`);
-    setIsPlaying(false);
-          
-    // Notify animation store about completion
-    if (sourceEntityId && targetEntityId) {
-      animationActions.completeAttackAnimation(sourceEntityId, targetEntityId);
-    }
-    
-    // Call callback if provided
-    if (onComplete) {
-      onComplete();
-    }
-  }, [sourceEntityId, targetEntityId, onComplete]);
 
   // Set up the AnimatedSprite ref callback to configure it when created
   const spriteRef = useCallback((sprite: PIXI.AnimatedSprite | null) => {
