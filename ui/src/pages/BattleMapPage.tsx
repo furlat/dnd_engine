@@ -11,6 +11,7 @@ import { useSnapshot } from 'valtio';
 import { AttackAnimation } from '../components/battlemap/AttackAnimation';
 import { Application, extend } from '@pixi/react';
 import { Container, AnimatedSprite } from 'pixi.js';
+import BackgroundMusicPlayer from '../components/music/BackgroundMusicPlayer';
 
 // Extend the PixiJS components
 extend({ Container, AnimatedSprite });
@@ -36,9 +37,15 @@ const BattleMapPage: React.FC = () => {
     targetY?: number
   } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [musicPlayerMinimized, setMusicPlayerMinimized] = React.useState(true);
 
   // Panel states
   const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(false);
+
+  // Toggle music player size
+  const toggleMusicPlayerSize = React.useCallback(() => {
+    setMusicPlayerMinimized(prev => !prev);
+  }, []);
 
   // Update container size when window resizes
   React.useEffect(() => {
@@ -385,6 +392,12 @@ const BattleMapPage: React.FC = () => {
           />
         ))}
       </Box>
+
+      {/* Background Music Player */}
+      <BackgroundMusicPlayer 
+        minimized={musicPlayerMinimized}
+        onToggleMinimize={toggleMusicPlayerSize}
+      />
 
       {/* Event Queue */}
       <EventQ />

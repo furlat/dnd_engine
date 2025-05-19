@@ -22,6 +22,7 @@ import { useSnapshot } from 'valtio';
 import { ReadonlyEntitySummary } from '../../models/readonly';
 import type { DeepReadonly } from '../../models/readonly';
 import { SensesType } from '../../models/character';
+import SettingsButton from '../settings/SettingsButton';
 
 // Initialize PixiJS Assets
 Assets.init({
@@ -712,6 +713,8 @@ const BattleMapCanvas: React.FC<BattleMapCanvasProps> = ({
             </span>
           </Tooltip>
         </Box>
+        <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
+        <SettingsButton />
       </Paper>
 
       {/* Canvas */}
