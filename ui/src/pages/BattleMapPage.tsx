@@ -19,6 +19,32 @@ import { entityDirectionState } from '../store/entityDirectionStore';
 // Extend the PixiJS components
 extend({ Container, AnimatedSprite });
 
+// Ensure eagerly preload is indeed eager by using an IIFE
+console.log('[PAGE-INIT] BattleMapPage module initializing');
+
+// Trigger preload immediately, but don't block module initialization
+(function preloadAssets() {
+  console.log('[PAGE-INIT] Starting eager asset preload');
+  
+  // Import and call the preload functions - don't await them, just let them run
+  import('../components/battlemap/AttackAnimation')
+    .then(({ preloadAnimationFrames, preloadAllSounds }) => {
+      console.log('[PAGE-INIT] Preloading animation frames and sounds');
+      
+      // Run preloads in parallel
+      return Promise.all([
+        preloadAnimationFrames(),
+        preloadAllSounds()
+      ]);
+    })
+    .then(() => {
+      console.log('[PAGE-INIT] All combat assets successfully preloaded');
+    })
+    .catch(err => {
+      console.error('[PAGE-INIT] Error during asset preload:', err);
+    });
+})();
+
 const BattleMapPage: React.FC = () => {
   const theme = useTheme();
   const [containerSize, setContainerSize] = React.useState({ width: 0, height: 0 });
@@ -35,10 +61,18 @@ const BattleMapPage: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [musicPlayerMinimized, setMusicPlayerMinimized] = React.useState(true);
   const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(false);
+  const attackInProgressRef = React.useRef<boolean>(false);
 
   // Toggle music player size
   const toggleMusicPlayerSize = React.useCallback(() => {
     setMusicPlayerMinimized(prev => !prev);
+  }, []);
+
+  // Handle animation completion - reset the in-progress flag
+  const handleAnimationComplete = React.useCallback(() => {
+    setAttackAnimation(null);
+    attackInProgressRef.current = false;
+    console.log('[ATTACK-FLOW] Attack animation complete, ready for next attack');
   }, []);
 
   // Update container size when window resizes
@@ -96,96 +130,132 @@ const BattleMapPage: React.FC = () => {
   const handleAttack = async (
     targetId: string
   ) => {
-    // Skip using the snapshot and access store directly
-    const selectedEntityId = characterStore.selectedEntityId;
-    const selectedEntity = selectedEntityId ? characterStore.summaries[selectedEntityId] : undefined;
-    
-    // Log state for debugging
-    console.log(`[ATTACK-FLOW] Selected entity ID: ${selectedEntityId}, Target ID: ${targetId}`);
-    console.log(`[ATTACK-FLOW] Entity summaries:`, Object.keys(characterStore.summaries));
-    
-    if (!selectedEntityId || !selectedEntity) {
-      console.error("[ATTACK-FLOW] No valid source entity found in state");
-      
-      // Try to force a refresh and report the error to the user
-      try {
-        await characterActions.forceRefresh();
-        const refreshedSelectedId = characterStore.selectedEntityId;
-        const refreshedEntity = refreshedSelectedId ? characterStore.summaries[refreshedSelectedId] : undefined;
-        
-        if (!refreshedEntity) {
-          setError("No entity selected to perform attack");
-          return;
-        }
-        
-        // Continue with refreshed entity data
-        console.log(`[ATTACK-FLOW] Recovered after refresh with entity ${refreshedEntity.uuid}`);
-      } catch (err) {
-        setError("No entity selected to perform attack");
-        return;
-      }
-    }
-    
-    // Re-check after potential refresh
-    const attackerEntityId = characterStore.selectedEntityId;
-    const attackerEntity = attackerEntityId ? characterStore.summaries[attackerEntityId] : undefined;
-    
-    if (!attackerEntityId || !attackerEntity) {
-      setError("Could not determine attacking entity");
+    // Prevent multiple simultaneous attacks
+    if (attackInProgressRef.current) {
+      console.log('[ATTACK-FLOW] Attack already in progress, ignoring new request');
       return;
     }
-
-    // Start timing measurement
-    const clickTime = performance.now();
-    console.log(`[ATTACK-FLOW] Attack initiated at ${clickTime.toFixed(2)}ms - Source: ${attackerEntity.uuid}, Target: ${targetId}`);
+    
+    // Mark attack as in progress
+    attackInProgressRef.current = true;
     
     try {
-      // We can directly use the combatApi without refresh since the attack API will get fresh data
-      console.log(`[ATTACK-FLOW] Executing attack - Source: ${attackerEntity.uuid}, Target: ${targetId}`);
+      // Skip using the snapshot and access store directly
+      const selectedEntityId = characterStore.selectedEntityId;
+      const selectedEntity = selectedEntityId ? characterStore.summaries[selectedEntityId] : undefined;
+      
+      // Log state for debugging
+      console.log(`[ATTACK-FLOW] Selected entity ID: ${selectedEntityId}, Target ID: ${targetId}`);
+      console.log(`[ATTACK-FLOW] Entity summaries:`, Object.keys(characterStore.summaries));
+      
+      // Start timing measurement
+      const clickTime = performance.now();
+      
+      if (!selectedEntityId || !selectedEntity) {
+        console.error("[ATTACK-FLOW] No valid source entity found in state");
+        
+        // Try to force a refresh and report the error to the user
+        try {
+          await characterActions.forceRefresh();
+          const refreshedSelectedId = characterStore.selectedEntityId;
+          const refreshedEntity = refreshedSelectedId ? characterStore.summaries[refreshedSelectedId] : undefined;
+          
+          if (!refreshedEntity) {
+            setError("No entity selected to perform attack");
+            attackInProgressRef.current = false;
+            return;
+          }
+          
+          // Continue with refreshed entity data
+          console.log(`[ATTACK-FLOW] Recovered after refresh with entity ${refreshedEntity.uuid}`);
+        } catch (err) {
+          setError("No entity selected to perform attack");
+          attackInProgressRef.current = false;
+          return;
+        }
+      }
+      
+      // Re-check after potential refresh
+      const attackerEntityId = characterStore.selectedEntityId;
+      const attackerEntity = attackerEntityId ? characterStore.summaries[attackerEntityId] : undefined;
+      
+      if (!attackerEntityId || !attackerEntity) {
+        setError("Could not determine attacking entity");
+        attackInProgressRef.current = false;
+        return;
+      }
 
-      // Use the combatApi module for attack
+      console.log(`[ATTACK-FLOW] Attack initiated at ${clickTime.toFixed(2)}ms - Source: ${attackerEntity.uuid}, Target: ${targetId}`);
+      
+      // Check if target exists
+      const targetEntity = characterStore.summaries[targetId];
+      if (!targetEntity) {
+        setError("Target entity not found");
+        attackInProgressRef.current = false;
+        return;
+      }
+      
+      // Compute direction based on entity positions immediately
+      const direction = entityDirectionState.computeDirection(
+        [...attackerEntity.position] as [number, number],
+        [...targetEntity.position] as [number, number]
+      );
+
+      // Update entity direction immediately
+      entityDirectionState.setDirection(attackerEntity.uuid, direction);
+      
+      // Import sound functions - but we'll only use them after getting API response
+      const { playAttackResultSound } = await import('../components/battlemap/AttackAnimation');
+      
+      // Execute attack API call
+      console.log(`[ATTACK-FLOW] Executing attack - Source: ${attackerEntity.uuid}, Target: ${targetId}`);
       const { executeAttack } = await import('../api/combatApi');
+      
+      // Execute attack - this is the main API call that we have to wait for
       const result = await executeAttack(attackerEntity.uuid, targetId, 'MAIN_HAND', 'Attack');
       
       // Check if the event was canceled
       if (result.event.canceled) {
         console.log('[ATTACK-FLOW] Attack was canceled:', result.event.status_message);
-        return; // Don't play animation for canceled attacks
+        // Don't play any animation or sound for canceled attacks
+        attackInProgressRef.current = false;
+        return;
       }
 
       // Determine if the attack was a hit based on event data
       const statusMsg = result.event.status_message || '';
       const isHit = !statusMsg.includes('MISS') && !statusMsg.includes('missed');
       console.log(`[ATTACK-FLOW] Attack result: ${isHit ? 'HIT' : 'MISS'} - ${statusMsg}`);
-
-      // Compute direction based on entity positions - use spreading to handle readonly arrays
-      const direction = entityDirectionState.computeDirection(
-        [...attackerEntity.position] as [number, number],
-        [...characterStore.summaries[targetId].position] as [number, number]
-      );
-
-      // Update entity direction before starting animation
-      entityDirectionState.setDirection(attackerEntity.uuid, direction);
-
-      // Start animation
+      
+      // Play hit/miss sound immediately upon getting result
+      playAttackResultSound(isHit);
+      
+      // Show animation immediately
       setAttackAnimation({ 
-        isHit,
+        isHit: isHit,
         sourceEntityId: attackerEntity.uuid,
         targetEntityId: targetId
       });
       
       console.log(`[ATTACK-FLOW] Attack animation started - Hit: ${isHit}`);
-    } catch (error) {
-      console.error('[ATTACK-FLOW] Error executing attack:', error);
+    } catch (err) {
+      // Stop any playing sounds on error
+      const { stopAttackSounds } = await import('../components/battlemap/AttackAnimation');
+      stopAttackSounds();
+      
+      console.error('[ATTACK-FLOW] Error executing attack:', err);
       
       // Show error in UI
-      const errorMessage = error instanceof Error
-        ? (error.message === 'Failed to fetch'
+      const errorMessage = err instanceof Error
+        ? (err.message === 'Failed to fetch'
             ? 'Network error - could not reach server'
-            : error.message)
+            : err.message)
         : 'Unknown error occurred';
-        
+          
       setError(errorMessage);
+      
+      // Reset attack in progress flag
+      attackInProgressRef.current = false;
     }
   };
 
@@ -269,12 +339,14 @@ const BattleMapPage: React.FC = () => {
                   backgroundColor={0x000000}
                   backgroundAlpha={0}
                 >
-                  <AttackAnimation
-                    isHit={attackAnimation.isHit}
-                    sourceEntityId={attackAnimation.sourceEntityId}
-                    targetEntityId={attackAnimation.targetEntityId}
-                    onComplete={() => setAttackAnimation(null)}
-                  />
+                  <pixiContainer x={mapSnap.gridOffsetX} y={mapSnap.gridOffsetY}>
+                    <AttackAnimation
+                      isHit={attackAnimation.isHit}
+                      sourceEntityId={attackAnimation.sourceEntityId}
+                      targetEntityId={attackAnimation.targetEntityId}
+                      onComplete={handleAnimationComplete}
+                    />
+                  </pixiContainer>
                 </Application>
               </Box>
             )}
