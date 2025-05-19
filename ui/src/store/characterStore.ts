@@ -3,6 +3,8 @@ import type { Character, EntitySummary } from '../models/character';
 import type { ReadonlyCharacter, ReadonlyEntitySummary, DeepReadonly } from '../models/readonly';
 import { fetchCharacter, fetchEntitySummaries } from '../api/characterApi';
 import { fetchGridSnapshot, TileSummary } from '../api/tileApi';
+import { Direction } from '../components/battlemap/DirectionalEntitySprite';
+import { entityDirectionState } from './entityDirectionStore';
 
 // Base state interface without readonly modifiers for the store
 export interface CharacterStoreState {
@@ -64,6 +66,7 @@ const characterActions = {
       if (characterStore.character) {
         characterStore.character.target_entity_uuid = entityId;
       }
+      // Don't automatically update direction when selecting a target
     }
   },
 
@@ -181,16 +184,6 @@ const characterActions = {
   // Move entity to a new position
   moveEntity: async (entityId: string, position: [number, number]) => {
     try {
-      // Optimistically update the position
-      const entity = characterStore.summaries[entityId];
-      if (entity) {
-        const updatedEntity = { ...entity, position };
-        characterStore.summaries = {
-          ...characterStore.summaries,
-          [entityId]: updatedEntity
-        };
-      }
-
       // Make API call
       const response = await fetch(`/api/entities/${entityId}/move`, {
         method: 'POST',
@@ -214,6 +207,12 @@ const characterActions = {
       console.error('Error moving entity:', err);
       // Refresh summaries to ensure consistent state
       await characterActions.fetchSummaries();
+    }
+  },
+
+  updateEntityDirection: (entityId: string, direction: Direction) => {
+    if (characterStore.selectedEntityId === entityId) {
+      entityDirectionState.setDirection(entityId, direction);
     }
   }
 };
