@@ -1,8 +1,15 @@
-import type { ReadonlyModifierChannel, ReadonlyModifiableValueSnapshot } from '../../models/readonly';
+import { ModifiableValueSnapshot } from '../../types/characterSheet_types';
+
+// Define channel type needed for calculations
+interface ModifierChannel {
+  readonly value_modifiers: ReadonlyArray<{
+    readonly value: number;
+  }>;
+}
 
 interface ModifierCalculations {
-  getTotalValue: (channel: ReadonlyModifierChannel) => number;
-  getModifierBreakdown: (score: ReadonlyModifiableValueSnapshot) => {
+  getTotalValue: (channel: ModifierChannel) => number;
+  getModifierBreakdown: (score: ModifiableValueSnapshot) => {
     rawScore: number;
     normalizedScore: number;
     baseModifier?: number;
@@ -12,18 +19,18 @@ interface ModifierCalculations {
 }
 
 export function useModifierCalculations(): ModifierCalculations {
-  const getTotalValue = (channel: ReadonlyModifierChannel): number => {
-    return channel.value_modifiers.reduce((sum, mod) => sum + mod.value, 0);
+  const getTotalValue = (channel: ModifierChannel): number => {
+    return channel.value_modifiers.reduce((sum: number, mod: { value: number }) => sum + mod.value, 0);
   };
 
-  const getModifierBreakdown = (score: ReadonlyModifiableValueSnapshot) => {
-    const rawScore = score.score;
-    const normalizedScore = score.normalized_score;
+  const getModifierBreakdown = (score: ModifiableValueSnapshot) => {
+    const rawScore = score.base_value;
+    const normalizedScore = score.normalized_value;
     const baseModifier = score.base_modifier?.value;
-    const modifierBonusValue = score.channels.reduce((sum, channel) => 
-      sum + channel.value_modifiers.reduce((modSum, mod) => modSum + mod.value, 0), 
+    const modifierBonusValue = score.channels?.reduce((sum: number, channel: ModifierChannel) => 
+      sum + channel.value_modifiers.reduce((modSum: number, mod: { value: number }) => modSum + mod.value, 0), 
       0
-    );
+    ) || 0;
     const calculatedModifier = normalizedScore + modifierBonusValue;
 
     return {

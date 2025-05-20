@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Container, Assets, Texture, Rectangle, Sprite } from 'pixi.js';
 import { useTick } from '@pixi/react';
-import { EntitySummary } from '../../models/character';
-import { ReadonlyEntitySummary } from '../../models/readonly';
+import { EntitySummary } from '../../types/common';
 
 // Direction mapping constants
 export enum Direction {
@@ -17,7 +16,7 @@ export enum Direction {
 }
 
 interface DirectionalEntitySpriteProps {
-  entity: EntitySummary | ReadonlyEntitySummary;
+  entity: EntitySummary;
   direction: Direction;
   width: number;
   height: number;

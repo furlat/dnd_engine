@@ -22,23 +22,29 @@ import {
   CardContent
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import type { ReadonlyAbilityScoresSnapshot, ReadonlyAbilityScore, ReadonlyModifierChannel, ReadonlyModifiableValueSnapshot } from '../../../models/readonly';
+import { 
+  AbilityScoresSnapshot, 
+  AbilityScore, 
+  ModifiableValueSnapshot, 
+  ScoreModifier,
+  ModifierDisplay 
+} from '../../../types/characterSheet_types';
 import { useAbilityScores } from '../../../hooks/character_sheet/useAbilityScores';
 
 interface AbilityDetailDialogProps {
   open: boolean;
   onClose: () => void;
-  ability: ReadonlyAbilityScore | null;
+  ability: AbilityScore | null;
 }
 
 // Helper component to display JSON data recursively
-const DisplayJSON = ({ data, name = "Data" }: { data: any, name?: string }) => {
+const DisplayJSON = ({ data, name = "Data" }: { data: unknown, name?: string }) => {
   return (
     <div>
       {(typeof data === 'object' && data !== null) ? (
         <>
-          {Object.keys(data).map((key) => {
-            const value = data[key];
+          {Object.keys(data as Record<string, unknown>).map((key) => {
+            const value = (data as Record<string, unknown>)[key];
             const isObject = typeof value === 'object' && value !== null;
             
             if (Array.isArray(value)) {
@@ -77,38 +83,43 @@ const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
   const { open, onClose, ability } = props;
   if (!ability) return null;
   
-  const getTotalValue = (channel: ReadonlyModifierChannel) => {
-    return channel.value_modifiers.reduce((sum, mod) => sum + mod.value, 0);
+  const getTotalValue = (modifiableValue: ModifiableValueSnapshot): number => {
+    return modifiableValue.modifiers.reduce((sum: number, mod) => sum + mod.value, 0);
   };
   
   // Access ability_score if available
   const abilityScore = ability.ability_score || { 
-    channels: [], 
-    score: ability.score, 
-    normalized_score: ability.score,
-    base_modifier: undefined
+    modifiers: [], 
+    base_value: ability.score, 
+    final_value: ability.score,
+    normalized_value: ability.score
   };
   
   // Get the modifier_bonus data
   const modifierBonus = ability.modifier_bonus || {
-    channels: [],
-    score: 0,
-    normalized_score: 0,
-    base_modifier: undefined
+    modifiers: [],
+    base_value: 0,
+    final_value: 0,
+    normalized_value: 0
   };
   
-  const hasChannels = abilityScore.channels && Array.isArray(abilityScore.channels);
-  const channels: ReadonlyModifierChannel[] = hasChannels ? abilityScore.channels : [];
+  const hasModifiers = abilityScore.modifiers && Array.isArray(abilityScore.modifiers);
+  const modifiers: ModifierDisplay[] = hasModifiers ? 
+    (abilityScore.modifiers as ScoreModifier[]).map(m => ({
+      name: m.name,
+      value: m.value,
+      source_entity_name: m.source_entity_name
+    })) : [];
   
   // Check for base_modifier in ability.ability_score
-  const baseModifier = abilityScore.base_modifier;
+  const baseModifier = abilityScore.modifiers.find(m => m.name === 'Base') as ScoreModifier | undefined;
   // Get actual raw and normalized scores from ability_score if available
-  const rawScore = abilityScore.score || ability.score;
-  const normalizedScore = abilityScore.normalized_score || ability.normalized_score || ability.score;
+  const rawScore = abilityScore.final_value || ability.score;
+  const normalizedScore = abilityScore.normalized_value || ability.normalized_value || ability.score;
   
-  // Get the normalized_score from the modifier_bonus (usually adds directly to the ability modifier)
-  const modifierBonusValue = modifierBonus.normalized_score || 0;
-  // The normalized_score is already in modifier range, so we use it directly
+  // Get the normalized_value from the modifier_bonus (usually adds directly to the ability modifier)
+  const modifierBonusValue = modifierBonus.normalized_value || 0;
+  // The normalized_value is already in modifier range, so we use it directly
   const baseCalculation = normalizedScore;
   const calculatedModifier = baseCalculation + modifierBonusValue;
   const modifierMatches = calculatedModifier === ability.modifier;
@@ -170,7 +181,7 @@ const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
               </Typography>
               <Paper elevation={1} sx={{ p: 2 }}>
                 <Typography variant="body2" color="text.secondary">Base Score</Typography>
-                <Typography variant="h6">{ability.base_score || ability.ability_score?.base_modifier?.value || rawScore}</Typography>
+                <Typography variant="h6">{ability.base_score || abilityScore.base_value || rawScore}</Typography>
                 
                 {baseModifier && (
                   <Box sx={{ mt: 1 }}>
@@ -180,7 +191,7 @@ const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
                   </Box>
                 )}
                 
-                {modifierBonus.base_modifier && (
+                {modifierBonus.modifiers.find(m => m.name === 'Base') && (
                   <>
                     <Divider sx={{ my: 1 }} />
                     <Typography variant="body2" color="text.secondary">Modifier Bonus</Typography>
@@ -189,21 +200,21 @@ const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
                     </Typography>
                     <Box sx={{ mt: 1 }}>
                       <Typography variant="caption" color="text.secondary">
-                        Source: {modifierBonus.base_modifier.name}
+                        Source: {modifierBonus.modifiers.find(m => m.name === 'Base')?.name}
                       </Typography>
                     </Box>
                   </>
                 )}
               </Paper>
               {/* Quick view of main static modifiers if available */}
-              {channels.length > 0 && channels[0].value_modifiers.length > 0 && (
+              {modifiers.length > 0 && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Ability Score Modifiers
                   </Typography>
                   <Paper elevation={1} sx={{ p: 2 }}>
-                    {channels[0].value_modifiers.map((mod, idx) => (
-                      <Box key={idx} sx={{ mb: idx < channels[0].value_modifiers.length - 1 ? 1 : 0 }}>
+                    {modifiers.map((mod, idx) => (
+                      <Box key={idx} sx={{ mb: idx < modifiers.length - 1 ? 1 : 0 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="body2">{mod.name}</Typography>
                           <Chip 
@@ -224,15 +235,14 @@ const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
               )}
               
               {/* Display modifier bonus modifiers if available */}
-              {modifierBonus.channels && modifierBonus.channels.length > 0 && 
-               modifierBonus.channels[0].value_modifiers.length > 0 && (
+              {modifierBonus.modifiers.length > 0 && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Modifier Bonus Modifiers
                   </Typography>
                   <Paper elevation={1} sx={{ p: 2 }}>
-                    {modifierBonus.channels[0].value_modifiers.map((mod, idx) => (
-                      <Box key={idx} sx={{ mb: idx < modifierBonus.channels[0].value_modifiers.length - 1 ? 1 : 0 }}>
+                    {(modifierBonus.modifiers as ScoreModifier[]).map((mod, idx) => (
+                      <Box key={idx} sx={{ mb: idx < modifierBonus.modifiers.length - 1 ? 1 : 0 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="body2">{mod.name}</Typography>
                           <Chip 
@@ -261,12 +271,19 @@ const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
             
             {/* Build accordion sections */}
             {(() => {
-              const sections: { label: string; channels: readonly ReadonlyModifierChannel[] }[] = [];
-              if (hasChannels) {
-                sections.push({ label: 'Ability Score Modifiers', channels });
+              const sections: { label: string; modifiers: ReadonlyArray<ModifierDisplay> }[] = [];
+              if (hasModifiers) {
+                sections.push({ label: 'Ability Score Modifiers', modifiers });
               }
-              if (modifierBonus.channels && modifierBonus.channels.length > 0) {
-                sections.push({ label: 'Modifier Bonus Modifiers', channels: modifierBonus.channels });
+              if (modifierBonus.modifiers && modifierBonus.modifiers.length > 0) {
+                sections.push({ 
+                  label: 'Modifier Bonus Modifiers', 
+                  modifiers: (modifierBonus.modifiers as ScoreModifier[]).map(m => ({
+                    name: m.name,
+                    value: m.value,
+                    source_entity_name: m.source_entity_name
+                  }))
+                });
               }
               if (sections.length === 0) {
                 return (
@@ -281,30 +298,28 @@ const AbilityDetailDialog: React.FC<AbilityDetailDialogProps> = (props) => {
                     <Typography variant="subtitle1">{section.label}</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    {section.channels.map((channel, idx) => (
-                      <Box key={idx} sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                          {channel.name} – Total: {getTotalValue(channel)}
-                        </Typography>
-                        <List dense disablePadding>
-                          {channel.value_modifiers.map((mod, mIdx) => (
-                            <ListItem key={mIdx} dense divider={mIdx < channel.value_modifiers.length - 1}>
-                              <ListItemText
-                                primary={mod.name}
-                                secondary={mod.source_entity_name}
-                                primaryTypographyProps={{ variant: 'body2' }}
-                                secondaryTypographyProps={{ variant: 'caption' }}
-                              />
-                              <Chip
-                                label={`${mod.value}`}
-                                color={mod.value >= 0 ? 'success' : 'error'}
-                                size="small"
-                              />
-                            </ListItem>
-                          ))}
-                        </List>
-                      </Box>
-                    ))}
+                    <Box key={sIdx} sx={{ mb: 2 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                        {section.label} – Total: {section.modifiers.reduce((sum, mod) => sum + mod.value, 0)}
+                      </Typography>
+                      <List dense disablePadding>
+                        {section.modifiers.map((mod, mIdx) => (
+                          <ListItem key={mIdx} dense divider={mIdx < section.modifiers.length - 1}>
+                            <ListItemText
+                              primary={mod.name}
+                              secondary={mod.source_entity_name}
+                              primaryTypographyProps={{ variant: 'body2' }}
+                              secondaryTypographyProps={{ variant: 'caption' }}
+                            />
+                            <Chip
+                              label={`${mod.value}`}
+                              color={mod.value >= 0 ? 'success' : 'error'}
+                              size="small"
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Box>
                   </AccordionDetails>
                 </Accordion>
               ));
@@ -380,13 +395,13 @@ const AbilityScoresBlock: React.FC = () => {
       </Typography>
       <Grid container spacing={2}>
         {abilityCards.map(({ key, label }) => {
-          const ability = abilityScores[key as keyof ReadonlyAbilityScoresSnapshot];
+          const ability = abilityScores[key as keyof AbilityScoresSnapshot];
           const modifierText = ability.modifier >= 0 ? `+${ability.modifier}` : ability.modifier;
           
           // Access ability_score if available
-          const abilityScore = ability.ability_score || { score: ability.score, normalized_score: ability.score };
-          const showNormalizedScore = abilityScore.normalized_score !== undefined && 
-                                     abilityScore.normalized_score !== abilityScore.score;
+          const abilityScore = ability.ability_score || { final_value: ability.score, normalized_value: ability.score };
+          const showNormalizedScore = abilityScore.normalized_value !== undefined && 
+                                     abilityScore.normalized_value !== abilityScore.final_value;
           
           return (
             <Grid size={{ xs: 6, sm: 4, md: 2 }} key={key}>
@@ -406,7 +421,7 @@ const AbilityScoresBlock: React.FC = () => {
                   {label}
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: 0.5 }}>
-                  <Typography variant="h4">{abilityScore.score}</Typography>
+                  <Typography variant="h4">{abilityScore.final_value}</Typography>
                   <Typography
                     variant="subtitle1"
                     color={ability.modifier >= 0 ? 'success.main' : 'error.main'}
@@ -414,7 +429,7 @@ const AbilityScoresBlock: React.FC = () => {
                 </Box>
                 {showNormalizedScore && (
                   <Typography variant="caption" color="text.secondary">
-                    Normalized: {abilityScore.normalized_score}
+                    Normalized: {abilityScore.normalized_value}
                   </Typography>
                 )}
               </Paper>

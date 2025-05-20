@@ -2,29 +2,29 @@ import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
 import { characterSheetStore } from '../../store/characterSheetStore';
 import type { 
-  ReadonlySavingThrowSetSnapshot, 
-  ReadonlySavingThrowBonusCalculation,
-  ReadonlySavingThrowSnapshot 
-} from '../../models/readonly';
+  SavingThrowSetSnapshot, 
+  SavingThrowBonusCalculationSnapshot,
+  SavingThrowSnapshot 
+} from '../../types/characterSheet_types';
 
 interface SavingThrowsData {
   // Data from store
-  savingThrows: ReadonlySavingThrowSetSnapshot | null;
-  calculations: Readonly<Record<string, ReadonlySavingThrowBonusCalculation>> | null;
+  savingThrows: SavingThrowSetSnapshot | null;
+  calculations: Readonly<Record<string, SavingThrowBonusCalculationSnapshot>> | null;
   // UI state
-  selectedSavingThrow: ReadonlySavingThrowSnapshot | null;
+  selectedSavingThrow: SavingThrowSnapshot | null;
   dialogOpen: boolean;
   // Actions
-  handleSavingThrowClick: (savingThrow: ReadonlySavingThrowSnapshot) => void;
+  handleSavingThrowClick: (savingThrow: SavingThrowSnapshot) => void;
   handleCloseDialog: () => void;
 }
 
 export function useSavingThrows(): SavingThrowsData {
   const snap = useSnapshot(characterSheetStore);
-  const [selectedSavingThrow, setSelectedSavingThrow] = useState<ReadonlySavingThrowSnapshot | null>(null);
+  const [selectedSavingThrow, setSelectedSavingThrow] = useState<SavingThrowSnapshot | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const handleSavingThrowClick = useCallback((savingThrow: ReadonlySavingThrowSnapshot) => {
+  const handleSavingThrowClick = useCallback((savingThrow: SavingThrowSnapshot) => {
     setSelectedSavingThrow(savingThrow);
     setDialogOpen(true);
   }, []);

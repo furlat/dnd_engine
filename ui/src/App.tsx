@@ -6,7 +6,6 @@ import { Box } from '@mui/material';
 import Layout from './components/character_sheet/layout/Layout';
 
 // Pages
-import CharacterListPage from './pages/CharacterListPage';
 import BattleMapPage from './pages/BattleMapPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -20,8 +19,7 @@ const App: React.FC = () => {
       <EventQueueProvider>
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route index element={<CharacterListPage />} />
-            <Route path="characters/:characterId" element={<BattleMapPage />} />
+            <Route index element={<BattleMapPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

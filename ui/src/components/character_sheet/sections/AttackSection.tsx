@@ -32,35 +32,58 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useAttack, WeaponSlot } from '../../../hooks/character_sheet/useAttack';
-import type { ReadonlyModifiableValueSnapshot } from '../../../models/readonly';
-import { AdvantageStatus, AutoHitStatus, CriticalStatus } from '../../../models/modifiers';
+import { 
+  ModifiableValueSnapshot, 
+  AdvantageStatus, 
+  AutoHitStatus, 
+  CriticalStatus,
+  ModifierDisplay,
+  AdvantageModifier
+} from '../../../types/characterSheet_types';
 import ItemDetailsDialog from '../modifiers/ItemDetailsDialog';
 
 const format = (value: number | undefined) => (value ?? 0) >= 0 ? `+${value}` : `${value}`;
 
 interface ChannelBreakdownProps {
-  mv: ReadonlyModifiableValueSnapshot;
+  mv: ModifiableValueSnapshot;
   label: string;
   showAdvantage?: boolean;
 }
 
 const ChannelBreakdown: React.FC<ChannelBreakdownProps> = ({ mv, label, showAdvantage = false }) => {
-  if (!mv || !mv.channels) return null;
+  if (!mv) return null;
+  
+  // Extract modifiers from ModifiableValueSnapshot
+  const valueModifiers: ModifierDisplay[] = mv.modifiers.map(mod => ({
+    name: mod.name,
+    value: mod.value,
+    source_entity_name: mod.source_entity_name
+  }));
+  
+  // For advantage display
+  const advantageModifiers: AdvantageModifier[] = [];
+  if (mv.advantage) {
+    advantageModifiers.push({
+      name: 'Advantage Status',
+      value: mv.advantage
+    });
+  }
+  
   return (
     <Accordion defaultExpanded sx={{ mb: 1 }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>{label}</AccordionSummary>
       <AccordionDetails>
-        {mv.channels.map((ch, idx) => (
-          <Box key={idx} sx={{ mb: 1 }}>
-            <Typography variant="body2" fontWeight="bold">
-              {ch.name} – Total: {showAdvantage ? ch.advantage_status : format(ch.normalized_score)}
-            </Typography>
-            <List dense disablePadding>
-              {(showAdvantage ? ch.advantage_modifiers : ch.value_modifiers).map((mod, i) => (
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="body2" fontWeight="bold">
+            {mv.name} – Total: {showAdvantage ? (mv.advantage || 'NONE') : format(mv.normalized_value)}
+          </Typography>
+          <List dense disablePadding>
+            {showAdvantage 
+              ? advantageModifiers.map((mod, i) => (
                 <ListItem
                   key={i}
                   dense
-                  divider={i < (showAdvantage ? ch.advantage_modifiers.length : ch.value_modifiers.length) - 1}
+                  divider={i < advantageModifiers.length - 1}
                 >
                   <ListItemText
                     primary={mod.name}
@@ -69,24 +92,40 @@ const ChannelBreakdown: React.FC<ChannelBreakdownProps> = ({ mv, label, showAdva
                     secondaryTypographyProps={{ variant: 'caption' }}
                   />
                   <Chip
-                    label={showAdvantage ? String(mod.value) : format(mod.value as number)}
+                    label={String(mod.value)}
                     size="small"
-                    color={showAdvantage 
-                      ? (mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 
-                         mod.value === AdvantageStatus.DISADVANTAGE ? 'error' : 'default')
-                      : (typeof mod.value === 'number' ? (mod.value >= 0 ? 'success' : 'error') : 'default')
-                    }
+                    color={mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 
+                           mod.value === AdvantageStatus.DISADVANTAGE ? 'error' : 'default'}
                   />
                 </ListItem>
-              ))}
-            </List>
-            {ch.advantage_modifiers.length === 0 && showAdvantage && (
-              <Typography variant="body2" color="text.secondary">
-                No advantage modifiers
-              </Typography>
-            )}
-          </Box>
-        ))}
+              ))
+              : valueModifiers.map((mod, i) => (
+                <ListItem
+                  key={i}
+                  dense
+                  divider={i < valueModifiers.length - 1}
+                >
+                  <ListItemText
+                    primary={mod.name}
+                    secondary={mod.source_entity_name}
+                    primaryTypographyProps={{ variant: 'body2' }}
+                    secondaryTypographyProps={{ variant: 'caption' }}
+                  />
+                  <Chip
+                    label={format(mod.value)}
+                    size="small"
+                    color={mod.value >= 0 ? 'success' : 'error'}
+                  />
+                </ListItem>
+              ))
+            }
+          </List>
+          {advantageModifiers.length === 0 && showAdvantage && (
+            <Typography variant="body2" color="text.secondary">
+              No advantage modifiers
+            </Typography>
+          )}
+        </Box>
       </AccordionDetails>
     </Accordion>
   );
@@ -181,28 +220,28 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
               {weaponName}
             </Typography>
             {/* Combat Status Chips */}
-              <Chip 
-                size="small" 
+            <Chip 
+              size="small" 
               label={calc.total_bonus.advantage === AdvantageStatus.ADVANTAGE ? 'Advantage' :
                      calc.total_bonus.advantage === AdvantageStatus.DISADVANTAGE ? 'Disadvantage' : 'N/A'}
               color={calc.total_bonus.advantage === AdvantageStatus.ADVANTAGE ? 'success' :
                      calc.total_bonus.advantage === AdvantageStatus.DISADVANTAGE ? 'error' : 'default'}
-                onClick={(e) => {
-                  e.stopPropagation();
+              onClick={(e) => {
+                e.stopPropagation();
                 handleDetailModeChange('advantage');
                 handleOpenDialog();
-                }}
-              />
-            {calc.total_bonus.auto_hit === AutoHitStatus.AUTOHIT && (
+              }}
+            />
+            {calc.total_bonus.auto_hit === AutoHitStatus.HIT && (
               <Chip size="small" label="Auto Hit" color="info" />
             )}
-            {calc.total_bonus.auto_hit === AutoHitStatus.AUTOMISS && (
+            {calc.total_bonus.auto_hit === AutoHitStatus.MISS && (
               <Chip size="small" label="Auto Miss" color="error" />
             )}
-            {calc.total_bonus.critical === CriticalStatus.AUTOCRIT && (
+            {calc.total_bonus.critical === CriticalStatus.CRITICAL && (
               <Chip size="small" label="Always Crit" color="warning" />
             )}
-            {calc.total_bonus.critical === CriticalStatus.NOCRIT && (
+            {calc.total_bonus.critical === CriticalStatus.NORMAL && (
               <Chip size="small" label="Never Crit" color="error" />
             )}
           </Box>
@@ -257,31 +296,31 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
       </Paper>
 
       {/* Menu */}
-        <Menu
-          anchorEl={menuAnchor}
-          open={Boolean(menuAnchor)}
-          onClose={handleMenuClose}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MenuItem onClick={() => {
-            handleMenuClose();
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <MenuItem onClick={() => {
+          handleMenuClose();
           handleWeaponSelectOpen();
-          }}>
-            <ListItemIcon>
-              <SwapHorizIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Change Weapon</ListItemText>
-          </MenuItem>
-          <MenuItem 
+        }}>
+          <ListItemIcon>
+            <SwapHorizIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Change Weapon</ListItemText>
+        </MenuItem>
+        <MenuItem 
           onClick={() => handleUnequipWeapon(slot)}
-            disabled={calc.is_unarmed}
-          >
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Unequip</ListItemText>
-          </MenuItem>
-        </Menu>
+          disabled={calc.is_unarmed}
+        >
+          <ListItemIcon>
+            <DeleteIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Unequip</ListItemText>
+        </MenuItem>
+      </Menu>
 
       {/* Attack Details Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
@@ -310,7 +349,7 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                   <Typography variant="h6">{calc.range.type === 'RANGE' ? `${calc.range.normal}/${calc.range.long ?? ''}` : 'Melee'}</Typography>
                   {calc.properties.length > 0 && (
                     <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {calc.properties.map((p) => (
+                      {calc.properties.map((p: string) => (
                         <Chip key={p} size="small" label={p} />
                       ))}
                     </Box>
@@ -328,7 +367,7 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                           {c.label}
                         </Typography>
                         <Typography variant="body2" fontWeight="bold">
-                          {format(c.mv.normalized_score)}
+                          {format(c.mv.normalized_value)}
                         </Typography>
                       </Box>
                       {idx < components.length - 1 && <Divider sx={{ my: 1 }} />}
@@ -390,7 +429,7 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                           {c.label}
                         </Typography>
                         <Typography variant="body2" fontWeight="bold">
-                          {format(c.mv.normalized_score)}
+                          {format(c.mv.normalized_value)}
                         </Typography>
                       </Box>
                       {idx < damageComponents.length - 1 && <Divider sx={{ my: 1 }} />}
@@ -428,17 +467,17 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                     <Chip 
                       size="small" 
                       label={calc.total_bonus.critical === CriticalStatus.NONE ? 'Normal Crit' :
-                             calc.total_bonus.critical === CriticalStatus.AUTOCRIT ? 'Always Crit' : 'Never Crit'}
+                             calc.total_bonus.critical === CriticalStatus.CRITICAL ? 'Always Crit' : 'Never Crit'}
                       color={calc.total_bonus.critical === CriticalStatus.NONE ? 'default' :
-                             calc.total_bonus.critical === CriticalStatus.AUTOCRIT ? 'warning' : 'error'}
+                             calc.total_bonus.critical === CriticalStatus.CRITICAL ? 'warning' : 'error'}
                     />
                     {/* Auto Hit Status */}
                     <Chip 
                       size="small" 
                       label={calc.total_bonus.auto_hit === AutoHitStatus.NONE ? 'Normal Hit' :
-                             calc.total_bonus.auto_hit === AutoHitStatus.AUTOHIT ? 'Auto Hit' : 'Auto Miss'}
+                             calc.total_bonus.auto_hit === AutoHitStatus.HIT ? 'Auto Hit' : 'Auto Miss'}
                       color={calc.total_bonus.auto_hit === AutoHitStatus.NONE ? 'default' :
-                             calc.total_bonus.auto_hit === AutoHitStatus.AUTOHIT ? 'info' : 'error'}
+                             calc.total_bonus.auto_hit === AutoHitStatus.HIT ? 'info' : 'error'}
                     />
                   </Box>
                   <Typography variant="body1" sx={{ mb: 2 }}>
@@ -447,70 +486,49 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
                      'Roll normally'}
                   </Typography>
                   <Typography variant="body1" sx={{ mb: 2 }}>
-                    {calc.total_bonus.critical === CriticalStatus.AUTOCRIT ? 'Attack always results in a critical hit' :
-                     calc.total_bonus.critical === CriticalStatus.NOCRIT ? 'Attack can never be a critical hit' :
+                    {calc.total_bonus.critical === CriticalStatus.CRITICAL ? 'Attack always results in a critical hit' :
+                     calc.total_bonus.critical === CriticalStatus.NORMAL ? 'Attack can never be a critical hit' :
                      'Normal critical hit rules apply'}
                   </Typography>
                   <Typography variant="body1">
-                    {calc.total_bonus.auto_hit === AutoHitStatus.AUTOHIT ? 'Attack automatically hits the target' :
-                     calc.total_bonus.auto_hit === AutoHitStatus.AUTOMISS ? 'Attack automatically misses the target' :
+                    {calc.total_bonus.auto_hit === AutoHitStatus.HIT ? 'Attack automatically hits the target' :
+                     calc.total_bonus.auto_hit === AutoHitStatus.MISS ? 'Attack automatically misses the target' :
                      'Normal hit rules apply'}
                   </Typography>
                 </Paper>
 
                 <Typography variant="h6" gutterBottom>
-                  Component Values
+                  Status Effects
                 </Typography>
                 <Paper sx={{ p: 2 }} elevation={1}>
-                  {/* Advantage Values */}
-                  <Typography variant="subtitle2" gutterBottom>Advantage Effects</Typography>
-                  {calc.total_bonus.channels.map((ch, idx) => (
-                    <React.Fragment key={idx}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {ch.name}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="bold">
-                          {ch.advantage_status}
-                        </Typography>
-                      </Box>
-                      {idx < calc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
-                    </React.Fragment>
-                  ))}
+                  {/* Advantage status */}
+                  <Typography variant="subtitle2" gutterBottom>Advantage Status</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">Current Status</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      {calc.total_bonus.advantage || 'NONE'}
+                    </Typography>
+                  </Box>
 
-                  {/* Critical Values */}
+                  {/* Critical status */}
                   <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" gutterBottom>Critical Effects</Typography>
-                  {calc.total_bonus.channels.map((ch, idx) => (
-                    <React.Fragment key={idx}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {ch.name}
-                </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                          {ch.critical_status}
-                          </Typography>
-                        </Box>
-                      {idx < calc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
-                    </React.Fragment>
-                  ))}
+                  <Typography variant="subtitle2" gutterBottom>Critical Status</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">Current Status</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      {calc.total_bonus.critical || 'NONE'}
+                    </Typography>
+                  </Box>
 
-                  {/* Auto Hit Values */}
+                  {/* Auto Hit status */}
                   <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" gutterBottom>Auto Hit Effects</Typography>
-                  {calc.total_bonus.channels.map((ch, idx) => (
-                    <React.Fragment key={idx}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {ch.name}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="bold">
-                          {ch.auto_hit_status}
-                        </Typography>
-                      </Box>
-                      {idx < calc.total_bonus.channels.length - 1 && <Divider sx={{ my: 1 }} />}
-                    </React.Fragment>
-                ))}
+                  <Typography variant="subtitle2" gutterBottom>Auto Hit Status</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">Current Status</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      {calc.total_bonus.auto_hit || 'NONE'}
+                    </Typography>
+                  </Box>
                 </Paper>
               </Grid>
 
@@ -550,25 +568,25 @@ const AttackCard: React.FC<AttackCardProps> = ({ slot }) => {
               {error}
             </Typography>
           )}
-            <List>
-              {availableWeapons.map((weapon) => (
-                <ListItemButton key={weapon.uuid} onClick={() => handleWeaponSelect(weapon.uuid, slot)}>
-                  <ListItemText 
-                    primary={weapon.name} 
-                    secondary={
-                      'damage_dice' in weapon ? 
-                        `${weapon.dice_numbers}d${weapon.damage_dice} ${weapon.damage_type}` : 
-                        undefined
-                    }
-                  />
-                </ListItemButton>
-              ))}
+          <List>
+            {availableWeapons.map((weapon) => (
+              <ListItemButton key={weapon.uuid} onClick={() => handleWeaponSelect(weapon.uuid, slot)}>
+                <ListItemText 
+                  primary={weapon.name} 
+                  secondary={
+                    'damage_dice' in weapon ? 
+                      `${weapon.dice_numbers}d${weapon.damage_dice} ${weapon.damage_type}` : 
+                      undefined
+                  }
+                />
+              </ListItemButton>
+            ))}
             {availableWeapons.length === 0 && (
-                <ListItemButton>
-                  <ListItemText primary="No weapons available" />
-                </ListItemButton>
-              )}
-            </List>
+              <ListItemButton>
+                <ListItemText primary="No weapons available" />
+              </ListItemButton>
+            )}
+          </List>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleWeaponSelectClose}>

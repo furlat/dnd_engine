@@ -7,14 +7,13 @@ import {
   Tooltip,
   IconButton,
 } from '@mui/material';
-import { EntitySummary } from '../../models/character';
-import { characterStore, characterActions } from '../../store/characterStore';
+import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
 import { useSnapshot } from 'valtio';
 import TargetIcon from '@mui/icons-material/RadioButtonChecked';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PersonIcon from '@mui/icons-material/Person';
-import { ReadonlyEntitySummary } from '../../models/readonly';
+import { EntitySummary } from '../../types/battlemap_types';
 
 const SIDEBAR_WIDTH = '280px';
 const COLLAPSED_WIDTH = '40px';
@@ -24,7 +23,7 @@ interface EntitySummaryBarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onSwitchToCharacter?: () => void;
-  entity?: EntitySummary | ReadonlyEntitySummary;
+  entity?: EntitySummary;
 }
 
 const EntitySummaryBar: React.FC<EntitySummaryBarProps> = ({ 
@@ -34,11 +33,12 @@ const EntitySummaryBar: React.FC<EntitySummaryBarProps> = ({
   onSwitchToCharacter,
   entity
 }) => {
-  const snap = useSnapshot(characterStore);
-  const summaries = Object.values(snap.summaries);
-  const currentCharacter = snap.character;
-  const selectedEntity = characterActions.getSelectedEntity();
-  const displayedEntity = characterActions.getDisplayedEntity();
+  const snap = useSnapshot(battlemapStore);
+  const summaries = Object.values(snap.entities.summaries) as EntitySummary[];
+  const selectedEntity = battlemapActions.getSelectedEntity();
+  const displayedEntity = snap.entities.displayedEntityId 
+    ? snap.entities.summaries[snap.entities.displayedEntityId] as EntitySummary
+    : undefined;
 
   // If an entity is provided directly, just render that entity's summary
   if (entity) {

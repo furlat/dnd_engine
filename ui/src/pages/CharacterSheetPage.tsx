@@ -1,27 +1,17 @@
 import * as React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import {
   Typography,
   Box,
   Paper,
-  CircularProgress,
-  Alert,
-  Button,
   IconButton,
   Tooltip,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import GroupIcon from '@mui/icons-material/Group';
-import { characterSheetStore, characterSheetActions } from '../store/characterSheetStore';
+import { battlemapStore, battlemapActions } from '../store/battlemapStore';
 import { useSnapshot } from 'valtio';
 import CharacterSheetContent from '../components/character_sheet/CharacterSheetContent';
-
-// Define the params interface
-type RouteParams = {
-  characterId?: string;
-}
 
 interface CharacterSheetPageProps {
   isCollapsed: boolean;
@@ -37,81 +27,12 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
   onToggleCollapse,
   onSwitchToEntities
 }) => {
-  const { characterId } = useParams<RouteParams>();
-  const navigate = useNavigate();
-  const snap = useSnapshot(characterSheetStore);
-
-  // Load character data on mount
-  React.useEffect(() => {
-    if (characterId) {
-      characterSheetActions.fetchCharacter(characterId);
-    }
-  }, [characterId]);
-
-  const handleBack = (): void => {
-    navigate('/');
-  };
-
-  const renderContent = () => {
-    if (snap.loading) {
-      return (
-        <Box display="flex" justifyContent="center" my={4}>
-          <CircularProgress />
-        </Box>
-      );
-    }
-
-    if (snap.error) {
-      return (
-        <Box>
-          <Button 
-            startIcon={<ArrowBackIcon />} 
-            onClick={handleBack}
-            sx={{ mb: 2 }}
-          >
-            Back to Characters
-          </Button>
-          <Alert severity="error">{snap.error}</Alert>
-        </Box>
-      );
-    }
-
-    if (!snap.character) {
-      return (
-        <Box>
-          <Button 
-            startIcon={<ArrowBackIcon />} 
-            onClick={handleBack}
-            sx={{ mb: 2 }}
-          >
-            Back to Characters
-          </Button>
-          <Alert severity="warning">Character not found</Alert>
-        </Box>
-      );
-    }
-
-    return (
-      <Box>
-        {/* Header with switch button */}
-        <Paper sx={{ p: 2, mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h4" component="h1">
-            {snap.character.name}
-          </Typography>
-          <Tooltip title="Switch to Entity List">
-            <IconButton onClick={onSwitchToEntities}>
-              <GroupIcon />
-            </IconButton>
-          </Tooltip>
-        </Paper>
-
-        {/* Character Sheet Content */}
-        <Paper sx={{ p: 3 }}>
-          <CharacterSheetContent />
-        </Paper>
-      </Box>
-    );
-  };
+  const snap = useSnapshot(battlemapStore);
+  const selectedEntity = snap.entities.selectedEntityId 
+    ? snap.entities.summaries[snap.entities.selectedEntityId] 
+    : snap.entities.displayedEntityId 
+      ? snap.entities.summaries[snap.entities.displayedEntityId] 
+      : undefined;
 
   return (
       <Box
@@ -149,7 +70,22 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
             },
           }}
         >
-          {renderContent()}
+          {/* Header with switch button */}
+          <Paper sx={{ p: 2, mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h4" component="h1">
+              {selectedEntity?.name || 'Character Sheet'}
+            </Typography>
+            <Tooltip title="Switch to Entity List">
+              <IconButton onClick={onSwitchToEntities}>
+                <GroupIcon />
+              </IconButton>
+            </Tooltip>
+          </Paper>
+
+          {/* Character Sheet Content */}
+          <Paper sx={{ p: 3 }}>
+            <CharacterSheetContent />
+          </Paper>
         </Paper>
 
         {/* Toggle button */}

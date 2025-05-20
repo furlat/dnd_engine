@@ -1,16 +1,16 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
 import { characterSheetStore } from '../../store/characterSheetStore';
-import type { ReadonlyAbilityScoresSnapshot, ReadonlyAbilityScore } from '../../models/readonly';
+import type { AbilityScoresSnapshot, AbilityScore } from '../../types/characterSheet_types';
 
 interface AbilityScoresState {
   // Data from store
-  abilityScores: ReadonlyAbilityScoresSnapshot | null;
+  abilityScores: AbilityScoresSnapshot | null;
   // UI state
-  selectedAbility: ReadonlyAbilityScore | null;
+  selectedAbility: AbilityScore | null;
   dialogOpen: boolean;
   // Actions
-  handleAbilityClick: (ability: ReadonlyAbilityScore) => void;
+  handleAbilityClick: (ability: AbilityScore) => void;
   handleCloseDialog: () => void;
 }
 
@@ -19,11 +19,11 @@ export function useAbilityScores(): AbilityScoresState {
   const snap = useSnapshot(characterSheetStore);
   
   // Local UI state
-  const [selectedAbility, setSelectedAbility] = useState<ReadonlyAbilityScore | null>(null);
+  const [selectedAbility, setSelectedAbility] = useState<AbilityScore | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Handlers
-  const handleAbilityClick = useCallback((ability: ReadonlyAbilityScore) => {
+  const handleAbilityClick = useCallback((ability: AbilityScore) => {
     setSelectedAbility(ability);
     setDialogOpen(true);
   }, []);

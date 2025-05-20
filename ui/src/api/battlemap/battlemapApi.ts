@@ -1,24 +1,14 @@
 import axios from 'axios';
-import { EntitySummary } from '../../models/character';
-import { TileSummary } from '../tileApi';
+import { 
+  GridSnapshot, 
+  TileSummary,
+  AttackResult,
+  toMutablePosition
+} from '../../types/battlemap_types';
+import { Position, EntitySummary } from '../../types/common';
 
 // API base URL
 const API_BASE_URL = 'http://localhost:8000/api';
-
-// Type for position
-export type Position = [number, number];
-
-// Response types
-export interface GridSnapshot {
-  width: number;
-  height: number;
-  tiles: Record<string, TileSummary>;
-}
-
-export interface AttackResult {
-  event: any; // Event details
-  attacker: any; // Updated attacker state
-}
 
 // Common params for character fetching
 const DEFAULT_INCLUDE_PARAMS = {
@@ -40,7 +30,7 @@ export const fetchEntitySummaries = async (): Promise<EntitySummary[]> => {
   }
 };
 
-// Fetch grid snapshot - fixed to match tileApi.ts
+// Fetch grid snapshot
 export const fetchGridSnapshot = async (): Promise<GridSnapshot> => {
   try {
     const response = await axios.get(`${API_BASE_URL}/tiles/`);
@@ -54,9 +44,12 @@ export const fetchGridSnapshot = async (): Promise<GridSnapshot> => {
 // Move entity to a new position
 export const moveEntity = async (entityId: string, position: Position): Promise<EntitySummary> => {
   try {
+    // Convert to mutable array for API call if necessary
+    const mutablePosition = toMutablePosition(position);
+    
     const response = await axios.post(
       `${API_BASE_URL}/entities/${entityId}/move`,
-      { position },
+      { position: mutablePosition },
       { params: DEFAULT_INCLUDE_PARAMS }
     );
     return response.data;

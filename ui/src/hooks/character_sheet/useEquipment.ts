@@ -1,12 +1,12 @@
 import { useSnapshot } from 'valtio';
 import { useMemo } from 'react';
 import { characterSheetStore } from '../../store/characterSheetStore';
-import type { 
-  ReadonlyEquipmentSnapshot, 
-  ReadonlyACBonusCalculation, 
-  ReadonlyAttackBonusCalculation,
-  ReadonlyModifiableValueSnapshot
-} from '../../models/readonly';
+import { 
+  EquipmentSnapshot as ReadonlyEquipmentSnapshot, 
+  ACBonusCalculationSnapshot as ReadonlyACBonusCalculation, 
+  AttackBonusCalculationSnapshot as ReadonlyAttackBonusCalculation,
+  ModifiableValueSnapshot as ReadonlyModifiableValueSnapshot
+} from '../../types/characterSheet_types';
 
 interface EquipmentStats {
   bodyArmorName: string;
@@ -64,13 +64,13 @@ export function useEquipment(): EquipmentData {
     if (!acCalc) return null;
 
     const baseAC = acCalc.is_unarmored ? 
-      (acCalc.unarmored_values?.reduce((sum, mv) => sum + mv.normalized_score, 0) ?? 0) :
-      (acCalc.armored_values?.reduce((sum, mv) => sum + mv.normalized_score, 0) ?? 0);
+      (acCalc.unarmored_values?.reduce((sum, mv) => sum + mv.normalized_value, 0) ?? 0) :
+      (acCalc.armored_values?.reduce((sum, mv) => sum + mv.normalized_value, 0) ?? 0);
 
-    const dexBonus = acCalc.combined_dexterity_bonus?.normalized_score ?? 0;
+    const dexBonus = acCalc.combined_dexterity_bonus?.normalized_value ?? 0;
     
     // Get total bonus from total_bonus field
-    const totalBonus = acCalc.total_bonus?.normalized_score ?? 0;
+    const totalBonus = acCalc.total_bonus?.normalized_value ?? 0;
     const shieldBonus = 0; // Shield bonus is included in total_bonus
     const otherBonuses = totalBonus - baseAC - dexBonus - shieldBonus;
 
@@ -87,8 +87,20 @@ export function useEquipment(): EquipmentData {
   const renderModifierChannels = useMemo(() => (mv: ReadonlyModifiableValueSnapshot | undefined | null) => {
     if (!mv || !mv.channels) return null;
 
-    const modifiers = mv.channels.flatMap(ch => 
-      ch.value_modifiers.map(mod => ({
+    type Channel = {
+      readonly name: string;
+      readonly normalized_value: number;
+      readonly value_modifiers: ReadonlyArray<ScoreModifier>;
+    }
+
+    type ScoreModifier = {
+      readonly name: string;
+      readonly value: number;
+      readonly source_entity_name?: string;
+    }
+
+    const modifiers = mv.channels.flatMap((ch: Channel) => 
+      ch.value_modifiers.map((mod: ScoreModifier) => ({
         name: mod.name,
         value: mod.value,
         sourceName: mod.source_entity_name
@@ -97,7 +109,7 @@ export function useEquipment(): EquipmentData {
 
     return {
       name: mv.name,
-      total: mv.normalized_score,
+      total: mv.normalized_value,
       modifiers
     };
   }, []);

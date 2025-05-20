@@ -90,7 +90,7 @@ const ActiveConditionsBar: React.FC = () => {
           <List>
             {CONDITIONS_LIST.map(condition => (
               <ListItemButton
-                key={condition.type}
+                key={condition.type.toString()}
                 onClick={() => handleAddCondition(condition.type)}
               >
                 <ListItemText 

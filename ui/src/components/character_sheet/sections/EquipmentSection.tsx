@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Box, Typography, Card, CardContent, Accordion, AccordionSummary, AccordionDetails, Chip, List, ListItem, ListItemText, Divider } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEquipment } from '../../../hooks/character_sheet/useEquipment';
-import type { ReadonlyModifiableValueSnapshot } from '../../../models/readonly';
+import { ModifiableValueSnapshot } from '../../../types/characterSheet_types';
 
 const EquipmentSection: React.FC = () => {
   const { 
@@ -75,7 +75,7 @@ const EquipmentSection: React.FC = () => {
                 {acCalc.unarmored_values && acCalc.unarmored_values.length > 0 && (
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Base Values</Typography>
-                    {acCalc.unarmored_values.map((mv, idx) => (
+                    {acCalc.unarmored_values.map((mv: ModifiableValueSnapshot, idx: number) => (
                       <Box key={idx} sx={{ ml: 2, mt: 1 }}>
                         {renderModifierChannels(mv) && (
                           <List dense disablePadding>
@@ -108,7 +108,7 @@ const EquipmentSection: React.FC = () => {
                 {acCalc.ability_bonuses && acCalc.ability_bonuses.length > 0 && (
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Ability Bonuses</Typography>
-                    {acCalc.ability_bonuses.map((mv, idx) => (
+                    {acCalc.ability_bonuses.map((mv: ModifiableValueSnapshot, idx: number) => (
                       <Box key={idx} sx={{ ml: 2, mt: 1 }}>
                         {renderModifierChannels(mv) && (
                           <List dense disablePadding>
@@ -141,7 +141,7 @@ const EquipmentSection: React.FC = () => {
                 {acCalc.ability_modifier_bonuses && acCalc.ability_modifier_bonuses.length > 0 && (
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Ability Modifier Bonuses</Typography>
-                    {acCalc.ability_modifier_bonuses.map((mv, idx) => (
+                    {acCalc.ability_modifier_bonuses.map((mv: ModifiableValueSnapshot, idx: number) => (
                       <Box key={idx} sx={{ ml: 2, mt: 1 }}>
                         {renderModifierChannels(mv) && (
                           <List dense disablePadding>
@@ -176,7 +176,7 @@ const EquipmentSection: React.FC = () => {
                 {acCalc.armored_values && acCalc.armored_values.length > 0 && (
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Armored Values</Typography>
-                    {acCalc.armored_values.map((mv, idx) => (
+                    {acCalc.armored_values.map((mv: ModifiableValueSnapshot, idx: number) => (
                       <Box key={idx} sx={{ ml: 2, mt: 1 }}>
                         {renderModifierChannels(mv) && (
                           <List dense disablePadding>
