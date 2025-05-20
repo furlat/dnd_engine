@@ -2,7 +2,7 @@ import { useSnapshot } from 'valtio';
 import { useCallback, useMemo } from 'react';
 import { battlemapStore, battlemapActions } from '../../store';
 import { EntitySummary } from '../../models/character';
-import { TileSummary } from '../../api/tileApi';
+import { TileSummary } from '../../api/battlemap/battlemapApi';
 
 /**
  * Hook for managing visibility and fog of war on the battlemap

@@ -1,26 +1,26 @@
 import { useSnapshot } from 'valtio';
 import { characterSheetStore } from '../../store/characterSheetStore';
-import type { Character, EntitySummary } from '../../models/character';
-import type { ReadonlyCharacter, ReadonlyEntitySummary } from '../../models/readonly';
+import { battlemapStore } from '../../store/battlemapStore';
+import type { Character } from '../../types/characterSheet_types';
+import type { EntitySummary } from '../../types/common';
 
 interface CharacterSheetState {
   // Data from store
-  character: ReadonlyCharacter | null;
+  character: Character | null;
   loading: boolean;
   error: string | null;
-  summaries: Record<string, ReadonlyEntitySummary>;
-  displayedEntityId: string | undefined;
+  selectedEntityId: string | undefined;
 }
 
 export function useCharacterSheet(): CharacterSheetState {
   // Get data from store
-  const snap = useSnapshot(characterSheetStore);
+  const characterSnap = useSnapshot(characterSheetStore);
+  const battlemapSnap = useSnapshot(battlemapStore);
   
   return {
-    character: snap.character,
-    loading: snap.loading,
-    error: snap.error,
-    summaries: snap.summaries,
-    displayedEntityId: snap.displayedEntityId
+    character: characterSnap.character,
+    loading: characterSnap.loading,
+    error: characterSnap.error,
+    selectedEntityId: battlemapSnap.entities.selectedEntityId || battlemapSnap.entities.displayedEntityId
   };
 } 

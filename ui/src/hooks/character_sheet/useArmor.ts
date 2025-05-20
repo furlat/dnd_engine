@@ -3,11 +3,11 @@ import { useState, useCallback, useEffect } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
-  ReadonlyACBonusCalculation,
-  ReadonlyEquipmentSnapshot,
-  ReadonlyModifiableValueSnapshot
-} from '../../models/readonly';
-import { ArmorSnapshot } from '../../api/types';
+  ACBonusCalculationSnapshot as ReadonlyACBonusCalculation,
+  EquipmentSnapshot as ReadonlyEquipmentSnapshot,
+  ModifiableValueSnapshot as ReadonlyModifiableValueSnapshot,
+  ArmorSnapshot
+} from '../../types/characterSheet_types';
 import { fetchAllEquipment, equipItem, unequipItem } from '../../api/character_sheet/characterSheetApi';
 
 interface ArmorData {
@@ -66,13 +66,13 @@ export function useArmor(): ArmorData {
       fetchAllEquipment(snap.character.uuid)
         .then(items => {
           // Filter for body armor only
-          const armor = items.filter((item): item is ArmorSnapshot => 
+          const armor = items.filter(item => 
             'type' in item && 
             'body_part' in item && 
             item.body_part === 'Body' &&
-            ['Light', 'Medium', 'Heavy', 'Cloth'].includes(item.type)
+            ['Light', 'Medium', 'Heavy', 'Cloth'].includes(item.type as string)
           );
-          setAvailableArmor(armor);
+          setAvailableArmor(armor as unknown as ArmorSnapshot[]);
         })
         .catch(error => {
           console.error('Failed to fetch armor:', error);
@@ -84,8 +84,8 @@ export function useArmor(): ArmorData {
   // Computed values
   const totalAC = acCalc?.final_ac ?? 0;
   const isUnarmored = acCalc?.is_unarmored ?? true;
-  const combinedDex = acCalc?.combined_dexterity_bonus?.normalized_score;
-  const maxDex = acCalc?.max_dexterity_bonus?.normalized_score;
+  const combinedDex = acCalc?.combined_dexterity_bonus?.normalized_value;
+  const maxDex = acCalc?.max_dexterity_bonus?.normalized_value;
   const bodyArmorName = equipment?.body_armor ? equipment.body_armor.name : 'No Armor';
   const armorType = equipment?.body_armor ? equipment.body_armor.type : 'Unarmored';
   const shieldName = equipment?.weapon_off_hand && (equipment.weapon_off_hand as any).ac_bonus 
@@ -120,9 +120,9 @@ export function useArmor(): ArmorData {
       characterSheetActions.setCharacter(equipResult);
       // Trigger event queue refresh after equipping armor
       eventQueueActions.refresh();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to equip armor:', error);
-      setError(error.response?.data?.detail ?? 'Failed to equip armor');
+      setError(error instanceof Error ? error.message : 'Failed to equip armor');
       setArmorSelectOpen(true);
     }
   }, [snap.character]);
@@ -135,9 +135,9 @@ export function useArmor(): ArmorData {
       handleMenuClose();
       // Trigger event queue refresh after unequipping armor
       eventQueueActions.refresh();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to unequip armor:', error);
-      setError(error.response?.data?.message ?? 'Failed to unequip armor');
+      setError(error instanceof Error ? error.message : 'Failed to unequip armor');
     }
   }, [snap.character, handleMenuClose]);
 

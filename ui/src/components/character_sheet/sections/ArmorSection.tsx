@@ -31,10 +31,14 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import { AdvantageStatus } from '../../../models/character';
+import { 
+  AdvantageStatus, 
+  ModifiableValueSnapshot,
+  AdvantageModifier,
+  ModifierDisplay
+} from '../../../types/characterSheet_types';
 import ItemDetailsDialog from '../modifiers/ItemDetailsDialog';
 import { useArmor } from '../../../hooks/character_sheet/useArmor';
-import type { ReadonlyModifiableValueSnapshot } from '../../../models/readonly';
 
 // Format helper function
 const format = (value: number | AdvantageStatus | undefined): string => {
@@ -44,26 +48,34 @@ const format = (value: number | AdvantageStatus | undefined): string => {
   return value?.toString() ?? '';
 };
 
+interface Channel {
+  name: string;
+  normalized_value: number;
+  advantage_status?: string;
+  value_modifiers: ModifierDisplay[];
+  advantage_modifiers: AdvantageModifier[];
+}
+
 interface ChannelBreakdownProps {
-  mv: ReadonlyModifiableValueSnapshot;
+  mv: ModifiableValueSnapshot;
   label: string;
   showAdvantage?: boolean;
 }
 
 const ChannelBreakdown: React.FC<ChannelBreakdownProps> = ({ mv, label, showAdvantage = false }) => {
-  if (!mv || !mv.channels) return null;
+  if (!mv || !(mv as any).channels) return null;
 
   return (
     <Accordion defaultExpanded sx={{ mb: 1 }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>{label}</AccordionSummary>
       <AccordionDetails>
-        {mv.channels.map((ch, idx) => (
+        {(mv as any).channels.map((ch: Channel, idx: number) => (
           <Box key={idx} sx={{ mb: 1 }}>
             <Typography variant="body2" fontWeight="bold">
-              {ch.name} – Total: {showAdvantage ? ch.advantage_status : format(ch.normalized_score)}
+              {ch.name} – Total: {showAdvantage ? ch.advantage_status : format(ch.normalized_value)}
             </Typography>
             <List dense disablePadding>
-              {(showAdvantage ? ch.advantage_modifiers : ch.value_modifiers).map((mod, i) => (
+              {(showAdvantage ? ch.advantage_modifiers : ch.value_modifiers).map((mod: ModifierDisplay | AdvantageModifier, i: number) => (
                 <ListItem
                   key={i}
                   dense
@@ -76,11 +88,11 @@ const ChannelBreakdown: React.FC<ChannelBreakdownProps> = ({ mv, label, showAdva
                     secondaryTypographyProps={{ variant: 'caption' }}
                   />
                   <Chip
-                    label={showAdvantage ? mod.value : format(mod.value)}
+                    label={showAdvantage ? String(mod.value) : format(mod.value as number)}
                     size="small"
                     color={showAdvantage 
-                      ? (mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 
-                         mod.value === AdvantageStatus.DISADVANTAGE ? 'error' : 'default')
+                      ? ((mod.value as AdvantageStatus) === AdvantageStatus.ADVANTAGE ? 'success' : 
+                         (mod.value as AdvantageStatus) === AdvantageStatus.DISADVANTAGE ? 'error' : 'default')
                       : (typeof mod.value === 'number' ? (mod.value >= 0 ? 'success' : 'error') : 'default')
                     }
                   />
@@ -308,7 +320,7 @@ const ArmorSection: React.FC = () => {
                         {mv.name}
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {format(mv.normalized_score)}
+                        {format(mv.normalized_value)}
                       </Typography>
                     </Box>
                     {idx < leftValues.length - 1 && <Divider sx={{ my: 1 }} />}
@@ -374,7 +386,7 @@ const ArmorSection: React.FC = () => {
                     primary={armor.name} 
                     secondary={
                       'type' in armor ? 
-                        `${formatArmorType(armor.type)} - AC ${armor.ac.normalized_score} (Max Dex ${armor.max_dex_bonus.normalized_score})` : 
+                        `${formatArmorType(armor.type)} - AC ${armor.ac.normalized_value} (Max Dex ${armor.max_dex_bonus.normalized_value})` : 
                         undefined
                     }
                   />

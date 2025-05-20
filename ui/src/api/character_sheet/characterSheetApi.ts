@@ -1,8 +1,15 @@
 import axios from 'axios';
-import { Character, ConditionType, DurationType, EntitySummary } from '../../models/character';
-import { EquipmentItem } from '../types';
+import { 
+  Character, 
+  ConditionType, 
+  DurationType, 
+  EquipmentItem,
+  AddConditionRequest,
+  toMutablePosition
+} from '../../types/characterSheet_types';
+import { EntitySummary } from '../../types/common';
 
-// Update to point directly to FastAPI backend
+// API base URL
 const API_BASE_URL = 'http://localhost:8000/api';
 
 // Common params for character fetching
@@ -92,14 +99,6 @@ export const unequipItem = async (characterId: string, slot: string): Promise<Ch
     throw error;
   }
 };
-
-// Add condition request type
-interface AddConditionRequest {
-  condition_type: ConditionType;
-  source_entity_uuid: string;
-  duration_type: DurationType;
-  duration_rounds?: number;
-}
 
 // Add condition management functions
 export const addCondition = async (entityId: string, request: AddConditionRequest): Promise<Character> => {

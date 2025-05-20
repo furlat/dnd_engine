@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
 import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
-import { moveEntity } from '../../api/battlemap';
-import { EntitySummary } from '../../models/character';
+import { moveEntity } from '../../api/battlemap/battlemapApi';
+import { EntitySummary, Position } from '../../types/common';
 import { Direction } from '../../components/battlemap/DirectionalEntitySprite';
-import { Position } from '../../api/battlemap/battlemapApi';
 
 /**
  * Hook for entity movement operations
@@ -69,7 +68,7 @@ export const useEntityMovement = () => {
       const entity = snap.entities.summaries[entityId];
       if (entity) {
         const direction = computeDirection(
-          [entity.position[0], entity.position[1]],
+          entity.position,
           position
         );
         battlemapActions.setEntityDirection(entityId, direction);

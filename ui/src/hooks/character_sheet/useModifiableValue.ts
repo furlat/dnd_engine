@@ -1,7 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useCallback, useMemo } from 'react';
 import { characterSheetStore } from '../../store/characterSheetStore';
-import type { ReadonlyModifiableValueSnapshot, ReadonlyModifier } from '../../models/readonly';
+import { ModifiableValueSnapshot as ReadonlyModifiableValueSnapshot } from '../../types/characterSheet_types';
 import { get } from 'lodash';
 
 interface ModifiableValueDetails {
@@ -43,17 +43,33 @@ export function useModifiableValue(valuePath: string | null): ModifiableValueSta
   const details = useMemo(() => {
     if (!value) return null;
 
+    type Channel = {
+      readonly name: string;
+      readonly normalized_value: number;
+      readonly value_modifiers: ReadonlyArray<{
+        readonly name: string;
+        readonly value: number;
+        readonly source_entity_name?: string;
+      }>;
+    }
+
+    type Modifier = {
+      readonly name: string;
+      readonly value: number;
+      readonly source_entity_name?: string;
+    }
+
     const baseModifier = value.base_modifier?.value ?? 0;
-    const modifiers = value.channels.flatMap(channel => 
-      channel.value_modifiers.map(mod => ({
+    const modifiers = value.channels?.flatMap((channel: Channel) => 
+      channel.value_modifiers.map((mod: Modifier) => ({
         source: mod.name,
         value: mod.value
       }))
-    );
+    ) || [];
 
     return {
       name: value.name,
-      value: value.normalized_score,
+      value: value.normalized_value,
       baseValue: baseModifier,
       modifiers,
       description: `${value.name} (Base: ${baseModifier})`
@@ -62,9 +78,16 @@ export function useModifiableValue(valuePath: string | null): ModifiableValueSta
 
   // Computed values
   const getModifierTotal = useCallback(() => {
-    if (!value) return 0;
-    return value.channels.reduce((total, channel) => 
-      total + channel.value_modifiers.reduce((sum, mod) => sum + mod.value, 0)
+    if (!value || !value.channels) return 0;
+    
+    type Channel = {
+      readonly value_modifiers: ReadonlyArray<{
+        readonly value: number;
+      }>;
+    }
+    
+    return value.channels.reduce((total: number, channel: Channel) => 
+      total + channel.value_modifiers.reduce((sum: number, mod: { value: number }) => sum + mod.value, 0)
     , 0);
   }, [value]);
 
@@ -87,17 +110,29 @@ export function useModifiableValue(valuePath: string | null): ModifiableValueSta
       };
     }
 
+    type Channel = {
+      readonly value_modifiers: ReadonlyArray<{
+        readonly name: string;
+        readonly value: number;
+      }>;
+    }
+
+    type Modifier = {
+      readonly name: string;
+      readonly value: number;
+    }
+
     const baseModifier = resolvedValue.base_modifier?.value ?? 0;
-    const modifiers = resolvedValue.channels.flatMap(channel => 
-      channel.value_modifiers.map(mod => ({
+    const modifiers = resolvedValue.channels?.flatMap((channel: Channel) => 
+      channel.value_modifiers.map((mod: Modifier) => ({
         source: mod.name,
         value: mod.value
       }))
-    );
+    ) || [];
 
     return {
       name: resolvedValue.name,
-      value: resolvedValue.normalized_score,
+      value: resolvedValue.normalized_value,
       baseValue: baseModifier,
       modifiers,
       description: `${resolvedValue.name} (Base: ${baseModifier})`

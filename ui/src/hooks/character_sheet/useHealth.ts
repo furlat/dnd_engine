@@ -2,12 +2,16 @@ import { useSnapshot } from 'valtio';
 import { useState, useCallback, useMemo } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import type { 
-  ReadonlyHealthSnapshot, 
-  ReadonlyModifiableValueSnapshot,
-  ReadonlyHitDiceSnapshot,
-  ReadonlyDamageResistanceSnapshot
-} from '../../models/readonly';
+  HealthSnapshot, 
+  ModifiableValueSnapshot,
+  HitDiceSnapshot
+} from '../../types/characterSheet_types';
 import { modifyHealth, applyTemporaryHP } from '../../api/character_sheet/characterSheetApi';
+
+interface DamageResistanceSnapshot {
+  readonly damage_type: string;
+  readonly status: string;
+}
 
 interface HealthStats {
   current: number;
@@ -24,7 +28,7 @@ interface HealthStats {
 
 interface HealthData {
   // Data from store
-  health: ReadonlyHealthSnapshot | null;
+  health: HealthSnapshot | null;
   // Computed values
   stats: HealthStats | null;
   // UI state
@@ -38,7 +42,7 @@ interface HealthData {
   handleModifyHealth: (amount: number) => Promise<void>;
   handleApplyTempHP: (amount: number) => Promise<void>;
   // Helper functions
-  getResistancesByType: (status: 'Immunity' | 'Resistance' | 'Vulnerability') => ReadonlyDamageResistanceSnapshot[];
+  getResistancesByType: (status: 'Immunity' | 'Resistance' | 'Vulnerability') => DamageResistanceSnapshot[];
 }
 
 export function useHealth(): HealthData {
@@ -82,10 +86,10 @@ export function useHealth(): HealthData {
 
     const current = health.current_hit_points ?? 0;
     const max = health.max_hit_points ?? 
-      health.hit_dices_total_hit_points + health.max_hit_points_bonus.normalized_score;
+      health.hit_dices_total_hit_points + health.max_hit_points_bonus.normalized_value;
     
     const conMod = health.max_hit_points ? 
-      max - health.hit_dices_total_hit_points - health.max_hit_points_bonus.normalized_score : 
+      max - health.hit_dices_total_hit_points - health.max_hit_points_bonus.normalized_value : 
       0;
 
     const totalDice = health.total_hit_dices_number;
@@ -94,8 +98,8 @@ export function useHealth(): HealthData {
     // Calculate hit dice string
     const hitDiceGroups: Record<string, number> = {};
     health.hit_dices.forEach((hd) => {
-      const sides = hd.hit_dice_value.score;
-      hitDiceGroups[sides] = (hitDiceGroups[sides] || 0) + hd.hit_dice_count.score;
+      const sides = hd.hit_dice_value.final_value;
+      hitDiceGroups[sides] = (hitDiceGroups[sides] || 0) + hd.hit_dice_count.final_value;
     });
     const hitDiceString = Object.entries(hitDiceGroups)
       .sort((a, b) => Number(a[0]) - Number(b[0]))
@@ -108,7 +112,7 @@ export function useHealth(): HealthData {
       conModifier: conMod,
       conPerLevel,
       totalDice,
-      damageReduction: health.damage_reduction.normalized_score,
+      damageReduction: health.damage_reduction.normalized_value,
       immunities: health.resistances.filter(r => r.status === 'Immunity').length,
       resistances: health.resistances.filter(r => r.status === 'Resistance').length,
       vulnerabilities: health.resistances.filter(r => r.status === 'Vulnerability').length,
@@ -117,8 +121,8 @@ export function useHealth(): HealthData {
   }, [snap.character?.health]);
 
   // Helper function for filtering resistances
-  const getResistancesByType = useCallback((status: 'Immunity' | 'Resistance' | 'Vulnerability'): ReadonlyDamageResistanceSnapshot[] => {
-    return (snap.character?.health?.resistances.filter(r => r.status === status) as ReadonlyDamageResistanceSnapshot[]) ?? [];
+  const getResistancesByType = useCallback((status: 'Immunity' | 'Resistance' | 'Vulnerability'): DamageResistanceSnapshot[] => {
+    return (snap.character?.health?.resistances.filter(r => r.status === status) as DamageResistanceSnapshot[]) ?? [];
   }, [snap.character?.health]);
 
   return {

@@ -3,20 +3,20 @@ import { useState, useCallback } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
-  ReadonlyAttackBonusCalculation,
-  ReadonlyEquipmentSnapshot,
-  ReadonlyModifiableValueSnapshot
-} from '../../models/readonly';
+  AttackBonusCalculationSnapshot,
+  EquipmentSnapshot,
+  ModifiableValueSnapshot,
+  EquipmentItem
+} from '../../types/characterSheet_types';
 import { fetchAllEquipment, equipItem, unequipItem } from '../../api/character_sheet/characterSheetApi';
-import { EquipmentItem } from '../../api/types';
 
 export type WeaponSlot = 'MAIN_HAND' | 'OFF_HAND';
 
 interface AttackData {
   // Store data
-  mainHandCalc: ReadonlyAttackBonusCalculation | null;
-  offHandCalc: ReadonlyAttackBonusCalculation | null;
-  equipment: ReadonlyEquipmentSnapshot | null;
+  mainHandCalc: AttackBonusCalculationSnapshot | null;
+  offHandCalc: AttackBonusCalculationSnapshot | null;
+  equipment: EquipmentSnapshot | null;
   // UI state
   dialogOpen: boolean;
   detailMode: 'attack' | 'damage' | 'advantage';
@@ -42,8 +42,8 @@ interface AttackData {
   getWeaponDamageExpr: (slot: WeaponSlot) => string;
   getWeaponDamageType: (slot: WeaponSlot) => string;
   getExtraDamageExprs: (slot: WeaponSlot) => Array<{ expr: string; type: string }>;
-  getComponentList: (slot: WeaponSlot) => Array<{ label: string; mv: ReadonlyModifiableValueSnapshot }>;
-  getDamageComponents: (slot: WeaponSlot) => Array<{ label: string; mv: ReadonlyModifiableValueSnapshot }>;
+  getComponentList: (slot: WeaponSlot) => Array<{ label: string; mv: ModifiableValueSnapshot }>;
+  getDamageComponents: (slot: WeaponSlot) => Array<{ label: string; mv: ModifiableValueSnapshot }>;
 }
 
 export function useAttack(): AttackData {
@@ -61,12 +61,12 @@ export function useAttack(): AttackData {
 
   // Get calculations for each slot
   const mainHandCalc = Object.values(calcsObj).find(
-    (c: any) => c && c.weapon_slot === 'MAIN_HAND'
-  ) as ReadonlyAttackBonusCalculation | null;
+    (c) => c && c.weapon_slot === 'MAIN_HAND'
+  ) as AttackBonusCalculationSnapshot | null;
 
   const offHandCalc = Object.values(calcsObj).find(
-    (c: any) => c && c.weapon_slot === 'OFF_HAND'
-  ) as ReadonlyAttackBonusCalculation | null;
+    (c) => c && c.weapon_slot === 'OFF_HAND'
+  ) as AttackBonusCalculationSnapshot | null;
 
   // Fetch available weapons when the selection dialog opens
   const fetchWeapons = useCallback(async () => {
@@ -149,13 +149,13 @@ export function useAttack(): AttackData {
     
     if (weapon && 'damage_dice' in weapon) {
       const base = `${weapon.dice_numbers}d${weapon.damage_dice}`;
-      const bonus = weapon.damage_bonus?.normalized_score ?? 0;
+      const bonus = weapon.damage_bonus?.normalized_value ?? 0;
       return bonus !== 0 ? `${base}${bonus > 0 ? '+' : ''}${bonus}` : base;
     }
     
     // Unarmed fallback
     const base = `${equipment.unarmed_dice_numbers}d${equipment.unarmed_damage_dice}`;
-    const bonus = equipment.unarmed_damage_bonus?.normalized_score ?? 0;
+    const bonus = equipment.unarmed_damage_bonus?.normalized_value ?? 0;
     return bonus !== 0 ? `${base}${bonus > 0 ? '+' : ''}${bonus}` : base;
   }, [equipment]);
 
@@ -176,7 +176,7 @@ export function useAttack(): AttackData {
     if (!weapon || !('extra_damages' in weapon)) return [];
     return (weapon as any).extra_damages.map((extra: any) => {
       const base = `${extra.dice_numbers}d${extra.damage_dice}`;
-      const bonus = extra.damage_bonus?.normalized_score ?? 0;
+      const bonus = extra.damage_bonus?.normalized_value ?? 0;
       const expr = bonus !== 0 ? `${base}${bonus > 0 ? '+' : ''}${bonus}` : base;
       const type = typeof extra.damage_type === 'string' 
         ? extra.damage_type.charAt(0).toUpperCase() + extra.damage_type.slice(1).toLowerCase() 
@@ -192,8 +192,8 @@ export function useAttack(): AttackData {
     return [
       { label: 'Proficiency Bonus', mv: calc.proficiency_bonus },
       { label: calc.weapon_name ? 'Weapon Bonus' : 'Unarmed Bonus', mv: calc.weapon_bonus },
-      ...calc.attack_bonuses.map((mv: ReadonlyModifiableValueSnapshot) => ({ label: mv.name, mv })),
-      ...calc.ability_bonuses.map((mv: ReadonlyModifiableValueSnapshot) => ({ label: mv.name, mv })),
+      ...calc.attack_bonuses.map((mv: ModifiableValueSnapshot) => ({ label: mv.name, mv })),
+      ...calc.ability_bonuses.map((mv: ModifiableValueSnapshot) => ({ label: mv.name, mv })),
     ];
   }, [mainHandCalc, offHandCalc]);
 
@@ -202,7 +202,7 @@ export function useAttack(): AttackData {
     const weapon = slot === 'MAIN_HAND' ? equipment.weapon_main_hand : equipment.weapon_off_hand;
     const calc = slot === 'MAIN_HAND' ? mainHandCalc : offHandCalc;
     
-    const items: { label: string; mv: ReadonlyModifiableValueSnapshot }[] = [];
+    const items: { label: string; mv: ModifiableValueSnapshot }[] = [];
     
     if (weapon && (weapon as any).damage_bonus) {
       items.push({ label: 'Weapon Damage Bonus', mv: (weapon as any).damage_bonus });
