@@ -1,7 +1,7 @@
 import { proxy } from 'valtio';
 import type { Character, EntitySummary } from '../models/character';
 import type { ReadonlyCharacter, ReadonlyEntitySummary, DeepReadonly } from '../models/readonly';
-import { fetchCharacter, fetchEntitySummaries } from '../api/characterSheetApi';
+import { fetchCharacter, fetchEntitySummaries } from '../api/character_sheet/characterSheetApi';
 
 // Base state interface without readonly modifiers for the store
 export interface CharacterSheetStoreState {

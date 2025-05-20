@@ -102,6 +102,11 @@ interface EntityOption {
   name: string;
 }
 
+interface EventQProps {
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
 const EventItem: React.FC<{ event: Event, depth?: number }> = ({ event, depth = 0 }) => {
   const [expanded, setExpanded] = React.useState(false);
   const hasChildren = event.child_events && event.child_events.length > 0;
@@ -183,14 +188,25 @@ const EventItem: React.FC<{ event: Event, depth?: number }> = ({ event, depth = 
   );
 };
 
-const EventQ: React.FC = () => {
+const EventQ: React.FC<EventQProps> = ({ isCollapsed: externalIsCollapsed, onToggleCollapse }) => {
   const [events, setEvents] = React.useState<Event[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  // Use external state if provided, otherwise use internal state
+  const [internalIsCollapsed, setInternalIsCollapsed] = React.useState(false);
+  const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
+  
   const [selectedEntity, setSelectedEntity] = React.useState<string>('');
   const [entityOptions, setEntityOptions] = React.useState<EntityOption[]>([]);
   const { setRefreshEvents } = useEventQueue();
+
+  const toggleCollapse = () => {
+    if (onToggleCollapse) {
+      onToggleCollapse();
+    } else {
+      setInternalIsCollapsed(!internalIsCollapsed);
+    }
+  };
 
   const fetchEvents = React.useCallback(async (fetchAll: boolean = false) => {
     try {
@@ -278,7 +294,7 @@ const EventQ: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedEntity]);
 
   // Handler for refresh button click
   const handleRefreshClick = React.useCallback((event: React.MouseEvent) => {
@@ -360,7 +376,7 @@ const EventQ: React.FC = () => {
           boxShadow: 2,
           transition: 'left 0.3s ease-in-out'
         }}
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={toggleCollapse}
       >
         <IconButton>
           {isCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}

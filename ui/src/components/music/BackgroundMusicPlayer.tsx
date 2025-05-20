@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { sound } from '@pixi/sound';
 import { useSoundSettings } from '../../contexts/SoundSettingsContext';
-import { Paper, Typography, IconButton, Slider, Select, MenuItem, FormControl, InputLabel, Box } from '@mui/material';
+import { Paper, Typography, IconButton, Slider, Select, MenuItem, FormControl, InputLabel, Box, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
@@ -491,9 +491,17 @@ const BackgroundMusicPlayer: React.FC<BackgroundMusicPlayerProps> = ({
           gap: 1
         }}
       >
-        <IconButton size="small" onClick={togglePlay} sx={{ color: 'white' }}>
-          {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-        </IconButton>
+        {!isLoaded ? (
+          <span>
+            <IconButton size="small" disabled sx={{ color: 'white' }}>
+              <PlayArrowIcon />
+            </IconButton>
+          </span>
+        ) : (
+          <IconButton size="small" onClick={togglePlay} sx={{ color: 'white' }}>
+            {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+          </IconButton>
+        )}
         
         <Typography variant="caption" sx={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isLoaded ? MUSIC_TRACKS[currentTrackIndex].title : 'Loading...'}
@@ -568,17 +576,41 @@ const BackgroundMusicPlayer: React.FC<BackgroundMusicPlayerProps> = ({
       </Box>
 
       <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-        <IconButton onClick={previousTrack} disabled={!isLoaded} sx={{ color: 'white' }}>
-          <SkipPreviousIcon />
-        </IconButton>
+        {!isLoaded ? (
+          <span>
+            <IconButton disabled sx={{ color: 'white' }}>
+              <SkipPreviousIcon />
+            </IconButton>
+          </span>
+        ) : (
+          <IconButton onClick={previousTrack} sx={{ color: 'white' }}>
+            <SkipPreviousIcon />
+          </IconButton>
+        )}
         
-        <IconButton onClick={togglePlay} disabled={!isLoaded} sx={{ color: 'white' }}>
-          {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-        </IconButton>
+        {!isLoaded ? (
+          <span>
+            <IconButton disabled sx={{ color: 'white' }}>
+              <PlayArrowIcon />
+            </IconButton>
+          </span>
+        ) : (
+          <IconButton onClick={togglePlay} sx={{ color: 'white' }}>
+            {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+          </IconButton>
+        )}
         
-        <IconButton onClick={nextTrack} disabled={!isLoaded} sx={{ color: 'white' }}>
-          <SkipNextIcon />
-        </IconButton>
+        {!isLoaded ? (
+          <span>
+            <IconButton disabled sx={{ color: 'white' }}>
+              <SkipNextIcon />
+            </IconButton>
+          </span>
+        ) : (
+          <IconButton onClick={nextTrack} sx={{ color: 'white' }}>
+            <SkipNextIcon />
+          </IconButton>
+        )}
       </Box>
 
       <Typography variant="body2" sx={{ textAlign: 'center', opacity: 0.8 }}>

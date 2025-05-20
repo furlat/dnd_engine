@@ -8,7 +8,7 @@ import type {
   ReadonlyModifiableValueSnapshot
 } from '../../models/readonly';
 import { ArmorSnapshot } from '../../api/types';
-import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterSheetApi';
+import { fetchAllEquipment, equipItem, unequipItem } from '../../api/character_sheet/characterSheetApi';
 
 interface ArmorData {
   // Store data

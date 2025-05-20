@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Position } from './types';
+import { Position } from '../models/character';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
