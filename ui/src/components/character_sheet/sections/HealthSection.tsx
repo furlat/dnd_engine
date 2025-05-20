@@ -28,8 +28,8 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import type { 
   ReadonlyModifiableValueSnapshot, 
   ReadonlyHitDiceSnapshot 
-} from '../../models/readonly';
-import { useHealth } from '../../hooks/character/useHealth';
+} from '../../../models/readonly';
+import { useHealth } from '../../../hooks/character_sheet/useHealth';
 
 const format = (v: number) => `${v}`;
 

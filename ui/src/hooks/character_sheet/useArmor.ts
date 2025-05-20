@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback, useEffect } from 'react';
-import { characterStore, characterActions } from '../../store/characterStore';
+import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
   ReadonlyACBonusCalculation,
@@ -8,7 +8,7 @@ import type {
   ReadonlyModifiableValueSnapshot
 } from '../../models/readonly';
 import { ArmorSnapshot } from '../../api/types';
-import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterApi';
+import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterSheetApi';
 
 interface ArmorData {
   // Store data
@@ -48,7 +48,7 @@ interface ArmorData {
 }
 
 export function useArmor(): ArmorData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   const [detailMode, setDetailMode] = useState<'armor' | 'advantage' | 'critical' | 'auto_hit'>('armor');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [itemDetailsOpen, setItemDetailsOpen] = useState<'armor' | 'shield' | null>(null);
@@ -117,7 +117,7 @@ export function useArmor(): ArmorData {
     try {
       setArmorSelectOpen(false);
       const equipResult = await equipItem(snap.character.uuid, armorId, 'Body');
-      characterActions.setCharacter(equipResult);
+      characterSheetActions.setCharacter(equipResult);
       // Trigger event queue refresh after equipping armor
       eventQueueActions.refresh();
     } catch (error: any) {
@@ -131,7 +131,7 @@ export function useArmor(): ArmorData {
     if (!snap.character) return;
     try {
       const unequipResult = await unequipItem(snap.character.uuid, 'Body');
-      characterActions.setCharacter(unequipResult);
+      characterSheetActions.setCharacter(unequipResult);
       handleMenuClose();
       // Trigger event queue refresh after unequipping armor
       eventQueueActions.refresh();

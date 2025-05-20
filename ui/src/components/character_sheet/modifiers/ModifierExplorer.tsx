@@ -12,7 +12,7 @@ import {
   useMediaQuery
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { useModifiableValue } from '../../hooks/character/useModifiableValue';
+import { useModifiableValue } from '../../../hooks/character_sheet/useModifiableValue';
 
 interface ModifierExplorerProps {
   valuePath?: string | null;
@@ -77,7 +77,7 @@ const ModifierExplorer: React.FC<ModifierExplorerProps> = ({
         Modifiers
       </Typography>
       <List disablePadding>
-        {details.modifiers.map((mod, index) => (
+        {details.modifiers.map((mod: { source: string, value: number }, index: number) => (
           <ListItem key={index} divider>
             <ListItemText
               primary={mod.source}

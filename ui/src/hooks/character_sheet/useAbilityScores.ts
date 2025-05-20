@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
-import { characterStore } from '../../store/characterStore';
+import { characterSheetStore } from '../../store/characterSheetStore';
 import type { ReadonlyAbilityScoresSnapshot, ReadonlyAbilityScore } from '../../models/readonly';
 
 interface AbilityScoresState {
@@ -16,7 +16,7 @@ interface AbilityScoresState {
 
 export function useAbilityScores(): AbilityScoresState {
   // Get data from store
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   
   // Local UI state
   const [selectedAbility, setSelectedAbility] = useState<ReadonlyAbilityScore | null>(null);

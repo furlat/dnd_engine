@@ -26,9 +26,9 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ReplayIcon from '@mui/icons-material/Replay';
 import StarIcon from '@mui/icons-material/Star';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import type { ReadonlyModifiableValueSnapshot, ReadonlyModifier } from '../../models/readonly';
-import { AdvantageStatus } from '../../models/modifiers';
-import { useActionEconomy } from '../../hooks/character/useActionEconomy';
+import type { ReadonlyModifiableValueSnapshot, ReadonlyModifier } from '../../../models/readonly';
+import { AdvantageStatus } from '../../../models/modifiers';
+import { useActionEconomy } from '../../../hooks/character_sheet/useActionEconomy';
 
 // Reusable component for displaying ModifiableValue breakdowns
 const ValueBreakdown: React.FC<{ 

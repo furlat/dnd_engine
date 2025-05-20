@@ -1,7 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
-import { characterStore, characterActions } from '../../store/characterStore';
-import { refreshActionEconomy } from '../../api/characterApi';
+import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
+import { refreshActionEconomy } from '../../api/characterSheetApi';
 import type { 
   ReadonlyActionEconomySnapshot,
   ReadonlyModifiableValueSnapshot,
@@ -38,7 +38,7 @@ interface ActionEconomyData {
 }
 
 export function useActionEconomy(): ActionEconomyData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dialogState, setDialogState] = useState<ActionEconomyDialogState>({
     movement: false,
@@ -61,7 +61,7 @@ export function useActionEconomy(): ActionEconomyData {
     try {
       setIsRefreshing(true);
       const result = await refreshActionEconomy(snap.character.uuid);
-      characterActions.setCharacter(result);
+      characterSheetActions.setCharacter(result);
     } catch (error) {
       console.error('Failed to refresh action economy:', error);
     } finally {

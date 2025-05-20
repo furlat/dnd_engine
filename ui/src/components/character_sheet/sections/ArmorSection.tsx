@@ -31,10 +31,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import { AdvantageStatus } from '../../models/character';
-import ItemDetailsDialog from './ItemDetailsDialog';
-import { useArmor } from '../../hooks/character/useArmor';
-import type { ReadonlyModifiableValueSnapshot } from '../../models/readonly';
+import { AdvantageStatus } from '../../../models/character';
+import ItemDetailsDialog from '../modifiers/ItemDetailsDialog';
+import { useArmor } from '../../../hooks/character_sheet/useArmor';
+import type { ReadonlyModifiableValueSnapshot } from '../../../models/readonly';
 
 // Format helper function
 const format = (value: number | AdvantageStatus | undefined): string => {

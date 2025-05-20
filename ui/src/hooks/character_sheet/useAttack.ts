@@ -1,13 +1,13 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
-import { characterStore, characterActions } from '../../store/characterStore';
+import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
   ReadonlyAttackBonusCalculation,
   ReadonlyEquipmentSnapshot,
   ReadonlyModifiableValueSnapshot
 } from '../../models/readonly';
-import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterApi';
+import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterSheetApi';
 import { EquipmentItem } from '../../api/types';
 
 export type WeaponSlot = 'MAIN_HAND' | 'OFF_HAND';
@@ -47,7 +47,7 @@ interface AttackData {
 }
 
 export function useAttack(): AttackData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   const [detailMode, setDetailMode] = useState<'attack' | 'damage' | 'advantage'>('attack');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [itemDetailsOpen, setItemDetailsOpen] = useState(false);
@@ -113,7 +113,7 @@ export function useAttack(): AttackData {
     try {
       setWeaponSelectOpen(false);
       const updatedEntity = await equipItem(snap.character.uuid, weaponId, slot);
-      characterActions.setCharacter(updatedEntity);
+      characterSheetActions.setCharacter(updatedEntity);
       // Trigger event queue refresh after equipping weapon
       eventQueueActions.refresh();
     } catch (error: any) {
@@ -127,7 +127,7 @@ export function useAttack(): AttackData {
     if (!snap.character) return;
     try {
       const updatedEntity = await unequipItem(snap.character.uuid, slot);
-      characterActions.setCharacter(updatedEntity);
+      characterSheetActions.setCharacter(updatedEntity);
       handleMenuClose();
       // Trigger event queue refresh after unequipping weapon
       eventQueueActions.refresh();
