@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Box, Typography, Tooltip } from '@mui/material';
 import { useSnapshot } from 'valtio';
-import { characterStore } from '../../store/characterStore';
+import { characterStore } from '../../../store/characterStore';
 
 // Update the EntityContext interface to add selectValue
 interface ValueDisplayProps {
