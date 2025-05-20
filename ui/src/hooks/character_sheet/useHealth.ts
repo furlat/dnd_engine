@@ -7,7 +7,7 @@ import type {
   ReadonlyHitDiceSnapshot,
   ReadonlyDamageResistanceSnapshot
 } from '../../models/readonly';
-import { modifyHealth, applyTemporaryHP } from '../../api/characterSheetApi';
+import { modifyHealth, applyTemporaryHP } from '../../api/character_sheet/characterSheetApi';
 
 interface HealthStats {
   current: number;

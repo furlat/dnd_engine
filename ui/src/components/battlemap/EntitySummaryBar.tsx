@@ -14,22 +14,25 @@ import TargetIcon from '@mui/icons-material/RadioButtonChecked';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PersonIcon from '@mui/icons-material/Person';
+import { ReadonlyEntitySummary } from '../../models/readonly';
 
 const SIDEBAR_WIDTH = '280px';
 const COLLAPSED_WIDTH = '40px';
 
 interface EntitySummaryBarProps {
-  onSelectTarget: (entityId: string) => void;
-  isCollapsed: boolean;
-  onToggleCollapse: () => void;
-  onSwitchToCharacter: () => void;
+  onSelectTarget?: (entityId: string) => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+  onSwitchToCharacter?: () => void;
+  entity?: EntitySummary | ReadonlyEntitySummary;
 }
 
 const EntitySummaryBar: React.FC<EntitySummaryBarProps> = ({ 
   onSelectTarget, 
-  isCollapsed, 
+  isCollapsed = false, 
   onToggleCollapse,
-  onSwitchToCharacter
+  onSwitchToCharacter,
+  entity
 }) => {
   const snap = useSnapshot(characterStore);
   const summaries = Object.values(snap.summaries);
@@ -37,6 +40,84 @@ const EntitySummaryBar: React.FC<EntitySummaryBarProps> = ({
   const selectedEntity = characterActions.getSelectedEntity();
   const displayedEntity = characterActions.getDisplayedEntity();
 
+  // If an entity is provided directly, just render that entity's summary
+  if (entity) {
+    return (
+      <Box sx={{ 
+        width: '100%', 
+        p: 1, 
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderRadius: 1,
+        color: 'white' 
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Entity Icon/Avatar */}
+          <Avatar
+            sx={{
+              width: 40,
+              height: 40,
+              backgroundColor: 'primary.main',
+            }}
+            src={entity.sprite_name ? `/sprites/${entity.sprite_name}` : undefined}
+          >
+            {!entity.sprite_name && entity.name[0]}
+          </Avatar>
+          
+          {/* Entity Info */}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="subtitle2" noWrap>
+              {entity.name}
+            </Typography>
+            
+            {/* HP Bar */}
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+              <Box sx={{ flex: 1 }}>
+                <Box sx={{ 
+                  width: '100%', 
+                  height: 4, 
+                  backgroundColor: 'rgba(255, 0, 0, 0.3)',
+                  borderRadius: 1,
+                }}>
+                  <Box sx={{
+                    width: `${(entity.current_hp / entity.max_hp) * 100}%`,
+                    height: '100%',
+                    backgroundColor: '#ff4444',
+                    borderRadius: 1,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </Box>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                  {entity.current_hp}/{entity.max_hp}
+                </Typography>
+              </Box>
+              
+              {/* AC Badge */}
+              {entity.armor_class !== undefined && (
+                <Tooltip title="Armor Class">
+                  <Box sx={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    width: 24,
+                    height: 24,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    ml: 1
+                  }}>
+                    <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                      {entity.armor_class}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Otherwise render the full entity sidebar
   return (
     <Box
       sx={{
@@ -84,14 +165,16 @@ const EntitySummaryBar: React.FC<EntitySummaryBarProps> = ({
           justifyContent: 'space-between'
         }}>
           <Typography variant="h6">Entities</Typography>
-          <Tooltip title="Switch to Character Sheet">
-            <IconButton 
-              onClick={onSwitchToCharacter}
-              sx={{ color: 'white' }}
-            >
-              <PersonIcon />
-            </IconButton>
-          </Tooltip>
+          {onSwitchToCharacter && (
+            <Tooltip title="Switch to Character Sheet">
+              <IconButton 
+                onClick={onSwitchToCharacter}
+                sx={{ color: 'white' }}
+              >
+                <PersonIcon />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
 
         {/* Entity List */}
@@ -117,7 +200,7 @@ const EntitySummaryBar: React.FC<EntitySummaryBarProps> = ({
                     : 'rgba(255, 255, 255, 0.2)',
                 },
               }}
-              onClick={() => onSelectTarget(entity.uuid)}
+              onClick={() => onSelectTarget && onSelectTarget(entity.uuid)}
             >
               {/* Entity Icon/Avatar */}
               <Avatar
@@ -195,33 +278,34 @@ const EntitySummaryBar: React.FC<EntitySummaryBarProps> = ({
       </Paper>
 
       {/* Toggle button */}
-      <Paper
-        sx={{
-          position: 'absolute',
-          left: isCollapsed ? 0 : -40,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: COLLAPSED_WIDTH,
-          height: '80px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          borderTopLeftRadius: '8px',
-          borderBottomLeftRadius: '8px',
-          borderTopRightRadius: '0',
-          borderBottomRightRadius: '0',
-          zIndex: 1,
-          boxShadow: 2,
-          transition: 'left 0.3s ease-in-out',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        }}
-        onClick={onToggleCollapse}
-      >
-        <IconButton sx={{ color: 'white' }}>
-          {isCollapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
-        </IconButton>
-      </Paper>
+      {onToggleCollapse && (
+        <Paper
+          sx={{
+            position: 'absolute',
+            left: 0,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: COLLAPSED_WIDTH,
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            borderTopLeftRadius: '8px',
+            borderBottomLeftRadius: '8px',
+            borderTopRightRadius: '0',
+            borderBottomRightRadius: '0',
+            zIndex: 1,
+            boxShadow: 2,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          }}
+          onClick={onToggleCollapse}
+        >
+          <IconButton sx={{ color: 'white' }}>
+            {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+          </IconButton>
+        </Paper>
+      )}
     </Box>
   );
 };

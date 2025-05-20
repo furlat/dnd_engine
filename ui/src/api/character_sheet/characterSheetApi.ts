@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { Character, ConditionType, DurationType, EntitySummary } from '../models/character';
-import { EquipmentItem } from './types';
+import { Character, ConditionType, DurationType, EntitySummary } from '../../models/character';
+import { EquipmentItem } from '../types';
 
 // Update to point directly to FastAPI backend
 const API_BASE_URL = 'http://localhost:8000/api';

@@ -24,7 +24,7 @@ export type {
 };
 
 // Position type
-export type Position = [number, number];
+export type Position = readonly [number, number] | [number, number];
 
 // Add SensesType enum
 export enum SensesType {
