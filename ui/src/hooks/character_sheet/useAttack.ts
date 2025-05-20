@@ -7,7 +7,7 @@ import type {
   ReadonlyEquipmentSnapshot,
   ReadonlyModifiableValueSnapshot
 } from '../../models/readonly';
-import { fetchAllEquipment, equipItem, unequipItem } from '../../api/characterSheetApi';
+import { fetchAllEquipment, equipItem, unequipItem } from '../../api/character_sheet/characterSheetApi';
 import { EquipmentItem } from '../../api/types';
 
 export type WeaponSlot = 'MAIN_HAND' | 'OFF_HAND';

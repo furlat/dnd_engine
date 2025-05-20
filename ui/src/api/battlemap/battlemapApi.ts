@@ -1,12 +1,33 @@
 import axios from 'axios';
-import { EntitySummary } from '../models/character';
-import { TileSummary } from './tileApi';
+import { EntitySummary } from '../../models/character';
+import { TileSummary } from '../tileApi';
 
-// Update to point directly to FastAPI backend
+// API base URL
 const API_BASE_URL = 'http://localhost:8000/api';
 
-// Position type
+// Type for position
 export type Position = [number, number];
+
+// Response types
+export interface GridSnapshot {
+  width: number;
+  height: number;
+  tiles: Record<string, TileSummary>;
+}
+
+export interface AttackResult {
+  event: any; // Event details
+  attacker: any; // Updated attacker state
+}
+
+// Common params for character fetching
+const DEFAULT_INCLUDE_PARAMS = {
+  include_skill_calculations: true,
+  include_saving_throw_calculations: true,
+  include_ac_calculation: true,
+  include_attack_calculations: true,
+  include_target_summary: true
+};
 
 // Fetch all entity summaries (lightweight version)
 export const fetchEntitySummaries = async (): Promise<EntitySummary[]> => {
@@ -19,13 +40,13 @@ export const fetchEntitySummaries = async (): Promise<EntitySummary[]> => {
   }
 };
 
-// Fetch entities at a specific position
-export const fetchEntitiesAtPosition = async (x: number, y: number): Promise<EntitySummary[]> => {
+// Fetch grid snapshot - fixed to match tileApi.ts
+export const fetchGridSnapshot = async (): Promise<GridSnapshot> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/entities/position/${x}/${y}`);
+    const response = await axios.get(`${API_BASE_URL}/tiles/`);
     return response.data;
   } catch (error) {
-    console.error('Error fetching entities at position:', error);
+    console.error('Error fetching grid snapshot:', error);
     throw error;
   }
 };
@@ -35,7 +56,8 @@ export const moveEntity = async (entityId: string, position: Position): Promise<
   try {
     const response = await axios.post(
       `${API_BASE_URL}/entities/${entityId}/move`,
-      { position }
+      { position },
+      { params: DEFAULT_INCLUDE_PARAMS }
     );
     return response.data;
   } catch (error) {
@@ -49,7 +71,8 @@ export const setTargetEntity = async (entityId: string, targetId: string | null)
   try {
     const response = await axios.post(
       `${API_BASE_URL}/entities/${entityId}/target`,
-      { target_entity_uuid: targetId }
+      { target_entity_uuid: targetId },
+      { params: DEFAULT_INCLUDE_PARAMS }
     );
     return response.data;
   } catch (error) {
@@ -58,11 +81,7 @@ export const setTargetEntity = async (entityId: string, targetId: string | null)
   }
 };
 
-export interface AttackResult {
-  attacker: EntitySummary;
-  event: any; // The event details
-}
-
+// Execute an attack from one entity to another
 export const executeAttack = async (
   entityId: string,
   targetId: string,
@@ -75,6 +94,7 @@ export const executeAttack = async (
       null,
       {
         params: {
+          ...DEFAULT_INCLUDE_PARAMS,
           weapon_slot: weaponSlot,
           attack_name: attackName
         }
@@ -83,6 +103,27 @@ export const executeAttack = async (
     return response.data;
   } catch (error) {
     console.error('Error executing attack:', error);
+    throw error;
+  }
+};
+
+// Update entity senses
+export const updateEntitySenses = async (entityId: string): Promise<void> => {
+  try {
+    await axios.post(`${API_BASE_URL}/entities/${entityId}/senses/update`);
+  } catch (error) {
+    console.error('Error updating entity senses:', error);
+    throw error;
+  }
+};
+
+// Get entities at a position
+export const getEntitiesAtPosition = async (x: number, y: number): Promise<EntitySummary[]> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/entities/position/${x}/${y}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching entities at position:', error);
     throw error;
   }
 }; 

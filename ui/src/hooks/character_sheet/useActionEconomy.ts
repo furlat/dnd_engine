@@ -1,7 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
-import { refreshActionEconomy } from '../../api/characterSheetApi';
+import { refreshActionEconomy } from '../../api/character_sheet/characterSheetApi';
 import type { 
   ReadonlyActionEconomySnapshot,
   ReadonlyModifiableValueSnapshot,

@@ -1,7 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
-import { removeCondition, addCondition } from '../../api/characterSheetApi';
+import { removeCondition, addCondition } from '../../api/character_sheet/characterSheetApi';
 import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
   ReadonlyConditionSnapshot,
