@@ -3,10 +3,10 @@ import { useState, useCallback } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import { refreshActionEconomy } from '../../api/character_sheet/characterSheetApi';
 import type { 
-  ReadonlyActionEconomySnapshot,
-  ReadonlyModifiableValueSnapshot,
-  ReadonlyModifier
-} from '../../models/readonly';
+  ActionEconomySnapshot,
+  ModifiableValueSnapshot,
+  NumericalModifierSnapshot
+} from '../../types/characterSheet_types';
 
 interface ActionEconomyDialogState {
   movement: boolean;
@@ -16,7 +16,7 @@ interface ActionEconomyDialogState {
 
 interface ActionEconomyData {
   // Store data
-  actionEconomy: ReadonlyActionEconomySnapshot | null;
+  actionEconomy: ActionEconomySnapshot | null;
   // UI state
   isRefreshing: boolean;
   dialogState: ActionEconomyDialogState;
@@ -70,7 +70,7 @@ export function useActionEconomy(): ActionEconomyData {
   }, [snap.character?.uuid]);
 
   // Helper function for cost calculation
-  const calculateTotalCost = useCallback((modifiers: ReadonlyArray<ReadonlyModifier>) => {
+  const calculateTotalCost = useCallback((modifiers: ReadonlyArray<NumericalModifierSnapshot>) => {
     return modifiers.reduce((sum, mod) => sum + mod.value, 0);
   }, []);
 

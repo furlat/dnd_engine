@@ -59,13 +59,13 @@ const ItemDetailsDialog: React.FC<ItemDetailsProps> = ({ open, onClose, item, it
       </Typography>
       <Paper sx={{ p: 2 }} elevation={1}>
         <Typography variant="body2" color="text.secondary">Base Armor Class</Typography>
-        <Typography variant="h6">{item.ac?.base_value || item.ac?.normalized_score}</Typography>
+        <Typography variant="h6">{item.ac?.base_value || item.ac?.normalized_value}</Typography>
         
         {item.max_dex_bonus && (
           <>
             <Divider sx={{ my: 2 }} />
             <Typography variant="body2" color="text.secondary">Maximum Dexterity Bonus</Typography>
-            <Typography variant="h6">{item.max_dex_bonus.normalized_score}</Typography>
+            <Typography variant="h6">{item.max_dex_bonus.normalized_value}</Typography>
           </>
         )}
 
@@ -87,7 +87,7 @@ const ItemDetailsDialog: React.FC<ItemDetailsProps> = ({ open, onClose, item, it
       </Typography>
       <Paper sx={{ p: 2 }} elevation={1}>
         <Typography variant="body2" color="text.secondary">AC Bonus</Typography>
-        <Typography variant="h6">+{item.ac_bonus?.normalized_score || item.ac_bonus?.base_value}</Typography>
+        <Typography variant="h6">+{item.ac_bonus?.normalized_value || item.ac_bonus?.base_value}</Typography>
       </Paper>
     </>
   );

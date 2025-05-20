@@ -3,11 +3,12 @@ import { useState, useCallback } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import { removeCondition, addCondition } from '../../api/character_sheet/characterSheetApi';
 import { eventQueueActions } from '../../store/eventQueueStore';
-import type { 
-  ReadonlyConditionSnapshot,
-  ReadonlyCharacter
-} from '../../models/readonly';
-import { ConditionType, DurationType } from '../../models/character';
+import { 
+  ConditionSnapshot as ReadonlyConditionSnapshot,
+  Character as ReadonlyCharacter,
+  ConditionType,
+  DurationType
+} from '../../types/characterSheet_types';
 
 export const CONDITIONS_LIST = Object.values(ConditionType).map(type => ({
   type,

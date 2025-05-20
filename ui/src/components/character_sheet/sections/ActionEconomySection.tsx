@@ -26,16 +26,42 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ReplayIcon from '@mui/icons-material/Replay';
 import StarIcon from '@mui/icons-material/Star';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import type { ReadonlyModifiableValueSnapshot, ReadonlyModifier } from '../../../models/readonly';
-import { AdvantageStatus } from '../../../models/modifiers';
+import { 
+  ModifiableValueSnapshot, 
+  NumericalModifierSnapshot, 
+  AdvantageStatus 
+} from '../../../types/characterSheet_types';
 import { useActionEconomy } from '../../../hooks/character_sheet/useActionEconomy';
+
+interface ModifierDisplay {
+  name: string;
+  value: number | string;
+  source_entity_name?: string;
+}
 
 // Reusable component for displaying ModifiableValue breakdowns
 const ValueBreakdown: React.FC<{ 
   label: string; 
-  mv: ReadonlyModifiableValueSnapshot 
+  mv: ModifiableValueSnapshot 
 }> = ({ label, mv }) => {
   const [showAdvantage, setShowAdvantage] = React.useState(false);
+
+  // Extract modifiers from the ModifiableValueSnapshot
+  const valueModifiers: ModifierDisplay[] = mv.modifiers.map(mod => ({
+    name: mod.name,
+    value: mod.value,
+    source_entity_name: mod.source_entity_name
+  }));
+
+  // There might not be advantage modifiers in the new structure
+  // This would need to be adjusted based on actual data structure
+  const advantageModifiers: ModifierDisplay[] = [];
+  if (mv.advantage) {
+    advantageModifiers.push({
+      name: 'Advantage Status',
+      value: mv.advantage
+    });
+  }
 
   return (
     <Accordion defaultExpanded sx={{ mb: 1 }}>
@@ -58,59 +84,57 @@ const ValueBreakdown: React.FC<{
         </Box>
       </AccordionSummary>
       <AccordionDetails>
-        {mv.channels.map((ch, idx) => (
-          <Box key={idx} sx={{ mb: 1 }}>
-            <Typography variant="body2" fontWeight="bold">
-              {ch.name} – Total: {ch.normalized_score}
-            </Typography>
-            <List dense disablePadding>
-              {/* Show value modifiers when not in advantage mode */}
-              {!showAdvantage && ch.value_modifiers.map((mod, i) => (
-                <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
-                  <ListItemText
-                    primary={mod.name}
-                    secondary={mod.source_entity_name}
-                    primaryTypographyProps={{ variant: 'body2' }}
-                    secondaryTypographyProps={{ variant: 'caption' }}
-                  />
-                  <Chip 
-                    label={mod.value >= 0 ? `+${mod.value}` : mod.value} 
-                    size="small" 
-                    color={mod.value >= 0 ? 'success' : 'error'} 
-                  />
-                </ListItem>
-              ))}
-              {/* Show advantage modifiers when in advantage mode */}
-              {showAdvantage && ch.advantage_modifiers.map((mod, i) => (
-                <ListItem key={i} dense divider={i < ch.advantage_modifiers.length - 1}>
-                  <ListItemText
-                    primary={mod.name}
-                    secondary={mod.source_entity_name}
-                    primaryTypographyProps={{ variant: 'body2' }}
-                    secondaryTypographyProps={{ variant: 'caption' }}
-                  />
-                  <Chip 
-                    label={mod.value}
-                    size="small"
-                    color={mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 'error'} 
-                  />
-                </ListItem>
-              ))}
-              {showAdvantage && ch.advantage_modifiers.length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                  No advantage modifiers
-                </Typography>
-              )}
-            </List>
-          </Box>
-        ))}
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="body2" fontWeight="bold">
+            {label} – Total: {mv.normalized_value}
+          </Typography>
+          <List dense disablePadding>
+            {/* Show value modifiers when not in advantage mode */}
+            {!showAdvantage && valueModifiers.map((mod, i) => (
+              <ListItem key={i} dense divider={i < valueModifiers.length - 1}>
+                <ListItemText
+                  primary={mod.name}
+                  secondary={mod.source_entity_name}
+                  primaryTypographyProps={{ variant: 'body2' }}
+                  secondaryTypographyProps={{ variant: 'caption' }}
+                />
+                <Chip 
+                  label={typeof mod.value === 'number' ? (mod.value >= 0 ? `+${mod.value}` : mod.value) : mod.value} 
+                  size="small" 
+                  color={typeof mod.value === 'number' ? (mod.value >= 0 ? 'success' : 'error') : 'default'} 
+                />
+              </ListItem>
+            ))}
+            {/* Show advantage modifiers when in advantage mode */}
+            {showAdvantage && advantageModifiers.map((mod, i) => (
+              <ListItem key={i} dense divider={i < advantageModifiers.length - 1}>
+                <ListItemText
+                  primary={mod.name}
+                  secondary={mod.source_entity_name}
+                  primaryTypographyProps={{ variant: 'body2' }}
+                  secondaryTypographyProps={{ variant: 'caption' }}
+                />
+                <Chip 
+                  label={mod.value}
+                  size="small"
+                  color={mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 'error'} 
+                />
+              </ListItem>
+            ))}
+            {showAdvantage && advantageModifiers.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                No advantage modifiers
+              </Typography>
+            )}
+          </List>
+        </Box>
       </AccordionDetails>
     </Accordion>
   );
 };
 
 // Cost Summary component
-const CostSummary: React.FC<{ costs: ReadonlyArray<ReadonlyModifier> }> = ({ costs }) => (
+const CostSummary: React.FC<{ costs: ReadonlyArray<NumericalModifierSnapshot> }> = ({ costs }) => (
   <List dense>
     {costs.map((cost, idx) => (
       <ListItem key={idx}>
@@ -261,45 +285,44 @@ const ActionsBlock: React.FC = () => {
         <DialogTitle>Actions Details</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="text.secondary">Actions (Current / Base)</Typography>
-                <Typography variant="h4">
-                  {details.availableActions}/{details.baseActions}
-                </Typography>
+                <Typography variant="subtitle2" color="text.secondary">Actions (Available / Base)</Typography>
+                <Typography variant="h4">{details.availableActions}/{details.baseActions}</Typography>
                 {details.totalActionCost !== 0 && (
                   <Typography variant="h6" color="error" sx={{ mt: 1 }}>
-                    Total Cost: {details.totalActionCost}
+                    Total Action Cost: {details.totalActionCost}
                   </Typography>
                 )}
                 {actionEconomy.action_costs.length > 0 && (
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" color="text.secondary">Active Costs</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">Active Action Costs</Typography>
                     <CostSummary costs={actionEconomy.action_costs} />
                   </Box>
                 )}
-
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="subtitle2" color="text.secondary">Bonus Actions (Current / Base)</Typography>
-                <Typography variant="h4">
-                  {details.availableBonusActions}/{details.baseBonusActions}
-                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" color="text.secondary">Bonus Actions (Available / Base)</Typography>
+                <Typography variant="h4">{details.availableBonusActions}/{details.baseBonusActions}</Typography>
                 {details.totalBonusActionCost !== 0 && (
                   <Typography variant="h6" color="error" sx={{ mt: 1 }}>
-                    Total Cost: {details.totalBonusActionCost}
+                    Total Bonus Action Cost: {details.totalBonusActionCost}
                   </Typography>
                 )}
                 {actionEconomy.bonus_action_costs.length > 0 && (
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" color="text.secondary">Active Costs</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">Active Bonus Action Costs</Typography>
                     <CostSummary costs={actionEconomy.bonus_action_costs} />
                   </Box>
                 )}
               </Box>
             </Grid>
-            <Grid item xs={12} md={8}>
+            <Grid item xs={12} md={6}>
               <ValueBreakdown label="Action Modifiers" mv={actionEconomy.actions} />
+            </Grid>
+            <Grid item xs={12} md={6}>
               <ValueBreakdown label="Bonus Action Modifiers" mv={actionEconomy.bonus_actions} />
             </Grid>
           </Grid>
@@ -390,23 +413,27 @@ const ReactionsBlock: React.FC = () => {
 
 // Main Action Economy Section
 const ActionEconomySection: React.FC = () => {
-  const { actionEconomy, isRefreshing, handleRefreshActionEconomy } = useActionEconomy();
+  const { 
+    actionEconomy, 
+    isRefreshing, 
+    handleRefreshActionEconomy 
+  } = useActionEconomy();
 
   if (!actionEconomy) return null;
 
   return (
     <Box>
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5">Action Economy</Typography>
         <IconButton 
           onClick={handleRefreshActionEconomy} 
           disabled={isRefreshing}
-          color="primary"
+          sx={{ ml: 1 }}
         >
           {isRefreshing ? <CircularProgress size={24} /> : <RefreshIcon />}
         </IconButton>
       </Box>
-      <Grid container spacing={2} alignItems="stretch">
+      <Grid container spacing={2}>
         <Grid item xs={12} md={4}>
           <MovementBlock />
         </Grid>

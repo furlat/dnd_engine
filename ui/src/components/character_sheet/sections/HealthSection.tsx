@@ -26,27 +26,27 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import type { 
-  ReadonlyModifiableValueSnapshot, 
-  ReadonlyHitDiceSnapshot 
-} from '../../../models/readonly';
+  ModifiableValueSnapshot, 
+  HitDiceSnapshot 
+} from '../../../types/characterSheet_types';
 import { useHealth } from '../../../hooks/character_sheet/useHealth';
 
 const format = (v: number) => `${v}`;
 
 const ValueBreakdown: React.FC<{ 
   label: string; 
-  mv: ReadonlyModifiableValueSnapshot 
+  mv: ModifiableValueSnapshot 
 }> = ({ label, mv }) => (
   <Accordion defaultExpanded sx={{ mb: 1 }}>
     <AccordionSummary expandIcon={<ExpandMoreIcon />}>{label}</AccordionSummary>
     <AccordionDetails>
-      {mv.channels.map((ch, idx) => (
+      {(mv as any).channels?.map((ch: any, idx: number) => (
         <Box key={idx} sx={{ mb: 1 }}>
           <Typography variant="body2" fontWeight="bold">
-            {ch.name} – Total: {format(ch.normalized_score)}
+            {ch.name} – Total: {format(ch.normalized_value)}
           </Typography>
           <List dense disablePadding>
-            {ch.value_modifiers.map((mod, i) => (
+            {ch.value_modifiers.map((mod: any, i: number) => (
               <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
                 <ListItemText
                   primary={mod.name}
@@ -65,7 +65,7 @@ const ValueBreakdown: React.FC<{
 );
 
 const HitDiceList: React.FC<{ 
-  hitDices: ReadonlyArray<ReadonlyHitDiceSnapshot> 
+  hitDices: ReadonlyArray<HitDiceSnapshot> 
 }> = ({ hitDices }) => (
   <Accordion defaultExpanded sx={{ mb: 1 }}>
     <AccordionSummary expandIcon={<ExpandMoreIcon />}>Hit Dice</AccordionSummary>
@@ -74,7 +74,7 @@ const HitDiceList: React.FC<{
         {hitDices.map((hd) => (
           <ListItem key={hd.uuid} divider>
             <ListItemText
-              primary={`${hd.hit_dice_count.score}d${hd.hit_dice_value.score} (${hd.mode})`}
+              primary={`${hd.hit_dice_count.final_value}d${hd.hit_dice_value.final_value} (${hd.mode})`}
               secondary={`HP: ${hd.hit_points}`}
             />
           </ListItem>
@@ -199,105 +199,147 @@ const HealthSection: React.FC = () => {
   if (!health || !stats) return null;
 
   return (
-    <Box>
-      <Typography variant="h5" gutterBottom>Health</Typography>
-      <Paper
-        sx={{ p: 2, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        elevation={3}
-        onClick={handleOpenDialog}
-      >
-        <Box sx={{ mr: 2 }}>
-          <Typography variant="subtitle1">HP</Typography>
-          <Typography variant="h4">{stats.current}/{stats.max}</Typography>
-        </Box>
-        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-          {stats.immunities > 0 && <Chip size="small" label={`Imm ${stats.immunities}`} color="success" />}
-          {stats.resistances > 0 && <Chip size="small" label={`Res ${stats.resistances}`} color="primary" />}
-          {stats.vulnerabilities > 0 && <Chip size="small" label={`Vul ${stats.vulnerabilities}`} color="error" />}
-        </Box>
-        <Box sx={{ ml: 2, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-          <Box textAlign="center">
-            <Typography variant="subtitle2">Hit Dice</Typography>
-            <Typography>{stats.hitDiceString}</Typography>
-          </Box>
-          <Box textAlign="center">
-            <Typography variant="subtitle2">CON</Typography>
-            <Typography>{stats.conPerLevel >= 0 ? `+${stats.conPerLevel}` : stats.conPerLevel}</Typography>
-          </Box>
-          {stats.damageReduction > 0 && (
-            <Box textAlign="center">
-              <Typography variant="subtitle2">DR</Typography>
-              <Typography>{stats.damageReduction}</Typography>
+    <>
+      {/* Main health display */}
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Grid container spacing={1} alignItems="center">
+          {/* Current/Max HP */}
+          <Grid item xs={12} sm={4}>
+            <Typography variant="h6" gutterBottom align="center">HP</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline' }}>
+              <Typography variant="h3" component="span">
+                {stats.current}
+              </Typography>
+              <Typography variant="h5" component="span" sx={{ ml: 1 }}>
+                / {stats.max}
+              </Typography>
             </Box>
-          )}
-        </Box>
+            {health.temporary_hit_points.final_value > 0 && (
+              <Typography align="center" variant="body2" color="primary">
+                +{health.temporary_hit_points.final_value} temporary
+              </Typography>
+            )}
+          </Grid>
+
+          {/* Hit dice */}
+          <Grid item xs={8} sm={4}>
+            <Typography variant="h6" gutterBottom align="center">
+              Hit Dice
+            </Typography>
+            <Typography variant="body1" align="center">
+              {stats.hitDiceString}
+            </Typography>
+            <Typography variant="caption" display="block" align="center">
+              (Con per level: {format(stats.conPerLevel)})
+            </Typography>
+          </Grid>
+
+          {/* Damage reduction */}
+          <Grid item xs={4} sm={4}>
+            <Typography variant="h6" gutterBottom align="center">
+              Reduction
+            </Typography>
+            <Typography variant="h4" align="center">
+              {stats.damageReduction}
+            </Typography>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'center', mt: 1 }}>
+              {stats.immunities > 0 && (
+                <Chip 
+                  label={`${stats.immunities} Immunities`} 
+                  color="info" 
+                  size="small" 
+                  onClick={handleOpenDialog}
+                />
+              )}
+              {stats.resistances > 0 && (
+                <Chip 
+                  label={`${stats.resistances} Resistances`} 
+                  color="success" 
+                  size="small" 
+                  onClick={handleOpenDialog}
+                />
+              )}
+              {stats.vulnerabilities > 0 && (
+                <Chip 
+                  label={`${stats.vulnerabilities} Vulnerabilities`} 
+                  color="error" 
+                  size="small" 
+                  onClick={handleOpenDialog}
+                />
+              )}
+              <Chip 
+                label="Modify HP" 
+                color="primary" 
+                size="small" 
+                onClick={handleOpenModifyDialog}
+              />
+            </Box>
+          </Grid>
+        </Grid>
       </Paper>
 
+      {/* Detailed dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography>Health Details</Typography>
-            <Button variant="contained" onClick={handleOpenModifyDialog}>
-              Modify HP
-            </Button>
-          </Box>
-        </DialogTitle>
+        <DialogTitle>Health Details</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="body2">Current HP</Typography>
-                <Typography variant="h5">{stats.current}</Typography>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="body2">Max HP</Typography>
-                <Typography variant="h5">{stats.max}</Typography>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="body2">Temporary HP</Typography>
-                <Typography variant="h6">{health.temporary_hit_points.normalized_score}</Typography>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="body2">Damage Taken</Typography>
-                <Typography variant="h6">{health.damage_taken}</Typography>
-              </Paper>
+            {/* Left column */}
+            <Grid item xs={12} md={6}>
+              {/* Resistances */}
+              {['Immunity', 'Resistance', 'Vulnerability'].map(status => {
+                const resistances = getResistancesByType(status as any);
+                if (resistances.length === 0) return null;
+                return (
+                  <Box key={status} sx={{ mb: 2 }}>
+                    <Typography variant="h6">{status}:</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                      {resistances.map((r, idx) => (
+                        <Chip 
+                          key={idx} 
+                          label={r.damage_type} 
+                          size="small" 
+                          color={
+                            status === 'Immunity' ? 'info' : 
+                            status === 'Resistance' ? 'success' : 'error'
+                          }
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                );
+              })}
 
-              {/* Resistances / Vulnerabilities / Immunities */}
-              {health.resistances && health.resistances.length > 0 && (
-                <Paper sx={{ p: 2, mt: 2 }}>
-                  <Typography variant="h6" gutterBottom>Damage Modifiers</Typography>
-                  <Grid container spacing={1}>
-                    {['Immunity', 'Resistance', 'Vulnerability'].map((status) => (
-                      <Grid item xs={12} key={status}>
-                        <Typography variant="subtitle2" color="text.secondary">{status}</Typography>
-                        {getResistancesByType(status as any).length === 0 ? (
-                          <Typography variant="caption">None</Typography>
-                        ) : (
-                          <List dense disablePadding>
-                            {getResistancesByType(status as any).map((r) => (
-                              <ListItem key={r.damage_type}>
-                                <ListItemText primary={r.damage_type} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        )}
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Paper>
-              )}
+              {/* Damage Reduction */}
+              <ValueBreakdown label="Damage Reduction" mv={health.damage_reduction} />
             </Grid>
 
-            <Grid item xs={12} md={8}>
-              <Paper sx={{ p: 2, mb: 1 }} elevation={1}>
-                <Typography variant="subtitle2">Constitution Bonus</Typography>
-                <Typography>
-                  {stats.totalDice > 0 
-                    ? `${stats.conPerLevel} per level, Total: ${stats.conModifier}` 
-                    : stats.conModifier}
-                </Typography>
-              </Paper>
-              <HitDiceList hitDices={health.hit_dices} />
-              <ValueBreakdown label="Max HP Bonus" mv={health.max_hit_points_bonus} />
+            {/* Right column */}
+            <Grid item xs={12} md={6}>
+              {/* Temporary HP */}
               <ValueBreakdown label="Temporary HP" mv={health.temporary_hit_points} />
-              <ValueBreakdown label="Damage Reduction" mv={health.damage_reduction} />
+              
+              {/* HP Bonus */}
+              <ValueBreakdown label="Max HP Bonus" mv={health.max_hit_points_bonus} />
+
+              {/* Hit Dice */}
+              <HitDiceList hitDices={health.hit_dices} />
+            </Grid>
+
+            {/* Debug JSON */}
+            <Grid item xs={12}>
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  Debug Raw Data
+                </AccordionSummary>
+                <AccordionDetails>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.75rem' }}>
+                    {JSON.stringify(health, null, 2)}
+                  </pre>
+                </AccordionDetails>
+              </Accordion>
             </Grid>
           </Grid>
         </DialogContent>
@@ -306,14 +348,15 @@ const HealthSection: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      <ModifyHealthDialog
+      {/* Modify HP Dialog */}
+      <ModifyHealthDialog 
         open={modifyDialogOpen}
         onClose={handleCloseModifyDialog}
         onModify={handleModifyHealth}
         onApplyTemp={handleApplyTempHP}
       />
-    </Box>
+    </>
   );
 };
 
-export default React.memo(HealthSection); 
+export default HealthSection; 

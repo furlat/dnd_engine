@@ -24,15 +24,22 @@ import {
   Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { AdvantageStatus, CriticalStatus, AutoHitStatus } from '../../../models/character';
+import { 
+  AdvantageStatus, 
+  CriticalStatus, 
+  AutoHitStatus, 
+  Skill, 
+  ModifierDisplay,
+  ScoreModifier,
+  AdvantageModifier
+} from '../../../types/characterSheet_types';
 import { useSkills } from '../../../hooks/character_sheet/useSkills';
-import type { ReadonlySkill } from '../../../models/readonly';
 
 const formatBonus = (n: number) => `${n}`;
 
 // Helper to render modifier breakdown similar to Ability block
 const ModifierBreakdown: React.FC<{ 
-  skill: ReadonlySkill; 
+  skill: Skill; 
   calc?: any;
   showAdvantage?: boolean;
 }> = ({ skill, calc, showAdvantage = false }): ReactElement => {
@@ -76,24 +83,39 @@ const ModifierBreakdown: React.FC<{
                   {ch.name} – Total: {showAdvantage ? ch.advantage_status : formatBonus(getTotal(ch))}
                 </Typography>
                 <List dense disablePadding>
-                  {(showAdvantage ? ch.advantage_modifiers : ch.value_modifiers).map((mod: any, i: number) => (
-                    <ListItem key={i} dense divider={i < (showAdvantage ? ch.advantage_modifiers.length : ch.value_modifiers.length) - 1}>
-                      <ListItemText
-                        primary={mod.name}
-                        secondary={mod.source_entity_name}
-                        primaryTypographyProps={{ variant: 'body2' }}
-                        secondaryTypographyProps={{ variant: 'caption' }}
-                      />
-                      <Chip 
-                        label={showAdvantage ? mod.value : formatBonus(mod.value)} 
-                        size="small" 
-                        color={showAdvantage 
-                          ? (mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 
-                             mod.value === AdvantageStatus.DISADVANTAGE ? 'error' : 'default')
-                          : (mod.value >= 0 ? 'success' : 'error')} 
-                      />
-                    </ListItem>
-                  ))}
+                  {showAdvantage 
+                    ? ch.advantage_modifiers.map((mod: AdvantageModifier, i: number) => (
+                        <ListItem key={i} dense divider={i < ch.advantage_modifiers.length - 1}>
+                          <ListItemText
+                            primary={mod.name}
+                            secondary={mod.source_entity_name}
+                            primaryTypographyProps={{ variant: 'body2' }}
+                            secondaryTypographyProps={{ variant: 'caption' }}
+                          />
+                          <Chip 
+                            label={String(mod.value)} 
+                            size="small" 
+                            color={mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 
+                                   mod.value === AdvantageStatus.DISADVANTAGE ? 'error' : 'default'} 
+                          />
+                        </ListItem>
+                      ))
+                    : ch.value_modifiers.map((mod: ModifierDisplay, i: number) => (
+                        <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
+                          <ListItemText
+                            primary={mod.name}
+                            secondary={mod.source_entity_name}
+                            primaryTypographyProps={{ variant: 'body2' }}
+                            secondaryTypographyProps={{ variant: 'caption' }}
+                          />
+                          <Chip 
+                            label={formatBonus(mod.value as number)} 
+                            size="small" 
+                            color={mod.value >= 0 ? 'success' : 'error'} 
+                          />
+                        </ListItem>
+                      ))
+                  }
                   {showAdvantage && ch.advantage_modifiers.length === 0 && (
                     <Typography variant="body2" color="text.secondary">
                       No advantage modifiers
@@ -160,16 +182,16 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
 
                 {/* Status Chips */}
                 <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {autoHit === AutoHitStatus.AUTOHIT && (
+                  {autoHit === AutoHitStatus.HIT && (
                     <Chip size="small" label="Auto Success" color="info" />
                   )}
-                  {autoHit === AutoHitStatus.AUTOMISS && (
+                  {autoHit === AutoHitStatus.MISS && (
                     <Chip size="small" label="Auto Fail" color="error" />
                   )}
-                  {critical === CriticalStatus.AUTOCRIT && (
+                  {critical === CriticalStatus.CRITICAL && (
                     <Chip size="small" label="Always Crit" color="warning" />
                   )}
-                  {critical === CriticalStatus.NOCRIT && (
+                  {critical === CriticalStatus.NORMAL && (
                     <Chip size="small" label="Never Crit" color="error" />
                   )}
                   <Chip 
@@ -188,10 +210,10 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
               </Typography>
               <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                 {[
-                  { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_score },
-                  { label: 'Skill Bonus', value: calc.skill_bonus.normalized_score },
-                  { label: 'Ability Bonus', value: calc.ability_bonus.normalized_score },
-                  { label: 'Ability Modifier Bonus', value: calc.ability_modifier_bonus.normalized_score },
+                  { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_value },
+                  { label: 'Skill Bonus', value: calc.skill_bonus.normalized_value },
+                  { label: 'Ability Bonus', value: calc.ability_bonus.normalized_value },
+                  { label: 'Ability Modifier Bonus', value: calc.ability_modifier_bonus.normalized_value },
                 ].map((row, idx, arr) => (
                   <React.Fragment key={row.label}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
@@ -219,15 +241,15 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
                 </Typography>
                 {critical !== CriticalStatus.NONE && (
                   <Typography variant="body1" sx={{ mb: 2 }}>
-                    {critical === CriticalStatus.AUTOCRIT ? 'Check automatically results in a critical success' :
-                     critical === CriticalStatus.NOCRIT ? 'Check can never be a critical success' :
+                    {critical === CriticalStatus.CRITICAL ? 'Check automatically results in a critical success' :
+                     critical === CriticalStatus.NORMAL ? 'Check can never be a critical success' :
                      'Normal critical rules apply'}
                   </Typography>
                 )}
                 {autoHit !== AutoHitStatus.NONE && (
                   <Typography variant="body1">
-                    {autoHit === AutoHitStatus.AUTOHIT ? 'Check automatically succeeds' :
-                     autoHit === AutoHitStatus.AUTOMISS ? 'Check automatically fails' :
+                    {autoHit === AutoHitStatus.HIT ? 'Check automatically succeeds' :
+                     autoHit === AutoHitStatus.MISS ? 'Check automatically fails' :
                      'Normal success rules apply'}
                   </Typography>
                 )}
@@ -249,33 +271,31 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
                   Debug JSON
                 </AccordionSummary>
                 <AccordionDetails>
-                  <pre style={{ fontSize: 12 }}>
-                    {JSON.stringify(selectedSkill, null, 2)}
+                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.75rem' }}>
+                    {JSON.stringify(calc, null, 2)}
                   </pre>
-                  {calc && (
-                    <>
-                      <Divider sx={{ my: 1 }} />
-                      <pre style={{ fontSize: 12 }}>
-                        {JSON.stringify(calc, null, 2)}
-                      </pre>
-                    </>
-                  )}
                 </AccordionDetails>
               </Accordion>
             </Grid>
           </Grid>
         ) : (
-          <Typography variant="body2">No calculation snapshot available.</Typography>
+          <CircularProgress />
         )}
       </DialogContent>
       <DialogActions>
         <Button 
-          onClick={() => setDetailMode(detailMode === 'values' ? 'advantage' : 'values')}
-          color="primary"
+          variant={detailMode === 'values' ? 'contained' : 'outlined'}
+          onClick={() => setDetailMode('values')}
         >
-          Show {detailMode === 'values' ? 'Advantage' : 'Values'} Details
+          Value Details
         </Button>
-        <Button onClick={() => handleSelectSkill(null)}>Close</Button>
+        <Button 
+          variant={detailMode === 'advantage' ? 'contained' : 'outlined'}
+          onClick={() => setDetailMode('advantage')}
+        >
+          Advantage Details
+        </Button>
+        <Button variant="outlined" onClick={() => handleSelectSkill(null)}>Close</Button>
       </DialogActions>
     </Dialog>
   );

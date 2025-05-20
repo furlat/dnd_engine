@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
-import { TileSummary } from '../../api/tileApi';
+import { TileSummary } from '../../types/battlemap_types';
 
 /**
  * Hook for grid operations and calculations

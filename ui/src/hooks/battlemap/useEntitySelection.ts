@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
-import { EntitySummary } from '../../models/character';
-import { setTargetEntity } from '../../api/battlemap';
+import { setTargetEntity } from '../../api/battlemap/battlemapApi';
+import { EntitySummary } from '../../types/battlemap_types';
 
 /**
  * Hook for entity selection and targeting operations
@@ -14,14 +14,14 @@ export const useEntitySelection = () => {
    * Get all entities as an array
    */
   const getAllEntities = useCallback((): EntitySummary[] => {
-    return Object.values(snap.entities.summaries);
+    return Object.values(snap.entities.summaries) as EntitySummary[];
   }, [snap.entities.summaries]);
   
   /**
    * Get entity by ID
    */
   const getEntityById = useCallback((entityId: string): EntitySummary | undefined => {
-    return snap.entities.summaries[entityId];
+    return snap.entities.summaries[entityId] as EntitySummary | undefined;
   }, [snap.entities.summaries]);
   
   /**
@@ -37,18 +37,16 @@ export const useEntitySelection = () => {
    * Get currently selected entity
    */
   const getSelectedEntity = useCallback((): EntitySummary | undefined => {
-    return snap.entities.selectedEntityId 
-      ? snap.entities.summaries[snap.entities.selectedEntityId] 
-      : undefined;
+    if (!snap.entities.selectedEntityId) return undefined;
+    return snap.entities.summaries[snap.entities.selectedEntityId] as EntitySummary | undefined;
   }, [snap.entities.selectedEntityId, snap.entities.summaries]);
   
   /**
    * Get currently displayed entity (for character sheet)
    */
   const getDisplayedEntity = useCallback((): EntitySummary | undefined => {
-    return snap.entities.displayedEntityId 
-      ? snap.entities.summaries[snap.entities.displayedEntityId] 
-      : undefined;
+    if (!snap.entities.displayedEntityId) return undefined;
+    return snap.entities.summaries[snap.entities.displayedEntityId] as EntitySummary | undefined;
   }, [snap.entities.displayedEntityId, snap.entities.summaries]);
   
   /**
