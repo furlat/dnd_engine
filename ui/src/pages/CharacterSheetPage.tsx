@@ -7,8 +7,6 @@ import {
   CircularProgress,
   Alert,
   Button,
-  Grid,
-  Slide,
   IconButton,
   Tooltip,
 } from '@mui/material';
@@ -16,10 +14,9 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import GroupIcon from '@mui/icons-material/Group';
-import { characterStore, characterActions } from '../store/characterStore';
+import { characterSheetStore, characterSheetActions } from '../store/characterSheetStore';
 import { useSnapshot } from 'valtio';
 import CharacterSheetContent from '../components/character_sheet/CharacterSheetContent';
-import ActionBar from '../components/character_sheet/ActionBar';
 
 // Define the params interface
 type RouteParams = {
@@ -42,12 +39,12 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
 }) => {
   const { characterId } = useParams<RouteParams>();
   const navigate = useNavigate();
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
 
   // Load character data on mount
   React.useEffect(() => {
     if (characterId) {
-      characterActions.fetchCharacter(characterId);
+      characterSheetActions.fetchCharacter(characterId);
     }
   }, [characterId]);
 
@@ -106,11 +103,6 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
               <GroupIcon />
             </IconButton>
           </Tooltip>
-        </Paper>
-
-        {/* Action Bar - Full Width */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <ActionBar />
         </Paper>
 
         {/* Character Sheet Content */}

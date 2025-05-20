@@ -13,7 +13,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CloseIcon from '@mui/icons-material/Close';
-import { useModifiableValue } from '../../hooks/character/useModifiableValue';
+import { useModifiableValue } from '../../../hooks/character_sheet/useModifiableValue';
 
 interface ModifierPanelProps {
   valuePath: string | null;
@@ -78,7 +78,7 @@ const ModifierPanel: React.FC<ModifierPanelProps> = ({
           </Typography>
           
           <List dense disablePadding>
-            {details.modifiers.map((mod, index) => (
+            {details.modifiers.map((mod: { source: string, value: number }, index: number) => (
               <ListItem key={index} dense sx={{ py: 0.5 }}>
                 <ListItemText
                   primary={`${mod.source}: ${mod.value}`}

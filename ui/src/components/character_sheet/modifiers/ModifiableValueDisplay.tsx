@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Box, Typography, Tooltip } from '@mui/material';
 import { useSnapshot } from 'valtio';
-import { characterStore } from '../../../store/characterStore';
+import { characterSheetStore } from '../../../store/characterSheetStore';
 
-// Update the EntityContext interface to add selectValue
+// Component interface
 interface ValueDisplayProps {
   value: {
     path: string;
@@ -18,7 +18,7 @@ const ModifiableValueDisplay: React.FC<ValueDisplayProps> = ({
   value, 
   showTooltip = true 
 }) => {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   
   if (!snap.character) return null;
 

@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Box, Typography, Card, CardContent, Accordion, AccordionSummary, AccordionDetails, Chip, List, ListItem, ListItemText, Divider } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useEquipment } from '../../hooks/character/useEquipment';
-import type { ReadonlyModifiableValueSnapshot } from '../../models/readonly';
+import { useEquipment } from '../../../hooks/character_sheet/useEquipment';
+import type { ReadonlyModifiableValueSnapshot } from '../../../models/readonly';
 
 const EquipmentSection: React.FC = () => {
   const { 

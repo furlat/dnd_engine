@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio';
 import { useCallback, useMemo } from 'react';
-import { characterStore } from '../../store/characterStore';
+import { characterSheetStore } from '../../store/characterSheetStore';
 import type { ReadonlyModifiableValueSnapshot, ReadonlyModifier } from '../../models/readonly';
 import { get } from 'lodash';
 
@@ -26,7 +26,7 @@ interface ModifiableValueState {
 }
 
 export function useModifiableValue(valuePath: string | null): ModifiableValueState {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
 
   // Path resolution
   const resolveValueAtPath = useCallback((path: string): ReadonlyModifiableValueSnapshot | null => {

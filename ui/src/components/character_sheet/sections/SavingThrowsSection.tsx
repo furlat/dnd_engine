@@ -1,10 +1,8 @@
-/// <reference types="react" />
 import * as React from 'react';
-import type { ReactElement } from 'react';
 import {
   Box,
+  Grid,
   Typography,
-  GridLegacy as Grid,
   Paper,
   Chip,
   Dialog,
@@ -19,38 +17,37 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  IconButton,
-  CircularProgress,
-  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { AdvantageStatus, CriticalStatus, AutoHitStatus } from '../../models/character';
-import { useSkills } from '../../hooks/character/useSkills';
-import type { ReadonlySkill } from '../../models/readonly';
+import type {
+  ReadonlySavingThrowSnapshot,
+  ReadonlySavingThrowBonusCalculation,
+  ReadonlyModifierChannel
+} from '../../../models/readonly';
+import { AdvantageStatus, CriticalStatus, AutoHitStatus } from '../../../models/character';
+import { useSavingThrows } from '../../../hooks/character_sheet/useSavingThrows';
 
-const formatBonus = (n: number) => `${n}`;
-
-// Helper to render modifier breakdown similar to Ability block
+// Helper to render modifier breakdown list
 const ModifierBreakdown: React.FC<{ 
-  skill: ReadonlySkill; 
-  calc?: any;
-  showAdvantage?: boolean;
-}> = ({ skill, calc, showAdvantage = false }): ReactElement => {
-  // Gather sections
+  savingThrow: ReadonlySavingThrowSnapshot; 
+  calc?: ReadonlySavingThrowBonusCalculation 
+}> = ({ savingThrow, calc }) => {
+  // Helper to grab channels safely
   const extractChannels = (mv: any) => (mv && mv.channels ? mv.channels : []);
-  const sections: { label: string; channels: any[] }[] = [];
-
-  // Proficiency Bonus
-  if (calc) sections.push({ label: 'Proficiency Bonus', channels: extractChannels(calc.normalized_proficiency_bonus) });
-  // Ability Bonus
-  if (calc) sections.push({ label: 'Ability Bonus', channels: extractChannels(calc.ability_bonus) });
-  // Ability Modifier Bonus
-  if (calc) sections.push({ label: 'Ability Modifier Bonus', channels: extractChannels(calc.ability_modifier_bonus) });
-
-  // Skill Bonus
-  const skillBonusMV = (skill as any).skill_bonus as any | undefined;
-  sections.push({ label: 'Skill Bonus', channels: extractChannels(skillBonusMV) });
-
+  const sections: { label: string; channels: ReadonlyModifierChannel[] }[] = [];
+  
+  // 1. Proficiency Bonus
+  if (calc) {
+    sections.push({ label: 'Proficiency Bonus', channels: extractChannels(calc.normalized_proficiency_bonus) });
+    sections.push({ label: 'Ability Bonus', channels: extractChannels(calc.ability_bonus) });
+    sections.push({ label: 'Ability Modifier Bonus', channels: extractChannels(calc.ability_modifier_bonus) });
+  }
+  
+  // 2. Saving Throw Bonus itself (specific modifiers)
+  const stBonusCh = extractChannels((savingThrow as any).bonus);
+  sections.push({ label: 'Saving Throw Bonus', channels: stBonusCh });
+  
+  // Filter out empty groups
   const activeSections = sections.filter((s) => s.channels.length > 0);
   if (activeSections.length === 0) {
     return (
@@ -59,9 +56,9 @@ const ModifierBreakdown: React.FC<{
       </Paper>
     );
   }
-
-  const getTotal = (ch: any) => ch.value_modifiers.reduce((s: number, m: any) => s + m.value, 0);
-
+  
+  const getTotal = (ch: ReadonlyModifierChannel) => ch.value_modifiers.reduce((s, m) => s + m.value, 0);
+  
   return (
     <>
       {activeSections.map((section, sIdx) => (
@@ -70,35 +67,27 @@ const ModifierBreakdown: React.FC<{
             <Typography variant="subtitle1">{section.label}</Typography>
           </AccordionSummary>
           <AccordionDetails>
-            {section.channels.map((ch: any, idx: number) => (
+            {section.channels.map((ch, idx) => (
               <Box key={idx} sx={{ mb: 2 }}>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                  {ch.name} – Total: {showAdvantage ? ch.advantage_status : formatBonus(getTotal(ch))}
+                  {ch.name} – Total: {formatBonus(getTotal(ch))}
                 </Typography>
                 <List dense disablePadding>
-                  {(showAdvantage ? ch.advantage_modifiers : ch.value_modifiers).map((mod: any, i: number) => (
-                    <ListItem key={i} dense divider={i < (showAdvantage ? ch.advantage_modifiers.length : ch.value_modifiers.length) - 1}>
+                  {ch.value_modifiers.map((mod, i) => (
+                    <ListItem key={i} dense divider={i < ch.value_modifiers.length - 1}>
                       <ListItemText
                         primary={mod.name}
                         secondary={mod.source_entity_name}
                         primaryTypographyProps={{ variant: 'body2' }}
                         secondaryTypographyProps={{ variant: 'caption' }}
                       />
-                      <Chip 
-                        label={showAdvantage ? mod.value : formatBonus(mod.value)} 
-                        size="small" 
-                        color={showAdvantage 
-                          ? (mod.value === AdvantageStatus.ADVANTAGE ? 'success' : 
-                             mod.value === AdvantageStatus.DISADVANTAGE ? 'error' : 'default')
-                          : (mod.value >= 0 ? 'success' : 'error')} 
+                      <Chip
+                        label={formatBonus(mod.value)}
+                        size="small"
+                        color={mod.value >= 0 ? 'success' : 'error'}
                       />
                     </ListItem>
                   ))}
-                  {showAdvantage && ch.advantage_modifiers.length === 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      No advantage modifiers
-                    </Typography>
-                  )}
                 </List>
               </Box>
             ))}
@@ -109,43 +98,42 @@ const ModifierBreakdown: React.FC<{
   );
 };
 
-interface DetailDialogProps {
-  calc?: any;
-}
+const formatBonus = (n: number) => `${n}`;
 
-const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
-  const [detailMode, setDetailMode] = React.useState<'values' | 'advantage'>('values');
-  const { selectedSkill, handleSelectSkill } = useSkills();
+const DetailDialog: React.FC<{
+  savingThrow: ReadonlySavingThrowSnapshot | null;
+  calc?: ReadonlySavingThrowBonusCalculation;
+  onClose: () => void;
+  open: boolean;
+}> = ({ savingThrow, calc, onClose, open }) => {
+  if (!savingThrow) return null;
   
-  if (!selectedSkill) return null;
-
+  // Get status from total_bonus if available
   const advantage = calc?.total_bonus?.advantage ?? AdvantageStatus.NONE;
   const critical = calc?.total_bonus?.critical ?? CriticalStatus.NONE;
   const autoHit = calc?.total_bonus?.auto_hit ?? AutoHitStatus.NONE;
-
+  
   return (
-    <Dialog open onClose={() => handleSelectSkill(null)} maxWidth="md" fullWidth>
-      <DialogTitle>{selectedSkill.name.toUpperCase()} Details</DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>{`${savingThrow.ability.toUpperCase()} Saving Throw Details`}</DialogTitle>
       <DialogContent dividers>
         {calc ? (
           <Grid container spacing={2}>
             {/* Left column */}
-            <Grid item xs={12} md={6} component="div">
+            <Grid size={{ xs: 12, md: 6 }}>
               {/* Overview */}
               <Typography variant="h6" gutterBottom>
                 Overview
               </Typography>
               <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                 <Grid container spacing={2}>
-                  <Grid item xs={6} component="div">
+                  <Grid size={6}>
                     <Typography variant="body2" color="text.secondary">
                       Ability
                     </Typography>
-                    <Typography variant="h5">
-                      {calc.ability_name.toUpperCase()}
-                    </Typography>
+                    <Typography variant="h5">{savingThrow.ability.toUpperCase()}</Typography>
                   </Grid>
-                  <Grid item xs={6} component="div">
+                  <Grid size={6}>
                     <Typography variant="body2" color="text.secondary">
                       Final Modifier
                     </Typography>
@@ -157,7 +145,6 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
                     </Typography>
                   </Grid>
                 </Grid>
-
                 {/* Status Chips */}
                 <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   {autoHit === AutoHitStatus.AUTOHIT && (
@@ -181,15 +168,15 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
                   />
                 </Box>
               </Paper>
-
-              {/* Component Values */}
+              
+              {/* Components */}
               <Typography variant="h6" gutterBottom>
                 Component Values
               </Typography>
               <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
                 {[
                   { label: 'Proficiency Bonus', value: calc.normalized_proficiency_bonus.normalized_score },
-                  { label: 'Skill Bonus', value: calc.skill_bonus.normalized_score },
+                  { label: 'Saving Throw Bonus', value: calc.saving_throw_bonus.normalized_score },
                   { label: 'Ability Bonus', value: calc.ability_bonus.normalized_score },
                   { label: 'Ability Modifier Bonus', value: calc.ability_modifier_bonus.normalized_score },
                 ].map((row, idx, arr) => (
@@ -206,7 +193,7 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
                   </React.Fragment>
                 ))}
               </Paper>
-
+              
               {/* Status Details */}
               <Typography variant="h6" gutterBottom>
                 Status Effects
@@ -219,45 +206,39 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
                 </Typography>
                 {critical !== CriticalStatus.NONE && (
                   <Typography variant="body1" sx={{ mb: 2 }}>
-                    {critical === CriticalStatus.AUTOCRIT ? 'Check automatically results in a critical success' :
-                     critical === CriticalStatus.NOCRIT ? 'Check can never be a critical success' :
+                    {critical === CriticalStatus.AUTOCRIT ? 'Save automatically results in a critical success' :
+                     critical === CriticalStatus.NOCRIT ? 'Save can never be a critical success' :
                      'Normal critical rules apply'}
                   </Typography>
                 )}
                 {autoHit !== AutoHitStatus.NONE && (
                   <Typography variant="body1">
-                    {autoHit === AutoHitStatus.AUTOHIT ? 'Check automatically succeeds' :
-                     autoHit === AutoHitStatus.AUTOMISS ? 'Check automatically fails' :
+                    {autoHit === AutoHitStatus.AUTOHIT ? 'Save automatically succeeds' :
+                     autoHit === AutoHitStatus.AUTOMISS ? 'Save automatically fails' :
                      'Normal success rules apply'}
                   </Typography>
                 )}
               </Paper>
             </Grid>
-
+            
             {/* Right column */}
-            <Grid item xs={12} md={6} component="div">
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography variant="h6" gutterBottom>
                 Modifier Breakdown
               </Typography>
-              <ModifierBreakdown skill={selectedSkill} calc={calc} showAdvantage={detailMode === 'advantage'} />
+              <ModifierBreakdown savingThrow={savingThrow} calc={calc} />
             </Grid>
-
-            {/* Debug full width */}
-            <Grid item xs={12} component="div">
+            
+            {/* Debug */}
+            <Grid size={12}>
               <Accordion sx={{ mt: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  Debug JSON
-                </AccordionSummary>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>Debug JSON</AccordionSummary>
                 <AccordionDetails>
-                  <pre style={{ fontSize: 12 }}>
-                    {JSON.stringify(selectedSkill, null, 2)}
-                  </pre>
+                  <pre style={{ fontSize: 12 }}>{JSON.stringify(savingThrow, null, 2)}</pre>
                   {calc && (
                     <>
                       <Divider sx={{ my: 1 }} />
-                      <pre style={{ fontSize: 12 }}>
-                        {JSON.stringify(calc, null, 2)}
-                      </pre>
+                      <pre style={{ fontSize: 12 }}>{JSON.stringify(calc, null, 2)}</pre>
                     </>
                   )}
                 </AccordionDetails>
@@ -269,77 +250,78 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ calc }) => {
         )}
       </DialogContent>
       <DialogActions>
-        <Button 
-          onClick={() => setDetailMode(detailMode === 'values' ? 'advantage' : 'values')}
-          color="primary"
-        >
-          Show {detailMode === 'values' ? 'Advantage' : 'Values'} Details
-        </Button>
-        <Button onClick={() => handleSelectSkill(null)}>Close</Button>
+        <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
   );
 };
 
-const SkillsSection: React.FC = () => {
-  const { 
+const SavingThrowsSection: React.FC = () => {
+  const {
+    savingThrows,
     calculations,
-    selectedSkill,
-    handleSelectSkill,
-    getOrderedSkills,
-    getSkillBonus,
-    isSkillProficient,
-    hasSkillExpertise
-  } = useSkills();
-
-  const orderedSkills = React.useMemo(() => getOrderedSkills(), [getOrderedSkills]);
-
+    selectedSavingThrow,
+    dialogOpen,
+    handleSavingThrowClick,
+    handleCloseDialog
+  } = useSavingThrows();
+  
+  // Move useMemo outside the conditional and handle null case inside
+  const ordered = React.useMemo(() => {
+    if (!savingThrows) return [];
+    
+    const order = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+    return order
+      .map((ability) => savingThrows.saving_throws[ability])
+      .filter(Boolean) as ReadonlySavingThrowSnapshot[];
+  }, [savingThrows]);
+  
+  if (!savingThrows) return null;
+  
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
-        Skills
+        Saving Throws
       </Typography>
-
       <Grid container spacing={2}>
-        {orderedSkills.map((skill) => {
-          const bonus = getSkillBonus(skill);
-          const proficient = isSkillProficient(skill);
-          const expertise = hasSkillExpertise(skill);
+        {ordered.map((st) => {
+          const bonus = st.effective_bonus ?? st.bonus?.normalized_score ?? 0;
           return (
-            <Grid item xs={6} sm={4} md={3} key={skill.name} component="div">
+            <Grid size={{ xs: 6, sm: 4, md: 2 }} key={st.name}>
               <Paper
-                elevation={2}
+                elevation={3}
                 sx={{
+                  textAlign: 'center',
                   p: 1.5,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
                   cursor: 'pointer',
-                  border: proficient ? 2 : 1,
-                  borderColor: expertise ? 'secondary.main' : proficient ? 'primary.main' : 'transparent',
+                  minHeight: 90,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  border: st.proficiency ? 2 : 1,
+                  borderColor: st.proficiency ? 'primary.main' : 'transparent',
                 }}
-                onClick={() => handleSelectSkill(skill)}
+                onClick={() => handleSavingThrowClick(st)}
               >
-                <Box>
-                  <Typography variant="subtitle1">{skill.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {skill.ability}
-                  </Typography>
-                </Box>
-                <Box display="flex" alignItems="center">
-                  <Typography variant="h6" color={bonus >= 0 ? 'success.main' : 'error.main'}>
-                    {formatBonus(bonus)}
-                  </Typography>
-                </Box>
+                <Typography variant="subtitle1">{st.ability.toUpperCase()}</Typography>
+                <Typography variant="h5" color={bonus >= 0 ? 'success.main' : 'error.main'}>
+                  {formatBonus(bonus)}
+                </Typography>
               </Paper>
             </Grid>
           );
         })}
       </Grid>
-
-      <DetailDialog calc={selectedSkill ? calculations?.[selectedSkill.name] : undefined} />
+      <DetailDialog 
+        savingThrow={selectedSavingThrow}
+        calc={selectedSavingThrow ? calculations?.[selectedSavingThrow.ability] : undefined}
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+      />
     </Box>
   );
 };
 
-export default SkillsSection; 
+export default React.memo(SavingThrowsSection);

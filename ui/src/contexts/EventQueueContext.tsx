@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { useEventQueue as useEventQueueStore } from '../hooks/useEventQueue';
+import { useEventQueue as useEventQueueStore } from '../hooks/events/useEventQueue';
 
 interface EventQueueContextType {
   refreshEvents: () => void;
