@@ -13,7 +13,7 @@ import TargetIcon from '@mui/icons-material/RadioButtonChecked';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PersonIcon from '@mui/icons-material/Person';
-import { EntitySummary } from '../../types/battlemap_types';
+import { EntitySummary } from '../../types/common';
 
 const SIDEBAR_WIDTH = '280px';
 const COLLAPSED_WIDTH = '40px';

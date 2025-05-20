@@ -1,5 +1,6 @@
 import { proxy } from 'valtio';
-import { TileSummary, EntitySummary } from '../types/battlemap_types';
+import { TileSummary } from '../types/battlemap_types';
+import { EntitySummary } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { Direction } from '../components/battlemap/DirectionalEntitySprite';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
