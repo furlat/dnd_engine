@@ -17,7 +17,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import { useActiveConditions, CONDITIONS_LIST } from '../../hooks/character/useActiveConditions';
+import { useActiveConditions, CONDITIONS_LIST } from '../../../hooks/character_sheet/useActiveConditions';
 
 const ActiveConditionsBar: React.FC = () => {
   const {

@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { Box, Grid, Fade } from '@mui/material';
-import AbilityScoresBlock from './AbilityScoresBlock';
-import ArmorSection from './ArmorSection';
-import AttackSection from './AttackSection';
-import SavingThrowsSection from './SavingThrowsSection';
-import HealthSection from './HealthSection';
-import ActionEconomySection from './ActionEconomySection';
-import SkillsSection from './SkillsSection';
-import ActiveConditionsBar from './ActiveConditionsBar';
+import AbilityScoresBlock from './sections/AbilityScoresBlock';
+import ArmorSection from './sections/ArmorSection';
+import AttackSection from './sections/AttackSection';
+import SavingThrowsSection from './sections/SavingThrowsSection';
+import HealthSection from './sections/HealthSection';
+import ActionEconomySection from './sections/ActionEconomySection';
+import SkillsSection from './sections/SkillsSection';
+import ActiveConditionsBar from './sections/ActiveConditionsBar';
 
 const CharacterSheetContent: React.FC = () => {
   return (

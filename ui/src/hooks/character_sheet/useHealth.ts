@@ -1,13 +1,13 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback, useMemo } from 'react';
-import { characterStore, characterActions } from '../../store/characterStore';
+import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import type { 
   ReadonlyHealthSnapshot, 
   ReadonlyModifiableValueSnapshot,
   ReadonlyHitDiceSnapshot,
   ReadonlyDamageResistanceSnapshot
 } from '../../models/readonly';
-import { modifyHealth, applyTemporaryHP } from '../../api/characterApi';
+import { modifyHealth, applyTemporaryHP } from '../../api/characterSheetApi';
 
 interface HealthStats {
   current: number;
@@ -42,7 +42,7 @@ interface HealthData {
 }
 
 export function useHealth(): HealthData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
 
@@ -57,7 +57,7 @@ export function useHealth(): HealthData {
     if (!snap.character?.uuid) return;
     try {
       const result = await modifyHealth(snap.character.uuid, amount);
-      characterActions.setCharacter(result);
+      characterSheetActions.setCharacter(result);
       setModifyDialogOpen(false);
     } catch (error) {
       console.error('Failed to modify health:', error);
@@ -68,7 +68,7 @@ export function useHealth(): HealthData {
     if (!snap.character?.uuid) return;
     try {
       const result = await applyTemporaryHP(snap.character.uuid, amount);
-      characterActions.setCharacter(result);
+      characterSheetActions.setCharacter(result);
       setModifyDialogOpen(false);
     } catch (error) {
       console.error('Failed to apply temporary HP:', error);

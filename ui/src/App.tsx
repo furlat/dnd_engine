@@ -3,7 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { Box } from '@mui/material';
 
 // Layout
-import Layout from './components/character_sheet/common/Layout';
+import Layout from './components/character_sheet/layout/Layout';
 
 // Pages
 import CharacterListPage from './pages/CharacterListPage';

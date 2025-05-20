@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
-import { characterStore } from '../../store/characterStore';
+import { characterSheetStore } from '../../store/characterSheetStore';
 import type { 
   ReadonlySkillSetSnapshot, 
   ReadonlySkillBonusCalculation,
@@ -25,7 +25,7 @@ interface SkillsData {
 const ABILITY_ORDER = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 
 export function useSkills(): SkillsData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   const [selectedSkill, setSelectedSkill] = useState<ReadonlySkill | null>(null);
 
   // Handlers

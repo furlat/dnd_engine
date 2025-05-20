@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
-import { characterStore } from '../../store/characterStore';
+import { characterSheetStore } from '../../store/characterSheetStore';
 import type { 
   ReadonlySavingThrowSetSnapshot, 
   ReadonlySavingThrowBonusCalculation,
@@ -20,7 +20,7 @@ interface SavingThrowsData {
 }
 
 export function useSavingThrows(): SavingThrowsData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   const [selectedSavingThrow, setSelectedSavingThrow] = useState<ReadonlySavingThrowSnapshot | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 

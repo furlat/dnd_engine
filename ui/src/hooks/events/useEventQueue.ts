@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSnapshot } from 'valtio';
-import { eventQueueStore, eventQueueActions } from '../store/eventQueueStore';
+import { eventQueueStore, eventQueueActions } from '../../store/eventQueueStore';
 
 interface EventQueueHook {
   isRefreshing: boolean;

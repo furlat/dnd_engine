@@ -31,10 +31,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import { useAttack, WeaponSlot } from '../../hooks/character/useAttack';
-import type { ReadonlyModifiableValueSnapshot } from '../../models/readonly';
-import { AdvantageStatus, AutoHitStatus, CriticalStatus } from '../../models/modifiers';
-import ItemDetailsDialog from './ItemDetailsDialog';
+import { useAttack, WeaponSlot } from '../../../hooks/character_sheet/useAttack';
+import type { ReadonlyModifiableValueSnapshot } from '../../../models/readonly';
+import { AdvantageStatus, AutoHitStatus, CriticalStatus } from '../../../models/modifiers';
+import ItemDetailsDialog from '../modifiers/ItemDetailsDialog';
 
 const format = (value: number | undefined) => (value ?? 0) >= 0 ? `+${value}` : `${value}`;
 

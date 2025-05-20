@@ -1,7 +1,7 @@
 import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
-import { characterStore, characterActions } from '../../store/characterStore';
-import { removeCondition, addCondition } from '../../api/characterApi';
+import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
+import { removeCondition, addCondition } from '../../api/characterSheetApi';
 import { eventQueueActions } from '../../store/eventQueueStore';
 import type { 
   ReadonlyConditionSnapshot,
@@ -34,7 +34,7 @@ interface ActiveConditionsData {
 }
 
 export function useActiveConditions(): ActiveConditionsData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -80,7 +80,7 @@ export function useActiveConditions(): ActiveConditionsData {
       
       // Update with server state
       console.time('Remove Condition Store Update');
-      characterActions.setCharacter(updatedCharacter);
+      characterSheetActions.setCharacter(updatedCharacter);
       console.timeEnd('Remove Condition Store Update');
 
       // Trigger event queue refresh
@@ -111,7 +111,7 @@ export function useActiveConditions(): ActiveConditionsData {
       console.timeEnd('Add Condition API Call');
       
       console.time('Add Condition Store Update');
-      characterActions.setCharacter(updatedCharacter);
+      characterSheetActions.setCharacter(updatedCharacter);
       console.timeEnd('Add Condition Store Update');
 
       // Trigger event queue refresh

@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio';
 import { useMemo } from 'react';
-import { characterStore } from '../../store/characterStore';
+import { characterSheetStore } from '../../store/characterSheetStore';
 import type { 
   ReadonlyEquipmentSnapshot, 
   ReadonlyACBonusCalculation, 
@@ -42,7 +42,7 @@ interface EquipmentData {
 }
 
 export function useEquipment(): EquipmentData {
-  const snap = useSnapshot(characterStore);
+  const snap = useSnapshot(characterSheetStore);
 
   // Computed stats
   const stats = useMemo((): EquipmentStats | null => {
