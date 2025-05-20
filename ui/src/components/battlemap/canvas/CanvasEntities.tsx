@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSnapshot } from 'valtio';
 import { Assets, Texture } from 'pixi.js';
 import { battlemapStore } from '../../../store';
-import type { EntitySummary } from '../../../models/character';
+import type { EntitySummary } from '../../../types/common';
 import { Direction } from '../DirectionalEntitySprite';
 
 // Cache for entity textures

@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
 import { setTargetEntity } from '../../api/battlemap/battlemapApi';
-import { EntitySummary } from '../../types/battlemap_types';
+import { EntitySummary } from '../../types/common';
 
 /**
  * Hook for entity selection and targeting operations
