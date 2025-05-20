@@ -1,2 +1,2 @@
-export * from './AttackAnimation';
+export * from './AttackEventAnimation';
 export * from './BattleMapCanvas'; 

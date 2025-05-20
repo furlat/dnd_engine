@@ -8,7 +8,7 @@ import EntitySummaryOverlay from '../components/battlemap/EntitySummaryOverlay';
 import { fetchGridSnapshot } from '../api/tileApi';
 import { characterStore, characterActions } from '../store/characterStore';
 import { useSnapshot } from 'valtio';
-import { AttackAnimation } from '../components/battlemap/AttackAnimation';
+import { AttackAnimation } from '../components/battlemap/AttackEventAnimation';
 import { Application, extend } from '@pixi/react';
 import { Container, AnimatedSprite } from 'pixi.js';
 import BackgroundMusicPlayer from '../components/music/BackgroundMusicPlayer';

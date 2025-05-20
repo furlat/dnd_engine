@@ -18,8 +18,8 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import GroupIcon from '@mui/icons-material/Group';
 import { characterStore, characterActions } from '../store/characterStore';
 import { useSnapshot } from 'valtio';
-import CharacterSheetContent from '../components/character/CharacterSheetContent';
-import ActionBar from '../components/character/ActionBar';
+import CharacterSheetContent from '../components/character_sheet/CharacterSheetContent';
+import ActionBar from '../components/character_sheet/ActionBar';
 
 // Define the params interface
 type RouteParams = {
