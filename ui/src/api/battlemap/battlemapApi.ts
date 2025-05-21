@@ -6,6 +6,7 @@ import {
   toMutablePosition
 } from '../../types/battlemap_types';
 import { Position, EntitySummary } from '../../types/common';
+import { TileType } from '../../hooks/battlemap';
 
 // API base URL
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -53,14 +54,17 @@ export const fetchTileAtPosition = async (x: number, y: number): Promise<TileSum
 };
 
 // Create a new tile
-export const createTile = async (position: Position, tileType: 'floor' | 'wall' | 'water'): Promise<TileSummary> => {
+export const createTile = async (position: Position, tileType: TileType): Promise<TileSummary> => {
   try {
     // Convert to mutable array for API call if necessary
     const mutablePosition = toMutablePosition(position);
     
+    // Ensure we're not sending "erase" as a tile type to the API
+    const apiTileType = tileType === 'erase' ? 'floor' : tileType;
+    
     const response = await axios.post(`${API_BASE_URL}/tiles/`, {
       position: mutablePosition,
-      tile_type: tileType
+      tile_type: apiTileType
     });
     return response.data;
   } catch (error) {

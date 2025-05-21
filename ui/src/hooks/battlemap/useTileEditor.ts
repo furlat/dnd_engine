@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { createTile } from '../../api/battlemap/battlemapApi';
+import { createTile, deleteTile } from '../../api/battlemap/battlemapApi';
 import { TileSummary } from '../../types/battlemap_types';
+import { battlemapActions, battlemapStore } from '../../store/battlemapStore';
+import { useSnapshot } from 'valtio';
 
-export type TileType = 'floor' | 'wall' | 'water';
+export type TileType = 'floor' | 'wall' | 'water' | 'lava' | 'grass' | 'erase';
 
 const getDefaultTileProperties = (tileType: TileType): Partial<TileSummary> => {
   switch (tileType) {
@@ -28,30 +30,63 @@ const getDefaultTileProperties = (tileType: TileType): Partial<TileSummary> => {
         sprite_name: 'water.png',
         name: 'Water'
       };
+    case 'lava':
+      return {
+        walkable: false,
+        visible: true,
+        sprite_name: 'lava.png',
+        name: 'Lava'
+      };
+    case 'grass':
+      return {
+        walkable: true,
+        visible: true,
+        sprite_name: 'grass.png',
+        name: 'Grass'
+      };
+    case 'erase':
+      return {
+        walkable: true,
+        visible: true,
+        name: 'Eraser'
+      };
   }
 };
 
 export const useTileEditor = () => {
-  const [selectedTile, setSelectedTile] = useState<TileType>('floor');
-  const [isEditing, setIsEditing] = useState(false);
-  const [isEditorVisible, setIsEditorVisible] = useState(false);
+  // Use the store instead of local state
+  const snap = useSnapshot(battlemapStore);
+  
+  // Extract tile editor state from the store
+  const selectedTile = snap.controls.selectedTileType as TileType;
+  const isEditing = snap.controls.isEditing;
+  const isEditorVisible = snap.controls.isEditorVisible;
 
   const toggleEditing = useCallback(() => {
-    setIsEditing(prev => !prev);
-    // When enabling editing, show the editor panel
-    if (!isEditing) {
-      setIsEditorVisible(true);
+    const newEditingState = !isEditing;
+    console.log('[TileEditor] Toggling editing mode:', { current: isEditing, new: newEditingState });
+    
+    battlemapActions.setTileEditing(newEditingState);
+    
+    // When enabling editing, always show the editor panel
+    if (newEditingState) {
+      console.log('[TileEditor] Editing enabled, showing editor panel');
+      battlemapActions.setTileEditorVisible(true);
     }
   }, [isEditing]);
 
   const toggleEditorVisibility = useCallback(() => {
-    setIsEditorVisible(prev => !prev);
-  }, []);
+    const newVisibility = !isEditorVisible;
+    console.log('[TileEditor] Toggling editor visibility:', { current: isEditorVisible, new: newVisibility });
+    
+    battlemapActions.setTileEditorVisible(newVisibility);
+  }, [isEditorVisible]);
 
   const selectTile = useCallback((tileType: TileType) => {
-    console.log('Selecting tile type:', tileType);
-    setSelectedTile(tileType);
-  }, []);
+    console.log('[TileEditor] Selecting tile type:', { previous: selectedTile, new: tileType });
+    
+    battlemapActions.setSelectedTileType(tileType);
+  }, [selectedTile]);
 
   const handleCellClick = useCallback(async (
     x: number, 
@@ -59,8 +94,31 @@ export const useTileEditor = () => {
     onOptimisticUpdate: (tile: TileSummary) => void,
     isLocked: boolean
   ) => {
-    console.log('Cell clicked for tile placement:', { x, y, selectedTile, isEditing, isLocked });
-    if (!isEditing || isLocked) return;
+    console.log('[TileEditor] Cell clicked for tile placement:', { 
+      position: [x, y], 
+      selectedTile, 
+      isEditing, 
+      isLocked 
+    });
+    
+    if (!isEditing || isLocked) {
+      console.log('[TileEditor] Skipping cell click - editor not active or map is locked');
+      return;
+    }
+
+    // Special case for eraser - call the delete API
+    if (selectedTile === 'erase') {
+      console.log('[TileEditor] Erasing tile at position:', [x, y]);
+      try {
+        await deleteTile(x, y);
+        console.log('[TileEditor] Tile deleted successfully at position:', [x, y]);
+        // Refresh the grid after deletion
+        battlemapActions.fetchGridSnapshot();
+      } catch (error) {
+        console.error('[TileEditor] Error deleting tile:', error);
+      }
+      return;
+    }
 
     // Create optimistic tile
     const optimisticTile: TileSummary = {
@@ -70,14 +128,18 @@ export const useTileEditor = () => {
     } as TileSummary;
 
     // Update UI immediately
+    console.log('[TileEditor] Applying optimistic UI update with tile:', optimisticTile);
     onOptimisticUpdate(optimisticTile);
 
     try {
       // Make API call in background
+      console.log('[TileEditor] Creating tile on server:', { position: [x, y], type: selectedTile });
       await createTile([x, y], selectedTile);
-      console.log('Tile created successfully:', optimisticTile);
+      console.log('[TileEditor] Tile created successfully');
+      // Refresh the grid to ensure server state is reflected
+      battlemapActions.fetchGridSnapshot();
     } catch (error) {
-      console.error('Error creating tile:', error);
+      console.error('[TileEditor] Error creating tile:', error);
       // Could add error handling/rollback here if needed
     }
   }, [selectedTile, isEditing]);

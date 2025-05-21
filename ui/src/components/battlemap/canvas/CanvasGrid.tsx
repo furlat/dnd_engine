@@ -319,19 +319,6 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       });
   }, [tilesRef.current, tileTextures, gridPositions, tileSize]);
   
-  // Track rendering only in development
-  if (process.env.NODE_ENV === 'development') {
-    useEffect(() => {
-      const now = Date.now();
-      const renderTime = now - lastRenderTimeRef.current;
-      lastRenderTimeRef.current = now;
-      
-      if (renderTime > 16) { // Log if full component render takes longer than 16ms (60fps)
-        console.log(`CanvasGrid full render time: ${renderTime}ms, isMoving: ${snap.view.wasd_moving}`);
-      }
-    });
-  }
-  
   return (
     <>
       <pixiContainer>
