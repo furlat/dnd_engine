@@ -1,53 +1,102 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Application, extend } from '@pixi/react';
-import { Graphics as PixiGraphics, Container, Sprite, FederatedPointerEvent } from 'pixi.js';
-import { Box } from '@mui/material';
-import { useGrid, useEntitySelection, useVisibility, useMapControls, useTileEditor } from '../../../hooks/battlemap';
-import { battlemapStore, battlemapActions } from '../../../store';
+import React, { useEffect, useRef, useState } from 'react';
+import { Box, Typography, Button, Alert } from '@mui/material';
+import { useGrid, useMapControls, useTileEditor } from '../../../hooks/battlemap';
+import { battlemapStore } from '../../../store';
 import { useSnapshot } from 'valtio';
-import { CanvasGrid } from './CanvasGrid';
 import { CanvasControls } from './CanvasControls';
-// import { CanvasEntities } from './CanvasEntities';  // Will re-enable later
+import TileEditorPanel from './TileEditorPanel';
+import { gameManager } from '../../../game';
 
-// Extend must be called at the module level
-extend({ Container, Graphics: PixiGraphics, Sprite });
+/**
+ * Custom hook to track component mount state
+ */
+const useMountedRef = () => {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  return mounted;
+};
 
 /**
  * Main component that renders the PixiJS application for the battlemap
  */
 const BattleMapCanvas: React.FC = () => {
-  const appRef = useRef(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const engineInitialized = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
+  const mountedRef = useMountedRef();
   
   const { 
-    gridWidth, 
-    gridHeight, 
-    tileSize, 
-    containerSize, 
-    setContainerSize,
-    calculateGridOffset, 
-    pixelToGrid,
-    updateHoveredCell 
+    setContainerSize
   } = useGrid();
 
   const { 
-    isGridVisible, 
-    isLocked,
-    isWasdMoving
+    isLocked
   } = useMapControls();
+
+  const {
+    isEditing,
+    isEditorVisible
+  } = useTileEditor();
   
-  const { selectEntity } = useEntitySelection();
   const snap = useSnapshot(battlemapStore);
-  const { isVisibilityEnabled } = useVisibility();
-  const { isEditing, handleCellClick } = useTileEditor();
+
+  // Function to initialize the engine with proper error handling
+  const initializeEngine = async () => {
+    if (!boxRef.current || !mountedRef.current) return false;
+    
+    try {
+      console.log('[BattleMapCanvas] Attempting to initialize game manager, attempt:', retryCount + 1);
+      await gameManager.initialize(boxRef.current);
+      engineInitialized.current = true;
+      return true;
+    } catch (err) {
+      console.error('[BattleMapCanvas] Failed to initialize game engine:', err);
+      
+      // Only update state if component is still mounted
+      if (mountedRef.current) {
+        // If we've tried too many times, show an error
+        if (retryCount >= maxRetries) {
+          setError(`Failed to initialize the battlemap after ${maxRetries} attempts. Please try refreshing the page.`);
+        } else {
+          // Otherwise increment the retry count and try again later
+          setRetryCount(prev => prev + 1);
+        }
+      }
+      
+      return false;
+    }
+  };
 
   // Update container size when the box ref is available
   useEffect(() => {
-    const updateSize = () => {
-      if (boxRef.current) {
-        const width = boxRef.current.clientWidth;
-        const height = boxRef.current.clientHeight;
-        setContainerSize({ width, height });
+    console.log('[BattleMapCanvas] Setting up game engine');
+    
+    const updateSize = async () => {
+      if (!boxRef.current || !mountedRef.current) return;
+      
+      const width = boxRef.current.clientWidth;
+      const height = boxRef.current.clientHeight;
+      console.log('[BattleMapCanvas] Container size:', width, height);
+      
+      setContainerSize({ width, height });
+      
+      // Initialize engine if needed
+      if (!engineInitialized.current) {
+        await initializeEngine();
+      } else {
+        // Resize engine if already initialized
+        try {
+          gameManager.resize(width, height);
+        } catch (err) {
+          console.error('[BattleMapCanvas] Failed to resize game engine:', err);
+        }
       }
     };
 
@@ -55,56 +104,94 @@ const BattleMapCanvas: React.FC = () => {
     updateSize();
     
     // Also update after a small delay to ensure all components are rendered
-    const timeoutId = setTimeout(updateSize, 100);
+    const timeoutId = setTimeout(updateSize, 300);
 
     // Add resize listener
     window.addEventListener('resize', updateSize);
+    
     return () => {
       window.removeEventListener('resize', updateSize);
       clearTimeout(timeoutId);
+      
+      // Clean up engine when component unmounts
+      if (engineInitialized.current) {
+        try {
+          console.log('[BattleMapCanvas] Destroying game engine on unmount');
+          gameManager.destroy();
+        } catch (err) {
+          console.error('[BattleMapCanvas] Failed to destroy game engine:', err);
+        }
+        engineInitialized.current = false;
+      }
     };
-  }, [setContainerSize]);
+  }, [setContainerSize, retryCount, mountedRef]);
 
-  // Event handlers for PixiJS pointer events
-  const handlePointerMove = useCallback((event: FederatedPointerEvent) => {
-    // Skip handling during WASD movement or when locked
-    if (isLocked || isWasdMoving) return;
+  // Add another effect to retry initialization after a delay if needed
+  useEffect(() => {
+    if (!mountedRef.current) return;
     
-    // Convert pointer coordinates to grid coordinates
-    const mouseX = event.global.x;
-    const mouseY = event.global.y;
-    
-    const { gridX, gridY } = pixelToGrid(mouseX, mouseY, containerSize.width, containerSize.height);
-    updateHoveredCell(gridX, gridY);
-  }, [isLocked, isWasdMoving, pixelToGrid, containerSize, updateHoveredCell]);
-   
-  const handlePointerDown = useCallback((event: FederatedPointerEvent) => {
-    // Skip handling during WASD movement or when locked
-    if (isLocked || isWasdMoving) return;
-    
-    // Convert pointer coordinates to grid coordinates
-    const mouseX = event.global.x;
-    const mouseY = event.global.y;
-    
-    const { gridX, gridY } = pixelToGrid(mouseX, mouseY, containerSize.width, containerSize.height);
-
-    // If in tile editing mode, handle cell click for tile placement
-    if (isEditing) {
-      handleCellClick(gridX, gridY, (tile) => {
-        // Optimistic update will be handled by the store
-        battlemapActions.fetchGridSnapshot();
-      }, isLocked);
+    if (retryCount > 0 && retryCount <= maxRetries && !engineInitialized.current) {
+      console.log(`[BattleMapCanvas] Scheduling retry attempt ${retryCount} in 1 second`);
+      const retryTimeoutId = setTimeout(() => {
+        if (mountedRef.current) {
+          initializeEngine();
+        }
+      }, 1000);
+      
+      return () => {
+        clearTimeout(retryTimeoutId);
+      };
     }
-    
-  }, [isLocked, isWasdMoving, pixelToGrid, containerSize, isEditing, handleCellClick]);
+  }, [retryCount, mountedRef]);
 
-  // PIXI.js background draw callback
-  const drawBackground = useCallback((g: PixiGraphics) => {
-    g.clear();
-    g.beginFill(0x111111);
-    g.drawRect(0, 0, containerSize.width, containerSize.height);
-    g.endFill();
-  }, [containerSize.width, containerSize.height]);
+  // If there's an error, show an error message with retry button
+  if (error) {
+    return (
+      <Box 
+        sx={{ 
+          width: '100%', 
+          height: '100%', 
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center', 
+          bgcolor: '#111',
+          color: 'white',
+          textAlign: 'center',
+          p: 3
+        }}
+      >
+        <Alert severity="error" sx={{ mb: 2, maxWidth: '600px' }}>
+          <Typography variant="h5" component="h2" gutterBottom>
+            Battlemap Error
+          </Typography>
+          <Typography variant="body1" paragraph>
+            {error}
+          </Typography>
+          <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'center' }}>
+            <Button 
+              variant="contained" 
+              color="primary"
+              onClick={() => {
+                setError(null);
+                setRetryCount(0);
+                engineInitialized.current = false;
+              }}
+            >
+              Try Again
+            </Button>
+            <Button 
+              variant="outlined" 
+              color="primary"
+              onClick={() => window.location.reload()}
+            >
+              Refresh Page
+            </Button>
+          </Box>
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box 
@@ -117,46 +204,9 @@ const BattleMapCanvas: React.FC = () => {
         bgcolor: '#111'
       }}
     >
-      {containerSize.width > 0 && containerSize.height > 0 && (
-        <Application
-          ref={appRef}
-          width={containerSize.width}
-          height={containerSize.height}
-          backgroundColor={0x111111}
-          antialias
-          autoDensity
-          resolution={window.devicePixelRatio || 1}
-        >
-          <pixiGraphics
-            eventMode="static"
-            interactive={true}
-            onPointerMove={handlePointerMove}
-            onPointerDown={handlePointerDown}
-            onPointerLeave={() => updateHoveredCell(-1, -1)}
-            draw={drawBackground}
-          />
-          
-          <CanvasGrid 
-            gridWidth={gridWidth}
-            gridHeight={gridHeight}
-            tileSize={tileSize}
-            containerSize={containerSize}
-            isGridVisible={isGridVisible}
-          />
-          
-          {/* Will re-enable entity rendering later
-          <CanvasEntities 
-            containerSize={containerSize}
-            tileSize={tileSize}
-            isVisibilityEnabled={isVisibilityEnabled}
-            onEntityClick={selectEntity}
-          />
-          */}
-        </Application>
-      )}
-      
-      {/* Canvas Controls */}
+      {/* Canvas Controls - These remain as React components */}
       <CanvasControls />
+      {isEditorVisible && <TileEditorPanel isLocked={isLocked} />}
     </Box>
   );
 };

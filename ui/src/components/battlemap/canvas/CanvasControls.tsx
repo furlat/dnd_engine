@@ -14,6 +14,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import EditOffIcon from '@mui/icons-material/EditOff';
 import { useMapControls, useVisibility, useTileEditor } from '../../../hooks/battlemap';
 import TileEditorPanel from './TileEditorPanel';
+import { battlemapStore } from '../../../store';
+import { useSnapshot } from 'valtio';
 
 /**
  * Component that renders the battlemap control panel
@@ -38,6 +40,10 @@ export const CanvasControls: React.FC = () => {
     toggleEditing, 
     toggleEditorVisibility 
   } = useTileEditor();
+  
+  // Get the current hovered cell position directly from the store
+  const snap = useSnapshot(battlemapStore);
+  const hoveredCell = snap.view.hoveredCell;
   
   const handleEditToggle = useCallback(() => {
     console.log('[CanvasControls] Edit button clicked, current state:', { isEditing });
@@ -75,7 +81,7 @@ export const CanvasControls: React.FC = () => {
         }}
       >
         <Typography variant="body2">
-          Position: (-, -)
+          Position: ({hoveredCell.x >= 0 ? hoveredCell.x : '-'}, {hoveredCell.y >= 0 ? hoveredCell.y : '-'})
         </Typography>
         <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
