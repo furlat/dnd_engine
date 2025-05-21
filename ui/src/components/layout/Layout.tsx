@@ -23,7 +23,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         <Toolbar>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            5e Character Engine
+            Neurodragon 5e v0.1
           </Typography>
         </Toolbar>
       </AppBar>
