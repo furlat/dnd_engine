@@ -6,8 +6,13 @@ import { BattleMapCanvas } from '../components/battlemap';
 import { EntitySummaryOverlays } from '../components/battlemap/summaries';
 import BackgroundMusicPlayer from '../components/music/BackgroundMusicPlayer';
 import { EffectsLayer } from '../components/battlemap/effects';
-import { useEffects, useGrid, useMapControls } from '../hooks/battlemap';
-import { useError } from '../hooks/useError';
+import { useEffects, useMapControls } from '../hooks/battlemap';
+// Simple local error hook since we can't find the imported one
+const useError = () => {
+  const [error, setError] = React.useState<string | null>(null);
+  const clearError = React.useCallback(() => setError(null), []);
+  return { error, setError, clearError };
+};
 import { battlemapActions } from '../store';
 
 /**
@@ -16,8 +21,6 @@ import { battlemapActions } from '../store';
  * but delegates all game logic to hooks and child components
  */
 const BattleMapPage: React.FC = () => {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const { containerSize, setContainerSize } = useGrid();
   const { isMusicPlayerMinimized, toggleMusicPlayerSize } = useMapControls();
   const { attackEffect } = useEffects();
   const { error, setError, clearError } = useError();
@@ -25,31 +28,12 @@ const BattleMapPage: React.FC = () => {
   // State for UI collapsing
   const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(true);
   const [isEventQCollapsed, setIsEventQCollapsed] = React.useState(true);
-  const [showEntityList, setShowEntityList] = React.useState(false);
 
   // Initialize polling when the component mounts
   React.useEffect(() => {
     battlemapActions.startPolling();
     return () => battlemapActions.stopPolling();
   }, []);
-
-  // Update container size when window resizes
-  React.useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
-        setContainerSize({ width, height });
-      }
-    };
-
-    // Initial size
-    updateSize();
-
-    // Add resize listener
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, [setContainerSize]);
 
   // Toggle handlers
   const toggleCharacterSheet = React.useCallback(() => {
@@ -58,10 +42,6 @@ const BattleMapPage: React.FC = () => {
 
   const toggleEventQ = React.useCallback(() => {
     setIsEventQCollapsed(prev => !prev);
-  }, []);
-
-  const toggleEntityList = React.useCallback(() => {
-    setShowEntityList(prev => !prev);
   }, []);
 
   return (
@@ -79,7 +59,6 @@ const BattleMapPage: React.FC = () => {
       <CharacterSheetPage 
         isCollapsed={isCharacterSheetCollapsed}
         onToggleCollapse={toggleCharacterSheet}
-        onSwitchToEntities={toggleEntityList}
       />
 
       {/* Error Snackbar */}
@@ -98,40 +77,32 @@ const BattleMapPage: React.FC = () => {
         </Alert>
       </Snackbar>
 
-      {/* Main content area */}
+      {/* Main content area - Single container with overlays */}
       <Box 
-        ref={containerRef}
         sx={{ 
           flex: 1,
-          display: 'flex',
           position: 'relative',
           overflow: 'hidden',
           bgcolor: '#000000',
         }}
       >
-        {containerSize.width > 0 && containerSize.height > 0 && (
-          <>
-            {/* Main battlemap canvas */}
-            <BattleMapCanvas />
+        {/* BattleMap Canvas - takes full area */}
+        <BattleMapCanvas />
 
-            {/* Attack effects layer */}
-            {attackEffect && (
-              <Box sx={{ 
-                position: 'absolute', 
-                top: 0, 
-                left: 0, 
-                width: '100%', 
-                height: '100%', 
-                pointerEvents: 'none'
-              }}>
-                <EffectsLayer />
-              </Box>
-            )}
-          </>
-        )}
-
-        {/* Entity summary overlays positioned absolutely */}
-        <EntitySummaryOverlays />
+        {/* Entity summary overlays - positioned as overlay */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '250px',  // Fixed width for entity summary
+            height: '100%',
+            zIndex: 10,
+            pointerEvents: 'auto',
+          }}
+        >
+          <EntitySummaryOverlays />
+        </Box>
       </Box>
 
       {/* Background Music Player */}
