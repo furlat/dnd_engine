@@ -207,7 +207,7 @@ export class GridRenderer extends AbstractRenderer {
     // Get grid offset and size
     const { offsetX, offsetY, tileSize } = this.calculateGridOffset();
     
-    // Draw highlight
+    // Draw highlight - always show highlight regardless of locked state
     this.highlightGraphics
       .rect(
         offsetX + (x * tileSize),

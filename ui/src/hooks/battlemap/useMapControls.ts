@@ -84,7 +84,14 @@ export const useMapControls = () => {
       }
       battlemapActions.setWasdMoving(false);
     }
-  }, [snap.view.wasd_moving]);
+    
+    // If locking, also close the tile editor
+    if (locked && snap.controls.isEditing) {
+      console.log('[MapControls] Map locked, closing tile editor');
+      battlemapActions.setTileEditing(false);
+      battlemapActions.setTileEditorVisible(false);
+    }
+  }, [snap.view.wasd_moving, snap.controls.isEditing]);
   
   // Toggle lock state
   const toggleLock = useCallback(() => {
@@ -99,7 +106,14 @@ export const useMapControls = () => {
       }
       battlemapActions.setWasdMoving(false);
     }
-  }, [snap.controls.isLocked, snap.view.wasd_moving]);
+    
+    // If locking, also close the tile editor
+    if (newLocked && snap.controls.isEditing) {
+      console.log('[MapControls] Map locked, closing tile editor');
+      battlemapActions.setTileEditing(false);
+      battlemapActions.setTileEditorVisible(false);
+    }
+  }, [snap.controls.isLocked, snap.view.wasd_moving, snap.controls.isEditing]);
   
   // Set grid visibility
   const setGridVisible = useCallback((visible: boolean) => {

@@ -124,8 +124,8 @@ export class InteractionsManager {
   private handlePointerMove(event: FederatedPointerEvent): void {
     const snap = battlemapStore;
     
-    // Skip handling during WASD movement or when locked
-    if (snap.controls.isLocked || snap.view.wasd_moving) return;
+    // Skip handling during WASD movement
+    if (snap.view.wasd_moving) return;
     
     // Convert to grid coordinates
     const mouseX = event.global.x;
@@ -133,7 +133,7 @@ export class InteractionsManager {
     
     const { gridX, gridY, inBounds } = this.pixelToGrid(mouseX, mouseY);
     
-    // Update store with hovered cell position
+    // Always update hovered cell position, even when locked
     battlemapActions.setHoveredCell(gridX, gridY);
   }
   
@@ -143,8 +143,8 @@ export class InteractionsManager {
   private handlePointerDown(event: FederatedPointerEvent): void {
     const snap = battlemapStore;
     
-    // Skip handling during WASD movement or when locked
-    if (snap.controls.isLocked || snap.view.wasd_moving) return;
+    // Skip handling during WASD movement
+    if (snap.view.wasd_moving) return;
     
     // Convert to grid coordinates
     const mouseX = event.global.x;
@@ -152,8 +152,8 @@ export class InteractionsManager {
     
     const { gridX, gridY } = this.pixelToGrid(mouseX, mouseY);
     
-    // If we're editing tiles, handle tile placement
-    if (snap.controls.isEditing) {
+    // If we're editing tiles and not locked, handle tile placement
+    if (snap.controls.isEditing && !snap.controls.isLocked) {
       this.handleTileEdit(gridX, gridY);
     }
   }
