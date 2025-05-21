@@ -12,6 +12,8 @@ import GridOffIcon from '@mui/icons-material/GridOff';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import EditIcon from '@mui/icons-material/Edit';
 import EditOffIcon from '@mui/icons-material/EditOff';
+import ImageIcon from '@mui/icons-material/Image';
+import HideImageIcon from '@mui/icons-material/HideImage';
 import { useMapControls, useVisibility, useTileEditor } from '../../../hooks/battlemap';
 import TileEditorPanel from './TileEditorPanel';
 import { battlemapStore } from '../../../store';
@@ -25,9 +27,11 @@ export const CanvasControls: React.FC = () => {
   const { 
     isLocked, 
     isGridVisible, 
+    isTilesVisible,
     isMovementHighlightEnabled,
     toggleLock,
     toggleGridVisibility,
+    toggleTilesVisibility,
     toggleMovementHighlight,
     resetView,
     zoomIn,
@@ -135,6 +139,20 @@ export const CanvasControls: React.FC = () => {
               }}
             >
               {isGridVisible ? <GridOnIcon /> : <GridOffIcon />}
+            </IconButton>
+          </Tooltip>
+
+          {/* Tiles Toggle */}
+          <Tooltip title={isTilesVisible ? "Hide Tiles (Debug)" : "Show Tiles"}>
+            <IconButton
+              size="small"
+              onClick={toggleTilesVisibility}
+              sx={{ 
+                color: 'white',
+                backgroundColor: isTilesVisible ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+              }}
+            >
+              {isTilesVisible ? <ImageIcon /> : <HideImageIcon />}
             </IconButton>
           </Tooltip>
 

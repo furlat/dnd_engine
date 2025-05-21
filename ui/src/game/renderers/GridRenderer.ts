@@ -13,6 +13,9 @@ export class GridRenderer extends AbstractRenderer {
   // Graphics references
   private gridGraphics: Graphics = new Graphics();
   private highlightGraphics: Graphics = new Graphics();
+  
+  // Store unsubscribe callbacks
+  private unsubscribeCallbacks: Array<() => void> = [];
 
   /**
    * Initialize the renderer
@@ -34,21 +37,27 @@ export class GridRenderer extends AbstractRenderer {
    * Set up subscriptions to the Valtio store
    */
   private setupSubscriptions(): void {
+    // Store unsubscribe functions
+    this.unsubscribeCallbacks = [];
+    
     // Subscribe to view changes (zooming, panning)
-    subscribe(battlemapStore.view, () => {
+    const unsubView = subscribe(battlemapStore.view, () => {
       this.render();
     });
+    this.unsubscribeCallbacks.push(unsubView);
     
     // Subscribe to hovered cell changes specifically
-    subscribe(battlemapStore.view.hoveredCell, () => {
+    const unsubHoveredCell = subscribe(battlemapStore.view.hoveredCell, () => {
       this.renderCellHighlight();
     });
+    this.unsubscribeCallbacks.push(unsubHoveredCell);
     
     // Subscribe to control changes for grid visibility
-    subscribe(battlemapStore.controls, () => {
+    const unsubControls = subscribe(battlemapStore.controls, () => {
       console.log('[GridRenderer] Controls changed, isGridVisible:', battlemapStore.controls.isGridVisible);
       this.renderGrid();
     });
+    this.unsubscribeCallbacks.push(unsubControls);
   }
   
   /**
@@ -91,6 +100,12 @@ export class GridRenderer extends AbstractRenderer {
    * Render everything
    */
   render(): void {
+    // Skip if not properly initialized
+    if (!this.engine || !this.engine.app) {
+      console.log('[GridRenderer] Skipping render - engine not ready');
+      return;
+    }
+    
     this.renderGrid();
     this.renderCellHighlight();
   }
@@ -99,6 +114,12 @@ export class GridRenderer extends AbstractRenderer {
    * Render the grid lines
    */
   private renderGrid(): void {
+    // Check if graphics is available
+    if (!this.gridGraphics) {
+      console.log('[GridRenderer] Grid graphics not available');
+      return;
+    }
+    
     // Get grid settings from store
     const snap = battlemapStore;
     const isGridVisible = snap.controls.isGridVisible;
@@ -117,25 +138,39 @@ export class GridRenderer extends AbstractRenderer {
     // Get grid offset and size
     const { offsetX, offsetY, tileSize, gridPixelWidth, gridPixelHeight } = this.calculateGridOffset();
     
-    // Set up stroke style for v8
-    this.gridGraphics.stroke({ 
-      width: 1, 
-      color: 0xFFFFFF, 
-      alpha: 0.5  // Increased for better visibility
+    console.log('[GridRenderer] Drawing grid with:', {
+      offsetX,
+      offsetY,
+      tileSize,
+      gridWidth,
+      gridHeight,
+      containerSize: this.engine?.containerSize
     });
     
-    // Draw vertical lines
+    // Create a line for each grid line (vertical)
     for (let i = 0; i <= gridWidth; i++) {
       const x = offsetX + (i * tileSize);
-      this.gridGraphics.moveTo(x, offsetY);
-      this.gridGraphics.lineTo(x, offsetY + gridPixelHeight);
+      this.gridGraphics
+        .moveTo(x, offsetY)
+        .lineTo(x, offsetY + gridPixelHeight)
+        .stroke({ 
+          width: 1, 
+          color: 0xCCCCCC, 
+          alpha: 0.5 
+        });
     }
     
-    // Draw horizontal lines
+    // Create a line for each grid line (horizontal)
     for (let i = 0; i <= gridHeight; i++) {
       const y = offsetY + (i * tileSize);
-      this.gridGraphics.moveTo(offsetX, y);
-      this.gridGraphics.lineTo(offsetX + gridPixelWidth, y);
+      this.gridGraphics
+        .moveTo(offsetX, y)
+        .lineTo(offsetX + gridPixelWidth, y)
+        .stroke({ 
+          width: 1, 
+          color: 0xCCCCCC, 
+          alpha: 0.5 
+        });
     }
     
     console.log('[GridRenderer] Grid drawn at:', { offsetX, offsetY, gridWidth, gridHeight });
@@ -145,6 +180,12 @@ export class GridRenderer extends AbstractRenderer {
    * Render cell highlight
    */
   private renderCellHighlight(): void {
+    // Check if graphics is available
+    if (!this.highlightGraphics) {
+      console.log('[GridRenderer] Highlight graphics not available');
+      return;
+    }
+    
     const snap = battlemapStore;
     
     // Skip highlighting during movement for better performance
@@ -181,13 +222,36 @@ export class GridRenderer extends AbstractRenderer {
    * Clean up resources
    */
   destroy(): void {
-    // Clear graphics
-    this.gridGraphics.clear();
-    this.highlightGraphics.clear();
+    // Unsubscribe from all subscriptions
+    this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
+    this.unsubscribeCallbacks = [];
     
-    // Destroy graphics
-    this.gridGraphics.destroy();
-    this.highlightGraphics.destroy();
+    // Clear graphics
+    if (this.gridGraphics) {
+      try {
+        if (this.gridGraphics.clear) {
+          this.gridGraphics.clear();
+        }
+        if (!this.gridGraphics.destroyed) {
+          this.gridGraphics.destroy();
+        }
+      } catch (e) {
+        console.warn('[GridRenderer] Error destroying grid graphics:', e);
+      }
+    }
+    
+    if (this.highlightGraphics) {
+      try {
+        if (this.highlightGraphics.clear) {
+          this.highlightGraphics.clear();
+        }
+        if (!this.highlightGraphics.destroyed) {
+          this.highlightGraphics.destroy();
+        }
+      } catch (e) {
+        console.warn('[GridRenderer] Error destroying highlight graphics:', e);
+      }
+    }
     
     // Call parent destroy
     super.destroy();
