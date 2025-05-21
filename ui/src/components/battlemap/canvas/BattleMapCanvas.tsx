@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Application, extend } from '@pixi/react';
-import { Graphics as PixiGraphics, Container, Sprite } from 'pixi.js';
+import { Graphics as PixiGraphics, Container, Sprite, FederatedPointerEvent } from 'pixi.js';
 import { Box } from '@mui/material';
 import { useGrid, useEntitySelection, useVisibility, useMapControls, useTileEditor } from '../../../hooks/battlemap';
 import { battlemapStore, battlemapActions } from '../../../store';
@@ -10,14 +10,12 @@ import { CanvasControls } from './CanvasControls';
 // import { CanvasEntities } from './CanvasEntities';  // Will re-enable later
 
 // Extend must be called at the module level
-console.log('Extending PixiJS components for JSX...');
 extend({ Container, Graphics: PixiGraphics, Sprite });
 
 /**
  * Main component that renders the PixiJS application for the battlemap
  */
 const BattleMapCanvas: React.FC = () => {
-  console.log('BattleMapCanvas rendering...');
   const appRef = useRef(null);
   const boxRef = useRef<HTMLDivElement>(null);
   
@@ -43,19 +41,12 @@ const BattleMapCanvas: React.FC = () => {
   const { isVisibilityEnabled } = useVisibility();
   const { isEditing, handleCellClick } = useTileEditor();
 
-  // Log component mounting
-  useEffect(() => {
-    console.log('BattleMapCanvas mounted');
-    return () => console.log('BattleMapCanvas unmounted');
-  }, []);
-
   // Update container size when the box ref is available
   useEffect(() => {
     const updateSize = () => {
       if (boxRef.current) {
         const width = boxRef.current.clientWidth;
         const height = boxRef.current.clientHeight;
-        console.log('Setting container size from direct measurement:', { width, height });
         setContainerSize({ width, height });
       }
     };
@@ -74,55 +65,46 @@ const BattleMapCanvas: React.FC = () => {
     };
   }, [setContainerSize]);
 
-  // Add debugging for container size changes
-  useEffect(() => {
-    console.log('Container size updated:', containerSize);
-  }, [containerSize]);
-
-  // Event handlers for mouse interaction
-  const handleMouseMove = useCallback((event: React.MouseEvent) => {
-    // Skip mouse handling during WASD movement or when locked
+  // Event handlers for PixiJS pointer events
+  const handlePointerMove = useCallback((event: FederatedPointerEvent) => {
+    // Skip handling during WASD movement or when locked
     if (isLocked || isWasdMoving) return;
     
-    // Convert mouse coordinates to grid coordinates
-    const rect = event.currentTarget.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    // Convert pointer coordinates to grid coordinates
+    const mouseX = event.global.x;
+    const mouseY = event.global.y;
     
     const { gridX, gridY } = pixelToGrid(mouseX, mouseY, containerSize.width, containerSize.height);
     updateHoveredCell(gridX, gridY);
   }, [isLocked, isWasdMoving, pixelToGrid, containerSize, updateHoveredCell]);
    
-  const handleClick = useCallback((event: React.MouseEvent) => {
-    // Skip click handling during WASD movement or when locked
+  const handlePointerDown = useCallback((event: FederatedPointerEvent) => {
+    // Skip handling during WASD movement or when locked
     if (isLocked || isWasdMoving) return;
     
-    // Convert mouse coordinates to grid coordinates
-    const rect = event.currentTarget.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    // Convert pointer coordinates to grid coordinates
+    const mouseX = event.global.x;
+    const mouseY = event.global.y;
     
     const { gridX, gridY } = pixelToGrid(mouseX, mouseY, containerSize.width, containerSize.height);
-    
-    console.log(`Grid clicked at: (${gridX}, ${gridY})`);
 
     // If in tile editing mode, handle cell click for tile placement
     if (isEditing) {
       handleCellClick(gridX, gridY, (tile) => {
         // Optimistic update will be handled by the store
-        battlemapActions.fetchGridData();
+        battlemapActions.fetchGridSnapshot();
       }, isLocked);
     }
     
   }, [isLocked, isWasdMoving, pixelToGrid, containerSize, isEditing, handleCellClick]);
 
-  // Calculate cursor style based on state
-  const getCursorStyle = () => {
-    if (isLocked) return 'default';
-    if (isWasdMoving) return 'grabbing';
-    if (isEditing) return 'crosshair';
-    return 'pointer';
-  };
+  // PIXI.js background draw callback
+  const drawBackground = useCallback((g: PixiGraphics) => {
+    g.clear();
+    g.beginFill(0x111111);
+    g.drawRect(0, 0, containerSize.width, containerSize.height);
+    g.endFill();
+  }, [containerSize.width, containerSize.height]);
 
   return (
     <Box 
@@ -132,11 +114,8 @@ const BattleMapCanvas: React.FC = () => {
         height: '100%', 
         position: 'relative', 
         overflow: 'hidden',
-        bgcolor: '#111',
-        cursor: getCursorStyle()
+        bgcolor: '#111'
       }}
-      onMouseMove={handleMouseMove}
-      onClick={handleClick}
     >
       {containerSize.width > 0 && containerSize.height > 0 && (
         <Application
@@ -148,6 +127,15 @@ const BattleMapCanvas: React.FC = () => {
           autoDensity
           resolution={window.devicePixelRatio || 1}
         >
+          <pixiGraphics
+            eventMode="static"
+            interactive={true}
+            onPointerMove={handlePointerMove}
+            onPointerDown={handlePointerDown}
+            onPointerLeave={() => updateHoveredCell(-1, -1)}
+            draw={drawBackground}
+          />
+          
           <CanvasGrid 
             gridWidth={gridWidth}
             gridHeight={gridHeight}

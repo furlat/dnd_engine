@@ -93,17 +93,6 @@ export const useGrid = () => {
     const gridX = Math.floor(relativeX / tileSize);
     const gridY = Math.floor(relativeY / tileSize);
     
-    console.log('pixelToGrid:', { 
-      pixelX, 
-      pixelY, 
-      offsetX, 
-      offsetY, 
-      relativeX, 
-      relativeY, 
-      gridX, 
-      gridY 
-    });
-    
     return { gridX, gridY };
   }, [calculateGridOffset, snap.view.tileSize]);
   
