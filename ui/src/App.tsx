@@ -3,7 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { Box, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 
 // Layout
-import Layout from './components/character_sheet/layout/Layout';
+import Layout from './components/layout/Layout';
 
 // Pages
 import BattleMapPage from './pages/BattleMapPage';
