@@ -3,6 +3,9 @@ import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
 import { TileSummary } from '../../types/battlemap_types';
 
+// Define constants
+const ENTITY_PANEL_WIDTH = 250;
+
 /**
  * Hook for grid operations and calculations
  */
@@ -32,13 +35,21 @@ export const useGrid = () => {
    */
   const calculateGridOffset = useCallback((containerWidth: number, containerHeight: number) => {
     const tileSize = snap.view.tileSize;
-    const offsetX = (containerWidth - (snap.grid.width * tileSize)) / 2;
-    const offsetY = (containerHeight - (snap.grid.height * tileSize)) / 2;
+    const gridPixelWidth = snap.grid.width * tileSize;
+    const gridPixelHeight = snap.grid.height * tileSize;
     
-    return { 
-      offsetX: offsetX + snap.view.offset.x, 
-      offsetY: offsetY + snap.view.offset.y 
-    };
+    // Calculate available width (total width minus entity panel)
+    const availableWidth = containerWidth - ENTITY_PANEL_WIDTH;
+    
+    // Base offsets - center grid in available space
+    const baseOffsetX = ENTITY_PANEL_WIDTH + (availableWidth - gridPixelWidth) / 2;
+    const baseOffsetY = (containerHeight - gridPixelHeight) / 2;
+    
+    // Apply the offset from WASD controls
+    const offsetX = baseOffsetX + snap.view.offset.x;
+    const offsetY = baseOffsetY + snap.view.offset.y;
+    
+    return { offsetX, offsetY };
   }, [snap.grid.width, snap.grid.height, snap.view.tileSize, snap.view.offset.x, snap.view.offset.y]);
   
   /**
@@ -74,8 +85,24 @@ export const useGrid = () => {
     const { offsetX, offsetY } = calculateGridOffset(containerWidth, containerHeight);
     const tileSize = snap.view.tileSize;
     
-    const gridX = Math.floor((pixelX - offsetX) / tileSize);
-    const gridY = Math.floor((pixelY - offsetY) / tileSize);
+    // Adjust pixelX and pixelY by the offset to get relative grid position
+    const relativeX = pixelX - offsetX;
+    const relativeY = pixelY - offsetY;
+    
+    // Convert to grid coordinates
+    const gridX = Math.floor(relativeX / tileSize);
+    const gridY = Math.floor(relativeY / tileSize);
+    
+    console.log('pixelToGrid:', { 
+      pixelX, 
+      pixelY, 
+      offsetX, 
+      offsetY, 
+      relativeX, 
+      relativeY, 
+      gridX, 
+      gridY 
+    });
     
     return { gridX, gridY };
   }, [calculateGridOffset, snap.view.tileSize]);

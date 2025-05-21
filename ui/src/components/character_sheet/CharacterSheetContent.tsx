@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, Grid, Fade, Typography, CircularProgress } from '@mui/material';
+import { Box, Typography, CircularProgress } from '@mui/material';
 import AbilityScoresBlock from './sections/AbilityScoresBlock';
 import ArmorSection from './sections/ArmorSection';
 import AttackSection from './sections/AttackSection';
@@ -16,6 +16,14 @@ const CharacterSheetContent: React.FC = () => {
   const snap = useSnapshot(characterSheetStore);
   const battlemapSnap = useSnapshot(battlemapStore);
   const selectedEntityId = battlemapSnap.entities.selectedEntityId || battlemapSnap.entities.displayedEntityId;
+  const [initialLoadDone, setInitialLoadDone] = React.useState(false);
+  
+  // Track if initial load has occurred to avoid showing loading indicator repeatedly
+  React.useEffect(() => {
+    if (snap.character && !initialLoadDone) {
+      setInitialLoadDone(true);
+    }
+  }, [snap.character, initialLoadDone]);
 
   // Update character data when selected entity changes
   React.useEffect(() => {
@@ -24,11 +32,11 @@ const CharacterSheetContent: React.FC = () => {
     }
   }, [selectedEntityId]);
 
-  // Show loading state
-  if (snap.loading) {
+  // Show loading state for initial load only
+  if (snap.loading && !initialLoadDone) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
-        <CircularProgress />
+        <CircularProgress size={24} sx={{ color: 'text.secondary' }} />
       </Box>
     );
   }
@@ -45,62 +53,30 @@ const CharacterSheetContent: React.FC = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Active Conditions Bar */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <ActiveConditionsBar />
-        </div>
-      </Fade>
+      <ActiveConditionsBar />
 
       {/* Abilities */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <AbilityScoresBlock />
-        </div>
-      </Fade>
+      <AbilityScoresBlock />
 
       {/* Saving Throws */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <SavingThrowsSection />
-        </div>
-      </Fade>
+      <SavingThrowsSection />
 
       {/* Health */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <HealthSection />
-        </div>
-      </Fade>
+      <HealthSection />
 
       {/* Armor */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <ArmorSection />
-        </div>
-      </Fade>
+      <ArmorSection />
 
       {/* Attack */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <AttackSection />
-        </div>
-      </Fade>
+      <AttackSection />
 
       {/* Action Economy */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <ActionEconomySection />
-        </div>
-      </Fade>
+      <ActionEconomySection />
 
       {/* Skills */}
-      <Fade in={true} timeout={150}>
-        <div>
-          <SkillsSection />
-        </div>
-      </Fade>
+      <SkillsSection />
     </Box>
   );
 };
 
-export default CharacterSheetContent; 
+export default React.memo(CharacterSheetContent); 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
 
@@ -6,13 +6,15 @@ import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
 const MIN_TILE_SIZE = 8;
 const MAX_TILE_SIZE = 128;
 const TILE_SIZE_STEP = 16;
-const MOVEMENT_SPEED = 8;
+const MOVEMENT_SPEED = 20; // Increased for more noticeable movement
+const MOVEMENT_END_DELAY = 100; // Time to wait after last keypress before ending movement mode
 
 /**
  * Hook for managing the battlemap UI controls and settings
  */
 export const useMapControls = () => {
   const snap = useSnapshot(battlemapStore);
+  const movementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   /**
    * Zoom in (increase tile size)
@@ -39,24 +41,65 @@ export const useMapControls = () => {
   }, []);
   
   /**
-   * Pan the map view
+   * Start movement mode - enable wasd_moving flag
    */
-  const panView = useCallback((deltaX: number, deltaY: number) => {
-    battlemapActions.setOffset(
-      snap.view.offset.x + deltaX,
-      snap.view.offset.y + deltaY
-    );
-  }, [snap.view.offset.x, snap.view.offset.y]);
+  const startMovement = useCallback(() => {
+    // Clear any existing timeout
+    if (movementTimeoutRef.current) {
+      clearTimeout(movementTimeoutRef.current);
+      movementTimeoutRef.current = null;
+    }
+    
+    // Set moving flag if not already set
+    if (!snap.view.wasd_moving) {
+      battlemapActions.setWasdMoving(true);
+    }
+  }, [snap.view.wasd_moving]);
+  
+  /**
+   * End movement mode after a delay
+   */
+  const endMovement = useCallback(() => {
+    // Clear any existing timeout
+    if (movementTimeoutRef.current) {
+      clearTimeout(movementTimeoutRef.current);
+    }
+    
+    // Set a new timeout to end movement mode
+    movementTimeoutRef.current = setTimeout(() => {
+      battlemapActions.setWasdMoving(false);
+      movementTimeoutRef.current = null;
+    }, MOVEMENT_END_DELAY);
+  }, []);
   
   // Lock/unlock the map
   const setLocked = useCallback((locked: boolean) => {
     battlemapActions.setLocked(locked);
-  }, []);
+    
+    // If locking, end movement immediately
+    if (locked && snap.view.wasd_moving) {
+      if (movementTimeoutRef.current) {
+        clearTimeout(movementTimeoutRef.current);
+        movementTimeoutRef.current = null;
+      }
+      battlemapActions.setWasdMoving(false);
+    }
+  }, [snap.view.wasd_moving]);
   
   // Toggle lock state
   const toggleLock = useCallback(() => {
-    battlemapActions.setLocked(!snap.controls.isLocked);
-  }, [snap.controls.isLocked]);
+    const newLocked = !snap.controls.isLocked;
+    battlemapActions.setLocked(newLocked);
+    
+    // If locking, end movement immediately
+    if (newLocked && snap.view.wasd_moving) {
+      if (movementTimeoutRef.current) {
+        clearTimeout(movementTimeoutRef.current);
+        movementTimeoutRef.current = null;
+      }
+      battlemapActions.setWasdMoving(false);
+    }
+  }, [snap.controls.isLocked, snap.view.wasd_moving]);
   
   // Set grid visibility
   const setGridVisible = useCallback((visible: boolean) => {
@@ -98,25 +141,84 @@ export const useMapControls = () => {
     if (snap.controls.isLocked) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if modifier keys are pressed
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      
+      // Mark key as pressed and apply direct movement
+      let moved = true;
+      
       switch (e.key.toLowerCase()) {
         case 'w':
-          panView(0, MOVEMENT_SPEED);
+          // Move up (decrease Y)
+          battlemapActions.setOffset(
+            snap.view.offset.x, 
+            snap.view.offset.y - MOVEMENT_SPEED
+          );
           break;
         case 's':
-          panView(0, -MOVEMENT_SPEED);
+          // Move down (increase Y)
+          battlemapActions.setOffset(
+            snap.view.offset.x, 
+            snap.view.offset.y + MOVEMENT_SPEED
+          );
           break;
         case 'a':
-          panView(MOVEMENT_SPEED, 0);
+          // Move left (decrease X)
+          battlemapActions.setOffset(
+            snap.view.offset.x - MOVEMENT_SPEED, 
+            snap.view.offset.y
+          );
           break;
         case 'd':
-          panView(-MOVEMENT_SPEED, 0);
+          // Move right (increase X)
+          battlemapActions.setOffset(
+            snap.view.offset.x + MOVEMENT_SPEED, 
+            snap.view.offset.y
+          );
           break;
+        default:
+          moved = false;
+      }
+      
+      // If we actually moved, handle movement state
+      if (moved) {
+        startMovement();
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // When a WASD key is released, schedule the end of movement
+      if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+        endMovement();
+      }
+    };
+    
+    // Handle window blur - end movement when window loses focus
+    const handleBlur = () => {
+      if (snap.view.wasd_moving) {
+        battlemapActions.setWasdMoving(false);
+        if (movementTimeoutRef.current) {
+          clearTimeout(movementTimeoutRef.current);
+          movementTimeoutRef.current = null;
+        }
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [snap.controls.isLocked, panView]);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+      
+      // Clean up timeout if component unmounts
+      if (movementTimeoutRef.current) {
+        clearTimeout(movementTimeoutRef.current);
+      }
+    };
+  }, [snap.controls.isLocked, snap.view.offset.x, snap.view.offset.y, snap.view.wasd_moving, startMovement, endMovement]);
   
   return {
     // Current state
@@ -127,12 +229,12 @@ export const useMapControls = () => {
     isVisibilityEnabled: snap.controls.isVisibilityEnabled,
     isMovementHighlightEnabled: snap.controls.isMovementHighlightEnabled,
     isMusicPlayerMinimized: snap.controls.isMusicPlayerMinimized,
+    isWasdMoving: snap.view.wasd_moving,
     
     // Methods
     zoomIn,
     zoomOut,
     resetView,
-    panView,
     setLocked,
     toggleLock,
     setGridVisible,

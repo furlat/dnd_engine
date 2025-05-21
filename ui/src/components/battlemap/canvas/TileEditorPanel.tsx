@@ -1,14 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Paper, ToggleButton, ToggleButtonGroup, Box, IconButton, Collapse } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import EditIcon from '@mui/icons-material/Edit';
-import EditOffIcon from '@mui/icons-material/EditOff';
-import { createTile, TileSummary } from '../../api/tileApi';
-import { v4 as uuidv4 } from 'uuid';
-import { Assets, Texture } from 'pixi.js';
-
-export type TileType = 'floor' | 'wall' | 'water';
+import { useTileEditor, TileType } from '../../../hooks/battlemap';
 
 interface TilePreviewProps {
   type: TileType;
@@ -65,23 +59,19 @@ const TilePreview: React.FC<TilePreviewProps> = ({ type, isSelected }) => {
   );
 };
 
-interface TileEditorProps {
-  onTileCreated?: () => void;
-  selectedTile: TileType;
-  onTileSelected: (tile: TileType) => void;
-  isEditing: boolean;
-  onToggleEditing: () => void;
+interface TileEditorPanelProps {
   isLocked: boolean;
 }
 
-const TileEditor: React.FC<TileEditorProps> = ({ 
-  onTileCreated, 
-  selectedTile, 
-  onTileSelected,
-  isEditing,
-  onToggleEditing,
-  isLocked
-}) => {
+const TileEditorPanel: React.FC<TileEditorPanelProps> = ({ isLocked }) => {
+  const { 
+    selectedTile, 
+    isEditing,
+    isEditorVisible,
+    toggleEditorVisibility,
+    selectTile
+  } = useTileEditor();
+  
   const [isExpanded, setIsExpanded] = useState(true);
 
   const handleTileChange = (
@@ -89,25 +79,25 @@ const TileEditor: React.FC<TileEditorProps> = ({
     newTile: TileType | null,
   ) => {
     if (newTile !== null) {
-      onTileSelected(newTile);
+      selectTile(newTile);
     }
   };
+
+  if (!isEditorVisible) return null;
 
   return (
     <Paper
       elevation={3}
       sx={{
         position: 'absolute',
-        top: 8,
-        left: '50%',
-        marginLeft: '250px',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        top: 160,
+        right: 16,
+        backgroundColor: 'rgba(33, 33, 33, 0.9)',
         color: 'white',
         zIndex: 1,
         display: 'flex',
         flexDirection: 'column',
         minWidth: '120px',
-        // maxWidth: '140px',
       }}
     >
       <Box sx={{ 
@@ -120,30 +110,15 @@ const TileEditor: React.FC<TileEditorProps> = ({
           <IconButton
             size="small"
             onClick={() => setIsExpanded(!isExpanded)}
-            sx={{ 
-              color: 'white', 
-              mr: 1,
-              visibility: isEditing && !isLocked ? 'visible' : 'hidden'
-            }}
+            sx={{ color: 'white', mr: 1 }}
           >
             {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </IconButton>
-          Tile Editor
+          Tile Types
         </Box>
-        <IconButton
-          size="small"
-          onClick={onToggleEditing}
-          disabled={isLocked}
-          sx={{ 
-            color: 'white',
-            opacity: isLocked ? 0.5 : 1
-          }}
-        >
-          {isEditing ? <EditOffIcon /> : <EditIcon />}
-        </IconButton>
       </Box>
 
-      <Collapse in={isExpanded && isEditing && !isLocked}>
+      <Collapse in={isExpanded && isEditing}>
         <Box sx={{ p: 1 }}>
           <ToggleButtonGroup
             value={selectedTile}
@@ -199,79 +174,4 @@ const TileEditor: React.FC<TileEditorProps> = ({
   );
 };
 
-const getDefaultTileProperties = (tileType: TileType): Partial<TileSummary> => {
-  switch (tileType) {
-    case 'floor':
-      return {
-        walkable: true,
-        visible: true,
-        sprite_name: 'floor.png',
-        name: 'Floor'
-      };
-    case 'wall':
-      return {
-        walkable: false,
-        visible: false,
-        sprite_name: 'wall.png',
-        name: 'Wall'
-      };
-    case 'water':
-      return {
-        walkable: false,
-        visible: true,
-        sprite_name: 'water.png',
-        name: 'Water'
-      };
-  }
-};
-
-export const useTileEditor = () => {
-  const [selectedTile, setSelectedTile] = useState<TileType>('floor');
-  const [isEditing, setIsEditing] = useState(false);
-
-  const handleCellClick = async (
-    x: number, 
-    y: number, 
-    onOptimisticUpdate: (tile: TileSummary) => void,
-    isLocked: boolean
-  ) => {
-    if (!isEditing || isLocked) return;
-
-    // Create optimistic tile
-    const optimisticTile: TileSummary = {
-      uuid: uuidv4(),
-      position: [x, y],
-      ...getDefaultTileProperties(selectedTile)
-    } as TileSummary;
-
-    // Update UI immediately
-    onOptimisticUpdate(optimisticTile);
-
-    try {
-      // Make API call in background
-      await createTile([x, y], selectedTile);
-    } catch (error) {
-      console.error('Error creating tile:', error);
-      // Could add error handling/rollback here if needed
-    }
-  };
-
-  const TileEditorComponent = ({ isLocked }: { isLocked: boolean }) => (
-    <TileEditor
-      selectedTile={selectedTile}
-      onTileSelected={setSelectedTile}
-      isEditing={isEditing}
-      onToggleEditing={() => setIsEditing(!isEditing)}
-      isLocked={isLocked}
-    />
-  );
-
-  return {
-    selectedTile,
-    isEditing,
-    handleCellClick,
-    TileEditor: TileEditorComponent,
-  };
-};
-
-export default TileEditor; 
+export default TileEditorPanel; 
