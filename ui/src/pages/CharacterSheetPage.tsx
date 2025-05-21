@@ -8,15 +8,13 @@ import {
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import GroupIcon from '@mui/icons-material/Group';
-import { battlemapStore, battlemapActions } from '../store/battlemapStore';
+import { battlemapStore } from '../store/battlemapStore';
 import { useSnapshot } from 'valtio';
 import CharacterSheetContent from '../components/character_sheet/CharacterSheetContent';
 
 interface CharacterSheetPageProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-  onSwitchToEntities: () => void;
 }
 
 const SIDEBAR_WIDTH = '922px';
@@ -24,8 +22,7 @@ const COLLAPSED_WIDTH = '40px';
 
 const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
   isCollapsed,
-  onToggleCollapse,
-  onSwitchToEntities
+  onToggleCollapse
 }) => {
   const snap = useSnapshot(battlemapStore);
   const selectedEntity = snap.entities.selectedEntityId 
@@ -33,6 +30,27 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
     : snap.entities.displayedEntityId 
       ? snap.entities.summaries[snap.entities.displayedEntityId] 
       : undefined;
+      
+  // Memoize content to prevent unnecessary rendering when collapsed
+  const sheetContent = React.useMemo(() => {
+    if (isCollapsed) return null;
+    
+    return (
+      <>
+        {/* Header */}
+        <Paper sx={{ p: 2, mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h4" component="h1">
+            {selectedEntity?.name || 'Character Sheet'}
+          </Typography>
+        </Paper>
+
+        {/* Character Sheet Content */}
+        <Paper sx={{ p: 3 }}>
+          <CharacterSheetContent />
+        </Paper>
+      </>
+    );
+  }, [isCollapsed, selectedEntity?.name]);
 
   return (
       <Box
@@ -70,22 +88,7 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
             },
           }}
         >
-          {/* Header with switch button */}
-          <Paper sx={{ p: 2, mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h4" component="h1">
-              {selectedEntity?.name || 'Character Sheet'}
-            </Typography>
-            <Tooltip title="Switch to Entity List">
-              <IconButton onClick={onSwitchToEntities}>
-                <GroupIcon />
-              </IconButton>
-            </Tooltip>
-          </Paper>
-
-          {/* Character Sheet Content */}
-          <Paper sx={{ p: 3 }}>
-            <CharacterSheetContent />
-          </Paper>
+          {sheetContent}
         </Paper>
 
         {/* Toggle button */}
@@ -109,7 +112,7 @@ const CharacterSheetPage: React.FC<CharacterSheetPageProps> = ({
             boxShadow: 2,
             transition: 'right 0.3s ease-in-out'
           }}
-        onClick={onToggleCollapse}
+          onClick={onToggleCollapse}
         >
           <IconButton>
             {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}

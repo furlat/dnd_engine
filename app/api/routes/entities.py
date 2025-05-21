@@ -89,7 +89,7 @@ async def list_entity_summaries():
     for entity in entities:
         try:
             summary = EntitySummary.from_engine(entity)
-            print(f"Summary for entity {entity.uuid}: {summary} with target {entity.target_entity_uuid}")
+            # print(f"Summary for entity {entity.uuid}: {summary} with target {entity.target_entity_uuid}")
             summaries.append(summary)
         except Exception as e:
             print(f"Error creating summary for entity {entity.uuid}: {str(e)}")

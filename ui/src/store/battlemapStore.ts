@@ -16,6 +16,7 @@ export interface ViewState {
   tileSize: number;
   offset: { x: number; y: number };
   hoveredCell: { x: number; y: number };
+  wasd_moving: boolean;
 }
 
 export interface ControlState {
@@ -57,6 +58,7 @@ const battlemapStore = proxy<BattlemapStoreState>({
     tileSize: 32,
     offset: { x: 0, y: 0 },
     hoveredCell: { x: -1, y: -1 },
+    wasd_moving: false,
   },
   controls: {
     isLocked: false,
@@ -104,6 +106,10 @@ const battlemapActions = {
   setHoveredCell: (x: number, y: number) => {
     battlemapStore.view.hoveredCell.x = x;
     battlemapStore.view.hoveredCell.y = y;
+  },
+  
+  setWasdMoving: (moving: boolean) => {
+    battlemapStore.view.wasd_moving = moving;
   },
   
   // Controls actions
@@ -216,7 +222,17 @@ const battlemapActions = {
     Promise.all([
       battlemapActions.fetchGridData(),
       battlemapActions.fetchEntitySummaries()
-    ]);
+    ]).then(() => {
+      // Select the first entity by default if none is selected
+      if (!battlemapStore.entities.selectedEntityId) {
+        const entityIds = Object.keys(battlemapStore.entities.summaries);
+        if (entityIds.length > 0) {
+          const firstEntityId = entityIds[0];
+          battlemapStore.entities.selectedEntityId = firstEntityId;
+          battlemapStore.entities.displayedEntityId = firstEntityId;
+        }
+      }
+    });
 
     // Set up polling interval
     pollingInterval = setInterval(async () => {
