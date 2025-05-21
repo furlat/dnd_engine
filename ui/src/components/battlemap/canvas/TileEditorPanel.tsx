@@ -55,8 +55,14 @@ const TilePreview: React.FC<{ type: TileType; isSelected: boolean }> = ({ type, 
     }
   };
 
-  // Load the texture
+  // Load the texture (skip for erase type)
   useEffect(() => {
+    // Skip texture loading for erase type
+    if (type === 'erase') {
+      setTexture(null);
+      return;
+    }
+    
     const loadTexture = async () => {
       try {
         let loadedTexture = Assets.get(spritePath);
@@ -73,7 +79,7 @@ const TilePreview: React.FC<{ type: TileType; isSelected: boolean }> = ({ type, 
     };
     
     loadTexture();
-  }, [spritePath]);
+  }, [spritePath, type]);
 
   return (
     <Box
@@ -94,7 +100,7 @@ const TilePreview: React.FC<{ type: TileType; isSelected: boolean }> = ({ type, 
         },
       }}
     >
-      {texture ? (
+      {texture && type !== 'erase' ? (
         <img
           src={spritePath}
           alt={`${type} tile`}
@@ -116,7 +122,7 @@ const TilePreview: React.FC<{ type: TileType; isSelected: boolean }> = ({ type, 
           }}
         >
           {type === 'erase' && (
-            <Typography variant="caption" sx={{ color: 'white' }}>X</Typography>
+            <Typography variant="caption" sx={{ color: '#FF3333', fontWeight: 'bold' }}>X</Typography>
           )}
         </Box>
       )}
