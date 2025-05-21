@@ -53,10 +53,10 @@ const EntityCard = React.memo(({
       sx={{
         p: 1,
         backgroundColor: isSelected 
-          ? 'rgba(25, 118, 210, 0.6)'
+          ? 'rgba(25, 118, 210, 0.4)'
           : isDisplayed
-            ? 'rgba(30, 30, 30, 0.9)'
-            : 'rgba(15, 15, 15, 0.7)',
+            ? 'rgba(20, 20, 20, 0.6)'
+            : 'rgba(0, 0, 0, 0.5)',
         cursor: 'pointer',
         transition: 'all 0.2s ease',
         display: 'flex',
@@ -64,26 +64,27 @@ const EntityCard = React.memo(({
         gap: 1,
         border: '1px solid',
         borderColor: isSelected 
-          ? 'rgba(25, 118, 210, 0.8)'
-          : 'rgba(255, 255, 255, 0.1)',
+          ? 'rgba(25, 118, 210, 0.6)'
+          : 'rgba(255, 255, 255, 0.05)',
         '&:hover': {
           backgroundColor: isSelected 
-            ? 'rgba(25, 118, 210, 0.7)'
-            : 'rgba(50, 50, 50, 0.8)',
-          borderColor: 'rgba(255, 255, 255, 0.3)',
+            ? 'rgba(25, 118, 210, 0.5)'
+            : 'rgba(30, 30, 30, 0.6)',
+          borderColor: 'rgba(255, 255, 255, 0.2)',
         },
+        backdropFilter: 'blur(2px)',
       }}
       onClick={handleClick}
-      elevation={isSelected ? 8 : 2}
+      elevation={isSelected ? 4 : 1}
     >
       {/* Entity Icon/Avatar */}
       <Avatar
         sx={{
           width: 36,
           height: 36,
-          backgroundColor: isSelected ? 'primary.main' : 'rgba(50, 50, 50, 0.8)',
-          border: '2px solid',
-          borderColor: isSelected ? 'primary.light' : 'rgba(255, 255, 255, 0.2)',
+          backgroundColor: isSelected ? 'rgba(25, 118, 210, 0.6)' : 'rgba(20, 20, 20, 0.5)',
+          border: '1px solid',
+          borderColor: isSelected ? 'rgba(25, 118, 210, 0.8)' : 'rgba(255, 255, 255, 0.1)',
         }}
         src={entity.sprite_name ? `/sprites/${entity.sprite_name}` : undefined}
       >
@@ -97,8 +98,9 @@ const EntityCard = React.memo(({
             variant="subtitle2" 
             noWrap
             sx={{
-              color: isSelected ? '#fff' : 'rgba(255, 255, 255, 0.9)',
+              color: isSelected ? '#fff' : 'rgba(255, 255, 255, 0.8)',
               fontWeight: isSelected ? 'bold' : 'normal',
+              fontSize: '0.85rem',
             }}
           >
             {entity.name}
@@ -115,10 +117,10 @@ const EntityCard = React.memo(({
           <Box sx={{ flex: 1 }}>
             <Box sx={{ 
               width: '100%', 
-              height: 4, 
-              backgroundColor: 'rgba(255, 0, 0, 0.2)',
+              height: 3, 
+              backgroundColor: 'rgba(255, 0, 0, 0.15)',
               borderRadius: 1,
-              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3)',
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)',
             }}>
               <Box sx={{
                 width: `${healthPercentage}%`,
@@ -126,14 +128,15 @@ const EntityCard = React.memo(({
                 backgroundColor: healthColor,
                 borderRadius: 1,
                 transition: 'width 0.3s ease, background-color 0.3s ease',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                boxShadow: '0 1px 1px rgba(0,0,0,0.1)',
               }} />
             </Box>
             <Typography 
               variant="caption" 
               sx={{ 
-                fontSize: '0.7rem',
-                color: healthTextColor
+                fontSize: '0.65rem',
+                color: healthTextColor,
+                opacity: 0.9
               }}
             >
               {entity.current_hp}/{entity.max_hp}
@@ -144,22 +147,23 @@ const EntityCard = React.memo(({
           {entity.armor_class !== undefined && (
             <Tooltip title="Armor Class">
               <Box sx={{
-                backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                backgroundColor: 'rgba(0, 0, 0, 0.3)',
                 borderRadius: '50%',
-                width: 24,
-                height: 24,
+                width: 20,
+                height: 20,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 ml: 1,
-                border: '1px solid rgba(255, 255, 255, 0.2)',
+                border: '1px solid rgba(144, 202, 249, 0.3)',
               }}>
                 <Typography 
                   variant="caption" 
                   sx={{ 
-                    fontSize: '0.7rem',
+                    fontSize: '0.65rem',
                     color: '#90caf9', // Light blue for AC
                     fontWeight: 'bold',
+                    opacity: 0.9
                   }}
                 >
                   {entity.armor_class}
@@ -227,35 +231,20 @@ const EntitySummaryOverlays: React.FC = () => {
         gap: 1,
         pointerEvents: 'auto',
         padding: 2,
+        backgroundColor: 'transparent',
         '&::-webkit-scrollbar': {
           width: '8px',
         },
         '&::-webkit-scrollbar-track': {
-          backgroundColor: 'rgba(0, 0, 0, 0.2)',
+          backgroundColor: 'rgba(0, 0, 0, 0.1)',
         },
         '&::-webkit-scrollbar-thumb': {
-          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
           borderRadius: '4px',
         },
       }}
     >
-      {/* Simple heading */}
-      <Typography 
-        variant="h6" 
-        sx={{ 
-          color: '#fff', 
-          textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          px: 2,
-          py: 1,
-          borderRadius: 1,
-          mb: 1
-        }}
-      >
-        Entities
-      </Typography>
-      
-      {/* Direct entity list without paper container */}
+      {/* Direct entity list without paper container or heading */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {entityList}
       </Box>

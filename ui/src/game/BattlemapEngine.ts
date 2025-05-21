@@ -50,7 +50,7 @@ export class BattlemapEngine {
       await this.app.init({
         width: width,
         height: height,
-        backgroundColor: 0x111111,
+        backgroundColor: 0x000000,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
       });

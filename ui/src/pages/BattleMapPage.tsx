@@ -99,6 +99,7 @@ const BattleMapPage: React.FC = () => {
             height: '100%',
             zIndex: 10,
             pointerEvents: 'auto',
+            bgcolor: '#000000',
           }}
         >
           <EntitySummaryOverlays />

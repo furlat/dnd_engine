@@ -307,7 +307,7 @@ export class TileRenderer extends AbstractRenderer {
     // Clear and redraw
     this.backgroundGraphics.clear();
     
-    // Draw background
+    // Draw background - use pure black for seamless blend with React components
     this.backgroundGraphics
       .rect(
         offsetX,
