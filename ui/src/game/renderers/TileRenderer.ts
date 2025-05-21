@@ -28,6 +28,12 @@ export class TileRenderer extends AbstractRenderer {
 
   // Store unsubscribe callbacks
   private unsubscribeCallbacks: Array<() => void> = [];
+  
+  // Flag to track when tiles need to be redrawn
+  private tilesNeedUpdate: boolean = true;
+  
+  // Last known position offset for movement detection
+  private lastOffset = { x: 0, y: 0 };
 
   /**
    * Initialize the renderer
@@ -47,8 +53,17 @@ export class TileRenderer extends AbstractRenderer {
     // Initial tile data
     this.tilesRef = {...battlemapStore.grid.tiles};
     
+    // Initialize last offset
+    this.lastOffset = { 
+      x: battlemapStore.view.offset.x, 
+      y: battlemapStore.view.offset.y 
+    };
+    
     // Load textures
     this.loadTileTextures();
+    
+    // Force initial render
+    this.tilesNeedUpdate = true;
     
     console.log('[TileRenderer] Initialized');
   }
@@ -62,11 +77,20 @@ export class TileRenderer extends AbstractRenderer {
     
     // Subscribe to grid changes (for tile updates)
     const unsubGrid = subscribe(battlemapStore.grid, () => {
-      console.log('[TileRenderer] Grid changed, updating tiles');
+      console.log('[TileRenderer] Grid changed, checking for tile updates');
       // Only update tiles reference when not moving
       if (!battlemapStore.view.wasd_moving) {
-        this.tilesRef = {...battlemapStore.grid.tiles};
-        this.loadTileTextures();
+        // Check if tiles have actually changed
+        const hasChanges = this.hasTilesChanged(battlemapStore.grid.tiles);
+        
+        if (hasChanges) {
+          console.log('[TileRenderer] Tile changes detected, updating');
+          this.tilesRef = {...battlemapStore.grid.tiles};
+          this.loadTileTextures();
+          this.tilesNeedUpdate = true;
+        } else {
+          console.log('[TileRenderer] No significant tile changes, skipping update');
+        }
       }
       
       this.render();
@@ -75,9 +99,78 @@ export class TileRenderer extends AbstractRenderer {
     
     // Subscribe to view changes (zooming, panning)
     const unsubView = subscribe(battlemapStore.view, () => {
+      // Check if position has changed (movement)
+      if (this.lastOffset.x !== battlemapStore.view.offset.x || 
+          this.lastOffset.y !== battlemapStore.view.offset.y) {
+        // Movement detected, update last offset
+        this.lastOffset = { 
+          x: battlemapStore.view.offset.x, 
+          y: battlemapStore.view.offset.y 
+        };
+      }
+      
+      // Always render on view changes for panning/zooming
       this.render();
     });
     this.unsubscribeCallbacks.push(unsubView);
+    
+    // Subscribe to control changes (e.g., tile visibility)
+    const unsubControls = subscribe(battlemapStore.controls, () => {
+      // Only need to re-render if tile visibility changed
+      if (battlemapStore.controls.isTilesVisible !== this.tilesContainer?.visible) {
+        this.render();
+      }
+    });
+    this.unsubscribeCallbacks.push(unsubControls);
+  }
+  
+  /**
+   * Check if the tiles have significantly changed to warrant a re-render
+   * @param newTiles The new tiles from the store
+   * @returns true if there are significant changes
+   */
+  private hasTilesChanged(newTiles: Record<string, TileSummary>): boolean {
+    // Quick check: different number of tiles
+    if (Object.keys(this.tilesRef).length !== Object.keys(newTiles).length) {
+      return true;
+    }
+    
+    // Check each tile for changes in sprite or position
+    for (const key in newTiles) {
+      const oldTile = this.tilesRef[key];
+      const newTile = newTiles[key];
+      
+      // New tile that didn't exist before
+      if (!oldTile) {
+        return true;
+      }
+      
+      // Check for sprite changes (this is what we care about most)
+      if (oldTile.sprite_name !== newTile.sprite_name) {
+        return true;
+      }
+      
+      // Check for position changes (this might happen during movement)
+      if (oldTile.position[0] !== newTile.position[0] || 
+          oldTile.position[1] !== newTile.position[1]) {
+        return true;
+      }
+      
+      // Check for walkable changes (affects fallback color)
+      if (oldTile.walkable !== newTile.walkable) {
+        return true;
+      }
+    }
+    
+    // Check for removed tiles
+    for (const key in this.tilesRef) {
+      if (!newTiles[key]) {
+        return true;
+      }
+    }
+    
+    // No significant changes detected
+    return false;
   }
   
   /**
@@ -98,6 +191,8 @@ export class TileRenderer extends AbstractRenderer {
             .then(texture => {
               textureCache[spritePath] = texture;
               this.tileTextures[tile.uuid] = texture;
+              // Flag tiles need update when texture is loaded
+              this.tilesNeedUpdate = true;
               // Re-render tiles when texture is loaded
               this.renderTiles();
             })
@@ -175,8 +270,25 @@ export class TileRenderer extends AbstractRenderer {
     if (this.tilesContainer) {
       this.tilesContainer.visible = true;
     }
+    
+    // Always render the background (it's cheap)
     this.renderBackground();
-    this.renderTiles();
+    
+    // Only render tiles if needed (position change or tile content change)
+    const hasPositionChanged = 
+      this.lastOffset.x !== snap.view.offset.x || 
+      this.lastOffset.y !== snap.view.offset.y;
+      
+    if (this.tilesNeedUpdate || hasPositionChanged || snap.view.wasd_moving) {
+      this.renderTiles();
+      // Reset flag after rendering
+      this.tilesNeedUpdate = false;
+      // Update last known position
+      this.lastOffset = { 
+        x: snap.view.offset.x, 
+        y: snap.view.offset.y 
+      };
+    }
   }
   
   /**
