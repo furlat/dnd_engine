@@ -26,6 +26,7 @@ export interface ControlState {
   isVisibilityEnabled: boolean;
   isMovementHighlightEnabled: boolean;
   isMusicPlayerMinimized: boolean;
+  isTilesVisible: boolean;
   // Tile editor controls
   isEditing: boolean;
   isEditorVisible: boolean;
@@ -71,6 +72,7 @@ const battlemapStore = proxy<BattlemapStoreState>({
     isVisibilityEnabled: true,
     isMovementHighlightEnabled: false,
     isMusicPlayerMinimized: true,
+    isTilesVisible: true,
     // Tile editor defaults
     isEditing: false,
     isEditorVisible: false,
@@ -128,6 +130,10 @@ const battlemapActions = {
   
   setGridVisible: (visible: boolean) => {
     battlemapStore.controls.isGridVisible = visible;
+  },
+  
+  setTilesVisible: (visible: boolean) => {
+    battlemapStore.controls.isTilesVisible = visible;
   },
   
   setVisibilityEnabled: (enabled: boolean) => {

@@ -111,6 +111,16 @@ export const useMapControls = () => {
     battlemapActions.setGridVisible(!snap.controls.isGridVisible);
   }, [snap.controls.isGridVisible]);
   
+  // Set tiles visibility
+  const setTilesVisible = useCallback((visible: boolean) => {
+    battlemapActions.setTilesVisible(visible);
+  }, []);
+  
+  // Toggle tiles visibility
+  const toggleTilesVisibility = useCallback(() => {
+    battlemapActions.setTilesVisible(!snap.controls.isTilesVisible);
+  }, [snap.controls.isTilesVisible]);
+  
   // Set visibility mode
   const setVisibilityEnabled = useCallback((enabled: boolean) => {
     battlemapActions.setVisibilityEnabled(enabled);
@@ -226,6 +236,7 @@ export const useMapControls = () => {
     offset: snap.view.offset,
     isLocked: snap.controls.isLocked,
     isGridVisible: snap.controls.isGridVisible,
+    isTilesVisible: snap.controls.isTilesVisible,
     isVisibilityEnabled: snap.controls.isVisibilityEnabled,
     isMovementHighlightEnabled: snap.controls.isMovementHighlightEnabled,
     isMusicPlayerMinimized: snap.controls.isMusicPlayerMinimized,
@@ -239,6 +250,8 @@ export const useMapControls = () => {
     toggleLock,
     setGridVisible,
     toggleGridVisibility,
+    setTilesVisible,
+    toggleTilesVisibility,
     setVisibilityEnabled,
     toggleVisibilityMode,
     setMovementHighlightEnabled,

@@ -25,6 +25,12 @@ export class BattlemapEngine {
    * @param element The HTML element to attach the canvas to
    */
   async initialize(element: HTMLElement): Promise<boolean> {
+    // Validate input element
+    if (!element) {
+      console.error('[BattlemapEngine] Cannot initialize - element is null or undefined');
+      return false;
+    }
+    
     // Clean up existing instance if any
     if (this.app) this.destroy();
     
@@ -34,10 +40,16 @@ export class BattlemapEngine {
       // Create new PixiJS application using v8 approach
       this.app = new Application();
       
+      // Get dimensions before initialization
+      const width = element.clientWidth || 800;  // Fallback width if clientWidth is 0
+      const height = element.clientHeight || 600; // Fallback height if clientHeight is 0
+      
+      console.log('[BattlemapEngine] Container dimensions:', width, height);
+      
       // Initialize the application with options
       await this.app.init({
-        width: element.clientWidth,
-        height: element.clientHeight,
+        width: width,
+        height: height,
         backgroundColor: 0x111111,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
@@ -45,13 +57,14 @@ export class BattlemapEngine {
       
       // Update container size
       this.containerSize = {
-        width: element.clientWidth,
-        height: element.clientHeight
+        width: width,
+        height: height
       };
       
       // Add the canvas to the DOM
       if (this.app.canvas) {
         element.appendChild(this.app.canvas);
+        console.log('[BattlemapEngine] Canvas appended to DOM');
       } else {
         throw new Error('Canvas not created after app initialization');
       }
@@ -93,6 +106,13 @@ export class BattlemapEngine {
     this.renderers.forEach(renderer => {
       renderer.render();
     });
+  }
+  
+  /**
+   * Get the number of registered renderers
+   */
+  getRendererCount(): number {
+    return this.renderers.size;
   }
   
   /**

@@ -51,6 +51,12 @@ const BattleMapCanvas: React.FC = () => {
   const initializeEngine = async () => {
     if (!boxRef.current || !mountedRef.current) return false;
     
+    // Make sure the container has actual dimensions before initialization
+    if (boxRef.current.clientWidth <= 0 || boxRef.current.clientHeight <= 0) {
+      console.log('[BattleMapCanvas] Container has zero dimensions, delaying initialization');
+      return false;
+    }
+    
     try {
       console.log('[BattleMapCanvas] Attempting to initialize game manager, attempt:', retryCount + 1);
       await gameManager.initialize(boxRef.current);
@@ -78,51 +84,65 @@ const BattleMapCanvas: React.FC = () => {
   useEffect(() => {
     console.log('[BattleMapCanvas] Setting up game engine');
     
-    const updateSize = async () => {
-      if (!boxRef.current || !mountedRef.current) return;
-      
-      const width = boxRef.current.clientWidth;
-      const height = boxRef.current.clientHeight;
-      console.log('[BattleMapCanvas] Container size:', width, height);
-      
-      setContainerSize({ width, height });
-      
-      // Initialize engine if needed
-      if (!engineInitialized.current) {
-        await initializeEngine();
-      } else {
-        // Resize engine if already initialized
-        try {
-          gameManager.resize(width, height);
-        } catch (err) {
-          console.error('[BattleMapCanvas] Failed to resize game engine:', err);
-        }
+    // Wait for the DOM to be fully ready with proper dimensions
+    const readyTimeout = setTimeout(() => {
+      if (!boxRef.current) {
+        console.log('[BattleMapCanvas] Box reference not available yet');
+        return;
       }
-    };
+      
+      const updateSize = async () => {
+        if (!boxRef.current || !mountedRef.current) return;
+        
+        const width = boxRef.current.clientWidth;
+        const height = boxRef.current.clientHeight;
+        console.log('[BattleMapCanvas] Container size:', width, height);
+        
+        // Skip if container dimensions are not ready
+        if (width <= 0 || height <= 0) {
+          console.log('[BattleMapCanvas] Container not ready yet, width or height is zero');
+          return;
+        }
+        
+        setContainerSize({ width, height });
+        
+        // Initialize engine if needed
+        if (!engineInitialized.current) {
+          await initializeEngine();
+        } else {
+          // Resize engine if already initialized
+          try {
+            gameManager.resize(width, height);
+          } catch (err) {
+            console.error('[BattleMapCanvas] Failed to resize game engine:', err);
+          }
+        }
+      };
 
-    // Initial size calculation
-    updateSize();
-    
-    // Also update after a small delay to ensure all components are rendered
-    const timeoutId = setTimeout(updateSize, 300);
-
-    // Add resize listener
-    window.addEventListener('resize', updateSize);
+      // Initial size calculation
+      updateSize();
+      
+      // Add resize listener
+      window.addEventListener('resize', updateSize);
+      
+      return () => {
+        window.removeEventListener('resize', updateSize);
+        
+        // Clean up engine when component unmounts
+        if (engineInitialized.current) {
+          try {
+            console.log('[BattleMapCanvas] Destroying game engine on unmount');
+            gameManager.destroy();
+          } catch (err) {
+            console.error('[BattleMapCanvas] Failed to destroy game engine:', err);
+          }
+          engineInitialized.current = false;
+        }
+      };
+    }, 500); // Give the DOM time to render
     
     return () => {
-      window.removeEventListener('resize', updateSize);
-      clearTimeout(timeoutId);
-      
-      // Clean up engine when component unmounts
-      if (engineInitialized.current) {
-        try {
-          console.log('[BattleMapCanvas] Destroying game engine on unmount');
-          gameManager.destroy();
-        } catch (err) {
-          console.error('[BattleMapCanvas] Failed to destroy game engine:', err);
-        }
-        engineInitialized.current = false;
-      }
+      clearTimeout(readyTimeout);
     };
   }, [setContainerSize, retryCount, mountedRef]);
 
