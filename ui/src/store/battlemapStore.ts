@@ -4,6 +4,7 @@ import { EntitySummary } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { Direction } from '../components/battlemap/DirectionalEntitySprite';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
+import { TileType } from '../hooks/battlemap';
 
 // Types for the store
 export interface GridState {
@@ -25,6 +26,10 @@ export interface ControlState {
   isVisibilityEnabled: boolean;
   isMovementHighlightEnabled: boolean;
   isMusicPlayerMinimized: boolean;
+  // Tile editor controls
+  isEditing: boolean;
+  isEditorVisible: boolean;
+  selectedTileType: TileType;
 }
 
 export interface EntityState {
@@ -66,6 +71,10 @@ const battlemapStore = proxy<BattlemapStoreState>({
     isVisibilityEnabled: true,
     isMovementHighlightEnabled: false,
     isMusicPlayerMinimized: true,
+    // Tile editor defaults
+    isEditing: false,
+    isEditorVisible: false,
+    selectedTileType: 'floor',
   },
   entities: {
     summaries: {},
@@ -133,6 +142,23 @@ const battlemapActions = {
     battlemapStore.controls.isMusicPlayerMinimized = minimized;
   },
   
+  // Tile editor actions
+  setTileEditing: (editing: boolean) => {
+    battlemapStore.controls.isEditing = editing;
+    // When disabling editing, also hide the editor panel
+    if (!editing) {
+      battlemapStore.controls.isEditorVisible = false;
+    }
+  },
+  
+  setTileEditorVisible: (visible: boolean) => {
+    battlemapStore.controls.isEditorVisible = visible;
+  },
+  
+  setSelectedTileType: (tileType: TileType) => {
+    battlemapStore.controls.selectedTileType = tileType;
+  },
+  
   // Entity actions
   setEntitySummaries: (summaries: Record<string, EntitySummary>) => {
     battlemapStore.entities.summaries = summaries;
@@ -172,15 +198,17 @@ const battlemapActions = {
   },
   
   // Fetch grid data
-  fetchGridData: async () => {
+  fetchGridSnapshot: async () => {
     try {
       const gridData = await fetchGridSnapshot();
       battlemapStore.grid.width = gridData.width;
       battlemapStore.grid.height = gridData.height;
       battlemapStore.grid.tiles = gridData.tiles;
+      return gridData;
     } catch (err) {
       console.error('Error fetching grid data:', err);
       battlemapActions.setError(err instanceof Error ? err.message : 'Failed to fetch grid data');
+      return null;
     }
   },
   
@@ -207,8 +235,10 @@ const battlemapActions = {
       }, {});
 
       battlemapStore.entities.summaries = summariesRecord;
+      return summariesRecord;
     } catch (err) {
       console.error('Error fetching entity summaries:', err);
+      return {};
     }
   },
   
@@ -220,7 +250,7 @@ const battlemapActions = {
 
     // Immediately fetch data
     Promise.all([
-      battlemapActions.fetchGridData(),
+      battlemapActions.fetchGridSnapshot(),
       battlemapActions.fetchEntitySummaries()
     ]).then(() => {
       // Select the first entity by default if none is selected
@@ -238,7 +268,7 @@ const battlemapActions = {
     pollingInterval = setInterval(async () => {
       await Promise.all([
         battlemapActions.fetchEntitySummaries(),
-        battlemapActions.fetchGridData()
+        battlemapActions.fetchGridSnapshot()
       ]);
     }, POLLING_INTERVAL);
   },

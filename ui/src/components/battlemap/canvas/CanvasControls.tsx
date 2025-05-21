@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Paper, IconButton, Tooltip, Divider } from '@mui/material';
+import React, { useCallback } from 'react';
+import { Box, Paper, IconButton, Tooltip, Divider, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -12,7 +12,7 @@ import GridOffIcon from '@mui/icons-material/GridOff';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import EditIcon from '@mui/icons-material/Edit';
 import EditOffIcon from '@mui/icons-material/EditOff';
-import { useMapControls, useGrid, useVisibility, useTileEditor } from '../../../hooks/battlemap';
+import { useMapControls, useVisibility, useTileEditor } from '../../../hooks/battlemap';
 import TileEditorPanel from './TileEditorPanel';
 
 /**
@@ -32,109 +32,151 @@ export const CanvasControls: React.FC = () => {
     zoomOut
   } = useMapControls();
   
-  const { toggleVisibility } = useVisibility();
-  const { isVisibilityEnabled } = useVisibility();
+  const { toggleVisibility, isVisibilityEnabled } = useVisibility();
   const { 
     isEditing, 
     toggleEditing, 
     toggleEditorVisibility 
   } = useTileEditor();
   
-  const handleEditToggle = () => {
+  const handleEditToggle = useCallback(() => {
+    console.log('[CanvasControls] Edit button clicked, current state:', { isEditing });
+    
+    // Toggle editing state
     toggleEditing();
-    toggleEditorVisibility();
-  };
+    
+    // If we're enabling editing, also ensure editor panel is visible
+    if (!isEditing) {
+      toggleEditorVisibility();
+    }
+    
+    console.log('[CanvasControls] After toggle, new editing state will be:', { isEditing: !isEditing });
+  }, [isEditing, toggleEditing, toggleEditorVisibility]);
   
   return (
     <>
-      <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
-        <Paper 
-          elevation={3}
-          sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            p: 0.5,
-            backgroundColor: 'rgba(33, 33, 33, 0.9)',
-          }}
-        >
+      {/* Controls Panel - Positioned at top center */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          position: 'absolute', 
+          top: 8, 
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: 1,
+          paddingX: 2,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 2,
+          zIndex: 1
+        }}
+      >
+        <Typography variant="body2">
+          Position: (-, -)
+        </Typography>
+        <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           {/* Zoom controls */}
-          <Tooltip title="Zoom In" placement="left">
-            <IconButton onClick={zoomIn} size="small" color="primary">
-              <AddIcon />
-            </IconButton>
-          </Tooltip>
-          
-          <Tooltip title="Zoom Out" placement="left">
-            <IconButton onClick={zoomOut} size="small" color="primary">
-              <RemoveIcon />
-            </IconButton>
-          </Tooltip>
-          
-          <Tooltip title="Reset View" placement="left">
-            <IconButton onClick={resetView} size="small" color="primary">
-              <RestartAltIcon />
-            </IconButton>
-          </Tooltip>
-          
-          <Divider sx={{ my: 0.5 }} />
-          
-          {/* Lock/unlock */}
-          <Tooltip title={isLocked ? "Unlock Map" : "Lock Map"} placement="left">
-            <IconButton 
-              onClick={toggleLock} 
-              size="small" 
-              color={isLocked ? "success" : "primary"}
+          <IconButton 
+            size="small" 
+            onClick={zoomOut}
+            sx={{ color: 'white' }}
+          >
+            <RemoveIcon />
+          </IconButton>
+          <IconButton 
+            size="small" 
+            onClick={resetView}
+            sx={{ color: 'white' }}
+          >
+            <RestartAltIcon />
+          </IconButton>
+          <IconButton 
+            size="small" 
+            onClick={zoomIn}
+            sx={{ color: 'white' }}
+          >
+            <AddIcon />
+          </IconButton>
+
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
+
+          {/* Lock Button */}
+          <Tooltip title={isLocked ? "Unlock Map" : "Lock Map"}>
+            <IconButton
+              size="small"
+              onClick={toggleLock}
+              sx={{ 
+                color: 'white',
+                backgroundColor: isLocked ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+              }}
             >
               {isLocked ? <LockIcon /> : <LockOpenIcon />}
             </IconButton>
           </Tooltip>
-          
-          {/* Grid toggle */}
-          <Tooltip title={isGridVisible ? "Hide Grid" : "Show Grid"} placement="left">
-            <IconButton 
-              onClick={toggleGridVisibility} 
-              size="small" 
-              color={isGridVisible ? "success" : "primary"}
+
+          {/* Grid Toggle */}
+          <Tooltip title={isGridVisible ? "Hide Grid" : "Show Grid"}>
+            <IconButton
+              size="small"
+              onClick={toggleGridVisibility}
+              sx={{ 
+                color: 'white',
+                backgroundColor: isGridVisible ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+              }}
             >
               {isGridVisible ? <GridOnIcon /> : <GridOffIcon />}
             </IconButton>
           </Tooltip>
-          
-          {/* Visibility toggle */}
-          <Tooltip title={isVisibilityEnabled ? "Disable Visibility" : "Enable Visibility"} placement="left">
-            <IconButton 
-              onClick={toggleVisibility} 
-              size="small" 
-              color={isVisibilityEnabled ? "success" : "primary"}
+
+          {/* Visibility Toggle */}
+          <Tooltip title={isVisibilityEnabled ? "Disable Visibility" : "Enable Visibility"}>
+            <IconButton
+              size="small"
+              onClick={toggleVisibility}
+              sx={{ 
+                color: 'white',
+                backgroundColor: isVisibilityEnabled ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+              }}
             >
               {isVisibilityEnabled ? <VisibilityIcon /> : <VisibilityOffIcon />}
             </IconButton>
           </Tooltip>
           
           {/* Movement highlight toggle */}
-          <Tooltip title={isMovementHighlightEnabled ? "Hide Movement Range" : "Show Movement Range"} placement="left">
+          <Tooltip title={isMovementHighlightEnabled ? "Hide Movement Range" : "Show Movement Range"}>
             <IconButton 
-              onClick={toggleMovementHighlight} 
               size="small" 
-              color={isMovementHighlightEnabled ? "success" : "primary"}
+              onClick={toggleMovementHighlight}
+              sx={{ 
+                color: 'white',
+                backgroundColor: isMovementHighlightEnabled ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+              }}
             >
               <DirectionsRunIcon />
             </IconButton>
           </Tooltip>
 
           {/* Tile Editor toggle */}
-          <Tooltip title={isEditing ? "Exit Tile Editor" : "Open Tile Editor"} placement="left">
+          <Tooltip title={isEditing ? "Exit Tile Editor" : "Open Tile Editor"}>
             <IconButton 
-              onClick={handleEditToggle} 
               size="small" 
-              color={isEditing ? "success" : "primary"}
+              onClick={handleEditToggle}
+              sx={{ 
+                color: 'white',
+                backgroundColor: isEditing ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                opacity: isLocked ? 0.5 : 1
+              }}
               disabled={isLocked}
             >
               {isEditing ? <EditOffIcon /> : <EditIcon />}
             </IconButton>
           </Tooltip>
-        </Paper>
-      </Box>
+        </Box>
+      </Paper>
       
       {/* Tile Editor Panel */}
       <TileEditorPanel isLocked={isLocked} />
