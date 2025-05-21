@@ -26,6 +26,9 @@ export class TileRenderer extends AbstractRenderer {
   // Container for tiles to make cleanup easier
   private tilesContainer: Container = new Container();
 
+  // Store unsubscribe callbacks
+  private unsubscribeCallbacks: Array<() => void> = [];
+
   /**
    * Initialize the renderer
    */
@@ -54,8 +57,11 @@ export class TileRenderer extends AbstractRenderer {
    * Set up subscriptions to the Valtio store
    */
   private setupSubscriptions(): void {
+    // Store unsubscribe functions
+    this.unsubscribeCallbacks = [];
+    
     // Subscribe to grid changes (for tile updates)
-    subscribe(battlemapStore.grid, () => {
+    const unsubGrid = subscribe(battlemapStore.grid, () => {
       console.log('[TileRenderer] Grid changed, updating tiles');
       // Only update tiles reference when not moving
       if (!battlemapStore.view.wasd_moving) {
@@ -65,11 +71,13 @@ export class TileRenderer extends AbstractRenderer {
       
       this.render();
     });
+    this.unsubscribeCallbacks.push(unsubGrid);
     
     // Subscribe to view changes (zooming, panning)
-    subscribe(battlemapStore.view, () => {
+    const unsubView = subscribe(battlemapStore.view, () => {
       this.render();
     });
+    this.unsubscribeCallbacks.push(unsubView);
   }
   
   /**
@@ -144,6 +152,29 @@ export class TileRenderer extends AbstractRenderer {
    * Render everything
    */
   render(): void {
+    // Skip if not properly initialized
+    if (!this.engine || !this.engine.app) {
+      console.log('[TileRenderer] Skipping render - engine not ready');
+      return;
+    }
+    
+    const snap = battlemapStore;
+    
+    // If tiles are set to invisible, clear everything and return
+    if (!snap.controls.isTilesVisible) {
+      if (this.backgroundGraphics) {
+        this.backgroundGraphics.clear();
+      }
+      if (this.tilesContainer) {
+        this.tilesContainer.visible = false;
+      }
+      return;
+    }
+    
+    // Otherwise render everything and ensure tiles are visible
+    if (this.tilesContainer) {
+      this.tilesContainer.visible = true;
+    }
     this.renderBackground();
     this.renderTiles();
   }
@@ -152,6 +183,12 @@ export class TileRenderer extends AbstractRenderer {
    * Render the background
    */
   private renderBackground(): void {
+    // Check if graphics is available
+    if (!this.backgroundGraphics) {
+      console.log('[TileRenderer] Background graphics not available');
+      return;
+    }
+    
     // Get grid offset and sizes
     const { offsetX, offsetY, gridPixelWidth, gridPixelHeight } = this.calculateGridOffset();
     
@@ -173,6 +210,12 @@ export class TileRenderer extends AbstractRenderer {
    * Render the tiles
    */
   private renderTiles(): void {
+    // Check if container is available
+    if (!this.tilesContainer) {
+      console.log('[TileRenderer] Tiles container not available');
+      return;
+    }
+    
     // Completely clear the tiles container before rendering new tiles
     this.tilesContainer.removeChildren();
     
@@ -216,13 +259,35 @@ export class TileRenderer extends AbstractRenderer {
    * Clean up resources
    */
   destroy(): void {
-    // Clear and destroy tiles container
-    this.tilesContainer.removeChildren();
-    this.tilesContainer.destroy({ children: true });
+    // Unsubscribe from all subscriptions
+    this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
+    this.unsubscribeCallbacks = [];
     
-    // Clear and destroy background graphics
-    this.backgroundGraphics.clear();
-    this.backgroundGraphics.destroy();
+    // Clear and destroy tiles container safely
+    if (this.tilesContainer) {
+      this.tilesContainer.removeChildren();
+      try {
+        if (!this.tilesContainer.destroyed) {
+          this.tilesContainer.destroy({ children: true });
+        }
+      } catch (e) {
+        console.warn('[TileRenderer] Error destroying tiles container:', e);
+      }
+    }
+    
+    // Clear and destroy background graphics safely
+    if (this.backgroundGraphics) {
+      try {
+        if (this.backgroundGraphics.clear) {
+          this.backgroundGraphics.clear();
+        }
+        if (!this.backgroundGraphics.destroyed) {
+          this.backgroundGraphics.destroy();
+        }
+      } catch (e) {
+        console.warn('[TileRenderer] Error destroying background graphics:', e);
+      }
+    }
     
     // Call parent destroy
     super.destroy();

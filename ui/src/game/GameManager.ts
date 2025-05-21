@@ -47,16 +47,25 @@ export class GameManager {
    * Initialize all components
    */
   private initializeComponents(): void {
+    console.log('[GameManager] Initializing components');
+    
     // Initialize and register tile renderer first (bottom layer)
     this.tileRenderer.initialize(battlemapEngine);
     battlemapEngine.registerRenderer('tiles', this.tileRenderer);
+    console.log('[GameManager] Tile renderer initialized');
     
     // Initialize and register grid renderer next (middle layer)
     this.gridRenderer.initialize(battlemapEngine);
     battlemapEngine.registerRenderer('grid', this.gridRenderer);
+    console.log('[GameManager] Grid renderer initialized');
     
     // Initialize interactions manager last (top layer)
     this.interactionsManager.initialize(battlemapEngine);
+    console.log('[GameManager] Interactions manager initialized');
+    
+    // Check that engine has renderers registered
+    console.log('[GameManager] Registered renderers count:', 
+      battlemapEngine.getRendererCount());
     
     console.log('[GameManager] All components initialized');
   }
