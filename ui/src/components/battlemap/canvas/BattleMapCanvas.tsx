@@ -175,7 +175,7 @@ const BattleMapCanvas: React.FC = () => {
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center', 
-          bgcolor: '#111',
+          bgcolor: '#000000',
           color: 'white',
           textAlign: 'center',
           p: 3
@@ -221,7 +221,7 @@ const BattleMapCanvas: React.FC = () => {
         height: '100%', 
         position: 'relative', 
         overflow: 'hidden',
-        bgcolor: '#111'
+        bgcolor: '#000000'
       }}
     >
       {/* Canvas Controls - These remain as React components */}
