@@ -185,18 +185,17 @@ export const CanvasControls: React.FC = () => {
           </Tooltip>
 
           {/* Tile Editor toggle */}
-          <Tooltip title={isEditing ? "Exit Tile Editor" : "Open Tile Editor"}>
+          <Tooltip title={isLocked ? "Unlock map to edit tiles" : (isEditing ? "Exit Tile Editor" : "Open Tile Editor")}>
             <IconButton 
               size="small" 
-              onClick={handleEditToggle}
+              onClick={isLocked ? undefined : handleEditToggle}
               sx={{ 
                 color: 'white',
-                backgroundColor: isEditing ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                backgroundColor: isEditing && !isLocked ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
                 opacity: isLocked ? 0.5 : 1
               }}
-              disabled={isLocked}
             >
-              {isEditing ? <EditOffIcon /> : <EditIcon />}
+              {isEditing && !isLocked ? <EditOffIcon /> : <EditIcon />}
             </IconButton>
           </Tooltip>
         </Box>
