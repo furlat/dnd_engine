@@ -5,7 +5,7 @@ export * from './sections';
 export * from './modifiers';
 
 // Re-export components from layout
-export * from './layout';
+export * from '../layout';
 
 // Export the main content component
 export { default as CharacterSheetContent } from './CharacterSheetContent'; 
