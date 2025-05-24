@@ -1,69 +1,85 @@
-import { FederatedPointerEvent, Graphics } from 'pixi.js';
+import { Graphics, FederatedPointerEvent, Container } from 'pixi.js';
 import { battlemapStore, battlemapActions } from '../store';
-import { BattlemapEngine } from './BattlemapEngine';
 import { createTile, deleteTile } from '../api/battlemap/battlemapApi';
+import { BattlemapEngine, LayerName } from './BattlemapEngine';
 import { TileSummary } from '../types/battlemap_types';
-import { v4 as uuidv4 } from 'uuid';
 
 // Define minimum width of entity panel
 const ENTITY_PANEL_WIDTH = 250;
 
 /**
- * InteractionsManager handles user input and edits
+ * InteractionsManager handles user input and interactions with the battlemap
+ * It manages mouse/touch events for tile editing and entity selection
  */
 export class InteractionsManager {
-  // Reference to the engine
+  // Engine reference
   private engine: BattlemapEngine | null = null;
   
-  // Hit area for detecting mouse events
+  // Hit area for capturing events (transparent overlay)
   private hitArea: Graphics | null = null;
-
+  
+  // Layer reference for proper integration
+  private layer: Container | null = null;
+  
   /**
-   * Initialize with the engine
-   * @param engine The battlemap engine
+   * Initialize the interactions manager
    */
   initialize(engine: BattlemapEngine): void {
     this.engine = engine;
     
-    if (!engine.app) {
-      console.error('[InteractionsManager] Cannot initialize - engine app is null');
-      return;
-    }
+    // Get the UI layer for interaction overlay
+    this.layer = engine.getLayer('ui');
     
-    // Create hit area
+    // Create hit area for event handling
     this.createHitArea();
     
-    console.log('[InteractionsManager] Initialized');
+    console.log('[InteractionsManager] Initialized with UI layer');
   }
   
   /**
-   * Create a hit area for mouse interaction
+   * Create a transparent hit area that covers the entire canvas
+   * This captures all mouse/touch events for the battlemap
    */
   private createHitArea(): void {
-    if (!this.engine?.app?.stage) return;
+    if (!this.engine?.app || !this.layer) return;
     
-    // Create a hit area that covers the entire visible area
-    this.hitArea = new Graphics()
-      .rect(0, 0, this.engine.containerSize.width, this.engine.containerSize.height)
-      .fill(0xFFFFFF, 0.001);
+    // Create a transparent graphics object that covers the entire canvas
+    this.hitArea = new Graphics();
     
-    // Configure hit area
+    // Set initial size
+    this.updateHitAreaSize();
+    
+    // Enable interactions
     this.hitArea.eventMode = 'static';
-    this.hitArea.cursor = 'pointer';
+    this.hitArea.cursor = 'crosshair';
     
-    // Add event listeners
+    // Set up event listeners
     this.hitArea.on('pointermove', this.handlePointerMove.bind(this));
     this.hitArea.on('pointerdown', this.handlePointerDown.bind(this));
-    this.hitArea.on('pointerleave', () => {
-      battlemapActions.setHoveredCell(-1, -1);
-    });
     
-    // Add to stage
-    this.engine.app.stage.addChild(this.hitArea);
+    // Add to UI layer
+    this.layer.addChild(this.hitArea);
+    
+    console.log('[InteractionsManager] Hit area created and added to UI layer');
   }
   
   /**
-   * Calculate grid offset
+   * Update hit area size to match container
+   */
+  private updateHitAreaSize(): void {
+    if (!this.hitArea || !this.engine) return;
+    
+    const { width, height } = this.engine.containerSize;
+    
+    this.hitArea.clear();
+    this.hitArea
+      .rect(0, 0, width, height)
+      .fill({ color: 0xFFFFFF, alpha: 0.001 }); // Nearly transparent
+  }
+  
+  /**
+   * Calculate grid offset with proper centering
+   * This matches the calculation used in renderers for consistency
    */
   private calculateGridOffset(): { 
     offsetX: number, 
@@ -119,26 +135,26 @@ export class InteractionsManager {
   }
   
   /**
-   * Handle pointer movement
+   * Handle pointer movement for hover effects
    */
   private handlePointerMove(event: FederatedPointerEvent): void {
     const snap = battlemapStore;
     
-    // Skip handling during WASD movement
+    // Skip handling during WASD movement for better performance
     if (snap.view.wasd_moving) return;
     
     // Convert to grid coordinates
     const mouseX = event.global.x;
     const mouseY = event.global.y;
     
-    const { gridX, gridY, inBounds } = this.pixelToGrid(mouseX, mouseY);
+    const { gridX, gridY } = this.pixelToGrid(mouseX, mouseY);
     
-    // Always update hovered cell position, even when locked
+    // Always update hovered cell position
     battlemapActions.setHoveredCell(gridX, gridY);
   }
   
   /**
-   * Handle pointer down (click)
+   * Handle pointer down (click) events
    */
   private handlePointerDown(event: FederatedPointerEvent): void {
     const snap = battlemapStore;
@@ -150,23 +166,27 @@ export class InteractionsManager {
     const mouseX = event.global.x;
     const mouseY = event.global.y;
     
-    const { gridX, gridY } = this.pixelToGrid(mouseX, mouseY);
+    const { gridX, gridY, inBounds } = this.pixelToGrid(mouseX, mouseY);
     
-    // If we're editing tiles and not locked, handle tile placement
+    if (!inBounds) return;
+    
+    // Handle tile editing if enabled and not locked
     if (snap.controls.isEditing && !snap.controls.isLocked) {
       this.handleTileEdit(gridX, gridY);
     }
+    
+    // TODO: Handle entity selection here when entity system is implemented
+    // if (!snap.controls.isEditing) {
+    //   this.handleEntitySelection(gridX, gridY);
+    // }
   }
   
   /**
-   * Handle tile editing
+   * Handle tile editing operations
    */
   private async handleTileEdit(x: number, y: number): Promise<void> {
     const snap = battlemapStore;
     const selectedTile = snap.controls.selectedTileType;
-    
-    // Skip if position is invalid
-    if (x < 0 || y < 0) return;
     
     console.log('[InteractionsManager] Editing tile:', { 
       position: [x, y], 
@@ -253,12 +273,8 @@ export class InteractionsManager {
    * Resize the hit area when container size changes
    */
   resize(): void {
-    if (!this.engine || !this.hitArea) return;
-    
-    this.hitArea.clear();
-    this.hitArea
-      .rect(0, 0, this.engine.containerSize.width, this.engine.containerSize.height)
-      .fill(0xFFFFFF, 0.001);
+    this.updateHitAreaSize();
+    console.log('[InteractionsManager] Hit area resized');
   }
   
   /**
@@ -272,5 +288,8 @@ export class InteractionsManager {
     }
     
     this.engine = null;
+    this.layer = null;
+    
+    console.log('[InteractionsManager] Destroyed');
   }
 } 

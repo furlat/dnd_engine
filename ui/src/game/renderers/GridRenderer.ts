@@ -2,6 +2,7 @@ import { Graphics } from 'pixi.js';
 import { battlemapStore } from '../../store';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
+import { LayerName } from '../BattlemapEngine';
 
 // Define minimum width of entity panel
 const ENTITY_PANEL_WIDTH = 250;
@@ -10,6 +11,9 @@ const ENTITY_PANEL_WIDTH = 250;
  * GridRenderer handles rendering the grid lines 
  */
 export class GridRenderer extends AbstractRenderer {
+  // Specify which layer this renderer belongs to
+  get layerName(): LayerName { return 'grid'; }
+  
   // Graphics references
   private gridGraphics: Graphics = new Graphics();
   private highlightGraphics: Graphics = new Graphics();
@@ -30,7 +34,7 @@ export class GridRenderer extends AbstractRenderer {
     // Setup subscriptions
     this.setupSubscriptions();
     
-    console.log('[GridRenderer] Initialized');
+    console.log('[GridRenderer] Initialized and added to grid layer');
   }
   
   /**
