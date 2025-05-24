@@ -3,6 +3,7 @@ import { battlemapStore } from '../../store';
 import { TileSummary } from '../../types/battlemap_types';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
+import { LayerName } from '../BattlemapEngine';
 
 // Create a texture cache
 const textureCache: Record<string, Texture> = {};
@@ -14,6 +15,9 @@ const ENTITY_PANEL_WIDTH = 250;
  * TileRenderer handles rendering the map tiles
  */
 export class TileRenderer extends AbstractRenderer {
+  // Specify which layer this renderer belongs to
+  get layerName(): LayerName { return 'tiles'; }
+  
   // Texture cache reference
   private tileTextures: Record<string, Texture | null> = {};
   
@@ -65,7 +69,7 @@ export class TileRenderer extends AbstractRenderer {
     // Force initial render
     this.tilesNeedUpdate = true;
     
-    console.log('[TileRenderer] Initialized');
+    console.log('[TileRenderer] Initialized and added to tiles layer');
   }
   
   /**
