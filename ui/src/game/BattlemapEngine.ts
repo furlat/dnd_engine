@@ -1,11 +1,15 @@
-import { Application } from 'pixi.js';
+import { Application, Container, Ticker } from 'pixi.js';
 import { subscribe } from 'valtio';
 import { battlemapStore } from '../store';
 
 /**
+ * Layer names for proper rendering order
+ */
+export type LayerName = 'tiles' | 'grid' | 'entities' | 'effects' | 'ui';
+
+/**
  * BattlemapEngine is the core class that manages the PixiJS application
- * It handles initialization, destruction, and basic rendering
- * but delegates specific rendering tasks to specialized renderers
+ * It handles initialization, destruction, layer management, and ticker-based updates
  */
 export class BattlemapEngine {
   // PixiJS Application instance
@@ -17,8 +21,14 @@ export class BattlemapEngine {
   // Track initialization state
   isInitialized = false;
   
+  // Layer containers for proper rendering order
+  private layers: Record<LayerName, Container> | null = null;
+  
+  // Ticker for animation updates
+  private animationTicker: Ticker | null = null;
+  
   // Renderers registry
-  private renderers: Map<string, { render: () => void }> = new Map();
+  private renderers: Map<string, { render?: () => void; update?: (ticker: Ticker) => void }> = new Map();
   
   /**
    * Initialize the PixiJS application
@@ -69,6 +79,15 @@ export class BattlemapEngine {
         throw new Error('Canvas not created after app initialization');
       }
       
+      // Set up layer hierarchy
+      this.setupLayers();
+      
+      // Initialize tickers
+      this.setupTickers();
+      
+      // Enable render groups for static content
+      this.enableRenderGroups();
+      
       this.isInitialized = true;
       console.log('[BattlemapEngine] Successfully initialized PixiJS application');
       return true;
@@ -81,30 +100,108 @@ export class BattlemapEngine {
   }
   
   /**
+   * Set up layer hierarchy for proper rendering order
+   */
+  private setupLayers(): void {
+    if (!this.app?.stage) return;
+    
+    const stage = this.app.stage;
+    
+    this.layers = {
+      tiles: new Container(),
+      grid: new Container(),
+      entities: new Container(),
+      effects: new Container(),
+      ui: new Container()
+    };
+    
+    // Add layers in rendering order (bottom to top)
+    stage.addChild(this.layers.tiles);
+    stage.addChild(this.layers.grid);
+    stage.addChild(this.layers.entities);
+    stage.addChild(this.layers.effects);
+    stage.addChild(this.layers.ui);
+    
+    console.log('[BattlemapEngine] Layer hierarchy established');
+  }
+  
+  /**
+   * Set up ticker system for frame-based updates
+   */
+  private setupTickers(): void {
+    if (!this.app) return;
+    
+    // Create animation ticker for entity updates
+    this.animationTicker = new Ticker();
+    this.animationTicker.start();
+    
+    // Add ticker callback for updating renderers
+    this.animationTicker.add(this.updateRenderers, this);
+    
+    console.log('[BattlemapEngine] Ticker system initialized');
+  }
+  
+  /**
+   * Enable render groups for static content optimization
+   */
+  private enableRenderGroups(): void {
+    if (!this.layers) return;
+    
+    // Enable render group for tiles (static content)
+    this.layers.tiles.isRenderGroup = true;
+    
+    console.log('[BattlemapEngine] Render groups enabled');
+  }
+  
+  /**
+   * Get a specific layer container
+   * @param layerName The name of the layer to retrieve
+   */
+  getLayer(layerName: LayerName): Container | null {
+    return this.layers?.[layerName] || null;
+  }
+  
+  /**
    * Register a renderer with the engine
    * @param name Unique name for the renderer
-   * @param renderer Renderer object with a render method
+   * @param renderer Renderer object with render and/or update methods
    */
-  registerRenderer(name: string, renderer: { render: () => void }) {
+  registerRenderer(name: string, renderer: { render?: () => void; update?: (ticker: Ticker) => void }) {
     this.renderers.set(name, renderer);
+    console.log(`[BattlemapEngine] Renderer '${name}' registered`);
   }
   
   /**
    * Get a registered renderer by name
    * @param name The name of the renderer to retrieve
    */
-  getRenderer<T extends { render: () => void }>(name: string): T | undefined {
+  getRenderer<T extends { render?: () => void; update?: (ticker: Ticker) => void }>(name: string): T | undefined {
     return this.renderers.get(name) as T | undefined;
   }
   
   /**
-   * Render all registered renderers
+   * Update all renderers that need ticker updates (called every frame)
+   */
+  private updateRenderers(ticker: Ticker): void {
+    if (!this.isInitialized) return;
+    
+    this.renderers.forEach(renderer => {
+      if (renderer.update) {
+        renderer.update(ticker);
+      }
+    });
+  }
+  
+  /**
+   * Render all registered renderers (called on store changes)
    */
   renderAll() {
     if (!this.isInitialized || !this.app) return;
     
     this.renderers.forEach(renderer => {
-      renderer.render();
+      if (renderer.render) {
+        renderer.render();
+      }
     });
   }
   
@@ -140,7 +237,15 @@ export class BattlemapEngine {
     console.log('[BattlemapEngine] Destroying engine');
     
     try {
+      // Stop and destroy animation ticker
+      if (this.animationTicker) {
+        this.animationTicker.stop();
+        this.animationTicker.destroy();
+        this.animationTicker = null;
+      }
+      
       this.renderers.clear();
+      this.layers = null;
       
       if (this.app) {
         // In v8, manually remove the canvas from the DOM

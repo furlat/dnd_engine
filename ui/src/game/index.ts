@@ -6,5 +6,6 @@ export { gameManager } from './GameManager';
 export { GridRenderer } from './renderers/GridRenderer';
 export { TileRenderer } from './renderers/TileRenderer';
 
-// User interaction
-export { InteractionsManager } from './InteractionsManager'; 
+// User interaction and movement
+export { InteractionsManager } from './InteractionsManager';
+export { MovementController } from './MovementController'; 
