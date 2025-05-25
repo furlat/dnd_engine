@@ -5,8 +5,7 @@ import EventQ from '../components/events/EventQ';
 import { BattleMapCanvas } from '../components/battlemap';
 import { EntitySummaryOverlays } from '../components/battlemap/summaries';
 import BackgroundMusicPlayer from '../components/music/BackgroundMusicPlayer';
-import { EffectsLayer } from '../components/battlemap/effects';
-import { useEffects, useMapControls } from '../hooks/battlemap';
+import { useMapControls } from '../hooks/battlemap';
 // Simple local error hook since we can't find the imported one
 const useError = () => {
   const [error, setError] = React.useState<string | null>(null);
@@ -22,7 +21,6 @@ import { battlemapActions } from '../store';
  */
 const BattleMapPage: React.FC = () => {
   const { isMusicPlayerMinimized, toggleMusicPlayerSize } = useMapControls();
-  const { attackEffect } = useEffects();
   const { error, setError, clearError } = useError();
   
   // State for UI collapsing

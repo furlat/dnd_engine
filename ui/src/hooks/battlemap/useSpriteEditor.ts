@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
 import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
-import { AnimationState, Direction, SpriteFolderName } from '../../types/battlemap_types';
+import { AnimationState, Direction, SpriteFolderName, MovementState } from '../../types/battlemap_types';
 
 /**
  * Hook for managing sprite assignment and editing functionality
+ * Note: This controls the "idle animation" - the default animation when not moving/acting
  */
 export const useSpriteEditor = () => {
   const snap = useSnapshot(battlemapStore);
@@ -18,10 +19,17 @@ export const useSpriteEditor = () => {
   const spriteMapping = selectedEntityId ? snap.entities.spriteMappings[selectedEntityId] : undefined;
   const hasAssignedSprite = Boolean(spriteMapping);
   const assignedSpriteFolder = spriteMapping?.spriteFolder;
-  const currentAnimation = spriteMapping?.currentAnimation || AnimationState.IDLE;
+  
+  // Use idle animation for editor controls (this is what user sets as default)
+  const currentAnimation = spriteMapping?.idleAnimation || AnimationState.IDLE;
   const currentDirection = spriteMapping?.currentDirection || Direction.S;
   const currentScale = spriteMapping?.scale || 1.0;
   const currentAnimationDuration = spriteMapping?.animationDurationSeconds || 1.0;
+  
+  // Additional state info
+  const movementState = spriteMapping?.movementState || MovementState.IDLE;
+  const isPositionSynced = spriteMapping?.isPositionSynced ?? true;
+  const actualCurrentAnimation = spriteMapping?.currentAnimation || AnimationState.IDLE;
   
   // Assign sprite to selected entity
   const assignSpriteToSelectedEntity = useCallback((spriteFolder: SpriteFolderName) => {
@@ -39,11 +47,11 @@ export const useSpriteEditor = () => {
     }
   }, [selectedEntityId]);
   
-  // Set animation state for selected entity
+  // Set IDLE animation state for selected entity (this is what the editor controls)
   const setSelectedEntityAnimation = useCallback((animation: AnimationState) => {
     if (selectedEntityId) {
-      console.log(`[useSpriteEditor] Setting animation ${animation} for entity ${selectedEntityId}`);
-      battlemapActions.setEntityAnimation(selectedEntityId, animation);
+      console.log(`[useSpriteEditor] Setting idle animation ${animation} for entity ${selectedEntityId}`);
+      battlemapActions.setEntityIdleAnimation(selectedEntityId, animation);
     }
   }, [selectedEntityId]);
   
@@ -79,15 +87,22 @@ export const useSpriteEditor = () => {
     availableSpriteFolders,
     hasAssignedSprite,
     assignedSpriteFolder,
-    currentAnimation,
+    
+    // Animation state (idle animation - what user controls)
+    currentAnimation, // This is the idle animation
     currentDirection,
     currentScale,
     currentAnimationDuration,
     
+    // Additional state info
+    movementState,
+    isPositionSynced,
+    actualCurrentAnimation, // What's actually playing (might be WALK during movement)
+    
     // Actions
     assignSpriteToSelectedEntity,
     removeSpriteFromSelectedEntity,
-    setSelectedEntityAnimation,
+    setSelectedEntityAnimation, // Sets idle animation
     setSelectedEntityDirection,
     setSelectedEntityScale,
     setSelectedEntityAnimationDuration,
