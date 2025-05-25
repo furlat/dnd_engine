@@ -1,8 +1,9 @@
 import { Graphics, FederatedPointerEvent, Container } from 'pixi.js';
 import { battlemapStore, battlemapActions } from '../store';
-import { createTile, deleteTile } from '../api/battlemap/battlemapApi';
+import { createTile, deleteTile, moveEntity } from '../api/battlemap/battlemapApi';
 import { BattlemapEngine, LayerName } from './BattlemapEngine';
-import { TileSummary } from '../types/battlemap_types';
+import { TileSummary, Direction, MovementAnimation, toVisualPosition } from '../types/battlemap_types';
+import { Position } from '../types/common';
 
 // Define minimum width of entity panel
 const ENTITY_PANEL_WIDTH = 250;
@@ -56,6 +57,12 @@ export class InteractionsManager {
     // Set up event listeners
     this.hitArea.on('pointermove', this.handlePointerMove.bind(this));
     this.hitArea.on('pointerdown', this.handlePointerDown.bind(this));
+    
+    // Prevent browser context menu on right-click
+    this.hitArea.on('rightclick', (event: FederatedPointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
     
     // Add to UI layer
     this.layer.addChild(this.hitArea);
@@ -175,10 +182,10 @@ export class InteractionsManager {
       this.handleTileEdit(gridX, gridY);
     }
     
-    // TODO: Handle entity selection here when entity system is implemented
-    // if (!snap.controls.isEditing) {
-    //   this.handleEntitySelection(gridX, gridY);
-    // }
+    // Handle entity movement if not editing
+    if (!snap.controls.isEditing) {
+      this.handleEntityMovement(gridX, gridY);
+    }
   }
   
   /**
@@ -267,6 +274,112 @@ export class InteractionsManager {
     } catch (error) {
       console.error('[InteractionsManager] Error creating tile:', error);
     }
+  }
+  
+  /**
+   * Handle entity movement operations
+   */
+  private async handleEntityMovement(gridX: number, gridY: number): Promise<void> {
+    const snap = battlemapStore;
+    const selectedEntityId = snap.entities.selectedEntityId;
+    
+    if (!selectedEntityId) {
+      console.log('[InteractionsManager] No entity selected for movement');
+      return;
+    }
+    
+    const entity = snap.entities.summaries[selectedEntityId];
+    if (!entity) {
+      console.warn('[InteractionsManager] Selected entity not found');
+      return;
+    }
+    
+    const targetPosition: Position = [gridX, gridY];
+    
+    // Check if entity can move to this position (requires path in senses)
+    const posKey = `${gridX},${gridY}`;
+    const path = entity.senses.paths[posKey];
+    
+    if (!path) {
+      console.log(`[InteractionsManager] No path available for ${entity.name} to position ${targetPosition}`);
+      return;
+    }
+    
+    // Check if entity is already moving
+    const existingMovement = snap.entities.movementAnimations[selectedEntityId];
+    if (existingMovement) {
+      console.log(`[InteractionsManager] Entity ${entity.name} is already moving, ignoring click`);
+      return;
+    }
+    
+    console.log(`[InteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
+    
+    // Get movement speed from sprite mapping (use animation duration as movement speed)
+    const spriteMapping = snap.entities.spriteMappings[selectedEntityId];
+    const movementSpeed = spriteMapping?.animationDurationSeconds ? (1.0 / spriteMapping.animationDurationSeconds) : 1.0; // tiles per second
+    
+    // Create movement animation with full path including current position
+    const fullPath = [entity.position, ...path];
+    const movementAnimation: MovementAnimation = {
+      entityId: selectedEntityId,
+      path: fullPath,
+      currentPathIndex: 0,
+      startTime: Date.now(),
+      movementSpeed,
+      targetPosition,
+      isServerApproved: undefined, // Will be set when server responds
+    };
+    
+    // Start movement animation immediately
+    battlemapActions.startEntityMovement(selectedEntityId, movementAnimation);
+    
+    // Compute and update direction based on first movement step
+    if (fullPath.length > 1) {
+      const direction = this.computeDirection(fullPath[0], fullPath[1]);
+      battlemapActions.setEntityDirectionFromMapping(selectedEntityId, direction);
+    }
+    
+    try {
+      // Send movement to server (don't wait for response to start animation)
+      const updatedEntity = await moveEntity(selectedEntityId, targetPosition);
+      
+      // Mark movement as server-approved
+      battlemapActions.updateEntityMovementAnimation(selectedEntityId, { isServerApproved: true });
+      
+      // Refresh entities to get updated server state
+      await battlemapActions.fetchEntitySummaries();
+      
+      console.log(`[InteractionsManager] Server approved movement for ${entity.name}`);
+    } catch (error) {
+      console.error(`[InteractionsManager] Server rejected movement for ${entity.name}:`, error);
+      
+      // Mark movement as server-rejected
+      battlemapActions.updateEntityMovementAnimation(selectedEntityId, { isServerApproved: false });
+      
+      // Movement animation will continue and then snap back on completion
+    }
+  }
+  
+  /**
+   * Compute direction from one position to another
+   */
+  private computeDirection(fromPos: Position, toPos: Position): Direction {
+    const [fromX, fromY] = fromPos;
+    const [toX, toY] = toPos;
+    
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    
+    if (dx > 0 && dy > 0) return Direction.SE;
+    if (dx > 0 && dy < 0) return Direction.NE;
+    if (dx < 0 && dy > 0) return Direction.SW;
+    if (dx < 0 && dy < 0) return Direction.NW;
+    if (dx === 0 && dy > 0) return Direction.S;
+    if (dx === 0 && dy < 0) return Direction.N;
+    if (dx > 0 && dy === 0) return Direction.E;
+    if (dx < 0 && dy === 0) return Direction.W;
+    
+    return Direction.S; // Default
   }
   
   /**
