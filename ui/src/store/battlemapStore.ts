@@ -201,7 +201,7 @@ const battlemapActions = {
       spriteFolder,
       currentAnimation: existing?.currentAnimation || AnimationState.IDLE,
       currentDirection: existing?.currentDirection || Direction.S,
-      scale: existing?.scale || 1.0,
+      scale: existing?.scale || 1.0, // Default to 1.0 instead of 0.6
       animationDurationSeconds: existing?.animationDurationSeconds || 1.0, // 1 second default for testing
     };
   },

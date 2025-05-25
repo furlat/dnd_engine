@@ -134,7 +134,7 @@ export class GridRenderer extends AbstractRenderer {
   private renderGrid(): void {
     if (!this.engine?.app) return;
     
-    const snap = snapshot(battlemapStore);
+    const snap = battlemapStore; // Use direct store reference, not snapshot
     const isVisible = snap.controls.isGridVisible;
     
     // Clear previous grid
@@ -146,22 +146,24 @@ export class GridRenderer extends AbstractRenderer {
     
     const { offsetX, offsetY, tileSize, gridWidth, gridHeight } = this.calculateGridOffset();
     
-    // Set line style
-    this.gridGraphics.lineStyle(1, 0x444444, 0.5);
-    
-    // Draw vertical lines
+    // Draw vertical lines using PixiJS v8 API with pixelLine
     for (let x = 0; x <= gridWidth; x++) {
       const lineX = offsetX + x * tileSize;
-      this.gridGraphics.moveTo(lineX, offsetY);
-      this.gridGraphics.lineTo(lineX, offsetY + gridHeight * tileSize);
+      this.gridGraphics
+        .moveTo(lineX, offsetY)
+        .lineTo(lineX, offsetY + gridHeight * tileSize);
     }
     
     // Draw horizontal lines
     for (let y = 0; y <= gridHeight; y++) {
       const lineY = offsetY + y * tileSize;
-      this.gridGraphics.moveTo(offsetX, lineY);
-      this.gridGraphics.lineTo(offsetX + gridWidth * tileSize, lineY);
+      this.gridGraphics
+        .moveTo(offsetX, lineY)
+        .lineTo(offsetX + gridWidth * tileSize, lineY);
     }
+    
+    // Apply stroke with pixelLine for pixel-perfect grid lines
+    this.gridGraphics.stroke({ color: 0x444444, pixelLine: true }); // Back to gray color
   }
   
   /**
