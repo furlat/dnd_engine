@@ -102,7 +102,11 @@ export const useEntityMovement = () => {
   /**
    * Move entity to a new position (triggers visual movement + server call)
    */
-  const moveEntityTo = useCallback(async (entityId: string, position: Position): Promise<EntitySummary | undefined> => {
+  const moveEntityTo = useCallback(async (
+    entityId: string, 
+    position: Position, 
+    includePathSenses: boolean = false
+  ): Promise<EntitySummary | undefined> => {
     const entity = snap.entities.summaries[entityId];
     if (!entity) return undefined;
     
@@ -124,16 +128,20 @@ export const useEntityMovement = () => {
     
     try {
       // Send movement to server (don't wait for response to start animation)
-      const updatedEntity = await moveEntity(entityId, position);
+      const movementResponse = await moveEntity(entityId, position, includePathSenses);
       
       // Mark movement as server-approved
       battlemapActions.updateEntityMovementAnimation(entityId, { isServerApproved: true });
+      
+      // Handle the movement response (updates entity and logs path senses)
+      battlemapActions.handleMovementResponse(movementResponse);
       
       // Refresh entities to get updated server state
       await battlemapActions.fetchEntitySummaries();
       
       console.log(`[useEntityMovement] Server approved movement for ${entity.name}`);
-      return updatedEntity;
+      
+      return movementResponse.entity;
     } catch (error) {
       console.error(`[useEntityMovement] Server rejected movement for ${entity.name}:`, error);
       

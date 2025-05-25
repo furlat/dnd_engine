@@ -1,5 +1,5 @@
 import { proxy } from 'valtio';
-import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, VisualPosition, toVisualPosition, isVisualPositionSynced } from '../types/battlemap_types';
+import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, VisualPosition, toVisualPosition, isVisualPositionSynced, MovementResponse } from '../types/battlemap_types';
 import { EntitySummary } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
@@ -481,6 +481,39 @@ const battlemapActions = {
     if (dx < 0 && dy === 0) return Direction.W;
     
     return Direction.S; // Default
+  },
+
+  // NEW: Handle movement response with optional path senses
+  handleMovementResponse: (movementResponse: MovementResponse) => {
+    // Update entity summary
+    if (movementResponse.entity) {
+      battlemapStore.entities.summaries[movementResponse.entity.uuid] = movementResponse.entity;
+    }
+    
+    // Log path senses for debugging (could be stored if needed for analysis)
+    if (movementResponse.path_senses && movementResponse.path_senses.length > 0) {
+      console.log(`[battlemapStore] Received ${movementResponse.path_senses.length} path senses snapshots`);
+      // Could store these in a separate state if needed for movement analysis
+      // For now, just log them for debugging purposes
+      movementResponse.path_senses.forEach((senses, index) => {
+        console.log(`[battlemapStore] Path senses ${index}:`, {
+          position: senses.position,
+          visibleCount: Object.keys(senses.visible).length,
+          pathsCount: Object.keys(senses.paths).length,
+          entitiesCount: Object.keys(senses.entities).length
+        });
+      });
+    }
+    
+    // Log movement event for debugging
+    if (movementResponse.event) {
+      console.log(`[battlemapStore] Movement event:`, {
+        type: movementResponse.event.type,
+        name: movementResponse.event.name,
+        sourceEntity: movementResponse.event.source_entity_uuid,
+        targetEntity: movementResponse.event.target_entity_uuid
+      });
+    }
   },
 };
 

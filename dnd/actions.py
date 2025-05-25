@@ -171,6 +171,9 @@ class Move(BaseAction):
             costs=costs,
             status_message=f"Added costs to {execution_event.uuid}"
         )
+        if effect_event.canceled:
+            return effect_event
+            
         Entity.update_entity_position(source_entity,execution_event.end_position)
         Entity.update_all_entities_senses() #later we will only update the senses of the entities that are affected by the movement 
         #now we declare the application of the effect

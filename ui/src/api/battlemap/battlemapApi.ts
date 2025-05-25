@@ -5,7 +5,9 @@ import {
   AttackResult,
   toMutablePosition,
   SpriteFolderName,
-  AnimationState
+  AnimationState,
+  MoveRequest,
+  MovementResponse
 } from '../../types/battlemap_types';
 import { Position, EntitySummary } from '../../types/common';
 import { TileType } from '../../hooks/battlemap';
@@ -108,21 +110,29 @@ export const isPositionVisible = async (x: number, y: number): Promise<boolean> 
 };
 
 // Move entity to a new position
-export const moveEntity = async (entityId: string, position: Position): Promise<EntitySummary> => {
-  try {
-    // Convert to mutable array for API call if necessary
-    const mutablePosition = toMutablePosition(position);
-    
-    const response = await axios.post(
-      `${API_BASE_URL}/entities/${entityId}/move`,
-      { position: mutablePosition },
-      { params: DEFAULT_INCLUDE_PARAMS }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Error moving entity:', error);
-    throw error;
+export const moveEntity = async (
+  entityId: string, 
+  position: Position, 
+  includePathSenses: boolean = false
+): Promise<MovementResponse> => {
+  const moveRequest: MoveRequest = {
+    position,
+    include_paths_senses: includePathSenses
+  };
+  
+  const response = await fetch(`${API_BASE_URL}/entities/${entityId}/move`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(moveRequest),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to move entity: ${response.statusText}`);
   }
+  
+  return response.json();
 };
 
 // Set target entity
