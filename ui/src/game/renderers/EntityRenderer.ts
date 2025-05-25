@@ -184,7 +184,23 @@ export class EntityRenderer extends AbstractRenderer {
           console.log(`[EntityRenderer] CREATING NEW SPRITE for ${entity.name} with animation ${mapping.currentAnimation}`);
           animatedSprite = new AnimatedSprite(directionTextures);
           animatedSprite.name = spriteKey;
-          animatedSprite.anchor.set(0.5, 0.5); // Center anchor
+          animatedSprite.anchor.set(0.5, 1.0); // Bottom-center anchor for character sprites
+          
+          // Set initial scale from mapping with zoom-dependent scaling
+          const userScaleMultiplier = mapping.scale || 1.0; // Default to 1.0
+          if (directionTextures.length > 0 && 'frame' in directionTextures[0]) {
+            // Calculate zoom-dependent scale like the old React component
+            const BASE_SCALE = 2.4; // Same as old React component: 2.0 * 1.2 (20% larger)
+            const textureWidth = directionTextures[0].frame.width;
+            const textureHeight = directionTextures[0].frame.height;
+            const { tileSize } = this.calculateGridOffset();
+            const zoomDependentScale = (tileSize / Math.max(textureWidth, textureHeight)) * BASE_SCALE;
+            const finalScale = zoomDependentScale * userScaleMultiplier;
+            animatedSprite.scale.set(finalScale);
+          } else {
+            // Fallback scale
+            animatedSprite.scale.set(userScaleMultiplier);
+          }
           
           // Use PixiJS v8 API properly - simple and direct
           animatedSprite.autoUpdate = true; // Let PixiJS handle updates
@@ -361,7 +377,7 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
-   * Update entity position on screen - IMPROVED with better debugging
+   * Update entity position on screen - FIXED positioning to align with tiles
    */
   private updateEntityPosition(entity: EntitySummary): void {
     const entityContainer = this.entityContainers.get(entity.uuid);
@@ -374,24 +390,39 @@ export class EntityRenderer extends AbstractRenderer {
     const { offsetX, offsetY, tileSize } = this.calculateGridOffset();
     
     // Convert entity position to screen coordinates
-    const screenX = offsetX + (entity.position[0] * tileSize) + (tileSize / 2);
-    const screenY = offsetY + (entity.position[1] * tileSize) + (tileSize / 2);
+    // Position sprite more south by adding extra offset to Y position
+    // Since anchor is bottom-center (0.5, 1.0), this aligns the sprite's feet with the tile bottom
+    const screenX = offsetX + (entity.position[0] * tileSize) + (tileSize / 2); // Center horizontally in tile
+    const screenY = offsetY + (entity.position[1] * tileSize) + tileSize + (tileSize * 0.2); // Bottom of tile + 20% more south
     
     entityContainer.x = screenX;
     entityContainer.y = screenY;
     
-    // Also update sprite scale based on tile size for better zoom behavior
+    // Update sprite scale - make it zoom-dependent like the old React component
     const animatedSprite = this.animatedSprites.get(entity.uuid);
     if (animatedSprite) {
-      // Get sprite mapping for scale
+      // Get sprite mapping for user-defined scale multiplier
       const mapping = snap.entities.spriteMappings[entity.uuid];
-      const spriteScale = mapping?.scale || 1.0;
+      const userScaleMultiplier = mapping?.scale || 1.0; // Default to 1.0
       
-      // Scale sprite based on tile size - adjust this multiplier as needed
-      const zoomScaleMultiplier = tileSize / 32; // Assuming 32 is the base tile size
-      const totalScale = zoomScaleMultiplier * spriteScale;
-      
-      animatedSprite.scale.set(totalScale);
+      // Calculate zoom-dependent scale like the old React component did
+      // Base scale calculation: make sprite fit within tile size
+      const spriteTexture = animatedSprite.textures[0]; // Get first texture for size reference
+      if (spriteTexture && 'frame' in spriteTexture) {
+        // Calculate base scale to fit sprite to tile size (like old React component)
+        const BASE_SCALE = 2.4; // Same as old React component: 2.0 * 1.2 (20% larger)
+        // Use frame dimensions for PixiJS v8 Texture
+        const textureWidth = spriteTexture.frame.width;
+        const textureHeight = spriteTexture.frame.height;
+        const zoomDependentScale = (tileSize / Math.max(textureWidth, textureHeight)) * BASE_SCALE;
+        
+        // Apply both zoom-dependent scale and user scale multiplier
+        const finalScale = zoomDependentScale * userScaleMultiplier;
+        animatedSprite.scale.set(finalScale);
+      } else {
+        // Fallback if no texture available or it's a FrameObject
+        animatedSprite.scale.set(userScaleMultiplier);
+      }
     }
   }
   
