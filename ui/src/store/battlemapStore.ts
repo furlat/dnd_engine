@@ -1,6 +1,6 @@
 import { proxy } from 'valtio';
-import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, VisualPosition, toVisualPosition, isVisualPositionSynced, MovementResponse } from '../types/battlemap_types';
-import { EntitySummary } from '../types/common';
+import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, VisualPosition, toVisualPosition, isVisualPositionSynced } from '../types/battlemap_types';
+import { EntitySummary, SensesSnapshot } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
 import { TileType } from '../hooks/battlemap';
@@ -43,6 +43,8 @@ export interface EntityState {
   availableSpriteFolders: SpriteFolderName[];
   // Movement animations
   movementAnimations: Record<string, MovementAnimation>;
+  // NEW: Path senses data indexed by entity UUID first, then by position
+  pathSenses: Record<string, Record<string, SensesSnapshot>>; // observerEntityId -> positionKey -> SensesSnapshot
 }
 
 export interface BattlemapStoreState {
@@ -90,6 +92,7 @@ const battlemapStore = proxy<BattlemapStoreState>({
     spriteMappings: {},
     availableSpriteFolders: [],
     movementAnimations: {},
+    pathSenses: {},
   },
   loading: false,
   error: null,
@@ -292,6 +295,23 @@ const battlemapActions = {
     }
   },
 
+  // NEW: Store path senses data for an entity
+  setEntityPathSenses: (entityId: string, pathSenses: Record<string, SensesSnapshot>) => {
+    battlemapStore.entities.pathSenses[entityId] = pathSenses;
+    console.log(`[battlemapStore] Stored path senses for entity ${entityId} with ${Object.keys(pathSenses).length} positions`);
+  },
+
+  // NEW: Get path senses data for an entity
+  getEntityPathSenses: (entityId: string): Record<string, SensesSnapshot> | undefined => {
+    return battlemapStore.entities.pathSenses[entityId];
+  },
+
+  // NEW: Clear path senses data for an entity
+  clearEntityPathSenses: (entityId: string) => {
+    delete battlemapStore.entities.pathSenses[entityId];
+    console.log(`[battlemapStore] Cleared path senses for entity ${entityId}`);
+  },
+
   updateEntityMovementAnimation: (entityId: string, updates: Partial<MovementAnimation>) => {
     const existing = battlemapStore.entities.movementAnimations[entityId];
     if (existing) {
@@ -317,6 +337,9 @@ const battlemapActions = {
   completeEntityMovement: (entityId: string, shouldResync: boolean = true) => {
     // Remove movement animation
     delete battlemapStore.entities.movementAnimations[entityId];
+    
+    // NEW: Clear path senses data when movement completes
+    delete battlemapStore.entities.pathSenses[entityId];
     
     // Update sprite mapping
     const mapping = battlemapStore.entities.spriteMappings[entityId];
@@ -481,39 +504,6 @@ const battlemapActions = {
     if (dx < 0 && dy === 0) return Direction.W;
     
     return Direction.S; // Default
-  },
-
-  // NEW: Handle movement response with optional path senses
-  handleMovementResponse: (movementResponse: MovementResponse) => {
-    // Update entity summary
-    if (movementResponse.entity) {
-      battlemapStore.entities.summaries[movementResponse.entity.uuid] = movementResponse.entity;
-    }
-    
-    // Log path senses for debugging (could be stored if needed for analysis)
-    if (movementResponse.path_senses && movementResponse.path_senses.length > 0) {
-      console.log(`[battlemapStore] Received ${movementResponse.path_senses.length} path senses snapshots`);
-      // Could store these in a separate state if needed for movement analysis
-      // For now, just log them for debugging purposes
-      movementResponse.path_senses.forEach((senses, index) => {
-        console.log(`[battlemapStore] Path senses ${index}:`, {
-          position: senses.position,
-          visibleCount: Object.keys(senses.visible).length,
-          pathsCount: Object.keys(senses.paths).length,
-          entitiesCount: Object.keys(senses.entities).length
-        });
-      });
-    }
-    
-    // Log movement event for debugging
-    if (movementResponse.event) {
-      console.log(`[battlemapStore] Movement event:`, {
-        type: movementResponse.event.type,
-        name: movementResponse.event.name,
-        sourceEntity: movementResponse.event.source_entity_uuid,
-        targetEntity: movementResponse.event.target_entity_uuid
-      });
-    }
   },
 };
 
