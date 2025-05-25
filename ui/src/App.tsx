@@ -10,7 +10,6 @@ import BattleMapPage from './pages/BattleMapPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 // Context
-import { EventQueueProvider } from './contexts/EventQueueContext';
 import { SoundSettingsProvider } from './contexts/SoundSettingsContext';
 
 // Create a dark theme with black background
@@ -57,16 +56,14 @@ const App: React.FC = () => {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <SoundSettingsProvider>
-        <EventQueueProvider>
-          <Box sx={{ bgcolor: '#000000', minHeight: '100vh' }}>
-            <Routes>
-              <Route path="/" element={<Layout />}>
-                <Route index element={<BattleMapPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Route>
-            </Routes>
-          </Box>
-        </EventQueueProvider>
+        <Box sx={{ bgcolor: '#000000', minHeight: '100vh' }}>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<BattleMapPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </Box>
       </SoundSettingsProvider>
     </ThemeProvider>
   );

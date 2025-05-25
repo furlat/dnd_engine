@@ -4,7 +4,9 @@ export { useTileEditor } from './useTileEditor';
 export { useSpriteEditor } from './useSpriteEditor';
 export { useEntitySelection } from './useEntitySelection';
 export { useEntityMovement } from './useEntityMovement';
+export { useMoveAndAttack } from './useMoveAndAttack';
 export { useGrid } from './useGrid';
+export { useBattlemapActionEconomy } from './useBattlemapActionEconomy';
 
 // Re-export types that are commonly used
 export type { TileType } from './useTileEditor'; 

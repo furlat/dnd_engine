@@ -2,6 +2,7 @@ import { battlemapEngine } from './BattlemapEngine';
 import { GridRenderer } from './renderers/GridRenderer';
 import { TileRenderer } from './renderers/TileRenderer';
 import { EntityRenderer } from './renderers/EntityRenderer';
+import { SubjectiveRenderer } from './renderers/SubjectiveRenderer';
 import { InteractionsManager } from './InteractionsManager';
 import { MovementController } from './MovementController';
 
@@ -17,6 +18,7 @@ export class GameManager {
   private tileRenderer: TileRenderer = new TileRenderer();
   private gridRenderer: GridRenderer = new GridRenderer();
   private entityRenderer: EntityRenderer = new EntityRenderer();
+  private subjectiveRenderer: SubjectiveRenderer = new SubjectiveRenderer();
   private interactionsManager: InteractionsManager = new InteractionsManager();
   private movementController: MovementController = new MovementController();
   
@@ -63,11 +65,13 @@ export class GameManager {
     this.tileRenderer.initialize(battlemapEngine);
     this.gridRenderer.initialize(battlemapEngine);
     this.entityRenderer.initialize(battlemapEngine);
+    this.subjectiveRenderer.initialize(battlemapEngine);
     
     // Register renderers with the engine
     battlemapEngine.registerRenderer('tiles', this.tileRenderer);
     battlemapEngine.registerRenderer('grid', this.gridRenderer);
     battlemapEngine.registerRenderer('entities', this.entityRenderer);
+    battlemapEngine.registerRenderer('subjective', this.subjectiveRenderer);
     
     // Initialize interactions (needs to be after renderers for proper layering)
     this.interactionsManager.initialize(battlemapEngine);
@@ -118,6 +122,7 @@ export class GameManager {
     // Destroy components in reverse order
     this.movementController.destroy();
     this.interactionsManager.destroy();
+    this.subjectiveRenderer.destroy();
     this.entityRenderer.destroy();
     this.gridRenderer.destroy();
     this.tileRenderer.destroy();
