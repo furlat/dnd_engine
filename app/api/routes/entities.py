@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Dict, Optional, Union, Literal, Tuple
 from uuid import UUID
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Import entity and models
+from app.models.sensory import SensesSnapshot
 from dnd.entity import Entity
 from app.models.entity import EntitySnapshot, ConditionSnapshot, EntitySummary
 from app.models.health import HealthSnapshot
@@ -18,7 +19,7 @@ from dnd.core.events import WeaponSlot
 from dnd.blocks.equipment import Equipment, BaseBlock, Armor, Weapon, Shield, BodyPart, RingSlot
 from dnd.core.base_conditions import DurationType
 from dnd.conditions import ConditionType, create_condition
-from dnd.actions import Attack, Move
+from dnd.actions import Attack, Move, MovementEvent
 
 # Import dependencies
 from app.api.deps import get_entity
@@ -30,6 +31,12 @@ class Position(BaseModel):
 
 class MoveRequest(BaseModel):
     position: Tuple[int, int]
+    include_paths_senses: bool = False
+
+class MovementResponse(BaseModel):
+    event: EventSnapshot
+    entity: EntitySummary
+    path_senses: List[SensesSnapshot] = Field(default_factory=list)
 
 # Create router
 router = APIRouter(
@@ -514,7 +521,7 @@ async def get_entities_at_position(x: int, y: int):
             }
         )
 
-@router.post("/{entity_uuid}/move", response_model=EntitySummary)
+@router.post("/{entity_uuid}/move", response_model=MovementResponse)
 async def move_entity(
     request: MoveRequest,
     entity: Entity = Depends(get_entity)
@@ -524,7 +531,13 @@ async def move_entity(
         Entity.update_entity_senses(entity)
         movement_action = Move(name=f"{entity.name} moves to {request.position}",source_entity_uuid=entity.uuid,target_entity_uuid=entity.uuid,end_position=request.position)
         movement_event = movement_action.apply()
-        return EntitySummary.from_engine(entity)
+        entity_summary = EntitySummary.from_engine(entity)
+        assert isinstance(movement_event, MovementEvent)
+        return MovementResponse(
+            event=EventSnapshot.from_engine(movement_event, include_children=True),
+            entity=entity_summary,
+            path_senses= [SensesSnapshot.from_engine(entity.create_senses_copy_at_position(pos)) for pos in movement_event.path] if request.include_paths_senses and movement_event.path else []
+        )
     except Exception as e:
         raise HTTPException(
             status_code=400,
