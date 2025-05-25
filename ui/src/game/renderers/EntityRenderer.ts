@@ -345,16 +345,20 @@ export class EntityRenderer extends AbstractRenderer {
     // Clean up precomputed data
     this.precomputedMovementData.delete(movement.entityId);
     
-    // Flush any pending direction update to store (same pattern as position)
+    // FIXED: Always sync the current direction to store before clearing local state
     const localState = this.localEntityStates.get(movement.entityId);
-    if (localState?.pendingStoreDirection) {
-      console.log(`[EntityRenderer] Syncing final direction ${localState.pendingStoreDirection} to store for entity ${movement.entityId}`);
-      battlemapActions.setEntityDirectionFromMapping(movement.entityId, localState.pendingStoreDirection);
+    if (localState) {
+      // Use pending direction if available, otherwise use current direction
+      const finalDirection = localState.pendingStoreDirection || localState.currentDirection;
+      console.log(`[EntityRenderer] Syncing final direction ${finalDirection} to store for entity ${movement.entityId}`);
+      battlemapActions.setEntityDirectionFromMapping(movement.entityId, finalDirection);
+      
+      // Clear local direction state AFTER committing final direction
+      this.localEntityStates.delete(movement.entityId);
+      console.log(`[EntityRenderer] Cleared local direction state for entity ${movement.entityId} after syncing direction`);
+    } else {
+      console.log(`[EntityRenderer] No local direction state found for entity ${movement.entityId} during movement completion`);
     }
-    
-    // FIXED: Clear local direction state after movement completes to allow future direction changes
-    this.localEntityStates.delete(movement.entityId);
-    console.log(`[EntityRenderer] Cleared local direction state for entity ${movement.entityId} after movement completion`);
     
     // Determine if we should resync based on server approval
     const shouldResync = movement.isServerApproved !== true;
