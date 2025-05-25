@@ -3,6 +3,7 @@ import { battlemapStore } from '../../store';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
 import { LayerName } from '../BattlemapEngine';
+import { snapshot } from 'valtio';
 
 // Define minimum width of entity panel
 const ENTITY_PANEL_WIDTH = 250;
@@ -20,6 +21,10 @@ export class GridRenderer extends AbstractRenderer {
   
   // Store unsubscribe callbacks
   private unsubscribeCallbacks: Array<() => void> = [];
+  
+  // Summary logging system
+  private lastSummaryTime = 0;
+  private renderCount = 0;
 
   /**
    * Initialize the renderer
@@ -38,28 +43,33 @@ export class GridRenderer extends AbstractRenderer {
   }
   
   /**
+   * Log summary every 10 seconds instead of spamming
+   */
+  private logSummary(): void {
+    const now = Date.now();
+    if (now - this.lastSummaryTime >= 10000) { // 10 seconds
+      console.log(`[GridRenderer] 10s Summary: ${this.renderCount} renders`);
+      this.lastSummaryTime = now;
+      this.renderCount = 0;
+    }
+  }
+  
+  /**
    * Set up subscriptions to the Valtio store
    */
   private setupSubscriptions(): void {
     // Store unsubscribe functions
     this.unsubscribeCallbacks = [];
     
-    // Subscribe to view changes (zooming, panning)
+    // Subscribe to view changes (for grid positioning and zoom)
     const unsubView = subscribe(battlemapStore.view, () => {
       this.render();
     });
     this.unsubscribeCallbacks.push(unsubView);
     
-    // Subscribe to hovered cell changes specifically
-    const unsubHoveredCell = subscribe(battlemapStore.view.hoveredCell, () => {
-      this.renderCellHighlight();
-    });
-    this.unsubscribeCallbacks.push(unsubHoveredCell);
-    
-    // Subscribe to control changes for grid visibility
+    // Subscribe to control changes (for grid visibility)
     const unsubControls = subscribe(battlemapStore.controls, () => {
-      console.log('[GridRenderer] Controls changed, isGridVisible:', battlemapStore.controls.isGridVisible);
-      this.renderGrid();
+      this.render();
     });
     this.unsubscribeCallbacks.push(unsubControls);
   }
@@ -73,15 +83,21 @@ export class GridRenderer extends AbstractRenderer {
     tileSize: number;
     gridPixelWidth: number;
     gridPixelHeight: number;
+    gridWidth: number;
+    gridHeight: number;
   } {
     const snap = battlemapStore;
     
     // Get container size from engine
     const containerSize = this.engine?.containerSize || { width: 0, height: 0 };
     
+    const gridWidth = snap.grid.width;
+    const gridHeight = snap.grid.height;
+    const tileSize = snap.view.tileSize;
+    
     const availableWidth = containerSize.width - ENTITY_PANEL_WIDTH;
-    const gridPixelWidth = snap.grid.width * snap.view.tileSize;
-    const gridPixelHeight = snap.grid.height * snap.view.tileSize;
+    const gridPixelWidth = gridWidth * tileSize;
+    const gridPixelHeight = gridHeight * tileSize;
     
     // Center grid in the available space (starting from entity panel width)
     const baseOffsetX = ENTITY_PANEL_WIDTH + (availableWidth - gridPixelWidth) / 2;
@@ -94,90 +110,58 @@ export class GridRenderer extends AbstractRenderer {
     return { 
       offsetX, 
       offsetY,
-      tileSize: snap.view.tileSize,
+      tileSize,
       gridPixelWidth,
-      gridPixelHeight
+      gridPixelHeight,
+      gridWidth,
+      gridHeight
     };
   }
   
   /**
-   * Render everything
+   * Main render method
    */
   render(): void {
-    // Skip if not properly initialized
-    if (!this.engine || !this.engine.app) {
-      console.log('[GridRenderer] Skipping render - engine not ready');
-      return;
-    }
-    
+    this.renderCount++;
     this.renderGrid();
     this.renderCellHighlight();
+    this.logSummary();
   }
   
   /**
    * Render the grid lines
    */
   private renderGrid(): void {
-    // Check if graphics is available
-    if (!this.gridGraphics) {
-      console.log('[GridRenderer] Grid graphics not available');
-      return;
-    }
+    if (!this.engine?.app) return;
     
-    // Get grid settings from store
-    const snap = battlemapStore;
-    const isGridVisible = snap.controls.isGridVisible;
-    
-    console.log('[GridRenderer] Rendering grid, visible:', isGridVisible);
+    const snap = snapshot(battlemapStore);
+    const isVisible = snap.controls.isGridVisible;
     
     // Clear previous grid
     this.gridGraphics.clear();
     
-    // Skip rendering if grid is not visible
-    if (!isGridVisible) return;
-    
-    const gridWidth = snap.grid.width;
-    const gridHeight = snap.grid.height;
-    
-    // Get grid offset and size
-    const { offsetX, offsetY, tileSize, gridPixelWidth, gridPixelHeight } = this.calculateGridOffset();
-    
-    console.log('[GridRenderer] Drawing grid with:', {
-      offsetX,
-      offsetY,
-      tileSize,
-      gridWidth,
-      gridHeight,
-      containerSize: this.engine?.containerSize
-    });
-    
-    // Create a line for each grid line (vertical)
-    for (let i = 0; i <= gridWidth; i++) {
-      const x = offsetX + (i * tileSize);
-      this.gridGraphics
-        .moveTo(x, offsetY)
-        .lineTo(x, offsetY + gridPixelHeight)
-        .stroke({ 
-          width: 1, 
-          color: 0xCCCCCC, 
-          alpha: 0.5 
-        });
+    if (!isVisible) {
+      return; // Don't draw grid if not visible
     }
     
-    // Create a line for each grid line (horizontal)
-    for (let i = 0; i <= gridHeight; i++) {
-      const y = offsetY + (i * tileSize);
-      this.gridGraphics
-        .moveTo(offsetX, y)
-        .lineTo(offsetX + gridPixelWidth, y)
-        .stroke({ 
-          width: 1, 
-          color: 0xCCCCCC, 
-          alpha: 0.5 
-        });
+    const { offsetX, offsetY, tileSize, gridWidth, gridHeight } = this.calculateGridOffset();
+    
+    // Set line style
+    this.gridGraphics.lineStyle(1, 0x444444, 0.5);
+    
+    // Draw vertical lines
+    for (let x = 0; x <= gridWidth; x++) {
+      const lineX = offsetX + x * tileSize;
+      this.gridGraphics.moveTo(lineX, offsetY);
+      this.gridGraphics.lineTo(lineX, offsetY + gridHeight * tileSize);
     }
     
-    console.log('[GridRenderer] Grid drawn at:', { offsetX, offsetY, gridWidth, gridHeight });
+    // Draw horizontal lines
+    for (let y = 0; y <= gridHeight; y++) {
+      const lineY = offsetY + y * tileSize;
+      this.gridGraphics.moveTo(offsetX, lineY);
+      this.gridGraphics.lineTo(offsetX + gridWidth * tileSize, lineY);
+    }
   }
   
   /**

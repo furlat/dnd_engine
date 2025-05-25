@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Box, Paper, IconButton, Tooltip, Divider, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -14,10 +14,13 @@ import EditIcon from '@mui/icons-material/Edit';
 import EditOffIcon from '@mui/icons-material/EditOff';
 import ImageIcon from '@mui/icons-material/Image';
 import HideImageIcon from '@mui/icons-material/HideImage';
-import { useMapControls, useVisibility, useTileEditor } from '../../../hooks/battlemap';
+import PersonIcon from '@mui/icons-material/Person';
+import { useMapControls, useVisibility, useTileEditor, useSpriteEditor } from '../../../hooks/battlemap';
 import TileEditorPanel from './TileEditorPanel';
-import { battlemapStore } from '../../../store';
+import SpriteEditorPanel from './SpriteEditorPanel';
+import { battlemapStore, battlemapActions } from '../../../store';
 import { useSnapshot } from 'valtio';
+import { discoverAvailableSpriteFolders } from '../../../api/battlemap/battlemapApi';
 
 /**
  * Component that renders the battlemap control panel
@@ -45,9 +48,34 @@ export const CanvasControls: React.FC = () => {
     toggleEditorVisibility 
   } = useTileEditor();
   
+  const {
+    selectedEntity,
+    hasAssignedSprite,
+    availableSpriteFolders
+  } = useSpriteEditor();
+  
   // Get the current hovered cell position directly from the store
   const snap = useSnapshot(battlemapStore);
   const hoveredCell = snap.view.hoveredCell;
+  
+  // Initialize sprite folders on mount
+  useEffect(() => {
+    const loadSpriteFolders = async () => {
+      try {
+        console.log('[CanvasControls] Loading available sprite folders...');
+        const folders = await discoverAvailableSpriteFolders();
+        battlemapActions.setAvailableSpriteFolders(folders);
+        console.log(`[CanvasControls] Loaded ${folders.length} sprite folders`);
+      } catch (error) {
+        console.error('[CanvasControls] Error loading sprite folders:', error);
+      }
+    };
+    
+    // Only load if we don't have any folders yet
+    if (availableSpriteFolders.length === 0) {
+      loadSpriteFolders();
+    }
+  }, [availableSpriteFolders.length]);
   
   const handleEditToggle = useCallback(() => {
     console.log('[CanvasControls] Edit button clicked, current state:', { isEditing });
@@ -87,6 +115,30 @@ export const CanvasControls: React.FC = () => {
         <Typography variant="body2">
           Position: ({hoveredCell.x >= 0 ? hoveredCell.x : '-'}, {hoveredCell.y >= 0 ? hoveredCell.y : '-'})
         </Typography>
+        
+        {/* Entity info if selected */}
+        {selectedEntity && (
+          <>
+            <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonIcon sx={{ fontSize: 16 }} />
+              <Typography variant="body2">
+                {selectedEntity.name}
+              </Typography>
+              {hasAssignedSprite && (
+                <Box 
+                  sx={{ 
+                    width: 8, 
+                    height: 8, 
+                    borderRadius: '50%', 
+                    backgroundColor: '#4caf50' 
+                  }} 
+                />
+              )}
+            </Box>
+          </>
+        )}
+        
         <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           {/* Zoom controls */}
@@ -203,6 +255,9 @@ export const CanvasControls: React.FC = () => {
       
       {/* Tile Editor Panel */}
       <TileEditorPanel isLocked={isLocked} />
+      
+      {/* Sprite Editor Panel */}
+      <SpriteEditorPanel isLocked={isLocked} />
     </>
   );
 }; 

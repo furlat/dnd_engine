@@ -3,7 +3,9 @@ import {
   GridSnapshot, 
   TileSummary,
   AttackResult,
-  toMutablePosition
+  toMutablePosition,
+  SpriteFolderName,
+  AnimationState
 } from '../../types/battlemap_types';
 import { Position, EntitySummary } from '../../types/common';
 import { TileType } from '../../hooks/battlemap';
@@ -183,4 +185,48 @@ export const getEntitiesAtPosition = async (x: number, y: number): Promise<Entit
     console.error('Error fetching entities at position:', error);
     throw error;
   }
+};
+
+// Sprite folder discovery - attempts to load available entity sprite folders
+export const discoverAvailableSpriteFolders = async (): Promise<SpriteFolderName[]> => {
+  // This is a list of known sprite folders from your assets
+  // In a real app, you might have an API endpoint that lists these
+  const knownFolders = [
+    '1Brute', '1Ogre', '2Archer', '2DeathLord', '2Golem',
+    '3DarkKnight', '3Nomad', '3Wizard', '4Berserker', '4Berserker_undead',
+    '5Archer', '5BarbArcher', '5CamoArcher', '6Barbarian', '6Mage', '6Warrior',
+    '7BowMan', '7DarkArcher', '8DarkLord', '8Necromancer', '8Witchdoctor',
+    '9Longbow', '9Shaman', '9Wizard', 'chainsaw_ork',
+    'CityZombie 1', 'CityZombie 2', 'CityZombie 3', 'CityZombie 5',
+    'RuralZombie 1', 'RuralZombie 2', 'RuralZombie 3', 'RuralZombie 4', 'RuralZombie 5',
+    'ZombieFemale1', 'ZombieFemale2', 'ZombieFemale3', 'ZombieFemale4', 'ZombieFemale5', 'ZombieFemale6', 'ZombieFemale7',
+    'ZombieHulk1', 'ZombieHulk2',
+    'ZombieMale1', 'ZombieMale2', 'ZombieMale3', 'ZombieMale4', 'ZombieMale5', 'ZombieMale6', 'ZombieMale7', 'ZombieMale8', 'ZombieMale9',
+    'ZombieMonster1', 'ZombieMonster2', 'ZombieMonster3',
+    'ZombieRadioactive1', 'ZombieRadioactive2', 'ZombieRadioactive3'
+  ];
+
+  const validFolders: SpriteFolderName[] = [];
+
+  // Test each folder by trying to load the Idle.json sprite sheet
+  for (const folder of knownFolders) {
+    try {
+      const testUrl = `/assets/entities/${folder}/Idle.json`;
+      const response = await fetch(testUrl, { method: 'HEAD' });
+      if (response.ok) {
+        validFolders.push(folder);
+      }
+    } catch (error) {
+      // Folder doesn't exist or sprite sheet missing, skip
+      console.warn(`Sprite folder ${folder} not accessible:`, error);
+    }
+  }
+
+  console.log(`[API] Discovered ${validFolders.length} valid sprite folders:`, validFolders);
+  return validFolders;
+};
+
+// Get sprite sheet path for entity
+export const getSpriteSheetPath = (spriteFolder: string, animation: AnimationState): string => {
+  return `/assets/entities/${spriteFolder}/${animation}.json`;
 }; 
