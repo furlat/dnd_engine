@@ -1,8 +1,7 @@
 import { proxy } from 'valtio';
-import { TileSummary } from '../types/battlemap_types';
+import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName } from '../types/battlemap_types';
 import { EntitySummary } from '../types/common';
 import type { DeepReadonly } from '../types/common';
-import { Direction } from '../components/battlemap/DirectionalEntitySprite';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
 import { TileType } from '../hooks/battlemap';
 
@@ -38,7 +37,10 @@ export interface EntityState {
   selectedEntityId: string | undefined;
   displayedEntityId: string | undefined;
   directions: Record<string, Direction>;
-  // Will expand with animation states later
+  // Sprite mappings for entities
+  spriteMappings: Record<string, EntitySpriteMapping>;
+  // Available sprite folders
+  availableSpriteFolders: SpriteFolderName[];
 }
 
 export interface BattlemapStoreState {
@@ -83,6 +85,8 @@ const battlemapStore = proxy<BattlemapStoreState>({
     selectedEntityId: undefined,
     displayedEntityId: undefined,
     directions: {},
+    spriteMappings: {},
+    availableSpriteFolders: [],
   },
   loading: false,
   error: null,
@@ -106,7 +110,9 @@ const battlemapActions = {
   
   // View actions
   setTileSize: (size: number) => {
+    console.log('[battlemapStore] setTileSize called:', battlemapStore.view.tileSize, '->', size);
     battlemapStore.view.tileSize = size;
+    console.log('[battlemapStore] setTileSize completed, new value:', battlemapStore.view.tileSize);
   },
   
   setOffset: (x: number, y: number) => {
@@ -187,11 +193,79 @@ const battlemapActions = {
     battlemapStore.entities.directions[entityId] = direction;
   },
   
+  // NEW: Sprite mapping actions
+  setEntitySpriteMapping: (entityId: string, spriteFolder: string) => {
+    const existing = battlemapStore.entities.spriteMappings[entityId];
+    battlemapStore.entities.spriteMappings[entityId] = {
+      entityId,
+      spriteFolder,
+      currentAnimation: existing?.currentAnimation || AnimationState.IDLE,
+      currentDirection: existing?.currentDirection || Direction.S,
+      scale: existing?.scale || 1.0,
+      animationDurationSeconds: existing?.animationDurationSeconds || 1.0, // 1 second default for testing
+    };
+  },
+  
+  setEntityAnimation: (entityId: string, animation: AnimationState) => {
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        currentAnimation: animation,
+      };
+    }
+  },
+  
+  setEntityDirectionFromMapping: (entityId: string, direction: Direction) => {
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        currentDirection: direction,
+      };
+    }
+  },
+  
+  // NEW: Set sprite scale
+  setEntitySpriteScale: (entityId: string, scale: number) => {
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        scale: Math.max(0.1, Math.min(5.0, scale)), // Clamp between 0.1 and 5.0
+      };
+    }
+  },
+  
+  // NEW: Set animation duration in seconds
+  setEntityAnimationDuration: (entityId: string, durationSeconds: number) => {
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        animationDurationSeconds: Math.max(0.1, Math.min(10.0, durationSeconds)), // Clamp between 0.1 and 10 seconds
+      };
+    }
+  },
+  
+  setAvailableSpriteFolders: (folders: SpriteFolderName[]) => {
+    battlemapStore.entities.availableSpriteFolders = folders;
+  },
+  
+  removeEntitySpriteMapping: (entityId: string) => {
+    delete battlemapStore.entities.spriteMappings[entityId];
+  },
+  
   // Get the currently selected entity
   getSelectedEntity: (): EntitySummary | undefined => {
     return battlemapStore.entities.selectedEntityId 
       ? battlemapStore.entities.summaries[battlemapStore.entities.selectedEntityId] 
       : undefined;
+  },
+  
+  // Get sprite mapping for entity
+  getEntitySpriteMapping: (entityId: string): EntitySpriteMapping | undefined => {
+    return battlemapStore.entities.spriteMappings[entityId];
   },
   
   // Loading/error status

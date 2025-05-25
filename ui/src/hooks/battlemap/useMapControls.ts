@@ -19,7 +19,8 @@ export const useMapControls = () => {
    */
   const zoomIn = useCallback(() => {
     const currentSize = snap.view.tileSize;
-    battlemapActions.setTileSize(Math.min(currentSize + TILE_SIZE_STEP, MAX_TILE_SIZE));
+    const newSize = Math.min(currentSize + TILE_SIZE_STEP, MAX_TILE_SIZE);
+    battlemapActions.setTileSize(newSize);
   }, [snap.view.tileSize]);
   
   /**
@@ -27,7 +28,8 @@ export const useMapControls = () => {
    */
   const zoomOut = useCallback(() => {
     const currentSize = snap.view.tileSize;
-    battlemapActions.setTileSize(Math.max(currentSize - TILE_SIZE_STEP, MIN_TILE_SIZE));
+    const newSize = Math.max(currentSize - TILE_SIZE_STEP, MIN_TILE_SIZE);
+    battlemapActions.setTileSize(newSize);
   }, [snap.view.tileSize]);
   
   /**

@@ -1,8 +1,12 @@
-export * from './useGrid';
-export * from './useEntitySelection';
-export * from './useVisibility';
-export * from './useMapControls';
-export * from './useEffects';
-export * from './useEntityMovement';
-export * from './useEntityAnimation';
-export * from './useTileEditor'; 
+export { useMapControls } from './useMapControls';
+export { useVisibility } from './useVisibility';
+export { useTileEditor } from './useTileEditor';
+export { useSpriteEditor } from './useSpriteEditor';
+export { useEntitySelection } from './useEntitySelection';
+export { useEntityMovement } from './useEntityMovement';
+export { useEntityAnimation } from './useEntityAnimation';
+export { useEffects } from './useEffects';
+export { useGrid } from './useGrid';
+
+// Re-export types that are commonly used
+export type { TileType } from './useTileEditor'; 

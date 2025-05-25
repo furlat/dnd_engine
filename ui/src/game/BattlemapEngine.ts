@@ -24,9 +24,6 @@ export class BattlemapEngine {
   // Layer containers for proper rendering order
   private layers: Record<LayerName, Container> | null = null;
   
-  // Ticker for animation updates
-  private animationTicker: Ticker | null = null;
-  
   // Renderers registry
   private renderers: Map<string, { render?: () => void; update?: (ticker: Ticker) => void }> = new Map();
   
@@ -131,14 +128,17 @@ export class BattlemapEngine {
   private setupTickers(): void {
     if (!this.app) return;
     
-    // Create animation ticker for entity updates
-    this.animationTicker = new Ticker();
-    this.animationTicker.start();
+    // Ensure the main app ticker is started
+    if (!this.app.ticker.started) {
+      this.app.ticker.start();
+      console.log('[BattlemapEngine] Started main app ticker');
+    }
     
-    // Add ticker callback for updating renderers
-    this.animationTicker.add(this.updateRenderers, this);
+    // Use the main app ticker instead of creating a separate one
+    // This ensures the canvas gets redrawn every frame
+    this.app.ticker.add(this.updateRenderers, this);
     
-    console.log('[BattlemapEngine] Ticker system initialized');
+    console.log('[BattlemapEngine] Ticker system initialized using main app ticker');
   }
   
   /**
@@ -190,6 +190,12 @@ export class BattlemapEngine {
         renderer.update(ticker);
       }
     });
+    
+    // Force a render to ensure canvas is redrawn
+    // This is needed because PixiJS doesn't automatically redraw static scenes
+    if (this.app?.renderer) {
+      this.app.renderer.render(this.app.stage);
+    }
   }
   
   /**
@@ -237,11 +243,9 @@ export class BattlemapEngine {
     console.log('[BattlemapEngine] Destroying engine');
     
     try {
-      // Stop and destroy animation ticker
-      if (this.animationTicker) {
-        this.animationTicker.stop();
-        this.animationTicker.destroy();
-        this.animationTicker = null;
+      // Remove ticker callback from main app ticker
+      if (this.app?.ticker) {
+        this.app.ticker.remove(this.updateRenderers, this);
       }
       
       this.renderers.clear();

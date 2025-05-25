@@ -161,13 +161,10 @@ const TileEditorPanel: React.FC<TileEditorPanelProps> = ({ isLocked }) => {
     }
   }, [selectTile]);
 
-  // Early return if editor is not visible or editing is not active
+  // Don't show if not editing or editor not visible
   if (!isEditorVisible || !isEditing) {
-    console.log('[TileEditorPanel] Not rendering panel, conditions not met:', { isEditorVisible, isEditing });
     return null;
   }
-
-  console.log('[TileEditorPanel] Rendering panel with selected tile:', selectedTile);
 
   return (
     <Paper

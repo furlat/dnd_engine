@@ -38,6 +38,15 @@ export class TileRenderer extends AbstractRenderer {
   
   // Last known position offset for movement detection
   private lastOffset = { x: 0, y: 0 };
+  
+  // Last known tile size for zoom detection
+  private lastTileSize = 32;
+  
+  // Summary logging system
+  private lastSummaryTime = 0;
+  private renderCount = 0;
+  private gridChangeCount = 0;
+  private viewChangeCount = 0;
 
   /**
    * Initialize the renderer
@@ -63,6 +72,9 @@ export class TileRenderer extends AbstractRenderer {
       y: battlemapStore.view.offset.y 
     };
     
+    // Initialize last tile size
+    this.lastTileSize = battlemapStore.view.tileSize;
+    
     // Load textures
     this.loadTileTextures();
     
@@ -70,6 +82,20 @@ export class TileRenderer extends AbstractRenderer {
     this.tilesNeedUpdate = true;
     
     console.log('[TileRenderer] Initialized and added to tiles layer');
+  }
+  
+  /**
+   * Log summary every 10 seconds instead of spamming
+   */
+  private logSummary(): void {
+    const now = Date.now();
+    if (now - this.lastSummaryTime >= 10000) { // 10 seconds
+      console.log(`[TileRenderer] 10s Summary: ${this.renderCount} renders, ${this.gridChangeCount} grid changes, ${this.viewChangeCount} view changes`);
+      this.lastSummaryTime = now;
+      this.renderCount = 0;
+      this.gridChangeCount = 0;
+      this.viewChangeCount = 0;
+    }
   }
   
   /**
@@ -81,19 +107,16 @@ export class TileRenderer extends AbstractRenderer {
     
     // Subscribe to grid changes (for tile updates)
     const unsubGrid = subscribe(battlemapStore.grid, () => {
-      console.log('[TileRenderer] Grid changed, checking for tile updates');
+      this.gridChangeCount++;
       // Only update tiles reference when not moving
       if (!battlemapStore.view.wasd_moving) {
         // Check if tiles have actually changed
         const hasChanges = this.hasTilesChanged(battlemapStore.grid.tiles);
         
         if (hasChanges) {
-          console.log('[TileRenderer] Tile changes detected, updating');
           this.tilesRef = {...battlemapStore.grid.tiles};
           this.loadTileTextures();
           this.tilesNeedUpdate = true;
-        } else {
-          console.log('[TileRenderer] No significant tile changes, skipping update');
         }
       }
       
@@ -103,16 +126,7 @@ export class TileRenderer extends AbstractRenderer {
     
     // Subscribe to view changes (zooming, panning)
     const unsubView = subscribe(battlemapStore.view, () => {
-      // Check if position has changed (movement)
-      if (this.lastOffset.x !== battlemapStore.view.offset.x || 
-          this.lastOffset.y !== battlemapStore.view.offset.y) {
-        // Movement detected, update last offset
-        this.lastOffset = { 
-          x: battlemapStore.view.offset.x, 
-          y: battlemapStore.view.offset.y 
-        };
-      }
-      
+      this.viewChangeCount++;
       // Always render on view changes for panning/zooming
       this.render();
     });
@@ -248,50 +262,41 @@ export class TileRenderer extends AbstractRenderer {
   }
   
   /**
-   * Render everything
+   * Main render method
    */
   render(): void {
-    // Skip if not properly initialized
     if (!this.engine || !this.engine.app) {
-      console.log('[TileRenderer] Skipping render - engine not ready');
       return;
     }
     
-    const snap = battlemapStore;
+    this.renderCount++;
+    this.logSummary();
     
-    // If tiles are set to invisible, clear everything and return
-    if (!snap.controls.isTilesVisible) {
-      if (this.backgroundGraphics) {
-        this.backgroundGraphics.clear();
-      }
-      if (this.tilesContainer) {
-        this.tilesContainer.visible = false;
-      }
-      return;
-    }
+    // Update visibility based on controls
+    this.tilesContainer.visible = battlemapStore.controls.isTilesVisible;
     
-    // Otherwise render everything and ensure tiles are visible
-    if (this.tilesContainer) {
-      this.tilesContainer.visible = true;
-    }
-    
-    // Always render the background (it's cheap)
+    // Always render background (it's cheap and handles position/zoom changes)
     this.renderBackground();
     
-    // Only render tiles if needed (position change or tile content change)
+    // Check if position has changed (WASD movement) or if tiles need updating
     const hasPositionChanged = 
-      this.lastOffset.x !== snap.view.offset.x || 
-      this.lastOffset.y !== snap.view.offset.y;
-      
-    if (this.tilesNeedUpdate || hasPositionChanged || snap.view.wasd_moving) {
+      this.lastOffset.x !== battlemapStore.view.offset.x || 
+      this.lastOffset.y !== battlemapStore.view.offset.y;
+    
+    // Check if tile size has changed (zoom)
+    const hasTileSizeChanged = this.lastTileSize !== battlemapStore.view.tileSize;
+    
+    // Render tiles if they need updating, position changed, size changed, or we're actively moving
+    if (this.tilesNeedUpdate || hasPositionChanged || hasTileSizeChanged || battlemapStore.view.wasd_moving) {
       this.renderTiles();
-      // Reset flag after rendering
       this.tilesNeedUpdate = false;
-      // Update last known position
+      
+      // Update last known position and tile size after rendering
       this.lastOffset = { 
-        x: snap.view.offset.x, 
-        y: snap.view.offset.y 
+        x: battlemapStore.view.offset.x, 
+        y: battlemapStore.view.offset.y 
       };
+      this.lastTileSize = battlemapStore.view.tileSize;
     }
   }
   
