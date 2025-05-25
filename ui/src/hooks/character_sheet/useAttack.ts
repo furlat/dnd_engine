@@ -10,7 +10,9 @@ import type {
   EquipmentItem
 } from '../../types/characterSheet_types';
 import { fetchAllEquipment, equipItem, unequipItem } from '../../api/character_sheet/characterSheetApi';
-import { useMoveAndAttack } from '../battlemap/useMoveAndAttack';
+import { executeAttack } from '../../api/battlemap/battlemapApi';
+import { battlemapActions } from '../../store/battlemapStore';
+import { AnimationState } from '../../types/battlemap_types';
 
 export type WeaponSlot = 'MAIN_HAND' | 'OFF_HAND';
 
@@ -62,8 +64,7 @@ export function useAttack(): AttackData {
   const [error, setError] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   
-  // Get move-and-attack functionality
-  const { attackTarget: battleAttackTarget, moveAndAttack: battleMoveAndAttack } = useMoveAndAttack();
+  // Note: Attack functionality now handled directly via API calls
 
   const equipment = snap.character?.equipment ?? null;
   const calcsObj = snap.character?.attack_calculations ?? {};
@@ -247,24 +248,47 @@ export function useAttack(): AttackData {
     return items;
   }, [equipment, mainHandCalc, offHandCalc]);
 
-  // Attack actions using battlemap functionality
+  // Attack actions using direct API calls
   const attackTarget = useCallback(async (targetId: string, slot: WeaponSlot = 'MAIN_HAND'): Promise<boolean> => {
     if (!snap.character) {
       console.warn('[useAttack] No character available for attack');
       return false;
     }
     
-    return await battleAttackTarget(snap.character.uuid, targetId, slot);
-  }, [snap.character, battleAttackTarget]);
-
-  const moveAndAttackTarget = useCallback(async (targetId: string, slot: WeaponSlot = 'MAIN_HAND'): Promise<boolean> => {
-    if (!snap.character) {
-      console.warn('[useAttack] No character available for move-and-attack');
+    try {
+      console.log(`[useAttack] ${snap.character.name} attacking target ${targetId} with ${slot}`);
+      
+      // Set attack animation if character is on battlemap
+      const spriteMapping = battlemapSnap.entities.spriteMappings[snap.character.uuid];
+      if (spriteMapping) {
+        battlemapActions.setEntityAnimation(snap.character.uuid, AnimationState.ATTACK1);
+      }
+      
+      // Execute the attack
+      await executeAttack(snap.character.uuid, targetId, slot);
+      
+      // Refresh entity summaries to get updated health/status
+      await battlemapActions.fetchEntitySummaries();
+      
+      console.log(`[useAttack] Attack successful`);
+      return true;
+    } catch (error) {
+      console.error(`[useAttack] Attack failed:`, error);
+      
+      // Return to idle animation on failure
+      const spriteMapping = battlemapSnap.entities.spriteMappings[snap.character.uuid];
+      if (spriteMapping) {
+        battlemapActions.setEntityAnimation(snap.character.uuid, spriteMapping.idleAnimation);
+      }
+      
       return false;
     }
-    
-    return await battleMoveAndAttack(snap.character.uuid, targetId, slot);
-  }, [snap.character, battleMoveAndAttack]);
+  }, [snap.character, battlemapSnap.entities.spriteMappings]);
+
+  const moveAndAttackTarget = useCallback(async (targetId: string, slot: WeaponSlot = 'MAIN_HAND'): Promise<boolean> => {
+    console.warn('[useAttack] Move-and-attack not supported from character sheet - use battlemap interactions');
+    return false;
+  }, []);
 
   return {
     mainHandCalc,
