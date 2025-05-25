@@ -350,9 +350,11 @@ export class EntityRenderer extends AbstractRenderer {
     if (localState?.pendingStoreDirection) {
       console.log(`[EntityRenderer] Syncing final direction ${localState.pendingStoreDirection} to store for entity ${movement.entityId}`);
       battlemapActions.setEntityDirectionFromMapping(movement.entityId, localState.pendingStoreDirection);
-      localState.pendingStoreDirection = undefined;
-      localState.lastStoreUpdateTime = Date.now();
     }
+    
+    // FIXED: Clear local direction state after movement completes to allow future direction changes
+    this.localEntityStates.delete(movement.entityId);
+    console.log(`[EntityRenderer] Cleared local direction state for entity ${movement.entityId} after movement completion`);
     
     // Determine if we should resync based on server approval
     const shouldResync = movement.isServerApproved !== true;
@@ -407,6 +409,17 @@ export class EntityRenderer extends AbstractRenderer {
   public cacheSensesDataForEntity(entityId: string, sensesData: { visible: Record<string, boolean>; seen: readonly Position[] }): void {
     this.cachedSensesData.set(entityId, sensesData);
     console.log(`[EntityRenderer] Manually cached senses data for entity ${entityId}`);
+  }
+  
+  /**
+   * NEW: Public method to clear local direction state for an entity
+   * Called by InteractionsManager before setting attack direction
+   */
+  public clearLocalDirectionState(entityId: string): void {
+    if (this.localEntityStates.has(entityId)) {
+      this.localEntityStates.delete(entityId);
+      console.log(`[EntityRenderer] Cleared local direction state for entity ${entityId}`);
+    }
   }
   
   /**
