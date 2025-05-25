@@ -4,6 +4,7 @@ import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
 import { LayerName } from '../BattlemapEngine';
 import { snapshot } from 'valtio';
+import { EntitySummary, Position } from '../../types/common';
 
 // Define minimum width of entity panel
 const ENTITY_PANEL_WIDTH = 250;
@@ -19,6 +20,9 @@ export class GridRenderer extends AbstractRenderer {
   private gridGraphics: Graphics = new Graphics();
   private highlightGraphics: Graphics = new Graphics();
   
+  // NEW: Graphics for movement path highlighting
+  private pathGraphics: Graphics = new Graphics();
+  
   // Store unsubscribe callbacks
   private unsubscribeCallbacks: Array<() => void> = [];
   
@@ -32,9 +36,10 @@ export class GridRenderer extends AbstractRenderer {
   initialize(engine: any): void {
     super.initialize(engine);
     
-    // Add graphics to container - grid first, then highlight
+    // Add graphics to container - grid first, then highlight, then paths
     this.container.addChild(this.gridGraphics);
     this.container.addChild(this.highlightGraphics);
+    this.container.addChild(this.pathGraphics);
     
     // Setup subscriptions
     this.setupSubscriptions();
@@ -125,6 +130,7 @@ export class GridRenderer extends AbstractRenderer {
     this.renderCount++;
     this.renderGrid();
     this.renderCellHighlight();
+    this.renderMovementPaths();
     this.logSummary();
   }
   
@@ -209,6 +215,81 @@ export class GridRenderer extends AbstractRenderer {
   }
   
   /**
+   * NEW: Render movement path highlights
+   */
+  private renderMovementPaths(): void {
+    // Check if graphics is available
+    if (!this.pathGraphics) {
+      return;
+    }
+    
+    const snap = battlemapStore;
+    
+    // Clear previous paths
+    this.pathGraphics.clear();
+    
+    // Only render if movement highlighting is enabled
+    if (!snap.controls.isMovementHighlightEnabled) {
+      return;
+    }
+    
+    // Get selected entity
+    const selectedEntity = this.getSelectedEntity();
+    if (!selectedEntity) {
+      return;
+    }
+    
+    // Get grid offset and size
+    const { offsetX, offsetY, tileSize, gridWidth, gridHeight } = this.calculateGridOffset();
+    
+    // Render movement range highlights
+    for (let x = 0; x < gridWidth; x++) {
+      for (let y = 0; y < gridHeight; y++) {
+        const posKey = `${x},${y}`;
+        const path = selectedEntity.senses.paths[posKey];
+        
+        if (path && path.length > 0) {
+          // Determine color based on path length (movement cost)
+          let pathColor = 0x00FF00; // Green for close
+          let pathAlpha = 0.2;
+          
+          if (path.length <= 6) {
+            // Within 30ft (6 squares) - green
+            pathColor = 0x00FF00;
+            pathAlpha = 0.3;
+          } else if (path.length <= 12) {
+            // Within 60ft (12 squares) - yellow
+            pathColor = 0xFFFF00;
+            pathAlpha = 0.25;
+          } else {
+            // Beyond 60ft - red
+            pathColor = 0xFF0000;
+            pathAlpha = 0.2;
+          }
+          
+          this.pathGraphics
+            .rect(
+              offsetX + (x * tileSize),
+              offsetY + (y * tileSize),
+              tileSize,
+              tileSize
+            )
+            .fill({ color: pathColor, alpha: pathAlpha });
+        }
+      }
+    }
+  }
+  
+  /**
+   * NEW: Get the selected entity for movement path calculations
+   */
+  private getSelectedEntity(): EntitySummary | null {
+    const snap = battlemapStore;
+    if (!snap.entities.selectedEntityId) return null;
+    return snap.entities.summaries[snap.entities.selectedEntityId] || null;
+  }
+  
+  /**
    * Clean up resources
    */
   destroy(): void {
@@ -240,6 +321,20 @@ export class GridRenderer extends AbstractRenderer {
         }
       } catch (e) {
         console.warn('[GridRenderer] Error destroying highlight graphics:', e);
+      }
+    }
+    
+    // NEW: Clean up path graphics
+    if (this.pathGraphics) {
+      try {
+        if (this.pathGraphics.clear) {
+          this.pathGraphics.clear();
+        }
+        if (!this.pathGraphics.destroyed) {
+          this.pathGraphics.destroy();
+        }
+      } catch (e) {
+        console.warn('[GridRenderer] Error destroying path graphics:', e);
       }
     }
     

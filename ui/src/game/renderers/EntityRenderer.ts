@@ -4,7 +4,7 @@ import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
 import { AnimationState, Direction, EntitySpriteMapping, MovementAnimation, MovementState, VisualPosition, toVisualPosition } from '../../types/battlemap_types';
 import { LayerName } from '../BattlemapEngine';
-import { EntitySummary } from '../../types/common';
+import { EntitySummary, Position } from '../../types/common';
 import { getSpriteSheetPath } from '../../api/battlemap/battlemapApi';
 
 /**
@@ -58,6 +58,12 @@ export class EntityRenderer extends AbstractRenderer {
   // OPTIMIZED: Precomputed movement data to avoid recalculation
   private precomputedMovementData: Map<string, PrecomputedMovementData> = new Map();
   
+  // NEW: Visibility-based alpha management (no store subscriptions, just direct updates)
+  private lastVisibilityStates: Map<string, { targetAlpha: number; shouldBeRenderable: boolean }> = new Map();
+  
+  // NEW: Cached senses data during movement to prevent visibility flickering
+  private cachedSensesData: Map<string, { visible: Record<string, boolean>; seen: readonly Position[] }> = new Map();
+  
   // Store unsubscribe callbacks
   private unsubscribeCallbacks: Array<() => void> = [];
   
@@ -92,6 +98,9 @@ export class EntityRenderer extends AbstractRenderer {
     Object.values(movementAnimations).forEach(movement => {
       this.updateMovementAnimation(movement, ticker.deltaTime);
     });
+    
+    // NEW: Update entity visibility alpha (smooth, no store subscriptions)
+    this.updateEntityVisibilityAlpha();
   }
   
   /**
@@ -359,6 +368,48 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
+   * NEW: Handle movement animation changes to cache senses data
+   */
+  private handleMovementAnimationChanges(): void {
+    const snap = battlemapStore;
+    const selectedEntity = this.getSelectedEntity();
+    
+    if (!selectedEntity || !snap.controls.isVisibilityEnabled) {
+      return;
+    }
+    
+    // Check for new movement animations that need senses data caching
+    const currentMovements = Object.keys(snap.entities.movementAnimations);
+    
+    if (currentMovements.length > 0) {
+      // There are active movements - ensure we have cached data for the current viewing entity
+      if (!this.cachedSensesData.has(selectedEntity.uuid)) {
+        const sensesData = {
+          visible: selectedEntity.senses.visible,
+          seen: selectedEntity.senses.seen
+        };
+        this.cachedSensesData.set(selectedEntity.uuid, sensesData);
+        console.log(`[EntityRenderer] Cached senses data for viewing entity ${selectedEntity.name} (selection changed during movement or new movement started)`);
+      }
+    } else {
+      // No active movements - clear all cached senses data
+      if (this.cachedSensesData.size > 0) {
+        console.log(`[EntityRenderer] Clearing all cached senses data - no active movements`);
+        this.cachedSensesData.clear();
+      }
+    }
+  }
+  
+  /**
+   * NEW: Public method to cache senses data for a specific entity
+   * Called by InteractionsManager before movement starts
+   */
+  public cacheSensesDataForEntity(entityId: string, sensesData: { visible: Record<string, boolean>; seen: readonly Position[] }): void {
+    this.cachedSensesData.set(entityId, sensesData);
+    console.log(`[EntityRenderer] Manually cached senses data for entity ${entityId}`);
+  }
+  
+  /**
    * Set up subscriptions to store changes
    */
   private setupSubscriptions(): void {
@@ -373,6 +424,19 @@ export class EntityRenderer extends AbstractRenderer {
       this.logSummary();
     });
     this.unsubscribeCallbacks.push(unsubEntities);
+    
+    // NEW: Subscribe to movement animations to cache senses data when movement starts
+    const unsubMovementAnimations = subscribe(battlemapStore.entities.movementAnimations, () => {
+      this.handleMovementAnimationChanges();
+    });
+    this.unsubscribeCallbacks.push(unsubMovementAnimations);
+    
+    // NEW: Subscribe to entity selection changes to cache senses data when perspective changes during movement
+    const unsubEntitySelection = subscribe(battlemapStore.entities, () => {
+      // Simple subscription - check if we need to handle selection changes during movement
+      this.handleEntitySelectionChange();
+    });
+    this.unsubscribeCallbacks.push(unsubEntitySelection);
     
     // Subscribe to view changes for positioning - just like TileRenderer and GridRenderer
     const unsubView = subscribe(battlemapStore.view, () => {
@@ -888,6 +952,9 @@ export class EntityRenderer extends AbstractRenderer {
     
     // Clean up local state
     this.localEntityStates.delete(entityId);
+    
+    // NEW: Clean up visibility state
+    this.lastVisibilityStates.delete(entityId);
   }
   
   /**
@@ -1002,6 +1069,12 @@ export class EntityRenderer extends AbstractRenderer {
     // Clean up local states
     this.localEntityStates.clear();
     
+    // NEW: Clean up visibility states
+    this.lastVisibilityStates.clear();
+    
+    // NEW: Clean up cached senses data
+    this.cachedSensesData.clear();
+    
     // Unsubscribe from store changes
     this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
     this.unsubscribeCallbacks = [];
@@ -1010,5 +1083,174 @@ export class EntityRenderer extends AbstractRenderer {
     super.destroy();
     
     console.log('[EntityRenderer] Destroyed');
+  }
+  
+  /**
+   * NEW: Update entity visibility alpha based on selected entity's senses
+   * This runs every frame but only updates alpha when visibility changes
+   */
+  private updateEntityVisibilityAlpha(): void {
+    const snap = battlemapStore;
+    const selectedEntity = this.getSelectedEntity();
+    
+    if (!selectedEntity || !snap.controls.isVisibilityEnabled) {
+      // No selected entity or visibility disabled - make all entities fully visible and renderable
+      this.entityContainers.forEach((container, entityId) => {
+        container.alpha = 1.0;
+        container.renderable = true;
+        this.lastVisibilityStates.delete(entityId); // Clear state to force update when re-enabled
+      });
+      return;
+    }
+    
+    const sensesData = this.getSensesData(selectedEntity);
+    if (!sensesData) return;
+    
+    // Update visibility for each entity
+    Object.values(snap.entities.summaries).forEach((entity: EntitySummary) => {
+      const container = this.entityContainers.get(entity.uuid);
+      if (!container) return;
+      
+      const visibility = this.calculateEntityVisibility(entity, selectedEntity, sensesData);
+      const lastState = this.lastVisibilityStates.get(entity.uuid);
+      
+      // Only update if visibility state changed (performance optimization)
+      if (!lastState || 
+          lastState.targetAlpha !== visibility.targetAlpha || 
+          lastState.shouldBeRenderable !== visibility.shouldBeRenderable) {
+        
+        // Update alpha for fog effect (seen but not visible)
+        container.alpha = visibility.targetAlpha;
+        
+        // Update renderable for complete invisibility (unseen entities)
+        // renderable = false makes sprites completely invisible while keeping animations running
+        container.renderable = visibility.shouldBeRenderable;
+        
+        // Cache the new state
+        this.lastVisibilityStates.set(entity.uuid, {
+          targetAlpha: visibility.targetAlpha,
+          shouldBeRenderable: visibility.shouldBeRenderable
+        });
+      }
+    });
+  }
+  
+  /**
+   * NEW: Get the selected entity for visibility calculations
+   */
+  private getSelectedEntity(): EntitySummary | null {
+    const snap = battlemapStore;
+    if (!snap.entities.selectedEntityId) return null;
+    return snap.entities.summaries[snap.entities.selectedEntityId] || null;
+  }
+  
+  /**
+   * NEW: Get senses data for visibility calculations (similar to SubjectiveRenderer)
+   */
+  private getSensesData(entity: EntitySummary): {
+    visible: Record<string, boolean>;
+    seen: readonly Position[];
+  } {
+    const snap = battlemapStore;
+    
+    // Check if ANY entity is currently moving
+    const hasActiveMovements = Object.keys(snap.entities.movementAnimations).length > 0;
+    
+    if (hasActiveMovements) {
+      // During movement - ALWAYS use cached data for the observer to maintain static perspective
+      const cached = this.cachedSensesData.get(entity.uuid);
+      if (cached) {
+        return cached;
+      }
+      
+      // No cached data - this means this entity wasn't the observer when movement started
+      // Use current data but this shouldn't happen for the selected entity
+      console.warn(`[EntityRenderer] No cached senses data for ${entity.name} during movement - using current data`);
+      return {
+        visible: entity.senses.visible,
+        seen: entity.senses.seen
+      };
+    } else {
+      // No active movements - use current data
+      return {
+        visible: entity.senses.visible,
+        seen: entity.senses.seen
+      };
+    }
+  }
+  
+  /**
+   * NEW: Calculate visibility state and target alpha for an entity
+   */
+  private calculateEntityVisibility(
+    entity: EntitySummary, 
+    selectedEntity: EntitySummary, 
+    sensesData: { visible: Record<string, boolean>; seen: readonly Position[] }
+  ): { visible: boolean; seen: boolean; targetAlpha: number; shouldBeRenderable: boolean } {
+    // Self is always fully visible
+    if (entity.uuid === selectedEntity.uuid) {
+      return { visible: true, seen: true, targetAlpha: 1.0, shouldBeRenderable: true };
+    }
+    
+    // NEW: Use entity's visual position if it's moving, otherwise use server position
+    const snap = battlemapStore;
+    const spriteMapping = snap.entities.spriteMappings[entity.uuid];
+    const isEntityMoving = !spriteMapping?.isPositionSynced;
+    
+    let entityX: number, entityY: number;
+    
+    if (isEntityMoving && spriteMapping?.visualPosition) {
+      // Entity is moving - use its current animated position for visibility calculation
+      entityX = Math.floor(spriteMapping.visualPosition.x);
+      entityY = Math.floor(spriteMapping.visualPosition.y);
+      console.log(`[EntityRenderer] Using visual position for ${entity.name}: (${entityX}, ${entityY}) vs server (${entity.position[0]}, ${entity.position[1]})`);
+    } else {
+      // Entity is not moving - use server position
+      [entityX, entityY] = entity.position;
+    }
+    
+    const posKey = `${entityX},${entityY}`;
+    
+    // Check if entity position is visible using the observer's static senses
+    const visible = !!sensesData.visible[posKey];
+    
+    // Check if entity position has been seen before using the observer's static senses
+    const seen = sensesData.seen.some(([seenX, seenY]) => seenX === entityX && seenY === entityY);
+    
+    if (visible) {
+      // Entity is in a visible cell - fully visible
+      return { visible: true, seen: true, targetAlpha: 1.0, shouldBeRenderable: true };
+    } else {
+      // Entity is NOT in a visible cell - completely invisible (regardless of seen status)
+      // For entities: if not visible, they should be completely invisible
+      return { visible: false, seen, targetAlpha: 1.0, shouldBeRenderable: false };
+    }
+  }
+  
+  /**
+   * NEW: Handle entity selection change
+   */
+  private handleEntitySelectionChange(): void {
+    const snap = battlemapStore;
+    const selectedEntity = this.getSelectedEntity();
+    
+    // Only handle if there are active movements and visibility is enabled
+    if (!selectedEntity || !snap.controls.isVisibilityEnabled) {
+      return;
+    }
+    
+    const hasActiveMovements = Object.keys(snap.entities.movementAnimations).length > 0;
+    if (hasActiveMovements) {
+      // There are active movements and user changed perspective
+      // Cache senses data for the newly selected entity if not already cached
+      if (!this.cachedSensesData.has(selectedEntity.uuid)) {
+        const sensesData = {
+          visible: selectedEntity.senses.visible,
+          seen: selectedEntity.senses.seen
+        };
+        this.cachedSensesData.set(selectedEntity.uuid, sensesData);
+        console.log(`[EntityRenderer] Cached senses data for newly selected entity ${selectedEntity.name} during movement`);
+      }
+    }
   }
 } 

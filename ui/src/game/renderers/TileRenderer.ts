@@ -4,6 +4,7 @@ import { TileSummary } from '../../types/battlemap_types';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
 import { LayerName } from '../BattlemapEngine';
+import { EntitySummary, Position } from '../../types/common';
 
 // Create a texture cache
 const textureCache: Record<string, Texture> = {};
@@ -29,6 +30,9 @@ export class TileRenderer extends AbstractRenderer {
   
   // Container for tiles to make cleanup easier
   private tilesContainer: Container = new Container();
+  
+  // NEW: Container for black fog overlays on unseen tiles
+  private blackFogContainer: Container = new Container();
 
   // Store unsubscribe callbacks
   private unsubscribeCallbacks: Array<() => void> = [];
@@ -42,11 +46,21 @@ export class TileRenderer extends AbstractRenderer {
   // Last known tile size for zoom detection
   private lastTileSize = 32;
   
+  // NEW: Visibility-based alpha management for tiles
+  private tileSprites: Map<string, Sprite | Graphics> = new Map(); // Track individual tile sprites/graphics
+  
+  // NEW: Cached senses data during movement to prevent visibility flickering
+  private cachedSensesData: Map<string, { visible: Record<string, boolean>; seen: readonly Position[] }> = new Map();
+  
   // Summary logging system
   private lastSummaryTime = 0;
   private renderCount = 0;
   private gridChangeCount = 0;
   private viewChangeCount = 0;
+  
+  // NEW: Track last selected entity and visibility state
+  private lastSelectedEntityId: string | undefined = undefined;
+  private lastVisibilityEnabled: boolean = false;
 
   /**
    * Initialize the renderer
@@ -140,6 +154,18 @@ export class TileRenderer extends AbstractRenderer {
       }
     });
     this.unsubscribeCallbacks.push(unsubControls);
+    
+    // NEW: Subscribe to movement animations to cache senses data when movement starts
+    const unsubMovementAnimations = subscribe(battlemapStore.entities.movementAnimations, () => {
+      this.handleMovementAnimationChanges();
+    });
+    this.unsubscribeCallbacks.push(unsubMovementAnimations);
+    
+    // NEW: Subscribe to entity selection changes to cache senses data when perspective changes during movement
+    const unsubEntitySelection = subscribe(battlemapStore.entities, () => {
+      this.handleEntitySelectionChange();
+    });
+    this.unsubscribeCallbacks.push(unsubEntitySelection);
   }
   
   /**
@@ -189,6 +215,83 @@ export class TileRenderer extends AbstractRenderer {
     
     // No significant changes detected
     return false;
+  }
+  
+  /**
+   * NEW: Handle movement animation changes to cache senses data
+   */
+  private handleMovementAnimationChanges(): void {
+    const snap = battlemapStore;
+    const selectedEntity = this.getSelectedEntity();
+    
+    if (!selectedEntity || !snap.controls.isVisibilityEnabled) {
+      return;
+    }
+    
+    // Check for new movement animations that need senses data caching
+    Object.values(snap.entities.movementAnimations).forEach(movement => {
+      // If we don't have cached data for this movement, cache it now
+      if (!this.cachedSensesData.has(selectedEntity.uuid)) {
+        const sensesData = {
+          visible: selectedEntity.senses.visible,
+          seen: selectedEntity.senses.seen
+        };
+        this.cachedSensesData.set(selectedEntity.uuid, sensesData);
+        console.log(`[TileRenderer] Cached senses data for selected entity ${selectedEntity.name} due to movement start`);
+      }
+    });
+    
+    // Check if any movements ended and clear cache if no movements are active
+    if (Object.keys(snap.entities.movementAnimations).length === 0) {
+      // No active movements - clear all cached senses data
+      if (this.cachedSensesData.size > 0) {
+        console.log(`[TileRenderer] Clearing all cached senses data - no active movements`);
+        this.cachedSensesData.clear();
+        // Force re-render when cache is cleared to update visibility
+        this.tilesNeedUpdate = true;
+        this.render();
+      }
+    }
+  }
+  
+  /**
+   * NEW: Public method to cache senses data for a specific entity
+   * Called by InteractionsManager before movement starts
+   */
+  public cacheSensesDataForEntity(entityId: string, sensesData: { visible: Record<string, boolean>; seen: readonly Position[] }): void {
+    this.cachedSensesData.set(entityId, sensesData);
+    console.log(`[TileRenderer] Manually cached senses data for entity ${entityId}`);
+  }
+  
+  /**
+   * NEW: Handle entity selection change
+   */
+  private handleEntitySelectionChange(): void {
+    const snap = battlemapStore;
+    const selectedEntity = this.getSelectedEntity();
+    
+    // Only handle if there are active movements and visibility is enabled
+    if (!selectedEntity || !snap.controls.isVisibilityEnabled) {
+      return;
+    }
+    
+    const hasActiveMovements = Object.keys(snap.entities.movementAnimations).length > 0;
+    if (hasActiveMovements) {
+      // There are active movements and user changed perspective
+      // Cache senses data for the newly selected entity if not already cached
+      if (!this.cachedSensesData.has(selectedEntity.uuid)) {
+        const sensesData = {
+          visible: selectedEntity.senses.visible,
+          seen: selectedEntity.senses.seen
+        };
+        this.cachedSensesData.set(selectedEntity.uuid, sensesData);
+        console.log(`[TileRenderer] Cached senses data for newly selected entity ${selectedEntity.name} during movement`);
+        
+        // Force re-render to apply new perspective
+        this.tilesNeedUpdate = true;
+        this.render();
+      }
+    }
   }
   
   /**
@@ -286,8 +389,16 @@ export class TileRenderer extends AbstractRenderer {
     // Check if tile size has changed (zoom)
     const hasTileSizeChanged = this.lastTileSize !== battlemapStore.view.tileSize;
     
-    // Render tiles if they need updating, position changed, size changed, or we're actively moving
-    if (this.tilesNeedUpdate || hasPositionChanged || hasTileSizeChanged || battlemapStore.view.wasd_moving) {
+    // NEW: Check if visibility settings changed (selected entity or visibility enabled)
+    const snap = battlemapStore;
+    const currentSelectedEntity = snap.entities.selectedEntityId;
+    const currentVisibilityEnabled = snap.controls.isVisibilityEnabled;
+    const visibilityChanged = 
+      this.lastSelectedEntityId !== currentSelectedEntity ||
+      this.lastVisibilityEnabled !== currentVisibilityEnabled;
+    
+    // Render tiles if they need updating, position changed, size changed, visibility changed, or we're actively moving
+    if (this.tilesNeedUpdate || hasPositionChanged || hasTileSizeChanged || visibilityChanged || battlemapStore.view.wasd_moving) {
       this.renderTiles();
       this.tilesNeedUpdate = false;
       
@@ -297,6 +408,10 @@ export class TileRenderer extends AbstractRenderer {
         y: battlemapStore.view.offset.y 
       };
       this.lastTileSize = battlemapStore.view.tileSize;
+      
+      // NEW: Update last known visibility state
+      this.lastSelectedEntityId = currentSelectedEntity;
+      this.lastVisibilityEnabled = currentVisibilityEnabled;
     }
   }
   
@@ -340,40 +455,132 @@ export class TileRenderer extends AbstractRenderer {
     // Completely clear the tiles container before rendering new tiles
     this.tilesContainer.removeChildren();
     
+    // NEW: Clear tile sprites tracking
+    this.tileSprites.clear();
+    
     // Get grid offset and sizes
     const { offsetX, offsetY, tileSize } = this.calculateGridOffset();
+    
+    // NEW: Get visibility info for conditional rendering
+    const snap = battlemapStore;
+    const selectedEntity = this.getSelectedEntity();
+    const sensesData = selectedEntity && snap.controls.isVisibilityEnabled 
+      ? this.getSensesDataForVisibility(selectedEntity) 
+      : null;
     
     // Draw all tiles
     Object.values(this.tilesRef).forEach(tile => {
       const [x, y] = tile.position;
       const tileX = offsetX + (x * tileSize);
       const tileY = offsetY + (y * tileSize);
+      const tileKey = `${x},${y}`;
       
-      // Check if we have a texture for this tile
-      const texture = this.tileTextures[tile.uuid];
-      
-      if (texture) {
-        // Use sprite for tiles with textures
-        const sprite = new Sprite(texture);
-        sprite.x = tileX;
-        sprite.y = tileY;
-        sprite.width = tileSize;
-        sprite.height = tileSize;
-        this.tilesContainer.addChild(sprite);
-      } else {
-        // Use a fallback color for tiles without textures
-        const tileGraphics = new Graphics();
-        const color = tile.walkable ? 0x333333 : 0x666666;
-        
-        tileGraphics
-          .rect(tileX, tileY, tileSize, tileSize)
-          .fill(color);
-          
-        this.tilesContainer.addChild(tileGraphics);
+      // NEW: Calculate visibility for this tile
+      let visible = true;
+      let seen = true;
+      if (sensesData) {
+        const posKey = `${x},${y}`;
+        visible = !!sensesData.visible[posKey];
+        seen = sensesData.seen.some(([seenX, seenY]) => seenX === x && seenY === y);
       }
+      
+      let tileSprite: Sprite | Graphics;
+      
+      if (!visible && !seen) {
+        // Never seen - render black tile directly
+        const blackTile = new Graphics();
+        blackTile
+          .rect(tileX, tileY, tileSize, tileSize)
+          .fill(0x000000);
+        this.tilesContainer.addChild(blackTile);
+        tileSprite = blackTile;
+      } else {
+        // Visible or seen - render actual tile
+        const texture = this.tileTextures[tile.uuid];
+        
+        if (texture) {
+          // Use sprite for tiles with textures
+          const sprite = new Sprite(texture);
+          sprite.x = tileX;
+          sprite.y = tileY;
+          sprite.width = tileSize;
+          sprite.height = tileSize;
+          
+          // Apply alpha for seen-but-not-visible tiles
+          if (!visible && seen) {
+            sprite.alpha = 0.4;
+          }
+          
+          this.tilesContainer.addChild(sprite);
+          tileSprite = sprite;
+        } else {
+          // Use a fallback color for tiles without textures
+          const tileGraphics = new Graphics();
+          const color = tile.walkable ? 0x333333 : 0x666666;
+          
+          tileGraphics
+            .rect(tileX, tileY, tileSize, tileSize)
+            .fill(color);
+          
+          // Apply alpha for seen-but-not-visible tiles
+          if (!visible && seen) {
+            tileGraphics.alpha = 0.4;
+          }
+            
+          this.tilesContainer.addChild(tileGraphics);
+          tileSprite = tileGraphics;
+        }
+      }
+      
+      // NEW: Track this tile sprite for any future updates
+      this.tileSprites.set(tileKey, tileSprite);
     });
     
     console.log('[TileRenderer] Rendered tiles:', this.tilesContainer.children.length);
+  }
+  
+  /**
+   * NEW: Get the selected entity for visibility calculations
+   */
+  private getSelectedEntity(): EntitySummary | null {
+    const snap = battlemapStore;
+    if (!snap.entities.selectedEntityId) return null;
+    return snap.entities.summaries[snap.entities.selectedEntityId] || null;
+  }
+  
+  /**
+   * NEW: Get senses data for visibility calculations
+   */
+  private getSensesDataForVisibility(entity: EntitySummary): {
+    visible: Record<string, boolean>;
+    seen: readonly Position[];
+  } {
+    const snap = battlemapStore;
+    
+    // Check if any entity is currently moving
+    const hasActiveMovements = Object.keys(snap.entities.movementAnimations).length > 0;
+    
+    if (hasActiveMovements) {
+      // There are active movements - use cached data if available
+      const cached = this.cachedSensesData.get(entity.uuid);
+      if (cached) {
+        return cached;
+      }
+      
+      // No cached data available - this shouldn't happen if caching worked correctly
+      // Fallback to current data but log a warning
+      console.warn(`[TileRenderer] No cached senses data for ${entity.name} during movement - using current data`);
+      return {
+        visible: entity.senses.visible,
+        seen: entity.senses.seen
+      };
+    } else {
+      // No active movements - use current data (don't cache here, cache on movement start)
+      return {
+        visible: entity.senses.visible,
+        seen: entity.senses.seen
+      };
+    }
   }
   
   /**
@@ -383,6 +590,12 @@ export class TileRenderer extends AbstractRenderer {
     // Unsubscribe from all subscriptions
     this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
     this.unsubscribeCallbacks = [];
+    
+    // NEW: Clean up tile visibility tracking
+    this.tileSprites.clear();
+    
+    // NEW: Clean up cached senses data
+    this.cachedSensesData.clear();
     
     // Clear and destroy tiles container safely
     if (this.tilesContainer) {

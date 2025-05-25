@@ -573,9 +573,11 @@ export class InteractionsManager {
       return false;
     }
     
-
-    
     console.log(`[InteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
+    
+    // NEW: Cache senses data for the selected entity BEFORE starting movement
+    // This prevents visibility flickering when changing perspectives during movement
+    this.cacheSensesDataForMovement();
     
     // IMMEDIATELY mark entity as out-of-sync to block further inputs
     const spriteMapping = battlemapStore.entities.spriteMappings[entityId];
@@ -654,6 +656,38 @@ export class InteractionsManager {
   }
   
   /**
+   * NEW: Cache senses data for the selected entity before movement starts
+   * This prevents visibility flickering when changing perspectives during movement
+   */
+  private cacheSensesDataForMovement(): void {
+    const snap = battlemapStore;
+    const selectedEntity = snap.entities.selectedEntityId ? snap.entities.summaries[snap.entities.selectedEntityId] : null;
+    
+    if (!selectedEntity || !snap.controls.isVisibilityEnabled) {
+      return;
+    }
+    
+    // Get the EntityRenderer to cache the senses data
+    const entityRenderer = this.engine?.getRenderer('EntityRenderer');
+    if (entityRenderer && 'cacheSensesDataForEntity' in entityRenderer) {
+      (entityRenderer as any).cacheSensesDataForEntity(selectedEntity.uuid, {
+        visible: selectedEntity.senses.visible,
+        seen: selectedEntity.senses.seen
+      });
+      console.log(`[InteractionsManager] Cached senses data for ${selectedEntity.name} before movement`);
+    }
+    
+    // Also cache for TileRenderer
+    const tileRenderer = this.engine?.getRenderer('TileRenderer');
+    if (tileRenderer && 'cacheSensesDataForEntity' in tileRenderer) {
+      (tileRenderer as any).cacheSensesDataForEntity(selectedEntity.uuid, {
+        visible: selectedEntity.senses.visible,
+        seen: selectedEntity.senses.seen
+      });
+    }
+  }
+  
+  /**
    * Handle entity movement operations
    */
   private async handleEntityMovement(gridX: number, gridY: number): Promise<void> {
@@ -688,9 +722,11 @@ export class InteractionsManager {
       return;
     }
     
-
-    
     console.log(`[InteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
+    
+    // NEW: Cache senses data for the selected entity BEFORE starting movement
+    // This prevents visibility flickering when changing perspectives during movement
+    this.cacheSensesDataForMovement();
     
     // IMMEDIATELY mark entity as out-of-sync to block further inputs
     const spriteMapping = snap.entities.spriteMappings[selectedEntityId];
