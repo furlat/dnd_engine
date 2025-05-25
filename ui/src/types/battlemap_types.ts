@@ -39,6 +39,45 @@ export interface AttackResult {
   readonly attacker: EntitySummary;
 }
 
+// Animation and sprite types
+export enum AnimationState {
+  IDLE = 'Idle',
+  IDLE2 = 'Idle2', 
+  WALK = 'Walk',
+  RUN = 'Run',
+  RUN_BACKWARDS = 'RunBackwards',
+  CROUCH_RUN = 'CrouchRun',
+  ATTACK1 = 'Attack1',
+  ATTACK2 = 'Attack2', 
+  ATTACK3 = 'Attack3',
+  TAKE_DAMAGE = 'TakeDamage',
+  DIE = 'Die'
+}
+
+export enum Direction {
+  N = 'N',   // North
+  NE = 'NE', // Northeast  
+  E = 'E',   // East
+  SE = 'SE', // Southeast
+  S = 'S',   // South
+  SW = 'SW', // Southwest
+  W = 'W',   // West
+  NW = 'NW'  // Northwest
+}
+
+// Entity sprite association
+export interface EntitySpriteMapping {
+  readonly entityId: string;
+  readonly spriteFolder: string;
+  readonly currentAnimation: AnimationState;
+  readonly currentDirection: Direction;
+  readonly scale?: number; // Optional scale multiplier, defaults to 1.0
+  readonly animationDurationSeconds?: number; // Optional animation duration in seconds, defaults to 2.0 (2 seconds for full cycle)
+}
+
+// Available sprite folders (read from assets/entities)
+export type SpriteFolderName = string; // Will be dynamically loaded
+
 /**
  * Helper function to make a position mutable if needed for API calls
  * Only use when specifically required for API calls that need mutable arrays
