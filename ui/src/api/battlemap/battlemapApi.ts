@@ -229,4 +229,19 @@ export const discoverAvailableSpriteFolders = async (): Promise<SpriteFolderName
 // Get sprite sheet path for entity
 export const getSpriteSheetPath = (spriteFolder: string, animation: AnimationState): string => {
   return `/assets/entities/${spriteFolder}/${animation}.json`;
+};
+
+// Refresh action economy for an entity (battlemap-specific)
+export const refreshEntityActionEconomy = async (entityId: string): Promise<EntitySummary> => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/entities/${entityId}/action-economy/refresh`,
+      null,
+      { params: DEFAULT_INCLUDE_PARAMS }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error refreshing entity action economy:', error);
+    throw error;
+  }
 }; 

@@ -58,15 +58,21 @@ export const useEntityMovement = () => {
     const path = getMovementPath(entityId, targetPosition);
     if (!path) return false;
     
-    // Check if entity is already moving
+    // Check if entity is ready for movement (not already moving or animating)
+    const spriteMapping = snap.entities.spriteMappings[entityId];
     const existingMovement = snap.entities.movementAnimations[entityId];
+    
     if (existingMovement) {
       console.log(`[useEntityMovement] Entity ${entity.name} is already moving, ignoring new movement`);
       return false;
     }
     
+    if (spriteMapping && !spriteMapping.isPositionSynced) {
+      console.log(`[useEntityMovement] Entity ${entity.name} is not position-synced, ignoring movement`);
+      return false;
+    }
+    
     // Get movement speed from sprite mapping (use animation duration as movement speed)
-    const spriteMapping = snap.entities.spriteMappings[entityId];
     const movementSpeed = spriteMapping?.animationDurationSeconds ? (1.0 / spriteMapping.animationDurationSeconds) : 1.0; // tiles per second
     
     // Create movement animation
@@ -81,6 +87,11 @@ export const useEntityMovement = () => {
     };
     
     console.log(`[useEntityMovement] Starting movement for ${entity.name} to ${targetPosition} with ${path.length} waypoints at ${movementSpeed} tiles/sec`);
+    
+    // IMMEDIATELY mark entity as out-of-sync to block further inputs
+    if (spriteMapping) {
+      battlemapActions.updateEntityVisualPosition(entityId, spriteMapping.visualPosition || { x: entity.position[0], y: entity.position[1] });
+    }
     
     // Start movement in store
     battlemapActions.startEntityMovement(entityId, movementAnimation);

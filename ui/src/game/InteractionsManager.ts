@@ -1,8 +1,8 @@
 import { Graphics, FederatedPointerEvent, Container } from 'pixi.js';
 import { battlemapStore, battlemapActions } from '../store';
-import { createTile, deleteTile, moveEntity } from '../api/battlemap/battlemapApi';
+import { createTile, deleteTile, moveEntity, getEntitiesAtPosition, executeAttack } from '../api/battlemap/battlemapApi';
 import { BattlemapEngine, LayerName } from './BattlemapEngine';
-import { TileSummary, Direction, MovementAnimation, toVisualPosition } from '../types/battlemap_types';
+import { TileSummary, Direction, MovementAnimation, toVisualPosition, AnimationState } from '../types/battlemap_types';
 import { Position } from '../types/common';
 
 // Define minimum width of entity panel
@@ -24,6 +24,10 @@ export class InteractionsManager {
   
   // Context menu event handler reference for cleanup
   private contextMenuHandler: ((event: Event) => boolean) | null = null;
+  
+  // Click throttling to prevent rapid inputs
+  private lastClickTime: number = 0;
+  private readonly CLICK_THROTTLE_MS = 300;
   
   /**
    * Initialize the interactions manager
@@ -182,6 +186,14 @@ export class InteractionsManager {
     // Skip handling during WASD movement
     if (snap.view.wasd_moving) return;
     
+    // Throttle clicks to prevent rapid inputs
+    const currentTime = Date.now();
+    if (currentTime - this.lastClickTime < this.CLICK_THROTTLE_MS) {
+      console.log(`[InteractionsManager] Click throttled (${currentTime - this.lastClickTime}ms since last click)`);
+      return;
+    }
+    this.lastClickTime = currentTime;
+    
     // Convert to grid coordinates
     const mouseX = event.global.x;
     const mouseY = event.global.y;
@@ -193,11 +205,19 @@ export class InteractionsManager {
     // Handle tile editing if enabled and not locked
     if (snap.controls.isEditing && !snap.controls.isLocked) {
       this.handleTileEdit(gridX, gridY);
+      return;
     }
     
-    // Handle entity movement if not editing
+    // Handle entity interactions if not editing
     if (!snap.controls.isEditing) {
-      this.handleEntityMovement(gridX, gridY);
+      // Check if this is a right-click (button 2)
+      if (event.button === 2) {
+        // Right-click: try attack first, fallback to movement
+        this.handleRightClick(gridX, gridY);
+      } else {
+        // Left-click for movement
+        this.handleEntityMovement(gridX, gridY);
+      }
     }
   }
   
@@ -290,6 +310,350 @@ export class InteractionsManager {
   }
   
   /**
+   * Handle right-click: try attack first, fallback to movement
+   */
+  private async handleRightClick(gridX: number, gridY: number): Promise<void> {
+    try {
+      // First, check if there are entities at the target position
+      const entitiesAtPosition = await getEntitiesAtPosition(gridX, gridY);
+      
+      if (entitiesAtPosition.length > 0) {
+        // There are entities at this position, try to attack
+        console.log(`[InteractionsManager] Right-click on position with entities, attempting attack`);
+        await this.handleEntityAttack(gridX, gridY);
+      } else {
+        // No entities at this position, fallback to movement
+        console.log(`[InteractionsManager] Right-click on empty position, fallback to movement`);
+        await this.handleEntityMovement(gridX, gridY);
+      }
+    } catch (error) {
+      console.error(`[InteractionsManager] Error handling right-click:`, error);
+      // On error, fallback to movement
+      await this.handleEntityMovement(gridX, gridY);
+    }
+  }
+  
+  /**
+   * Handle entity attack operations (right-click)
+   */
+  private async handleEntityAttack(gridX: number, gridY: number): Promise<void> {
+    const snap = battlemapStore;
+    const selectedEntityId = snap.entities.selectedEntityId;
+    
+    if (!selectedEntityId) {
+      console.log('[InteractionsManager] No entity selected for attack');
+      return;
+    }
+    
+    const attacker = snap.entities.summaries[selectedEntityId];
+    if (!attacker) {
+      console.warn('[InteractionsManager] Selected entity not found');
+      return;
+    }
+    
+    // Check if entity is ready for input
+    if (!this.isEntityReadyForInput(selectedEntityId)) {
+      console.log(`[InteractionsManager] Entity ${attacker.name} is not ready for input, ignoring attack command`);
+      return;
+    }
+    
+    try {
+      // Get entities at the target position
+      const entitiesAtPosition = await getEntitiesAtPosition(gridX, gridY);
+      
+      if (entitiesAtPosition.length === 0) {
+        console.log(`[InteractionsManager] No entities at position ${gridX},${gridY} to attack`);
+        return;
+      }
+      
+      // Find the first entity that is not the attacker
+      const target = entitiesAtPosition.find(entity => entity.uuid !== selectedEntityId);
+      
+      if (!target) {
+        console.log(`[InteractionsManager] No valid target found at position ${gridX},${gridY}`);
+        return;
+      }
+      
+      console.log(`[InteractionsManager] ${attacker.name} attempting to attack ${target.name} at position ${gridX},${gridY}`);
+      
+      // Check if attacker is adjacent to target
+      if (this.isAdjacentToTarget(attacker.position, target.position)) {
+        // Direct attack
+        console.log(`[InteractionsManager] ${attacker.name} is adjacent to ${target.name}, attacking directly`);
+        await this.executeDirectAttack(selectedEntityId, target.uuid);
+      } else {
+        // Move and attack - start movement first
+        console.log(`[InteractionsManager] ${attacker.name} needs to move to attack ${target.name}`);
+        await this.executeMoveAndAttack(selectedEntityId, target.uuid, target.position);
+      }
+      
+    } catch (error) {
+      console.error(`[InteractionsManager] Error handling attack:`, error);
+    }
+  }
+  
+  /**
+   * Check if an entity is adjacent to a target position
+   */
+  private isAdjacentToTarget(entityPosition: Position, targetPosition: Position): boolean {
+    const [entityX, entityY] = entityPosition;
+    const [targetX, targetY] = targetPosition;
+    
+    const dx = Math.abs(entityX - targetX);
+    const dy = Math.abs(entityY - targetY);
+    
+    // Adjacent means within 1 tile in any direction (including diagonals)
+    return dx <= 1 && dy <= 1 && (dx > 0 || dy > 0);
+  }
+  
+  /**
+   * Execute a direct attack (entities are adjacent)
+   */
+  private async executeDirectAttack(attackerId: string, targetId: string): Promise<void> {
+    const attacker = battlemapStore.entities.summaries[attackerId];
+    const target = battlemapStore.entities.summaries[targetId];
+    
+    if (!attacker || !target) return;
+    
+    try {
+      console.log(`[InteractionsManager] ${attacker.name} attacking ${target.name} directly`);
+      
+      // IMMEDIATELY mark entity as out-of-sync to block further inputs
+      const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
+      if (spriteMapping) {
+        battlemapActions.updateEntityVisualPosition(attackerId, spriteMapping.visualPosition || { x: attacker.position[0], y: attacker.position[1] });
+      }
+      
+      // Set direction to face the target before attacking
+      const direction = this.computeDirection(attacker.position, target.position);
+      battlemapActions.setEntityDirectionFromMapping(attackerId, direction);
+      
+      // Trigger attack animation
+      battlemapActions.setEntityAnimation(attackerId, AnimationState.ATTACK1);
+      
+      // Execute the attack
+      const attackResult = await executeAttack(attackerId, targetId, 'MAIN_HAND');
+      
+      console.log(`[InteractionsManager] Attack successful:`, attackResult);
+      
+      // Refresh entity summaries to get updated health/status
+      await battlemapActions.fetchEntitySummaries();
+      
+    } catch (error) {
+      console.error(`[InteractionsManager] Attack failed:`, error);
+      
+      // Return to idle animation on failure
+      const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
+      if (spriteMapping) {
+        battlemapActions.setEntityAnimation(attackerId, spriteMapping.idleAnimation);
+      }
+    }
+  }
+  
+  /**
+   * Execute move-and-attack sequence
+   */
+  private async executeMoveAndAttack(attackerId: string, targetId: string, targetPosition: Position): Promise<void> {
+    const attacker = battlemapStore.entities.summaries[attackerId];
+    const target = battlemapStore.entities.summaries[targetId];
+    
+    if (!attacker || !target) return;
+    
+    // Find the nearest adjacent position to the target
+    const attackPosition = this.findNearestAttackPosition(attackerId, targetPosition);
+    if (!attackPosition) {
+      console.warn(`[InteractionsManager] No valid attack position found for ${attacker.name} to reach ${target.name}`);
+      return;
+    }
+    
+    console.log(`[InteractionsManager] ${attacker.name} moving to attack position ${attackPosition} to reach ${target.name}`);
+    
+    try {
+      // Start movement to attack position using the same logic as handleEntityMovement
+      const success = await this.startEntityMovementToPosition(attackerId, attackPosition);
+      if (!success) {
+        console.warn(`[InteractionsManager] Failed to start movement for ${attacker.name}`);
+        return;
+      }
+      
+      // Set up a listener for when movement completes to execute the attack
+      const checkMovementComplete = () => {
+        const currentMovement = battlemapStore.entities.movementAnimations[attackerId];
+        const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
+        
+        // Check if movement is complete (no active movement and back to idle)
+        if (!currentMovement && spriteMapping?.movementState === 'idle') {
+          console.log(`[InteractionsManager] Movement completed for ${attacker.name}, executing attack on ${target.name}`);
+          
+          // Execute the attack after movement completes
+          this.executeDirectAttack(attackerId, targetId);
+          
+          // Stop checking
+          clearInterval(movementCheckInterval);
+        }
+      };
+      
+      // Check every 100ms for movement completion
+      const movementCheckInterval = setInterval(checkMovementComplete, 100);
+      
+      // Safety timeout - stop checking after 10 seconds
+      setTimeout(() => {
+        clearInterval(movementCheckInterval);
+        console.warn(`[InteractionsManager] Movement timeout for ${attacker.name}, attack cancelled`);
+      }, 10000);
+      
+    } catch (error) {
+      console.error(`[InteractionsManager] Move-and-attack failed:`, error);
+    }
+  }
+  
+  /**
+   * Find the nearest adjacent cell to a target that the entity can move to
+   */
+  private findNearestAttackPosition(entityId: string, targetPosition: Position): Position | null {
+    const entity = battlemapStore.entities.summaries[entityId];
+    if (!entity) return null;
+    
+    const [targetX, targetY] = targetPosition;
+    
+    // Check all 8 adjacent positions around the target
+    const adjacentPositions: Position[] = [
+      [targetX - 1, targetY - 1], // NW
+      [targetX, targetY - 1],     // N
+      [targetX + 1, targetY - 1], // NE
+      [targetX + 1, targetY],     // E
+      [targetX + 1, targetY + 1], // SE
+      [targetX, targetY + 1],     // S
+      [targetX - 1, targetY + 1], // SW
+      [targetX - 1, targetY]      // W
+    ];
+    
+    // Filter positions that the entity can move to (has path in senses)
+    const validPositions = adjacentPositions.filter(pos => {
+      const posKey = `${pos[0]},${pos[1]}`;
+      return !!entity.senses.paths[posKey];
+    });
+    
+    if (validPositions.length === 0) return null;
+    
+    // Find the position with the shortest path
+    let bestPosition: Position | null = null;
+    let shortestPathLength = Infinity;
+    
+    for (const position of validPositions) {
+      const posKey = `${position[0]},${position[1]}`;
+      const path = entity.senses.paths[posKey];
+      if (path && path.length < shortestPathLength) {
+        shortestPathLength = path.length;
+        bestPosition = position;
+      }
+    }
+    
+    return bestPosition;
+  }
+  
+  /**
+   * Start entity movement to a specific position (used for move-and-attack)
+   */
+  private async startEntityMovementToPosition(entityId: string, targetPosition: Position): Promise<boolean> {
+    const entity = battlemapStore.entities.summaries[entityId];
+    if (!entity) {
+      console.warn('[InteractionsManager] Entity not found for movement');
+      return false;
+    }
+    
+    const [gridX, gridY] = targetPosition;
+    
+    // Check if entity can move to this position (requires path in senses)
+    const posKey = `${gridX},${gridY}`;
+    const path = entity.senses.paths[posKey];
+    
+    if (!path) {
+      console.log(`[InteractionsManager] No path available for ${entity.name} to position ${targetPosition}`);
+      return false;
+    }
+    
+
+    
+    console.log(`[InteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
+    
+    // IMMEDIATELY mark entity as out-of-sync to block further inputs
+    const spriteMapping = battlemapStore.entities.spriteMappings[entityId];
+    if (spriteMapping) {
+      battlemapActions.updateEntityVisualPosition(entityId, spriteMapping.visualPosition || { x: entity.position[0], y: entity.position[1] });
+    }
+    
+    // Get movement speed from sprite mapping (use animation duration as movement speed)
+    const movementSpeed = spriteMapping?.animationDurationSeconds ? (1.0 / spriteMapping.animationDurationSeconds) : 1.0; // tiles per second
+    
+    // Create movement animation with full path including current position
+    const fullPath = [entity.position, ...path];
+    const movementAnimation: MovementAnimation = {
+      entityId: entityId,
+      path: fullPath,
+      currentPathIndex: 0,
+      startTime: Date.now(),
+      movementSpeed,
+      targetPosition,
+      isServerApproved: undefined, // Will be set when server responds
+    };
+    
+    // Start movement animation immediately
+    battlemapActions.startEntityMovement(entityId, movementAnimation);
+    
+    // OPTIMIZED: Set initial direction immediately (EntityRenderer will handle direction changes during movement locally)
+    if (fullPath.length > 1) {
+      const initialDirection = this.computeDirection(fullPath[0], fullPath[1]);
+      battlemapActions.setEntityDirectionFromMapping(entityId, initialDirection);
+    }
+    
+    try {
+      // Send movement to server (don't wait for response to start animation)
+      const updatedEntity = await moveEntity(entityId, targetPosition);
+      
+      // Mark movement as server-approved
+      battlemapActions.updateEntityMovementAnimation(entityId, { isServerApproved: true });
+      
+      // Refresh entities to get updated server state
+      await battlemapActions.fetchEntitySummaries();
+      
+      console.log(`[InteractionsManager] Server approved movement for ${entity.name}`);
+      return true;
+    } catch (error) {
+      console.error(`[InteractionsManager] Server rejected movement for ${entity.name}:`, error);
+      
+      // Mark movement as server-rejected
+      battlemapActions.updateEntityMovementAnimation(entityId, { isServerApproved: false });
+      
+      // Movement animation will continue and then snap back on completion
+      return false;
+    }
+  }
+  
+  /**
+   * Check if an entity is ready for input (in sync and not animating)
+   */
+  private isEntityReadyForInput(entityId: string): boolean {
+    const snap = battlemapStore;
+    const spriteMapping = snap.entities.spriteMappings[entityId];
+    const movementAnimation = snap.entities.movementAnimations[entityId];
+    
+    // Block input if entity is moving
+    if (movementAnimation) {
+      console.log(`[InteractionsManager] Entity ${entityId} is currently moving, blocking input`);
+      return false;
+    }
+    
+    // Block input if entity is not position-synced (e.g., during attack animations)
+    if (spriteMapping && !spriteMapping.isPositionSynced) {
+      console.log(`[InteractionsManager] Entity ${entityId} is not position-synced, blocking input`);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
    * Handle entity movement operations
    */
   private async handleEntityMovement(gridX: number, gridY: number): Promise<void> {
@@ -307,6 +671,12 @@ export class InteractionsManager {
       return;
     }
     
+    // Check if entity is ready for input
+    if (!this.isEntityReadyForInput(selectedEntityId)) {
+      console.log(`[InteractionsManager] Entity ${entity.name} is not ready for input, ignoring movement command`);
+      return;
+    }
+    
     const targetPosition: Position = [gridX, gridY];
     
     // Check if entity can move to this position (requires path in senses)
@@ -318,17 +688,17 @@ export class InteractionsManager {
       return;
     }
     
-    // Check if entity is already moving
-    const existingMovement = snap.entities.movementAnimations[selectedEntityId];
-    if (existingMovement) {
-      console.log(`[InteractionsManager] Entity ${entity.name} is already moving, ignoring click`);
-      return;
-    }
+
     
     console.log(`[InteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
     
-    // Get movement speed from sprite mapping (use animation duration as movement speed)
+    // IMMEDIATELY mark entity as out-of-sync to block further inputs
     const spriteMapping = snap.entities.spriteMappings[selectedEntityId];
+    if (spriteMapping) {
+      battlemapActions.updateEntityVisualPosition(selectedEntityId, spriteMapping.visualPosition || { x: entity.position[0], y: entity.position[1] });
+    }
+    
+    // Get movement speed from sprite mapping (use animation duration as movement speed)
     const movementSpeed = spriteMapping?.animationDurationSeconds ? (1.0 / spriteMapping.animationDurationSeconds) : 1.0; // tiles per second
     
     // Create movement animation with full path including current position
@@ -346,10 +716,10 @@ export class InteractionsManager {
     // Start movement animation immediately
     battlemapActions.startEntityMovement(selectedEntityId, movementAnimation);
     
-    // Compute and update direction based on first movement step
+    // OPTIMIZED: Set initial direction immediately (EntityRenderer will handle direction changes during movement locally)
     if (fullPath.length > 1) {
-      const direction = this.computeDirection(fullPath[0], fullPath[1]);
-      battlemapActions.setEntityDirectionFromMapping(selectedEntityId, direction);
+      const initialDirection = this.computeDirection(fullPath[0], fullPath[1]);
+      battlemapActions.setEntityDirectionFromMapping(selectedEntityId, initialDirection);
     }
     
     try {

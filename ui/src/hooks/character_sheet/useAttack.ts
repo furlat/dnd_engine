@@ -2,6 +2,7 @@ import { useSnapshot } from 'valtio';
 import { useState, useCallback } from 'react';
 import { characterSheetStore, characterSheetActions } from '../../store/characterSheetStore';
 import { eventQueueActions } from '../../store/eventQueueStore';
+import { battlemapStore } from '../../store/battlemapStore';
 import type { 
   AttackBonusCalculationSnapshot,
   EquipmentSnapshot,
@@ -9,6 +10,7 @@ import type {
   EquipmentItem
 } from '../../types/characterSheet_types';
 import { fetchAllEquipment, equipItem, unequipItem } from '../../api/character_sheet/characterSheetApi';
+import { useMoveAndAttack } from '../battlemap/useMoveAndAttack';
 
 export type WeaponSlot = 'MAIN_HAND' | 'OFF_HAND';
 
@@ -37,6 +39,9 @@ interface AttackData {
   handleMenuClick: (event: React.MouseEvent<HTMLElement>) => void;
   handleMenuClose: () => void;
   clearError: () => void;
+  // Attack actions
+  attackTarget: (targetId: string, slot?: WeaponSlot) => Promise<boolean>;
+  moveAndAttackTarget: (targetId: string, slot?: WeaponSlot) => Promise<boolean>;
   // Computed values
   getWeaponName: (slot: WeaponSlot) => string;
   getWeaponDamageExpr: (slot: WeaponSlot) => string;
@@ -48,6 +53,7 @@ interface AttackData {
 
 export function useAttack(): AttackData {
   const snap = useSnapshot(characterSheetStore);
+  const battlemapSnap = useSnapshot(battlemapStore);
   const [detailMode, setDetailMode] = useState<'attack' | 'damage' | 'advantage'>('attack');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [itemDetailsOpen, setItemDetailsOpen] = useState(false);
@@ -55,6 +61,9 @@ export function useAttack(): AttackData {
   const [availableWeapons, setAvailableWeapons] = useState<EquipmentItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  
+  // Get move-and-attack functionality
+  const { attackTarget: battleAttackTarget, moveAndAttack: battleMoveAndAttack } = useMoveAndAttack();
 
   const equipment = snap.character?.equipment ?? null;
   const calcsObj = snap.character?.attack_calculations ?? {};
@@ -238,6 +247,25 @@ export function useAttack(): AttackData {
     return items;
   }, [equipment, mainHandCalc, offHandCalc]);
 
+  // Attack actions using battlemap functionality
+  const attackTarget = useCallback(async (targetId: string, slot: WeaponSlot = 'MAIN_HAND'): Promise<boolean> => {
+    if (!snap.character) {
+      console.warn('[useAttack] No character available for attack');
+      return false;
+    }
+    
+    return await battleAttackTarget(snap.character.uuid, targetId, slot);
+  }, [snap.character, battleAttackTarget]);
+
+  const moveAndAttackTarget = useCallback(async (targetId: string, slot: WeaponSlot = 'MAIN_HAND'): Promise<boolean> => {
+    if (!snap.character) {
+      console.warn('[useAttack] No character available for move-and-attack');
+      return false;
+    }
+    
+    return await battleMoveAndAttack(snap.character.uuid, targetId, slot);
+  }, [snap.character, battleMoveAndAttack]);
+
   return {
     mainHandCalc,
     offHandCalc,
@@ -260,6 +288,8 @@ export function useAttack(): AttackData {
     handleMenuClick,
     handleMenuClose,
     clearError,
+    attackTarget,
+    moveAndAttackTarget,
     getWeaponName,
     getWeaponDamageExpr,
     getWeaponDamageType,
