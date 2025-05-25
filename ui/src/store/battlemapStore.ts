@@ -333,12 +333,13 @@ const battlemapActions = {
           isPositionSynced: true,
         };
       } else {
-        // If not resyncing (server approved), stay at current position and go to idle
+        // If not resyncing (server approved), sync visual position to server position and go to idle
         battlemapStore.entities.spriteMappings[entityId] = {
           ...mapping,
           movementState: MovementState.IDLE,
           currentAnimation: mapping.idleAnimation, // Return to idle animation
-          isPositionSynced: entity ? isVisualPositionSynced(mapping.visualPosition || toVisualPosition(entity.position), entity.position) : false,
+          visualPosition: entity ? toVisualPosition(entity.position) : mapping.visualPosition,
+          isPositionSynced: true, // Server approved, so we're synced
         };
       }
     }
