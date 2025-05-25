@@ -16,6 +16,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  CircularProgress,
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -48,84 +49,132 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
   );
 };
 
+// Component to show a preview of the sprite (first frame of south-facing idle)
 const SpritePreview: React.FC<{ spriteFolder: string; isSelected: boolean }> = ({ 
   spriteFolder, 
   isSelected 
 }) => {
-  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
-  
-  // Try to load a preview image (first frame of Idle animation, South direction)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
     const loadPreview = async () => {
+      setIsLoading(true);
       try {
-        // Try to load the idle sprite sheet JSON to get the first frame
-        const spritesheetPath = getSpriteSheetPath(spriteFolder, AnimationState.IDLE);
+        // Try to load the Idle spritesheet for this folder
+        const spritesheetPath = `/assets/entities/${spriteFolder}/Idle.json`;
         const response = await fetch(spritesheetPath);
         
-        if (response.ok) {
-          const spritesheetData = await response.json();
-          
-          // Look for the first frame of south-facing idle animation
-          // Pattern: Idle_S_1.png or similar
-          const frames = Object.keys(spritesheetData.frames || {});
-          const southIdleFrame = frames.find(frame => 
-            frame.includes('_S_') && frame.includes('_1.')
-          );
-          
-          if (southIdleFrame) {
-            // Extract the frame from the spritesheet
-            const baseImagePath = spritesheetPath.replace('.json', '.png');
-            setPreviewSrc(baseImagePath); // For now, show the full spritesheet
-            // TODO: Extract specific frame if needed
-          } else {
-            setPreviewSrc(null);
+        if (!response.ok) {
+          throw new Error(`Failed to load spritesheet: ${response.status}`);
+        }
+        
+        const spritesheetData = await response.json();
+        
+        // Look for south-facing idle frame (try different naming patterns)
+        const possibleFrameNames = [
+          'Idle_S_00.png',
+          'Idle_S_01.png', 
+          'Idle_S_1.png',
+          'Idle_S_0.png',
+          'idle_s_00.png',
+          'idle_s_01.png',
+          'idle_s_1.png',
+          'idle_s_0.png'
+        ];
+        
+        let frameData = null;
+        for (const frameName of possibleFrameNames) {
+          if (spritesheetData.frames && spritesheetData.frames[frameName]) {
+            frameData = spritesheetData.frames[frameName];
+            break;
           }
-        } else {
-          setPreviewSrc(null);
+        }
+        
+        if (!frameData) {
+          // If no south frame found, try to get the first available frame
+          const firstFrameKey = Object.keys(spritesheetData.frames || {})[0];
+          if (firstFrameKey) {
+            frameData = spritesheetData.frames[firstFrameKey];
+          }
+        }
+        
+        if (frameData && spritesheetData.meta && spritesheetData.meta.image) {
+          // Create a canvas to extract the specific frame
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error('Failed to load sprite image'));
+            img.src = `/assets/entities/${spriteFolder}/${spritesheetData.meta.image}`;
+          });
+          
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            const frame = frameData.frame;
+            canvas.width = frame.w;
+            canvas.height = frame.h;
+            
+            // Draw the specific frame from the spritesheet
+            ctx.drawImage(
+              img,
+              frame.x, frame.y, frame.w, frame.h, // Source rectangle
+              0, 0, frame.w, frame.h // Destination rectangle
+            );
+            
+            setPreviewUrl(canvas.toDataURL());
+          }
         }
       } catch (error) {
         console.warn(`[SpritePreview] Could not load preview for ${spriteFolder}:`, error);
-        setPreviewSrc(null);
+        setPreviewUrl(null);
+      } finally {
+        setIsLoading(false);
       }
     };
-    
+
     loadPreview();
   }, [spriteFolder]);
 
   return (
     <Box
       sx={{
-        width: 48,
-        height: 48,
-        borderRadius: 1,
-        mr: 1.5,
-        transition: 'all 0.2s ease',
-        opacity: isSelected ? 1 : 0.7,
-        overflow: 'hidden',
-        position: 'relative',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        backgroundColor: 'rgba(50, 50, 50, 0.5)',
+        width: '100%',
+        height: '100%',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        '&:hover': {
-          opacity: 1,
-          transform: 'scale(1.05)'
-        },
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 1,
+        overflow: 'hidden',
       }}
+      title={spriteFolder} // Show full name on hover
     >
-      {previewSrc ? (
-        <img
-          src={previewSrc}
+      {isLoading ? (
+        <CircularProgress size={32} sx={{ color: 'rgba(255,255,255,0.5)' }} />
+      ) : previewUrl ? (
+        <Box
+          component="img"
+          src={previewUrl}
           alt={`${spriteFolder} preview`}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain'
+          sx={{
+            maxWidth: '100%',
+            maxHeight: '100%',
+            objectFit: 'contain',
           }}
         />
       ) : (
-        <PersonIcon sx={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 32 }} />
+        <Box
+          sx={{
+            color: 'rgba(255,255,255,0.5)',
+            fontSize: '2rem',
+          }}
+        >
+          ?
+        </Box>
       )}
     </Box>
   );
@@ -202,21 +251,42 @@ const SpriteEditorPanel: React.FC<SpriteEditorPanelProps> = ({ isLocked }) => {
   }
 
   // Categorize sprites
-  const humanoidSprites = availableSpriteFolders.filter(folder => 
-    !folder.toLowerCase().includes('zombie') && 
-    !folder.toLowerCase().includes('ork') &&
-    !folder.toLowerCase().includes('golem')
-  );
+  const humanoidSprites = availableSpriteFolders.filter(folder => {
+    const lowerFolder = folder.toLowerCase();
+    return !lowerFolder.includes('zombie') && 
+           !lowerFolder.includes('ork') &&
+           !lowerFolder.includes('golem') &&
+           !lowerFolder.includes('brute') &&
+           !lowerFolder.includes('ogre') &&
+           !lowerFolder.includes('deathlord') &&
+           !lowerFolder.includes('darkknight') &&
+           !lowerFolder.includes('berserker_undead') &&
+           !lowerFolder.includes('6warrior') &&
+           !lowerFolder.includes('5archer') &&
+           !lowerFolder.includes('7darkarcher') &&
+           !lowerFolder.includes('8necromancer') &&
+           !lowerFolder.includes('9wizard');
+  });
   
   const zombieSprites = availableSpriteFolders.filter(folder => 
     folder.toLowerCase().includes('zombie')
   );
   
-  const monsterSprites = availableSpriteFolders.filter(folder => 
-    folder.toLowerCase().includes('ork') || 
-    folder.toLowerCase().includes('golem') ||
-    folder.toLowerCase().includes('ogre')
-  );
+  const monsterSprites = availableSpriteFolders.filter(folder => {
+    const lowerFolder = folder.toLowerCase();
+    return lowerFolder.includes('ork') || 
+           lowerFolder.includes('golem') ||
+           lowerFolder.includes('brute') ||
+           lowerFolder.includes('ogre') ||
+           lowerFolder.includes('deathlord') ||
+           lowerFolder.includes('darkknight') ||
+           lowerFolder.includes('berserker_undead') ||
+           lowerFolder.includes('6warrior') ||
+           lowerFolder.includes('5archer') ||
+           lowerFolder.includes('7darkarcher') ||
+           lowerFolder.includes('8necromancer') ||
+           lowerFolder.includes('9wizard');
+  });
 
   return (
     <Paper
@@ -446,8 +516,8 @@ const SpriteGrid: React.FC<{
           justifyContent: 'flex-start',
           px: 1,
           py: 1,
-          minWidth: '120px',
-          maxWidth: '180px',
+          width: '140px', // Fixed width for consistency
+          height: '90px', // Fixed height for consistency
           display: 'flex',
           alignItems: 'center',
           flexDirection: 'column',
@@ -468,9 +538,6 @@ const SpriteGrid: React.FC<{
       {sprites.map(sprite => (
         <ToggleButton key={sprite} value={sprite} aria-label={sprite}>
           <SpritePreview spriteFolder={sprite} isSelected={selectedSprite === sprite} />
-          <Typography variant="caption" sx={{ textAlign: 'center', fontSize: '0.7rem' }}>
-            {sprite}
-          </Typography>
         </ToggleButton>
       ))}
     </ToggleButtonGroup>
