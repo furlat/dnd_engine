@@ -4,7 +4,6 @@ import { createTile, deleteTile, moveEntity, getEntitiesAtPosition, executeAttac
 import { BattlemapEngine, LayerName } from './BattlemapEngine';
 import { TileSummary, Direction, MovementAnimation, toVisualPosition, AnimationState } from '../types/battlemap_types';
 import { Position } from '../types/common';
-import { TileType } from '../hooks/battlemap';
 
 // Define minimum width of entity panel
 const ENTITY_PANEL_WIDTH = 250;
@@ -562,18 +561,12 @@ export class InteractionsManager {
   }
   
   /**
-   * Start entity movement to a position with path senses for debugging
+   * Start entity movement to a specific position (used for move-and-attack)
    */
   private async startEntityMovementToPosition(entityId: string, targetPosition: Position): Promise<boolean> {
     const entity = battlemapStore.entities.summaries[entityId];
     if (!entity) {
-      console.warn(`[InteractionsManager] Entity ${entityId} not found for movement`);
-      return false;
-    }
-    
-    // Check if entity is ready for movement
-    if (!this.isEntityReadyForInput(entityId)) {
-      console.log(`[InteractionsManager] Entity ${entity.name} is not ready for movement`);
+      console.warn('[InteractionsManager] Entity not found for movement');
       return false;
     }
     
@@ -590,7 +583,8 @@ export class InteractionsManager {
     
     console.log(`[InteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
     
-    // Cache senses data before movement starts
+    // NEW: Cache senses data for the selected entity BEFORE starting movement
+    // This prevents visibility flickering when changing perspectives during movement
     this.cacheSensesDataForMovement();
     
     // IMMEDIATELY mark entity as out-of-sync to block further inputs
@@ -624,23 +618,17 @@ export class InteractionsManager {
     }
     
     try {
-      // Request path senses for debugging/analysis (can be disabled for performance)
-      const includePathSenses = true; // Enable for debugging movement paths
-      
       // Send movement to server (don't wait for response to start animation)
-      const movementResponse = await moveEntity(entityId, targetPosition, includePathSenses);
+      // NEW: Use the updated moveEntity API that returns MovementResponse with path senses
+      const updatedEntity = await moveEntity(entityId, targetPosition, true); // Default to true for debugging
       
       // Mark movement as server-approved
       battlemapActions.updateEntityMovementAnimation(entityId, { isServerApproved: true });
-      
-      // Handle the movement response (updates entity and logs path senses)
-      battlemapActions.handleMovementResponse(movementResponse);
       
       // Refresh entities to get updated server state
       await battlemapActions.fetchEntitySummaries();
       
       console.log(`[InteractionsManager] Server approved movement for ${entity.name}`);
-      
       return true;
     } catch (error) {
       console.error(`[InteractionsManager] Server rejected movement for ${entity.name}:`, error);
@@ -781,7 +769,8 @@ export class InteractionsManager {
     
     try {
       // Send movement to server (don't wait for response to start animation)
-      const updatedEntity = await moveEntity(selectedEntityId, targetPosition);
+      // NEW: Use the updated moveEntity API that returns MovementResponse with path senses
+      const updatedEntity = await moveEntity(selectedEntityId, targetPosition, true); // Default to true for debugging
       
       // Mark movement as server-approved
       battlemapActions.updateEntityMovementAnimation(selectedEntityId, { isServerApproved: true });

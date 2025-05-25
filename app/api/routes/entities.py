@@ -36,7 +36,7 @@ class MoveRequest(BaseModel):
 class MovementResponse(BaseModel):
     event: EventSnapshot
     entity: EntitySummary
-    path_senses: List[SensesSnapshot] = Field(default_factory=list)
+    path_senses: Dict[Tuple[int,int],SensesSnapshot] = Field(default_factory=dict)
 
 # Create router
 router = APIRouter(
@@ -533,10 +533,15 @@ async def move_entity(
         movement_event = movement_action.apply()
         entity_summary = EntitySummary.from_engine(entity)
         assert isinstance(movement_event, MovementEvent)
+        if request.include_paths_senses and movement_event.path:
+            if movement_event.status_message:
+                movement_event.status_message += f"\n added senses info"
+            else:
+                movement_event.status_message = f"added senses info"
         return MovementResponse(
             event=EventSnapshot.from_engine(movement_event, include_children=True),
             entity=entity_summary,
-            path_senses= [SensesSnapshot.from_engine(entity.create_senses_copy_at_position(pos)) for pos in movement_event.path] if request.include_paths_senses and movement_event.path else []
+            path_senses= {pos: SensesSnapshot.from_engine(entity.create_senses_copy_at_position(pos)) for pos in movement_event.path} if request.include_paths_senses and movement_event.path else {}
         )
     except Exception as e:
         raise HTTPException(
