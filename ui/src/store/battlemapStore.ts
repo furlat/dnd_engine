@@ -1,5 +1,5 @@
 import { proxy } from 'valtio';
-import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName } from '../types/battlemap_types';
+import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, VisualPosition, toVisualPosition, isVisualPositionSynced } from '../types/battlemap_types';
 import { EntitySummary } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
@@ -41,6 +41,8 @@ export interface EntityState {
   spriteMappings: Record<string, EntitySpriteMapping>;
   // Available sprite folders
   availableSpriteFolders: SpriteFolderName[];
+  // Movement animations
+  movementAnimations: Record<string, MovementAnimation>;
 }
 
 export interface BattlemapStoreState {
@@ -87,6 +89,7 @@ const battlemapStore = proxy<BattlemapStoreState>({
     directions: {},
     spriteMappings: {},
     availableSpriteFolders: [],
+    movementAnimations: {},
   },
   loading: false,
   error: null,
@@ -196,13 +199,18 @@ const battlemapActions = {
   // NEW: Sprite mapping actions
   setEntitySpriteMapping: (entityId: string, spriteFolder: string) => {
     const existing = battlemapStore.entities.spriteMappings[entityId];
+    const entity = battlemapStore.entities.summaries[entityId];
     battlemapStore.entities.spriteMappings[entityId] = {
       entityId,
       spriteFolder,
-      currentAnimation: existing?.currentAnimation || AnimationState.IDLE,
+      idleAnimation: existing?.idleAnimation || AnimationState.IDLE,
+      currentAnimation: existing?.currentAnimation || existing?.idleAnimation || AnimationState.IDLE,
       currentDirection: existing?.currentDirection || Direction.S,
       scale: existing?.scale || 1.0, // Default to 1.0 instead of 0.6
       animationDurationSeconds: existing?.animationDurationSeconds || 1.0, // 1 second default for testing
+      movementState: existing?.movementState || MovementState.IDLE,
+      visualPosition: existing?.visualPosition || (entity ? toVisualPosition(entity.position) : undefined),
+      isPositionSynced: existing?.isPositionSynced ?? true,
     };
   },
   
@@ -212,6 +220,18 @@ const battlemapActions = {
       battlemapStore.entities.spriteMappings[entityId] = {
         ...mapping,
         currentAnimation: animation,
+      };
+    }
+  },
+
+  setEntityIdleAnimation: (entityId: string, animation: AnimationState) => {
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        idleAnimation: animation,
+        // If currently idle, also update current animation
+        currentAnimation: mapping.movementState === MovementState.IDLE ? animation : mapping.currentAnimation,
       };
     }
   },
@@ -254,6 +274,87 @@ const battlemapActions = {
   
   removeEntitySpriteMapping: (entityId: string) => {
     delete battlemapStore.entities.spriteMappings[entityId];
+  },
+
+  // Movement animation actions
+  startEntityMovement: (entityId: string, movementAnimation: MovementAnimation) => {
+    battlemapStore.entities.movementAnimations[entityId] = movementAnimation;
+    
+    // Update sprite mapping to moving state
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        movementState: MovementState.MOVING,
+        currentAnimation: AnimationState.WALK, // Switch to walk animation
+        isPositionSynced: false, // Visual position will diverge from server
+      };
+    }
+  },
+
+  updateEntityMovementAnimation: (entityId: string, updates: Partial<MovementAnimation>) => {
+    const existing = battlemapStore.entities.movementAnimations[entityId];
+    if (existing) {
+      battlemapStore.entities.movementAnimations[entityId] = {
+        ...existing,
+        ...updates,
+      };
+    }
+  },
+
+  updateEntityVisualPosition: (entityId: string, visualPosition: VisualPosition) => {
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      const entity = battlemapStore.entities.summaries[entityId];
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        visualPosition,
+        isPositionSynced: entity ? isVisualPositionSynced(visualPosition, entity.position) : false,
+      };
+    }
+  },
+
+  completeEntityMovement: (entityId: string, shouldResync: boolean = true) => {
+    // Remove movement animation
+    delete battlemapStore.entities.movementAnimations[entityId];
+    
+    // Update sprite mapping
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      const entity = battlemapStore.entities.summaries[entityId];
+      
+      if (shouldResync && entity) {
+        // If resyncing, snap back to server position and go to idle
+        battlemapStore.entities.spriteMappings[entityId] = {
+          ...mapping,
+          movementState: MovementState.IDLE,
+          currentAnimation: mapping.idleAnimation, // Return to idle animation
+          visualPosition: toVisualPosition(entity.position),
+          isPositionSynced: true,
+        };
+      } else {
+        // If not resyncing (server approved), stay at current position and go to idle
+        battlemapStore.entities.spriteMappings[entityId] = {
+          ...mapping,
+          movementState: MovementState.IDLE,
+          currentAnimation: mapping.idleAnimation, // Return to idle animation
+          isPositionSynced: entity ? isVisualPositionSynced(mapping.visualPosition || toVisualPosition(entity.position), entity.position) : false,
+        };
+      }
+    }
+  },
+
+  resyncEntityPosition: (entityId: string) => {
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    const entity = battlemapStore.entities.summaries[entityId];
+    if (mapping && entity) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        movementState: MovementState.IDLE,
+        visualPosition: toVisualPosition(entity.position),
+        isPositionSynced: true,
+      };
+    }
   },
   
   // Get the currently selected entity
