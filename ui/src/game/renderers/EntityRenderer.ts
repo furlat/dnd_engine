@@ -1,4 +1,4 @@
-import { Container, AnimatedSprite, Assets, Spritesheet, Ticker } from 'pixi.js';
+import { Container, AnimatedSprite, Assets, Spritesheet, Ticker, Texture } from 'pixi.js';
 import { battlemapStore, battlemapActions } from '../../store';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
@@ -8,7 +8,35 @@ import { EntitySummary } from '../../types/common';
 import { getSpriteSheetPath } from '../../api/battlemap/battlemapApi';
 
 /**
- * EntityRenderer handles rendering animated sprites for entities
+ * Cached sprite data using PixiJS v8 Assets cache properly
+ * Key format: "spriteFolder|animation" for consistent cache management
+ */
+interface CachedSpriteData {
+  spritesheet: Spritesheet;
+  directionTextures: Record<Direction, Texture[]>;
+  cacheKey: string; // For proper cleanup
+}
+
+/**
+ * Local entity state for direction optimization - avoids store spam during movement
+ */
+interface LocalEntityState {
+  currentDirection: Direction;
+  pendingStoreDirection?: Direction; // Only set when we need to update store at the end
+  lastStoreUpdateTime: number;
+}
+
+/**
+ * Precomputed movement data to avoid recalculation
+ */
+interface PrecomputedMovementData {
+  directions: Direction[]; // Direction for each path segment
+  distances: number[];     // Distance for each path segment
+  totalDistance: number;   // Total path distance
+}
+
+/**
+ * EntityRenderer with optimized PixiJS v8 cache management and direction handling
  */
 export class EntityRenderer extends AbstractRenderer {
   // Specify which layer this renderer belongs to
@@ -20,7 +48,15 @@ export class EntityRenderer extends AbstractRenderer {
   // Entity management
   private entityContainers: Map<string, Container> = new Map();
   private animatedSprites: Map<string, AnimatedSprite> = new Map();
-  private loadedSpritesheets: Map<string, Spritesheet> = new Map();
+  
+  // OPTIMIZED: Use PixiJS Assets cache with proper key management
+  private spriteCacheByKey: Map<string, CachedSpriteData> = new Map(); // key: "spriteFolder|animation"
+  
+  // OPTIMIZED: Local entity state to avoid store spam during movement
+  private localEntityStates: Map<string, LocalEntityState> = new Map();
+  
+  // OPTIMIZED: Precomputed movement data to avoid recalculation
+  private precomputedMovementData: Map<string, PrecomputedMovementData> = new Map();
   
   // Store unsubscribe callbacks
   private unsubscribeCallbacks: Array<() => void> = [];
@@ -37,7 +73,7 @@ export class EntityRenderer extends AbstractRenderer {
   
   initialize(engine: any): void {
     super.initialize(engine);
-    console.log('[EntityRenderer] Initializing');
+    console.log('[EntityRenderer] Initializing with PixiJS v8 Assets cache management');
     
     // Subscribe to store changes
     this.setupSubscriptions();
@@ -59,11 +95,45 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
-   * Update a single movement animation with direction-aware interpolation
+   * Precompute movement data when movement starts
+   */
+  private precomputeMovementData(movement: MovementAnimation): PrecomputedMovementData {
+    const directions: Direction[] = [];
+    const distances: number[] = [];
+    let totalDistance = 0;
+    
+    // Compute direction and distance for each path segment
+    for (let i = 0; i < movement.path.length - 1; i++) {
+      const fromPos = movement.path[i];
+      const toPos = movement.path[i + 1];
+      
+      // Compute direction
+      const direction = this.computeDirectionFromPositions(fromPos, toPos);
+      directions.push(direction);
+      
+      // Compute distance
+      const distance = this.calculateDistance(fromPos, toPos);
+      distances.push(distance);
+      totalDistance += distance;
+    }
+    
+    return { directions, distances, totalDistance };
+  }
+  
+  /**
+   * Update a single movement animation with PRECOMPUTED direction handling
    */
   private updateMovementAnimation(movement: MovementAnimation, deltaTime: number): void {
     const entity = battlemapStore.entities.summaries[movement.entityId];
     if (!entity) return;
+    
+    // Get or create precomputed data
+    let precomputed = this.precomputedMovementData.get(movement.entityId);
+    if (!precomputed) {
+      precomputed = this.precomputeMovementData(movement);
+      this.precomputedMovementData.set(movement.entityId, precomputed);
+      console.log(`[EntityRenderer] Precomputed movement data for ${entity.name}: ${precomputed.directions.length} segments, total distance ${precomputed.totalDistance.toFixed(2)}`);
+    }
     
     const currentTime = Date.now();
     const elapsedSeconds = (currentTime - movement.startTime) / 1000;
@@ -71,14 +141,13 @@ export class EntityRenderer extends AbstractRenderer {
     // Calculate how far along the path we should be based on movement speed
     const distanceTraveled = elapsedSeconds * movement.movementSpeed;
     
-    // Find current position along the path
+    // Find current position along the path using precomputed distances
     let pathDistance = 0;
     let currentPathIndex = 0;
     let interpolationT = 0;
     
-    // Calculate cumulative distances along path
-    for (let i = 0; i < movement.path.length - 1; i++) {
-      const segmentDistance = this.calculateDistance(movement.path[i], movement.path[i + 1]);
+    for (let i = 0; i < precomputed.distances.length; i++) {
+      const segmentDistance = precomputed.distances[i];
       
       if (pathDistance + segmentDistance >= distanceTraveled) {
         // We're in this segment
@@ -90,7 +159,7 @@ export class EntityRenderer extends AbstractRenderer {
       pathDistance += segmentDistance;
       
       // If we've reached the end of the path
-      if (i === movement.path.length - 2) {
+      if (i === precomputed.distances.length - 1) {
         currentPathIndex = i;
         interpolationT = 1.0;
         break;
@@ -110,10 +179,12 @@ export class EntityRenderer extends AbstractRenderer {
       y: currentPos[1] + (nextPos[1] - currentPos[1]) * interpolationT,
     };
     
-    // Update direction if moving to a new segment
-    if (currentPathIndex !== movement.currentPathIndex && currentPathIndex < movement.path.length - 1) {
-      const direction = this.computeDirectionFromPositions(currentPos, nextPos);
-      battlemapActions.setEntityDirectionFromMapping(movement.entityId, direction);
+    // OPTIMIZED: Handle direction changes locally using precomputed directions
+    if (currentPathIndex !== movement.currentPathIndex && currentPathIndex < precomputed.directions.length) {
+      const newDirection = precomputed.directions[currentPathIndex];
+      
+      // Update local direction immediately for smooth animation (no store updates during movement)
+      this.updateLocalDirection(movement.entityId, newDirection);
       
       // Update movement animation with new path index
       battlemapActions.updateEntityMovementAnimation(movement.entityId, {
@@ -127,24 +198,84 @@ export class EntityRenderer extends AbstractRenderer {
     // Update entity container position
     this.updateEntityVisualPosition(movement.entityId, visualPosition);
     
-    // Debug logging every few seconds
-    if (Math.floor(elapsedSeconds) % 2 === 0 && elapsedSeconds > 0) {
-      console.log(`[EntityRenderer] Movement progress for ${entity.name}: elapsed=${elapsedSeconds.toFixed(1)}s, pathIndex=${currentPathIndex}/${movement.path.length-1}, interpolationT=${interpolationT.toFixed(2)}, distanceTraveled=${distanceTraveled.toFixed(2)}, pathDistance=${pathDistance.toFixed(2)}`);
-      console.log(`[EntityRenderer] Current visual position: (${visualPosition.x.toFixed(2)}, ${visualPosition.y.toFixed(2)}), target: (${movement.targetPosition[0]}, ${movement.targetPosition[1]})`);
-    }
-    
     // Simple completion check: if we're close enough to the target position
     const targetDistance = this.calculateDistance([visualPosition.x, visualPosition.y], movement.targetPosition);
     const isAtTarget = targetDistance < 0.1; // Within 0.1 tiles of target
     
     // Check if movement is complete
     if (isAtTarget || (currentPathIndex >= movement.path.length - 1 && interpolationT >= 1.0)) {
-      console.log(`[EntityRenderer] Movement completion detected for ${entity.name}: isAtTarget=${isAtTarget}, targetDistance=${targetDistance.toFixed(3)}, pathIndex=${currentPathIndex}, pathLength=${movement.path.length}, interpolationT=${interpolationT}`);
+      console.log(`[EntityRenderer] Movement completion detected for ${entity.name}`);
       this.completeMovement(movement);
     } else if (elapsedSeconds > 5) {
-      // Reduced timeout to 5 seconds for faster debugging
-      console.warn(`[EntityRenderer] Movement timeout for ${entity.name} after ${elapsedSeconds.toFixed(1)}s, forcing completion. pathIndex=${currentPathIndex}, pathLength=${movement.path.length}, interpolationT=${interpolationT}, distanceTraveled=${distanceTraveled}, totalPathDistance=${pathDistance}, targetDistance=${targetDistance.toFixed(3)}`);
+      console.warn(`[EntityRenderer] Movement timeout for ${entity.name}, forcing completion`);
       this.completeMovement(movement);
+    }
+  }
+  
+  /**
+   * Update local direction state (immediate, no store update) - same pattern as position
+   */
+  private updateLocalDirection(entityId: string, direction: Direction): void {
+    let localState = this.localEntityStates.get(entityId);
+    if (!localState) {
+      localState = {
+        currentDirection: direction,
+        lastStoreUpdateTime: 0
+      };
+      this.localEntityStates.set(entityId, localState);
+    }
+    
+    // OPTIMIZED: Only update if direction actually changed
+    if (localState.currentDirection === direction) {
+      return; // No change needed
+    }
+    
+    // Update local direction immediately
+    localState.currentDirection = direction;
+    
+    // Mark for store update at the end (same pattern as position)
+    localState.pendingStoreDirection = direction;
+    
+    // Update sprite direction immediately for smooth animation
+    const animatedSprite = this.animatedSprites.get(entityId);
+    if (animatedSprite) {
+      this.updateSpriteDirection(entityId, direction);
+    }
+  }
+  
+  /**
+   * Update sprite direction without changing animation
+   */
+  private async updateSpriteDirection(entityId: string, direction: Direction): Promise<void> {
+    const entity = battlemapStore.entities.summaries[entityId];
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    const animatedSprite = this.animatedSprites.get(entityId);
+    
+    if (!entity || !mapping || !animatedSprite) return;
+    
+    // Get cached sprite data
+    const cacheKey = this.createCacheKey(mapping.spriteFolder, mapping.currentAnimation);
+    const cachedData = this.spriteCacheByKey.get(cacheKey);
+    
+    if (!cachedData) return;
+    
+    // Get textures for new direction
+    const directionTextures = cachedData.directionTextures[direction];
+    if (!directionTextures || directionTextures.length === 0) return;
+    
+    // Update textures without restarting animation if it's a looping animation
+    const wasPlaying = animatedSprite.playing;
+    const currentFrame = animatedSprite.currentFrame;
+    const shouldLoop = mapping.currentAnimation === mapping.idleAnimation || this.shouldLoop(mapping.currentAnimation);
+    
+    animatedSprite.textures = directionTextures;
+    
+    if (shouldLoop && wasPlaying) {
+      // For looping animations, maintain current frame position
+      animatedSprite.gotoAndPlay(Math.min(currentFrame, directionTextures.length - 1));
+    } else if (wasPlaying) {
+      // For non-looping animations, restart
+      animatedSprite.gotoAndPlay(0);
     }
   }
   
@@ -197,10 +328,22 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
-   * Complete a movement animation
+   * Complete a movement animation - sync both position AND direction at the end
    */
   private completeMovement(movement: MovementAnimation): void {
     console.log(`[EntityRenderer] Movement completed for entity ${movement.entityId}`);
+    
+    // Clean up precomputed data
+    this.precomputedMovementData.delete(movement.entityId);
+    
+    // Flush any pending direction update to store (same pattern as position)
+    const localState = this.localEntityStates.get(movement.entityId);
+    if (localState?.pendingStoreDirection) {
+      console.log(`[EntityRenderer] Syncing final direction ${localState.pendingStoreDirection} to store for entity ${movement.entityId}`);
+      battlemapActions.setEntityDirectionFromMapping(movement.entityId, localState.pendingStoreDirection);
+      localState.pendingStoreDirection = undefined;
+      localState.lastStoreUpdateTime = Date.now();
+    }
     
     // Determine if we should resync based on server approval
     const shouldResync = movement.isServerApproved !== true;
@@ -305,175 +448,262 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
-   * Load sprite for an entity - IMPROVED to reuse existing sprites
+   * Create consistent cache key for sprite data
+   */
+  private createCacheKey(spriteFolder: string, animation: AnimationState): string {
+    return `${spriteFolder}|${animation}`;
+  }
+  
+  /**
+   * OPTIMIZED: Load sprite with PixiJS v8 Assets cache and preloaded directions
    */
   private async loadEntitySprite(entity: EntitySummary, mapping: EntitySpriteMapping): Promise<void> {
-    const spriteKey = `${mapping.spriteFolder}_${mapping.currentAnimation}_${mapping.currentDirection}`;
+    const cacheKey = this.createCacheKey(mapping.spriteFolder, mapping.currentAnimation);
     
     try {
-      const spritesheetPath = getSpriteSheetPath(mapping.spriteFolder, mapping.currentAnimation);
+      // Get or load cached sprite data
+      let cachedData = this.spriteCacheByKey.get(cacheKey);
       
-      try {
-        // Check if we already have this spritesheet loaded
-        const spritesheetKey = `${mapping.spriteFolder}_${mapping.currentAnimation}`;
-        let spritesheet = this.loadedSpritesheets.get(spritesheetKey);
+      if (!cachedData) {
+        // Load and cache sprite data with ALL directions using PixiJS Assets
+        const loadedData = await this.loadAndCacheSpriteData(mapping.spriteFolder, mapping.currentAnimation, cacheKey);
+        if (!loadedData) return;
         
-        if (!spritesheet) {
-          // Load the spritesheet only if not already loaded
-          try {
-            const loadedSpritesheet = await Assets.load<Spritesheet>(spritesheetPath);
-            if (!loadedSpritesheet) {
-              console.error(`[EntityRenderer] Assets.load returned undefined for ${spritesheetPath}`);
-              return;
-            }
-            spritesheet = loadedSpritesheet;
-            this.loadedSpritesheets.set(spritesheetKey, spritesheet);
-          } catch (error) {
-            console.error(`[EntityRenderer] Failed to load spritesheet ${spritesheetPath}:`, error);
-            return;
-          }
-        } else {
-          // Spritesheet already cached
-        }
-        
-        // Ensure spritesheet is loaded before proceeding
-        if (!spritesheet) {
-          console.error(`[EntityRenderer] Spritesheet is undefined for ${spritesheetKey}`);
-          return;
-        }
-        
-        // Get the textures for the current direction (spritesheet is guaranteed to be defined here)
-        // Get the textures for the current direction
-        const directionTextures = this.getDirectionTextures(spritesheet, mapping.currentDirection);
-        
-        if (directionTextures.length === 0) {
-          console.warn(`[EntityRenderer] No textures found for direction ${mapping.currentDirection} in ${spritesheetKey}`);
-          return;
-        }
-        
-        // Get or create animated sprite for this entity
-        let animatedSprite = this.animatedSprites.get(entity.uuid);
-        
-        if (!animatedSprite) {
-          // Create new animated sprite only if none exists
-          console.log(`[EntityRenderer] CREATING NEW SPRITE for ${entity.name} with animation ${mapping.currentAnimation}`);
-          animatedSprite = new AnimatedSprite(directionTextures);
-          animatedSprite.name = spriteKey;
-          animatedSprite.anchor.set(0.5, 1.0); // Bottom-center anchor for character sprites
-          
-          // Set initial scale from mapping with zoom-dependent scaling
-          const userScaleMultiplier = mapping.scale || 1.0; // Default to 1.0
-          if (directionTextures.length > 0 && 'frame' in directionTextures[0]) {
-            // Calculate zoom-dependent scale like the old React component
-            const BASE_SCALE = 2.4; // Same as old React component: 2.0 * 1.2 (20% larger)
-            const textureWidth = directionTextures[0].frame.width;
-            const textureHeight = directionTextures[0].frame.height;
-            const { tileSize } = this.calculateGridOffset();
-            const zoomDependentScale = (tileSize / Math.max(textureWidth, textureHeight)) * BASE_SCALE;
-            const finalScale = zoomDependentScale * userScaleMultiplier;
-            animatedSprite.scale.set(finalScale);
-          } else {
-            // Fallback scale
-            animatedSprite.scale.set(userScaleMultiplier);
-          }
-          
-          // Use PixiJS v8 API properly - simple and direct
-          animatedSprite.autoUpdate = true; // Let PixiJS handle updates
-          // Animation should loop if it's the idle animation OR if it's naturally a looping animation
-          animatedSprite.loop = mapping.currentAnimation === mapping.idleAnimation || this.shouldLoop(mapping.currentAnimation);
-          
-          // Calculate animation speed based on desired duration from slider
-          const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
-          // animationSpeed controls how fast frames advance
-          // For 15 frames to play over desiredDurationSeconds:
-          // We need to advance 15 frames in desiredDurationSeconds
-          // PixiJS animationSpeed is frames per second / 60fps
-          const framesPerSecond = directionTextures.length / desiredDurationSeconds;
-          animatedSprite.animationSpeed = framesPerSecond / 60; // PixiJS expects speed relative to 60fps
-          
-          console.log(`[EntityRenderer] Setting animation speed to ${animatedSprite.animationSpeed.toFixed(3)} for ${desiredDurationSeconds}s duration (${directionTextures.length} frames, ${framesPerSecond.toFixed(1)} fps)`);
-          
-          // Set up animation callbacks
-          this.setupAnimationCallbacks(animatedSprite, entity, mapping);
-          
-          // Start playing
-          console.log(`[EntityRenderer] STARTING ANIMATION for ${entity.name}: ${mapping.currentAnimation} (${directionTextures.length} frames)`);
-          animatedSprite.play();
-          
-          // Add to entity container
-          const entityContainer = this.entityContainers.get(entity.uuid);
-          if (entityContainer) {
-            entityContainer.addChild(animatedSprite);
-            this.animatedSprites.set(entity.uuid, animatedSprite);
-          }
-        } else {
-          // Reuse existing sprite - check what actually changed
-          console.log(`[EntityRenderer] REUSING SPRITE for ${entity.name}, checking what changed for ${mapping.currentAnimation}`);
-          
-          // Check if textures actually changed (animation or direction change)
-          const currentTextures = animatedSprite.textures;
-          const texturesChanged = currentTextures.length !== directionTextures.length || 
-            currentTextures.some((tex, i) => tex !== directionTextures[i]);
-          
-          // Check if this is just a duration/scale change vs animation/direction change
-          const currentSpriteKey = animatedSprite.name;
-          const animationOrDirectionChanged = currentSpriteKey !== spriteKey;
-          
-          if (texturesChanged || animationOrDirectionChanged) {
-            console.log(`[EntityRenderer] ANIMATION/DIRECTION CHANGED for ${entity.name} - RESTARTING ANIMATION`);
-            animatedSprite.stop(); // Stop current animation
-            animatedSprite.textures = directionTextures; // Update textures
-            animatedSprite.name = spriteKey; // Update name for tracking
-            animatedSprite.autoUpdate = true; // Let PixiJS handle updates
-            // Animation should loop if it's the idle animation OR if it's naturally a looping animation
-            animatedSprite.loop = mapping.currentAnimation === mapping.idleAnimation || this.shouldLoop(mapping.currentAnimation);
-            
-            // Calculate animation speed based on desired duration from slider
-            const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
-            // animationSpeed controls how fast frames advance
-            // For 15 frames to play over desiredDurationSeconds:
-            // We need to advance 15 frames in desiredDurationSeconds
-            // PixiJS animationSpeed is frames per second / 60fps
-            const framesPerSecond = directionTextures.length / desiredDurationSeconds;
-            animatedSprite.animationSpeed = framesPerSecond / 60; // PixiJS expects speed relative to 60fps
-            
-            console.log(`[EntityRenderer] Setting animation speed to ${animatedSprite.animationSpeed.toFixed(3)} for ${desiredDurationSeconds}s duration (${directionTextures.length} frames, ${framesPerSecond.toFixed(1)} fps)`);
-            
-            // Set up animation callbacks
-            this.setupAnimationCallbacks(animatedSprite, entity, mapping);
-            
-            // Start playing
-            console.log(`[EntityRenderer] STARTING ANIMATION for ${entity.name}: ${mapping.currentAnimation} (${directionTextures.length} frames)`);
-            animatedSprite.play();
-          } else {
-            console.log(`[EntityRenderer] ONLY DURATION/SCALE CHANGED for ${entity.name} - UPDATING ANIMATION SPEED`);
-            // Update animation speed based on new duration without restarting animation
-            const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
-            const currentFrames = animatedSprite.totalFrames;
-            const framesPerSecond = currentFrames / desiredDurationSeconds;
-            animatedSprite.animationSpeed = framesPerSecond / 60; // PixiJS expects speed relative to 60fps
-            console.log(`[EntityRenderer] Updated animation speed to ${animatedSprite.animationSpeed.toFixed(3)} for ${desiredDurationSeconds}s duration (${currentFrames} frames, ${framesPerSecond.toFixed(1)} fps)`);
-            return;
-          }
-        }
-        
-      } catch (error) {
-        console.error(`[EntityRenderer] Error loading sprite for entity ${entity.uuid}:`, error);
+        cachedData = loadedData;
+        this.spriteCacheByKey.set(cacheKey, cachedData);
+        console.log(`[EntityRenderer] Cached sprite data for ${cacheKey} with ${Object.keys(cachedData.directionTextures).length} directions`);
       }
+      
+      // Get current direction (use local state if available, otherwise mapping)
+      const localState = this.localEntityStates.get(entity.uuid);
+      const currentDirection = localState?.currentDirection || mapping.currentDirection;
+      
+      // Get textures for current direction
+      const directionTextures = cachedData.directionTextures[currentDirection];
+      if (!directionTextures || directionTextures.length === 0) {
+        console.warn(`[EntityRenderer] No textures found for direction ${currentDirection} in ${cacheKey}`);
+        return;
+      }
+      
+      // Get or create animated sprite for this entity
+      let animatedSprite = this.animatedSprites.get(entity.uuid);
+      
+      if (!animatedSprite) {
+        // Create new animated sprite
+        console.log(`[EntityRenderer] Creating new sprite for ${entity.name} with animation ${mapping.currentAnimation}`);
+        animatedSprite = this.createAnimatedSprite(entity, mapping, directionTextures, cacheKey);
+        
+        // Add to entity container
+        const entityContainer = this.entityContainers.get(entity.uuid);
+        if (entityContainer) {
+          entityContainer.addChild(animatedSprite);
+          this.animatedSprites.set(entity.uuid, animatedSprite);
+        }
+      } else {
+        // Update existing sprite
+        this.updateExistingSprite(entity, mapping, animatedSprite, cachedData, currentDirection);
+      }
+      
     } catch (error) {
       console.error(`[EntityRenderer] Error loading sprite for entity ${entity.uuid}:`, error);
     }
   }
   
   /**
+   * Load and cache sprite data with ALL directions preloaded using PixiJS v8 Assets
+   * FIXED: Use unique cache keys to prevent conflicts between different sprite folders
+   */
+  private async loadAndCacheSpriteData(spriteFolder: string, animation: AnimationState, cacheKey: string): Promise<CachedSpriteData | null> {
+    try {
+      const spritesheetPath = getSpriteSheetPath(spriteFolder, animation);
+      
+      // FIXED: Use unique cache key that includes sprite folder to prevent conflicts
+      const uniqueSpritesheetKey = `${spriteFolder}|${animation}|spritesheet`;
+      
+      // Check if already cached with our unique key
+      let spritesheet: Spritesheet;
+      if (Assets.cache.has(uniqueSpritesheetKey)) {
+        spritesheet = Assets.cache.get(uniqueSpritesheetKey);
+        console.log(`[EntityRenderer] Using cached spritesheet: ${uniqueSpritesheetKey}`);
+      } else {
+        // Load with unique key to prevent conflicts
+        spritesheet = await Assets.load<Spritesheet>({ alias: uniqueSpritesheetKey, src: spritesheetPath });
+        console.log(`[EntityRenderer] Loaded and cached spritesheet: ${uniqueSpritesheetKey} from ${spritesheetPath}`);
+      }
+      
+      if (!spritesheet) {
+        console.error(`[EntityRenderer] Failed to load spritesheet: ${spritesheetPath}`);
+        return null;
+      }
+      
+      // Preload ALL directions
+      const directionTextures: Record<Direction, Texture[]> = {} as Record<Direction, Texture[]>;
+      
+      for (const direction of Object.values(Direction)) {
+        directionTextures[direction] = this.getDirectionTextures(spritesheet, direction);
+      }
+      
+      return {
+        spritesheet,
+        directionTextures,
+        cacheKey
+      };
+    } catch (error) {
+      console.error(`[EntityRenderer] Error loading sprite data:`, error);
+      return null;
+    }
+  }
+  
+  /**
+   * Create a new animated sprite with proper setup - FIXED sprite key format
+   */
+  private createAnimatedSprite(
+    entity: EntitySummary, 
+    mapping: EntitySpriteMapping, 
+    directionTextures: Texture[], 
+    cacheKey: string
+  ): AnimatedSprite {
+    const animatedSprite = new AnimatedSprite(directionTextures);
+    
+    // FIXED: Use consistent sprite key format with direction
+    const localState = this.localEntityStates.get(entity.uuid);
+    const currentDirection = localState?.currentDirection || mapping.currentDirection;
+    const spriteKey = `${cacheKey}_${currentDirection}`;
+    
+    animatedSprite.name = spriteKey;
+    animatedSprite.anchor.set(0.5, 1.0); // Bottom-center anchor for character sprites
+    
+    // Set initial scale from mapping with zoom-dependent scaling
+    this.updateSpriteScale(animatedSprite, mapping);
+    
+    // Use PixiJS v8 API properly - simple and direct
+    animatedSprite.autoUpdate = true; // Let PixiJS handle updates
+    
+    // OPTIMIZED: Check if transitioning to same state to avoid unnecessary callbacks
+    const shouldLoop = mapping.currentAnimation === mapping.idleAnimation || this.shouldLoop(mapping.currentAnimation);
+    animatedSprite.loop = shouldLoop;
+    
+    // Calculate animation speed based on desired duration from slider
+    const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
+    const framesPerSecond = directionTextures.length / desiredDurationSeconds;
+    animatedSprite.animationSpeed = framesPerSecond / 60; // PixiJS expects speed relative to 60fps
+    
+    // OPTIMIZED: Set up animation callbacks with state transition checking
+    this.setupOptimizedAnimationCallbacks(animatedSprite, entity, mapping);
+    
+    // Start playing
+    console.log(`[EntityRenderer] Starting animation for ${entity.name}: ${mapping.currentAnimation} (${directionTextures.length} frames)`);
+    animatedSprite.play();
+    
+    return animatedSprite;
+  }
+  
+  /**
+   * Update existing sprite with new data - FIXED to prevent unnecessary animation restarts
+   */
+  private updateExistingSprite(
+    entity: EntitySummary,
+    mapping: EntitySpriteMapping,
+    animatedSprite: AnimatedSprite,
+    cachedData: CachedSpriteData,
+    currentDirection: Direction
+  ): void {
+    // FIXED: Use consistent cache key format
+    const expectedCacheKey = this.createCacheKey(mapping.spriteFolder, mapping.currentAnimation);
+    const spriteKey = `${expectedCacheKey}_${currentDirection}`;
+    
+    // FIXED: Parse current sprite key properly
+    const currentSpriteKey = animatedSprite.name || '';
+    const currentParts = currentSpriteKey.split('_');
+    const currentCacheKey = currentParts.slice(0, -1).join('_'); // Everything except direction
+    const currentDirectionFromKey = currentParts[currentParts.length - 1]; // Last part is direction
+    
+    // Check what actually changed
+    const animationChanged = currentCacheKey !== expectedCacheKey;
+    const directionChanged = currentDirectionFromKey !== currentDirection;
+    
+    console.log(`[EntityRenderer] Sprite update for ${entity.name}:`, {
+      animationChanged,
+      directionChanged,
+      currentKey: currentSpriteKey,
+      expectedKey: spriteKey,
+      currentAnimation: mapping.currentAnimation,
+      currentDirection
+    });
+    
+    if (animationChanged) {
+      console.log(`[EntityRenderer] Animation changed for ${entity.name}: ${currentCacheKey} -> ${expectedCacheKey}`);
+      
+      // Get textures for current direction
+      const directionTextures = cachedData.directionTextures[currentDirection];
+      if (directionTextures && directionTextures.length > 0) {
+        // OPTIMIZED: Only restart if actually different animation
+        animatedSprite.stop();
+        animatedSprite.textures = directionTextures;
+        animatedSprite.name = spriteKey;
+        
+        // Update animation properties
+        const shouldLoop = mapping.currentAnimation === mapping.idleAnimation || this.shouldLoop(mapping.currentAnimation);
+        animatedSprite.loop = shouldLoop;
+        
+        const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
+        const framesPerSecond = directionTextures.length / desiredDurationSeconds;
+        animatedSprite.animationSpeed = framesPerSecond / 60;
+        
+        // FIXED: Set up callbacks without triggering store updates for looping animations
+        this.setupOptimizedAnimationCallbacks(animatedSprite, entity, mapping);
+        
+        animatedSprite.play();
+      }
+    } else if (directionChanged) {
+      console.log(`[EntityRenderer] Direction changed for ${entity.name}: ${currentDirectionFromKey} -> ${currentDirection}`);
+      // Only direction changed - update textures smoothly without restarting animation
+      this.updateSpriteDirection(entity.uuid, currentDirection);
+      animatedSprite.name = spriteKey;
+    } else {
+      // Only duration/scale changed - update speed without restarting
+      const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
+      const currentFrames = animatedSprite.totalFrames;
+      const framesPerSecond = currentFrames / desiredDurationSeconds;
+      const newSpeed = framesPerSecond / 60;
+      
+      if (Math.abs(animatedSprite.animationSpeed - newSpeed) > 0.001) {
+        console.log(`[EntityRenderer] Speed changed for ${entity.name}: ${animatedSprite.animationSpeed} -> ${newSpeed}`);
+        animatedSprite.animationSpeed = newSpeed;
+      }
+    }
+    
+    // Always update scale
+    this.updateSpriteScale(animatedSprite, mapping);
+  }
+  
+  /**
+   * Update sprite scale based on mapping and zoom
+   */
+  private updateSpriteScale(animatedSprite: AnimatedSprite, mapping: EntitySpriteMapping): void {
+    const userScaleMultiplier = mapping.scale || 1.0;
+    
+    if (animatedSprite.textures.length > 0 && 'frame' in animatedSprite.textures[0]) {
+      const BASE_SCALE = 2.4;
+      const textureWidth = animatedSprite.textures[0].frame.width;
+      const textureHeight = animatedSprite.textures[0].frame.height;
+      const { tileSize } = this.calculateGridOffset();
+      const zoomDependentScale = (tileSize / Math.max(textureWidth, textureHeight)) * BASE_SCALE;
+      const finalScale = zoomDependentScale * userScaleMultiplier;
+      animatedSprite.scale.set(finalScale);
+    } else {
+      animatedSprite.scale.set(userScaleMultiplier);
+    }
+  }
+  
+  /**
    * Get textures for a specific direction from a spritesheet
    */
-  private getDirectionTextures(spritesheet: Spritesheet, direction: Direction) {
+  private getDirectionTextures(spritesheet: Spritesheet, direction: Direction): Texture[] {
     const textures = spritesheet.textures;
     const directionTextures = [];
     
     // Look for textures with the direction pattern
-    // Pattern: AnimationName_Direction_FrameNumber.png
     const pattern = new RegExp(`_${direction}_\\d+\\.png$`);
     
     for (const [textureName, texture] of Object.entries(textures)) {
@@ -482,9 +712,8 @@ export class EntityRenderer extends AbstractRenderer {
       }
     }
     
-    // Sort by frame number extracted from texture name
+    // Sort by frame number
     directionTextures.sort((a, b) => {
-      // Get the first cache ID which should be the original texture name
       const aName = Object.keys(textures).find(name => textures[name] === a) || '';
       const bName = Object.keys(textures).find(name => textures[name] === b) || '';
       
@@ -524,31 +753,48 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
-   * Set up animation callbacks
+   * OPTIMIZED: Set up animation callbacks with state transition checking - FIXED to prevent re-render loops
    */
-  private setupAnimationCallbacks(sprite: AnimatedSprite, entity: EntitySummary, mapping: EntitySpriteMapping): void {
-    const startTime = Date.now();
-    
+  private setupOptimizedAnimationCallbacks(sprite: AnimatedSprite, entity: EntitySummary, mapping: EntitySpriteMapping): void {
     // Clear any existing callbacks to prevent memory leaks
     sprite.onComplete = undefined;
     sprite.onLoop = undefined;
     
-    // Determine if this animation should loop based on context
     const shouldLoop = mapping.currentAnimation === mapping.idleAnimation || this.shouldLoop(mapping.currentAnimation);
     
     if (!shouldLoop) {
-      // Non-looping animations that are NOT the idle animation should transition back to idle
+      // Non-looping animations only
       sprite.onComplete = () => {
-        const totalTime = Date.now() - startTime;
-        console.log(`[EntityRenderer] Non-looping animation ${mapping.currentAnimation} completed for ${entity.name} after ${totalTime}ms, transitioning to idle animation ${mapping.idleAnimation}`);
-        battlemapActions.setEntityAnimation(entity.uuid, mapping.idleAnimation);
+        console.log(`[EntityRenderer] Non-looping animation ${mapping.currentAnimation} completed for ${entity.name}`);
+        
+        // FIXED: Double-check current state to prevent unnecessary updates
+        const currentMapping = battlemapStore.entities.spriteMappings[entity.uuid];
+        if (!currentMapping) {
+          console.warn(`[EntityRenderer] No sprite mapping found for ${entity.uuid} during animation completion`);
+          return;
+        }
+        
+        // FIXED: Only update if we're still in the same animation that just completed
+        // This prevents race conditions where the animation changed while completing
+        if (currentMapping.currentAnimation === mapping.currentAnimation && 
+            currentMapping.currentAnimation !== currentMapping.idleAnimation) {
+          console.log(`[EntityRenderer] Transitioning ${entity.name} from ${mapping.currentAnimation} to ${currentMapping.idleAnimation}`);
+          battlemapActions.setEntityAnimation(entity.uuid, currentMapping.idleAnimation);
+        } else {
+          console.log(`[EntityRenderer] Skipping transition for ${entity.name} - animation already changed or already idle`);
+        }
+        
+        // If this was an attack animation, resync the entity position
+        if (mapping.currentAnimation === AnimationState.ATTACK1 || 
+            mapping.currentAnimation === AnimationState.ATTACK2 || 
+            mapping.currentAnimation === AnimationState.ATTACK3) {
+          console.log(`[EntityRenderer] Attack animation completed for ${entity.name}, resyncing position`);
+          battlemapActions.resyncEntityPosition(entity.uuid);
+        }
       };
     } else {
-      // For looping animations (including idle animations), just log the loop events
-      sprite.onLoop = () => {
-        const loopTime = Date.now() - startTime;
-        console.log(`[EntityRenderer] Animation ${mapping.currentAnimation} looped for ${entity.name} after ${loopTime}ms (frames: ${sprite.totalFrames}, speed: ${sprite.animationSpeed})`);
-      };
+      // FIXED: For looping animations, absolutely no callbacks to prevent any store updates
+      console.log(`[EntityRenderer] Setting up looping animation for ${entity.name} - no callbacks needed`);
     }
   }
   
@@ -575,32 +821,10 @@ export class EntityRenderer extends AbstractRenderer {
     
     this.updateEntityVisualPosition(entity.uuid, positionToUse);
     
-    // Update sprite scale - make it zoom-dependent like the old React component
+    // Update sprite scale
     const animatedSprite = this.animatedSprites.get(entity.uuid);
-    if (animatedSprite) {
-      // Get sprite mapping for user-defined scale multiplier
-      const mapping = snap.entities.spriteMappings[entity.uuid];
-      const userScaleMultiplier = mapping?.scale || 1.0; // Default to 1.0
-      
-      // Calculate zoom-dependent scale like the old React component did
-      // Base scale calculation: make sprite fit within tile size
-      const spriteTexture = animatedSprite.textures[0]; // Get first texture for size reference
-      if (spriteTexture && 'frame' in spriteTexture) {
-        // Calculate base scale to fit sprite to tile size (like old React component)
-        const BASE_SCALE = 2.4; // Same as old React component: 2.0 * 1.2 (20% larger)
-        // Use frame dimensions for PixiJS v8 Texture
-        const textureWidth = spriteTexture.frame.width;
-        const textureHeight = spriteTexture.frame.height;
-        const { tileSize } = this.calculateGridOffset();
-        const zoomDependentScale = (tileSize / Math.max(textureWidth, textureHeight)) * BASE_SCALE;
-        
-        // Apply both zoom-dependent scale and user scale multiplier
-        const finalScale = zoomDependentScale * userScaleMultiplier;
-        animatedSprite.scale.set(finalScale);
-      } else {
-        // Fallback if no texture available or it's a FrameObject
-        animatedSprite.scale.set(userScaleMultiplier);
-      }
+    if (animatedSprite && spriteMapping) {
+      this.updateSpriteScale(animatedSprite, spriteMapping);
     }
   }
   
@@ -661,6 +885,9 @@ export class EntityRenderer extends AbstractRenderer {
       animatedSprite.destroy();
       this.animatedSprites.delete(entityId);
     }
+    
+    // Clean up local state
+    this.localEntityStates.delete(entityId);
   }
   
   /**
@@ -679,6 +906,7 @@ export class EntityRenderer extends AbstractRenderer {
   /**
    * Check if entities have actually changed by comparing JSON hashes
    * This prevents unnecessary re-renders when polling creates new objects with same data
+   * OPTIMIZED: Completely ignore direction changes during movement to avoid feedback loops
    */
   private hasEntitiesActuallyChanged(): boolean {
     const snap = battlemapStore;
@@ -690,7 +918,6 @@ export class EntityRenderer extends AbstractRenderer {
         uuid: entity.uuid,
         name: entity.name,
         position: entity.position,
-        // Add other relevant fields that affect rendering
       });
       
       const lastHash = this.lastEntityData.get(entityId);
@@ -701,22 +928,27 @@ export class EntityRenderer extends AbstractRenderer {
       }
     }
     
-    // Check sprite mappings
+    // Check sprite mappings (COMPLETELY exclude direction changes during movement)
     for (const [entityId, mapping] of Object.entries(snap.entities.spriteMappings)) {
+      const isMoving = mapping.movementState === MovementState.MOVING;
+      
       const mappingHash = JSON.stringify({
         spriteFolder: mapping.spriteFolder,
         currentAnimation: mapping.currentAnimation,
-        currentDirection: mapping.currentDirection,
+        // OPTIMIZED: Only include direction when NOT moving to prevent feedback loops
+        currentDirection: isMoving ? 'MOVING' : mapping.currentDirection,
         scale: mapping.scale,
         animationDurationSeconds: mapping.animationDurationSeconds,
+        movementState: mapping.movementState, // Include movement state changes
       });
       
       const lastMappingHash = this.lastSpriteMappingData.get(entityId);
       if (lastMappingHash !== mappingHash) {
         console.log(`[EntityRenderer] Entity ${entityId} sprite mapping changed:`, {
           animation: mapping.currentAnimation,
-          direction: mapping.currentDirection,
-          duration: mapping.animationDurationSeconds
+          direction: isMoving ? 'MOVING (ignored)' : mapping.currentDirection,
+          duration: mapping.animationDurationSeconds,
+          movementState: mapping.movementState
         });
         this.lastSpriteMappingData.set(entityId, mappingHash);
         hasChanges = true;
@@ -743,7 +975,7 @@ export class EntityRenderer extends AbstractRenderer {
   private logSummary(): void {
     const now = Date.now();
     if (now - this.lastSummaryTime >= 10000) { // 10 seconds
-      console.log(`[EntityRenderer] 10s Summary: ${this.renderCount} renders, ${this.subscriptionFireCount} subscription fires, ${this.actualChangeCount} actual changes`);
+      console.log(`[EntityRenderer] 10s Summary: ${this.renderCount} renders, ${this.subscriptionFireCount} subscription fires, ${this.actualChangeCount} actual changes, ${this.spriteCacheByKey.size} cached sprites`);
       this.lastSummaryTime = now;
       this.renderCount = 0;
       this.subscriptionFireCount = 0;
@@ -752,7 +984,7 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
-   * Clean up resources
+   * Clean up resources with proper PixiJS v8 cache management
    */
   destroy(): void {
     // Clean up all entities
@@ -760,11 +992,15 @@ export class EntityRenderer extends AbstractRenderer {
       this.removeEntityFromRendering(entityId);
     });
     
-    // Clean up spritesheets
-    this.loadedSpritesheets.forEach(spritesheet => {
-      spritesheet.destroy();
+    // Clean up sprite cache - let PixiJS Assets handle the actual texture cleanup
+    this.spriteCacheByKey.forEach(cachedData => {
+      // Don't destroy the spritesheet - PixiJS Assets manages this
+      // Just clear our references
     });
-    this.loadedSpritesheets.clear();
+    this.spriteCacheByKey.clear();
+    
+    // Clean up local states
+    this.localEntityStates.clear();
     
     // Unsubscribe from store changes
     this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());

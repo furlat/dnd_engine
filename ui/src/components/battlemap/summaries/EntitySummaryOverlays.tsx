@@ -5,12 +5,15 @@ import {
   Typography,
   Avatar,
   Tooltip,
+  IconButton,
+  CircularProgress,
 } from '@mui/material';
 import { battlemapStore, battlemapActions } from '../../../store/battlemapStore';
 import { useSnapshot } from 'valtio';
 import TargetIcon from '@mui/icons-material/RadioButtonChecked';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { EntitySummary } from '../../../types/common';
-import { useEntitySelection } from '../../../hooks/battlemap';
+import { useEntitySelection, useBattlemapActionEconomy } from '../../../hooks/battlemap';
 
 // Extracted to a separate component to prevent entire list re-rendering
 const EntityCard = React.memo(({ 
@@ -181,6 +184,7 @@ const EntityCard = React.memo(({
 const EntitySummaryOverlays: React.FC = () => {
   const snap = useSnapshot(battlemapStore, { sync: true });
   const { selectEntity } = useEntitySelection();
+  const { refreshActionEconomy, isRefreshing, error } = useBattlemapActionEconomy();
   
   // Memoize expensive calculations
   const summaries = useMemo(() => 
@@ -202,6 +206,13 @@ const EntitySummaryOverlays: React.FC = () => {
   const handleSelectEntity = useCallback((entityId: string) => {
     selectEntity(entityId);
   }, [selectEntity]);
+
+  // Memoize refresh handler
+  const handleRefresh = useCallback(async () => {
+    if (selectedEntityId) {
+      await refreshActionEconomy(selectedEntityId);
+    }
+  }, [selectedEntityId, refreshActionEconomy]);
   
   // Memoize the entity list to prevent unnecessary re-renders
   const entityList = useMemo(() => (
@@ -239,21 +250,57 @@ const EntitySummaryOverlays: React.FC = () => {
         },
       }}
     >
-      {/* Simple heading */}
-      <Typography 
-        variant="h6" 
-        sx={{ 
-          color: '#fff', 
-          textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          px: 2,
-          py: 1,
-          borderRadius: 1,
-          mb: 1
-        }}
-      >
-        Entities
-      </Typography>
+      {/* Header with title and refresh button */}
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        px: 2,
+        py: 1,
+        borderRadius: 1,
+        mb: 1
+      }}>
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            color: '#fff', 
+            textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+          }}
+        >
+          Entities
+        </Typography>
+        
+        {/* Refresh Action Economy Button */}
+        <Tooltip title={
+          error ? `Error: ${error}` :
+          selectedEntityId ? "Refresh Action Economy" : 
+          "Select an entity to refresh action economy"
+        }>
+          <span>
+            <IconButton
+              onClick={handleRefresh}
+              disabled={!selectedEntityId || isRefreshing}
+              sx={{
+                color: error ? '#f44336' : selectedEntityId ? '#4fc3f7' : 'rgba(255, 255, 255, 0.3)',
+                '&:hover': {
+                  backgroundColor: error ? 'rgba(244, 67, 54, 0.1)' : 'rgba(79, 195, 247, 0.1)',
+                },
+                '&:disabled': {
+                  color: 'rgba(255, 255, 255, 0.3)',
+                },
+              }}
+              size="small"
+            >
+              {isRefreshing ? (
+                <CircularProgress size={20} sx={{ color: '#4fc3f7' }} />
+              ) : (
+                <RefreshIcon fontSize="small" />
+              )}
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
       
       {/* Direct entity list without paper container */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
