@@ -189,7 +189,17 @@ export class EntityRenderer extends AbstractRenderer {
           // Use PixiJS v8 API properly - simple and direct
           animatedSprite.autoUpdate = true; // Let PixiJS handle updates
           animatedSprite.loop = this.shouldLoop(mapping.currentAnimation);
-          animatedSprite.animationSpeed = 0.1; // Simple fixed speed for now
+          
+          // Calculate animation speed based on desired duration from slider
+          const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
+          // animationSpeed controls how fast frames advance
+          // For 15 frames to play over desiredDurationSeconds:
+          // We need to advance 15 frames in desiredDurationSeconds
+          // PixiJS animationSpeed is frames per second / 60fps
+          const framesPerSecond = directionTextures.length / desiredDurationSeconds;
+          animatedSprite.animationSpeed = framesPerSecond / 60; // PixiJS expects speed relative to 60fps
+          
+          console.log(`[EntityRenderer] Setting animation speed to ${animatedSprite.animationSpeed.toFixed(3)} for ${desiredDurationSeconds}s duration (${directionTextures.length} frames, ${framesPerSecond.toFixed(1)} fps)`);
           
           // Set up animation callbacks
           this.setupAnimationCallbacks(animatedSprite, entity, mapping);
@@ -224,7 +234,17 @@ export class EntityRenderer extends AbstractRenderer {
             animatedSprite.name = spriteKey; // Update name for tracking
             animatedSprite.autoUpdate = true; // Let PixiJS handle updates
             animatedSprite.loop = this.shouldLoop(mapping.currentAnimation);
-            animatedSprite.animationSpeed = 0.1; // Simple fixed speed for now
+            
+            // Calculate animation speed based on desired duration from slider
+            const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
+            // animationSpeed controls how fast frames advance
+            // For 15 frames to play over desiredDurationSeconds:
+            // We need to advance 15 frames in desiredDurationSeconds
+            // PixiJS animationSpeed is frames per second / 60fps
+            const framesPerSecond = directionTextures.length / desiredDurationSeconds;
+            animatedSprite.animationSpeed = framesPerSecond / 60; // PixiJS expects speed relative to 60fps
+            
+            console.log(`[EntityRenderer] Setting animation speed to ${animatedSprite.animationSpeed.toFixed(3)} for ${desiredDurationSeconds}s duration (${directionTextures.length} frames, ${framesPerSecond.toFixed(1)} fps)`);
             
             // Set up animation callbacks
             this.setupAnimationCallbacks(animatedSprite, entity, mapping);
@@ -233,8 +253,13 @@ export class EntityRenderer extends AbstractRenderer {
             console.log(`[EntityRenderer] STARTING ANIMATION for ${entity.name}: ${mapping.currentAnimation} (${directionTextures.length} frames)`);
             animatedSprite.play();
           } else {
-            console.log(`[EntityRenderer] ONLY DURATION/SCALE CHANGED for ${entity.name} - NO CHANGES NEEDED`);
-            // For now, just log that nothing changed
+            console.log(`[EntityRenderer] ONLY DURATION/SCALE CHANGED for ${entity.name} - UPDATING ANIMATION SPEED`);
+            // Update animation speed based on new duration without restarting animation
+            const desiredDurationSeconds = mapping.animationDurationSeconds || 1.0;
+            const currentFrames = animatedSprite.totalFrames;
+            const framesPerSecond = currentFrames / desiredDurationSeconds;
+            animatedSprite.animationSpeed = framesPerSecond / 60; // PixiJS expects speed relative to 60fps
+            console.log(`[EntityRenderer] Updated animation speed to ${animatedSprite.animationSpeed.toFixed(3)} for ${desiredDurationSeconds}s duration (${currentFrames} frames, ${framesPerSecond.toFixed(1)} fps)`);
             return;
           }
         }
@@ -314,7 +339,12 @@ export class EntityRenderer extends AbstractRenderer {
    * Set up animation callbacks
    */
   private setupAnimationCallbacks(sprite: AnimatedSprite, entity: EntitySummary, mapping: EntitySpriteMapping): void {
+    const startTime = Date.now();
+    
     sprite.onComplete = () => {
+      const totalTime = Date.now() - startTime;
+      console.log(`[EntityRenderer] Animation ${mapping.currentAnimation} completed for ${entity.name} after ${totalTime}ms`);
+      
       // Handle animation completion
       if (!this.shouldLoop(mapping.currentAnimation)) {
         // Non-looping animations should transition back to idle
@@ -325,8 +355,8 @@ export class EntityRenderer extends AbstractRenderer {
     };
     
     sprite.onLoop = () => {
-      // Handle loop events if needed
-      console.log(`[EntityRenderer] Animation ${mapping.currentAnimation} looped for ${entity.name}`);
+      const loopTime = Date.now() - startTime;
+      console.log(`[EntityRenderer] Animation ${mapping.currentAnimation} looped for ${entity.name} after ${loopTime}ms (frames: ${sprite.totalFrames}, speed: ${sprite.animationSpeed})`);
     };
   }
   
