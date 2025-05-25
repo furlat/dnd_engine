@@ -418,17 +418,25 @@ export class InteractionsManager {
     try {
       console.log(`[InteractionsManager] ${attacker.name} attacking ${target.name} directly`);
       
-      // IMMEDIATELY mark entity as out-of-sync to block further inputs
+      // FIRST: Set direction to face the target BEFORE marking as out-of-sync
+      const direction = this.computeDirection(attacker.position, target.position);
+      
+      // Clear any local direction state that might interfere with attack direction
+      const entityRenderer = this.engine?.getRenderer('EntityRenderer');
+      if (entityRenderer && 'clearLocalDirectionState' in entityRenderer) {
+        (entityRenderer as any).clearLocalDirectionState(attackerId);
+      }
+      
+      battlemapActions.setEntityDirectionFromMapping(attackerId, direction);
+      console.log(`[InteractionsManager] Set attack direction for ${attacker.name}: ${direction}`);
+      
+      // THEN: Mark entity as out-of-sync to block further inputs
       const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
       if (spriteMapping) {
         battlemapActions.updateEntityVisualPosition(attackerId, spriteMapping.visualPosition || { x: attacker.position[0], y: attacker.position[1] });
       }
       
-      // Set direction to face the target before attacking
-      const direction = this.computeDirection(attacker.position, target.position);
-      battlemapActions.setEntityDirectionFromMapping(attackerId, direction);
-      
-      // Trigger attack animation
+      // FINALLY: Trigger attack animation (should use the direction we just set)
       battlemapActions.setEntityAnimation(attackerId, AnimationState.ATTACK1);
       
       // Execute the attack
