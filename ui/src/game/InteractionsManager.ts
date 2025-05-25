@@ -22,6 +22,9 @@ export class InteractionsManager {
   // Layer reference for proper integration
   private layer: Container | null = null;
   
+  // Context menu event handler reference for cleanup
+  private contextMenuHandler: ((event: Event) => boolean) | null = null;
+  
   /**
    * Initialize the interactions manager
    */
@@ -63,6 +66,16 @@ export class InteractionsManager {
       event.preventDefault();
       event.stopPropagation();
     });
+    
+    // Also prevent context menu at the DOM level
+    if (this.engine?.app?.canvas) {
+      this.contextMenuHandler = (event: Event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      };
+      this.engine.app.canvas.addEventListener('contextmenu', this.contextMenuHandler);
+    }
     
     // Add to UI layer
     this.layer.addChild(this.hitArea);
@@ -398,6 +411,12 @@ export class InteractionsManager {
       this.hitArea.removeAllListeners();
       this.hitArea.destroy();
       this.hitArea = null;
+    }
+    
+    // Remove context menu event listener
+    if (this.contextMenuHandler && this.engine?.app?.canvas) {
+      this.engine.app.canvas.removeEventListener('contextmenu', this.contextMenuHandler);
+      this.contextMenuHandler = null;
     }
     
     this.engine = null;
