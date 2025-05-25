@@ -149,22 +149,7 @@ export const useEntityMovement = () => {
    * Compute direction from one position to another
    */
   const computeDirection = useCallback((fromPos: Position, toPos: Position): Direction => {
-    const [fromX, fromY] = fromPos;
-    const [toX, toY] = toPos;
-    
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    
-    if (dx > 0 && dy > 0) return Direction.SE;
-    if (dx > 0 && dy < 0) return Direction.NE;
-    if (dx < 0 && dy > 0) return Direction.SW;
-    if (dx < 0 && dy < 0) return Direction.NW;
-    if (dx === 0 && dy > 0) return Direction.S;
-    if (dx === 0 && dy < 0) return Direction.N;
-    if (dx > 0 && dy === 0) return Direction.E;
-    if (dx < 0 && dy === 0) return Direction.W;
-    
-    return Direction.S; // Default
+    return battlemapActions.computeDirection([fromPos[0], fromPos[1]], [toPos[0], toPos[1]]);
   }, []);
   
   /**
