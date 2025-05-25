@@ -6,7 +6,8 @@ import {
   toMutablePosition,
   SpriteFolderName,
   AnimationState,
-  MoveRequest,
+  EntitySpriteMapping,
+  Direction,
   MovementResponse
 } from '../../types/battlemap_types';
 import { Position, EntitySummary } from '../../types/common';
@@ -109,30 +110,46 @@ export const isPositionVisible = async (x: number, y: number): Promise<boolean> 
   }
 };
 
-// Move entity to a new position
+/**
+ * Move an entity to a new position
+ * @param entityId The UUID of the entity to move
+ * @param position The target position [x, y]
+ * @param includePathSenses Whether to include senses data for each position in the path (default: true for debugging)
+ * @returns Promise<EntitySummary> The updated entity summary
+ */
 export const moveEntity = async (
   entityId: string, 
   position: Position, 
-  includePathSenses: boolean = false
-): Promise<MovementResponse> => {
-  const moveRequest: MoveRequest = {
-    position,
-    include_paths_senses: includePathSenses
-  };
-  
-  const response = await fetch(`${API_BASE_URL}/entities/${entityId}/move`, {
+  includePathSenses: boolean = true
+): Promise<EntitySummary> => {
+  const response = await fetch(`/api/entities/${entityId}/move`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(moveRequest),
+    body: JSON.stringify({
+      position: position,
+      include_paths_senses: includePathSenses
+    }),
   });
-  
+
   if (!response.ok) {
-    throw new Error(`Failed to move entity: ${response.statusText}`);
+    const errorData = await response.json();
+    throw new Error(errorData.detail?.message || `Failed to move entity: ${response.statusText}`);
+  }
+
+  const movementResponse: MovementResponse = await response.json();
+  
+  // NEW: Store path senses data in the store if available
+  if (movementResponse.path_senses && Object.keys(movementResponse.path_senses).length > 0) {
+    console.log(`[moveEntity] Received path senses for ${Object.keys(movementResponse.path_senses).length} positions:`, movementResponse.path_senses);
+    
+    // Import battlemapActions dynamically to avoid circular imports
+    const { battlemapActions } = await import('../../store/battlemapStore');
+    battlemapActions.setEntityPathSenses(entityId, movementResponse.path_senses);
   }
   
-  return response.json();
+  return movementResponse.entity;
 };
 
 // Set target entity

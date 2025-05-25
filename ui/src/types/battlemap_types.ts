@@ -89,17 +89,11 @@ export interface MovementAnimation {
   readonly isServerApproved?: boolean;          // Whether server approved the movement
 }
 
-// NEW: Movement request interface to match backend
-export interface MoveRequest {
-  readonly position: Position;
-  readonly include_paths_senses?: boolean;
-}
-
-// NEW: Movement response interface to match backend
+// NEW: Movement response from backend with optional path senses
 export interface MovementResponse {
   readonly event: any; // EventSnapshot - TODO: Define proper event type
   readonly entity: EntitySummary;
-  readonly path_senses: readonly SensesSnapshot[];
+  readonly path_senses?: Readonly<Record<string, SensesSnapshot>>; // Optional path senses data keyed by "x,y"
 }
 
 // Entity sprite association with decoupled animation states

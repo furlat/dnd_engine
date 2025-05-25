@@ -64,6 +64,9 @@ export class EntityRenderer extends AbstractRenderer {
   // NEW: Cached senses data during movement to prevent visibility flickering
   private cachedSensesData: Map<string, { visible: Record<string, boolean>; seen: readonly Position[] }> = new Map();
   
+  // NEW: Track last logged position for each entity to reduce console spam
+  private lastLoggedPositions: Map<string, { x: number; y: number }> = new Map();
+  
   // Store unsubscribe callbacks
   private unsubscribeCallbacks: Array<() => void> = [];
   
@@ -454,6 +457,34 @@ export class EntityRenderer extends AbstractRenderer {
       this.handleEntitySelectionChange();
     });
     this.unsubscribeCallbacks.push(unsubEntitySelection);
+    
+    // NEW: Subscribe to pathSenses changes to trigger visibility updates when data becomes available
+    const unsubPathSenses = subscribe(battlemapStore.entities.pathSenses, () => {
+      // When path senses data becomes available, we need to update visibility immediately
+      // This is a "hot swap" that doesn't trigger full re-renders, only visibility alpha updates
+      const snap = battlemapStore;
+      const selectedEntity = this.getSelectedEntity();
+      
+      // Only update if the selected entity has path senses (is moving and observing)
+      if (selectedEntity && snap.entities.pathSenses[selectedEntity.uuid]) {
+        this.updateEntityVisibilityAlpha();
+      }
+    });
+    this.unsubscribeCallbacks.push(unsubPathSenses);
+    
+    // NEW: Subscribe to sprite mappings for snappy entity visibility updates during movement
+    const unsubSpriteMappingsVisibility = subscribe(battlemapStore.entities.spriteMappings, () => {
+      // When visual positions change during movement, update entity visibility immediately
+      // This makes entity visibility changes feel snappy and responsive
+      const snap = battlemapStore;
+      const selectedEntity = this.getSelectedEntity();
+      
+      // Only trigger visibility update if the selected entity is moving (has dynamic path senses)
+      if (selectedEntity && snap.entities.movementAnimations[selectedEntity.uuid] && snap.entities.pathSenses[selectedEntity.uuid]) {
+        this.updateEntityVisibilityAlpha();
+      }
+    });
+    this.unsubscribeCallbacks.push(unsubSpriteMappingsVisibility);
     
     // Subscribe to view changes for positioning - just like TileRenderer and GridRenderer
     const unsubView = subscribe(battlemapStore.view, () => {
@@ -1092,6 +1123,9 @@ export class EntityRenderer extends AbstractRenderer {
     // NEW: Clean up cached senses data
     this.cachedSensesData.clear();
     
+    // NEW: Clean up position tracking
+    this.lastLoggedPositions.clear();
+    
     // Unsubscribe from store changes
     this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
     this.unsubscribeCallbacks = [];
@@ -1162,7 +1196,7 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
-   * NEW: Get senses data for visibility calculations (similar to SubjectiveRenderer)
+   * NEW: Get senses data for visibility calculations using dynamic path senses
    */
   private getSensesData(entity: EntitySummary): {
     visible: Record<string, boolean>;
@@ -1170,30 +1204,76 @@ export class EntityRenderer extends AbstractRenderer {
   } {
     const snap = battlemapStore;
     
-    // Check if ANY entity is currently moving
-    const hasActiveMovements = Object.keys(snap.entities.movementAnimations).length > 0;
+    // Check if the OBSERVER entity (the one we're getting senses for) is currently moving
+    const observerMovementAnimation = snap.entities.movementAnimations[entity.uuid];
     
-    if (hasActiveMovements) {
-      // During movement - ALWAYS use cached data for the observer to maintain static perspective
+    if (observerMovementAnimation) {
+      // The OBSERVER entity is moving - use dynamic path senses based on their current animated position
+      // This ensures visibility is only dynamic when the observer themselves is moving
+      const pathSenses = snap.entities.pathSenses[entity.uuid];
+      
+      if (pathSenses) {
+        // Get the entity's current animated position with anticipation
+        const spriteMapping = snap.entities.spriteMappings[entity.uuid];
+        if (spriteMapping?.visualPosition) {
+          // Use anticipation: switch to next cell's senses when we're at the center of the sprite
+          // This makes visibility changes feel more natural and realistic
+          const anticipationThreshold = 0.5;
+          const currentX = Math.floor(spriteMapping.visualPosition.x + anticipationThreshold);
+          const currentY = Math.floor(spriteMapping.visualPosition.y + anticipationThreshold);
+          const posKey = `${currentX},${currentY}`;
+          
+          // Use senses data for the current animated position
+          const currentPositionSenses = pathSenses[posKey];
+          if (currentPositionSenses) {
+            // Only log when position changes to reduce spam
+            const lastLoggedPos = this.lastLoggedPositions.get(entity.uuid);
+            if (!lastLoggedPos || lastLoggedPos.x !== currentX || lastLoggedPos.y !== currentY) {
+              console.log(`[EntityRenderer] Using dynamic path senses for ${entity.name} at position (${currentX}, ${currentY})`);
+              this.lastLoggedPositions.set(entity.uuid, { x: currentX, y: currentY });
+            }
+            return {
+              visible: currentPositionSenses.visible,
+              seen: currentPositionSenses.seen
+            };
+          } else {
+            // Path senses available but no data for current position - use entity's current senses
+            // This can happen during the first few frames of movement before reaching the first path position
+            return {
+              visible: entity.senses.visible,
+              seen: entity.senses.seen
+            };
+          }
+        }
+      } else {
+        // Path senses not yet available (timing issue) - use entity's current senses as fallback
+        // This is normal during the first few frames after movement starts
+        return {
+          visible: entity.senses.visible,
+          seen: entity.senses.seen
+        };
+      }
+    }
+    
+    // Check if ANY OTHER entity is currently moving (but not the selected entity)
+    const hasOtherMovements = Object.keys(snap.entities.movementAnimations).some(id => id !== entity.uuid);
+    
+    if (hasOtherMovements) {
+      // Other entities are moving but not the selected entity - use cached static perspective
       const cached = this.cachedSensesData.get(entity.uuid);
       if (cached) {
+        console.log(`[EntityRenderer] Using cached static senses for observer ${entity.name} while other entities move`);
         return cached;
       }
       
-      // No cached data - this means this entity wasn't the observer when movement started
-      // Use current data but this shouldn't happen for the selected entity
-      console.warn(`[EntityRenderer] No cached senses data for ${entity.name} during movement - using current data`);
-      return {
-        visible: entity.senses.visible,
-        seen: entity.senses.seen
-      };
-    } else {
-      // No active movements - use current data
-      return {
-        visible: entity.senses.visible,
-        seen: entity.senses.seen
-      };
+      console.warn(`[EntityRenderer] No cached senses data for observer ${entity.name} during other movements - using current data`);
     }
+    
+    // No movements or fallback - use current data
+    return {
+      visible: entity.senses.visible,
+      seen: entity.senses.seen
+    };
   }
   
   /**
