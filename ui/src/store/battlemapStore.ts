@@ -1,5 +1,5 @@
 import { proxy } from 'valtio';
-import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, VisualPosition, toVisualPosition, isVisualPositionSynced } from '../types/battlemap_types';
+import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, AttackMetadata, VisualPosition, toVisualPosition, isVisualPositionSynced } from '../types/battlemap_types';
 import { EntitySummary, SensesSnapshot } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
@@ -43,6 +43,8 @@ export interface EntityState {
   availableSpriteFolders: SpriteFolderName[];
   // Movement animations
   movementAnimations: Record<string, MovementAnimation>;
+  // NEW: Attack animations with metadata
+  attackAnimations: Record<string, { entityId: string; targetId: string; metadata?: AttackMetadata }>;
   // NEW: Path senses data indexed by entity UUID first, then by position
   pathSenses: Record<string, Record<string, SensesSnapshot>>; // observerEntityId -> positionKey -> SensesSnapshot
 }
@@ -92,6 +94,7 @@ const battlemapStore = proxy<BattlemapStoreState>({
     spriteMappings: {},
     availableSpriteFolders: [],
     movementAnimations: {},
+    attackAnimations: {},
     pathSenses: {},
   },
   loading: false,
@@ -363,6 +366,57 @@ const battlemapActions = {
           currentAnimation: mapping.idleAnimation, // Return to idle animation
           visualPosition: entity ? toVisualPosition(entity.position) : mapping.visualPosition,
           isPositionSynced: true, // Server approved, so we're synced
+        };
+      }
+    }
+  },
+
+  // NEW: Attack animation actions
+  startEntityAttack: (entityId: string, targetId: string) => {
+    battlemapStore.entities.attackAnimations[entityId] = { entityId, targetId };
+    
+    // Update sprite mapping to attack animation
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        currentAnimation: AnimationState.ATTACK1, // Switch to attack animation
+      };
+    }
+  },
+
+  updateEntityAttackMetadata: (entityId: string, metadata: AttackMetadata) => {
+    const existing = battlemapStore.entities.attackAnimations[entityId];
+    if (existing) {
+      battlemapStore.entities.attackAnimations[entityId] = {
+        ...existing,
+        metadata,
+      };
+    }
+  },
+
+  completeEntityAttack: (entityId: string) => {
+    const attackAnimation = battlemapStore.entities.attackAnimations[entityId];
+    
+    // Remove attack animation
+    delete battlemapStore.entities.attackAnimations[entityId];
+    
+    // Update sprite mapping back to idle
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    if (mapping) {
+      battlemapStore.entities.spriteMappings[entityId] = {
+        ...mapping,
+        currentAnimation: mapping.idleAnimation, // Return to idle animation
+      };
+    }
+
+    // NEW: If attack hit, trigger damage animation on target
+    if (attackAnimation?.metadata?.attack_outcome === 'Hit' || attackAnimation?.metadata?.attack_outcome === 'Crit') {
+      const targetMapping = battlemapStore.entities.spriteMappings[attackAnimation.targetId];
+      if (targetMapping) {
+        battlemapStore.entities.spriteMappings[attackAnimation.targetId] = {
+          ...targetMapping,
+          currentAnimation: AnimationState.TAKE_DAMAGE, // Switch target to damage animation
         };
       }
     }

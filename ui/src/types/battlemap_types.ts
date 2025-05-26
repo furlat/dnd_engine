@@ -96,6 +96,23 @@ export interface MovementResponse {
   readonly path_senses?: Readonly<Record<string, SensesSnapshot>>; // Optional path senses data keyed by "x,y"
 }
 
+// NEW: Attack response types to match backend AttackMetadata and AttackResponse
+export interface AttackMetadata {
+  readonly weapon_slot: string;
+  readonly attack_roll?: number; // The d20 roll result
+  readonly attack_total?: number; // Total attack bonus + roll
+  readonly target_ac?: number; // Target's AC
+  readonly attack_outcome?: string; // Hit/Miss/Crit/etc
+  readonly damage_rolls?: readonly number[]; // Individual damage roll totals
+  readonly total_damage?: number; // Sum of all damage
+  readonly damage_types?: readonly string[]; // Types of damage dealt
+}
+
+export interface AttackResponse {
+  readonly event: any; // EventSnapshot - TODO: Define proper event type
+  readonly metadata: AttackMetadata;
+}
+
 // Entity sprite association with decoupled animation states
 export interface EntitySpriteMapping {
   readonly entityId: string;
