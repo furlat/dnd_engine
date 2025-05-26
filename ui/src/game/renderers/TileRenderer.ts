@@ -44,7 +44,7 @@ export class TileRenderer extends AbstractRenderer {
   private lastOffset = { x: 0, y: 0 };
   
   // Last known tile size for zoom detection
-  private lastTileSize = 32;
+  private lastTileSize = 128; // Match new default tile size
   
   // NEW: Visibility-based alpha management for tiles
   private tileSprites: Map<string, Sprite | Graphics> = new Map(); // Track individual tile sprites/graphics

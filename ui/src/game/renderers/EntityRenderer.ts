@@ -56,6 +56,9 @@ export class EntityRenderer extends AbstractRenderer {
   // OPTIMIZED: Local entity state to avoid store spam during movement
   private localEntityStates: Map<string, LocalEntityState> = new Map();
   
+  // NEW: Local z-order state to avoid store spam during combat
+  private localZOrderStates: Map<string, number> = new Map(); // entityId -> zIndex
+  
   // OPTIMIZED: Precomputed movement data to avoid recalculation
   private precomputedMovementData: Map<string, PrecomputedMovementData> = new Map();
   
@@ -146,6 +149,9 @@ export class EntityRenderer extends AbstractRenderer {
       precomputed = this.precomputeMovementData(movement);
       this.precomputedMovementData.set(movement.entityId, precomputed);
       console.log(`[EntityRenderer] Precomputed movement data for ${entity.name}: ${precomputed.directions.length} segments, total distance ${precomputed.totalDistance.toFixed(2)}`);
+      
+      // NEW: Set default z-order for moving entity (on top)
+      this.setLocalZOrder(movement.entityId, 150);
     }
     
     const currentTime = Date.now();
@@ -428,6 +434,9 @@ export class EntityRenderer extends AbstractRenderer {
     // Clean up precomputed data
     this.precomputedMovementData.delete(movement.entityId);
     
+    // NEW: Clear z-order override when movement completes
+    this.clearLocalZOrder(movement.entityId);
+    
     // FIXED: Always sync the current direction to store before clearing local state
     const localState = this.localEntityStates.get(movement.entityId);
     if (localState) {
@@ -507,6 +516,72 @@ export class EntityRenderer extends AbstractRenderer {
       this.localEntityStates.delete(entityId);
       console.log(`[EntityRenderer] Cleared local direction state for entity ${entityId}`);
     }
+  }
+  
+  /**
+   * NEW: Set local z-order for an entity (immediate, no store update)
+   */
+  private setLocalZOrder(entityId: string, zIndex: number): void {
+    const currentZOrder = this.localZOrderStates.get(entityId);
+    if (currentZOrder !== zIndex) {
+      this.localZOrderStates.set(entityId, zIndex);
+      console.log(`[EntityRenderer] Set local z-order for ${entityId}: ${zIndex}`);
+      // Trigger container re-ordering
+      this.updateEntityContainerOrder();
+    }
+  }
+  
+  /**
+   * NEW: Clear local z-order for an entity
+   */
+  private clearLocalZOrder(entityId: string): void {
+    if (this.localZOrderStates.has(entityId)) {
+      this.localZOrderStates.delete(entityId);
+      console.log(`[EntityRenderer] Cleared local z-order for entity ${entityId}`);
+      // Trigger container re-ordering
+      this.updateEntityContainerOrder();
+    }
+  }
+  
+  /**
+   * NEW: Update entity container order based on local and global z-order states
+   */
+  private updateEntityContainerOrder(): void {
+    const snap = battlemapStore;
+    const entities = Object.values(snap.entities.summaries) as EntitySummary[];
+    
+    // Create array of entities with their effective z-order
+    const entitiesWithZOrder = entities
+      .filter(entity => this.entityContainers.has(entity.uuid))
+      .map(entity => {
+        // Use local z-order if available, otherwise global, otherwise default based on state
+        let zOrder = this.localZOrderStates.get(entity.uuid);
+        if (zOrder === undefined) {
+          zOrder = snap.entities.zOrderOverrides[entity.uuid];
+        }
+        if (zOrder === undefined) {
+          // Default z-order: moving/attacking entities go on top
+          const isMoving = !!snap.entities.movementAnimations[entity.uuid];
+          const isAttacking = !!snap.entities.attackAnimations[entity.uuid];
+          zOrder = (isMoving || isAttacking) ? 100 : 0;
+        }
+        
+        return { entity, zOrder };
+      })
+      .sort((a, b) => a.zOrder - b.zOrder); // Sort by z-order (lower first)
+    
+    // Re-order containers in the main container
+    entitiesWithZOrder.forEach(({ entity }) => {
+      const container = this.entityContainers.get(entity.uuid);
+      if (container) {
+        // Remove and re-add to put it at the end (on top)
+        this.container.removeChild(container);
+        this.container.addChild(container);
+      }
+    });
+    
+    console.log(`[EntityRenderer] Updated container order for ${entitiesWithZOrder.length} entities:`, 
+      entitiesWithZOrder.map(({ entity, zOrder }) => `${entity.name}:${zOrder}`));
   }
   
   /**
@@ -611,6 +686,9 @@ export class EntityRenderer extends AbstractRenderer {
     
     // Clean up entities that no longer exist
     this.cleanupRemovedEntities(entities.map(e => e.uuid));
+    
+    // NEW: Update container order based on current z-order states
+    this.updateEntityContainerOrder();
   }
   
   /**
@@ -962,6 +1040,9 @@ export class EntityRenderer extends AbstractRenderer {
       // Non-looping animations
       
       if (isAttackAnimation) {
+        // NEW: Set default z-order for attacking entity (on top initially)
+        this.setLocalZOrder(entity.uuid, 150);
+        
         // NEW: For attack animations, use onFrameChange for precise timing
         let damageTriggered = false; // Prevent multiple triggers
         
@@ -979,6 +1060,19 @@ export class EntityRenderer extends AbstractRenderer {
             if (attackAnimation?.metadata) {
               const isHit = attackAnimation.metadata.attack_outcome === 'Hit' || 
                            attackAnimation.metadata.attack_outcome === 'Crit';
+              
+              // NEW: Set z-order based on attack outcome
+              // Hit: attacker on top (showing successful strike)
+              // Miss: defender on top (hiding/covering the missed swing)
+              if (isHit) {
+                console.log(`[EntityRenderer] Attack hit - setting attacker ${entity.name} on top`);
+                this.setLocalZOrder(entity.uuid, 200); // Attacker on top
+                this.setLocalZOrder(attackAnimation.targetId, 100); // Target below
+              } else {
+                console.log(`[EntityRenderer] Attack missed - setting defender ${attackAnimation.targetId} on top`);
+                this.setLocalZOrder(entity.uuid, 100); // Attacker below
+                this.setLocalZOrder(attackAnimation.targetId, 200); // Target on top (hiding swing)
+              }
               
                              if (isHit) {
                  console.log(`[EntityRenderer] Attack frame ${currentFrame}/${totalFrames} (${Math.round(frameProgress * 100)}%) - triggering damage animation on target`);
@@ -1103,6 +1197,14 @@ export class EntityRenderer extends AbstractRenderer {
           if (!currentMapping) {
             console.warn(`[EntityRenderer] No sprite mapping found for ${entity.uuid} during animation completion`);
             return;
+          }
+          
+          // NEW: Clear z-order overrides when attack completes
+          const attackAnimation = battlemapStore.entities.attackAnimations[entity.uuid];
+          if (attackAnimation) {
+            console.log(`[EntityRenderer] Clearing z-order overrides for completed attack`);
+            this.clearLocalZOrder(entity.uuid);
+            this.clearLocalZOrder(attackAnimation.targetId);
           }
           
           // Complete the attack (this will transition attacker back to idle)
@@ -1248,6 +1350,9 @@ export class EntityRenderer extends AbstractRenderer {
     // Clean up local state
     this.localEntityStates.delete(entityId);
     
+    // NEW: Clean up local z-order state
+    this.localZOrderStates.delete(entityId);
+    
     // NEW: Clean up visibility state
     this.lastVisibilityStates.delete(entityId);
   }
@@ -1363,6 +1468,9 @@ export class EntityRenderer extends AbstractRenderer {
     
     // Clean up local states
     this.localEntityStates.clear();
+    
+    // NEW: Clean up local z-order states
+    this.localZOrderStates.clear();
     
     // NEW: Clean up visibility states
     this.lastVisibilityStates.clear();

@@ -29,6 +29,8 @@ export const useSoundSettings = () => {
     setCurrentTrack: soundActions.setCurrentTrack,
     setPlaying: soundActions.setPlaying,
     setCurrentTime: soundActions.setCurrentTime,
-    setShuffle: soundActions.setShuffle
+    setShuffle: soundActions.setShuffle,
+    playNextTrack: soundActions.playNextTrack,
+    playPreviousTrack: soundActions.playPreviousTrack
   };
 }; 

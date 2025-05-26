@@ -107,10 +107,7 @@ const BattleMapPage: React.FC = () => {
       </Box>
 
       {/* Background Music Player */}
-      <BackgroundMusicPlayer 
-        minimized={isMusicPlayerMinimized}
-        onToggleMinimize={toggleMusicPlayerSize}
-      />
+      <BackgroundMusicPlayer />
 
       {/* Event Queue */}
       <EventQ />
