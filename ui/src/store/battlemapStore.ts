@@ -1,5 +1,5 @@
 import { proxy } from 'valtio';
-import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, AttackMetadata, VisualPosition, toVisualPosition, isVisualPositionSynced } from '../types/battlemap_types';
+import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, AttackMetadata, VisualPosition, toVisualPosition, isVisualPositionSynced, EffectAnimation, EffectType } from '../types/battlemap_types';
 import { EntitySummary, SensesSnapshot } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
@@ -49,6 +49,16 @@ export interface EntityState {
   pathSenses: Record<string, Record<string, SensesSnapshot>>; // observerEntityId -> positionKey -> SensesSnapshot
   // NEW: Z-order overrides for dynamic layering during combat/movement
   zOrderOverrides: Record<string, number>; // entityId -> zIndex (higher = on top)
+  // NEW: Permanent effects attached to entities (for debugging/testing)
+  permanentEffects: Record<string, EffectType[]>; // entityId -> array of effect types
+}
+
+// NEW: Effect system state
+export interface EffectState {
+  // Active effect animations
+  activeEffects: Record<string, EffectAnimation>; // effectId -> EffectAnimation
+  // Available effect types for debugging
+  availableEffects: EffectType[];
 }
 
 export interface BattlemapStoreState {
@@ -56,6 +66,7 @@ export interface BattlemapStoreState {
   view: ViewState;
   controls: ControlState;
   entities: EntityState;
+  effects: EffectState;
   loading: boolean;
   error: string | null;
 }
@@ -99,6 +110,11 @@ const battlemapStore = proxy<BattlemapStoreState>({
     attackAnimations: {},
     pathSenses: {},
     zOrderOverrides: {},
+    permanentEffects: {},
+  },
+  effects: {
+    activeEffects: {},
+    availableEffects: Object.values(EffectType),
   },
   loading: false,
   error: null,
@@ -494,6 +510,51 @@ const battlemapActions = {
     }
   },
   
+  // NEW: Center map on entity position
+  centerMapOnEntity: (entityId: string) => {
+    const entity = battlemapStore.entities.summaries[entityId];
+    if (!entity) return;
+
+    const [entityX, entityY] = entity.position;
+    const tileSize = battlemapStore.view.tileSize;
+    const gridWidth = battlemapStore.grid.width;
+    const gridHeight = battlemapStore.grid.height;
+
+    // Calculate the center offset needed to center the entity on screen
+    // We want the entity to be in the center of the visible area
+    const ENTITY_PANEL_WIDTH = 250;
+    
+    // Assume a typical screen size for centering calculation
+    // In practice, this will be adjusted by the actual container size
+    const assumedScreenWidth = 1200;
+    const assumedScreenHeight = 800;
+    
+    const availableWidth = assumedScreenWidth - ENTITY_PANEL_WIDTH;
+    const gridPixelWidth = gridWidth * tileSize;
+    const gridPixelHeight = gridHeight * tileSize;
+    
+    // Calculate where the grid would naturally be positioned (centered)
+    const baseOffsetX = ENTITY_PANEL_WIDTH + (availableWidth - gridPixelWidth) / 2;
+    const baseOffsetY = (assumedScreenHeight - gridPixelHeight) / 2;
+    
+    // Calculate where the entity currently is in screen coordinates
+    const entityScreenX = baseOffsetX + (entityX * tileSize) + (tileSize / 2);
+    const entityScreenY = baseOffsetY + (entityY * tileSize) + (tileSize / 2);
+    
+    // Calculate where we want the entity to be (center of available area)
+    const targetScreenX = ENTITY_PANEL_WIDTH + (availableWidth / 2);
+    const targetScreenY = assumedScreenHeight / 2;
+    
+    // Calculate the offset needed to move the entity to the target position
+    const offsetX = targetScreenX - entityScreenX;
+    const offsetY = targetScreenY - entityScreenY;
+    
+    console.log(`[battlemapStore] Centering map on ${entity.name} at (${entityX}, ${entityY}), offset: (${offsetX}, ${offsetY})`);
+    
+    battlemapStore.view.offset.x = offsetX;
+    battlemapStore.view.offset.y = offsetY;
+  },
+
   // Start polling for data
   startPolling: () => {
     if (pollingInterval) {
@@ -504,7 +565,7 @@ const battlemapActions = {
     Promise.all([
       battlemapActions.fetchGridSnapshot(),
       battlemapActions.fetchEntitySummaries()
-    ]).then(() => {
+    ]).then(async () => {
       // Select the first entity by default if none is selected
       if (!battlemapStore.entities.selectedEntityId) {
         const entityIds = Object.keys(battlemapStore.entities.summaries);
@@ -512,6 +573,14 @@ const battlemapActions = {
           const firstEntityId = entityIds[0];
           battlemapStore.entities.selectedEntityId = firstEntityId;
           battlemapStore.entities.displayedEntityId = firstEntityId;
+          
+          // NEW: Auto-center map on selected entity for debugging
+          console.log('[battlemapStore] Auto-centering map on first selected entity for debugging');
+          battlemapActions.centerMapOnEntity(firstEntityId);
+          
+          // NEW: Auto-assign random character sprites to all entities for debugging
+          console.log('[battlemapStore] Auto-assigning random character sprites for debugging');
+          await battlemapActions.autoAssignRandomCharacters();
         }
       }
     });
@@ -544,6 +613,120 @@ const battlemapActions = {
   
   clearAllZOrderOverrides: () => {
     battlemapStore.entities.zOrderOverrides = {};
+  },
+
+  // NEW: Effect system actions
+  startEffect: (effectAnimation: EffectAnimation) => {
+    battlemapStore.effects.activeEffects[effectAnimation.effectId] = effectAnimation;
+    console.log(`[battlemapStore] Started effect ${effectAnimation.effectType} at (${effectAnimation.position.x}, ${effectAnimation.position.y})`);
+  },
+
+  updateEffect: (effectId: string, updates: Partial<EffectAnimation>) => {
+    const existing = battlemapStore.effects.activeEffects[effectId];
+    if (existing) {
+      battlemapStore.effects.activeEffects[effectId] = {
+        ...existing,
+        ...updates,
+      };
+    }
+  },
+
+  completeEffect: (effectId: string) => {
+    const effect = battlemapStore.effects.activeEffects[effectId];
+    if (effect) {
+      console.log(`[battlemapStore] Completed effect ${effect.effectType} (${effectId})`);
+      
+      // Trigger callback if provided
+      if (effect.triggerCallback) {
+        effect.triggerCallback();
+      }
+      
+      // Remove from active effects
+      delete battlemapStore.effects.activeEffects[effectId];
+    }
+  },
+
+  clearAllEffects: () => {
+    battlemapStore.effects.activeEffects = {};
+    console.log(`[battlemapStore] Cleared all active effects`);
+  },
+
+  // NEW: Permanent effect management for entities (debugging)
+  addPermanentEffectToEntity: (entityId: string, effectType: EffectType) => {
+    const existing = battlemapStore.entities.permanentEffects[entityId] || [];
+    if (!existing.includes(effectType)) {
+      battlemapStore.entities.permanentEffects[entityId] = [...existing, effectType];
+      console.log(`[battlemapStore] Added permanent effect ${effectType} to entity ${entityId}`);
+    }
+  },
+
+  removePermanentEffectFromEntity: (entityId: string, effectType: EffectType) => {
+    const existing = battlemapStore.entities.permanentEffects[entityId] || [];
+    battlemapStore.entities.permanentEffects[entityId] = existing.filter(e => e !== effectType);
+    if (battlemapStore.entities.permanentEffects[entityId].length === 0) {
+      delete battlemapStore.entities.permanentEffects[entityId];
+    }
+    console.log(`[battlemapStore] Removed permanent effect ${effectType} from entity ${entityId}`);
+  },
+
+  clearAllPermanentEffectsFromEntity: (entityId: string) => {
+    delete battlemapStore.entities.permanentEffects[entityId];
+    console.log(`[battlemapStore] Cleared all permanent effects from entity ${entityId}`);
+  },
+
+  // NEW: Auto-assign random character sprites to all entities (debugging feature)
+  autoAssignRandomCharacters: async () => {
+    // First, ensure we have sprite folders loaded
+    if (battlemapStore.entities.availableSpriteFolders.length === 0) {
+      try {
+        const { discoverAvailableSpriteFolders } = await import('../api/battlemap/battlemapApi');
+        const folders = await discoverAvailableSpriteFolders();
+        battlemapStore.entities.availableSpriteFolders = folders;
+        console.log(`[battlemapStore] Loaded ${folders.length} sprite folders for auto-assignment`);
+      } catch (error) {
+        console.error('[battlemapStore] Failed to load sprite folders for auto-assignment:', error);
+        return;
+      }
+    }
+
+    // Filter out zombies but keep monsters
+    const availableFolders = battlemapStore.entities.availableSpriteFolders;
+    const characterFolders = availableFolders.filter(folder => {
+      const lowerFolder = folder.toLowerCase();
+      // Exclude zombies but keep everything else (including monsters)
+      return !lowerFolder.includes('zombie');
+    });
+
+    if (characterFolders.length === 0) {
+      console.warn('[battlemapStore] No character folders available for auto-assignment');
+      return;
+    }
+
+    console.log(`[battlemapStore] Auto-assigning from ${characterFolders.length} character folders:`, characterFolders);
+
+    // Assign random sprites to all entities that don't already have one
+    const entities = Object.values(battlemapStore.entities.summaries);
+    let assignedCount = 0;
+
+    entities.forEach(entity => {
+      // Skip if entity already has a sprite assigned
+      if (battlemapStore.entities.spriteMappings[entity.uuid]) {
+        console.log(`[battlemapStore] Skipping ${entity.name} - already has sprite assigned`);
+        return;
+      }
+
+      // Pick a random character folder
+      const randomIndex = Math.floor(Math.random() * characterFolders.length);
+      const selectedFolder = characterFolders[randomIndex];
+
+      // Assign the sprite
+      battlemapActions.setEntitySpriteMapping(entity.uuid, selectedFolder);
+      assignedCount++;
+
+      console.log(`[battlemapStore] Auto-assigned ${selectedFolder} to ${entity.name}`);
+    });
+
+    console.log(`[battlemapStore] Auto-assigned sprites to ${assignedCount} entities`);
   },
   
   // Compute direction between two positions

@@ -54,14 +54,14 @@ const App: React.FC = () => {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Box sx={{ bgcolor: '#000000', minHeight: '100vh' }}>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<BattleMapPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
-      </Box>
+        <Box sx={{ bgcolor: '#000000', minHeight: '100vh' }}>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<BattleMapPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </Box>
     </ThemeProvider>
   );
 };

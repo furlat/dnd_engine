@@ -180,4 +180,124 @@ export function toMutableRecord<K extends string | number | symbol, V>(
   record: Readonly<Record<K, V>>
 ): Record<K, V> {
   return { ...record };
+}
+
+// NEW: Effect system types
+export enum EffectType {
+  // Temporary effects (play once and disappear)
+  BLOOD_SPLAT = 'blood_splat',
+  SPARKS = 'sparks-sheet',
+  SPLASH = 'splash-sheet',
+  SMOKE_SIMPLE_1 = 'smoke_simple_1',
+  SMOKE_SIMPLE_2 = 'smoke_simple_2',
+  SMOKE_SIMPLE_3 = 'smoke_simple_3',
+  ROCK_BREAK = 'rock_break',
+  LIGHT_SPARK = 'light_spark',
+  
+  // Permanent/looping effects (stay until removed)
+  DARK_AURA = 'dark_aura',
+  HOLY_LIGHT_AURA = 'holy_light_aura',
+  BUBBLE_SHIELD = 'bubble_shield',
+  ROTATING_SHIELD = 'rotating_shield',
+  CONFUSE1 = 'confuse1',
+  CONFUSE2 = 'confuse2',
+  REGEN = 'regen',
+  ELECTRIC_AURA = 'eletric_aura',
+  FIRE_AURA = 'bonfire-sheet',
+  POISON_CLOUD = 'poison_cloud-sheet',
+}
+
+export enum EffectCategory {
+  TEMPORARY = 'temporary',    // Play once and disappear
+  PERMANENT = 'permanent',    // Loop until removed
+  ATTACHED = 'attached'       // Attached to entity, moves with it
+}
+
+export interface EffectAnimation {
+  readonly effectId: string;           // Unique ID for this effect instance
+  readonly effectType: EffectType;     // Type of effect
+  readonly category: EffectCategory;   // How the effect behaves
+  readonly position: VisualPosition;   // World position of the effect
+  readonly startTime: number;          // When the effect started
+  readonly duration?: number;          // Duration in ms (for temporary effects)
+  readonly scale?: number;             // Scale multiplier
+  readonly alpha?: number;             // Alpha transparency
+  readonly attachedToEntityId?: string; // If attached to an entity
+  readonly offsetX?: number;           // Offset from entity position (if attached)
+  readonly offsetY?: number;           // Offset from entity position (if attached)
+  readonly triggerCallback?: () => void; // Callback when effect completes
+}
+
+export interface EffectMetadata {
+  readonly name: string;
+  readonly normalized_name: string;
+  readonly total_frames: number;
+  readonly sprite_size: {
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly files: {
+    readonly json: string;
+    readonly png: string;
+  };
+}
+
+/**
+ * Helper function to get effect path
+ */
+export function getEffectPath(effectType: EffectType): string {
+  return `/assets/effects/${effectType}.json`;
+}
+
+/**
+ * Helper function to determine if an effect should loop
+ */
+export function shouldEffectLoop(effectType: EffectType): boolean {
+  switch (effectType) {
+    case EffectType.DARK_AURA:
+    case EffectType.HOLY_LIGHT_AURA:
+    case EffectType.BUBBLE_SHIELD:
+    case EffectType.ROTATING_SHIELD:
+    case EffectType.CONFUSE1:
+    case EffectType.CONFUSE2:
+    case EffectType.REGEN:
+    case EffectType.ELECTRIC_AURA:
+    case EffectType.FIRE_AURA:
+    case EffectType.POISON_CLOUD:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Helper function to get effect category
+ */
+export function getEffectCategory(effectType: EffectType): EffectCategory {
+  if (shouldEffectLoop(effectType)) {
+    return EffectCategory.PERMANENT;
+  }
+  return EffectCategory.TEMPORARY;
+}
+
+/**
+ * Helper function to get default effect duration (for temporary effects)
+ */
+export function getDefaultEffectDuration(effectType: EffectType): number {
+  switch (effectType) {
+    case EffectType.BLOOD_SPLAT:
+      return 800; // 0.8 seconds
+    case EffectType.SPARKS:
+    case EffectType.SPLASH:
+      return 600; // 0.6 seconds
+    case EffectType.SMOKE_SIMPLE_1:
+    case EffectType.SMOKE_SIMPLE_2:
+    case EffectType.SMOKE_SIMPLE_3:
+      return 1000; // 1 second
+    case EffectType.ROCK_BREAK:
+    case EffectType.LIGHT_SPARK:
+      return 500; // 0.5 seconds
+    default:
+      return 1000; // 1 second default
+  }
 } 

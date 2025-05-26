@@ -22,8 +22,8 @@ import PersonIcon from '@mui/icons-material/Person';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useSpriteEditor } from '../../../hooks/battlemap';
 import { useSnapshot } from 'valtio';
-import { battlemapStore } from '../../../store';
-import { SpriteFolderName, AnimationState, Direction } from '../../../types/battlemap_types';
+import { battlemapStore, battlemapActions } from '../../../store';
+import { SpriteFolderName, AnimationState, Direction, EffectType } from '../../../types/battlemap_types';
 import { getSpriteSheetPath } from '../../../api/battlemap/battlemapApi';
 
 interface TabPanelProps {
@@ -451,6 +451,7 @@ const SpriteEditorPanel: React.FC<SpriteEditorPanelProps> = ({ isLocked }) => {
           <Tab label={`Humanoids (${humanoidSprites.length})`} />
           <Tab label={`Zombies (${zombieSprites.length})`} />
           <Tab label={`Monsters (${monsterSprites.length})`} />
+          <Tab label="Effects" />
         </Tabs>
       </Box>
 
@@ -479,8 +480,186 @@ const SpriteEditorPanel: React.FC<SpriteEditorPanelProps> = ({ isLocked }) => {
             onSpriteChange={handleSpriteChange}
           />
         </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
+          <EffectsPanel selectedEntityId={selectedEntityId} />
+        </TabPanel>
       </Box>
     </Paper>
+  );
+};
+
+// Helper component for effects panel
+const EffectsPanel: React.FC<{ selectedEntityId: string }> = ({ selectedEntityId }) => {
+  const snap = useSnapshot(battlemapStore);
+  const currentEffects = snap.entities.permanentEffects[selectedEntityId] || [];
+
+  const handleAddEffect = useCallback((effectType: EffectType) => {
+    battlemapActions.addPermanentEffectToEntity(selectedEntityId, effectType);
+  }, [selectedEntityId]);
+
+  const handleRemoveEffect = useCallback((effectType: EffectType) => {
+    battlemapActions.removePermanentEffectFromEntity(selectedEntityId, effectType);
+  }, [selectedEntityId]);
+
+  const handleClearAllEffects = useCallback(() => {
+    battlemapActions.clearAllPermanentEffectsFromEntity(selectedEntityId);
+  }, [selectedEntityId]);
+
+  // Categorize effects
+  const temporaryEffects = [
+    EffectType.BLOOD_SPLAT,
+    EffectType.SPARKS,
+    EffectType.SPLASH,
+    EffectType.SMOKE_SIMPLE_1,
+    EffectType.SMOKE_SIMPLE_2,
+    EffectType.SMOKE_SIMPLE_3,
+    EffectType.ROCK_BREAK,
+    EffectType.LIGHT_SPARK,
+  ];
+
+  const permanentEffects = [
+    EffectType.DARK_AURA,
+    EffectType.HOLY_LIGHT_AURA,
+    EffectType.BUBBLE_SHIELD,
+    EffectType.ROTATING_SHIELD,
+    EffectType.CONFUSE1,
+    EffectType.CONFUSE2,
+    EffectType.REGEN,
+    EffectType.ELECTRIC_AURA,
+    EffectType.FIRE_AURA,
+    EffectType.POISON_CLOUD,
+  ];
+
+  return (
+    <Box sx={{ p: 2 }}>
+      <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
+        Entity Effects (Debug)
+      </Typography>
+
+      {/* Current Effects */}
+      {currentEffects.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, color: 'rgba(255,255,255,0.8)' }}>
+            Active Effects ({currentEffects.length})
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+            {currentEffects.map(effectType => (
+              <Chip
+                key={effectType}
+                label={effectType.replace(/_/g, ' ').replace(/-/g, ' ')}
+                size="small"
+                color="primary"
+                onDelete={() => handleRemoveEffect(effectType)}
+                deleteIcon={<DeleteIcon />}
+                sx={{ 
+                  backgroundColor: 'rgba(25, 118, 210, 0.3)',
+                  color: 'white',
+                  '& .MuiChip-deleteIcon': { color: 'rgba(255,255,255,0.7)' }
+                }}
+              />
+            ))}
+          </Box>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleClearAllEffects}
+            sx={{ 
+              color: 'rgba(255,255,255,0.7)',
+              borderColor: 'rgba(255,255,255,0.3)',
+              '&:hover': {
+                borderColor: 'rgba(255,255,255,0.5)',
+                backgroundColor: 'rgba(255,255,255,0.1)'
+              }
+            }}
+          >
+            Clear All Effects
+          </Button>
+        </Box>
+      )}
+
+      {/* Permanent Effects */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle2" sx={{ mb: 2, color: 'rgba(255,255,255,0.8)' }}>
+          Permanent Effects (Looping)
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {permanentEffects.map(effectType => {
+            const isActive = currentEffects.includes(effectType);
+            return (
+              <Button
+                key={effectType}
+                variant={isActive ? "contained" : "outlined"}
+                size="small"
+                onClick={() => isActive ? handleRemoveEffect(effectType) : handleAddEffect(effectType)}
+                sx={{ 
+                  color: isActive ? 'white' : 'rgba(255,255,255,0.7)',
+                  borderColor: 'rgba(255,255,255,0.3)',
+                  backgroundColor: isActive ? 'rgba(25, 118, 210, 0.6)' : 'transparent',
+                  '&:hover': {
+                    borderColor: 'rgba(255,255,255,0.5)',
+                    backgroundColor: isActive ? 'rgba(25, 118, 210, 0.8)' : 'rgba(255,255,255,0.1)'
+                  },
+                  fontSize: '0.7rem',
+                  minWidth: 'auto',
+                  px: 1,
+                }}
+              >
+                {effectType.replace(/_/g, ' ').replace(/-/g, ' ')}
+              </Button>
+            );
+          })}
+        </Box>
+      </Box>
+
+      {/* Temporary Effects (for testing) */}
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 2, color: 'rgba(255,255,255,0.8)' }}>
+          Temporary Effects (Test Trigger)
+        </Typography>
+        <Typography variant="caption" sx={{ mb: 2, color: 'rgba(255,255,255,0.5)', display: 'block' }}>
+          These effects play once and disappear. Click to trigger at entity position.
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {temporaryEffects.map(effectType => (
+            <Button
+              key={effectType}
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                // Trigger temporary effect at entity position
+                const entity = snap.entities.summaries[selectedEntityId];
+                if (entity) {
+                  const entityMapping = snap.entities.spriteMappings[selectedEntityId];
+                  const position = entityMapping?.visualPosition || { x: entity.position[0], y: entity.position[1] };
+                  
+                  // Import gameManager dynamically to avoid circular imports
+                  import('../../../game/GameManager').then(({ gameManager }) => {
+                    const effectRenderer = gameManager.getEffectRenderer();
+                    effectRenderer.triggerEffect(effectType, position, {
+                      callback: () => console.log(`[EffectsPanel] ${effectType} completed`)
+                    });
+                  });
+                }
+              }}
+              sx={{ 
+                color: 'rgba(255,255,255,0.7)',
+                borderColor: 'rgba(255,255,255,0.3)',
+                '&:hover': {
+                  borderColor: 'rgba(255,255,255,0.5)',
+                  backgroundColor: 'rgba(255,255,255,0.1)'
+                },
+                fontSize: '0.7rem',
+                minWidth: 'auto',
+                px: 1,
+              }}
+            >
+              {effectType.replace(/_/g, ' ').replace(/-/g, ' ')}
+            </Button>
+          ))}
+        </Box>
+      </Box>
+    </Box>
   );
 };
 
