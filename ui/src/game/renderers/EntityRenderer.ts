@@ -1,5 +1,6 @@
 import { Container, AnimatedSprite, Assets, Spritesheet, Ticker, Texture } from 'pixi.js';
 import { battlemapStore, battlemapActions } from '../../store';
+import { soundActions } from '../../store/soundStore';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
 import { AnimationState, Direction, EntitySpriteMapping, MovementAnimation, MovementState, VisualPosition, toVisualPosition } from '../../types/battlemap_types';
@@ -982,6 +983,9 @@ export class EntityRenderer extends AbstractRenderer {
                              if (isHit) {
                  console.log(`[EntityRenderer] Attack frame ${currentFrame}/${totalFrames} (${Math.round(frameProgress * 100)}%) - triggering damage animation on target`);
                  
+                 // Play attack hit sound
+                 soundActions.playAttackSound(attackAnimation.metadata.attack_outcome as 'Hit' | 'Crit');
+                 
                  // Get attacker and target entities for direction calculation
                  const attackerEntity = battlemapStore.entities.summaries[entity.uuid];
                  const targetEntity = battlemapStore.entities.summaries[attackAnimation.targetId];
@@ -1007,6 +1011,9 @@ export class EntityRenderer extends AbstractRenderer {
                  }
                } else {
                  console.log(`[EntityRenderer] Attack frame ${currentFrame}/${totalFrames} (${Math.round(frameProgress * 100)}%) - attack missed, triggering dodge animation`);
+                 
+                 // Play attack miss sound (swoosh)
+                 soundActions.playAttackSound('Miss');
                  
                  // Get attacker and target entities for direction calculation
                  const attackerEntity = battlemapStore.entities.summaries[entity.uuid];

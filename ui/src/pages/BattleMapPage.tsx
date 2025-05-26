@@ -13,6 +13,7 @@ const useError = () => {
   return { error, setError, clearError };
 };
 import { battlemapActions } from '../store';
+import { soundActions } from '../store/soundStore';
 
 /**
  * BattleMapPage is responsible for overall layout of the game area
@@ -25,21 +26,22 @@ const BattleMapPage: React.FC = () => {
   
   // State for UI collapsing
   const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(true);
-  const [isEventQCollapsed, setIsEventQCollapsed] = React.useState(true);
 
-  // Initialize polling when the component mounts
+  // Initialize polling and sound system when the component mounts
   React.useEffect(() => {
     battlemapActions.startPolling();
+    
+    // Initialize sound system
+    soundActions.initialize().catch(error => {
+      console.error('[BattleMapPage] Failed to initialize sound system:', error);
+    });
+    
     return () => battlemapActions.stopPolling();
   }, []);
 
   // Toggle handlers
   const toggleCharacterSheet = React.useCallback(() => {
     setIsCharacterSheetCollapsed(prev => !prev);
-  }, []);
-
-  const toggleEventQ = React.useCallback(() => {
-    setIsEventQCollapsed(prev => !prev);
   }, []);
 
   return (
@@ -111,10 +113,7 @@ const BattleMapPage: React.FC = () => {
       />
 
       {/* Event Queue */}
-      <EventQ 
-        isCollapsed={isEventQCollapsed}
-        onToggleCollapse={toggleEventQ}
-      />
+      <EventQ />
     </Box>
   );
 };

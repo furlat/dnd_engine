@@ -9,3 +9,4 @@ dnd.egg-info/SOURCES.txt
 
 /ui/node_modules
 /ui/public/assets/entities
+*.mp3
