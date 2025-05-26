@@ -3,7 +3,7 @@ import { battlemapStore, battlemapActions } from '../../store';
 import { soundActions } from '../../store/soundStore';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
-import { AnimationState, Direction, EntitySpriteMapping, MovementAnimation, MovementState, VisualPosition, toVisualPosition } from '../../types/battlemap_types';
+import { AnimationState, Direction, EntitySpriteMapping, MovementAnimation, MovementState, VisualPosition, toVisualPosition, EffectType, EffectCategory } from '../../types/battlemap_types';
 import { LayerName } from '../BattlemapEngine';
 import { EntitySummary, Position } from '../../types/common';
 import { getSpriteSheetPath } from '../../api/battlemap/battlemapApi';
@@ -1102,6 +1102,192 @@ export class EntityRenderer extends AbstractRenderer {
                    
                    // Trigger damage animation on target
                    battlemapActions.setEntityAnimation(attackAnimation.targetId, AnimationState.TAKE_DAMAGE);
+                   
+                   // NEW: Trigger blood splat effects immediately (revert to original timing)
+                   // The 70% timing was better for visual impact
+                   const currentTargetMapping = targetMapping;
+                   const currentTargetEntity = targetEntity;
+                     
+                     // Use target's center position as base
+                     const targetVisualPosition = currentTargetMapping.visualPosition || toVisualPosition(currentTargetEntity.position);
+                     
+                     // Calculate direction FROM attacker TO target (this is the impact direction)
+                     const impactDirection = this.computeDirectionFromPositions(
+                       attackerEntity.position as readonly [number, number], 
+                       currentTargetEntity.position as readonly [number, number]
+                     );
+                     
+                     // Calculate starting position HIGHER and FARTHER away from attacker
+                     let backStartX = 0;
+                     let backStartY = 0;
+                     const backDistance = 0.35; // Increased from 0.2 to 0.35 - farther away
+                     const heightOffset = -0.4; // Higher up (more negative Y)
+                     
+                     // Position blood start point on the BACK of target (opposite side from attacker)
+                     switch (impactDirection) {
+                       case Direction.N: backStartY = backDistance; break; // Attacker S of target, blood starts N side
+                       case Direction.NE: backStartX = backDistance * 0.7; backStartY = backDistance * 0.7; break; // Attacker SW, blood starts NE
+                       case Direction.E: backStartX = backDistance; break; // Attacker W of target, blood starts E side
+                       case Direction.SE: backStartX = backDistance * 0.7; backStartY = -backDistance * 0.7; break; // Attacker NW, blood starts SE
+                       case Direction.S: backStartY = -backDistance; break; // Attacker N of target, blood starts S side
+                       case Direction.SW: backStartX = -backDistance * 0.7; backStartY = -backDistance * 0.7; break; // Attacker NE, blood starts SW
+                       case Direction.W: backStartX = -backDistance; break; // Attacker E of target, blood starts W side
+                       case Direction.NW: backStartX = -backDistance * 0.7; backStartY = backDistance * 0.7; break; // Attacker SE, blood starts NW
+                     }
+                     
+                     // Blood spray base position (higher and farther back)
+                     const bloodBasePosition = {
+                       x: targetVisualPosition.x + backStartX,
+                       y: targetVisualPosition.y + backStartY + heightOffset // Higher up
+                     };
+                     
+                     // REVERSED pattern: less blood at beginning, more later
+                     const totalStages = 5;
+                     const stageDroplets = [1, 2, 4, 6, 5]; // Start minimal, build up to peak, then slight reduction
+                     const totalDroplets = stageDroplets.reduce((sum, count) => sum + count, 0); // 18 total
+                     
+                     // Five-stage expanding blood spray: concentrated → expanding → peak → reducing → final
+                     const createBloodStage = (stageIndex: number, stageDroplets: number, stageDelay: number, stageDistance: number, spreadFactor: number) => {
+                       for (let i = 0; i < stageDroplets; i++) {
+                         // Start at body level with minimal jiggle initially, expanding over stages
+                         const bodyLevelOffset = -0.3 - (Math.random() * 0.2); // -0.3 to -0.5 tiles up from center
+                         const baseSpread = 0.1 * spreadFactor; // Expanding spread per stage
+                         const horizontalJiggle = (Math.random() - 0.5) * baseSpread; // Expanding horizontal spread
+                         const verticalJiggle = (Math.random() - 0.5) * (baseSpread * 0.3); // Smaller vertical spread
+                         
+                         const startPosition = {
+                           x: bloodBasePosition.x + horizontalJiggle,
+                           y: bloodBasePosition.y + bodyLevelOffset + verticalJiggle
+                         };
+                         
+                         // Calculate end position - always spray AWAY from attacker
+                         const baseDistance = stageDistance + Math.random() * (0.2 * spreadFactor); // Expanding distance
+                         const fallDistance = 0.3 + Math.random() * 0.4; // 0.3-0.7 tiles down
+                         
+                         // Directional jiggle - but ONLY away from attacker (never towards)
+                         const awayJiggleRange = 0.2 * spreadFactor; // Expanding jiggle range
+                         let directionJiggleX = 0;
+                         let directionJiggleY = 0;
+                         
+                         // Generate jiggle that only goes further away from attacker
+                         switch (impactDirection) {
+                           case Direction.N: 
+                             directionJiggleX = (Math.random() - 0.5) * awayJiggleRange;
+                             directionJiggleY = Math.random() * awayJiggleRange; // Only positive (further N)
+                             break;
+                           case Direction.NE:
+                             directionJiggleX = Math.random() * awayJiggleRange; // Only positive (further E)
+                             directionJiggleY = Math.random() * awayJiggleRange; // Only positive (further N)
+                             break;
+                           case Direction.E:
+                             directionJiggleX = Math.random() * awayJiggleRange; // Only positive (further E)
+                             directionJiggleY = (Math.random() - 0.5) * awayJiggleRange;
+                             break;
+                           case Direction.SE:
+                             directionJiggleX = Math.random() * awayJiggleRange; // Only positive (further E)
+                             directionJiggleY = -Math.random() * awayJiggleRange; // Only negative (further S)
+                             break;
+                           case Direction.S:
+                             directionJiggleX = (Math.random() - 0.5) * awayJiggleRange;
+                             directionJiggleY = -Math.random() * awayJiggleRange; // Only negative (further S)
+                             break;
+                           case Direction.SW:
+                             directionJiggleX = -Math.random() * awayJiggleRange; // Only negative (further W)
+                             directionJiggleY = -Math.random() * awayJiggleRange; // Only negative (further S)
+                             break;
+                           case Direction.W:
+                             directionJiggleX = -Math.random() * awayJiggleRange; // Only negative (further W)
+                             directionJiggleY = (Math.random() - 0.5) * awayJiggleRange;
+                             break;
+                           case Direction.NW:
+                             directionJiggleX = -Math.random() * awayJiggleRange; // Only negative (further W)
+                             directionJiggleY = Math.random() * awayJiggleRange; // Only positive (further N)
+                             break;
+                         }
+                         
+                         let endX = startPosition.x;
+                         let endY = startPosition.y + fallDistance; // Always fall down
+                         
+                         // Add directional movement AWAY from attacker
+                         switch (impactDirection) {
+                           case Direction.N: 
+                             endY -= baseDistance;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                           case Direction.NE: 
+                             endX += baseDistance * 0.7; 
+                             endY -= baseDistance * 0.7;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                           case Direction.E: 
+                             endX += baseDistance;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                           case Direction.SE: 
+                             endX += baseDistance * 0.7; 
+                             endY += baseDistance * 0.7;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                           case Direction.S: 
+                             endY += baseDistance;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                           case Direction.SW: 
+                             endX -= baseDistance * 0.7; 
+                             endY += baseDistance * 0.7;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                           case Direction.W: 
+                             endX -= baseDistance;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                           case Direction.NW: 
+                             endX -= baseDistance * 0.7; 
+                             endY -= baseDistance * 0.7;
+                             endX += directionJiggleX;
+                             endY += directionJiggleY;
+                             break;
+                         }
+                         
+                         // Frame delay: 2 frames base + randomization (33ms = ~2 frames at 60fps)
+                         const frameDelay = 33 + Math.floor(Math.random() * 17); // 33-50ms (2-3 frames)
+                         
+                         const bloodSplatEffectId = `blood_splat_${Date.now()}_s${stageIndex}_${i}_${Math.random().toString(36).substr(2, 9)}`;
+                         const bloodSplatEffect = {
+                           effectId: bloodSplatEffectId,
+                           effectType: EffectType.BLOOD_SPLAT,
+                           category: EffectCategory.TEMPORARY,
+                           position: startPosition,
+                           startTime: Date.now() + stageDelay + (i * frameDelay), // Stage delay + frame delay
+                           duration: 700 + Math.random() * 400, // 0.7-1.1 seconds
+                           scale: (0.7 + Math.random() * 0.8) * 1.2, // 20% bigger: 0.84-1.8 scale variation
+                           alpha: 0.7 + Math.random() * 0.3, // 0.7-1.0 alpha variation
+                           // Store end position for movement animation
+                           offsetX: endX - startPosition.x,
+                           offsetY: endY - startPosition.y,
+                           triggerCallback: (stageIndex === 0 && i === 0) ? () => {
+                             console.log(`[EntityRenderer] Blood splat effects completed for ${currentTargetEntity.name} (${totalDroplets} droplets in ${totalStages} stages)`);
+                           } : undefined // Only log on first droplet of first stage
+                         };
+                         battlemapActions.startEffect(bloodSplatEffect);
+                       }
+                     };
+                     
+                     // Five-stage expanding spray pattern with farther travel
+                     stageDroplets.forEach((dropletCount, stageIndex) => {
+                       const stageDelay = stageIndex * 40; // Reduced from 60ms to 40ms for faster sequence
+                       const stageDistance = -0.2 + (stageIndex * 0.3); // FARTHER: 0.6, 0.9, 1.2, 1.5, 1.8 tiles
+                       const spreadFactor = 1 + (stageIndex * 0.6); // More spread: 1.0, 1.6, 2.2, 2.8, 3.4 multiplier
+                       
+                       createBloodStage(stageIndex, dropletCount, stageDelay, stageDistance, spreadFactor);
+                     });
                  }
                } else {
                  console.log(`[EntityRenderer] Attack frame ${currentFrame}/${totalFrames} (${Math.round(frameProgress * 100)}%) - attack missed, triggering dodge animation`);
