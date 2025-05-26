@@ -3,6 +3,7 @@ import {
   GridSnapshot, 
   TileSummary,
   AttackResult,
+  AttackResponse,
   toMutablePosition,
   SpriteFolderName,
   AnimationState,
@@ -173,14 +174,13 @@ export const executeAttack = async (
   targetId: string,
   weaponSlot: 'MAIN_HAND' | 'OFF_HAND' = 'MAIN_HAND',
   attackName: string = 'Attack'
-): Promise<AttackResult> => {
+): Promise<AttackResponse> => {
   try {
     const response = await axios.post(
       `${API_BASE_URL}/entities/${entityId}/attack/${targetId}`,
       null,
       {
         params: {
-          ...DEFAULT_INCLUDE_PARAMS,
           weapon_slot: weaponSlot,
           attack_name: attackName
         }
