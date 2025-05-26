@@ -38,6 +38,22 @@ class MovementResponse(BaseModel):
     entity: EntitySummary
     path_senses: Dict[Tuple[int,int],SensesSnapshot] = Field(default_factory=dict)
 
+# NEW: Attack-related models to preserve metadata lost in event translation
+class AttackMetadata(BaseModel):
+    """Metadata extracted from AttackEvent that gets lost in event translation"""
+    weapon_slot: str  # WeaponSlot enum value
+    attack_roll: Optional[int] = None  # The d20 roll result
+    attack_total: Optional[int] = None  # Total attack bonus + roll
+    target_ac: Optional[int] = None  # Target's AC
+    attack_outcome: Optional[str] = None  # Hit/Miss/Crit/etc
+    damage_rolls: Optional[List[int]] = None  # Individual damage roll totals
+    total_damage: Optional[int] = None  # Sum of all damage
+    damage_types: Optional[List[str]] = None  # Types of damage dealt
+
+class AttackResponse(BaseModel):
+    event: EventSnapshot
+    metadata: AttackMetadata
+
 # Create router
 router = APIRouter(
     prefix="/entities",
@@ -455,18 +471,14 @@ async def set_entity_target(
         include_saving_throw_calculations=include_saving_throw_calculations
     ) 
 
-@router.post("/{entity_uuid}/attack/{target_uuid}")
+@router.post("/{entity_uuid}/attack/{target_uuid}", response_model=AttackResponse)
 async def execute_attack(
     entity_uuid: UUID,
     target_uuid: UUID,
     weapon_slot: WeaponSlot = Query(WeaponSlot.MAIN_HAND, description="Which weapon slot to use for the attack"),
-    attack_name: str = Query("Attack", description="Name of the attack"),
-    include_skill_calculations: bool = Query(False, description="Whether to include skill calculations in response"),
-    include_attack_calculations: bool = Query(True, description="Whether to include attack calculations in response"),
-    include_ac_calculation: bool = Query(True, description="Whether to include AC calculation in response"),
-    include_saving_throw_calculations: bool = Query(False, description="Whether to include saving throw calculations in response")
+    attack_name: str = Query("Attack", description="Name of the attack")
 ):
-    """Execute an attack from one entity to another"""
+    """Execute an attack from one entity to another and return event + metadata"""
     entity = Entity.get(entity_uuid)
     target = Entity.get(target_uuid)
     
@@ -487,23 +499,35 @@ async def execute_attack(
     if not result_event:
         raise HTTPException(status_code=400, detail="Attack could not be executed")
     
-    # Get fresh copy of attacker after the attack
-    updated_attacker = Entity.get(entity_uuid)
-    if not updated_attacker:
-        raise HTTPException(status_code=404, detail="Entity not found after attack")
+    # Cast to AttackEvent to access attack-specific attributes
+    from dnd.actions import AttackEvent
+    if not isinstance(result_event, AttackEvent):
+        raise HTTPException(status_code=500, detail="Expected AttackEvent but got different event type")
     
-    # Return the full updated attacker state with target summary included
-    return {
-        "event": EventSnapshot.from_engine(result_event, include_children=True),
-        "attacker": EntitySnapshot.from_engine(
-            updated_attacker,
-            include_skill_calculations=include_skill_calculations,
-            include_attack_calculations=include_attack_calculations,
-            include_ac_calculation=include_ac_calculation,
-            include_saving_throw_calculations=include_saving_throw_calculations,
-            include_target_summary=True
-        )
-    } 
+    # Extract metadata from the AttackEvent that gets lost in event translation
+    attack_roll = None
+    if result_event.dice_roll and result_event.dice_roll.results:
+        # For d20 rolls, results is typically a list with the natural roll as first element
+        if isinstance(result_event.dice_roll.results, list) and len(result_event.dice_roll.results) > 0:
+            attack_roll = result_event.dice_roll.results[0]
+        elif isinstance(result_event.dice_roll.results, int):
+            attack_roll = result_event.dice_roll.results
+    
+    metadata = AttackMetadata(
+        weapon_slot=weapon_slot.value,
+        attack_roll=attack_roll,
+        attack_total=result_event.dice_roll.total if result_event.dice_roll else None,
+        target_ac=result_event.ac.normalized_score if result_event.ac else None,
+        attack_outcome=result_event.attack_outcome.value if result_event.attack_outcome else None,
+        damage_rolls=[roll.total for roll in result_event.damage_rolls] if result_event.damage_rolls else None,
+        total_damage=sum(roll.total for roll in result_event.damage_rolls) if result_event.damage_rolls else None,
+        damage_types=[damage.damage_type.value for damage in result_event.damages] if result_event.damages else None
+    )
+    
+    return AttackResponse(
+        event=EventSnapshot.from_engine(result_event, include_children=True),
+        metadata=metadata
+    ) 
 
 @router.get("/position/{x}/{y}", response_model=List[EntitySummary])
 async def get_entities_at_position(x: int, y: int):

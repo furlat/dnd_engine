@@ -896,11 +896,12 @@ export class EntityRenderer extends AbstractRenderer {
           console.log(`[EntityRenderer] Skipping transition for ${entity.name} - animation already changed or already idle`);
         }
         
-        // If this was an attack animation, resync the entity position
+        // NEW: If this was an attack animation, complete the attack (triggers damage animation on target if hit)
         if (mapping.currentAnimation === AnimationState.ATTACK1 || 
             mapping.currentAnimation === AnimationState.ATTACK2 || 
             mapping.currentAnimation === AnimationState.ATTACK3) {
-          console.log(`[EntityRenderer] Attack animation completed for ${entity.name}, resyncing position`);
+          console.log(`[EntityRenderer] Attack animation completed for ${entity.name}, completing attack`);
+          battlemapActions.completeEntityAttack(entity.uuid);
           battlemapActions.resyncEntityPosition(entity.uuid);
         }
       };

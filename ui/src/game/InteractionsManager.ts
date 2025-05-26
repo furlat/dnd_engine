@@ -407,7 +407,7 @@ export class InteractionsManager {
   }
   
   /**
-   * Execute a direct attack (entities are adjacent)
+   * Execute a direct attack (entities are adjacent) using optimistic pattern
    */
   private async executeDirectAttack(attackerId: string, targetId: string): Promise<void> {
     const attacker = battlemapStore.entities.summaries[attackerId];
@@ -415,46 +415,52 @@ export class InteractionsManager {
     
     if (!attacker || !target) return;
     
+    console.log(`[InteractionsManager] ${attacker.name} attacking ${target.name} directly (optimistic)`);
+    
+    // STEP 1: Set direction to face the target BEFORE starting attack
+    const direction = this.computeDirection(attacker.position, target.position);
+    
+    // Clear any local direction state that might interfere with attack direction
+    const entityRenderer = this.engine?.getRenderer('EntityRenderer');
+    if (entityRenderer && 'clearLocalDirectionState' in entityRenderer) {
+      (entityRenderer as any).clearLocalDirectionState(attackerId);
+    }
+    
+    battlemapActions.setEntityDirectionFromMapping(attackerId, direction);
+    console.log(`[InteractionsManager] Set attack direction for ${attacker.name}: ${direction}`);
+    
+    // STEP 2: Mark entity as out-of-sync to block further inputs
+    const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
+    if (spriteMapping) {
+      battlemapActions.updateEntityVisualPosition(attackerId, spriteMapping.visualPosition || { x: attacker.position[0], y: attacker.position[1] });
+    }
+    
+    // STEP 3: Start optimistic attack animation immediately
+    battlemapActions.startEntityAttack(attackerId, targetId);
+    console.log(`[InteractionsManager] Started optimistic attack animation for ${attacker.name}`);
+    
     try {
-      console.log(`[InteractionsManager] ${attacker.name} attacking ${target.name} directly`);
+      // STEP 4: Execute the attack API call
+      const attackResponse = await executeAttack(attackerId, targetId, 'MAIN_HAND');
       
-      // FIRST: Set direction to face the target BEFORE marking as out-of-sync
-      const direction = this.computeDirection(attacker.position, target.position);
+      console.log(`[InteractionsManager] Attack response received:`, {
+        event: attackResponse.event,
+        metadata: attackResponse.metadata
+      });
       
-      // Clear any local direction state that might interfere with attack direction
-      const entityRenderer = this.engine?.getRenderer('EntityRenderer');
-      if (entityRenderer && 'clearLocalDirectionState' in entityRenderer) {
-        (entityRenderer as any).clearLocalDirectionState(attackerId);
-      }
+      // STEP 5: Update attack metadata from server response
+      battlemapActions.updateEntityAttackMetadata(attackerId, attackResponse.metadata);
       
-      battlemapActions.setEntityDirectionFromMapping(attackerId, direction);
-      console.log(`[InteractionsManager] Set attack direction for ${attacker.name}: ${direction}`);
-      
-      // THEN: Mark entity as out-of-sync to block further inputs
-      const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
-      if (spriteMapping) {
-        battlemapActions.updateEntityVisualPosition(attackerId, spriteMapping.visualPosition || { x: attacker.position[0], y: attacker.position[1] });
-      }
-      
-      // FINALLY: Trigger attack animation (should use the direction we just set)
-      battlemapActions.setEntityAnimation(attackerId, AnimationState.ATTACK1);
-      
-      // Execute the attack
-      const attackResult = await executeAttack(attackerId, targetId, 'MAIN_HAND');
-      
-      console.log(`[InteractionsManager] Attack successful:`, attackResult);
-      
-      // Refresh entity summaries to get updated health/status
+      // STEP 6: Refresh entity summaries to get updated health/status
       await battlemapActions.fetchEntitySummaries();
+      
+      console.log(`[InteractionsManager] Attack successful - outcome: ${attackResponse.metadata.attack_outcome}, damage: ${attackResponse.metadata.total_damage}`);
       
     } catch (error) {
       console.error(`[InteractionsManager] Attack failed:`, error);
       
-      // Return to idle animation on failure
-      const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
-      if (spriteMapping) {
-        battlemapActions.setEntityAnimation(attackerId, spriteMapping.idleAnimation);
-      }
+      // ROLLBACK: Complete attack immediately on failure (returns to idle)
+      battlemapActions.completeEntityAttack(attackerId);
     }
   }
   
