@@ -323,6 +323,85 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
+   * Get the opposite direction for dodge movement
+   */
+  private getOppositeDirection(direction: Direction): Direction {
+    switch (direction) {
+      case Direction.N: return Direction.S;
+      case Direction.NE: return Direction.SW;
+      case Direction.E: return Direction.W;
+      case Direction.SE: return Direction.NW;
+      case Direction.S: return Direction.N;
+      case Direction.SW: return Direction.NE;
+      case Direction.W: return Direction.E;
+      case Direction.NW: return Direction.SE;
+      default: return Direction.S;
+    }
+  }
+  
+  /**
+   * Get position offset by 1/3 of a cell in a given direction for subtle dodge movement
+   */
+  private getAdjacentPosition(position: readonly [number, number], direction: Direction): readonly [number, number] {
+    const [x, y] = position;
+    const offset = 1/4; // Only move 1/3 of a cell for subtle dodge
+    
+    switch (direction) {
+      case Direction.N: return [x, y - offset];
+      case Direction.NE: return [x + offset, y - offset];
+      case Direction.E: return [x + offset, y];
+      case Direction.SE: return [x + offset, y + offset];
+      case Direction.S: return [x, y + offset];
+      case Direction.SW: return [x - offset, y + offset];
+      case Direction.W: return [x - offset, y];
+      case Direction.NW: return [x - offset, y - offset];
+      default: return position;
+    }
+  }
+  
+  /**
+   * Start a smooth dodge movement animation
+   */
+  private startDodgeMovement(entityId: string, targetPosition: readonly [number, number], duration: number): void {
+    const entity = battlemapStore.entities.summaries[entityId];
+    const mapping = battlemapStore.entities.spriteMappings[entityId];
+    
+    if (!entity || !mapping) return;
+    
+    const startPosition = mapping.visualPosition || toVisualPosition(entity.position);
+    const targetVisualPosition = toVisualPosition(targetPosition);
+    const startTime = Date.now();
+    
+    console.log(`[EntityRenderer] Starting dodge movement for ${entity.name} from (${startPosition.x}, ${startPosition.y}) to (${targetVisualPosition.x}, ${targetVisualPosition.y}) over ${duration}ms`);
+    
+    // Create smooth interpolation animation
+    const animateDodge = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1.0);
+      
+      // Smooth easing function (ease-out)
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      
+      // Interpolate position
+      const currentX = startPosition.x + (targetVisualPosition.x - startPosition.x) * easedProgress;
+      const currentY = startPosition.y + (targetVisualPosition.y - startPosition.y) * easedProgress;
+      
+      // Update visual position
+      battlemapActions.updateEntityVisualPosition(entityId, { x: currentX, y: currentY });
+      
+      // Continue animation if not complete
+      if (progress < 1.0) {
+        requestAnimationFrame(animateDodge);
+      } else {
+        console.log(`[EntityRenderer] Dodge movement completed for ${entity.name}`);
+      }
+    };
+    
+    // Start the animation
+    requestAnimationFrame(animateDodge);
+  }
+  
+  /**
    * Update entity visual position on screen
    */
   private updateEntityVisualPosition(entityId: string, visualPosition: VisualPosition): void {
@@ -871,11 +950,164 @@ export class EntityRenderer extends AbstractRenderer {
     // Clear any existing callbacks to prevent memory leaks
     sprite.onComplete = undefined;
     sprite.onLoop = undefined;
+    sprite.onFrameChange = undefined;
     
     const shouldLoop = mapping.currentAnimation === mapping.idleAnimation || this.shouldLoop(mapping.currentAnimation);
+    const isAttackAnimation = mapping.currentAnimation === AnimationState.ATTACK1 || 
+                             mapping.currentAnimation === AnimationState.ATTACK2 || 
+                             mapping.currentAnimation === AnimationState.ATTACK3;
     
     if (!shouldLoop) {
-      // Non-looping animations only
+      // Non-looping animations
+      
+      if (isAttackAnimation) {
+        // NEW: For attack animations, use onFrameChange for precise timing
+        let damageTriggered = false; // Prevent multiple triggers
+        
+        sprite.onFrameChange = (currentFrame: number) => {
+          const totalFrames = sprite.totalFrames;
+          const frameProgress = currentFrame / Math.max(totalFrames - 1, 1); // 0.0 to 1.0
+          
+          // Trigger damage animation when we're about 70% through the attack animation
+          // This makes the impact feel more connected to the visual strike
+          if (!damageTriggered && frameProgress >= 0.4) {
+            damageTriggered = true;
+            
+            // Check if this entity has an active attack animation with metadata
+            const attackAnimation = battlemapStore.entities.attackAnimations[entity.uuid];
+            if (attackAnimation?.metadata) {
+              const isHit = attackAnimation.metadata.attack_outcome === 'Hit' || 
+                           attackAnimation.metadata.attack_outcome === 'Crit';
+              
+                             if (isHit) {
+                 console.log(`[EntityRenderer] Attack frame ${currentFrame}/${totalFrames} (${Math.round(frameProgress * 100)}%) - triggering damage animation on target`);
+                 
+                 // Get attacker and target entities for direction calculation
+                 const attackerEntity = battlemapStore.entities.summaries[entity.uuid];
+                 const targetEntity = battlemapStore.entities.summaries[attackAnimation.targetId];
+                 const targetMapping = battlemapStore.entities.spriteMappings[attackAnimation.targetId];
+                 
+                 if (attackerEntity && targetEntity && targetMapping) {
+                   // Calculate direction from target to attacker (target should face attacker)
+                   const targetDirection = this.computeDirectionFromPositions(
+                     targetEntity.position as readonly [number, number], 
+                     attackerEntity.position as readonly [number, number]
+                   );
+                   
+                   // Clear any local direction state for target to ensure clean direction update
+                   this.clearLocalDirectionState(attackAnimation.targetId);
+                   
+                   // Set target direction to face attacker using local state (no store update)
+                   this.updateLocalDirection(attackAnimation.targetId, targetDirection);
+                   
+                   console.log(`[EntityRenderer] Target ${targetEntity.name} turning to face attacker ${attackerEntity.name} (direction: ${targetDirection})`);
+                   
+                   // Trigger damage animation on target
+                   battlemapActions.setEntityAnimation(attackAnimation.targetId, AnimationState.TAKE_DAMAGE);
+                 }
+               } else {
+                 console.log(`[EntityRenderer] Attack frame ${currentFrame}/${totalFrames} (${Math.round(frameProgress * 100)}%) - attack missed, triggering dodge animation`);
+                 
+                 // Get attacker and target entities for direction calculation
+                 const attackerEntity = battlemapStore.entities.summaries[entity.uuid];
+                 const targetEntity = battlemapStore.entities.summaries[attackAnimation.targetId];
+                 const targetMapping = battlemapStore.entities.spriteMappings[attackAnimation.targetId];
+                 
+                 if (attackerEntity && targetEntity && targetMapping) {
+                   // Calculate direction from target to attacker (target should face attacker while dodging)
+                   const targetDirection = this.computeDirectionFromPositions(
+                     targetEntity.position as readonly [number, number], 
+                     attackerEntity.position as readonly [number, number]
+                   );
+                   
+                   // Clear any local direction state for target to ensure clean direction update
+                   this.clearLocalDirectionState(attackAnimation.targetId);
+                   
+                   // Set target direction to face attacker using local state (no store update)
+                   this.updateLocalDirection(attackAnimation.targetId, targetDirection);
+                   
+                                      console.log(`[EntityRenderer] Target ${targetEntity.name} turning to face attacker ${attackerEntity.name} and dodging (direction: ${targetDirection})`);
+                   
+                   // Use RUN_BACKWARDS for clean, consistent dodge animation
+                   const selectedDodgeAnimation = AnimationState.RUN_BACKWARDS;
+                   
+                   // Calculate dodge timing based on remaining attack animation time
+                   const remainingFrames = totalFrames - currentFrame;
+                   const remainingTime = (remainingFrames / totalFrames) * (sprite.animationSpeed > 0 ? (totalFrames / sprite.animationSpeed) / 60 * 1000 : 1000);
+                   const dodgeBackTime = remainingTime * 0.3; // 30% of remaining time to dodge back
+                   const returnTime = remainingTime * 0.3; // 30% of remaining time to return
+                   
+                   // Store original position for return
+                   const originalPosition = { ...targetEntity.position };
+                   
+                   // Calculate backward position (1/3 tile back from attacker for subtle dodge)
+                   const backwardDirection = this.getOppositeDirection(targetDirection);
+                   const backwardPosition = this.getAdjacentPosition(targetEntity.position, backwardDirection);
+                   
+                   console.log(`[EntityRenderer] Starting ${selectedDodgeAnimation} dodge: back in ${dodgeBackTime}ms, return in ${returnTime}ms`);
+                   
+                   // Start dodge animation
+                   battlemapActions.setEntityAnimation(attackAnimation.targetId, selectedDodgeAnimation);
+                   
+                   // Phase 1: Move backward (30% of remaining attack time)
+                   this.startDodgeMovement(attackAnimation.targetId, backwardPosition, dodgeBackTime);
+                   
+                   // Phase 2: Return to original position (after dodge back completes)
+                   setTimeout(() => {
+                     const currentTargetMapping = battlemapStore.entities.spriteMappings[attackAnimation.targetId];
+                     if (currentTargetMapping && (currentTargetMapping.currentAnimation === selectedDodgeAnimation)) {
+                       console.log(`[EntityRenderer] Dodge return phase for ${targetEntity.name}`);
+                       this.startDodgeMovement(attackAnimation.targetId, originalPosition, returnTime);
+                     }
+                   }, dodgeBackTime);
+                   
+                   // Phase 3: Return to idle (after return movement completes)
+                   setTimeout(() => {
+                     const currentTargetMapping = battlemapStore.entities.spriteMappings[attackAnimation.targetId];
+                     if (currentTargetMapping && (currentTargetMapping.currentAnimation === selectedDodgeAnimation)) {
+                       console.log(`[EntityRenderer] Dodge complete - returning ${targetEntity.name} to idle`);
+                       
+                       // Sync direction to store before returning to idle
+                       const localState = this.localEntityStates.get(attackAnimation.targetId);
+                       if (localState) {
+                         const finalDirection = localState.pendingStoreDirection || localState.currentDirection;
+                         battlemapActions.setEntityDirectionFromMapping(attackAnimation.targetId, finalDirection);
+                         this.localEntityStates.delete(attackAnimation.targetId);
+                         console.log(`[EntityRenderer] Synced dodge direction ${finalDirection} to store for ${targetEntity.name}`);
+                       }
+                       
+                       // Ensure entity is back at original position and return to idle
+                       battlemapActions.updateEntityVisualPosition(attackAnimation.targetId, toVisualPosition(originalPosition));
+                       battlemapActions.setEntityAnimation(attackAnimation.targetId, currentTargetMapping.idleAnimation);
+                     }
+                   }, dodgeBackTime + returnTime);
+                 }
+               }
+            }
+          }
+        };
+        
+        // Still use onComplete for final cleanup
+        sprite.onComplete = () => {
+          console.log(`[EntityRenderer] Attack animation completed for ${entity.name}, completing attack`);
+          
+          // FIXED: Double-check current state to prevent unnecessary updates
+          const currentMapping = battlemapStore.entities.spriteMappings[entity.uuid];
+          if (!currentMapping) {
+            console.warn(`[EntityRenderer] No sprite mapping found for ${entity.uuid} during animation completion`);
+            return;
+          }
+          
+          // Complete the attack (this will transition attacker back to idle)
+          if (currentMapping.currentAnimation === mapping.currentAnimation && 
+              currentMapping.currentAnimation !== currentMapping.idleAnimation) {
+            battlemapActions.completeEntityAttack(entity.uuid);
+            battlemapActions.resyncEntityPosition(entity.uuid);
+          }
+        };
+        
+      } else {
+                 // Non-attack animations use standard onComplete behavior
       sprite.onComplete = () => {
         console.log(`[EntityRenderer] Non-looping animation ${mapping.currentAnimation} completed for ${entity.name}`);
         
@@ -884,6 +1116,21 @@ export class EntityRenderer extends AbstractRenderer {
         if (!currentMapping) {
           console.warn(`[EntityRenderer] No sprite mapping found for ${entity.uuid} during animation completion`);
           return;
+        }
+           
+           // NEW: If this was a damage animation, sync direction to store before transitioning to idle
+           if (mapping.currentAnimation === AnimationState.TAKE_DAMAGE) {
+             const localState = this.localEntityStates.get(entity.uuid);
+             if (localState) {
+               // Use pending direction if available, otherwise use current direction
+               const finalDirection = localState.pendingStoreDirection || localState.currentDirection;
+               console.log(`[EntityRenderer] Syncing damage animation direction ${finalDirection} to store for ${entity.name}`);
+               battlemapActions.setEntityDirectionFromMapping(entity.uuid, finalDirection);
+               
+               // Clear local direction state AFTER committing final direction
+               this.localEntityStates.delete(entity.uuid);
+               console.log(`[EntityRenderer] Cleared local direction state for ${entity.name} after damage animation`);
+             }
         }
         
         // FIXED: Only update if we're still in the same animation that just completed
@@ -895,16 +1142,8 @@ export class EntityRenderer extends AbstractRenderer {
         } else {
           console.log(`[EntityRenderer] Skipping transition for ${entity.name} - animation already changed or already idle`);
         }
-        
-        // NEW: If this was an attack animation, complete the attack (triggers damage animation on target if hit)
-        if (mapping.currentAnimation === AnimationState.ATTACK1 || 
-            mapping.currentAnimation === AnimationState.ATTACK2 || 
-            mapping.currentAnimation === AnimationState.ATTACK3) {
-          console.log(`[EntityRenderer] Attack animation completed for ${entity.name}, completing attack`);
-          battlemapActions.completeEntityAttack(entity.uuid);
-          battlemapActions.resyncEntityPosition(entity.uuid);
-        }
-      };
+         };
+      }
     } else {
       // FIXED: For looping animations, absolutely no callbacks to prevent any store updates
       console.log(`[EntityRenderer] Setting up looping animation for ${entity.name} - no callbacks needed`);

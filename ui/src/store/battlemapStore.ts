@@ -396,8 +396,6 @@ const battlemapActions = {
   },
 
   completeEntityAttack: (entityId: string) => {
-    const attackAnimation = battlemapStore.entities.attackAnimations[entityId];
-    
     // Remove attack animation
     delete battlemapStore.entities.attackAnimations[entityId];
     
@@ -410,16 +408,8 @@ const battlemapActions = {
       };
     }
 
-    // NEW: If attack hit, trigger damage animation on target
-    if (attackAnimation?.metadata?.attack_outcome === 'Hit' || attackAnimation?.metadata?.attack_outcome === 'Crit') {
-      const targetMapping = battlemapStore.entities.spriteMappings[attackAnimation.targetId];
-      if (targetMapping) {
-        battlemapStore.entities.spriteMappings[attackAnimation.targetId] = {
-          ...targetMapping,
-          currentAnimation: AnimationState.TAKE_DAMAGE, // Switch target to damage animation
-        };
-      }
-    }
+    // NOTE: Damage animation on target is now triggered via onFrameChange callback
+    // in EntityRenderer for more precise timing during the attack animation
   },
 
   resyncEntityPosition: (entityId: string) => {
