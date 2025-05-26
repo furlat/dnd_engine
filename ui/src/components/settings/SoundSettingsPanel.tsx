@@ -16,7 +16,7 @@ import VolumeMuteIcon from '@mui/icons-material/VolumeMute';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
 import CloseIcon from '@mui/icons-material/Close';
-import { useSoundSettings } from '../../contexts/SoundSettingsContext';
+import { useSoundSettings } from '../../hooks/useSoundSettings';
 
 interface SoundSettingsPanelProps {
   onClose?: () => void;

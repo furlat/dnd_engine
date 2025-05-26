@@ -9,8 +9,7 @@ import Layout from './components/layout/Layout';
 import BattleMapPage from './pages/BattleMapPage';
 import NotFoundPage from './pages/NotFoundPage';
 
-// Context
-import { SoundSettingsProvider } from './contexts/SoundSettingsContext';
+// Note: Sound settings now managed by valtio store in store/soundStore.ts
 
 // Create a dark theme with black background
 const darkTheme = createTheme({
@@ -55,16 +54,14 @@ const App: React.FC = () => {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <SoundSettingsProvider>
-        <Box sx={{ bgcolor: '#000000', minHeight: '100vh' }}>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<BattleMapPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Route>
-          </Routes>
-        </Box>
-      </SoundSettingsProvider>
+      <Box sx={{ bgcolor: '#000000', minHeight: '100vh' }}>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<BattleMapPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </Box>
     </ThemeProvider>
   );
 };

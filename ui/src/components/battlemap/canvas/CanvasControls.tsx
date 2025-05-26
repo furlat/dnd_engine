@@ -21,6 +21,7 @@ import SpriteEditorPanel from './SpriteEditorPanel';
 import { battlemapStore, battlemapActions } from '../../../store';
 import { useSnapshot } from 'valtio';
 import { discoverAvailableSpriteFolders } from '../../../api/battlemap/battlemapApi';
+import SettingsButton from '../../settings/SettingsButton';
 
 /**
  * Component that renders the battlemap control panel
@@ -235,6 +236,11 @@ export const CanvasControls: React.FC = () => {
               <DirectionsRunIcon />
             </IconButton>
           </Tooltip>
+
+          {/* Settings Button */}
+          <SettingsButton />
+
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
 
           {/* Tile Editor toggle */}
           <Tooltip title={isLocked ? "Unlock map to edit tiles" : (isEditing ? "Exit Tile Editor" : "Open Tile Editor")}>
