@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { sound } from '@pixi/sound';
-import { useSoundSettings } from '../../contexts/SoundSettingsContext';
+import { useSoundSettings } from '../../hooks/useSoundSettings';
 import { Paper, Typography, IconButton, Slider, Select, MenuItem, FormControl, InputLabel, Box, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
