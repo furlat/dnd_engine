@@ -47,6 +47,8 @@ export interface EntityState {
   attackAnimations: Record<string, { entityId: string; targetId: string; metadata?: AttackMetadata }>;
   // NEW: Path senses data indexed by entity UUID first, then by position
   pathSenses: Record<string, Record<string, SensesSnapshot>>; // observerEntityId -> positionKey -> SensesSnapshot
+  // NEW: Z-order overrides for dynamic layering during combat/movement
+  zOrderOverrides: Record<string, number>; // entityId -> zIndex (higher = on top)
 }
 
 export interface BattlemapStoreState {
@@ -69,7 +71,7 @@ const battlemapStore = proxy<BattlemapStoreState>({
     tiles: {},
   },
   view: {
-    tileSize: 32,
+    tileSize: 128, // 4x the previous default (32 * 4 = 128)
     offset: { x: 0, y: 0 },
     hoveredCell: { x: -1, y: -1 },
     wasd_moving: false,
@@ -96,6 +98,7 @@ const battlemapStore = proxy<BattlemapStoreState>({
     movementAnimations: {},
     attackAnimations: {},
     pathSenses: {},
+    zOrderOverrides: {},
   },
   loading: false,
   error: null,
@@ -530,6 +533,19 @@ const battlemapActions = {
     }
   },
 
+  // NEW: Z-order management actions
+  setEntityZOrder: (entityId: string, zIndex: number) => {
+    battlemapStore.entities.zOrderOverrides[entityId] = zIndex;
+  },
+  
+  clearEntityZOrder: (entityId: string) => {
+    delete battlemapStore.entities.zOrderOverrides[entityId];
+  },
+  
+  clearAllZOrderOverrides: () => {
+    battlemapStore.entities.zOrderOverrides = {};
+  },
+  
   // Compute direction between two positions
   computeDirection: (fromPos: [number, number], toPos: [number, number]): Direction => {
     const [fromX, fromY] = fromPos;

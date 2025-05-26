@@ -75,6 +75,21 @@ const musicTracks: MusicTrack[] = [
     id: 'intro_menu',
     name: 'Intro Menu',
     path: 'sounds/music/intro_menu.mp3'
+  },
+  {
+    id: 'relax_cyborg',
+    name: 'Relax Cyborg',
+    path: 'sounds/music/relax_cyborg.mp3'
+  },
+  {
+    id: 'xilo_cyborg',
+    name: 'Xilo Cyborg',
+    path: 'sounds/music/xilo_cyborg.mp3'
+  },
+  {
+    id: 'combat_cyborg',
+    name: 'Combat Cyborg',
+    path: 'sounds/music/combat_cyborg.mp3'
   }
 ];
 
@@ -221,9 +236,32 @@ export const soundActions = {
     soundStore.shuffle = shuffle;
   },
   
+  // Music playback controls
+  playNextTrack: () => {
+    const currentIndex = musicTracks.findIndex(track => track.id === soundStore.currentTrack?.id);
+    const nextIndex = (currentIndex + 1) % musicTracks.length;
+    soundStore.currentTrack = musicTracks[nextIndex];
+  },
+  
+  playPreviousTrack: () => {
+    const currentIndex = musicTracks.findIndex(track => track.id === soundStore.currentTrack?.id);
+    const prevIndex = currentIndex <= 0 ? musicTracks.length - 1 : currentIndex - 1;
+    soundStore.currentTrack = musicTracks[prevIndex];
+  },
+  
+  // Initialize music with intro_menu
+  initializeMusic: () => {
+    if (!soundStore.currentTrack) {
+      soundStore.currentTrack = musicTracks[0]; // Start with intro_menu
+    }
+  },
+  
   // Initialize sound system
   initialize: async (): Promise<void> => {
     console.log('[SoundStore] Initializing sound system...');
+    
+    // Initialize music
+    soundActions.initializeMusic();
     
     // Preload all attack sounds
     for (const sound of attackSounds) {

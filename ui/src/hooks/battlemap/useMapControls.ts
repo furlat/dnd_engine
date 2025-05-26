@@ -3,8 +3,8 @@ import { useSnapshot } from 'valtio';
 import { battlemapStore, battlemapActions } from '../../store/battlemapStore';
 
 // Constants for zoom
-const MIN_TILE_SIZE = 8;
-const MAX_TILE_SIZE = 128;
+const MIN_TILE_SIZE = 8;  // Keep same minimum (allows zooming out to current minimal scale)
+const MAX_TILE_SIZE = 512; // Increase maximum to 4x the previous max (128 * 4 = 512)
 const TILE_SIZE_STEP = 16;
 
 /**
@@ -36,7 +36,7 @@ export const useMapControls = () => {
    * Reset view to default (reset zoom and offset)
    */
   const resetView = useCallback(() => {
-    battlemapActions.setTileSize(32);
+    battlemapActions.setTileSize(128); // 4x the previous default (32 * 4 = 128)
     battlemapActions.setOffset(0, 0);
   }, []);
   
