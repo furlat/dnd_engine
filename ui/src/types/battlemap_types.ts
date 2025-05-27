@@ -226,6 +226,9 @@ export interface EffectAnimation {
   readonly offsetX?: number;           // Offset from entity position (if attached)
   readonly offsetY?: number;           // Offset from entity position (if attached)
   readonly triggerCallback?: () => void; // Callback when effect completes
+  // For blood effects: positions needed for isometric layer determination
+  readonly attackerPosition?: readonly [number, number]; // Position of attacker
+  readonly defenderPosition?: readonly [number, number]; // Position of defender
 }
 
 export interface EffectMetadata {
