@@ -56,6 +56,8 @@ export interface ControlState {
   isMovementHighlightEnabled: boolean;
   isMusicPlayerMinimized: boolean;
   isTilesVisible: boolean;
+  // Camera mode
+  isIsometric: boolean;
   // Tile editor controls
   isEditing: boolean;
   isEditorVisible: boolean;
@@ -154,6 +156,8 @@ const battlemapStore = proxy<BattlemapStoreState>({
     isMovementHighlightEnabled: false,
     isMusicPlayerMinimized: true,
     isTilesVisible: true,
+    // Camera mode defaults
+    isIsometric: true, // Default to isometric for testing
     // Tile editor defaults
     isEditing: false,
     isEditorVisible: false,
@@ -243,6 +247,10 @@ const battlemapActions = {
   
   setMusicPlayerMinimized: (minimized: boolean) => {
     battlemapStore.controls.isMusicPlayerMinimized = minimized;
+  },
+  
+  setIsometric: (isometric: boolean) => {
+    battlemapStore.controls.isIsometric = isometric;
   },
   
   // Tile editor actions

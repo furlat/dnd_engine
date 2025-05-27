@@ -1,9 +1,14 @@
 import { battlemapEngine } from './BattlemapEngine';
-import { GridRenderer } from './renderers/GridRenderer';
-import { TileRenderer } from './renderers/TileRenderer';
-import { EntityRenderer } from './renderers/EntityRenderer';
+// TEMPORARILY COMMENTED OUT FOR ISOMETRIC TESTING
+// import { GridRenderer } from './renderers/GridRenderer';
+import { IsometricGridRenderer } from './renderers/IsometricGridRenderer';
+// import { TileRenderer } from './renderers/TileRenderer';
+import { IsometricTileRenderer } from './renderers/IsometricTileRenderer';
+// import { EntityRenderer } from './renderers/EntityRenderer';
+import { IsometricEntityRenderer } from './renderers/IsometricEntityRenderer';
 import { EffectRenderer } from './renderers/EffectRenderer';
-import { InteractionsManager } from './InteractionsManager';
+// import { InteractionsManager } from './InteractionsManager';
+import { IsometricInteractionsManager } from './IsometricInteractionsManager';
 import { MovementController } from './MovementController';
 
 /**
@@ -15,11 +20,14 @@ export class GameManager {
   private isInitialized: boolean = false;
   
   // Component references
-  private tileRenderer: TileRenderer = new TileRenderer();
-  private gridRenderer: GridRenderer = new GridRenderer();
-  private entityRenderer: EntityRenderer = new EntityRenderer();
+  private tileRenderer: IsometricTileRenderer = new IsometricTileRenderer();
+  // TEMPORARILY USING ISOMETRIC RENDERER FOR TESTING
+  // private gridRenderer: GridRenderer = new GridRenderer();
+  private gridRenderer: IsometricGridRenderer = new IsometricGridRenderer();
+  private entityRenderer: IsometricEntityRenderer = new IsometricEntityRenderer();
   private effectRenderer: EffectRenderer = new EffectRenderer();
-  private interactionsManager: InteractionsManager = new InteractionsManager();
+  // private interactionsManager: InteractionsManager = new InteractionsManager();
+  private interactionsManager: IsometricInteractionsManager = new IsometricInteractionsManager();
   private movementController: MovementController = new MovementController();
   
   /**
@@ -69,7 +77,8 @@ export class GameManager {
     
     // Register renderers with the engine
     battlemapEngine.registerRenderer('tiles', this.tileRenderer);
-    battlemapEngine.registerRenderer('grid', this.gridRenderer);
+    // TEMPORARILY USING ISOMETRIC GRID RENDERER
+    battlemapEngine.registerRenderer('isometric_grid', this.gridRenderer);
     battlemapEngine.registerRenderer('entities', this.entityRenderer);
     battlemapEngine.registerRenderer('effects', this.effectRenderer);
     
@@ -117,7 +126,7 @@ export class GameManager {
     console.log('[GameManager] Resizing to:', width, height);
     
     battlemapEngine.resize(width, height);
-    this.interactionsManager.resize();
+    this.interactionsManager.resize(width, height);
   }
   
   /**

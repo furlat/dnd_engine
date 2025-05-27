@@ -1,10 +1,11 @@
-import { Container, AnimatedSprite, Assets, Spritesheet, Ticker, Texture } from 'pixi.js';
+import { Container, AnimatedSprite, Assets, Spritesheet, Ticker, Texture, Graphics, Sprite } from 'pixi.js';
 import { battlemapStore, battlemapActions } from '../../store';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
 import { EffectAnimation, EffectType, EffectCategory, VisualPosition, toVisualPosition, getEffectPath, shouldEffectLoop, getEffectCategory, getDefaultEffectDuration, Direction } from '../../types/battlemap_types';
 import { LayerName } from '../BattlemapEngine';
-import { EntitySummary } from '../../types/common';
+import { EntitySummary, Position } from '../../types/common';
+import { calculateIsometricGridOffset, gridToIsometric } from '../../utils/isometricUtils';
 
 /**
  * Cached effect sprite data using PixiJS v8 Assets cache properly
@@ -646,14 +647,31 @@ export class EffectRenderer extends AbstractRenderer {
    * Update effect container position
    */
   private updateEffectContainerPosition(container: Container, visualPosition: VisualPosition): void {
+    const snap = battlemapStore;
     const { offsetX, offsetY, tileSize } = this.calculateGridOffset();
     
-    // Convert visual position to screen coordinates (center of tile)
-    const screenX = offsetX + (visualPosition.x * tileSize) + (tileSize / 2);
-    const screenY = offsetY + (visualPosition.y * tileSize) + (tileSize / 2);
-    
-    container.x = screenX;
-    container.y = screenY;
+    if (snap.controls.isIsometric) {
+      // Convert grid position to isometric coordinates
+      const { isoX, isoY } = gridToIsometric(visualPosition.x, visualPosition.y);
+      
+      // Apply scale factor to isometric coordinates (tileSize is the scale factor)
+      const scaledIsoX = isoX * tileSize;
+      const scaledIsoY = isoY * tileSize;
+      
+      // Convert isometric coordinates to screen coordinates with proper centering
+      const screenX = offsetX + scaledIsoX; // Center horizontally in isometric space
+      const screenY = offsetY + scaledIsoY; // Center vertically in isometric space
+      
+      container.x = screenX;
+      container.y = screenY;
+    } else {
+      // Convert visual position to screen coordinates (center of tile)
+      const screenX = offsetX + (visualPosition.x * tileSize) + (tileSize / 2);
+      const screenY = offsetY + (visualPosition.y * tileSize) + (tileSize / 2);
+      
+      container.x = screenX;
+      container.y = screenY;
+    }
   }
   
   /**
@@ -680,28 +698,49 @@ export class EffectRenderer extends AbstractRenderer {
   }
   
   /**
-   * Calculate grid offset (same as other renderers)
+   * Calculate grid offset (adapted for isometric mode)
    */
   private calculateGridOffset(): { offsetX: number; offsetY: number; tileSize: number } {
     const snap = battlemapStore;
     const ENTITY_PANEL_WIDTH = 250;
     
-    // Get container size from engine
-    const containerSize = this.engine?.containerSize || { width: 0, height: 0 };
-    
-    const availableWidth = containerSize.width - ENTITY_PANEL_WIDTH;
-    const gridPixelWidth = snap.grid.width * snap.view.tileSize;
-    const gridPixelHeight = snap.grid.height * snap.view.tileSize;
-    
-    // Center grid in the available space
-    const baseOffsetX = ENTITY_PANEL_WIDTH + (availableWidth - gridPixelWidth) / 2;
-    const baseOffsetY = (containerSize.height - gridPixelHeight) / 2;
-    
-    // Apply the offset from WASD controls
-    const offsetX = baseOffsetX + snap.view.offset.x;
-    const offsetY = baseOffsetY + snap.view.offset.y;
-    
-    return { offsetX, offsetY, tileSize: snap.view.tileSize };
+    // Check if we're in isometric mode
+    if (snap.controls.isIsometric) {
+      // Use isometric coordinate calculation
+      const isometricOffset = calculateIsometricGridOffset(
+        this.engine?.containerSize?.width || 0,
+        this.engine?.containerSize?.height || 0,
+        snap.grid.width,
+        snap.grid.height,
+        snap.view.tileSize,
+        snap.view.offset.x,
+        snap.view.offset.y,
+        ENTITY_PANEL_WIDTH
+      );
+      
+      return { 
+        offsetX: isometricOffset.offsetX, 
+        offsetY: isometricOffset.offsetY,
+        tileSize: isometricOffset.tileSize // This is the scale factor for isometric
+      };
+    } else {
+      // Use regular grid coordinate calculation
+      const containerSize = this.engine?.containerSize || { width: 0, height: 0 };
+      
+      const availableWidth = containerSize.width - ENTITY_PANEL_WIDTH;
+      const gridPixelWidth = snap.grid.width * snap.view.tileSize;
+      const gridPixelHeight = snap.grid.height * snap.view.tileSize;
+      
+      // Center grid in the available space
+      const baseOffsetX = ENTITY_PANEL_WIDTH + (availableWidth - gridPixelWidth) / 2;
+      const baseOffsetY = (containerSize.height - gridPixelHeight) / 2;
+      
+      // Apply the offset from WASD controls
+      const offsetX = baseOffsetX + snap.view.offset.x;
+      const offsetY = baseOffsetY + snap.view.offset.y;
+      
+      return { offsetX, offsetY, tileSize: snap.view.tileSize };
+    }
   }
   
   /**
