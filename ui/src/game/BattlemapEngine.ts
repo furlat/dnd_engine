@@ -5,7 +5,7 @@ import { battlemapStore } from '../store';
 /**
  * Layer names for proper rendering order
  */
-export type LayerName = 'tiles' | 'grid' | 'entities' | 'effects' | 'ui';
+export type LayerName = 'tiles' | 'grid' | 'below_effects' | 'entities' | 'above_effects' | 'ui';
 
 /**
  * BattlemapEngine is the core class that manages the PixiJS application
@@ -107,16 +107,19 @@ export class BattlemapEngine {
     this.layers = {
       tiles: new Container(),
       grid: new Container(),
+      below_effects: new Container(),
       entities: new Container(),
-      effects: new Container(),
+      above_effects: new Container(),
       ui: new Container()
     };
     
     // Add layers in rendering order (bottom to top)
+    // Two effect layers: below and above entities for isometric perspective
     stage.addChild(this.layers.tiles);
     stage.addChild(this.layers.grid);
+    stage.addChild(this.layers.below_effects);  // Effects behind entities (when entity shows front)
     stage.addChild(this.layers.entities);
-    stage.addChild(this.layers.effects);
+    stage.addChild(this.layers.above_effects);  // Effects in front of entities (when entity shows back)
     stage.addChild(this.layers.ui);
     
     console.log('[BattlemapEngine] Layer hierarchy established');

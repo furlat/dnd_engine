@@ -347,6 +347,129 @@ export class EntityRenderer extends AbstractRenderer {
   }
   
   /**
+   * Generic helper to calculate a position relative to an entity's visual center
+   * with both absolute directional offsets and relative offsets based on connection to another entity
+   * 
+   * @param targetEntityId The entity to position relative to
+   * @param sourceEntityId Optional source entity for relative positioning (e.g., attacker)
+   * @param absoluteOffsets Absolute movement in world directions (N/S/E/W with negatives)
+   * @param relativeOffsets Movement relative to the line connecting source to target
+   * @returns The calculated world position
+   */
+  private calculateRelativePosition(
+    targetEntityId: string,
+    sourceEntityId?: string,
+    absoluteOffsets?: {
+      north?: number;    // Positive = north, negative = south
+      east?: number;     // Positive = east, negative = west
+    },
+    relativeOffsets?: {
+      forward?: number;  // Positive = toward source, negative = away from source
+      right?: number;    // Positive = right of source->target line, negative = left
+    }
+  ): VisualPosition | null {
+    const targetEntity = battlemapStore.entities.summaries[targetEntityId];
+    const targetMapping = battlemapStore.entities.spriteMappings[targetEntityId];
+    
+    if (!targetEntity) return null;
+    
+    // Start with target entity's visual center
+    let entityVisualCenterX: number, entityVisualCenterY: number;
+    
+    // Use visual position if available and not synced, otherwise use server position
+    if (targetMapping?.visualPosition && !targetMapping.isPositionSynced) {
+      entityVisualCenterX = targetMapping.visualPosition.x;
+      entityVisualCenterY = targetMapping.visualPosition.y;
+    } else {
+      entityVisualCenterX = targetEntity.position[0];
+      entityVisualCenterY = targetEntity.position[1];
+    }
+    
+    // Apply absolute offsets (world-relative)
+    let finalX = entityVisualCenterX;
+    let finalY = entityVisualCenterY;
+    
+    if (absoluteOffsets) {
+      if (absoluteOffsets.north !== undefined) {
+        finalY -= absoluteOffsets.north; // North is negative Y
+      }
+      if (absoluteOffsets.east !== undefined) {
+        finalX += absoluteOffsets.east; // East is positive X
+      }
+    }
+    
+    // Apply relative offsets (relative to source->target line)
+    if (relativeOffsets && sourceEntityId) {
+      const sourceEntity = battlemapStore.entities.summaries[sourceEntityId];
+      if (sourceEntity) {
+        // Calculate direction vector from source to target
+        const dx = targetEntity.position[0] - sourceEntity.position[0];
+        const dy = targetEntity.position[1] - sourceEntity.position[1];
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0) {
+          // Normalize direction vector
+          const dirX = dx / distance;
+          const dirY = dy / distance;
+          
+          // Calculate perpendicular vector (right side of source->target line)
+          const perpX = -dirY; // Rotate 90 degrees clockwise
+          const perpY = dirX;
+          
+          // Apply forward/backward offset (along source->target line)
+          if (relativeOffsets.forward !== undefined) {
+            finalX += dirX * relativeOffsets.forward;
+            finalY += dirY * relativeOffsets.forward;
+          }
+          
+          // Apply left/right offset (perpendicular to source->target line)
+          if (relativeOffsets.right !== undefined) {
+            finalX += perpX * relativeOffsets.right;
+            finalY += perpY * relativeOffsets.right;
+          }
+        }
+      }
+    }
+    
+    return { x: finalX, y: finalY };
+  }
+
+  /**
+   * Determine if defender shows front or back based on attacker position
+   * From defender's perspective (defender is center):
+   * - If attacker is NE, E, SE, S, SW relative to defender: defender shows FRONT
+   * - If attacker is W, NW, N relative to defender: defender shows BACK
+   * 
+   * @param attackerPosition Position of the attacker
+   * @param defenderPosition Position of the defender
+   * @returns true if defender shows front, false if defender shows back
+   */
+  private isDefenderShowingFront(attackerPosition: readonly [number, number], defenderPosition: readonly [number, number]): boolean {
+    // Calculate attacker position relative to defender (defender is center)
+    const dx = attackerPosition[0] - defenderPosition[0];
+    const dy = attackerPosition[1] - defenderPosition[1];
+    
+    // Determine attacker's direction relative to defender
+    let attackerDirection: Direction;
+    if (dx > 0 && dy > 0) attackerDirection = Direction.SE;
+    else if (dx > 0 && dy < 0) attackerDirection = Direction.NE;
+    else if (dx < 0 && dy > 0) attackerDirection = Direction.SW;
+    else if (dx < 0 && dy < 0) attackerDirection = Direction.NW;
+    else if (dx === 0 && dy > 0) attackerDirection = Direction.S;
+    else if (dx === 0 && dy < 0) attackerDirection = Direction.N;
+    else if (dx > 0 && dy === 0) attackerDirection = Direction.E;
+    else if (dx < 0 && dy === 0) attackerDirection = Direction.W;
+    else attackerDirection = Direction.S; // Default
+    
+    // Determine if defender shows front or back
+    return attackerDirection === Direction.NE || 
+           attackerDirection === Direction.E || 
+           attackerDirection === Direction.SE || 
+           attackerDirection === Direction.S || 
+           attackerDirection === Direction.SW;
+  }
+
+  /**
    * Get position offset by 1/3 of a cell in a given direction for subtle dodge movement
    */
   private getAdjacentPosition(position: readonly [number, number], direction: Direction): readonly [number, number] {
@@ -1108,45 +1231,72 @@ export class EntityRenderer extends AbstractRenderer {
                    const currentTargetMapping = targetMapping;
                    const currentTargetEntity = targetEntity;
                      
-                     // Use target's center position as base
-                     const targetVisualPosition = currentTargetMapping.visualPosition || toVisualPosition(currentTargetEntity.position);
+                     // ========================================
+                     // 🩸 BLOOD EFFECT SETTINGS FROM STORE 🩸
+                     // ========================================
+                     // Get blood settings from the store (adjustable via UI)
+                     
+                     const bloodSettings = battlemapStore.controls.bloodSettings;
+                     
+                     // Early exit if blood effects are disabled
+                     if (!bloodSettings.enabled) {
+                       console.log(`[EntityRenderer] Blood effects disabled - skipping blood splat for ${currentTargetEntity.name}`);
+                       return;
+                     }
+                     
+                     // ========================================
+                     
+                     // Determine if defender shows front or back for conditional offsets
+                     const defenderShowsFront = this.isDefenderShowingFront(
+                       attackerEntity.position as readonly [number, number], 
+                       currentTargetEntity.position as readonly [number, number]
+                     );
+                     
+                     // Apply directional conditional offsets (invert height offset as mentioned by user)
+                     const conditionalHeightOffset = defenderShowsFront 
+                       ? -bloodSettings.frontFacingHeightOffset 
+                       : -bloodSettings.backFacingHeightOffset;
+                     const conditionalBackDistance = defenderShowsFront 
+                       ? bloodSettings.frontFacingBackDistance 
+                       : bloodSettings.backFacingBackDistance;
+                     
+                     console.log(`[EntityRenderer] Blood positioning: defender shows ${defenderShowsFront ? 'FRONT' : 'BACK'}, height offset: ${conditionalHeightOffset}, back distance: ${conditionalBackDistance}`);
+                     
+                     // Calculate blood base position using the generic helper
+                     const bloodBasePosition = this.calculateRelativePosition(
+                       currentTargetEntity.uuid,
+                       attackerEntity.uuid,
+                       {
+                         // Absolute offsets (world-relative)
+                         north: bloodSettings.heightOffset - conditionalHeightOffset,
+                         east: bloodSettings.eastOffset - bloodSettings.westOffset
+                       },
+                       {
+                         // Relative offsets (relative to attacker->target line)
+                         forward: (bloodSettings.backDistance + conditionalBackDistance), // Positive = away from attacker (fixed inversion)
+                         right: bloodSettings.lateralOffset // Lateral offset along perpendicular to attacker->target line
+                       }
+                     );
+                     
+                     if (!bloodBasePosition) {
+                       console.error(`[EntityRenderer] Failed to calculate blood base position for ${currentTargetEntity.name}`);
+                       return;
+                     }
+                     
+                     // Use blood settings from store
+                     const totalStages = bloodSettings.stageCount;
+                     const stageDroplets = bloodSettings.dropletsPerStage;
+                     const totalDroplets = stageDroplets.reduce((sum, count) => sum + count, 0);
+                     
+                     console.log(`[EntityRenderer] Creating blood spray with ${totalDroplets} droplets across ${totalStages} stages for ${currentTargetEntity.name}`);
                      
                      // Calculate direction FROM attacker TO target (this is the impact direction)
                      const impactDirection = this.computeDirectionFromPositions(
                        attackerEntity.position as readonly [number, number], 
                        currentTargetEntity.position as readonly [number, number]
                      );
-                     
-                     // Calculate starting position HIGHER and FARTHER away from attacker
-                     let backStartX = 0;
-                     let backStartY = 0;
-                     const backDistance = 0.35; // Increased from 0.2 to 0.35 - farther away
-                     const heightOffset = -0.4; // Higher up (more negative Y)
-                     
-                     // Position blood start point on the BACK of target (opposite side from attacker)
-                     switch (impactDirection) {
-                       case Direction.N: backStartY = backDistance; break; // Attacker S of target, blood starts N side
-                       case Direction.NE: backStartX = backDistance * 0.7; backStartY = backDistance * 0.7; break; // Attacker SW, blood starts NE
-                       case Direction.E: backStartX = backDistance; break; // Attacker W of target, blood starts E side
-                       case Direction.SE: backStartX = backDistance * 0.7; backStartY = -backDistance * 0.7; break; // Attacker NW, blood starts SE
-                       case Direction.S: backStartY = -backDistance; break; // Attacker N of target, blood starts S side
-                       case Direction.SW: backStartX = -backDistance * 0.7; backStartY = -backDistance * 0.7; break; // Attacker NE, blood starts SW
-                       case Direction.W: backStartX = -backDistance; break; // Attacker E of target, blood starts W side
-                       case Direction.NW: backStartX = -backDistance * 0.7; backStartY = backDistance * 0.7; break; // Attacker SE, blood starts NW
-                     }
-                     
-                     // Blood spray base position (higher and farther back)
-                     const bloodBasePosition = {
-                       x: targetVisualPosition.x + backStartX,
-                       y: targetVisualPosition.y + backStartY + heightOffset // Higher up
-                     };
-                     
-                     // REVERSED pattern: less blood at beginning, more later
-                     const totalStages = 5;
-                     const stageDroplets = [1, 2, 4, 6, 5]; // Start minimal, build up to peak, then slight reduction
-                     const totalDroplets = stageDroplets.reduce((sum, count) => sum + count, 0); // 18 total
-                     
-                     // Five-stage expanding blood spray: concentrated → expanding → peak → reducing → final
+
+                     // Multi-stage expanding blood spray using store settings
                      const createBloodStage = (stageIndex: number, stageDroplets: number, stageDelay: number, stageDistance: number, spreadFactor: number) => {
                        for (let i = 0; i < stageDroplets; i++) {
                          // Start at body level with minimal jiggle initially, expanding over stages
@@ -1160,104 +1310,60 @@ export class EntityRenderer extends AbstractRenderer {
                            y: bloodBasePosition.y + bodyLevelOffset + verticalJiggle
                          };
                          
-                         // Calculate end position - always spray AWAY from attacker
+                         // Calculate end position using directional spray settings
                          const baseDistance = stageDistance + Math.random() * (0.2 * spreadFactor); // Expanding distance
                          const fallDistance = 0.3 + Math.random() * 0.4; // 0.3-0.7 tiles down
                          
-                         // Directional jiggle - but ONLY away from attacker (never towards)
-                         const awayJiggleRange = 0.2 * spreadFactor; // Expanding jiggle range
-                         let directionJiggleX = 0;
-                         let directionJiggleY = 0;
+                         // SIMPLE RELATIVE DIRECTIONS: South = toward attacker, North = away from attacker
+                         // Calculate spray direction in "attacker coordinate system" where attacker is always south
+                         const relativeNorth = bloodSettings.sprayNorthAmount; // Away from attacker
+                         const relativeSouth = bloodSettings.spraySouthAmount; // Toward attacker  
+                         const relativeEast = bloodSettings.sprayEastAmount;   // Right side relative to attacker
+                         const relativeWest = bloodSettings.sprayWestAmount;   // Left side relative to attacker
                          
-                         // Generate jiggle that only goes further away from attacker
-                         switch (impactDirection) {
-                           case Direction.N: 
-                             directionJiggleX = (Math.random() - 0.5) * awayJiggleRange;
-                             directionJiggleY = Math.random() * awayJiggleRange; // Only positive (further N)
-                             break;
-                           case Direction.NE:
-                             directionJiggleX = Math.random() * awayJiggleRange; // Only positive (further E)
-                             directionJiggleY = Math.random() * awayJiggleRange; // Only positive (further N)
-                             break;
-                           case Direction.E:
-                             directionJiggleX = Math.random() * awayJiggleRange; // Only positive (further E)
-                             directionJiggleY = (Math.random() - 0.5) * awayJiggleRange;
-                             break;
-                           case Direction.SE:
-                             directionJiggleX = Math.random() * awayJiggleRange; // Only positive (further E)
-                             directionJiggleY = -Math.random() * awayJiggleRange; // Only negative (further S)
-                             break;
-                           case Direction.S:
-                             directionJiggleX = (Math.random() - 0.5) * awayJiggleRange;
-                             directionJiggleY = -Math.random() * awayJiggleRange; // Only negative (further S)
-                             break;
-                           case Direction.SW:
-                             directionJiggleX = -Math.random() * awayJiggleRange; // Only negative (further W)
-                             directionJiggleY = -Math.random() * awayJiggleRange; // Only negative (further S)
-                             break;
-                           case Direction.W:
-                             directionJiggleX = -Math.random() * awayJiggleRange; // Only negative (further W)
-                             directionJiggleY = (Math.random() - 0.5) * awayJiggleRange;
-                             break;
-                           case Direction.NW:
-                             directionJiggleX = -Math.random() * awayJiggleRange; // Only negative (further W)
-                             directionJiggleY = Math.random() * awayJiggleRange; // Only positive (further N)
-                             break;
-                         }
+                         // Calculate net direction in relative coordinates
+                         const relativeX = relativeEast - relativeWest; // Positive = right, Negative = left
+                         const relativeY = relativeNorth - relativeSouth; // Positive = away, Negative = toward
                          
-                         let endX = startPosition.x;
-                         let endY = startPosition.y + fallDistance; // Always fall down
+                         // Add randomization
+                         const jiggleRange = 0.3 * spreadFactor;
+                         const jiggleX = (Math.random() - 0.5) * jiggleRange;
+                         const jiggleY = (Math.random() - 0.5) * jiggleRange;
                          
-                         // Add directional movement AWAY from attacker
-                         switch (impactDirection) {
-                           case Direction.N: 
-                             endY -= baseDistance;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                           case Direction.NE: 
-                             endX += baseDistance * 0.7; 
-                             endY -= baseDistance * 0.7;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                           case Direction.E: 
-                             endX += baseDistance;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                           case Direction.SE: 
-                             endX += baseDistance * 0.7; 
-                             endY += baseDistance * 0.7;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                           case Direction.S: 
-                             endY += baseDistance;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                           case Direction.SW: 
-                             endX -= baseDistance * 0.7; 
-                             endY += baseDistance * 0.7;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                           case Direction.W: 
-                             endX -= baseDistance;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                           case Direction.NW: 
-                             endX -= baseDistance * 0.7; 
-                             endY -= baseDistance * 0.7;
-                             endX += directionJiggleX;
-                             endY += directionJiggleY;
-                             break;
-                         }
+                         const finalRelativeX = relativeX + jiggleX;
+                         const finalRelativeY = relativeY + jiggleY;
                          
-                         // Frame delay: 2 frames base + randomization (33ms = ~2 frames at 60fps)
-                         const frameDelay = 33 + Math.floor(Math.random() * 17); // 33-50ms (2-3 frames)
+                         // Simple 8-direction transformation
+                         // finalRelativeY > 0 = away from attacker, finalRelativeX > 0 = to attacker's right
+                         
+                         // Direction vectors for each of the 8 directions (where attacker would be)
+                         const directionVectors = {
+                           [Direction.N]:  { x:  0, y: -1 }, // Attacker south, away = north
+                           [Direction.NE]: { x:  1, y: -1 }, // Attacker southwest, away = northeast  
+                           [Direction.E]:  { x:  1, y:  0 }, // Attacker west, away = east
+                           [Direction.SE]: { x:  1, y:  1 }, // Attacker northwest, away = southeast
+                           [Direction.S]:  { x:  0, y:  1 }, // Attacker north, away = south
+                           [Direction.SW]: { x: -1, y:  1 }, // Attacker northeast, away = southwest
+                           [Direction.W]:  { x: -1, y:  0 }, // Attacker east, away = west
+                           [Direction.NW]: { x: -1, y: -1 }  // Attacker southeast, away = northwest
+                         };
+                         
+                         // Get the "away" direction vector
+                         const awayVector = directionVectors[impactDirection];
+                         
+                         // Calculate perpendicular "right" vector (90 degrees clockwise from away)
+                         const rightVector = { x: -awayVector.y, y: awayVector.x };
+                         
+                         // Transform relative coordinates to world coordinates
+                         const worldDeltaX = (finalRelativeY * awayVector.x) + (finalRelativeX * rightVector.x);
+                         const worldDeltaY = (finalRelativeY * awayVector.y) + (finalRelativeX * rightVector.y);
+                         
+                         // Calculate final end position
+                         let endX = startPosition.x + (worldDeltaX * baseDistance);
+                         let endY = startPosition.y + fallDistance + (worldDeltaY * baseDistance);
+                         
+                         // Frame delay using store settings
+                         const frameDelay = bloodSettings.dropletDelayMs + Math.floor(Math.random() * (bloodSettings.dropletDelayMs * 0.5)); // Base + up to 50% variation
                          
                          const bloodSplatEffectId = `blood_splat_${Date.now()}_s${stageIndex}_${i}_${Math.random().toString(36).substr(2, 9)}`;
                          const bloodSplatEffect = {
@@ -1267,11 +1373,14 @@ export class EntityRenderer extends AbstractRenderer {
                            position: startPosition,
                            startTime: Date.now() + stageDelay + (i * frameDelay), // Stage delay + frame delay
                            duration: 700 + Math.random() * 400, // 0.7-1.1 seconds
-                           scale: (0.7 + Math.random() * 0.8) * 1.2, // 20% bigger: 0.84-1.8 scale variation
-                           alpha: 0.7 + Math.random() * 0.3, // 0.7-1.0 alpha variation
+                           scale: (0.7 + Math.random() * 0.8) * bloodSettings.scale, // Use store scale setting
+                           alpha: (0.7 + Math.random() * 0.3) * bloodSettings.alpha, // Use store alpha setting
                            // Store end position for movement animation
                            offsetX: endX - startPosition.x,
                            offsetY: endY - startPosition.y,
+                           // Add attacker and defender positions for isometric layer determination
+                           attackerPosition: attackerEntity.position as readonly [number, number],
+                           defenderPosition: currentTargetEntity.position as readonly [number, number],
                            triggerCallback: (stageIndex === 0 && i === 0) ? () => {
                              console.log(`[EntityRenderer] Blood splat effects completed for ${currentTargetEntity.name} (${totalDroplets} droplets in ${totalStages} stages)`);
                            } : undefined // Only log on first droplet of first stage
@@ -1280,11 +1389,11 @@ export class EntityRenderer extends AbstractRenderer {
                        }
                      };
                      
-                     // Five-stage expanding spray pattern with farther travel
+                     // Multi-stage expanding spray pattern using store settings
                      stageDroplets.forEach((dropletCount, stageIndex) => {
-                       const stageDelay = stageIndex * 40; // Reduced from 60ms to 40ms for faster sequence
-                       const stageDistance = -0.2 + (stageIndex * 0.3); // FARTHER: 0.6, 0.9, 1.2, 1.5, 1.8 tiles
-                       const spreadFactor = 1 + (stageIndex * 0.6); // More spread: 1.0, 1.6, 2.2, 2.8, 3.4 multiplier
+                       const stageDelay = stageIndex * bloodSettings.stageDelayMs;
+                       const stageDistance = (bloodSettings.maxTravelDistance / totalStages) * (stageIndex + 1); // Progressive distance
+                       const spreadFactor = 1 + (stageIndex * (bloodSettings.spreadMultiplier - 1) / (totalStages - 1)); // Progressive spread
                        
                        createBloodStage(stageIndex, dropletCount, stageDelay, stageDistance, spreadFactor);
                      });

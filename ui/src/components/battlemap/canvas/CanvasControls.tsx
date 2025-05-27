@@ -15,9 +15,11 @@ import EditOffIcon from '@mui/icons-material/EditOff';
 import ImageIcon from '@mui/icons-material/Image';
 import HideImageIcon from '@mui/icons-material/HideImage';
 import PersonIcon from '@mui/icons-material/Person';
+import BloodtypeIcon from '@mui/icons-material/Bloodtype';
 import { useMapControls, useVisibility, useTileEditor, useSpriteEditor } from '../../../hooks/battlemap';
 import TileEditorPanel from './TileEditorPanel';
 import SpriteEditorPanel from './SpriteEditorPanel';
+import BloodSettingsPanel from './BloodSettingsPanel';
 import { battlemapStore, battlemapActions } from '../../../store';
 import { useSnapshot } from 'valtio';
 import { discoverAvailableSpriteFolders } from '../../../api/battlemap/battlemapApi';
@@ -58,6 +60,7 @@ export const CanvasControls: React.FC = () => {
   // Get the current hovered cell position directly from the store
   const snap = useSnapshot(battlemapStore);
   const hoveredCell = snap.view.hoveredCell;
+  const isBloodSettingsVisible = snap.controls.isBloodSettingsVisible;
   
   // Initialize sprite folders on mount
   useEffect(() => {
@@ -91,6 +94,10 @@ export const CanvasControls: React.FC = () => {
     
     console.log('[CanvasControls] After toggle, new editing state will be:', { isEditing: !isEditing });
   }, [isEditing, toggleEditing, toggleEditorVisibility]);
+
+  const handleBloodSettingsToggle = useCallback(() => {
+    battlemapActions.setBloodSettingsVisible(!isBloodSettingsVisible);
+  }, [isBloodSettingsVisible]);
   
   return (
     <>
@@ -242,6 +249,21 @@ export const CanvasControls: React.FC = () => {
 
           <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
 
+          {/* Blood Settings toggle */}
+          <Tooltip title={isLocked ? "Unlock map to adjust blood settings" : (isBloodSettingsVisible ? "Close Blood Settings" : "Blood & Gore Settings")}>
+            <IconButton 
+              size="small" 
+              onClick={isLocked ? undefined : handleBloodSettingsToggle}
+              sx={{ 
+                color: 'white',
+                backgroundColor: isBloodSettingsVisible && !isLocked ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                opacity: isLocked ? 0.5 : 1
+              }}
+            >
+              <BloodtypeIcon />
+            </IconButton>
+          </Tooltip>
+
           {/* Tile Editor toggle */}
           <Tooltip title={isLocked ? "Unlock map to edit tiles" : (isEditing ? "Exit Tile Editor" : "Open Tile Editor")}>
             <IconButton 
@@ -264,6 +286,9 @@ export const CanvasControls: React.FC = () => {
       
       {/* Sprite Editor Panel */}
       <SpriteEditorPanel isLocked={isLocked} />
+      
+      {/* Blood Settings Panel */}
+      <BloodSettingsPanel isLocked={isLocked} />
     </>
   );
 }; 

@@ -2,7 +2,7 @@ import { Container, AnimatedSprite, Assets, Spritesheet, Ticker, Texture } from 
 import { battlemapStore, battlemapActions } from '../../store';
 import { AbstractRenderer } from './BaseRenderer';
 import { subscribe } from 'valtio';
-import { EffectAnimation, EffectType, EffectCategory, VisualPosition, toVisualPosition, getEffectPath, shouldEffectLoop, getEffectCategory, getDefaultEffectDuration } from '../../types/battlemap_types';
+import { EffectAnimation, EffectType, EffectCategory, VisualPosition, toVisualPosition, getEffectPath, shouldEffectLoop, getEffectCategory, getDefaultEffectDuration, Direction } from '../../types/battlemap_types';
 import { LayerName } from '../BattlemapEngine';
 import { EntitySummary } from '../../types/common';
 
@@ -21,11 +21,15 @@ interface CachedEffectData {
  * Supports both temporary effects (blood splat, sparks) and permanent effects (auras, shields)
  */
 export class EffectRenderer extends AbstractRenderer {
-  // Specify which layer this renderer belongs to
-  get layerName(): LayerName { return 'effects'; }
+  // Specify which layer this renderer belongs to (we'll use both below_effects and above_effects)
+  get layerName(): LayerName { return 'below_effects'; } // Default layer, but we'll manage both
   
   // Enable ticker updates for effect animations
   protected needsTickerUpdate: boolean = true;
+  
+  // Layer management for isometric perspective
+  private belowEffectsLayer: Container | null = null;
+  private aboveEffectsLayer: Container | null = null;
   
   // Effect management
   private effectContainers: Map<string, Container> = new Map(); // effectId -> Container
@@ -49,7 +53,18 @@ export class EffectRenderer extends AbstractRenderer {
   
   initialize(engine: any): void {
     super.initialize(engine);
-    console.log('[EffectRenderer] Initializing with PixiJS v8 Assets cache management');
+    console.log('[EffectRenderer] Initializing with PixiJS v8 Assets cache management and dual-layer support');
+    
+    // Get both effect layers for isometric perspective
+    this.belowEffectsLayer = this.engine?.getLayer('below_effects') || null;
+    this.aboveEffectsLayer = this.engine?.getLayer('above_effects') || null;
+    
+    if (!this.belowEffectsLayer || !this.aboveEffectsLayer) {
+      console.error('[EffectRenderer] Failed to get effect layers');
+      return;
+    }
+    
+    console.log('[EffectRenderer] Successfully acquired both effect layers');
     
     // Subscribe to store changes
     this.setupSubscriptions();
@@ -75,6 +90,65 @@ export class EffectRenderer extends AbstractRenderer {
     this.updateAttachedEffects();
   }
   
+  /**
+   * Determine if defender shows front or back based on attacker position
+   * From defender's perspective (defender is center):
+   * - If attacker is NE, E, SE, S, SW relative to defender: defender shows FRONT
+   * - If attacker is W, NW, N relative to defender: defender shows BACK
+   * 
+   * @param attackerPosition Position of the attacker
+   * @param defenderPosition Position of the defender
+   * @returns true if defender shows front, false if defender shows back
+   */
+  private isDefenderShowingFront(attackerPosition: readonly [number, number], defenderPosition: readonly [number, number]): boolean {
+    // Calculate attacker position relative to defender (defender is center)
+    const dx = attackerPosition[0] - defenderPosition[0];
+    const dy = attackerPosition[1] - defenderPosition[1];
+    
+    // Determine attacker's direction relative to defender
+    let attackerDirection: Direction;
+    if (dx > 0 && dy > 0) attackerDirection = Direction.SE;
+    else if (dx > 0 && dy < 0) attackerDirection = Direction.NE;
+    else if (dx < 0 && dy > 0) attackerDirection = Direction.SW;
+    else if (dx < 0 && dy < 0) attackerDirection = Direction.NW;
+    else if (dx === 0 && dy > 0) attackerDirection = Direction.S;
+    else if (dx === 0 && dy < 0) attackerDirection = Direction.N;
+    else if (dx > 0 && dy === 0) attackerDirection = Direction.E;
+    else if (dx < 0 && dy === 0) attackerDirection = Direction.W;
+    else attackerDirection = Direction.S; // Default
+    
+    // Determine if defender shows front or back
+    return attackerDirection === Direction.NE || 
+           attackerDirection === Direction.E || 
+           attackerDirection === Direction.SE || 
+           attackerDirection === Direction.S || 
+           attackerDirection === Direction.SW;
+  }
+
+  /**
+   * Determine which layer to use for blood effects based on attacker position relative to defender
+   * From defender's perspective (defender is center):
+   * - If attacker is NE, E, SE, S, SW relative to defender: use BELOW layer (defender shows front)
+   * - If attacker is W, NW, N relative to defender: use ABOVE layer (defender shows back to camera)
+   * 
+   * @param attackerPosition Position of the attacker
+   * @param defenderPosition Position of the defender
+   * @returns The appropriate layer container
+   */
+  private getBloodEffectLayer(attackerPosition: readonly [number, number], defenderPosition: readonly [number, number]): Container {
+    const defenderShowsFront = this.isDefenderShowingFront(attackerPosition, defenderPosition);
+    
+    if (defenderShowsFront) {
+      // Defender shows front -> blood goes below
+      console.log(`[EffectRenderer] Defender shows front -> blood below entity (below_effects)`);
+      return this.belowEffectsLayer!;
+    } else {
+      // Defender shows back -> blood goes above
+      console.log(`[EffectRenderer] Defender shows back -> blood above entity (above_effects)`);
+      return this.aboveEffectsLayer!;
+    }
+  }
+
   /**
    * Update a temporary effect animation (check for completion)
    */
@@ -275,7 +349,26 @@ export class EffectRenderer extends AbstractRenderer {
         // Create new effect container
         effectContainer = new Container();
         this.effectContainers.set(effect.effectId, effectContainer);
-        this.container.addChild(effectContainer);
+        
+        // Determine which layer to add the container to
+        let targetLayer: Container;
+        
+        if (effect.effectType === EffectType.BLOOD_SPLAT) {
+          // For blood effects, we need attacker and defender positions to determine layer
+          // This information should be passed in the effect metadata
+          if (effect.attackerPosition && effect.defenderPosition) {
+            targetLayer = this.getBloodEffectLayer(effect.attackerPosition, effect.defenderPosition);
+          } else {
+            // Fallback to below layer if positions not available
+            console.warn(`[EffectRenderer] Blood effect ${effect.effectId} missing position data, using below layer`);
+            targetLayer = this.belowEffectsLayer!;
+          }
+        } else {
+          // Non-blood effects default to below layer
+          targetLayer = this.belowEffectsLayer!;
+        }
+        
+        targetLayer.addChild(effectContainer);
       }
       
       // Load effect sprite if not already loaded
@@ -303,7 +396,9 @@ export class EffectRenderer extends AbstractRenderer {
         // Create new effect container
         effectContainer = new Container();
         this.effectContainers.set(effectId, effectContainer);
-        this.container.addChild(effectContainer);
+        
+        // Permanent effects default to below layer (most common case)
+        this.belowEffectsLayer!.addChild(effectContainer);
       }
       
       // Create pseudo effect animation for loading
@@ -617,7 +712,12 @@ export class EffectRenderer extends AbstractRenderer {
     const animatedSprite = this.animatedSprites.get(effectId);
     
     if (effectContainer) {
-      this.container.removeChild(effectContainer);
+      // Remove from whichever layer it's in
+      if (effectContainer.parent === this.belowEffectsLayer) {
+        this.belowEffectsLayer!.removeChild(effectContainer);
+      } else if (effectContainer.parent === this.aboveEffectsLayer) {
+        this.aboveEffectsLayer!.removeChild(effectContainer);
+      }
       effectContainer.destroy();
       this.effectContainers.delete(effectId);
     }
@@ -751,6 +851,10 @@ export class EffectRenderer extends AbstractRenderer {
       // Just clear our references
     });
     this.effectCacheByKey.clear();
+    
+    // Clear layer references
+    this.belowEffectsLayer = null;
+    this.aboveEffectsLayer = null;
     
     // Unsubscribe from store changes
     this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
