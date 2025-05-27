@@ -5,6 +5,36 @@ import type { DeepReadonly } from '../types/common';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
 import { TileType } from '../hooks/battlemap';
 
+// Default blood settings constant - single source of truth
+const DEFAULT_BLOOD_SETTINGS = {
+  enabled: true,
+  // Absolute positioning (world-relative)
+  heightOffset: 0.25,      // North movement (positive = north, negative = south)
+  eastOffset: 0.0,         // East movement (positive = east, negative = west)
+  westOffset: 0.0,         // West movement (for UI convenience, combined with eastOffset)
+  // Relative positioning (relative to attacker->target line)
+  backDistance: 0.0,       // Distance away from attacker (positive = away, negative = toward)
+  lateralOffset: 0.0,      // Lateral offset (positive = right of attacker->target line)
+  // Directional conditional offsets (when defender shows front vs back)
+  frontFacingHeightOffset: 0.15,    // Additional height when defender shows front (NE,E,SE,S,SW attackers)
+  frontFacingBackDistance: 0.0,     // Additional back distance when defender shows front
+  backFacingHeightOffset: 0.0,      // Additional height when defender shows back (W,NW,N attackers)
+  backFacingBackDistance: 0.15,     // Additional back distance when defender shows back
+  // Spray direction settings from your image
+  sprayNorthAmount: 2.0,   // Away from attacker
+  sprayEastAmount: 0.0,    // Toward east
+  sprayWestAmount: 0.0,    // Toward west
+  spraySouthAmount: 0.0,   // Toward attacker
+  stageCount: 5,
+  dropletsPerStage: [2, 10, 10, 6, 0], // S1=2, S2=10, S3=10, S4=6, S5=0 (28 total)
+  maxTravelDistance: 2.0,  // Max Travel Distance: 2.0
+  spreadMultiplier: 3.4,   // Spread Multiplier: 3.4
+  stageDelayMs: 10,        // Stage Delay: 10ms
+  dropletDelayMs: 10,      // Droplet Delay: 10ms (from screenshot)
+  scale: 1.70,             // Scale: 1.70x (from screenshot)
+  alpha: 0.85,             // Alpha: 85%
+};
+
 // Types for the store
 export interface GridState {
   width: number;
@@ -30,6 +60,36 @@ export interface ControlState {
   isEditing: boolean;
   isEditorVisible: boolean;
   selectedTileType: TileType;
+  // Blood/gore settings
+  isBloodSettingsVisible: boolean;
+  bloodSettings: {
+    enabled: boolean;
+    // Absolute positioning (world-relative)
+    heightOffset: number;      // North movement (positive = north, negative = south)
+    eastOffset: number;        // East movement (positive = east, negative = west)
+    westOffset: number;        // West movement (for UI convenience, combined with eastOffset)
+    // Relative positioning (relative to attacker->target line)
+    backDistance: number;      // Distance away from attacker (positive = away, negative = toward)
+    lateralOffset: number;     // Lateral offset (positive = right of attacker->target line)
+    // Directional conditional offsets (when defender shows front vs back)
+    frontFacingHeightOffset: number;    // Additional height when defender shows front (NE,E,SE,S,SW attackers)
+    frontFacingBackDistance: number;    // Additional back distance when defender shows front
+    backFacingHeightOffset: number;     // Additional height when defender shows back (W,NW,N attackers)
+    backFacingBackDistance: number;     // Additional back distance when defender shows back
+    // Spray direction controls (relative to attacker)
+    sprayNorthAmount: number;   // How much to spray toward north (away from attacker)
+    sprayEastAmount: number;    // How much to spray toward east
+    sprayWestAmount: number;    // How much to spray toward west
+    spraySouthAmount: number;   // How much to spray toward south (toward attacker)
+    stageCount: number;
+    dropletsPerStage: number[];
+    maxTravelDistance: number;
+    spreadMultiplier: number;
+    stageDelayMs: number;
+    dropletDelayMs: number;
+    scale: number;
+    alpha: number;
+  };
 }
 
 export interface EntityState {
@@ -98,6 +158,9 @@ const battlemapStore = proxy<BattlemapStoreState>({
     isEditing: false,
     isEditorVisible: false,
     selectedTileType: 'floor',
+    // Blood/gore settings defaults
+    isBloodSettingsVisible: false,
+    bloodSettings: { ...DEFAULT_BLOOD_SETTINGS },
   },
   entities: {
     summaries: {},
@@ -197,6 +260,22 @@ const battlemapActions = {
   
   setSelectedTileType: (tileType: TileType) => {
     battlemapStore.controls.selectedTileType = tileType;
+  },
+  
+  // Blood/gore settings actions
+  setBloodSettingsVisible: (visible: boolean) => {
+    battlemapStore.controls.isBloodSettingsVisible = visible;
+  },
+  
+  updateBloodSettings: (settings: Partial<typeof battlemapStore.controls.bloodSettings>) => {
+    battlemapStore.controls.bloodSettings = {
+      ...battlemapStore.controls.bloodSettings,
+      ...settings,
+    };
+  },
+  
+  resetBloodSettings: () => {
+    battlemapStore.controls.bloodSettings = { ...DEFAULT_BLOOD_SETTINGS };
   },
   
   // Entity actions
@@ -554,7 +633,7 @@ const battlemapActions = {
     battlemapStore.view.offset.x = offsetX;
     battlemapStore.view.offset.y = offsetY;
   },
-
+  
   // Start polling for data
   startPolling: () => {
     if (pollingInterval) {
@@ -728,7 +807,7 @@ const battlemapActions = {
 
     console.log(`[battlemapStore] Auto-assigned sprites to ${assignedCount} entities`);
   },
-  
+
   // Compute direction between two positions
   computeDirection: (fromPos: [number, number], toPos: [number, number]): Direction => {
     const [fromX, fromY] = fromPos;
