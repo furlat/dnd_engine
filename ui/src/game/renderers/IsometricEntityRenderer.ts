@@ -737,10 +737,32 @@ export class IsometricEntityRenderer extends AbstractRenderer {
           zOrder = snap.entities.zOrderOverrides[entity.uuid];
         }
         if (zOrder === undefined) {
-          // Default z-order: moving/attacking entities go on top
+          // Default z-order: combine isometric depth with dynamic state
           const isMoving = !!snap.entities.movementAnimations[entity.uuid];
           const isAttacking = !!snap.entities.attackAnimations[entity.uuid];
-          zOrder = (isMoving || isAttacking) ? 100 : 0;
+          
+          // Get entity position (use visual position if available during movement)
+          const spriteMapping = snap.entities.spriteMappings[entity.uuid];
+          let entityPosition: readonly [number, number];
+          if (spriteMapping?.visualPosition && !spriteMapping.isPositionSynced) {
+            // Use visual position during movement
+            entityPosition = [spriteMapping.visualPosition.x, spriteMapping.visualPosition.y];
+          } else {
+            // Use server position
+            entityPosition = entity.position;
+          }
+          
+          // Calculate isometric depth: entities further "down" on screen (higher Y + X) should render on top
+          // In isometric view, depth increases as we go toward bottom-right (+X, +Y)
+          const isometricDepth = entityPosition[0] + entityPosition[1];
+          
+          if (isMoving || isAttacking) {
+            // Dynamic entities: base 1000 + depth (ensures they're always above static entities)
+            zOrder = 1000 + isometricDepth;
+          } else {
+            // Static entities: just use depth for proper layering
+            zOrder = isometricDepth;
+          }
         }
         
         return { entity, zOrder };
@@ -758,7 +780,11 @@ export class IsometricEntityRenderer extends AbstractRenderer {
     });
     
     console.log(`[IsometricEntityRenderer] Updated container order for ${entitiesWithZOrder.length} entities:`, 
-      entitiesWithZOrder.map(({ entity, zOrder }) => `${entity.name}:${zOrder}`));
+      entitiesWithZOrder.map(({ entity, zOrder }) => {
+        const pos = entity.position;
+        const depth = pos[0] + pos[1];
+        return `${entity.name}:(${pos[0]},${pos[1]})=depth${depth}→z${zOrder}`;
+      }));
   }
   
   /**
@@ -1414,32 +1440,30 @@ export class IsometricEntityRenderer extends AbstractRenderer {
                        // Multi-stage expanding blood spray
                        const createBloodStage = (stageIndex: number, stageDroplets: number, stageDelay: number, stageDistance: number, spreadFactor: number) => {
                          for (let i = 0; i < stageDroplets; i++) {
-                           // FIXED: Only apply body-level offset and jiggle when spray randomness > 0
-                           // This prevents hidden biases when user has all settings at 0
-                           const bodyLevelOffset = settings.sprayRandomness > 0.001 ? (-0.3 - (Math.random() * 0.2)) : 0; // Only offset if randomness enabled
-                           const baseSpread = 0.1 * spreadFactor * settings.sprayRandomness; // Expanding spread per stage
-                           const horizontalJiggle = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * baseSpread) : 0; // Only jiggle if randomness enabled
-                           const verticalJiggle = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * (baseSpread * 0.3)) : 0; // Only jiggle if randomness enabled
-                           
+                           // FIXED: Start position is ALWAYS exact - no randomness applied to start
                            const startPosition = {
-                             x: basePosition.x + horizontalJiggle,
-                             y: basePosition.y + bodyLevelOffset + verticalJiggle
+                             x: basePosition.x,
+                             y: basePosition.y
                            };
                            
                            console.log(`[IsometricEntityRenderer] Blood droplet ${i}: target=(${currentTargetEntity.position[0]}, ${currentTargetEntity.position[1]}), base=(${basePosition.x}, ${basePosition.y}), start=(${startPosition.x}, ${startPosition.y})`);
                            
                            // Calculate end position using spray intensity and direction
                            const sprayDistance = stageDistance * settings.sprayIntensity;
-                           const fallDistance = settings.sprayRandomness > 0.001 ? (0.3 + Math.random() * 0.4) : 0; // Only fall if randomness enabled
                            
-                           // Add spray randomness - only if randomness > 0
-                           const jiggleRange = 0.3 * spreadFactor * settings.sprayRandomness;
-                           const jiggleX = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * jiggleRange) : 0;
-                           const jiggleY = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * jiggleRange) : 0;
+                           // FIXED: Randomness only applies to END position and only PERPENDICULAR to spray direction
+                           // Calculate perpendicular vector to spray direction (90 degrees)
+                           const perpX = -directionVector.y; // Perpendicular X
+                           const perpY = directionVector.x;  // Perpendicular Y
+                           
+                           // Apply randomness only perpendicular to spray direction (never against it)
+                           const perpRandomness = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * 0.6 * spreadFactor) : 0;
+                           const perpOffsetX = perpX * perpRandomness;
+                           const perpOffsetY = perpY * perpRandomness;
                            
                            // Calculate final end position in GRID SPACE
-                           const endX = startPosition.x + (directionVector.x * sprayDistance) + jiggleX;
-                           const endY = startPosition.y + fallDistance + (directionVector.y * sprayDistance) + jiggleY;
+                           const endX = startPosition.x + (directionVector.x * sprayDistance) + perpOffsetX;
+                           const endY = startPosition.y + (directionVector.y * sprayDistance) + perpOffsetY;
                            
                            // Frame delay using store settings
                            const frameDelay = settings.dropletDelayMs + Math.floor(Math.random() * (settings.dropletDelayMs * 0.5)); // Base + up to 50% variation
