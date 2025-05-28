@@ -229,6 +229,8 @@ export interface EffectAnimation {
   // For blood effects: positions needed for isometric layer determination
   readonly attackerPosition?: readonly [number, number]; // Position of attacker
   readonly defenderPosition?: readonly [number, number]; // Position of defender
+  // NEW: Layer hint for explicit layer assignment
+  readonly layerHint?: 'below' | 'above'; // Explicit layer assignment (overrides automatic logic)
 }
 
 export interface EffectMetadata {
@@ -303,4 +305,81 @@ export function getDefaultEffectDuration(effectType: EffectType): number {
     default:
       return 1000; // 1 second default
   }
-} 
+}
+
+// NEW: Blood splat system types
+export enum BloodSplatDirection {
+  TOWARD_ATTACKER = 'toward_attacker',
+  AWAY_FROM_ATTACKER = 'away_from_attacker'
+}
+
+export interface BloodSplatSettings {
+  enabled: boolean;
+  
+  // Simple position controls relative to diamond center
+  upDownOffset: number;        // Positive = up on screen, negative = down on screen
+  
+  // Movement along attacker-target axis
+  forwardBackwardOffset: number; // Positive = toward attacker, negative = away from attacker
+  
+  // Conditional offsets based on camera perspective
+  frontFacingUpDownOffset: number;        // Additional up/down offset when defender shows front
+  frontFacingForwardBackwardOffset: number; // Additional forward/backward offset when defender shows front
+  backFacingUpDownOffset: number;         // Additional up/down offset when defender shows back
+  backFacingForwardBackwardOffset: number; // Additional forward/backward offset when defender shows back
+  
+  // Spray pattern
+  sprayIntensity: number;      // How much the blood spreads out (0-2)
+  sprayRandomness: number;     // How random the spray pattern is (0-1)
+  
+  // Timing and visual
+  stageCount: number;
+  dropletsPerStage: number[];
+  maxTravelDistance: number;
+  spreadMultiplier: number;
+  stageDelayMs: number;
+  dropletDelayMs: number;
+  scale: number;
+  alpha: number;
+}
+
+export interface BloodSplatConfig {
+  towardAttacker: BloodSplatSettings;
+  awayFromAttacker: BloodSplatSettings;
+}
+
+// Default blood splat settings
+export const DEFAULT_BLOOD_SPLAT_SETTINGS: BloodSplatSettings = {
+  enabled: true,
+  upDownOffset: 0.0,
+  forwardBackwardOffset: 0.0,
+  frontFacingUpDownOffset: 0.0,
+  frontFacingForwardBackwardOffset: 0.0,
+  backFacingUpDownOffset: 0.0,
+  backFacingForwardBackwardOffset: 0.0,
+  sprayIntensity: 1.0,
+  sprayRandomness: 0.0,
+  stageCount: 3,
+  dropletsPerStage: [2, 5, 3], // 10 total droplets
+  maxTravelDistance: 1.5,
+  spreadMultiplier: 2.0,
+  stageDelayMs: 20,
+  dropletDelayMs: 15,
+  scale: 1.0,
+  alpha: 0.8,
+};
+
+export const DEFAULT_BLOOD_SPLAT_CONFIG: BloodSplatConfig = {
+  towardAttacker: { 
+    ...DEFAULT_BLOOD_SPLAT_SETTINGS,
+    enabled: false, // Start disabled - user must enable manually
+    forwardBackwardOffset: 0.0, // No offset by default
+    sprayIntensity: 1.0, // Default intensity
+  },
+  awayFromAttacker: { 
+    ...DEFAULT_BLOOD_SPLAT_SETTINGS,
+    enabled: true, // Main blood effect - enabled by default
+    forwardBackwardOffset: 0.0, // No offset by default
+    sprayIntensity: 1.0, // Default intensity
+  },
+}; 

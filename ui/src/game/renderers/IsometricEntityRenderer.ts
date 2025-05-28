@@ -7,7 +7,7 @@ import { AnimationState, Direction, EntitySpriteMapping, MovementAnimation, Move
 import { LayerName } from '../BattlemapEngine';
 import { EntitySummary, Position } from '../../types/common';
 import { getSpriteSheetPath } from '../../api/battlemap/battlemapApi';
-import { gridToIsometric, calculateIsometricGridOffset } from '../../utils/isometricUtils';
+import { gridToIsometric, calculateIsometricGridOffset, isometricToGrid } from '../../utils/isometricUtils';
 
 /**
  * Cached sprite data using PixiJS v8 Assets cache properly
@@ -343,7 +343,7 @@ export class IsometricEntityRenderer extends AbstractRenderer {
     
     return directionMap[absoluteDirection];
   }
-
+  
   /**
    * Compute direction from one position to another (returns isometric-adjusted direction)
    */
@@ -1311,15 +1311,15 @@ export class IsometricEntityRenderer extends AbstractRenderer {
                    const currentTargetEntity = targetEntity;
                      
                      // ========================================
-                     // 🩸 BLOOD EFFECT SETTINGS FROM STORE 🩸
+                     // 🩸 NEW BLOOD SPLAT SYSTEM 🩸
                      // ========================================
-                     // Get blood settings from the store (adjustable via UI)
+                     // Get blood splat config from the store (two separate directions)
                      
-                     const bloodSettings = battlemapStore.controls.bloodSettings;
+                     const bloodSplatConfig = battlemapStore.controls.bloodSplatConfig;
                      
-                     // Early exit if blood effects are disabled
-                     if (!bloodSettings.enabled) {
-                       console.log(`[IsometricEntityRenderer] Blood effects disabled - skipping blood splat for ${currentTargetEntity.name}`);
+                     // Early exit if both blood effects are disabled
+                     if (!bloodSplatConfig.towardAttacker.enabled && !bloodSplatConfig.awayFromAttacker.enabled) {
+                       console.log(`[IsometricEntityRenderer] Both blood splat directions disabled - skipping blood effects for ${currentTargetEntity.name}`);
                        return;
                      }
                      
@@ -1331,151 +1331,168 @@ export class IsometricEntityRenderer extends AbstractRenderer {
                        currentTargetEntity.position as readonly [number, number]
                      );
                      
-                     // Apply directional conditional offsets (invert height offset as mentioned by user)
-                     const conditionalHeightOffset = defenderShowsFront 
-                       ? -bloodSettings.frontFacingHeightOffset 
-                       : -bloodSettings.backFacingHeightOffset;
-                     const conditionalBackDistance = defenderShowsFront 
-                       ? bloodSettings.frontFacingBackDistance 
-                       : bloodSettings.backFacingBackDistance;
-                     
-                     console.log(`[IsometricEntityRenderer] Blood positioning: defender shows ${defenderShowsFront ? 'FRONT' : 'BACK'}, height offset: ${conditionalHeightOffset}, back distance: ${conditionalBackDistance}`);
-                     
-                     // Calculate blood base position using the generic helper
-                     const bloodBasePosition = this.calculateRelativePosition(
-                       currentTargetEntity.uuid,
-                       attackerEntity.uuid,
-                       {
-                         // Absolute offsets (world-relative)
-                         north: bloodSettings.heightOffset - conditionalHeightOffset,
-                         east: bloodSettings.eastOffset - bloodSettings.westOffset
-                       },
-                       {
-                         // Relative offsets (relative to attacker->target line)
-                         forward: (bloodSettings.backDistance + conditionalBackDistance), // Positive = away from attacker (fixed inversion)
-                         right: bloodSettings.lateralOffset // Lateral offset along perpendicular to attacker->target line
-                       }
-                     );
-                     
-                     if (!bloodBasePosition) {
-                       console.error(`[IsometricEntityRenderer] Failed to calculate blood base position for ${currentTargetEntity.name}`);
-                       return;
-                     }
-                     
-                     // Use blood settings from store
-                     const totalStages = bloodSettings.stageCount;
-                     const stageDroplets = bloodSettings.dropletsPerStage;
-                     const totalDroplets = stageDroplets.reduce((sum, count) => sum + count, 0);
-                     
-                     console.log(`[IsometricEntityRenderer] Creating blood spray with ${totalDroplets} droplets across ${totalStages} stages for ${currentTargetEntity.name}`);
-                     
                      // Calculate direction FROM attacker TO target (this is the impact direction)
                      const impactDirection = this.computeDirectionFromPositions(
                        attackerEntity.position as readonly [number, number], 
                        currentTargetEntity.position as readonly [number, number]
                      );
-
-                     // Multi-stage expanding blood spray using store settings
-                     const createBloodStage = (stageIndex: number, stageDroplets: number, stageDelay: number, stageDistance: number, spreadFactor: number) => {
-                       for (let i = 0; i < stageDroplets; i++) {
-                         // Start at body level with minimal jiggle initially, expanding over stages
-                         const bodyLevelOffset = -0.3 - (Math.random() * 0.2); // -0.3 to -0.5 tiles up from center
-                         const baseSpread = 0.1 * spreadFactor; // Expanding spread per stage
-                         const horizontalJiggle = (Math.random() - 0.5) * baseSpread; // Expanding horizontal spread
-                         const verticalJiggle = (Math.random() - 0.5) * (baseSpread * 0.3); // Smaller vertical spread
-                         
-                         const startPosition = {
-                           x: bloodBasePosition.x + horizontalJiggle,
-                           y: bloodBasePosition.y + bodyLevelOffset + verticalJiggle
-                         };
-                         
-                         // Calculate end position using directional spray settings
-                         const baseDistance = stageDistance + Math.random() * (0.2 * spreadFactor); // Expanding distance
-                         const fallDistance = 0.3 + Math.random() * 0.4; // 0.3-0.7 tiles down
-                         
-                         // SIMPLE RELATIVE DIRECTIONS: South = toward attacker, North = away from attacker
-                         // Calculate spray direction in "attacker coordinate system" where attacker is always south
-                         const relativeNorth = bloodSettings.sprayNorthAmount; // Away from attacker
-                         const relativeSouth = bloodSettings.spraySouthAmount; // Toward attacker  
-                         const relativeEast = bloodSettings.sprayEastAmount;   // Right side relative to attacker
-                         const relativeWest = bloodSettings.sprayWestAmount;   // Left side relative to attacker
-                         
-                         // Calculate net direction in relative coordinates
-                         const relativeX = relativeEast - relativeWest; // Positive = right, Negative = left
-                         const relativeY = relativeNorth - relativeSouth; // Positive = away, Negative = toward
-                         
-                         // Add randomization
-                         const jiggleRange = 0.3 * spreadFactor;
-                         const jiggleX = (Math.random() - 0.5) * jiggleRange;
-                         const jiggleY = (Math.random() - 0.5) * jiggleRange;
-                         
-                         const finalRelativeX = relativeX + jiggleX;
-                         const finalRelativeY = relativeY + jiggleY;
-                         
-                         // Simple 8-direction transformation
-                         // finalRelativeY > 0 = away from attacker, finalRelativeX > 0 = to attacker's right
-                         
-                         // Direction vectors for each of the 8 directions (where attacker would be)
-                         const directionVectors = {
-                           [Direction.N]:  { x:  0, y: -1 }, // Attacker south, away = north
-                           [Direction.NE]: { x:  1, y: -1 }, // Attacker southwest, away = northeast  
-                           [Direction.E]:  { x:  1, y:  0 }, // Attacker west, away = east
-                           [Direction.SE]: { x:  1, y:  1 }, // Attacker northwest, away = southeast
-                           [Direction.S]:  { x:  0, y:  1 }, // Attacker north, away = south
-                           [Direction.SW]: { x: -1, y:  1 }, // Attacker northeast, away = southwest
-                           [Direction.W]:  { x: -1, y:  0 }, // Attacker east, away = west
-                           [Direction.NW]: { x: -1, y: -1 }  // Attacker southeast, away = northwest
-                         };
-                         
-                         // Get the "away" direction vector
-                         const awayVector = directionVectors[impactDirection];
-                         
-                         // Calculate perpendicular "right" vector (90 degrees clockwise from away)
-                         const rightVector = { x: -awayVector.y, y: awayVector.x };
-                         
-                         // Transform relative coordinates to world coordinates
-                         const worldDeltaX = (finalRelativeY * awayVector.x) + (finalRelativeX * rightVector.x);
-                         const worldDeltaY = (finalRelativeY * awayVector.y) + (finalRelativeX * rightVector.y);
-                         
-                         // Calculate final end position
-                         let endX = startPosition.x + (worldDeltaX * baseDistance);
-                         let endY = startPosition.y + fallDistance + (worldDeltaY * baseDistance);
-                         
-                         // Frame delay using store settings
-                         const frameDelay = bloodSettings.dropletDelayMs + Math.floor(Math.random() * (bloodSettings.dropletDelayMs * 0.5)); // Base + up to 50% variation
-                         
-                         const bloodSplatEffectId = `blood_splat_${Date.now()}_s${stageIndex}_${i}_${Math.random().toString(36).substr(2, 9)}`;
-                         const bloodSplatEffect = {
-                           effectId: bloodSplatEffectId,
-                           effectType: EffectType.BLOOD_SPLAT,
-                           category: EffectCategory.TEMPORARY,
-                           position: startPosition,
-                           startTime: Date.now() + stageDelay + (i * frameDelay), // Stage delay + frame delay
-                           duration: 700 + Math.random() * 400, // 0.7-1.1 seconds
-                           scale: (0.7 + Math.random() * 0.8) * bloodSettings.scale, // Use store scale setting
-                           alpha: (0.7 + Math.random() * 0.3) * bloodSettings.alpha, // Use store alpha setting
-                           // Store end position for movement animation
-                           offsetX: endX - startPosition.x,
-                           offsetY: endY - startPosition.y,
-                           // Add attacker and defender positions for isometric layer determination
-                           attackerPosition: attackerEntity.position as readonly [number, number],
-                           defenderPosition: currentTargetEntity.position as readonly [number, number],
-                           triggerCallback: (stageIndex === 0 && i === 0) ? () => {
-                             console.log(`[IsometricEntityRenderer] Blood splat effects completed for ${currentTargetEntity.name} (${totalDroplets} droplets in ${totalStages} stages)`);
-                           } : undefined // Only log on first droplet of first stage
+                     
+                     // Get the "away from attacker" direction vector (opposite of impact)
+                     const awayDirection = this.getOppositeDirection(impactDirection);
+                     
+                     // Direction vectors for each of the 8 directions in GRID SPACE
+                     const gridDirectionVectors = {
+                       [Direction.N]:  { x:  0, y: -1 }, // North = negative Y
+                       [Direction.NE]: { x:  1, y: -1 }, // Northeast
+                       [Direction.E]:  { x:  1, y:  0 }, // East = positive X
+                       [Direction.SE]: { x:  1, y:  1 }, // Southeast
+                       [Direction.S]:  { x:  0, y:  1 }, // South = positive Y
+                       [Direction.SW]: { x: -1, y:  1 }, // Southwest
+                       [Direction.W]:  { x: -1, y:  0 }, // West = negative X
+                       [Direction.NW]: { x: -1, y: -1 }  // Northwest
+                     };
+                     
+                     // Get direction vectors
+                     const awayVector = gridDirectionVectors[awayDirection];
+                     const impactVector = gridDirectionVectors[impactDirection]; // Direction FROM attacker TO target
+                     
+                     // Calculate perpendicular "right" vector (90 degrees clockwise from away)
+                     const rightVector = { x: -awayVector.y, y: awayVector.x };
+                     
+                     console.log(`[IsometricEntityRenderer] Blood spray setup: impact=${impactDirection}, away=${awayDirection}, defender shows ${defenderShowsFront ? 'FRONT' : 'BACK'}`);
+                     
+                     // Create blood splats for each enabled direction
+                     const createBloodSplatsForDirection = (
+                       direction: 'towardAttacker' | 'awayFromAttacker',
+                       settings: typeof bloodSplatConfig.towardAttacker,
+                       directionVector: { x: number; y: number },
+                       layerHint: 'below' | 'above'
+                     ) => {
+                       if (!settings.enabled) return;
+                       
+                       // Apply conditional offsets based on camera perspective
+                       const conditionalUpDownOffset = defenderShowsFront 
+                         ? settings.frontFacingUpDownOffset 
+                         : settings.backFacingUpDownOffset;
+                       const conditionalForwardBackwardOffset = defenderShowsFront 
+                         ? settings.frontFacingForwardBackwardOffset 
+                         : settings.backFacingForwardBackwardOffset;
+                       
+                       // FIXED: Blood base position is ALWAYS the diamond center (target position)
+                       // Start with diamond center in grid coordinates
+                       const basePosition = {
+                         x: currentTargetEntity.position[0],
+                         y: currentTargetEntity.position[1]
+                       };
+                       
+                       // Apply up/down offset in SCREEN SPACE (not grid space)
+                       // Convert screen up/down offset to isometric grid coordinates
+                       const totalUpDownOffset = settings.upDownOffset + conditionalUpDownOffset;
+                       if (Math.abs(totalUpDownOffset) > 0.001) {
+                         // In isometric view:
+                         // Screen UP = Map NE direction = (-1, -1) in grid coordinates
+                         // Screen DOWN = Map SW direction = (+1, +1) in grid coordinates
+                         // Positive upDownOffset = screen up = move NE in grid space
+                         basePosition.x -= totalUpDownOffset; // Screen up (+) = grid west (-)
+                         basePosition.y -= totalUpDownOffset; // Screen up (+) = grid north (-)
+                       }
+                       
+                       // FIXED: Only apply forward/backward offset if user explicitly sets it (not based on attacker position)
+                       // This offset moves the blood along the attacker-target axis but doesn't change with attacker movement
+                       const forwardBackwardTotal = settings.forwardBackwardOffset + conditionalForwardBackwardOffset;
+                       if (Math.abs(forwardBackwardTotal) > 0.001) {
+                         // Apply offset in the direction vector (which is constant for this attack)
+                         basePosition.x += directionVector.x * forwardBackwardTotal;
+                         basePosition.y += directionVector.y * forwardBackwardTotal;
+                       }
+                       
+                       console.log(`[IsometricEntityRenderer] Creating ${direction} blood: ${settings.dropletsPerStage.reduce((sum, count) => sum + count, 0)} droplets, layer: ${layerHint}`);
+                       console.log(`[IsometricEntityRenderer] Target position: (${currentTargetEntity.position[0]}, ${currentTargetEntity.position[1]})`);
+                       console.log(`[IsometricEntityRenderer] Blood base position: (${basePosition.x}, ${basePosition.y})`);
+                       console.log(`[IsometricEntityRenderer] Settings: upDown=${settings.upDownOffset}, forwardBack=${settings.forwardBackwardOffset}, randomness=${settings.sprayRandomness}`);
+                       
+                       // Multi-stage expanding blood spray
+                       const createBloodStage = (stageIndex: number, stageDroplets: number, stageDelay: number, stageDistance: number, spreadFactor: number) => {
+                         for (let i = 0; i < stageDroplets; i++) {
+                           // FIXED: Only apply body-level offset and jiggle when spray randomness > 0
+                           // This prevents hidden biases when user has all settings at 0
+                           const bodyLevelOffset = settings.sprayRandomness > 0.001 ? (-0.3 - (Math.random() * 0.2)) : 0; // Only offset if randomness enabled
+                           const baseSpread = 0.1 * spreadFactor * settings.sprayRandomness; // Expanding spread per stage
+                           const horizontalJiggle = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * baseSpread) : 0; // Only jiggle if randomness enabled
+                           const verticalJiggle = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * (baseSpread * 0.3)) : 0; // Only jiggle if randomness enabled
+                           
+                           const startPosition = {
+                             x: basePosition.x + horizontalJiggle,
+                             y: basePosition.y + bodyLevelOffset + verticalJiggle
+                           };
+                           
+                           console.log(`[IsometricEntityRenderer] Blood droplet ${i}: target=(${currentTargetEntity.position[0]}, ${currentTargetEntity.position[1]}), base=(${basePosition.x}, ${basePosition.y}), start=(${startPosition.x}, ${startPosition.y})`);
+                           
+                           // Calculate end position using spray intensity and direction
+                           const sprayDistance = stageDistance * settings.sprayIntensity;
+                           const fallDistance = settings.sprayRandomness > 0.001 ? (0.3 + Math.random() * 0.4) : 0; // Only fall if randomness enabled
+                           
+                           // Add spray randomness - only if randomness > 0
+                           const jiggleRange = 0.3 * spreadFactor * settings.sprayRandomness;
+                           const jiggleX = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * jiggleRange) : 0;
+                           const jiggleY = settings.sprayRandomness > 0.001 ? ((Math.random() - 0.5) * jiggleRange) : 0;
+                           
+                           // Calculate final end position in GRID SPACE
+                           const endX = startPosition.x + (directionVector.x * sprayDistance) + jiggleX;
+                           const endY = startPosition.y + fallDistance + (directionVector.y * sprayDistance) + jiggleY;
+                           
+                           // Frame delay using store settings
+                           const frameDelay = settings.dropletDelayMs + Math.floor(Math.random() * (settings.dropletDelayMs * 0.5)); // Base + up to 50% variation
+                           
+                           const bloodSplatEffectId = `blood_splat_${direction}_${Date.now()}_s${stageIndex}_${i}_${Math.random().toString(36).substr(2, 9)}`;
+                           const bloodSplatEffect = {
+                             effectId: bloodSplatEffectId,
+                             effectType: EffectType.BLOOD_SPLAT,
+                             category: EffectCategory.TEMPORARY,
+                             position: startPosition,
+                             startTime: Date.now() + stageDelay + (i * frameDelay), // Stage delay + frame delay
+                             duration: 700 + Math.random() * 400, // 0.7-1.1 seconds
+                             scale: (0.7 + Math.random() * 0.8) * settings.scale, // Use store scale setting
+                             alpha: (0.7 + Math.random() * 0.3) * settings.alpha, // Use store alpha setting
+                             // Store end position for movement animation
+                             offsetX: endX - startPosition.x,
+                             offsetY: endY - startPosition.y,
+                             // Add attacker and defender positions for isometric layer determination
+                             attackerPosition: attackerEntity.position as readonly [number, number],
+                             defenderPosition: currentTargetEntity.position as readonly [number, number],
+                                                           // Add layer hint for proper rendering order
+                              layerHint: layerHint,
+                              triggerCallback: (direction === 'awayFromAttacker' && stageIndex === 0 && i === 0) ? () => {
+                                console.log(`[IsometricEntityRenderer] Blood splat effects completed for ${currentTargetEntity.name}`);
+                              } : undefined // Only log on first droplet of main direction
                          };
                          battlemapActions.startEffect(bloodSplatEffect);
                        }
                      };
                      
                      // Multi-stage expanding spray pattern using store settings
-                     stageDroplets.forEach((dropletCount, stageIndex) => {
-                       const stageDelay = stageIndex * bloodSettings.stageDelayMs;
-                       const stageDistance = (bloodSettings.maxTravelDistance / totalStages) * (stageIndex + 1); // Progressive distance
-                       const spreadFactor = 1 + (stageIndex * (bloodSettings.spreadMultiplier - 1) / (totalStages - 1)); // Progressive spread
+                     settings.dropletsPerStage.forEach((dropletCount: number, stageIndex: number) => {
+                       const stageDelay = stageIndex * settings.stageDelayMs;
+                       const stageDistance = (settings.maxTravelDistance / settings.stageCount) * (stageIndex + 1); // Progressive distance
+                       const spreadFactor = 1 + (stageIndex * (settings.spreadMultiplier - 1) / (settings.stageCount - 1)); // Progressive spread
                        
                        createBloodStage(stageIndex, dropletCount, stageDelay, stageDistance, spreadFactor);
                      });
+                   };
+                   
+                   // Create blood splats for both directions (if enabled)
+                   // FIXED: Correct direction assignments and layering
+                   // - "towardAttacker" should spray TOWARD the attacker (opposite of impact direction)
+                   // - "awayFromAttacker" should spray AWAY from the attacker (same as impact direction)
+                   
+                   // FIXED: Correct layering for away from attacker blood:
+                   // - Above layer when we see the BACK (attacker from E, NE, N, NW, W)
+                   // - Below layer when we see the FRONT (attacker from SW, S, SE)
+                   const awayBloodLayer = defenderShowsFront ? 'below' : 'above';
+                   const towardBloodLayer = defenderShowsFront ? 'above' : 'below'; // Opposite of away blood
+                   
+                   createBloodSplatsForDirection('towardAttacker', bloodSplatConfig.towardAttacker, awayVector, towardBloodLayer);
+                   createBloodSplatsForDirection('awayFromAttacker', bloodSplatConfig.awayFromAttacker, impactVector, awayBloodLayer);
                  }
                } else {
                  console.log(`[IsometricEntityRenderer] Attack frame ${currentFrame}/${totalFrames} (${Math.round(frameProgress * 100)}%) - attack missed, triggering dodge animation`);

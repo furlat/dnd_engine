@@ -5,7 +5,7 @@ import { subscribe } from 'valtio';
 import { EffectAnimation, EffectType, EffectCategory, VisualPosition, toVisualPosition, getEffectPath, shouldEffectLoop, getEffectCategory, getDefaultEffectDuration, Direction } from '../../types/battlemap_types';
 import { LayerName } from '../BattlemapEngine';
 import { EntitySummary, Position } from '../../types/common';
-import { calculateIsometricGridOffset, gridToIsometric } from '../../utils/isometricUtils';
+import { calculateIsometricGridOffset, gridToIsometric, ISOMETRIC_TILE_WIDTH, ISOMETRIC_TILE_HEIGHT } from '../../utils/isometricUtils';
 
 /**
  * Cached effect sprite data using PixiJS v8 Assets cache properly
@@ -118,36 +118,68 @@ export class EffectRenderer extends AbstractRenderer {
     else if (dx < 0 && dy === 0) attackerDirection = Direction.W;
     else attackerDirection = Direction.S; // Default
     
-    // Determine if defender shows front or back
-    return attackerDirection === Direction.NE || 
-           attackerDirection === Direction.E || 
-           attackerDirection === Direction.SE || 
-           attackerDirection === Direction.S || 
-           attackerDirection === Direction.SW;
+    const snap = battlemapStore;
+    
+    if (snap.controls.isIsometric) {
+      // In isometric view, directions are rotated 45 degrees
+      // Grid directions map to visual directions as follows:
+      // Grid N -> Visual NW, Grid E -> Visual NE, Grid S -> Visual SE, Grid W -> Visual SW
+      // 
+      // For isometric sprites, "front" means the sprite shows its front to the camera
+      // This happens when the attacker is coming from the "back" side of the isometric view
+      // 
+      // In isometric view, the "front-facing" directions are:
+      // E, SE, S, SW, W (the bottom and sides of the diamond)
+      return attackerDirection === Direction.E || 
+             attackerDirection === Direction.SE || 
+             attackerDirection === Direction.S || 
+             attackerDirection === Direction.SW || 
+             attackerDirection === Direction.W;
+    } else {
+      // Regular grid view - original logic
+      // Determine if defender shows front or back
+      return attackerDirection === Direction.NE || 
+             attackerDirection === Direction.E || 
+             attackerDirection === Direction.SE || 
+             attackerDirection === Direction.S || 
+             attackerDirection === Direction.SW;
+    }
   }
 
   /**
-   * Determine which layer to use for blood effects based on attacker position relative to defender
-   * From defender's perspective (defender is center):
-   * - If attacker is NE, E, SE, S, SW relative to defender: use BELOW layer (defender shows front)
-   * - If attacker is W, NW, N relative to defender: use ABOVE layer (defender shows back to camera)
-   * 
-   * @param attackerPosition Position of the attacker
-   * @param defenderPosition Position of the defender
+   * Get the appropriate layer for an effect based on layerHint or legacy logic
+   * @param effect The effect animation
    * @returns The appropriate layer container
    */
-  private getBloodEffectLayer(attackerPosition: readonly [number, number], defenderPosition: readonly [number, number]): Container {
-    const defenderShowsFront = this.isDefenderShowingFront(attackerPosition, defenderPosition);
-    
-    if (defenderShowsFront) {
-      // Defender shows front -> blood goes below
-      console.log(`[EffectRenderer] Defender shows front -> blood below entity (below_effects)`);
-      return this.belowEffectsLayer!;
-    } else {
-      // Defender shows back -> blood goes above
-      console.log(`[EffectRenderer] Defender shows back -> blood above entity (above_effects)`);
-      return this.aboveEffectsLayer!;
+  private getEffectLayer(effect: EffectAnimation): Container {
+    // NEW: Use layerHint if provided (from new blood splat system)
+    if ('layerHint' in effect && effect.layerHint) {
+      if (effect.layerHint === 'below') {
+        console.log(`[EffectRenderer] Using layerHint 'below' -> below_effects layer`);
+        return this.belowEffectsLayer!;
+      } else if (effect.layerHint === 'above') {
+        console.log(`[EffectRenderer] Using layerHint 'above' -> above_effects layer`);
+        return this.aboveEffectsLayer!;
+      }
     }
+    
+    // LEGACY: Fall back to old logic for blood effects without layerHint
+    if (effect.effectType === EffectType.BLOOD_SPLAT && effect.attackerPosition && effect.defenderPosition) {
+      const defenderShowsFront = this.isDefenderShowingFront(effect.attackerPosition, effect.defenderPosition);
+      
+      if (defenderShowsFront) {
+        // Defender shows front -> blood goes below
+        console.log(`[EffectRenderer] Legacy logic: Defender shows front -> blood below entity (below_effects)`);
+        return this.belowEffectsLayer!;
+      } else {
+        // Defender shows back -> blood goes above
+        console.log(`[EffectRenderer] Legacy logic: Defender shows back -> blood above entity (above_effects)`);
+        return this.aboveEffectsLayer!;
+      }
+    }
+    
+    // DEFAULT: Use below layer for most effects
+    return this.belowEffectsLayer!;
   }
 
   /**
@@ -358,7 +390,7 @@ export class EffectRenderer extends AbstractRenderer {
           // For blood effects, we need attacker and defender positions to determine layer
           // This information should be passed in the effect metadata
           if (effect.attackerPosition && effect.defenderPosition) {
-            targetLayer = this.getBloodEffectLayer(effect.attackerPosition, effect.defenderPosition);
+            targetLayer = this.getEffectLayer(effect);
           } else {
             // Fallback to below layer if positions not available
             console.warn(`[EffectRenderer] Blood effect ${effect.effectId} missing position data, using below layer`);
@@ -651,19 +683,21 @@ export class EffectRenderer extends AbstractRenderer {
     const { offsetX, offsetY, tileSize } = this.calculateGridOffset();
     
     if (snap.controls.isIsometric) {
-      // Convert grid position to isometric coordinates
+      // Convert grid position to isometric coordinates (this gives us the DIAMOND CENTER)
       const { isoX, isoY } = gridToIsometric(visualPosition.x, visualPosition.y);
       
-      // Apply scale factor to isometric coordinates (tileSize is the scale factor)
+      // Apply scale factor to isometric coordinates
       const scaledIsoX = isoX * tileSize;
       const scaledIsoY = isoY * tileSize;
       
-      // Convert isometric coordinates to screen coordinates with proper centering
-      const screenX = offsetX + scaledIsoX; // Center horizontally in isometric space
-      const screenY = offsetY + scaledIsoY; // Center vertically in isometric space
+      // FIXED: Position at the TRUE DIAMOND CENTER - no entity offsets
+      const centerX = offsetX + scaledIsoX;
+      const centerY = offsetY + scaledIsoY; // Pure diamond center, no entity positioning offsets
       
-      container.x = screenX;
-      container.y = screenY;
+      container.x = centerX;
+      container.y = centerY;
+      
+      console.log(`[EffectRenderer] Effect positioned at DIAMOND CENTER: grid(${visualPosition.x}, ${visualPosition.y}) -> iso(${scaledIsoX}, ${scaledIsoY}) -> center(${centerX}, ${centerY})`);
     } else {
       // Convert visual position to screen coordinates (center of tile)
       const screenX = offsetX + (visualPosition.x * tileSize) + (tileSize / 2);
