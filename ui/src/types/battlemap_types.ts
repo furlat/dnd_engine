@@ -372,14 +372,36 @@ export const DEFAULT_BLOOD_SPLAT_SETTINGS: BloodSplatSettings = {
 export const DEFAULT_BLOOD_SPLAT_CONFIG: BloodSplatConfig = {
   towardAttacker: { 
     ...DEFAULT_BLOOD_SPLAT_SETTINGS,
-    enabled: false, // Start disabled - user must enable manually
-    forwardBackwardOffset: 0.0, // No offset by default
-    sprayIntensity: 1.0, // Default intensity
+    enabled: true, // Start disabled - user must enable manually
+    upDownOffset: 0.60,
+    forwardBackwardOffset: 0.0,
+    frontFacingUpDownOffset: 0.25,
+    frontFacingForwardBackwardOffset: 0.15,
+    backFacingUpDownOffset: 0.0,
+    backFacingForwardBackwardOffset: 0.0,
+    sprayIntensity: 0.2,
+    sprayRandomness: 0.0,
+    maxTravelDistance: 0.5,
+    spreadMultiplier: 2.0,
+    dropletsPerStage: [4, 0, 0], // 4 total droplets
+    scale: 0.5,
+    alpha: 1.0,
   },
   awayFromAttacker: { 
     ...DEFAULT_BLOOD_SPLAT_SETTINGS,
     enabled: true, // Main blood effect - enabled by default
-    forwardBackwardOffset: 0.0, // No offset by default
-    sprayIntensity: 1.0, // Default intensity
+    upDownOffset: 0.75,
+    forwardBackwardOffset: 0.0,
+    frontFacingUpDownOffset: 0.2,
+    frontFacingForwardBackwardOffset: 0.05,
+    backFacingUpDownOffset: 0.0,
+    backFacingForwardBackwardOffset: 0.0,
+    sprayIntensity: 1.4,
+    sprayRandomness: 0.4,
+    maxTravelDistance: 2.0,
+    spreadMultiplier: 3.4,
+    dropletsPerStage: [7, 5, 6], // 18 total droplets
+    scale: 1.5,
+    alpha: 1.0,
   },
 }; 
