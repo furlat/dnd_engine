@@ -6,6 +6,8 @@ import { subscribe } from 'valtio';
 import { LayerName } from '../BattlemapEngine';
 import { gridToIsometric, calculateIsometricGridOffset, calculateIsometricDiamondCorners } from '../../utils/isometricUtils';
 import { EntitySummary, Position } from '../../types/common';
+import { ENTITY_PANEL_WIDTH } from '../../constants/layout';
+import { animationActions } from '../../store/animationStore';
 
 /**
  * IsometricTileRenderer handles rendering isometric tiles with basic colors
@@ -16,9 +18,6 @@ export class IsometricTileRenderer extends AbstractRenderer {
   
   // Graphics references
   private tilesGraphics: Graphics = new Graphics();
-  
-  // Store unsubscribe callbacks
-  private unsubscribeCallbacks: Array<() => void> = [];
   
   // Reference to tiles for stable rendering during movement
   private tilesRef: Record<string, TileSummary> = {};
@@ -66,9 +65,6 @@ export class IsometricTileRenderer extends AbstractRenderer {
    * Set up subscriptions to the Valtio store
    */
   private setupSubscriptions(): void {
-    // Store unsubscribe functions
-    this.unsubscribeCallbacks = [];
-    
     // Subscribe to grid changes (for tile updates)
     const unsubGrid = subscribe(battlemapStore.grid, () => {
       // Only update tiles reference when not moving
@@ -84,21 +80,21 @@ export class IsometricTileRenderer extends AbstractRenderer {
       
       this.render();
     });
-    this.unsubscribeCallbacks.push(unsubGrid);
+    this.addSubscription(unsubGrid);
     
     // Subscribe to view changes (zooming, panning)
     const unsubView = subscribe(battlemapStore.view, () => {
       // Always render on view changes for panning/zooming
       this.render();
     });
-    this.unsubscribeCallbacks.push(unsubView);
+    this.addSubscription(unsubView);
     
     // Subscribe to control changes (e.g., tile visibility)
     const unsubControls = subscribe(battlemapStore.controls, () => {
       // Only need to re-render if tile visibility changed
       this.render();
     });
-    this.unsubscribeCallbacks.push(unsubControls);
+    this.addSubscription(unsubControls);
 
     // NEW: Subscribe to pathSenses changes to trigger tile re-render when data becomes available
     const unsubPathSenses = subscribe(battlemapStore.entities.pathSenses, () => {
@@ -107,7 +103,7 @@ export class IsometricTileRenderer extends AbstractRenderer {
       this.tilesNeedUpdate = true;
       this.render();
     });
-    this.unsubscribeCallbacks.push(unsubPathSenses);
+    this.addSubscription(unsubPathSenses);
     
     // NEW: Subscribe to sprite mappings for snappy tile visibility updates during movement
     const unsubSpriteMappings = subscribe(battlemapStore.entities.spriteMappings, () => {
@@ -117,12 +113,25 @@ export class IsometricTileRenderer extends AbstractRenderer {
       const selectedEntity = this.getSelectedEntity();
       
       // Only trigger re-render if the selected entity is moving (has dynamic path senses)
-      if (selectedEntity && snap.entities.movementAnimations[selectedEntity.uuid] && snap.entities.pathSenses[selectedEntity.uuid]) {
+      if (selectedEntity && animationActions.getActiveAnimation(selectedEntity.uuid) && snap.entities.pathSenses[selectedEntity.uuid]) {
         this.tilesNeedUpdate = true;
         this.render();
       }
     });
-    this.unsubscribeCallbacks.push(unsubSpriteMappings);
+    this.addSubscription(unsubSpriteMappings);
+
+    // NEW: Subscribe to entity selection changes for immediate tile visibility updates
+    const unsubEntitySelection = subscribe(battlemapStore.entities, (ops) => {
+      // Check if selectedEntityId changed
+      const snap = battlemapStore;
+      const currentSelectedId = snap.entities.selectedEntityId;
+      
+      // Trigger immediate tile re-render when selection changes
+      console.log(`[IsometricTileRenderer] Entity selection changed to: ${currentSelectedId || 'none'} - triggering tile visibility update`);
+      this.tilesNeedUpdate = true;
+      this.render();
+    });
+    this.addSubscription(unsubEntitySelection);
   }
   
   /**
@@ -232,7 +241,7 @@ export class IsometricTileRenderer extends AbstractRenderer {
     const snap = battlemapStore;
     
     // Check if the OBSERVER entity (the one we're getting senses for) is currently moving
-    const observerMovementAnimation = snap.entities.movementAnimations[entity.uuid];
+    const observerMovementAnimation = animationActions.getActiveAnimation(entity.uuid);
     
     if (observerMovementAnimation) {
       // The OBSERVER entity is moving - use dynamic path senses based on their current animated position
@@ -345,7 +354,7 @@ export class IsometricTileRenderer extends AbstractRenderer {
       snap.view.tileSize,
       snap.view.offset.x,
       snap.view.offset.y,
-      250 // ENTITY_PANEL_WIDTH
+      ENTITY_PANEL_WIDTH
     );
 
     // Get visibility info for conditional rendering
@@ -404,25 +413,10 @@ export class IsometricTileRenderer extends AbstractRenderer {
    * Clean up resources
    */
   destroy(): void {
-    // Unsubscribe from all subscriptions
-    this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
-    this.unsubscribeCallbacks = [];
+    // Use base class graphics cleanup
+    this.destroyGraphics(this.tilesGraphics, 'tilesGraphics');
     
-    // Clear and destroy graphics safely
-    if (this.tilesGraphics) {
-      try {
-        if (this.tilesGraphics.clear) {
-          this.tilesGraphics.clear();
-        }
-        if (!this.tilesGraphics.destroyed) {
-          this.tilesGraphics.destroy();
-        }
-      } catch (e) {
-        console.warn('[IsometricTileRenderer] Error destroying tiles graphics:', e);
-      }
-    }
-    
-    // Call parent destroy
+    // Call parent destroy (handles subscription cleanup automatically)
     super.destroy();
   }
 } 

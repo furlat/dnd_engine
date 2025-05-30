@@ -1,4 +1,4 @@
-import { Container, Ticker } from 'pixi.js';
+import { Container, Ticker, Graphics } from 'pixi.js';
 import { BattlemapEngine, LayerName } from '../BattlemapEngine';
 
 /**
@@ -51,6 +51,13 @@ export abstract class AbstractRenderer implements BaseRenderer {
   // Whether this renderer needs ticker updates (default: false)
   protected needsTickerUpdate: boolean = false;
   
+  // NEW: Common subscription management
+  protected unsubscribeCallbacks: Array<() => void> = [];
+  
+  // NEW: Common logging system
+  protected lastSummaryTime = 0;
+  protected renderCount = 0;
+  
   /**
    * Initialize the renderer
    * @param engine The battlemap engine instance
@@ -90,6 +97,88 @@ export abstract class AbstractRenderer implements BaseRenderer {
   }
   
   /**
+   * NEW: Protected helper to safely destroy graphics with error handling
+   * Common pattern used across all renderers
+   */
+  protected destroyGraphics(graphics: Graphics, name?: string): void {
+    if (graphics) {
+      try {
+        if (graphics.clear && !graphics.destroyed) {
+          graphics.clear();
+        }
+        if (!graphics.destroyed) {
+          graphics.destroy();
+        }
+      } catch (e) {
+        const graphicsName = name || 'graphics';
+        console.warn(`[${this.constructor.name}] Error destroying ${graphicsName}:`, e);
+      }
+    }
+  }
+  
+  /**
+   * NEW: Protected helper to safely destroy multiple graphics objects
+   */
+  protected destroyGraphicsArray(graphicsArray: Graphics[], names?: string[]): void {
+    graphicsArray.forEach((graphics, index) => {
+      const name = names?.[index] || `graphics[${index}]`;
+      this.destroyGraphics(graphics, name);
+    });
+  }
+  
+  /**
+   * NEW: Protected helper to clean up all subscriptions
+   * Common pattern used across all renderers
+   */
+  protected cleanupSubscriptions(): void {
+    this.unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
+    this.unsubscribeCallbacks = [];
+  }
+  
+  /**
+   * NEW: Protected helper to add a subscription with automatic cleanup tracking
+   */
+  protected addSubscription(unsubscribeCallback: () => void): void {
+    this.unsubscribeCallbacks.push(unsubscribeCallback);
+  }
+  
+  /**
+   * NEW: Protected logging utility for render summaries
+   * Prevents spam by logging every 10 seconds instead of every render
+   */
+  protected logRenderSummary(additionalInfo?: string): void {
+    const now = Date.now();
+    if (now - this.lastSummaryTime >= 10000) { // 10 seconds
+      const baseInfo = `10s Summary: ${this.renderCount} renders`;
+      const fullInfo = additionalInfo ? `${baseInfo}, ${additionalInfo}` : baseInfo;
+      console.log(`[${this.constructor.name}] ${fullInfo}`);
+      
+      this.lastSummaryTime = now;
+      this.renderCount = 0;
+    }
+  }
+  
+  /**
+   * NEW: Protected helper to increment render count
+   * Should be called at the start of render() method
+   */
+  protected incrementRenderCount(): void {
+    this.renderCount++;
+  }
+  
+  /**
+   * NEW: Protected helper to check if engine is properly initialized
+   * Common check across all renderers
+   */
+  protected isEngineReady(): boolean {
+    if (!this.engine || !this.engine.app) {
+      console.warn(`[${this.constructor.name}] Render called but engine not initialized`);
+      return false;
+    }
+    return true;
+  }
+  
+  /**
    * Render the graphics - can be implemented by subclasses
    */
   render?(): void;
@@ -103,6 +192,9 @@ export abstract class AbstractRenderer implements BaseRenderer {
    * Clean up resources
    */
   destroy(): void {
+    // NEW: Use centralized subscription cleanup
+    this.cleanupSubscriptions();
+    
     // Remove the container from its parent (layer or stage)
     this.container.removeFromParent();
     

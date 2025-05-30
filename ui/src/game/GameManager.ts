@@ -9,7 +9,7 @@ import { IsometricEntityRenderer } from './renderers/IsometricEntityRenderer';
 import { EffectRenderer } from './renderers/EffectRenderer';
 // import { InteractionsManager } from './InteractionsManager';
 import { IsometricInteractionsManager } from './IsometricInteractionsManager';
-import { MovementController } from './MovementController';
+import { MovementController } from './MapMovementController';
 
 /**
  * GameManager is the main entry point for the game engine
