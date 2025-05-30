@@ -2,9 +2,10 @@ import { Container, AnimatedSprite } from 'pixi.js';
 import { battlemapStore } from '../../../store';
 import { animationActions } from '../../../store/animationStore';
 import { EntitySummary } from '../../../types/common';
-import { VisualPosition } from '../../../types/battlemap_types';
+import { VisualPosition, EntitySpriteMapping } from '../../../types/battlemap_types';
 import { gridToIsometric } from '../../../utils/isometricUtils';
 import { IsometricRenderingUtils } from '../utils/IsometricRenderingUtils';
+import { SpriteLoadingUtils } from '../../animation/utils/AnimationUtils';
 
 /**
  * PositionManager - Specialized manager for entity position updates
@@ -53,6 +54,7 @@ export class PositionManager {
   /**
    * Update all entity positions (called on view changes)
    * PERFORMANCE: Skips entities that are currently animating to prevent position conflicts
+   * FIXED: Also updates sprite scaling for zoom responsiveness
    */
   updateAllEntityPositions(
     entityContainers: Map<string, Container>,
@@ -76,12 +78,30 @@ export class PositionManager {
       console.log(`[PositionManager] Skipping position update for ${entities.length - entitiesToUpdate.length} animating entities`);
     }
     
-    // Update positions for all non-animating entities
+    // Update positions AND scaling for all non-animating entities
     entitiesToUpdate.forEach(entity => {
       this.updateSingleEntityPosition(entity, entityContainers, engine);
+      
+      // CRITICAL FIX: Also update sprite scaling when tile size changes (zoom)
+      const animatedSprite = animatedSprites.get(entity.uuid);
+      const spriteMapping = snap.entities.spriteMappings[entity.uuid];
+      if (animatedSprite && spriteMapping) {
+        this.updateSpriteScaling(animatedSprite, spriteMapping);
+      }
     });
     
-    console.log(`[PositionManager] Updated positions for ${entitiesToUpdate.length} entities`);
+    console.log(`[PositionManager] Updated positions and scaling for ${entitiesToUpdate.length} entities`);
+  }
+  
+  /**
+   * Update sprite scaling for an entity
+   * FIXED: Use the existing SpriteLoadingUtils method for proper scaling
+   */
+  private updateSpriteScaling(animatedSprite: AnimatedSprite, spriteMapping: EntitySpriteMapping): void {
+    const snap = battlemapStore;
+    
+    // Use the existing, properly tested scaling method from SpriteLoadingUtils
+    SpriteLoadingUtils.updateSpriteScale(animatedSprite, spriteMapping, snap.view.tileSize);
   }
   
   /**
