@@ -5,7 +5,10 @@ import { subscribe } from 'valtio';
 import { EffectAnimation, EffectType, EffectCategory, VisualPosition, toVisualPosition, getEffectPath, shouldEffectLoop, getEffectCategory, getDefaultEffectDuration, Direction } from '../../types/battlemap_types';
 import { LayerName } from '../BattlemapEngine';
 import { EntitySummary, Position } from '../../types/common';
-import { calculateIsometricGridOffset, gridToIsometric, ISOMETRIC_TILE_WIDTH, ISOMETRIC_TILE_HEIGHT } from '../../utils/isometricUtils';
+import { calculateIsometricGridOffset, gridToIsometric } from '../../utils/isometricUtils';
+import { ENTITY_PANEL_WIDTH, ISOMETRIC_TILE_WIDTH, ISOMETRIC_TILE_HEIGHT } from '../../constants/layout';
+// NEW: Import centralized combat utilities
+import { isDefenderShowingFront } from '../../utils/combatUtils';
 
 /**
  * Cached effect sprite data using PixiJS v8 Assets cache properly
@@ -39,16 +42,11 @@ export class EffectRenderer extends AbstractRenderer {
   // OPTIMIZED: Use PixiJS Assets cache with proper key management
   private effectCacheByKey: Map<string, CachedEffectData> = new Map(); // key: effectType
   
-  // Store unsubscribe callbacks
-  private unsubscribeCallbacks: Array<() => void> = [];
-  
   // MEMOIZATION: Track last seen effect data to prevent unnecessary re-renders
   private lastEffectData: Map<string, string> = new Map(); // effectId -> JSON hash
   private lastPermanentEffectData: Map<string, string> = new Map(); // entityId -> JSON hash
   
-  // Summary logging system
-  private lastSummaryTime = 0;
-  private renderCount = 0;
+  // Summary logging system - specific counters for this renderer
   private subscriptionFireCount = 0;
   private actualChangeCount = 0;
   
@@ -92,61 +90,6 @@ export class EffectRenderer extends AbstractRenderer {
   }
   
   /**
-   * Determine if defender shows front or back based on attacker position
-   * From defender's perspective (defender is center):
-   * - If attacker is NE, E, SE, S, SW relative to defender: defender shows FRONT
-   * - If attacker is W, NW, N relative to defender: defender shows BACK
-   * 
-   * @param attackerPosition Position of the attacker
-   * @param defenderPosition Position of the defender
-   * @returns true if defender shows front, false if defender shows back
-   */
-  private isDefenderShowingFront(attackerPosition: readonly [number, number], defenderPosition: readonly [number, number]): boolean {
-    // Calculate attacker position relative to defender (defender is center)
-    const dx = attackerPosition[0] - defenderPosition[0];
-    const dy = attackerPosition[1] - defenderPosition[1];
-    
-    // Determine attacker's direction relative to defender
-    let attackerDirection: Direction;
-    if (dx > 0 && dy > 0) attackerDirection = Direction.SE;
-    else if (dx > 0 && dy < 0) attackerDirection = Direction.NE;
-    else if (dx < 0 && dy > 0) attackerDirection = Direction.SW;
-    else if (dx < 0 && dy < 0) attackerDirection = Direction.NW;
-    else if (dx === 0 && dy > 0) attackerDirection = Direction.S;
-    else if (dx === 0 && dy < 0) attackerDirection = Direction.N;
-    else if (dx > 0 && dy === 0) attackerDirection = Direction.E;
-    else if (dx < 0 && dy === 0) attackerDirection = Direction.W;
-    else attackerDirection = Direction.S; // Default
-    
-    const snap = battlemapStore;
-    
-    if (snap.controls.isIsometric) {
-      // In isometric view, directions are rotated 45 degrees
-      // Grid directions map to visual directions as follows:
-      // Grid N -> Visual NW, Grid E -> Visual NE, Grid S -> Visual SE, Grid W -> Visual SW
-      // 
-      // For isometric sprites, "front" means the sprite shows its front to the camera
-      // This happens when the attacker is coming from the "back" side of the isometric view
-      // 
-      // In isometric view, the "front-facing" directions are:
-      // E, SE, S, SW, W (the bottom and sides of the diamond)
-      return attackerDirection === Direction.E || 
-             attackerDirection === Direction.SE || 
-             attackerDirection === Direction.S || 
-             attackerDirection === Direction.SW || 
-             attackerDirection === Direction.W;
-    } else {
-      // Regular grid view - original logic
-      // Determine if defender shows front or back
-      return attackerDirection === Direction.NE || 
-             attackerDirection === Direction.E || 
-             attackerDirection === Direction.SE || 
-             attackerDirection === Direction.S || 
-             attackerDirection === Direction.SW;
-    }
-  }
-
-  /**
    * Get the appropriate layer for an effect based on layerHint or legacy logic
    * @param effect The effect animation
    * @returns The appropriate layer container
@@ -165,7 +108,7 @@ export class EffectRenderer extends AbstractRenderer {
     
     // LEGACY: Fall back to old logic for blood effects without layerHint
     if (effect.effectType === EffectType.BLOOD_SPLAT && effect.attackerPosition && effect.defenderPosition) {
-      const defenderShowsFront = this.isDefenderShowingFront(effect.attackerPosition, effect.defenderPosition);
+      const defenderShowsFront = isDefenderShowingFront(effect.attackerPosition, effect.defenderPosition);
       
       if (defenderShowsFront) {
         // Defender shows front -> blood goes below
@@ -736,7 +679,6 @@ export class EffectRenderer extends AbstractRenderer {
    */
   private calculateGridOffset(): { offsetX: number; offsetY: number; tileSize: number } {
     const snap = battlemapStore;
-    const ENTITY_PANEL_WIDTH = 250;
     
     // Check if we're in isometric mode
     if (snap.controls.isIsometric) {

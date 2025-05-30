@@ -1,5 +1,5 @@
 import { proxy } from 'valtio';
-import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, MovementAnimation, AttackMetadata, VisualPosition, toVisualPosition, isVisualPositionSynced, EffectAnimation, EffectType, BloodSplatConfig, DEFAULT_BLOOD_SPLAT_CONFIG } from '../types/battlemap_types';
+import { TileSummary, EntitySpriteMapping, AnimationState, Direction, SpriteFolderName, MovementState, VisualPosition, toVisualPosition, isVisualPositionSynced, EffectAnimation, EffectType, BloodSplatConfig, DEFAULT_BLOOD_SPLAT_CONFIG, AttackMetadata } from '../types/battlemap_types';
 import { EntitySummary, SensesSnapshot } from '../types/common';
 import type { DeepReadonly } from '../types/common';
 import { fetchGridSnapshot, fetchEntitySummaries } from '../api/battlemap/battlemapApi';
@@ -49,9 +49,7 @@ export interface EntityState {
   spriteMappings: Record<string, EntitySpriteMapping>;
   // Available sprite folders
   availableSpriteFolders: SpriteFolderName[];
-  // Movement animations
-  movementAnimations: Record<string, MovementAnimation>;
-  // NEW: Attack animations with metadata
+  // NEW: Attack animations with metadata (will be moved to animationStore in next step)
   attackAnimations: Record<string, { entityId: string; targetId: string; metadata?: AttackMetadata }>;
   // NEW: Path senses data indexed by entity UUID first, then by position
   pathSenses: Record<string, Record<string, SensesSnapshot>>; // observerEntityId -> positionKey -> SensesSnapshot
@@ -119,7 +117,6 @@ const battlemapStore = proxy<BattlemapStoreState>({
     directions: {},
     spriteMappings: {},
     availableSpriteFolders: [],
-    movementAnimations: {},
     attackAnimations: {},
     pathSenses: {},
     zOrderOverrides: {},
@@ -341,22 +338,6 @@ const battlemapActions = {
     delete battlemapStore.entities.spriteMappings[entityId];
   },
 
-  // Movement animation actions
-  startEntityMovement: (entityId: string, movementAnimation: MovementAnimation) => {
-    battlemapStore.entities.movementAnimations[entityId] = movementAnimation;
-    
-    // Update sprite mapping to moving state
-    const mapping = battlemapStore.entities.spriteMappings[entityId];
-    if (mapping) {
-      battlemapStore.entities.spriteMappings[entityId] = {
-        ...mapping,
-        movementState: MovementState.MOVING,
-        currentAnimation: AnimationState.WALK, // Switch to walk animation
-        isPositionSynced: false, // Visual position will diverge from server
-      };
-    }
-  },
-
   // NEW: Store path senses data for an entity
   setEntityPathSenses: (entityId: string, pathSenses: Record<string, SensesSnapshot>) => {
     battlemapStore.entities.pathSenses[entityId] = pathSenses;
@@ -374,16 +355,6 @@ const battlemapActions = {
     console.log(`[battlemapStore] Cleared path senses for entity ${entityId}`);
   },
 
-  updateEntityMovementAnimation: (entityId: string, updates: Partial<MovementAnimation>) => {
-    const existing = battlemapStore.entities.movementAnimations[entityId];
-    if (existing) {
-      battlemapStore.entities.movementAnimations[entityId] = {
-        ...existing,
-        ...updates,
-      };
-    }
-  },
-
   updateEntityVisualPosition: (entityId: string, visualPosition: VisualPosition) => {
     const mapping = battlemapStore.entities.spriteMappings[entityId];
     if (mapping) {
@@ -393,40 +364,6 @@ const battlemapActions = {
         visualPosition,
         isPositionSynced: entity ? isVisualPositionSynced(visualPosition, entity.position) : false,
       };
-    }
-  },
-
-  completeEntityMovement: (entityId: string, shouldResync: boolean = true) => {
-    // Remove movement animation
-    delete battlemapStore.entities.movementAnimations[entityId];
-    
-    // NEW: Clear path senses data when movement completes
-    delete battlemapStore.entities.pathSenses[entityId];
-    
-    // Update sprite mapping
-    const mapping = battlemapStore.entities.spriteMappings[entityId];
-    if (mapping) {
-      const entity = battlemapStore.entities.summaries[entityId];
-      
-      if (shouldResync && entity) {
-        // If resyncing, snap back to server position and go to idle
-        battlemapStore.entities.spriteMappings[entityId] = {
-          ...mapping,
-          movementState: MovementState.IDLE,
-          currentAnimation: mapping.idleAnimation, // Return to idle animation
-          visualPosition: toVisualPosition(entity.position),
-          isPositionSynced: true,
-        };
-      } else {
-        // If not resyncing (server approved), sync visual position to server position and go to idle
-        battlemapStore.entities.spriteMappings[entityId] = {
-          ...mapping,
-          movementState: MovementState.IDLE,
-          currentAnimation: mapping.idleAnimation, // Return to idle animation
-          visualPosition: entity ? toVisualPosition(entity.position) : mapping.visualPosition,
-          isPositionSynced: true, // Server approved, so we're synced
-        };
-      }
     }
   },
 

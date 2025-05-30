@@ -1,9 +1,5 @@
-// Isometric tile dimensions (these should match your isometric tile assets)
-export const ISOMETRIC_TILE_WIDTH = 64;  // Width of diamond tile
-export const ISOMETRIC_TILE_HEIGHT = 32; // Height of diamond tile
-
-// Grid line styling
-export const GRID_STROKE_WIDTH = 1; // Width of grid lines
+import { Direction } from '../types/battlemap_types';
+import { GRID_STROKE_WIDTH, ISOMETRIC_TILE_WIDTH, ISOMETRIC_TILE_HEIGHT } from '../constants/layout';
 
 /**
  * Convert grid coordinates to isometric screen coordinates
@@ -219,4 +215,24 @@ export function calculateIsometricDiamondCorners(
     leftX: centerX - tileWidthHalf + strokeOffset,
     leftY: centerY
   };
+}
+
+/**
+ * Convert absolute direction to isometric direction
+ * In isometric view, absolute North appears as NE, East as SE, etc.
+ * This accounts for the 45-degree rotation of the isometric perspective
+ */
+export function convertToIsometricDirection(absoluteDirection: Direction): Direction {
+  const directionMap: Record<Direction, Direction> = {
+    [Direction.N]: Direction.NE,   // North becomes Northeast
+    [Direction.NE]: Direction.E,   // Northeast becomes East
+    [Direction.E]: Direction.SE,   // East becomes Southeast
+    [Direction.SE]: Direction.S,   // Southeast becomes South
+    [Direction.S]: Direction.SW,   // South becomes Southwest
+    [Direction.SW]: Direction.W,   // Southwest becomes West
+    [Direction.W]: Direction.NW,   // West becomes Northwest
+    [Direction.NW]: Direction.N    // Northwest becomes North
+  };
+  
+  return directionMap[absoluteDirection];
 } 
