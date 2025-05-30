@@ -1,11 +1,14 @@
 import { Graphics, FederatedPointerEvent, Container } from 'pixi.js';
 import { battlemapStore, battlemapActions } from '../store';
-import { createTile, deleteTile, moveEntity, getEntitiesAtPosition, executeAttack } from '../api/battlemap/battlemapApi';
+import { createTile, deleteTile, getEntitiesAtPosition } from '../api/battlemap/battlemapApi';
 import { BattlemapEngine, LayerName } from './BattlemapEngine';
-import { TileSummary, Direction, MovementAnimation, toVisualPosition, AnimationState } from '../types/battlemap_types';
+import { TileSummary, Direction, toVisualPosition, AnimationState } from '../types/battlemap_types';
 import { Position } from '../types/common';
 import { IsometricGridRenderer } from './renderers/IsometricGridRenderer';
 import { screenToGrid } from '../utils/isometricUtils';
+import { EntityMovementService } from './services/EntityMovementService';
+import { EntityCombatService } from './services/EntityCombatService';
+import { animationActions } from '../store/animationStore';
 
 // Define minimum width of entity panel
 const ENTITY_PANEL_WIDTH = 250;
@@ -221,25 +224,10 @@ export class IsometricInteractionsManager {
   
   /**
    * Check if an entity is ready for input (in sync and not animating)
+   * Now uses EntityCombatService for consistent logic with React components
    */
   private isEntityReadyForInput(entityId: string): boolean {
-    const snap = battlemapStore;
-    const spriteMapping = snap.entities.spriteMappings[entityId];
-    const movementAnimation = snap.entities.movementAnimations[entityId];
-    
-    // Block input if entity is moving
-    if (movementAnimation) {
-      console.log(`[IsometricInteractionsManager] Entity ${entityId} is currently moving, blocking input`);
-      return false;
-    }
-    
-    // Block input if entity is not position-synced (e.g., during attack animations)
-    if (spriteMapping && !spriteMapping.isPositionSynced) {
-      console.log(`[IsometricInteractionsManager] Entity ${entityId} is not position-synced, blocking input`);
-      return false;
-    }
-    
-    return true;
+    return EntityCombatService.isEntityReadyForAttack(entityId);
   }
   
   /**
@@ -275,7 +263,7 @@ export class IsometricInteractionsManager {
   }
 
   /**
-   * Handle entity movement
+   * Handle entity movement using EntityMovementService for consistency
    */
   private async handleEntityMovement(gridX: number, gridY: number): Promise<void> {
     const snap = battlemapStore;
@@ -292,86 +280,25 @@ export class IsometricInteractionsManager {
       return;
     }
 
-    // Check if entity is ready for input
-    if (!this.isEntityReadyForInput(selectedEntityId)) {
-      console.log(`[IsometricInteractionsManager] Entity ${entity.name} is not ready for input, ignoring movement command`);
-      return;
-    }
-
     const targetPosition: Position = [gridX, gridY];
-    
-    // Check if entity can move to this position (requires path in senses)
-    const posKey = `${gridX},${gridY}`;
-    const path = entity.senses.paths[posKey];
-    
-    if (!path) {
-      console.log(`[IsometricInteractionsManager] No path available for ${entity.name} to position ${targetPosition}`);
-      return;
-    }
-
-    console.log(`[IsometricInteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
     
     // Cache senses data for the selected entity BEFORE starting movement
     // This prevents visibility flickering when changing perspectives during movement
     this.cacheSensesDataForMovement();
     
-    // IMMEDIATELY mark entity as out-of-sync to block further inputs
-    const spriteMapping = snap.entities.spriteMappings[selectedEntityId];
-    if (spriteMapping) {
-      battlemapActions.updateEntityVisualPosition(selectedEntityId, spriteMapping.visualPosition || { x: entity.position[0], y: entity.position[1] });
-    }
+    console.log(`[IsometricInteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
     
-    // Get movement speed from sprite mapping (use animation duration as movement speed)
-    const movementSpeed = spriteMapping?.animationDurationSeconds ? (1.0 / spriteMapping.animationDurationSeconds) : 1.0; // tiles per second
-    
-    // Create movement animation with full path including current position
-    const fullPath = [entity.position, ...path];
-    const movementAnimation: MovementAnimation = {
-      entityId: selectedEntityId,
-      path: fullPath,
-      currentPathIndex: 0,
-      startTime: Date.now(),
-      movementSpeed,
-      targetPosition,
-      isServerApproved: undefined, // Will be set when server responds
-    };
-    
-    // Start movement animation immediately
-    battlemapActions.startEntityMovement(selectedEntityId, movementAnimation);
-    
-    // Set initial direction immediately (IsometricEntityRenderer will handle direction changes during movement locally)
-    if (fullPath.length > 1) {
-      const initialDirection = this.computeDirection(fullPath[0], fullPath[1]);
-      battlemapActions.setEntityDirectionFromMapping(selectedEntityId, initialDirection);
-    }
-
+    // Use EntityMovementService for all movement logic - same as React components
     try {
-      // Send movement to server (don't wait for response to start animation)
-      // Use the updated moveEntity API that returns MovementResponse with path senses
-      const updatedEntity = await moveEntity(selectedEntityId, targetPosition, true); // Default to true for debugging
-      
-      // Mark movement as server-approved
-      battlemapActions.updateEntityMovementAnimation(selectedEntityId, { isServerApproved: true });
-      
-      // Refresh entities to get updated server state
-      await battlemapActions.fetchEntitySummaries();
-      
-      console.log(`[IsometricInteractionsManager] Server approved movement for ${entity.name}`);
+      const result = await EntityMovementService.moveEntityTo(selectedEntityId, targetPosition);
+      if (result) {
+        console.log(`[IsometricInteractionsManager] Movement successful for ${entity.name}`);
+      } else {
+        console.log(`[IsometricInteractionsManager] Movement failed for ${entity.name}`);
+      }
     } catch (error) {
-      console.error(`[IsometricInteractionsManager] Server rejected movement for ${entity.name}:`, error);
-      
-      // Mark movement as server-rejected
-      battlemapActions.updateEntityMovementAnimation(selectedEntityId, { isServerApproved: false });
-      
-      // Movement animation will continue and then snap back on completion
+      console.error(`[IsometricInteractionsManager] Movement error for ${entity.name}:`, error);
     }
-  }
-
-  /**
-   * Compute direction from one position to another
-   */
-  private computeDirection(fromPos: Position, toPos: Position): Direction {
-    return battlemapActions.computeDirection([fromPos[0], fromPos[1]], [toPos[0], toPos[1]]);
   }
   
   /**
@@ -461,18 +388,11 @@ export class IsometricInteractionsManager {
    * Check if an entity is adjacent to a target position
    */
   private isAdjacentToTarget(entityPosition: Position, targetPosition: Position): boolean {
-    const [entityX, entityY] = entityPosition;
-    const [targetX, targetY] = targetPosition;
-    
-    const dx = Math.abs(entityX - targetX);
-    const dy = Math.abs(entityY - targetY);
-    
-    // Adjacent means within 1 tile in any direction (including diagonals)
-    return dx <= 1 && dy <= 1 && (dx > 0 || dy > 0);
+    return EntityCombatService.isAdjacentToTarget(entityPosition, targetPosition);
   }
 
   /**
-   * Execute a direct attack (entities are adjacent) using optimistic pattern
+   * Execute a direct attack (entities are adjacent) using EntityCombatService
    */
   private async executeDirectAttack(attackerId: string, targetId: string): Promise<void> {
     const attacker = battlemapStore.entities.summaries[attackerId];
@@ -480,57 +400,23 @@ export class IsometricInteractionsManager {
     
     if (!attacker || !target) return;
     
-    console.log(`[IsometricInteractionsManager] ${attacker.name} attacking ${target.name} directly (optimistic)`);
-      
-    // STEP 1: Set direction to face the target BEFORE starting attack
-    const direction = this.computeDirection(attacker.position, target.position);
+    console.log(`[IsometricInteractionsManager] ${attacker.name} attacking ${target.name} directly`);
     
-    // Clear any local direction state that might interfere with attack direction
-    const entityRenderer = this.engine?.getRenderer('isometric_entity');
-    if (entityRenderer && 'clearLocalDirectionState' in entityRenderer) {
-      (entityRenderer as any).clearLocalDirectionState(attackerId);
-    }
-    
-    battlemapActions.setEntityDirectionFromMapping(attackerId, direction);
-    console.log(`[IsometricInteractionsManager] Set attack direction for ${attacker.name}: ${direction}`);
-    
-    // STEP 2: Mark entity as out-of-sync to block further inputs
-    const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
-    if (spriteMapping) {
-      battlemapActions.updateEntityVisualPosition(attackerId, spriteMapping.visualPosition || { x: attacker.position[0], y: attacker.position[1] });
-    }
-    
-    // STEP 3: Start optimistic attack animation immediately
-    battlemapActions.startEntityAttack(attackerId, targetId);
-    console.log(`[IsometricInteractionsManager] Started optimistic attack animation for ${attacker.name}`);
-      
+    // Use EntityCombatService for all attack logic - same as EntityMovementService pattern
     try {
-      // STEP 4: Execute the attack API call
-      const attackResponse = await executeAttack(attackerId, targetId, 'MAIN_HAND');
-      
-      console.log(`[IsometricInteractionsManager] Attack response received:`, {
-        event: attackResponse.event,
-        metadata: attackResponse.metadata
-      });
-      
-      // STEP 5: Update attack metadata from server response
-      battlemapActions.updateEntityAttackMetadata(attackerId, attackResponse.metadata);
-      
-      // STEP 6: Refresh entity summaries to get updated health/status
-      await battlemapActions.fetchEntitySummaries();
-      
-      console.log(`[IsometricInteractionsManager] Attack successful - outcome: ${attackResponse.metadata.attack_outcome}, damage: ${attackResponse.metadata.total_damage}`);
-      
+      const result = await EntityCombatService.executeAttack(attackerId, targetId, 'MAIN_HAND');
+      if (result) {
+        console.log(`[IsometricInteractionsManager] Attack successful for ${attacker.name}`);
+      } else {
+        console.log(`[IsometricInteractionsManager] Attack failed for ${attacker.name}`);
+      }
     } catch (error) {
-      console.error(`[IsometricInteractionsManager] Attack failed:`, error);
-      
-      // ROLLBACK: Complete attack immediately on failure (returns to idle)
-      battlemapActions.completeEntityAttack(attackerId);
+      console.error(`[IsometricInteractionsManager] Attack error for ${attacker.name}:`, error);
     }
   }
 
   /**
-   * Execute move-and-attack sequence
+   * Execute move-and-attack sequence using EntityMovementService
    */
   private async executeMoveAndAttack(attackerId: string, targetId: string, targetPosition: Position): Promise<void> {
     const attacker = battlemapStore.entities.summaries[attackerId];
@@ -548,8 +434,8 @@ export class IsometricInteractionsManager {
     console.log(`[IsometricInteractionsManager] ${attacker.name} moving to attack position ${attackPosition} to reach ${target.name}`);
     
     try {
-      // Start movement to attack position using the same logic as handleEntityMovement
-      const success = await this.startEntityMovementToPosition(attackerId, attackPosition);
+      // Use EntityMovementService for movement
+      const success = await EntityMovementService.moveEntityTo(attackerId, attackPosition);
       if (!success) {
         console.warn(`[IsometricInteractionsManager] Failed to start movement for ${attacker.name}`);
         return;
@@ -557,7 +443,8 @@ export class IsometricInteractionsManager {
       
       // Set up a listener for when movement completes to execute the attack
       const checkMovementComplete = () => {
-        const currentMovement = battlemapStore.entities.movementAnimations[attackerId];
+        // FIXED: Check animationStore instead of removed movementAnimations
+        const currentMovement = animationActions.getActiveAnimation(attackerId);
         const spriteMapping = battlemapStore.entities.spriteMappings[attackerId];
         
         // Check if movement is complete (no active movement and back to idle)
@@ -631,87 +518,6 @@ export class IsometricInteractionsManager {
     return bestPosition;
   }
 
-  /**
-   * Start entity movement to a specific position (used for move-and-attack)
-   */
-  private async startEntityMovementToPosition(entityId: string, targetPosition: Position): Promise<boolean> {
-    const entity = battlemapStore.entities.summaries[entityId];
-    if (!entity) {
-      console.warn('[IsometricInteractionsManager] Entity not found for movement');
-      return false;
-    }
-    
-    const [gridX, gridY] = targetPosition;
-    
-    // Check if entity can move to this position (requires path in senses)
-    const posKey = `${gridX},${gridY}`;
-    const path = entity.senses.paths[posKey];
-    
-    if (!path) {
-      console.log(`[IsometricInteractionsManager] No path available for ${entity.name} to position ${targetPosition}`);
-      return false;
-    }
-    
-    console.log(`[IsometricInteractionsManager] Moving entity ${entity.name} to position ${targetPosition}`);
-    
-    // Cache senses data for the selected entity BEFORE starting movement
-    // This prevents visibility flickering when changing perspectives during movement
-    this.cacheSensesDataForMovement();
-    
-    // IMMEDIATELY mark entity as out-of-sync to block further inputs
-    const spriteMapping = battlemapStore.entities.spriteMappings[entityId];
-    if (spriteMapping) {
-      battlemapActions.updateEntityVisualPosition(entityId, spriteMapping.visualPosition || { x: entity.position[0], y: entity.position[1] });
-    }
-    
-    // Get movement speed from sprite mapping (use animation duration as movement speed)
-    const movementSpeed = spriteMapping?.animationDurationSeconds ? (1.0 / spriteMapping.animationDurationSeconds) : 1.0; // tiles per second
-    
-    // Create movement animation with full path including current position
-    const fullPath = [entity.position, ...path];
-    const movementAnimation: MovementAnimation = {
-      entityId: entityId,
-      path: fullPath,
-      currentPathIndex: 0,
-      startTime: Date.now(),
-      movementSpeed,
-      targetPosition,
-      isServerApproved: undefined, // Will be set when server responds
-    };
-    
-    // Start movement animation immediately
-    battlemapActions.startEntityMovement(entityId, movementAnimation);
-    
-    // Set initial direction immediately (IsometricEntityRenderer will handle direction changes during movement locally)
-    if (fullPath.length > 1) {
-      const initialDirection = this.computeDirection(fullPath[0], fullPath[1]);
-      battlemapActions.setEntityDirectionFromMapping(entityId, initialDirection);
-    }
-    
-    try {
-      // Send movement to server (don't wait for response to start animation)
-      // Use the updated moveEntity API that returns MovementResponse with path senses
-      const updatedEntity = await moveEntity(entityId, targetPosition, true); // Default to true for debugging
-      
-      // Mark movement as server-approved
-      battlemapActions.updateEntityMovementAnimation(entityId, { isServerApproved: true });
-      
-      // Refresh entities to get updated server state
-      await battlemapActions.fetchEntitySummaries();
-      
-      console.log(`[IsometricInteractionsManager] Server approved movement for ${entity.name}`);
-      return true;
-    } catch (error) {
-      console.error(`[IsometricInteractionsManager] Server rejected movement for ${entity.name}:`, error);
-      
-      // Mark movement as server-rejected
-      battlemapActions.updateEntityMovementAnimation(entityId, { isServerApproved: false });
-      
-      // Movement animation will continue and then snap back on completion
-      return false;
-    }
-  }
-  
   /**
    * Resize handler
    */
