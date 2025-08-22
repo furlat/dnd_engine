@@ -287,6 +287,17 @@ class CircusPerformer(BaseCondition):
             )
             outs.append((target_entity.action_economy.reactions.uuid, reactions_mod_uuid))
 
+            # extra actions (99)
+            extra_actions_mod_uuid = target_entity.action_economy.actions.self_static.add_value_modifier(
+                NumericalModifier(
+                    name="Circus Training",
+                    value=99,
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid
+                )
+            )
+            outs.append((target_entity.action_economy.actions.uuid, extra_actions_mod_uuid))
+
             # Movement penalty (-5)
             movement_mod_uuid = target_entity.action_economy.movement.self_static.add_value_modifier(
                 NumericalModifier(

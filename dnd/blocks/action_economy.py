@@ -2,7 +2,7 @@ from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Cal
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
 from dnd.core.base_actions import CostType
 from enum import Enum
 from random import randint
@@ -103,7 +103,6 @@ class ActionEconomy(BaseBlock):
     def can_afford(self, cost_type: CostType, amount: int) -> bool:
         """Check if the entity can afford a given action type and amount."""
         if cost_type == "actions":
-            print("actions cazzo minchia",self.actions.self_static.normalized_score,amount)
             return self.actions.self_static.normalized_score - amount >= 0
         elif cost_type == "bonus_actions":
             return self.bonus_actions.self_static.normalized_score - amount >= 0
