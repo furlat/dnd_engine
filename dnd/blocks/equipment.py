@@ -3,9 +3,10 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
 from dnd.core.dice import Dice, DiceRoll, RollType, AttackOutcome
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
 from dnd.blocks.abilities import  AbilityScores
 from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, SkillName, Damage
+
 from enum import Enum
 from random import randint
 from functools import cached_property
@@ -519,7 +520,6 @@ class Equipment(BaseBlock):
         damages: List[Damage] = []
         for dice, dice_numbers, bonus, damage_type in zip(self.extra_attack_damage_dices, self.extra_attack_damage_dices_numbers, self.extra_attack_damage_bonus, self.extra_attack_damage_type):
             damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=dice, dice_numbers=dice_numbers, damage_bonus=bonus, damage_type=damage_type))
-        print(f"len damages: {len(damages)} get_extra_attack_damage before returning")
         if weapon_slot is not None:
             return damages+self._get_extra_weapon_damages(weapon_slot)
         else:

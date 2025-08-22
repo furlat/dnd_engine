@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from dnd.core.events import Event,EventType, EventHandler, EventPhase, EventProcessor
-from dnd.core.values import BaseObject
+from dnd.core.base_object import BaseObject
 from typing import Optional, Dict, Callable, OrderedDict, List, Literal
 from uuid import UUID
 
@@ -25,9 +25,9 @@ class ActionEvent(Event):
         self.costs.append(base_cost)
 
     @classmethod
-    def from_costs(cls,costs: List[Cost], source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, parent_event: Optional[Event] = None):
+    def from_costs(cls,costs: List[Cost], source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, parent_event: Optional[Event] = None, use_register: bool = True):
         base_costs = [BaseCost.model_validate(cost) for cost in costs]
-        return cls(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, costs=base_costs, parent_event=parent_event.uuid if parent_event else None)
+        return cls(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, costs=base_costs, parent_event=parent_event.uuid if parent_event else None, use_register=use_register)
 
 class BaseAction(BaseObject):
     """Base class for all actions in the game. This class provides the basic structure
@@ -40,15 +40,14 @@ class BaseAction(BaseObject):
 
     def check_costs(self) -> bool:
         for cost in self.costs:
-                print(f"cost {cost.cost_type} {cost.cost} {cost.evaluator}")
                 if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid,cost.cost_type,cost.cost):
                     return False
         return True
 
-    def _create_declaration_event(self,parent_event: Optional[Event] = None) -> Optional[ActionEvent]:
+    def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
         """Create the declaration event for this action. Override in subclasses if needed."""
         
-        return ActionEvent.from_costs(self.costs,self.source_entity_uuid,self.target_entity_uuid,parent_event)
+        return ActionEvent.from_costs(self.costs,self.source_entity_uuid,self.target_entity_uuid,parent_event,use_register=use_register)
 
     
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
@@ -59,7 +58,20 @@ class BaseAction(BaseObject):
             EventPhase.EXECUTION,
             status_message=f"Succesfully validated action{self.name} for {declaration_event.source_entity_uuid}"
         )
-
+    
+    def pre_validate(self)-> bool:
+        """Pre-validate the action. creates a non-registered event that is not added to the event queue and calls _validate"""
+        if not self.check_costs():
+            return False
+        declaration_event = self._create_declaration_event(parent_event=None, use_register=False)
+        if declaration_event is None:
+            return False
+        if declaration_event.phase != EventPhase.DECLARATION:
+            return False
+        validation_event = self._validate(declaration_event)
+        if validation_event is None or validation_event.canceled:
+            return False
+        return True
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the action's effects. Override this in subclasses to implement
         custom application logic. Similar to BaseCondition._apply pattern."""
