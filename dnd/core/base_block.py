@@ -2,9 +2,9 @@ from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Cal
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import EventHandler, Trigger, Event
+from dnd.core.events import EventHandler, EventQueue, Trigger, Event
 from enum import Enum
 from random import randint
 from functools import cached_property
@@ -140,8 +140,8 @@ class BaseBlock(BaseModel):
     active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=lambda: defaultdict(list),description="Dictionary of active conditions by source entity UUID")
 
     event_handlers: Dict[UUID, EventHandler] = Field(default_factory=dict)
-    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
-    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=dict)
+    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=lambda: defaultdict(list))
+    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=lambda: defaultdict(list))
     
     allow_events_conditions: bool = Field(default=False,description="If True, events and conditions will be allowed to be added to the block")
 
@@ -515,6 +515,7 @@ class BaseBlock(BaseModel):
             if trigger.is_simple():
                 self.event_handlers_by_simple_trigger[trigger].append(event_handler)
             self.event_handlers_by_trigger[trigger].append(event_handler)
+        EventQueue.add_event_handler(event_handler)
 
     def remove_event_handler_from_dicts(self, event_handler: EventHandler) -> None:
         if not self.allow_events_conditions:

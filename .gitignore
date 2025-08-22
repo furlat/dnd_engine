@@ -8,3 +8,6 @@ dnd.egg-info/SOURCES.txt
 /.venv
 
 /ui/node_modules
+/ui/public/assets/entities
+*.mp3
+/ui/public/assets/effects

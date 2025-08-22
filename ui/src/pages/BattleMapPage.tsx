@@ -1,66 +1,48 @@
 import * as React from 'react';
-import { Box, useTheme } from '@mui/material';
+import { Box, Snackbar, Alert } from '@mui/material';
 import CharacterSheetPage from './CharacterSheetPage';
 import EventQ from '../components/events/EventQ';
-import BattleMapCanvas from '../components/battlemap/BattleMapCanvas';
-import TileEditor, { useTileEditor } from '../components/battlemap/TileEditor';
-import EntitySummaryOverlay from '../components/battlemap/EntitySummaryOverlay';
-import { fetchGridSnapshot } from '../api/tileApi';
-import { characterStore, characterActions } from '../store/characterStore';
-import { useSnapshot } from 'valtio';
+import { BattleMapCanvas } from '../components/battlemap';
+import { EntitySummaryOverlays } from '../components/battlemap/summaries';
+import BackgroundMusicPlayer from '../components/music/BackgroundMusicPlayer';
+import { useMapControls } from '../hooks/battlemap';
+// Simple local error hook since we can't find the imported one
+const useError = () => {
+  const [error, setError] = React.useState<string | null>(null);
+  const clearError = React.useCallback(() => setError(null), []);
+  return { error, setError, clearError };
+};
+import { battlemapActions } from '../store';
+import { soundActions } from '../store/soundStore';
 
+/**
+ * BattleMapPage is responsible for overall layout of the game area
+ * It positions the main components (character sheet, battlemap, event queue)
+ * but delegates all game logic to hooks and child components
+ */
 const BattleMapPage: React.FC = () => {
-  const theme = useTheme();
-  const [containerSize, setContainerSize] = React.useState({ width: 0, height: 0 });
-  const [gridSize, setGridSize] = React.useState({ width: 30, height: 20 }); // Default size
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [isLocked, setIsLocked] = React.useState(false);
-  const { handleCellClick, TileEditor, isEditing } = useTileEditor();
-  const snap = useSnapshot(characterStore);
+  const { isMusicPlayerMinimized, toggleMusicPlayerSize } = useMapControls();
+  const { error, setError, clearError } = useError();
+  
+  // State for UI collapsing
+  const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(true);
 
-  // Panel states
-  const [isCharacterSheetCollapsed, setIsCharacterSheetCollapsed] = React.useState(false);
-
-  // Update container size when window resizes
+  // Initialize polling and sound system when the component mounts
   React.useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
-        setContainerSize({ width, height });
-      }
-    };
-
-    // Initial size
-    updateSize();
-
-    // Add resize listener
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    battlemapActions.startPolling();
+    
+    // Initialize sound system
+    soundActions.initialize().catch(error => {
+      console.error('[BattleMapPage] Failed to initialize sound system:', error);
+    });
+    
+    return () => battlemapActions.stopPolling();
   }, []);
 
-  // Fetch grid dimensions from backend
-  React.useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const grid = await fetchGridSnapshot();
-        setGridSize({ width: grid.width, height: grid.height });
-        await characterActions.fetchSummaries();
-      } catch (error) {
-        console.error('Error fetching initial data:', error);
-      }
-    };
-
-    fetchData();
+  // Toggle handlers
+  const toggleCharacterSheet = React.useCallback(() => {
+    setIsCharacterSheetCollapsed(prev => !prev);
   }, []);
-
-  // Handle target selection
-  const handleTargetSelect = (entityId: string) => {
-    characterActions.setSelectedEntity(entityId);
-    characterActions.setDisplayedEntity(entityId);
-  };
-
-  const entities = Object.values(snap.summaries);
 
   return (
     <Box sx={{ 
@@ -76,50 +58,56 @@ const BattleMapPage: React.FC = () => {
       {/* Character Sheet Panel */}
       <CharacterSheetPage 
         isCollapsed={isCharacterSheetCollapsed}
-        onToggleCollapse={() => setIsCharacterSheetCollapsed(!isCharacterSheetCollapsed)}
-        onSwitchToEntities={() => {}}
+        onToggleCollapse={toggleCharacterSheet}
       />
 
-      {/* Main content area */}
+      {/* Error Snackbar */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={6000}
+        onClose={clearError}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={clearError} 
+          severity="error"
+          variant="filled"
+        >
+          {error}
+        </Alert>
+      </Snackbar>
+
+      {/* Main content area - Single container with overlays */}
       <Box 
-        ref={containerRef}
         sx={{ 
           flex: 1,
-          display: 'flex',
           position: 'relative',
           overflow: 'hidden',
           bgcolor: '#000000',
         }}
       >
-        {/* Tile Editor */}
-        <TileEditor isLocked={isLocked} />
+        {/* BattleMap Canvas - takes full area */}
+        <BattleMapCanvas />
 
-        {containerSize.width > 0 && containerSize.height > 0 && (
-          <BattleMapCanvas 
-            width={gridSize.width}
-            height={gridSize.height}
-            tileSize={32}
-            onCellClick={(x, y, onOptimisticUpdate) => handleCellClick(x, y, onOptimisticUpdate, isLocked)}
-            isEditing={isEditing}
-            onLockChange={setIsLocked}
-            isLocked={isLocked}
-            containerWidth={containerSize.width}
-            containerHeight={containerSize.height}
-          />
-        )}
-
-        {/* Entity Summary Overlays */}
-        {entities.map((entity, index) => (
-          <EntitySummaryOverlay
-            key={entity.uuid}
-            entity={entity}
-            isSelected={entity.uuid === snap.selectedEntityId}
-            isDisplayed={entity.uuid === snap.displayedEntityId}
-            onSelectTarget={handleTargetSelect}
-            index={index}
-          />
-        ))}
+        {/* Entity summary overlays - positioned as overlay */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '250px',  // Fixed width for entity summary
+            height: '100%',
+            zIndex: 10,
+            pointerEvents: 'auto',
+            bgcolor: '#000000',
+          }}
+        >
+          <EntitySummaryOverlays />
+        </Box>
       </Box>
+
+      {/* Background Music Player */}
+      <BackgroundMusicPlayer />
 
       {/* Event Queue */}
       <EventQ />

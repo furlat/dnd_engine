@@ -1,4 +1,4 @@
-from typing import DefaultDict, Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable
+from typing import DefaultDict, Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
 from enum import Enum
@@ -9,7 +9,7 @@ from collections import defaultdict
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import (
     NumericalModifier, DamageType, ResistanceStatus, 
-    ContextAwareCondition, BaseObject
+    ContextAwareCondition
 )
 
 from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue, ContextualValue
@@ -180,10 +180,12 @@ class Entity(BaseBlock):
         self.position = new_position
         self.senses.position = new_position 
 
-    def move(self,new_position: Tuple[int,int]):
+    def move(self,new_position: Tuple[int,int], update_senses: bool = True):
         """ move the entity to a new position """
         
         Entity.update_entity_position(self,new_position)
+        if update_senses:
+            Entity.update_all_entities_senses()
         
     def get_target_entity(self,copy: bool = False) -> Optional['Entity']:
         if self.target_entity_uuid is None:
@@ -473,7 +475,6 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
         damages = self.equipment.get_damages(weapon_slot, self.ability_scores)
-        print(f"len damages: {len(damages)} inside entity")
         if should_clear_target:
             self.clear_target_entity()
         return damages
@@ -604,6 +605,46 @@ class Entity(BaseBlock):
         self.clear_target_entity()
         return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
 
+
+    @staticmethod
+    def compute_senses_from_position(position: Tuple[int,int],seen: Set[Tuple[int,int]], max_distance: int = 10) -> Tuple[Dict[Tuple[int,int],bool],DefaultDict[Tuple[int,int],List[Tuple[int,int]]],Dict[Tuple[int,int],bool],Dict[UUID,Tuple[int,int]]]:
+         # Get visible cells using shadowcast
+        visible_positions = Tile.get_fov(position, max_distance)
+        visible_dict = {pos: True for pos in visible_positions}
+        
+        # Get walkable paths using dijkstra
+        distances, paths = Tile.get_paths(position, max_distance)
+        
+        # Filter paths to only include those where:
+        # 1. The destination is currently visible
+        # 2. All positions in the path have been seen before
+        filtered_paths = defaultdict(list)
+        for pos, path in paths.items():
+            # Check if destination is visible and all path positions are in seen
+            if pos in visible_dict and all(step in seen for step in path):
+                filtered_paths[pos] = path
+        
+        # Get entities at visible positions
+        visible_entities = {}
+        for pos in visible_positions:
+            entities = Entity.get_all_entities_at_position(pos)
+            for entity in entities:
+                    visible_entities[entity.uuid] = pos
+        return visible_dict, filtered_paths, {pos: Tile.is_walkable(pos) for pos in visible_positions}, visible_entities
+    
+    def create_senses_copy_at_position(self, position: Tuple[int,int], max_distance: int = 10) -> 'Senses':
+        senses = self.senses.model_copy(deep=True)
+        senses.position = position
+        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(position, self.senses.seen, max_distance)
+        
+        senses.update_senses(
+            entities=visible_entities,
+            visible=visible_dict,
+            walkable=walkable,
+            paths=filtered_paths
+        )
+        return senses
+    
     def update_entity_senses(self, max_distance: int = 10):
         """
         Update the entity's senses using shadowcasting and pathfinding.
@@ -616,28 +657,35 @@ class Entity(BaseBlock):
             max_distance: Maximum view/movement distance (default 10)
         """
         # Get visible cells using shadowcast
-        visible_positions = Tile.get_fov(self.position, max_distance)
-        visible_dict = {pos: True for pos in visible_positions}
+        # visible_positions = Tile.get_fov(self.position, max_distance)
+        # visible_dict = {pos: True for pos in visible_positions}
         
-        # Get walkable paths using dijkstra
-        distances, paths = Tile.get_paths(self.position, max_distance)
+        # # Get walkable paths using dijkstra
+        # distances, paths = Tile.get_paths(self.position, max_distance)
         
-        # Filter paths to only include visible positions
-        filtered_paths = {pos: path for pos, path in paths.items() if pos in visible_dict}
+        # # Filter paths to only include those where:
+        # # 1. The destination is currently visible
+        # # 2. All positions in the path have been seen before
+        # filtered_paths = defaultdict(list)
+        # for pos, path in paths.items():
+        #     # Check if destination is visible and all path positions are in seen
+        #     if pos in visible_dict and all(step in self.senses.seen for step in path):
+        #         filtered_paths[pos] = path
         
-        # Get entities at visible positions
-        visible_entities = {}
-        for pos in visible_positions:
-            entities = Entity.get_all_entities_at_position(pos)
-            for entity in entities:
-                if entity.uuid != self.uuid:  # Don't include self
-                    visible_entities[entity.uuid] = pos
+        # # Get entities at visible positions
+        # visible_entities = {}
+        # for pos in visible_positions:
+        #     entities = Entity.get_all_entities_at_position(pos)
+        #     for entity in entities:
+        #         if entity.uuid != self.uuid:  # Don't include self
+        #             visible_entities[entity.uuid] = pos
         
+        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(self.position, self.senses.seen, max_distance)
         # Update the senses block
         self.senses.update_senses(
             entities=visible_entities,
             visible=visible_dict,
-            walkable={pos: Tile.is_walkable(pos) for pos in visible_positions},
+            walkable=walkable,
             paths=filtered_paths
         )
 

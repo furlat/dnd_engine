@@ -4,7 +4,8 @@ from typing import Dict, Any, Optional, Self, Union, List, Tuple
 
 from pydantic import BaseModel, model_validator
 from enum import Enum
-from dnd.core.modifiers import ContextAwareCondition, BaseObject
+from dnd.core.modifiers import ContextAwareCondition
+from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler
 class DurationType(str,Enum):

@@ -2,7 +2,8 @@ from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Cal
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
 from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier
+from dnd.core.base_object import BaseObject
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import EventHandler, Trigger, Event
 from enum import Enum
@@ -49,7 +50,10 @@ class Tile(BaseObject):
     
     @classmethod
     def grid_size(cls) -> Tuple[int,int]:
-        return max(tile.position[0] for tile in cls.get_all_tiles()) + 1, max(tile.position[1] for tile in cls.get_all_tiles()) + 1
+        tiles = cls.get_all_tiles()
+        if len(tiles) == 0:
+            return (0,0)
+        return max(tile.position[0] for tile in tiles) + 1, max(tile.position[1] for tile in tiles) + 1
     
     @classmethod
     def create(cls, position: Tuple[int,int], sprite_name: Optional[str] = None, can_walk: bool = True, can_see: bool = True,name:str = "Floor") -> 'Tile':
