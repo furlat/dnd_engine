@@ -656,29 +656,7 @@ class Entity(BaseBlock):
         Args:
             max_distance: Maximum view/movement distance (default 10)
         """
-        # Get visible cells using shadowcast
-        # visible_positions = Tile.get_fov(self.position, max_distance)
-        # visible_dict = {pos: True for pos in visible_positions}
-        
-        # # Get walkable paths using dijkstra
-        # distances, paths = Tile.get_paths(self.position, max_distance)
-        
-        # # Filter paths to only include those where:
-        # # 1. The destination is currently visible
-        # # 2. All positions in the path have been seen before
-        # filtered_paths = defaultdict(list)
-        # for pos, path in paths.items():
-        #     # Check if destination is visible and all path positions are in seen
-        #     if pos in visible_dict and all(step in self.senses.seen for step in path):
-        #         filtered_paths[pos] = path
-        
-        # # Get entities at visible positions
-        # visible_entities = {}
-        # for pos in visible_positions:
-        #     entities = Entity.get_all_entities_at_position(pos)
-        #     for entity in entities:
-        #         if entity.uuid != self.uuid:  # Don't include self
-        #             visible_entities[entity.uuid] = pos
+
         
         visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(self.position, self.senses.seen, max_distance)
         # Update the senses block
