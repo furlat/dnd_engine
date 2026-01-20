@@ -1,0 +1,15 @@
+[tool.pyright]
+include = ["dnd", "examples"]
+exclude = ["**/__pycache__"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = true
+reportUnusedVariable = true
+reportUndefinedVariable = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
