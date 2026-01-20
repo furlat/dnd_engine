@@ -25,17 +25,17 @@ Expected Condition Effects (from CLAUDE.md):
 | Unconscious   | Auto-fail STR/DEX saves                         | Advantage, auto-crit ≤5ft, prone-like  | Incapacitated  |
 """
 
-from typing import List, Tuple, Callable
-from uuid import UUID
+from typing import List, Tuple, cast
 
+from dnd.core.events import SkillName
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.conditions import (
     Blinded, Charmed, Dashing, Deafened, Dodging, Frightened,
-    Grappled, Incapacitated, Invisible, Paralyzed, Poisoned,
+    Grappled, Incapacitated, Paralyzed, Poisoned,
     Prone, Restrained, Stunned, Unconscious
 )
 from dnd.blocks.equipment import WeaponSlot
-from dnd.blocks.skills import skills_requiring_sight, skills_requiring_hearing, skills_social, all_skills
+from dnd.blocks.skills import skills_requiring_sight, skills_requiring_hearing, skills_social
 from dnd.entity import Entity
 from dnd.core.values import AdvantageStatus, CriticalStatus, AutoHitStatus
 
@@ -194,7 +194,6 @@ def test_charmed() -> bool:
 
     # Check 2: Charmer has advantage on social skills vs charmed (via to_target_contextual)
     for skill_name in skills_social:
-        skill = target.skill_set.get_skill(skill_name)
         # The advantage is given to the charmer via to_target_contextual
         attacker.set_target_entity(target.uuid)
         target.set_target_entity(attacker.uuid)
@@ -226,7 +225,7 @@ def test_dashing() -> bool:
     """
     print_separator("TEST: DASHING")
     result = TestResult()
-    attacker, target = setup_combat_pair()
+    attacker, _ = setup_combat_pair()
 
     base_modifier = attacker.action_economy.movement.get_base_modifier()
     if base_modifier is None:
@@ -346,7 +345,8 @@ def test_frightened() -> bool:
 
     # Check 2: Disadvantage on ability checks (contextual - frightener must be visible)
     # The contextual check requires the frightener to be in senses
-    for skill_name in ["perception", "investigation"]:  # Sample skills
+    for skill_str in ["perception", "investigation"]:  # Sample skills
+        skill_name = cast(SkillName, skill_str)
         target.set_target_entity(attacker.uuid)
         skill_bonus = target.skill_bonus(attacker.uuid, skill_name)
         result.check(
@@ -513,7 +513,8 @@ def test_poisoned() -> bool:
     )
 
     # Check 2: Disadvantage on ALL ability checks (sample a few)
-    for skill_name in ["athletics", "perception", "stealth", "persuasion"]:
+    for skill_str in ["athletics", "perception", "stealth", "persuasion"]:
+        skill_name = cast(SkillName, skill_str)
         skill = attacker.skill_set.get_skill(skill_name)
         result.check(
             skill.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE,

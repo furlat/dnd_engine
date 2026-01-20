@@ -1,14 +1,10 @@
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable, Tuple
+from typing import Dict, Optional, Any, List, Self,ClassVar,  Callable, Tuple
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
-from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
+from pydantic import BaseModel, Field, model_validator, computed_field
+from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import EventHandler, EventQueue, Trigger, Event
-from enum import Enum
-from random import randint
-from functools import cached_property
-from typing import Literal as TypeLiteral
+
 from collections import defaultdict
 
 ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'],Optional[dict]], bool]
@@ -203,12 +199,12 @@ class BaseBlock(BaseModel):
         # This validator only makes sense during initialization, not during target propagation
         
         # Check all values
-        for uuid, value in self.values.items():
+        for _, value in self.values.items():
             if value.source_entity_uuid != self.source_entity_uuid:
                 raise ValueError(f"ModifiableValue '{value.name}' has mismatched source UUID")
-                
+
         # Check all blocks
-        for uuid, block in self.blocks.items():
+        for _, block in self.blocks.items():
             if block.source_entity_uuid != self.source_entity_uuid:
                 raise ValueError(f"BaseBlock '{block.name}' has mismatched source UUID")
                 
@@ -220,7 +216,7 @@ class BaseBlock(BaseModel):
         Populates the blocks and values dictionaries with all BaseBlock and ModifiableValue
         instances that are attributes of this class. This is done once during initialization.
         """
-        for name, field in self.__class__.model_fields.items():
+        for name, _ in self.__class__.model_fields.items():
             attr_value = getattr(self, name)
             # Skip the dictionaries themselves to avoid recursion
             if name in ['blocks', 'values']:

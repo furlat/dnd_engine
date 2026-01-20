@@ -1,11 +1,10 @@
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost,BaseCost, ActionEvent
 from dnd.core.values import ModifiableValue
 
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, BaseObject, saving_throws, ResistanceModifier, AutoHitStatus, CriticalStatus
-from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType,Event, EventType, WeaponSlot, Range, Damage, EventHandler,EventProcessor, EventPhase
+from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
+from dnd.core.events import RangeType,Event, EventType, WeaponSlot, Range, Damage,  EventPhase
 from pydantic import Field
-from typing import Optional, List, TypeVar, Generic, Union, Tuple
+from typing import Optional, List, TypeVar,  Tuple
 from uuid import UUID
 from dnd.entity import Entity, determine_attack_outcome
 from collections import OrderedDict
@@ -60,6 +59,7 @@ class MovementEvent(ActionEvent):
     """An event that represents a movement"""
     name: str = Field(default="Movement",description="A movement event")
     event_type: EventType = Field(default=EventType.MOVEMENT,description="The type of event")
+    costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
     start_position: Tuple[int,int] = Field(description="The start position of the movement")
     end_position: Tuple[int,int] = Field(description="The end position of the movement")
     path: Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
@@ -203,6 +203,7 @@ class Move(BaseAction):
 class AttackEvent(ActionEvent):
     """An event that represents an attack"""
     name: str = Field(default="Attack",description="An attack event")
+    costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
     range: Optional[Range] = Field(default=None,description="The range of the attack")
     attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")

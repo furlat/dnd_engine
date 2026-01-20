@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(pyright:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(python:*)",
+      "Bash(ls:*)",
+      "Bash(python3 -m py_compile:*)"
+    ]
+  }
+}

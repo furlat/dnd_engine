@@ -61,8 +61,10 @@ def print_attack_result(event) -> None:
         total_damage = sum(roll.total for roll in event.damage_rolls)
         print(f"  Damage Dealt: {total_damage}")
         for i, roll in enumerate(event.damage_rolls):
-            damage_type = event.damages[i].damage_type if event.damages else "Unknown"
-            print(f"    - {roll.total} {damage_type.value}")
+            if event.damages and i < len(event.damages):
+                print(f"    - {roll.total} {event.damages[i].damage_type.value}")
+            else:
+                print(f"    - {roll.total} Unknown")
 
 
 def main():

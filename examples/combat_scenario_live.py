@@ -35,7 +35,7 @@ from dnd.blocks.equipment import (
 )
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.modifiers import DamageType
-from dnd.actions import Attack, Move
+from dnd.actions import Attack, AttackEvent, Move
 from dnd.conditions import Poisoned, Prone, Dodging
 
 # Use bestiary for goblin and skeleton
@@ -237,7 +237,7 @@ def perform_attack(attacker: Entity, target: Entity):
         log_result(f"Attack returned no event")
     elif event.canceled:
         log_result(f"Attack failed: {event.status_message}")
-    elif hasattr(event, 'attack_outcome'):
+    elif isinstance(event, AttackEvent):
         outcome = event.attack_outcome.value if event.attack_outcome else "unknown"
         log_result(f"Attack roll: {outcome}")
         if event.damage_rolls:
@@ -262,7 +262,11 @@ def perform_move(entity: Entity, new_position: tuple):
     )
     event = move.apply()
 
-    if event.canceled:
+    if event is None:
+        log_result(f"Move returned no event")
+        Entity.update_entity_position(entity, new_position)
+        log_result(f"(Teleported for demo purposes)")
+    elif event.canceled:
         log_result(f"Move failed: {event.status_message}")
         # Fall back to direct position update for demo
         Entity.update_entity_position(entity, new_position)
@@ -491,7 +495,7 @@ def main():
 
     # Start server in background
     print(f"\nStarting websocket server on port {SERVER_PORT}...")
-    server, thread = run_server_in_background()
+    _server, _thread = run_server_in_background()
     print(f"Server running at http://localhost:{SERVER_PORT}")
     print(f"WebSocket at ws://localhost:{SERVER_PORT}/ws")
 

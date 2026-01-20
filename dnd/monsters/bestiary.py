@@ -16,9 +16,8 @@ from dnd.blocks.equipment import (
     WeaponSlot, WeaponProperty, ArmorType, BodyPart, Range
 )
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
-from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.modifiers import DamageType, ResistanceStatus
+from dnd.core.modifiers import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.core.events import RangeType
 

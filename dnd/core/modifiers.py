@@ -1,6 +1,6 @@
-from pydantic import ConfigDict, BaseModel, Field, computed_field, field_validator, PrivateAttr,model_validator, ValidationError
-from typing import List,Literal, Optional, Dict, Any, Callable, Protocol, TypeVar, ClassVar,Union, Tuple, Self
-from uuid import UUID, uuid4
+from pydantic import Field, computed_field, model_validator
+from typing import List,Literal, Optional, Dict, Any, Callable, TypeVar,Union, Tuple, Self
+from uuid import UUID
 from enum import Enum
 
 from dnd.core.base_object import BaseObject
@@ -414,7 +414,7 @@ class ContextualModifier(BaseObject):
     
     def callable_validation_function(self) -> None:
         if self.callable_arguments is not None:
-            source_entity_uuid, target_entity_uuid, context = self.callable_arguments
+            source_entity_uuid, _, _ = self.callable_arguments
             if source_entity_uuid != self.target_entity_uuid:
                 raise ValueError("Callable argument Source entity UUID does not match target entity UUID of the modifier")
     

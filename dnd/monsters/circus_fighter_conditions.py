@@ -5,14 +5,13 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import (
     NumericalModifier, AdvantageModifier, AdvantageStatus,
-    AutoHitModifier, AutoHitStatus, ResistanceModifier, ResistanceStatus, DamageType
+ ResistanceModifier, ResistanceStatus, DamageType
 )
 from dnd.entity import Entity
 from uuid import UUID
 from typing import Optional, Dict, Any
 from dnd.core.modifiers import NumericalModifier, ContextualNumericalModifier, ContextualAdvantageModifier
-from dnd.blocks.equipment import Equipment, WeaponProperty, Weapon
-from dnd.core.events import WeaponSlot
+from dnd.blocks.equipment import  WeaponProperty, Weapon
 from dnd.entity import Entity
 
 def elemental_advantage(source_uuid: UUID, target_uuid: Optional[UUID], context: Optional[Dict[str, Any]]) -> Optional[AdvantageModifier]:
