@@ -9,13 +9,16 @@ Manages:
 - Cell subscriptions for spatial events
 """
 
-from typing import Dict, List, Optional, Tuple, Set, DefaultDict
+from typing import Dict, List, Optional, Tuple, Set, DefaultDict, TYPE_CHECKING
 from uuid import UUID, uuid4
 from collections import defaultdict
 from pydantic import BaseModel, ConfigDict
 
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
+
+if TYPE_CHECKING:
+    from dnd.core.events import SpatialChangeEvent
 
 
 class GridMap:
@@ -93,9 +96,7 @@ class GridMap:
     def enable_events(self) -> None:
         """Enable event firing and flush pending events."""
         self._events_enabled = True
-        # Flush pending events
-        for event in self._pending_events:
-            pass  # Events were already registered, just clear the queue
+        # Flush pending events (events were already registered, just clear the queue)
         self._pending_events.clear()
 
     def disable_events(self) -> None:
@@ -424,7 +425,7 @@ class GridMap:
     def get_path(self, start: Tuple[int, int], end: Tuple[int, int],
                  max_distance: Optional[int] = None) -> Optional[List[Tuple[int, int]]]:
         """Get path from start to end, or None if no path exists."""
-        distances, paths = self.compute_paths(start, max_distance)
+        _, paths = self.compute_paths(start, max_distance)
         return paths.get(end)
 
     def get_distance(self, start: Tuple[int, int], end: Tuple[int, int]) -> Optional[int]:

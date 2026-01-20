@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_object import BaseObject
-from dnd.core.gridmap import GridMap, TileData, get_map
+from dnd.core.gridmap import  TileData, get_map
 
 
 class Tile(BaseObject):

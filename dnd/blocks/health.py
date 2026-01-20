@@ -1,13 +1,12 @@
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable, Tuple
+from typing import  Optional,  List, Literal,Tuple
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
-from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
+from pydantic import BaseModel, Field,  computed_field,field_validator
+from dnd.core.values import ModifiableValue
+from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ResistanceModifier
 
-from enum import Enum
 from random import randint
 from functools import cached_property
-from typing import Literal as TypeLiteral
+
 
 
 from dnd.core.base_block import BaseBlock

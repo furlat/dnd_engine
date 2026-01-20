@@ -1,13 +1,12 @@
-from dnd.core.modifiers import NumericalModifier, DamageType, AdvantageModifier, AdvantageStatus
+from dnd.core.modifiers import  DamageType, AdvantageModifier, AdvantageStatus
 from dnd.core.values import ModifiableValue
-from dnd.core.base_block import BaseBlock
-from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
-from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
-from dnd.blocks.health import (HealthConfig,Health,HitDiceConfig)
-from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponProperty, Range, Shield, Weapon, BodyArmor, ArmorType, BodyPart)
-from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
-from dnd.blocks.skills import (SkillSetConfig,SkillSet,SkillConfig)
-from dnd.core.events import SavingThrowEvent,RangeType, AbilityName, SkillName
+from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig)
+from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig)
+from dnd.blocks.health import (HealthConfig,HitDiceConfig)
+from dnd.blocks.equipment import (EquipmentConfig,WeaponSlot,WeaponProperty, Range, Weapon, BodyArmor, ArmorType, BodyPart)
+from dnd.blocks.action_economy import (ActionEconomyConfig)
+from dnd.blocks.skills import (SkillSetConfig,SkillConfig)
+from dnd.core.events import RangeType
 from dnd.conditions import Blinded
 from dnd.monsters.circus_fighter_conditions import (
     DualWielder, ElementalWeaponMastery, ElementalAffinity, CircusPerformer
@@ -19,7 +18,7 @@ from uuid import uuid4, UUID
 from typing import Optional, Tuple
 from dnd.core.events import EventHandler, Trigger, EventType, EventPhase
 from dnd.actions import AttackEvent
-from dnd.reactions import create_opputinity_attack_handler, add_opportunity_attack_handler
+from dnd.reactions import add_opportunity_attack_handler
 def attack_processor(event: AttackEvent, source_entity_uuid: UUID ) -> Optional[AttackEvent]:
         print(f"Simple Attack event received for {source_entity_uuid} with target {event.target_entity_uuid} in phase {event.phase}")
         return event
@@ -240,8 +239,6 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     dagger = create_dagger(entity.uuid)
     flaming_scimitar = create_flaming_scimitar(entity.uuid)
     light_armor = create_light_armor(entity.uuid)
-    longsword = create_longsword_plus_one(entity.uuid)
-    morningstar = create_morningstar(entity.uuid)
 
     entity.equipment.equip(light_armor)
     entity.equipment.equip(flaming_scimitar, WeaponSlot.MAIN_HAND)

@@ -1,35 +1,32 @@
-from typing import DefaultDict, Dict, Optional, Any, List, Self, Literal, ClassVar, Union, Tuple, Callable, Set
+from typing import DefaultDict, Dict, Optional, Any, List, ClassVar, Union, Tuple,  Set
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator, computed_field, field_validator
-from enum import Enum
+from pydantic import BaseModel, Field
 from collections import defaultdict
 
 
 
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import (
-    NumericalModifier, DamageType, ResistanceStatus, 
-    ContextAwareCondition
+    NumericalModifier
 )
 
-from dnd.core.values import  AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue, ContextualValue
+from dnd.core.values import   CriticalStatus, AutoHitStatus
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-from dnd.core.events import EventType, EventPhase, Event, RangeType, SavingThrowEvent, SkillCheckEvent
+from dnd.core.events import  Event, RangeType, SavingThrowEvent, SkillCheckEvent
 
 from dnd.core.base_block import BaseBlock
-from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig, AbilityScores)
-from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig,SavingThrowSet)
+from dnd.blocks.abilities import (AbilityScoresConfig, AbilityScores)
+from dnd.blocks.saving_throws import (SavingThrowSetConfig,SavingThrowSet)
 from dnd.blocks.health import (HealthConfig,Health)
 from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponProperty, Range, Shield, Damage)
 from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
-from dnd.core.events import AbilityName, SkillName, EventHandler, EventType, EventPhase, Trigger
-from dnd.core.base_block import ContextualConditionImmunity
+from dnd.core.events import AbilityName, SkillName
 from dnd.core.base_tiles import Tile
-from dnd.core.gridmap import get_map, reset_map
+from dnd.core.gridmap import get_map
 
 
 def determine_attack_outcome(roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
@@ -207,7 +204,7 @@ class Entity(BaseBlock):
                 return True
         #then check contextual immunities
         condition_contextual_immunities = self.contextual_condition_immunities.get(condition_name,[])
-        for immunity_name, immunity_check in condition_contextual_immunities:
+        for _, immunity_check in condition_contextual_immunities:
             if immunity_check(self,self.get_target_entity(copy=True),self.context):
                 return True
         return False
@@ -231,7 +228,7 @@ class Entity(BaseBlock):
             else:
                 return None
         if check_save_throw and condition.application_saving_throw is not None:
-            (outcome,dice_roll,success) = self.saving_throw(condition.application_saving_throw)
+            (_, _, success) = self.saving_throw(condition.application_saving_throw)
             if success:
                 if declaration_event is not None:
                     return declaration_event.cancel(status_message=f"Target passed the {condition.application_saving_throw.ability_name} saving throw with")
@@ -254,7 +251,7 @@ class Entity(BaseBlock):
         """ Overrides the base method of BaseBlock to add the saving throw checks"""
         condition = self.active_conditions[condition_name]
         if not skip_save_throw and condition.removal_saving_throw is not None:
-            (outcome,dice_roll,success) = self.saving_throw(condition.removal_saving_throw)
+            (_, _, success) = self.saving_throw(condition.removal_saving_throw)
             if success:
                 self.remove_condition(condition_name)
                 return True
@@ -466,7 +463,7 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
     
-        proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range = self._get_attack_bonuses(weapon_slot)
+        proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, _ = self._get_attack_bonuses(weapon_slot)
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
         
@@ -619,7 +616,7 @@ class Entity(BaseBlock):
         visible_dict = {pos: True for pos in visible_positions}
         
         # Get walkable paths using dijkstra
-        distances, paths = Tile.get_paths(position, max_distance)
+        _, paths = Tile.get_paths(position, max_distance)
         
         # Filter paths to only include those where:
         # 1. The destination is currently visible
