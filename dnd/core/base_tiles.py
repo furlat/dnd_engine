@@ -1,134 +1,150 @@
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable, Tuple, DefaultDict
-from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
-from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.base_object import BaseObject
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import EventHandler, Trigger, Event
-from enum import Enum
-from random import randint
-from functools import cached_property
-from typing import Literal as TypeLiteral
-from collections import defaultdict
-from dnd.core.shadowcast import compute_fov
-from dnd.core.dijkstra import dijkstra
+"""
+Tile system for the D&D engine.
 
+The Tile class provides backwards-compatible API but delegates to GridMap internally.
+For new code, prefer using GridMap directly via `from dnd.core.gridmap import get_map`.
+"""
+
+from typing import Dict, Optional, List, Tuple
+from uuid import UUID, uuid4
+from pydantic import Field
+
+from dnd.core.base_object import BaseObject
+from dnd.core.gridmap import GridMap, TileData, get_map
 
 
 class Tile(BaseObject):
-    name: str = Field(default="Floor",description="The name of the tile")
-    position: Tuple[int,int] = Field(description="The position of the tile on the grid")
-    walkable: bool = Field(default=True,description="Whether the tile can be walked on")
-    visible: bool = Field(default=True,description="Whether the tile can be seen through")
-    sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the tile")
-    _tile_registry: ClassVar[Dict[UUID, 'Tile']] = {}
-    _tile_by_position: ClassVar[Dict[Tuple[int,int], 'Tile']] = {}
+    """
+    A tile on the game grid.
+
+    Note: This class maintains backwards compatibility but delegates to GridMap.
+    For new code, consider using GridMap directly for better performance.
+    """
+    name: str = Field(default="Floor", description="The name of the tile")
+    position: Tuple[int, int] = Field(description="The position of the tile on the grid")
+    walkable: bool = Field(default=True, description="Whether the tile can be walked on")
+    visible: bool = Field(default=True, description="Whether the tile can be seen through")
+    sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the tile")
 
     def __init__(self, **data):
-        """
-        Initialize the BaseBlock and register it in the class registry.
-
-        Args:
-            **data: Keyword arguments to initialize the BaseBlock attributes.
-        """
+        """Initialize tile and register with GridMap."""
         super().__init__(**data)
-        self.__class__._tile_registry[self.uuid] = self
-        self.__class__._tile_by_position[self.position] = self
+        # Register with GridMap
+        grid = get_map()
+        grid.set_tile(
+            self.position[0], self.position[1],
+            walkable=self.walkable,
+            visible=self.visible,
+            name=self.name,
+            sprite_name=self.sprite_name
+        )
 
     @classmethod
     def get_all_tiles(cls) -> List['Tile']:
-        return list(cls._tile_registry.values())
-    
+        """
+        Get all tiles.
+
+        Note: Returns TileData wrapped in a list for compatibility.
+        For better performance, use GridMap.get_all_tiles() directly.
+        """
+        # This is inefficient but maintains backwards compatibility
+        # New code should use GridMap directly
+        grid = get_map()
+        tiles = []
+        for pos, tile_data in grid.get_all_tiles().items():
+            # Create lightweight tile objects (not registered again)
+            tiles.append(_create_tile_view(pos, tile_data))
+        return tiles
+
     @classmethod
-    def get_tile_at_position(cls, position: Tuple[int,int]) -> Optional['Tile']:
-        return cls._tile_by_position.get(position)
-    
+    def get_tile_at_position(cls, position: Tuple[int, int]) -> Optional['Tile']:
+        """Get tile at position."""
+        grid = get_map()
+        tile_data = grid.get_tile(position[0], position[1])
+        if tile_data is None:
+            return None
+        return _create_tile_view(position, tile_data)
+
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Tile']:
-        return cls._tile_registry.get(uuid)
-    
-    @classmethod
-    def grid_size(cls) -> Tuple[int,int]:
-        tiles = cls.get_all_tiles()
-        if len(tiles) == 0:
-            return (0,0)
-        return max(tile.position[0] for tile in tiles) + 1, max(tile.position[1] for tile in tiles) + 1
-    
-    @classmethod
-    def create(cls, position: Tuple[int,int], sprite_name: Optional[str] = None, can_walk: bool = True, can_see: bool = True,name:str = "Floor") -> 'Tile':
-        tile_uuid = uuid4()
-        return cls(uuid=tile_uuid,source_entity_uuid=tile_uuid,target_entity_uuid=tile_uuid, position=position, sprite_name=sprite_name, walkable=can_walk, visible=can_see,name=name)
+        """
+        Get tile by UUID.
+
+        Note: GridMap doesn't track UUIDs, so this always returns None.
+        Use get_tile_at_position instead.
+        """
+        # GridMap doesn't track individual tile UUIDs
+        # This is kept for API compatibility but won't work
+        return None
 
     @classmethod
-    def is_visible(cls, position: Tuple[int,int]) -> bool:
-        tile = cls.get_tile_at_position(position)
-        if tile is None:
-            return False
-        return tile.visible
-    
+    def grid_size(cls) -> Tuple[int, int]:
+        """Get grid dimensions as (width, height)."""
+        grid = get_map()
+        return grid.size
+
     @classmethod
-    def is_walkable(cls, position: Tuple[int,int]) -> bool:
-        tile = cls.get_tile_at_position(position)
-        if tile is None:
-            return False
-        return tile.walkable
-    
+    def create(cls, position: Tuple[int, int], sprite_name: Optional[str] = None,
+               can_walk: bool = True, can_see: bool = True, name: str = "Floor") -> 'Tile':
+        """Create a new tile at position."""
+        tile_uuid = uuid4()
+        return cls(
+            uuid=tile_uuid,
+            source_entity_uuid=tile_uuid,
+            target_entity_uuid=tile_uuid,
+            position=position,
+            sprite_name=sprite_name,
+            walkable=can_walk,
+            visible=can_see,
+            name=name
+        )
+
+    @classmethod
+    def is_visible(cls, position: Tuple[int, int]) -> bool:
+        """Check if position allows vision."""
+        return get_map().is_visible(position[0], position[1])
+
+    @classmethod
+    def is_walkable(cls, position: Tuple[int, int]) -> bool:
+        """Check if position is walkable."""
+        return get_map().is_walkable(position[0], position[1])
+
     @classmethod
     def get_fov(cls, source_pos: Tuple[int, int], max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
-        """
-        Compute the field of view from a given position using shadowcasting.
-        
-        Args:
-            source_pos: The position to compute FOV from
-            max_distance: Maximum view distance (optional)
-            
-        Returns:
-            List of visible positions
-        """
-        visible_positions: List[Tuple[int, int]] = []
-        
-        def is_blocking(x: int, y: int) -> bool:
-            tile = cls.get_tile_at_position((x, y))
-            return tile is None or not tile.visible
-            
-        def mark_visible(x: int, y: int) -> None:
-            visible_positions.append((x, y))
-            
-        compute_fov(source_pos, is_blocking, mark_visible, max_distance)
-        return visible_positions
+        """Compute field of view from position using shadowcasting."""
+        return get_map().compute_fov(source_pos, max_distance)
 
     @classmethod
-    def get_paths(cls, start_pos: Tuple[int, int], max_distance: Optional[int] = None) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
-        """
-        Compute all possible paths from a starting position using Dijkstra's algorithm.
-        
-        Args:
-            start_pos: Starting position
-            max_distance: Maximum path distance (optional)
-            
-        Returns:
-            Tuple of (distances_dict, paths_dict) where:
-            - distances_dict maps positions to their distance from start
-            - paths_dict maps positions to the path list to reach them
-        """
-        width, height = cls.grid_size()
-        
-        def is_walkable(x: int, y: int) -> bool:
-            tile = cls.get_tile_at_position((x, y))
-            return tile is not None and tile.walkable
-            
-        return dijkstra(start_pos, is_walkable, width, height, diagonal=True, max_distance=max_distance)
+    def get_paths(cls, start_pos: Tuple[int, int], max_distance: Optional[int] = None
+                  ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
+        """Compute paths from position using Dijkstra."""
+        return get_map().compute_paths(start_pos, max_distance)
 
 
-def floor_factory(position: Tuple[int,int]) -> Tile:
-    return Tile.create(position, sprite_name="floor.png", can_walk=True, can_see=True)
+def _create_tile_view(position: Tuple[int, int], tile_data: TileData) -> Tile:
+    """Create a Tile view object without registering it again."""
+    # Temporarily disable registration by creating object directly
+    tile = object.__new__(Tile)
+    BaseObject.__init__(tile, uuid=uuid4(), source_entity_uuid=uuid4(), target_entity_uuid=uuid4())
+    tile.name = tile_data.name
+    tile.position = position
+    tile.walkable = tile_data.walkable
+    tile.visible = tile_data.visible
+    tile.sprite_name = tile_data.sprite_name
+    return tile
 
-def wall_factory(position: Tuple[int,int]) -> Tile:
-    return Tile.create(position, sprite_name="wall.png", can_walk=False, can_see=False)
 
-def water_factory(position: Tuple[int,int]) -> Tile:
-    return Tile.create(position, sprite_name="water.png", can_walk=False, can_see=True)
+# Factory functions
+def floor_factory(position: Tuple[int, int]) -> Tile:
+    """Create a floor tile."""
+    return Tile.create(position, sprite_name="floor.png", can_walk=True, can_see=True, name="Floor")
 
 
+def wall_factory(position: Tuple[int, int]) -> Tile:
+    """Create a wall tile."""
+    return Tile.create(position, sprite_name="wall.png", can_walk=False, can_see=False, name="Wall")
 
+
+def water_factory(position: Tuple[int, int]) -> Tile:
+    """Create a water tile (can't walk, can see through)."""
+    return Tile.create(position, sprite_name="water.png", can_walk=False, can_see=True, name="Water")
