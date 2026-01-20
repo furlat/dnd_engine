@@ -3,3 +3,6 @@ pytest
 fastapi
 requests
 uvicorn
+pyright
+websockets
+httpx

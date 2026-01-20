@@ -29,6 +29,7 @@ from dnd.blocks.sensory import Senses
 from dnd.core.events import AbilityName, SkillName, EventHandler, EventType, EventPhase, Trigger
 from dnd.core.base_block import ContextualConditionImmunity
 from dnd.core.base_tiles import Tile
+from dnd.core.gridmap import get_map, reset_map
 
 
 def determine_attack_outcome(roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
@@ -67,12 +68,12 @@ def determine_attack_outcome(roll: DiceRoll, ac: Union[int, ModifiableValue]) ->
             return AttackOutcome.MISS
         
 class EntityConfig(BaseModel):
-    ability_scores: AbilityScoresConfig = Field(default_factory=lambda: AbilityScoresConfig,description="Ability scores for the entity")
-    skill_set: SkillSetConfig = Field(default_factory=lambda: SkillSetConfig,description="Skill set for the entity")
-    saving_throws: SavingThrowSetConfig = Field(default_factory=lambda: SavingThrowSetConfig,description="Saving throws for the entity")
-    health: HealthConfig = Field(default_factory=lambda: HealthConfig,description="Health for the entity")
-    equipment: EquipmentConfig = Field(default_factory=lambda: EquipmentConfig,description="Equipment for the entity")
-    action_economy: ActionEconomyConfig = Field(default_factory=lambda: ActionEconomyConfig,description="Action economy for the entity")
+    ability_scores: AbilityScoresConfig = Field(default_factory=AbilityScoresConfig,description="Ability scores for the entity")
+    skill_set: SkillSetConfig = Field(default_factory=SkillSetConfig,description="Skill set for the entity")
+    saving_throws: SavingThrowSetConfig = Field(default_factory=SavingThrowSetConfig,description="Saving throws for the entity")
+    health: HealthConfig = Field(default_factory=HealthConfig,description="Health for the entity")
+    equipment: EquipmentConfig = Field(default_factory=EquipmentConfig,description="Equipment for the entity")
+    action_economy: ActionEconomyConfig = Field(default_factory=ActionEconomyConfig,description="Action economy for the entity")
     proficiency_bonus: int = Field(default=0,description="Proficiency bonus for the entity")
     proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
@@ -106,12 +107,17 @@ class Entity(BaseBlock):
         super().__init__(**data)
         self.__class__._entity_registry[self.uuid] = self
         self.__class__._entity_by_position[self.position].append(self)
+        # Also register with GridMap for spatial queries
+        get_map().register_entity(self.uuid, self.position)
 
     @classmethod
-    def update_entity_position(cls, entity: 'Entity',new_position: Tuple[int,int]):
+    def update_entity_position(cls, entity: 'Entity', new_position: Tuple[int, int]):
+        """Update entity position in both class registry and GridMap."""
         cls._entity_by_position[entity.position].remove(entity)
         cls._entity_by_position[new_position].append(entity)
         entity._set_position(new_position)
+        # Also update GridMap (handles dirty tracking)
+        get_map().move_entity(entity.uuid, new_position)
 
     @classmethod
     def register_entity(cls, entity: 'Entity'):
@@ -652,12 +658,13 @@ class Entity(BaseBlock):
         - Visible cells within max_distance using shadowcast
         - Paths to visible cells using dijkstra
         - Entities present in visible cells
-        
+
+        After updating, subscribes to visible cells so this entity
+        receives SpatialChangeEvents when something changes in its FOV.
+
         Args:
             max_distance: Maximum view/movement distance (default 10)
         """
-
-        
         visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(self.position, self.senses.seen, max_distance)
         # Update the senses block
         self.senses.update_senses(
@@ -666,9 +673,12 @@ class Entity(BaseBlock):
             walkable=walkable,
             paths=filtered_paths
         )
+        # Subscribe to visible cells for spatial change notifications
+        visible_cells = set(visible_dict.keys())
+        get_map().subscribe_to_cells(self.uuid, visible_cells)
 
     @classmethod
     def update_all_entities_senses(cls, max_distance: int = 10):
-        """ Update the senses for all entities """
+        """Update the senses for all entities."""
         for entity in cls.get_all_entities():
             entity.update_entity_senses(max_distance)

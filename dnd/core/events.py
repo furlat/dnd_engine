@@ -6,7 +6,7 @@ it introduces and Event qeueue which is the source of ground truth information f
 from enum import Enum
 from logging import handlers
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal as TypeLiteral, Union,List, Optional, Dict, Any, Self, Literal, TypeVar, Protocol, runtime_checkable
+from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Any, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple
 from dnd.core.values import ModifiableValue
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
@@ -90,7 +90,7 @@ class EventType(str, Enum):
 
     #Trigger events
     TRIGGER_EVENT = "trigger_event"
-    
+
     #Dice roll events
     DICE_ROLL = "dice_roll"
     DICE_ROLL_RESULT = "dice_roll_result"
@@ -99,6 +99,20 @@ class EventType(str, Enum):
     ENEMY_SPOTTED = "enemy_spotted"
     ENEMY_KILLED = "enemy_killed"
     ENEMY_ENGAGED = "enemy_engaged"
+
+    # Spatial events (for GridMap subscriptions)
+    SPATIAL_ENTITY_ENTERED = "spatial_entity_entered"  # Entity moved into a cell
+    SPATIAL_ENTITY_LEFT = "spatial_entity_left"        # Entity left a cell
+    SPATIAL_TILE_CHANGED = "spatial_tile_changed"      # Tile properties changed
+
+
+class SpatialChangeType(str, Enum):
+    """Types of spatial changes that can occur."""
+    ENTITY_ENTERED = "entity_entered"
+    ENTITY_LEFT = "entity_left"
+    TILE_CHANGED = "tile_changed"
+    TILE_CREATED = "tile_created"
+    TILE_REMOVED = "tile_removed"
 
 
 class EventPhase(str, Enum):
@@ -375,6 +389,27 @@ class EventQueue:
     _event_handlers_by_trigger : Dict[Trigger, List[EventHandler]] = defaultdict(list)
     _event_handlers_by_simple_trigger : Dict[Trigger, List[EventHandler]] = defaultdict(list)
     _event_handlers_by_source_entity_uuid : Dict[UUID, List[EventHandler]] = defaultdict(list)
+
+    # Passive event callbacks (for monitoring, logging, websocket broadcast)
+    # These are called for ALL events after storage, cannot modify events
+    _on_event_callbacks: List[Callable[['Event'], None]] = []
+
+    @classmethod
+    def add_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
+        """Add a callback that fires for every event after storage.
+
+        Unlike EventHandlers, these callbacks:
+        - Fire for ALL events regardless of phase
+        - Cannot modify or cancel events
+        - Are for passive monitoring (logging, websocket broadcast, etc.)
+        """
+        cls._on_event_callbacks.append(callback)
+
+    @classmethod
+    def remove_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
+        """Remove an event callback."""
+        if callback in cls._on_event_callbacks:
+            cls._on_event_callbacks.remove(callback)
     @classmethod
     def register(cls, event: Event) -> Event:
         """Register an event and notify listeners"""
@@ -440,17 +475,24 @@ class EventQueue:
         
         # By phase
         cls._events_by_phase[event.phase].append(event)
-        
+
         # By source
         cls._events_by_source[event.source_entity_uuid].append(event)
-        
+
         # By target (if applicable)
         if event.target_entity_uuid:
             cls._events_by_target[event.target_entity_uuid].append(event)
-        
+
         # Add to chronological list and sort
         cls._all_events.append(event)
         cls._all_events.sort(key=lambda e: e.timestamp)
+
+        # Notify passive callbacks (for monitoring/logging)
+        for callback in cls._on_event_callbacks:
+            try:
+                callback(event)
+            except Exception:
+                pass  # Don't let callback errors affect event processing
     
     @classmethod
     def _get_handlers_for_event(cls, event: Event) -> List[EventHandler]:
@@ -593,6 +635,73 @@ class SkillCheckEvent(D20Event):
     name: str = Field(default="Skill Check",description="A skill check event")
     skill_name: SkillName = Field(description="The skill that is being checked")
     event_type: EventType = Field(default=EventType.SKILL_CHECK,description="The type of event")
+
+
+class SpatialChangeEvent(Event):
+    """
+    Event fired when something changes at a grid position.
+
+    Used for:
+    - Entity sense updates (entities subscribe to visible cells)
+    - UI/renderer updates (websocket broadcasts these events)
+
+    Entities can subscribe to cells via EventHandler with triggers matching:
+    - event_type: SPATIAL_ENTITY_ENTERED, SPATIAL_ENTITY_LEFT, or SPATIAL_TILE_CHANGED
+    - event_phase: COMPLETION (spatial changes are instantaneous)
+    """
+    name: str = Field(default="Spatial Change", description="A spatial change event")
+    event_type: EventType = Field(default=EventType.SPATIAL_ENTITY_ENTERED, description="Type of spatial change")
+    change_type: SpatialChangeType = Field(description="Specific type of spatial change")
+    position: Tuple[int, int] = Field(description="Grid position where change occurred")
+    entity_uuid: Optional[UUID] = Field(default=None, description="UUID of entity involved (if any)")
+    old_position: Optional[Tuple[int, int]] = Field(default=None, description="Previous position (for movement)")
+    tile_walkable: Optional[bool] = Field(default=None, description="New walkable state (for tile changes)")
+    tile_visible: Optional[bool] = Field(default=None, description="New visible state (for tile changes)")
+
+    @classmethod
+    def entity_entered(cls, position: Tuple[int, int], entity_uuid: UUID,
+                       old_position: Optional[Tuple[int, int]] = None,
+                       source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for an entity entering a cell."""
+        return cls(
+            source_entity_uuid=source_entity_uuid or entity_uuid,
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            change_type=SpatialChangeType.ENTITY_ENTERED,
+            position=position,
+            entity_uuid=entity_uuid,
+            old_position=old_position,
+            phase=EventPhase.COMPLETION
+        )
+
+    @classmethod
+    def entity_left(cls, position: Tuple[int, int], entity_uuid: UUID,
+                    new_position: Optional[Tuple[int, int]] = None,
+                    source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for an entity leaving a cell."""
+        return cls(
+            source_entity_uuid=source_entity_uuid or entity_uuid,
+            event_type=EventType.SPATIAL_ENTITY_LEFT,
+            change_type=SpatialChangeType.ENTITY_LEFT,
+            position=position,
+            entity_uuid=entity_uuid,
+            old_position=new_position,  # Store new position in old_position field for reference
+            phase=EventPhase.COMPLETION
+        )
+
+    @classmethod
+    def tile_changed(cls, position: Tuple[int, int], walkable: bool, visible: bool,
+                     source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for a tile property change."""
+        return cls(
+            source_entity_uuid=source_entity_uuid or uuid4(),
+            event_type=EventType.SPATIAL_TILE_CHANGED,
+            change_type=SpatialChangeType.TILE_CHANGED,
+            position=position,
+            tile_walkable=walkable,
+            tile_visible=visible,
+            phase=EventPhase.COMPLETION
+        )
+
 
 class RangeType(str, Enum):
     REACH = "Reach"
