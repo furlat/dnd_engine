@@ -6,15 +6,14 @@ This script verifies that events can be serialized to JSON for websocket transmi
 
 import json
 from uuid import uuid4
-from typing import Any, Dict
 
 from dnd.core.events import (
-    Event, EventType, EventPhase,
-    SpatialChangeEvent, SpatialChangeType,
+    Event, EventType,
+    SpatialChangeEvent,
     SavingThrowEvent, SkillCheckEvent,
     EventQueue
 )
-from dnd.actions import AttackEvent, MovementEvent
+
 from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity, EntityConfig
 
@@ -129,7 +128,7 @@ def test_events_from_actions():
 
     # Create an entity (this will generate spatial events)
     entity_uuid = uuid4()
-    entity = Entity.create(
+    _ = Entity.create(
         source_entity_uuid=entity_uuid,
         name="TestEntity",
         config=EntityConfig(position=(3, 3))

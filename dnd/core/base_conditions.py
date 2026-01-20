@@ -2,7 +2,7 @@ from uuid import UUID, uuid4
 from pydantic import Field, computed_field
 from typing import Dict, Any, Optional, Self, Union, List, Tuple
 
-from pydantic import BaseModel, model_validator
+from pydantic import  model_validator
 from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
@@ -41,8 +41,8 @@ class Duration(BaseObject):
             if self.duration is not None:
                 raise ValueError(f"Duration must be None when duration_type is UNTIL_LONG_REST instead of {self.duration}")
         elif self.duration_type == DurationType.ON_CONDITION:
-            if not isinstance(self.duration,ContextAwareCondition):
-                raise ValueError(f"Duration must be a ContextAwareCondition when duration_type is ON_CONDITION instead of {type(self.duration)}")
+            if not callable(self.duration):
+                raise ValueError(f"Duration must be a ContextAwareCondition (callable) when duration_type is ON_CONDITION instead of {type(self.duration)}")
         return self
     
     @computed_field
@@ -53,7 +53,7 @@ class Duration(BaseObject):
             assert isinstance(self.duration,int)
             return self.duration >= 0
         elif self.duration_type == DurationType.ON_CONDITION:
-            assert isinstance(self.duration,ContextAwareCondition)
+            assert callable(self.duration)
             duration = self.duration(self.source_entity_uuid,self.target_entity_uuid,self.context)
             if duration is None:
                 return False

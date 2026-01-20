@@ -1,16 +1,13 @@
-from typing import Dict, Optional, Any, List, Self, Literal,ClassVar, Union, Callable, Tuple
+from typing import Optional, List, Self, Literal, Union, Tuple
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator, computed_field,field_validator
-from dnd.core.values import ModifiableValue, StaticValue
-from dnd.core.dice import Dice, DiceRoll, RollType, AttackOutcome
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ContextAwareCondition, saving_throws, ResistanceModifier
+from pydantic import BaseModel, Field, model_validator
+from dnd.core.values import ModifiableValue
+from dnd.core.modifiers import NumericalModifier, DamageType 
 from dnd.blocks.abilities import  AbilityScores
-from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, SkillName, Damage
+from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, Damage
 
 from enum import Enum
-from random import randint
-from functools import cached_property
-from typing import Literal as TypeLiteral
+
 import copy
 
 from dnd.core.base_block import BaseBlock
@@ -597,7 +594,7 @@ class Equipment(BaseBlock):
         item.source_entity_uuid = self.source_entity_uuid
         
         # Update any ModifiableValue fields to use the new source_entity_uuid
-        for field_name, field_value in item.__dict__.items():
+        for _, field_value in item.__dict__.items():
             if isinstance(field_value, ModifiableValue):
                 field_value.source_entity_uuid = self.source_entity_uuid
             elif isinstance(field_value, list):
@@ -609,7 +606,8 @@ class Equipment(BaseBlock):
         if isinstance(item, Ring):
             if slot not in (RingSlot.LEFT, RingSlot.RIGHT):
                 raise ValueError("Must specify LEFT or RIGHT slot for rings")
-            
+            assert slot is not None  # Type narrowing after validation
+
             #check if the ring is already equipped in case unequip the previous ring
             if slot == RingSlot.LEFT and self.ring_left is not None:
                 self.unequip(RingSlot.LEFT,)
@@ -639,7 +637,8 @@ class Equipment(BaseBlock):
         if isinstance(item, (Weapon, Shield)):
             if slot not in (WeaponSlot.MAIN_HAND, WeaponSlot.OFF_HAND):
                 slot = WeaponSlot.MAIN_HAND
-            
+            assert slot is not None  # Type narrowing after validation
+
             #check if the weapon is already equipped in case unequip the previous weapon
             if slot == WeaponSlot.MAIN_HAND and self.weapon_main_hand is not None:
                 self.unequip(WeaponSlot.MAIN_HAND)
@@ -680,6 +679,7 @@ class Equipment(BaseBlock):
 
         if slot not in slot_mapping:
             raise ValueError(f"Invalid equipment slot: {slot}")
+        assert slot is not None  # Type narrowing after validation
 
         #check if the armor is already equipped in case unequip the previous armor
         if slot in slot_mapping and self.body_armor is not None:
@@ -697,6 +697,7 @@ class Equipment(BaseBlock):
         if event.phase_to(EventPhase.EXECUTION).canceled:
             return
 
+        assert isinstance(slot, BodyPart)  # Type narrowing - validated at line 680
         attribute_name = slot_mapping[slot]
         setattr(self, attribute_name, item)
         

@@ -9,17 +9,14 @@ This tests:
 """
 
 from uuid import uuid4
-from typing import List, Tuple
-from collections import defaultdict
+
 
 # Core imports
 from dnd.core.gridmap import get_map, reset_map, GridMap
 from dnd.core.events import (
-    EventQueue, EventType, EventPhase, SpatialChangeEvent, SpatialChangeType,
-    EventHandler, Trigger
+    EventQueue, EventType, SpatialChangeEvent,
 )
 from dnd.entity import Entity, EntityConfig
-from dnd.blocks.abilities import AbilityScoresConfig
 
 
 def clear_state():
@@ -100,7 +97,7 @@ def test_spatial_events_on_movement():
     print("\n=== Test: Spatial Events on Movement ===")
     clear_state()
 
-    grid = create_simple_grid()
+    create_simple_grid()  # Creates grid with side effects
 
     # Create entity
     entity_uuid = uuid4()
@@ -110,8 +107,8 @@ def test_spatial_events_on_movement():
         config=EntityConfig(position=(2, 2))
     )
 
-    # Record events before movement
-    events_before = len(EventQueue.get_events_by_type(EventType.SPATIAL_ENTITY_ENTERED))
+    # Record events before movement (entity creation also fires an entered event)
+    _ = len(EventQueue.get_events_by_type(EventType.SPATIAL_ENTITY_ENTERED))
 
     # Move entity
     old_pos = entity.position
@@ -273,7 +270,7 @@ def test_entity_senses_with_gridmap():
     )
 
     entity2_uuid = uuid4()
-    entity2 = Entity.create(
+    _ = Entity.create(
         source_entity_uuid=entity2_uuid,
         name="Target",
         config=EntityConfig(position=(9, 7))
@@ -305,7 +302,7 @@ def test_no_duplicate_events():
     print("\n=== Test: No Duplicate Events ===")
     clear_state()
 
-    grid = create_simple_grid()
+    create_simple_grid()  # Creates grid with side effects
 
     # Count all events before
     total_before = len(EventQueue._all_events)

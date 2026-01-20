@@ -1,6 +1,6 @@
 import math
 from fractions import Fraction
-from typing import Tuple, Callable, Optional, Iterator, Union
+from typing import Tuple, Callable, Optional, Iterator
 
 def compute_fov(
     origin: Tuple[int, int],
@@ -78,7 +78,7 @@ def slope(tile: Tuple[int, int]) -> Fraction:
     return Fraction(2 * col - 1, 2 * row_depth)
 
 def is_symmetric(row: Row, tile: Tuple[int, int]) -> bool:
-    row_depth, col = tile
+    _, col = tile
     return (col >= row.depth * row.start_slope
             and col <= row.depth * row.end_slope)
 
