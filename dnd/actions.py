@@ -1,4 +1,3 @@
-from tkinter import NO
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost,BaseCost, ActionEvent
 from dnd.core.values import ModifiableValue
 
