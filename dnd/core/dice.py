@@ -262,7 +262,8 @@ class Dice(BaseModel):
         Returns:
             Tuple[int, List[int]]: A tuple containing the highest roll result and a list of all roll results.
         """
-        rolls = [random.randint(1, self.value) for _ in range(self.count)]
+        # Always roll 2 dice for advantage, regardless of self.count
+        rolls = [random.randint(1, self.value) for _ in range(2)]
         return max(rolls), rolls
 
     def _roll_with_disadvantage(self) -> Tuple[int, List[int]]:
@@ -274,7 +275,8 @@ class Dice(BaseModel):
         Returns:
             Tuple[int, List[int]]: A tuple containing the lowest roll result and a list of all roll results.
         """
-        rolls = [random.randint(1, self.value) for _ in range(self.count)]
+        # Always roll 2 dice for disadvantage, regardless of self.count
+        rolls = [random.randint(1, self.value) for _ in range(2)]
         return min(rolls), rolls
 
     def _roll(self, crit: bool = False) -> List[Tuple[int, List[int]]]:
@@ -310,8 +312,13 @@ class Dice(BaseModel):
             results = [roll[0] for roll in self._roll(crit=(self.attack_outcome == AttackOutcome.CRIT))]
             total = sum(results) + self.bonus.normalized_score
         else:
-            results = self._roll()[0][0]
-            total = results + self.bonus.normalized_score
+            roll_result = self._roll()[0]
+            # roll_result is (selected_value, [all_rolls]) for adv/disadv, or (value, []) for normal
+            selected_value = roll_result[0]
+            all_rolls = roll_result[1]
+            # Store all individual rolls if advantage/disadvantage, otherwise just the single roll
+            results = all_rolls if all_rolls else [selected_value]
+            total = selected_value + self.bonus.normalized_score
 
         return DiceRoll(
             dice_uuid=self.uuid,

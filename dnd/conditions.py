@@ -185,6 +185,26 @@ class Dodging(BaseCondition):
             return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+class Disengaging(BaseCondition):
+    """
+    A disengaging creature's movement doesn't provoke opportunity attacks.
+
+    This condition has no modifiers - it's checked directly by the opportunity
+    attack handler in reactions.py.
+    """
+    name: str = "Disengaging"
+    description: str = "Your movement doesn't provoke opportunity attacks for the rest of the turn."
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+        # No modifiers to apply - this condition is checked by opportunity attack logic
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied Disengaging to {self.target_entity_uuid}"
+        )
+        return [], [], [], effect_event
+
+
 class Frightened(BaseCondition):
     """ A frightened creature has disadvantage on attack rolls and ability checks and can not move while the frightener is in sight"""
     name: str = "Frightened"

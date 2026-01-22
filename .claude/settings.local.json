@@ -8,7 +8,15 @@
       "mcp__ide__getDiagnostics",
       "Bash(python:*)",
       "Bash(ls:*)",
-      "Bash(python3 -m py_compile:*)"
+      "Bash(python3 -m py_compile:*)",
+      "Bash(python3:*)",
+      "Bash(curl:*)",
+      "Bash(__NEW_LINE_de67dfa6b99aab7e__ echo \"=== 1. Root endpoint ===\")",
+      "Bash(__NEW_LINE_24ba1819c7a17f9e__ echo \"\")",
+      "Bash(__NEW_LINE_4fb0a2ef61967796__ echo \"\")",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(pkill:*)"
     ]
   }
 }

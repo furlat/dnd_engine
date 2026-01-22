@@ -1,5 +1,6 @@
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost,BaseCost, ActionEvent
 from dnd.core.values import ModifiableValue
+from dnd.core.base_conditions import DurationType
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType,Event, EventType, WeaponSlot, Range, Damage,  EventPhase
@@ -7,6 +8,7 @@ from pydantic import Field
 from typing import Optional, List, TypeVar,  Tuple
 from uuid import UUID
 from dnd.entity import Entity, determine_attack_outcome
+from dnd.conditions import Dashing, Dodging, Disengaging, Prone
 from collections import OrderedDict
 
 
@@ -82,7 +84,10 @@ class Move(BaseAction):
 
     def _setup_costs_from_path(self):
         if self.path is not None and self.use_movement_cost:
-            self.costs.append(Cost(name="Movement Cost",cost_type="movement",cost=len(self.path),evaluator=entity_action_economy_cost_evaluator))
+            # Path includes starting position, so actual squares moved = len - 1
+            # Each square = 5 feet in D&D 5e
+            feet_cost = (len(self.path) - 1) * 5
+            self.costs.append(Cost(name="Movement Cost",cost_type="movement",cost=feet_cost,evaluator=entity_action_economy_cost_evaluator))
 
     def _setup_path(self):
         """Check if the costs of the action are valid and sets up the path and the costs"""
@@ -174,7 +179,7 @@ class Move(BaseAction):
             return effect_event
             
         Entity.update_entity_position(source_entity,execution_event.end_position)
-        Entity.update_all_entities_senses() #later we will only update the senses of the entities that are affected by the movement 
+        Entity.update_all_entities_senses(max_distance=20)  # Use consistent vision range 
         #now we declare the application of the effect
         
 
@@ -406,6 +411,325 @@ class Attack(BaseAction):
         """Apply the costs of the action"""
         return entity_action_economy_cost_applier(completion_event,self.source_entity_uuid)
 
+
+# =============================================================================
+# Turn-Based Actions: Dash, Dodge, Disengage
+# =============================================================================
+
+class Dash(BaseAction):
+    """
+    Take the Dash action - gain extra movement equal to your speed.
+
+    Applies the Dashing condition which adds movement equal to base speed.
+    Lasts until the start of your next turn (duration=1, advanced at turn start).
+    """
+    name: str = Field(default="Dash")
+    description: str = Field(default="Gain extra movement equal to your speed")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Dash Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        return ActionEvent(
+            name=self.name,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,  # Self-targeted
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Create Dashing condition with 1 round duration
+        dashing = Dashing(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid
+        )
+        dashing.duration.duration_type = DurationType.ROUNDS
+        dashing.duration.duration = 1
+
+        entity.add_condition(dashing)
+
+        base_movement = entity.action_economy.get_base_value("movement")
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Applied Dashing - gained {base_movement}ft extra movement"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+class Dodge(BaseAction):
+    """
+    Take the Dodge action - focus on avoiding attacks.
+
+    Applies the Dodging condition which gives:
+    - Disadvantage on attack rolls against you (if you can see the attacker)
+    - Advantage on Dexterity saving throws
+
+    Lasts until the start of your next turn (duration=1, advanced at turn start).
+    """
+    name: str = Field(default="Dodge")
+    description: str = Field(default="Attackers have disadvantage, advantage on DEX saves")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Dodge Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        return ActionEvent(
+            name=self.name,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Create Dodging condition with 1 round duration
+        dodging = Dodging(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid
+        )
+        dodging.duration.duration_type = DurationType.ROUNDS
+        dodging.duration.duration = 1
+
+        entity.add_condition(dodging)
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message="Applied Dodging - attackers have disadvantage"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+class Disengage(BaseAction):
+    """
+    Take the Disengage action - your movement doesn't provoke opportunity attacks.
+
+    Applies the Disengaging condition which prevents opportunity attacks.
+    Lasts until the start of your next turn (duration=1, advanced at turn start).
+    """
+    name: str = Field(default="Disengage")
+    description: str = Field(default="Movement doesn't provoke opportunity attacks")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Disengage Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        return ActionEvent(
+            name=self.name,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Create Disengaging condition with 1 round duration
+        disengaging = Disengaging(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid
+        )
+        disengaging.duration.duration_type = DurationType.ROUNDS
+        disengaging.duration.duration = 1
+
+        entity.add_condition(disengaging)
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message="Applied Disengaging - movement won't provoke OAs"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+# =============================================================================
+# Prone Actions: Stand Up, Drop Prone
+# =============================================================================
+
+class StandUp(BaseAction):
+    """
+    Stand up from prone - costs half your movement speed.
+
+    Removes the Prone condition. Can only be used while Prone.
+    """
+    name: str = Field(default="Stand Up")
+    description: str = Field(default="Stand up from prone")
+    # Cost is set dynamically based on entity's base movement
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Calculate cost based on entity's base movement
+        entity = Entity.get(self.source_entity_uuid)
+        if entity:
+            base_movement = entity.action_economy.get_base_value("movement")
+            half_movement = base_movement // 2
+            self.costs = [Cost(
+                name="Stand Up Cost",
+                cost_type="movement",
+                cost=half_movement,
+                evaluator=entity_action_economy_cost_evaluator
+            )]
+        else:
+            self.costs = [Cost(
+                name="Stand Up Cost",
+                cost_type="movement",
+                cost=15,  # Default half of 30
+                evaluator=entity_action_economy_cost_evaluator
+            )]
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        return ActionEvent(
+            name=self.name,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        # Must be Prone to stand up
+        if "Prone" not in entity.active_conditions:
+            return declaration_event.cancel(status_message="Not prone - cannot stand up")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Remove Prone condition
+        entity.remove_condition("Prone")
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message="Stood up from prone"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+class DropProne(BaseAction):
+    """
+    Drop prone - free action (no cost).
+
+    Applies the Prone condition. Can only be used while not Prone.
+    """
+    name: str = Field(default="Drop Prone")
+    description: str = Field(default="Drop to the ground")
+    costs: List[Cost] = Field(default_factory=list)  # Free action
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        return ActionEvent(
+            name=self.name,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        # Must not be Prone already
+        if "Prone" in entity.active_conditions:
+            return declaration_event.cancel(status_message="Already prone")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Apply Prone condition (permanent until removed by StandUp)
+        prone = Prone(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid
+        )
+        # Prone is permanent (no duration) - removed by StandUp action
+        entity.add_condition(prone)
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message="Dropped prone"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        # No costs for free action, but still call the applier for consistency
+        return completion_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message="No costs for Drop Prone"
+        )
 
 
 #factories, these are redundant examples to create the same actions using the structured action approach
