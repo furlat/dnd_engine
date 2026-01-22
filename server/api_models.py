@@ -198,16 +198,63 @@ class APICurrentTurn(BaseModel):
     movement_remaining: int = 0
 
 
-# Request models for action endpoints
+# =============================================================================
+# Session Models
+# =============================================================================
+
+class CreateSessionRequest(BaseModel):
+    """Request to create a new player session."""
+    player_type: str  # "human" or "claude"
+    name: Optional[str] = None  # Display name (optional)
+
+
+class CreateSessionResponse(BaseModel):
+    """Response from creating a session."""
+    session_id: str
+    player_type: str
+    name: str
+
+
+class SessionPingResponse(BaseModel):
+    """Response from session ping."""
+    status: str
+    session_id: str
+    connection_status: str
+    is_my_turn: bool
+    active_entity_uuid: Optional[str]
+    active_entity_name: Optional[str]
+    controlled_entities: List[str]
+
+
+class JoinGameRequest(BaseModel):
+    """Request to join a game with a session."""
+    session_id: str
+    entity_uuids: Optional[List[str]] = None  # Entities to control (optional, auto-assign if not provided)
+
+
+class JoinGameResponse(BaseModel):
+    """Response from joining a game."""
+    success: bool
+    game_id: str
+    session_id: str
+    controlled_entities: List[str]
+    message: str
+
+
+# =============================================================================
+# Request models for action endpoints (with session support)
+# =============================================================================
 
 class MoveRequest(BaseModel):
     """Request body for move action."""
+    session_id: str  # Required: session performing the action
     entity_uuid: str
     position: Tuple[int, int]
 
 
 class AttackRequest(BaseModel):
     """Request body for attack action."""
+    session_id: str  # Required: session performing the action
     entity_uuid: str
     target_uuid: str
     weapon_slot: str = "main_hand"  # "main_hand" or "off_hand"
@@ -215,6 +262,7 @@ class AttackRequest(BaseModel):
 
 class SimpleActionRequest(BaseModel):
     """Request body for simple actions (dash, dodge, disengage, end-turn)."""
+    session_id: str  # Required: session performing the action
     entity_uuid: str
 
 

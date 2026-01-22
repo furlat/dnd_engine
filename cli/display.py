@@ -174,8 +174,14 @@ def show_map(
     console.print(Panel(content, title=title, box=box.ROUNDED))
 
 
-def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]]):
-    """Display turn information and entity status."""
+def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]], is_my_turn: bool = None):
+    """Display turn information and entity status.
+
+    Args:
+        turn: Turn data from API
+        entities: List of entity data
+        is_my_turn: Whether it's THIS player's turn. If None, falls back to is_human_turn.
+    """
     # Find current entity
     current_uuid = turn.get("current_entity_uuid")
     current = next((e for e in entities if e["uuid"] == current_uuid), None)
@@ -184,9 +190,9 @@ def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]]):
         console.print("[red]No current entity[/red]")
         return
 
-    # Turn header
-    is_human = turn.get("is_human_turn", False)
-    turn_text = "[bold green]YOUR TURN[/bold green]" if is_human else "[bold red]ENEMY TURN[/bold red]"
+    # Turn header - use explicit is_my_turn if provided, else fall back to is_human_turn
+    my_turn = is_my_turn if is_my_turn is not None else turn.get("is_human_turn", False)
+    turn_text = "[bold green]YOUR TURN[/bold green]" if my_turn else "[bold red]OPPONENT'S TURN[/bold red]"
 
     console.print(Panel(
         f"Round [bold]{turn['round_number']}[/bold] - {current['name']} - {turn_text}",
@@ -204,7 +210,7 @@ def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]]):
     for e in entities:
         is_current = e["uuid"] == current_uuid
         name = f"[bold]{e['name']}[/bold]" if is_current else e['name']
-        if e["uuid"] == current_uuid and is_human:
+        if e["uuid"] == current_uuid and my_turn:
             name = f"[green]{name}[/green]"
         elif e.get("is_dead"):
             name = f"[dim strikethrough]{e['name']}[/dim strikethrough]"
@@ -224,8 +230,8 @@ def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]]):
 
     console.print(table)
 
-    # Action economy for current entity if human turn
-    if is_human:
+    # Action economy for current entity if it's my turn
+    if my_turn:
         console.print(
             f"\n[bold]Action Economy:[/bold] "
             f"Actions: [cyan]{turn['actions_remaining']}[/cyan]  "
@@ -308,6 +314,88 @@ def format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attac
         adv_text = ""
 
     return f"  {adv_text}Attack Roll: {rolls_display} {bonus_str} = [bold]{attack_total}[/bold] vs AC [bold]{target_ac}[/bold]"
+
+
+def show_opponent_action(entry: Dict[str, Any]):
+    """
+    Display an opponent's action from a combat log entry with rich formatting.
+
+    Similar to show_action_result but for combat log entries.
+    """
+    entry_type = entry.get("type", "")
+    message = entry.get("message", "")
+    details = entry.get("details", {})
+
+    if entry_type == "attack":
+        attacker = details.get("attacker", "Opponent")
+        target_name = details.get("target", "Unknown")
+        weapon = details.get("weapon", "weapon")
+        d20 = details.get("d20")
+        all_d20_rolls = details.get("all_d20_rolls", [])
+        advantage_status = details.get("advantage_status", "none")
+        attack_bonus = details.get("attack_bonus", 0)
+        attack_total = details.get("attack_total")
+        target_ac = details.get("target_ac")
+        outcome = (details.get("outcome") or "").lower()
+        total_damage = details.get("total_damage", 0)
+        target_hp = details.get("target_hp")
+
+        # Attack header
+        console.print(f"\n[bold red]{attacker}[/bold red] attacks [bold cyan]{target_name}[/bold cyan] with [white]{weapon}[/white]")
+
+        # Roll breakdown
+        if d20 is not None and attack_total is not None and target_ac is not None:
+            console.print(format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total, target_ac))
+
+        # Outcome
+        if outcome == "crit":
+            console.print(f"  Result: [bold yellow]*** CRITICAL HIT! ***[/bold yellow]")
+        elif outcome == "hit":
+            console.print(f"  Result: [bold green]HIT![/bold green]")
+        elif outcome == "crit miss":
+            console.print(f"  Result: [bold red]CRITICAL MISS![/bold red]")
+        else:
+            console.print(f"  Result: [dim]MISS[/dim]")
+
+        # Damage if hit
+        if outcome in ("hit", "crit") and total_damage > 0:
+            console.print(f"  Damage: [bold red]{total_damage}[/bold red]")
+
+        # Target HP
+        if target_hp is not None:
+            console.print(f"  {target_name} HP: [red]{target_hp}[/red]")
+
+    elif entry_type == "move":
+        entity = details.get("entity", "Opponent")
+        to_pos = details.get("to", [])
+        console.print(f"\n[yellow]{entity}[/yellow] moves to {tuple(to_pos)}")
+
+    elif entry_type == "opportunity_attack":
+        attacker = details.get("attacker", "Opponent")
+        target_name = details.get("target", "Unknown")
+        outcome = (details.get("outcome") or "").lower()
+        total_damage = details.get("total_damage", 0)
+        console.print(f"\n[red](Opportunity Attack)[/red] {attacker} attacks {target_name}!")
+        if outcome in ("hit", "crit"):
+            console.print(f"  Result: [green]HIT![/green] for [red]{total_damage}[/red] damage")
+        else:
+            console.print(f"  Result: [dim]MISS[/dim]")
+
+    elif entry_type == "action":
+        # Generic action (dash, dodge, disengage)
+        console.print(f"\n[yellow]{message}[/yellow]")
+
+    elif entry_type == "death":
+        console.print(f"\n[bold red]{message}[/bold red]")
+
+    elif entry_type == "turn_end":
+        # Don't need to show turn end separately
+        pass
+
+    else:
+        # Unknown type, just show message
+        if message:
+            console.print(f"[dim]{message}[/dim]")
 
 
 def show_action_result(result: Dict[str, Any]):

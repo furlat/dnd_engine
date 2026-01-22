@@ -108,7 +108,8 @@ other_actions:
 See `CLI_API_REFERENCE.md` for full API documentation.
 
 **Key endpoints**:
-- `POST /simulation/start-human` - Start game
+- `POST /simulation/start-human` - Start game (player vs AI)
+- `POST /simulation/start-pvp` - Start PvP game (both human controlled)
 - `GET /state` - Full game state
 - `GET /visibility` - Entity visibility data
 - `GET /entity/{uuid}/available-actions` - Available actions
@@ -117,13 +118,14 @@ See `CLI_API_REFERENCE.md` for full API documentation.
 - `POST /action/dash` - Dash
 - `POST /action/dodge` - Dodge
 - `POST /action/disengage` - Disengage
-- `POST /action/end-turn` - End turn (includes `ai_actions` with paths)
+- `POST /action/end-turn` - End turn (includes `ai_actions` with paths in AI mode)
 
 ### Files Structure
 
 ```
 cli/
 ├── __main__.py      # Module entry point
+├── agent.py         # Non-interactive CLI for Claude agent
 ├── api_client.py    # HTTP client for server
 ├── commands.py      # Command parsing and execution
 ├── display.py       # Rich-based ASCII rendering
@@ -140,14 +142,67 @@ server/
 # Terminal 1: Start server
 python -m server.event_server --force
 
-# Terminal 2: Start CLI
+# Terminal 2: Start CLI (player vs AI)
 python -m cli play
 ```
+
+### PvP Mode (User vs Claude)
+
+PvP mode allows Claude to play against a human user via the agent CLI.
+
+```bash
+# Terminal 1: Start server
+python -m server.event_server --force
+
+# Terminal 2: User starts PvP game via regular CLI
+python -m cli play
+# Then use "start-pvp" command (or call POST /simulation/start-pvp)
+
+# Claude uses agent CLI to control the Skeleton:
+python -m cli.agent state         # See board state
+python -m cli.agent actions       # See available actions
+python -m cli.agent move 5 3      # Move to position
+python -m cli.agent attack 0      # Attack target #0
+python -m cli.agent end           # End turn
+```
+
+**Agent CLI Commands:**
+- `state` - Show game state (map, entities, whose turn)
+- `actions` - Show available actions for active entity
+- `wait` - Check if it's my turn (exit code 0 = yes)
+- `move X Y` - Move to position
+- `attack N` - Attack target by index
+- `dash` - Take Dash action
+- `dodge` - Take Dodge action
+- `disengage` - Take Disengage action
+- `end` - End turn
+- `start-pvp` - Start new PvP game
+
+### Recent Fixes (January 2026)
+
+#### Dice Rolling Bug - FIXED
+**Problem**: Advantage/disadvantage was only rolling 1 die instead of 2.
+
+**Root cause**: `_roll_with_advantage()` and `_roll_with_disadvantage()` in `dnd/core/dice.py` used `range(self.count)` where `self.count=1` for d20 rolls.
+
+**Fix**: Changed both methods to always use `range(2)`:
+```python
+def _roll_with_advantage(self) -> Tuple[int, List[int]]:
+    rolls = [random.randint(1, self.value) for _ in range(2)]
+    return max(rolls), rolls
+```
+
+#### Advantage Status Case Sensitivity - FIXED
+**Problem**: Server wasn't correctly selecting min/max die for advantage/disadvantage.
+
+**Root cause**: `AdvantageStatus.DISADVANTAGE.value` is `"Disadvantage"` (capital D), but comparisons used lowercase `"disadvantage"`.
+
+**Fix**: Applied `.lower()` to all advantage status comparisons in `event_server.py`.
 
 ### Next Steps
 
 1. ~~**Debug opportunity attacks**~~: FIXED - handlers now registered in setup_combat_with_human()
 2. ~~**Debug action availability**~~: FIXED - dash/dodge/disengage now shown in action hints
-3. **Test dodge condition effect**: Verify attackers get disadvantage when target has Dodging condition
+3. ~~**Test dodge condition effect**~~: VERIFIED WORKING - `examples/test_dodging_attack.py` confirms attackers get disadvantage
 4. **Test disengage condition effect**: Verify no opportunity attacks trigger when Disengaging
 5. **Add ranged weapon support**: Currently only melee weapons work

@@ -549,6 +549,14 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Basic combat demo | `examples/combat_basic.py` |
 | Condition tests | `examples/combat_conditions.py` |
 | Spatial events test | `examples/spatial_events_test.py` |
+| **Server & CLI** | |
+| FastAPI server | `server/event_server.py` |
+| Session management | `server/session.py` |
+| Human CLI (play/playpvp) | `cli/main.py` |
+| Claude agent CLI | `cli/agent.py` |
+| API client | `cli/api_client.py` |
+| Display/rendering | `cli/display.py` |
+| Command parsing | `cli/commands.py` |
 
 ## Implemented Conditions
 
@@ -1096,6 +1104,75 @@ def process(event: "SpatialChangeEvent") -> None:  # Use string annotation
 ### Files with Known Legacy Issues
 
 `examples/old_examples/*.py` - These files import from `dnd.interfaces` which no longer exists. They are legacy/deprecated and have unresolvable type errors without refactoring or removal.
+
+## CLI and Server Architecture
+
+### Running the Game
+
+```bash
+# Start the server
+uvicorn server.event_server:app --reload
+
+# In another terminal - Human vs AI
+python -m cli play
+
+# Human vs Claude (PvP mode)
+python -m cli playpvp
+
+# Claude agent CLI (for PvP opponent)
+python -m cli.agent connect
+python -m cli.agent state
+python -m cli.agent attack 0
+python -m cli.agent end
+```
+
+### Session-Based Authority System
+
+PvP mode uses session-based authentication (`server/session.py`):
+
+- **PlayerSession**: A connected client (HUMAN, CLAUDE, or AI) that controls entities
+- **GameSession**: Active game with players and entity ownership mappings
+- **SessionManager**: Singleton managing all sessions and games
+
+Key endpoints:
+- `POST /session/create` - Create player session
+- `POST /game/join` - Join game with session, get assigned entities
+- `POST /action/*` - All actions require `session_id` + `entity_uuid`
+- `GET /pvp/status` - Check whose turn, who's connected
+
+### Server-Side Combat Log
+
+The server maintains a unified combat log (`GET /combat-log`) that both players write to:
+
+```python
+# Server adds entries on each action
+sim.add_combat_log("attack", "Skeleton hits Hero. d20(17)+4=21 vs AC 15 → 8 damage", {
+    "attacker": "Skeleton",
+    "target": "Hero",
+    "d20": 17,
+    "attack_bonus": 4,
+    "outcome": "hit",
+    "total_damage": 8,
+    ...
+})
+
+# CLI polls for new entries
+entries = client.get_combat_log(since=last_index)
+for entry in entries:
+    display.show_opponent_action(entry)  # Rich formatted display
+```
+
+Entry types: `attack`, `move`, `action`, `opportunity_attack`, `death`, `turn_end`
+
+### CLI Architecture
+
+- **cli/main.py**: Human player CLI with `play` and `playpvp` commands
+- **cli/agent.py**: Claude agent CLI with simple commands (connect, state, attack, move, end)
+- **cli/api_client.py**: HTTP client wrapper with session management
+- **cli/display.py**: Rich terminal rendering (map, entities, combat log, action results)
+- **cli/commands.py**: Command parsing and execution
+
+The `wait_for_opponent_turn()` function polls `/combat-log` and `/pvp/status` to detect opponent actions and display them with rich formatting.
 
 ## Dependencies
 
