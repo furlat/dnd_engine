@@ -2,9 +2,9 @@
 GridMap - Centralized spatial data management for the D&D engine.
 
 Manages:
-- Tile grid with cached dimensions
+- Tile grid (stores Tile objects which can have conditions)
 - Spatial queries (walkable, visible, entities at position)
-- FOV and pathfinding
+- FOV and pathfinding (with occupancy awareness)
 - Entity position registry
 - Cell subscriptions for spatial events
 """
@@ -12,10 +12,10 @@ Manages:
 from typing import Dict, List, Optional, Tuple, Set, DefaultDict, TYPE_CHECKING
 from uuid import UUID, uuid4
 from collections import defaultdict
-from pydantic import BaseModel, ConfigDict
 
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
+from dnd.core.base_tiles import Tile
 
 if TYPE_CHECKING:
     from dnd.core.events import SpatialChangeEvent
@@ -37,8 +37,8 @@ class GridMap:
     _instance: Optional['GridMap'] = None
 
     def __init__(self):
-        # Tile storage
-        self._tiles: Dict[Tuple[int, int], 'TileData'] = {}
+        # Tile storage - now stores actual Tile objects (BaseBlock with conditions)
+        self._tiles: Dict[Tuple[int, int], Tile] = {}
 
         # Cached grid bounds (updated on tile add/remove)
         self._min_x: int = 0
@@ -148,25 +148,36 @@ class GridMap:
 
     def set_tile(self, x: int, y: int, walkable: bool = True, visible: bool = True,
                  name: str = "Floor", sprite_name: Optional[str] = None,
-                 fire_event: bool = True) -> None:
-        """Set a tile at the given position."""
+                 fire_event: bool = True) -> Tile:
+        """
+        Set a tile at the given position.
+
+        Creates a new Tile object and stores it. Returns the created tile.
+        """
         position = (x, y)
         old_tile = self._tiles.get(position)
 
-        self._tiles[position] = TileData(
+        # Create new Tile object
+        tile = Tile.create(
+            position=position,
             walkable=walkable,
             visible=visible,
             name=name,
             sprite_name=sprite_name
         )
+        self._tiles[position] = tile
         self._bounds_dirty = True
 
         # Fire tile changed event if properties actually changed
         if fire_event and self._events_enabled:
-            if old_tile is None or old_tile.walkable != walkable or old_tile.visible != visible:
+            old_walkable = old_tile.walkable if old_tile else None
+            old_visible = old_tile.visible if old_tile else None
+            if old_tile is None or old_walkable != walkable or old_visible != visible:
                 from dnd.core.events import SpatialChangeEvent
                 event = SpatialChangeEvent.tile_changed(position, walkable, visible)
                 self._fire_spatial_event(event)
+
+        return tile
 
     def remove_tile(self, x: int, y: int, fire_event: bool = True) -> None:
         """Remove a tile at the given position."""
@@ -184,8 +195,8 @@ class GridMap:
                 )
                 self._fire_spatial_event(event)
 
-    def get_tile(self, x: int, y: int) -> Optional['TileData']:
-        """Get tile data at position, or None if no tile exists."""
+    def get_tile(self, x: int, y: int) -> Optional[Tile]:
+        """Get tile at position, or None if no tile exists."""
         return self._tiles.get((x, y))
 
     def has_tile(self, x: int, y: int) -> bool:
@@ -193,9 +204,38 @@ class GridMap:
         return (x, y) in self._tiles
 
     def is_walkable(self, x: int, y: int) -> bool:
-        """Check if position is walkable (has tile and tile is walkable)."""
+        """
+        Check if position is walkable based on tile property only.
+
+        Does NOT consider entity occupancy - use is_walkable_for() for that.
+        """
         tile = self._tiles.get((x, y))
         return tile is not None and tile.walkable
+
+    def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None) -> bool:
+        """
+        Check if position is walkable for a specific entity.
+
+        Considers:
+        1. Tile must exist and be walkable
+        2. Position must not be occupied by another entity
+
+        The requesting entity can always walk on its own position.
+        """
+        # First check tile walkability
+        if not self.is_walkable(x, y):
+            return False
+
+        # Check occupancy
+        occupants = self._entities_by_position.get((x, y), set())
+        if not occupants:
+            return True
+
+        # If there are occupants, only allow if it's just the requesting entity
+        if requesting_entity_uuid is None:
+            return False  # No entity specified, and position is occupied
+
+        return occupants == {requesting_entity_uuid}
 
     def is_visible(self, x: int, y: int) -> bool:
         """Check if position allows vision (has tile and tile allows vision)."""
@@ -262,10 +302,14 @@ class GridMap:
         try:
             for tx in range(x, x + width):
                 for ty in range(y, y + height):
-                    self._tiles[(tx, ty)] = TileData(
-                        walkable=walkable, visible=visible,
-                        name=name, sprite_name=sprite_name
+                    tile = Tile.create(
+                        position=(tx, ty),
+                        walkable=walkable,
+                        visible=visible,
+                        name=name,
+                        sprite_name=sprite_name
                     )
+                    self._tiles[(tx, ty)] = tile
             self._bounds_dirty = True
         finally:
             self.enable_events()
@@ -277,15 +321,15 @@ class GridMap:
         try:
             # Walls
             for tx in range(x, x + width):
-                self._tiles[(tx, y)] = TileData(walkable=False, visible=False, name=wall_name)
-                self._tiles[(tx, y + height - 1)] = TileData(walkable=False, visible=False, name=wall_name)
+                self._tiles[(tx, y)] = Tile.create((tx, y), walkable=False, visible=False, name=wall_name)
+                self._tiles[(tx, y + height - 1)] = Tile.create((tx, y + height - 1), walkable=False, visible=False, name=wall_name)
             for ty in range(y, y + height):
-                self._tiles[(x, ty)] = TileData(walkable=False, visible=False, name=wall_name)
-                self._tiles[(x + width - 1, ty)] = TileData(walkable=False, visible=False, name=wall_name)
+                self._tiles[(x, ty)] = Tile.create((x, ty), walkable=False, visible=False, name=wall_name)
+                self._tiles[(x + width - 1, ty)] = Tile.create((x + width - 1, ty), walkable=False, visible=False, name=wall_name)
             # Floor
             for tx in range(x + 1, x + width - 1):
                 for ty in range(y + 1, y + height - 1):
-                    self._tiles[(tx, ty)] = TileData(walkable=True, visible=True, name=floor_name)
+                    self._tiles[(tx, ty)] = Tile.create((tx, ty), walkable=True, visible=True, name=floor_name)
             self._bounds_dirty = True
         finally:
             self.enable_events()
@@ -386,10 +430,17 @@ class GridMap:
         compute_fov(origin, self.is_blocking, mark_visible, max_distance)
         return visible_positions
 
-    def compute_paths(self, start: Tuple[int, int], max_distance: Optional[int] = None
+    def compute_paths(self, start: Tuple[int, int], max_distance: Optional[int] = None,
+                      requesting_entity_uuid: Optional[UUID] = None
                       ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
         """
         Compute all reachable positions and paths from start using Dijkstra.
+
+        Args:
+            start: Starting position
+            max_distance: Maximum distance to compute paths for
+            requesting_entity_uuid: If provided, treats cells occupied by OTHER entities as blocked.
+                                    The requesting entity's own position is always walkable.
 
         Returns (distances_dict, paths_dict).
         """
@@ -401,9 +452,17 @@ class GridMap:
         grid_width = self._max_x + 2
         grid_height = self._max_y + 2
 
+        # Choose walkability function based on whether we're checking occupancy
+        if requesting_entity_uuid is not None:
+            def walkable_check(x: int, y: int) -> bool:
+                return self.is_walkable_for(x, y, requesting_entity_uuid)
+        else:
+            def walkable_check(x: int, y: int) -> bool:
+                return self.is_walkable(x, y)
+
         return dijkstra(
             start,
-            lambda x, y: self.is_walkable(x, y),
+            walkable_check,
             grid_width,
             grid_height,
             diagonal=True,
@@ -423,14 +482,16 @@ class GridMap:
         return result
 
     def get_path(self, start: Tuple[int, int], end: Tuple[int, int],
-                 max_distance: Optional[int] = None) -> Optional[List[Tuple[int, int]]]:
+                 max_distance: Optional[int] = None,
+                 requesting_entity_uuid: Optional[UUID] = None) -> Optional[List[Tuple[int, int]]]:
         """Get path from start to end, or None if no path exists."""
-        _, paths = self.compute_paths(start, max_distance)
+        _, paths = self.compute_paths(start, max_distance, requesting_entity_uuid)
         return paths.get(end)
 
-    def get_distance(self, start: Tuple[int, int], end: Tuple[int, int]) -> Optional[int]:
+    def get_distance(self, start: Tuple[int, int], end: Tuple[int, int],
+                     requesting_entity_uuid: Optional[UUID] = None) -> Optional[int]:
         """Get walking distance from start to end, or None if unreachable."""
-        distances, _ = self.compute_paths(start)
+        distances, _ = self.compute_paths(start, requesting_entity_uuid=requesting_entity_uuid)
         return distances.get(end)
 
     # =========================================================================
@@ -447,7 +508,7 @@ class GridMap:
         self._pending_events.clear()
         self._bounds_dirty = True
 
-    def get_all_tiles(self) -> Dict[Tuple[int, int], 'TileData']:
+    def get_all_tiles(self) -> Dict[Tuple[int, int], Tile]:
         """Get all tiles (for serialization/debugging)."""
         return self._tiles.copy()
 
@@ -462,16 +523,6 @@ class GridMap:
     def subscription_count(self) -> int:
         """Get total number of cell subscriptions."""
         return sum(len(subs) for subs in self._cell_subscribers.values())
-
-
-class TileData(BaseModel):
-    """Lightweight tile data (no UUID, just properties)."""
-    model_config = ConfigDict(frozen=True)
-
-    walkable: bool = True
-    visible: bool = True
-    name: str = "Floor"
-    sprite_name: Optional[str] = None
 
 
 # =========================================================================

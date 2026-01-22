@@ -6,3 +6,5 @@ uvicorn
 pyright
 websockets
 httpx
+rich
+typer
