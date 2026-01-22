@@ -7,17 +7,21 @@ from typing import Optional
 
 
 def opportunity_attack_processor(event: MovementEvent, source_entity_uuid: UUID) -> Optional[MovementEvent]:
-    """checks if movement event is an opportunity attack, source entity uuid is the entity that 
+    """checks if movement event is an opportunity attack, source entity uuid is the entity that
     added this trigger to the event q, the event.source_entity_uuid is the entity that is moving
-    
+
     this is a quite greed approach since any movement will trigger this check"""
     #first we get the source entity
     reaction_source_entity = Entity.get(source_entity_uuid)
     event_source_entity = Entity.get(event.source_entity_uuid)
     if reaction_source_entity is None or event_source_entity is None:
         return event
-    
+
     if reaction_source_entity.uuid == event_source_entity.uuid:
+        return event
+
+    # Disengage action prevents opportunity attacks
+    if "Disengaging" in event_source_entity.active_conditions:
         return event
     threathened_positions = reaction_source_entity.senses.get_threathened_positions()
 

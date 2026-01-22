@@ -2,6 +2,24 @@
 it introduces and Event qeueue which is the source of ground truth information flow between entities, it allows each action to broadcast its intent and results
  and allow it to be intercepted by reactions and or trigger cascade effects at any point in the game"""
 
+__all__ = [
+    # Enums
+    "WeaponSlot", "EventType", "SpatialChangeType", "EventPhase", "RangeType",
+    # Type literals
+    "AbilityName", "SkillName",
+    # Core event classes
+    "Event", "Trigger", "EventHandler", "EventQueue",
+    # D20 events
+    "D20Event", "SavingThrowEvent", "SkillCheckEvent",
+    # Spatial events
+    "SpatialChangeEvent",
+    # Combat data
+    "Range", "Damage",
+    # Encounter/Turn events
+    "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
+    "RoundEvent", "RoundStartEvent", "RoundEndEvent",
+    "TurnEvent", "TurnStartEvent", "TurnEndEvent",
+]
 
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
@@ -103,6 +121,15 @@ class EventType(str, Enum):
     SPATIAL_ENTITY_ENTERED = "spatial_entity_entered"  # Entity moved into a cell
     SPATIAL_ENTITY_LEFT = "spatial_entity_left"        # Entity left a cell
     SPATIAL_TILE_CHANGED = "spatial_tile_changed"      # Tile properties changed
+
+    # Encounter/Turn events
+    ENCOUNTER_START = "encounter_start"
+    ENCOUNTER_END = "encounter_end"
+    ROUND_START = "round_start"
+    ROUND_END = "round_end"
+    TURN_START = "turn_start"
+    TURN_END = "turn_end"
+    DEATH = "death"
 
 
 class SpatialChangeType(str, Enum):
@@ -742,4 +769,88 @@ class Damage(BaseObject):
     
     def get_dice(self, attack_outcome: AttackOutcome) -> Dice:
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome)
+
+
+# =============================================================================
+# Encounter/Turn Events
+# =============================================================================
+
+class EncounterEvent(Event):
+    """Base event for encounter lifecycle."""
+    name: str = Field(default="Encounter Event", description="An encounter lifecycle event")
+    encounter_uuid: UUID = Field(description="UUID of the encounter")
+    combatant_uuids: List[UUID] = Field(default_factory=list, description="UUIDs of all combatants")
+
+
+class EncounterStartEvent(EncounterEvent):
+    """Fired when an encounter begins."""
+    name: str = Field(default="Encounter Start", description="Encounter has started")
+    event_type: EventType = Field(default=EventType.ENCOUNTER_START)
+    initiative_order: List[UUID] = Field(default_factory=list, description="Combatants sorted by initiative")
+
+
+class EncounterEndEvent(EncounterEvent):
+    """Fired when an encounter ends."""
+    name: str = Field(default="Encounter End", description="Encounter has ended")
+    event_type: EventType = Field(default=EventType.ENCOUNTER_END)
+    reason: Optional[str] = Field(default=None, description="Why the encounter ended")
+
+
+class RoundEvent(Event):
+    """Base event for round lifecycle."""
+    name: str = Field(default="Round Event", description="A round lifecycle event")
+    encounter_uuid: UUID = Field(description="UUID of the encounter")
+    round_number: int = Field(description="Current round number (1-indexed)")
+
+
+class RoundStartEvent(RoundEvent):
+    """Fired at the start of a new round."""
+    name: str = Field(default="Round Start", description="A new round has started")
+    event_type: EventType = Field(default=EventType.ROUND_START)
+
+
+class RoundEndEvent(RoundEvent):
+    """Fired at the end of a round."""
+    name: str = Field(default="Round End", description="The round has ended")
+    event_type: EventType = Field(default=EventType.ROUND_END)
+
+
+class TurnEvent(Event):
+    """Base event for turn lifecycle."""
+    name: str = Field(default="Turn Event", description="A turn lifecycle event")
+    encounter_uuid: UUID = Field(description="UUID of the encounter")
+    entity_uuid: UUID = Field(description="UUID of the entity whose turn it is")
+    round_number: int = Field(description="Current round number")
+    turn_index: int = Field(description="Position in initiative order (0-indexed)")
+
+
+class TurnStartEvent(TurnEvent):
+    """Fired at the start of an entity's turn."""
+    name: str = Field(default="Turn Start", description="Entity's turn has started")
+    event_type: EventType = Field(default=EventType.TURN_START)
+    actions_available: int = Field(default=1, description="Actions available this turn")
+    bonus_actions_available: int = Field(default=1, description="Bonus actions available")
+    movement_available: int = Field(default=30, description="Movement available in feet")
+    reaction_available: int = Field(default=1, description="Reaction available")
+
+
+class TurnEndEvent(TurnEvent):
+    """Fired at the end of an entity's turn."""
+    name: str = Field(default="Turn End", description="Entity's turn has ended")
+    event_type: EventType = Field(default=EventType.TURN_END)
+    actions_used: int = Field(default=0, description="Actions used this turn")
+    bonus_actions_used: int = Field(default=0, description="Bonus actions used")
+    movement_used: int = Field(default=0, description="Movement used in feet")
+
+
+class DeathEvent(Event):
+    """Fired when an entity dies (HP drops to 0 or below)."""
+    name: str = Field(default="Death", description="Entity has died")
+    event_type: EventType = Field(default=EventType.DEATH)
+    entity_uuid: UUID = Field(description="UUID of the entity that died")
+    entity_name: str = Field(default="", description="Name of the entity that died")
+    killer_uuid: Optional[UUID] = Field(default=None, description="UUID of entity that dealt killing blow")
+    killer_name: str = Field(default="", description="Name of killer if known")
+    final_hp: int = Field(default=0, description="Final HP value (typically negative)")
+    encounter_uuid: Optional[UUID] = Field(default=None, description="UUID of encounter if in combat")
 

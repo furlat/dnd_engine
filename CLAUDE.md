@@ -8,6 +8,46 @@ D&D 5e game engine with event-driven architecture and component-based entities. 
 
 **Core Principle**: All game state changes flow through events.
 
+## Working With This Codebase (CRITICAL)
+
+**The user (Tommaso) is the architect and designer of this codebase.** Claude is here to assist, not to drive. Past sessions have failed badly when Claude acted autonomously, made multiple speculative fixes without validation, or tried to "know better" than the designer.
+
+### Required Behavior
+
+1. **One change, one checkpoint.** Make a single change, then report what you did and ask if it's correct before making the next change. Do NOT chain 5 fixes hoping one works.
+
+2. **Ask before assuming.** If you're unsure how something should work, ASK. Don't guess based on "common patterns" - this codebase has specific design decisions.
+
+3. **Study Python first.** When debugging cross-system issues, trace through the Python backend before touching other layers. The source of truth is always the Python code.
+
+4. **Report failures immediately.** If something doesn't work, say so and ask for guidance. Don't silently try alternative approaches.
+
+5. **No "know-it-all" behavior.** Phrases like "I'll just fix this" or "This should work" followed by 5 failed attempts are not acceptable. Uncertainty means stopping and asking.
+
+### What Killed Previous Sessions
+
+- Making 5+ speculative fixes without user validation
+- Debugging TypeScript when the bug was in Python event flow
+- Not studying backend code before writing frontend code
+- Assuming WebSocket message delivery was reliable (it wasn't)
+- Continuing to flail instead of asking for help
+
+### The Right Pattern
+
+```
+Claude: I made change X. Does this look right?
+User: No, try Y instead.
+Claude: Done. Here's the result. Should I continue?
+User: Yes, now do Z.
+```
+
+NOT:
+
+```
+Claude: I'll fix this. [change 1] Hmm that didn't work. [change 2] Still broken. [change 3] [change 4] [change 5]
+User: What are you doing? That's all wrong.
+```
+
 ## Common Commands
 
 ```bash
@@ -487,7 +527,7 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Dice rolling | `dnd/core/dice.py` |
 | **Spatial System** | |
 | GridMap (central spatial manager) | `dnd/core/gridmap.py` |
-| Tile class (backwards compat) | `dnd/core/base_tiles.py` |
+| Tile class (BaseBlock, can have conditions) | `dnd/core/base_tiles.py` |
 | Shadowcast FOV algorithm | `dnd/core/shadowcast.py` |
 | Dijkstra pathfinding | `dnd/core/dijkstra.py` |
 | **Conditions & Actions** | |
@@ -562,7 +602,7 @@ The `GridMap` (`dnd/core/gridmap.py`) is a singleton that centralizes all spatia
 ```
 GridMap (singleton via get_map())
 ├── Tile Storage
-│   ├── _tiles: Dict[Tuple[int,int], TileData]     # All tiles
+│   ├── _tiles: Dict[Tuple[int,int], Tile]         # Tile objects (BaseBlock, can have conditions)
 │   └── _bounds_dirty + cached min/max             # Lazy bounds calculation
 │
 ├── Entity Position Tracking
@@ -574,8 +614,8 @@ GridMap (singleton via get_map())
 │   └── _entity_subscriptions: Dict[UUID, Set[pos]]# Entity → subscribed cells
 │
 └── Spatial Algorithms
-    ├── compute_fov(origin, max_distance)          # Shadowcast
-    └── compute_paths(start, max_distance)         # Dijkstra
+    ├── compute_fov(origin, max_distance)                           # Shadowcast
+    └── compute_paths(start, max_distance, requesting_entity_uuid)  # Dijkstra with occupancy
 ```
 
 ### Basic Usage
@@ -590,19 +630,25 @@ grid.create_rectangle(0, 0, 10, 10)  # 10x10 floor
 grid.create_room(0, 0, 10, 10)       # Room with walls
 
 # Query tiles
-grid.is_walkable(5, 5)   # bool
-grid.is_visible(5, 5)    # bool (can see through)
-grid.get_tile(5, 5)      # TileData or None
+grid.is_walkable(5, 5)                      # bool - tile property only
+grid.is_walkable_for(5, 5, entity_uuid)     # bool - tile + occupancy check
+grid.is_visible(5, 5)                       # bool (can see through)
+grid.get_tile(5, 5)                         # Tile object or None
 
 # Entity position tracking (auto-registered on Entity creation)
 grid.get_entity_position(entity_uuid)  # Tuple[int, int]
 grid.get_entities_at((5, 5))           # Set[UUID]
 grid.move_entity(uuid, (new_x, new_y)) # Updates + fires events
 
-# Spatial queries
-grid.compute_fov((5, 5), max_distance=10)       # List of visible positions
-grid.compute_paths((5, 5), max_distance=20)     # (distances, paths) dicts
-grid.get_visible_entities((5, 5), max_distance) # Dict[UUID, position]
+# Spatial queries (with occupancy awareness)
+grid.compute_fov((5, 5), max_distance=10)                    # List of visible positions
+grid.compute_paths((5, 5), max_distance=20)                  # Tile-only walkability
+grid.compute_paths((5, 5), max_distance=20, entity_uuid)     # Excludes occupied cells
+grid.get_visible_entities((5, 5), max_distance)              # Dict[UUID, position]
+
+# Tiles can have conditions (fire, traps, difficult terrain)
+tile = grid.get_tile(5, 5)
+tile.add_condition(OnFire(source_entity_uuid=caster.uuid, target_entity_uuid=tile.uuid))
 ```
 
 ### Cell Subscription System
@@ -683,18 +729,23 @@ distances, paths = dijkstra(
 # paths: Dict[pos, List[pos]] - full path to each reachable cell
 ```
 
-### Backwards Compatibility
+### Tile as BaseBlock
 
-`Tile` class (`dnd/core/base_tiles.py`) still works but delegates to GridMap:
+`Tile` (`dnd/core/base_tiles.py`) is now a proper `BaseBlock` that can have conditions:
 
 ```python
 from dnd.core.base_tiles import Tile, floor_factory, wall_factory
 
-# These still work but use GridMap internally
-tile = Tile.create((5, 5), can_walk=True, can_see=True)
-Tile.is_walkable((5, 5))
-Tile.get_fov((5, 5), max_distance=10)
-Tile.get_paths((5, 5), max_distance=10)
+# Create tiles via GridMap (recommended)
+grid.create_rectangle(0, 0, 10, 10)
+
+# Or create individual tiles
+tile = Tile.create(position=(5, 5), walkable=True, visible=True, name="Floor")
+
+# Tiles can have conditions attached
+tile.add_condition(OnFire(...))       # Tile is on fire
+tile.add_condition(DifficultTerrain())  # Costs double movement
+tile.add_condition(TrapCondition(...))  # Triggered on entry
 ```
 
 ## The Event System (Deep Dive)
@@ -957,6 +1008,12 @@ class MyCustomEvent(Event):
 - `Weapon` requires `source_entity_uuid`, `dice_numbers`, and proper `ModifiableValue` for bonuses
 - `RangeType` is in `dnd/core/events.py`, not `dnd/blocks/equipment.py`
 - Always use bestiary factories (`create_goblin`, `create_skeleton`) as reference for entity creation
+- **Bestiary factories use keyword args**: `create_goblin(name="Name", position=(0,0))` NOT `create_goblin("Name", ...)`
+- **No `get_weapon()` method**: Use `entity.equipment.weapon_main_hand` directly
+- **Ability modifier is int**: `entity.ability_scores.strength.modifier` returns `int`, not `ModifiableValue`
+- **Always call `Entity.update_all_entities_senses()`** after creating entities for LOS to work
+
+**For writing examples and tests**, see `claude_docs/EXAMPLE_PATTERNS.md` for complete patterns.
 
 **Before running any new script:**
 1. `python -m py_compile script.py` - Check syntax
@@ -1059,6 +1116,10 @@ Contains high-level architecture documents and implementation plans created duri
 |------|---------|
 | `MASTER_SUMMARY.md` | High-level implementation plan for encounter system, lists what exists vs what's needed, proposed new modules |
 | `CODEBASE_ANALYSIS.md` | Deep dive into existing primitives (Entity, Senses, GridMap, Events, Actions), how they integrate, and what's needed for turn-based combat |
+| `EXAMPLE_PATTERNS.md` | **IMPORTANT**: Correct patterns for writing examples and tests - read before writing any new example code |
+| `AVAILABLE_ACTIONS_DESIGN.md` | Design document for the available actions query system |
+| `UI_ARCHITECTURE.md` | **ABANDONED** - Design doc for a web UI that was never completed. Keep for reference only. |
+| `FRONTEND_POSTMORTEM.md` | **LESSONS LEARNED** - Post-mortem of failed UI attempt. Documents what went wrong (too autonomous, no user validation, debugging wrong layer). Read this to understand how NOT to work on this codebase. |
 
 ### interactive_ruleset/
 

@@ -25,7 +25,6 @@ from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
 from dnd.blocks.skills import (SkillSetConfig,SkillSet)
 from dnd.blocks.sensory import Senses
 from dnd.core.events import AbilityName, SkillName
-from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import get_map
 
 
@@ -73,6 +72,7 @@ class EntityConfig(BaseModel):
     action_economy: ActionEconomyConfig = Field(default_factory=ActionEconomyConfig,description="Action economy for the entity")
     proficiency_bonus: int = Field(default=0,description="Proficiency bonus for the entity")
     proficiency_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to the proficiency bonus")
+    initiative_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to initiative (e.g., Alert feat +5)")
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
     sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
 
@@ -88,6 +88,7 @@ class Entity(BaseBlock):
     equipment: Equipment = Field(default_factory=lambda: Equipment.create(source_entity_uuid=uuid4()))
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
+    initiative: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="initiative",base_value=0))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
     allow_events_conditions: bool = Field(default=True,description="If True, events and conditions will be allowed to be added to the block")
     sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
@@ -161,6 +162,13 @@ class Entity(BaseBlock):
             proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.proficiency_bonus)
             for modifier in config.proficiency_bonus_modifiers:
                 proficiency_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid,name=modifier[0],value=modifier[1]))
+
+            # Initiative base is DEX modifier
+            dex_mod = ability_scores.get_ability("dexterity").modifier
+            initiative = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=dex_mod,value_name="initiative")
+            for modifier in config.initiative_modifiers:
+                initiative.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid,name=modifier[0],value=modifier[1]))
+
             return cls(
                 uuid=source_entity_uuid,
                 source_entity_uuid=source_entity_uuid,
@@ -174,6 +182,7 @@ class Entity(BaseBlock):
                 senses=senses,
                 action_economy=action_economy,
                 proficiency_bonus=proficiency_bonus,
+                initiative=initiative,
                 position=config.position,
                 sprite_name=config.sprite_name
             )
@@ -610,36 +619,62 @@ class Entity(BaseBlock):
 
 
     @staticmethod
-    def compute_senses_from_position(position: Tuple[int,int],seen: Set[Tuple[int,int]], max_distance: int = 10) -> Tuple[Dict[Tuple[int,int],bool],DefaultDict[Tuple[int,int],List[Tuple[int,int]]],Dict[Tuple[int,int],bool],Dict[UUID,Tuple[int,int]]]:
-         # Get visible cells using shadowcast
-        visible_positions = Tile.get_fov(position, max_distance)
+    def compute_senses_from_position(
+        position: Tuple[int, int],
+        seen: Set[Tuple[int, int]],
+        max_distance: int = 10,
+        entity_uuid: Optional[UUID] = None
+    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]]]:
+        """
+        Compute senses data from a position.
+
+        Args:
+            position: The position to compute from
+            seen: Set of previously seen positions
+            max_distance: Maximum view/movement distance
+            entity_uuid: If provided, pathfinding will exclude cells occupied by other entities
+
+        Returns:
+            (visible_dict, paths, walkable, visible_entities)
+        """
+        grid = get_map()
+
+        # Get visible cells using shadowcast
+        visible_positions = grid.compute_fov(position, max_distance)
         visible_dict = {pos: True for pos in visible_positions}
-        
-        # Get walkable paths using dijkstra
-        _, paths = Tile.get_paths(position, max_distance)
-        
+
+        # Get walkable paths using dijkstra (with occupancy check if entity_uuid provided)
+        _, paths = grid.compute_paths(position, max_distance, requesting_entity_uuid=entity_uuid)
+
         # Filter paths to only include those where:
         # 1. The destination is currently visible
-        # 2. All positions in the path have been seen before
-        filtered_paths = defaultdict(list)
+        # 2. All positions in the path are either seen before OR currently visible
+        filtered_paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
         for pos, path in paths.items():
-            # Check if destination is visible and all path positions are in seen
-            if pos in visible_dict and all(step in seen for step in path):
+            # Check if destination is visible and all path positions are known (seen or visible)
+            if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
                 filtered_paths[pos] = path
-        
+
         # Get entities at visible positions
-        visible_entities = {}
+        visible_entities: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
             entities = Entity.get_all_entities_at_position(pos)
             for entity in entities:
-                    visible_entities[entity.uuid] = pos
-        return visible_dict, filtered_paths, {pos: Tile.is_walkable(pos) for pos in visible_positions}, visible_entities
-    
-    def create_senses_copy_at_position(self, position: Tuple[int,int], max_distance: int = 10) -> 'Senses':
+                visible_entities[entity.uuid] = pos
+
+        # Build walkable dict from grid
+        walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in visible_positions}
+
+        return visible_dict, filtered_paths, walkable, visible_entities
+
+    def create_senses_copy_at_position(self, position: Tuple[int, int], max_distance: int = 10) -> 'Senses':
+        """Create a copy of senses as if entity were at a different position."""
         senses = self.senses.model_copy(deep=True)
         senses.position = position
-        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(position, self.senses.seen, max_distance)
-        
+        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(
+            position, self.senses.seen, max_distance, entity_uuid=self.uuid
+        )
+
         senses.update_senses(
             entities=visible_entities,
             visible=visible_dict,
@@ -647,13 +682,14 @@ class Entity(BaseBlock):
             paths=filtered_paths
         )
         return senses
-    
+
     def update_entity_senses(self, max_distance: int = 10):
         """
         Update the entity's senses using shadowcasting and pathfinding.
+
         This computes:
         - Visible cells within max_distance using shadowcast
-        - Paths to visible cells using dijkstra
+        - Paths to reachable cells using dijkstra (excludes cells occupied by other entities)
         - Entities present in visible cells
 
         After updating, subscribes to visible cells so this entity
@@ -662,7 +698,9 @@ class Entity(BaseBlock):
         Args:
             max_distance: Maximum view/movement distance (default 10)
         """
-        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(self.position, self.senses.seen, max_distance)
+        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(
+            self.position, self.senses.seen, max_distance, entity_uuid=self.uuid
+        )
         # Update the senses block
         self.senses.update_senses(
             entities=visible_entities,

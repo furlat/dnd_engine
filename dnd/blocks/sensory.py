@@ -69,17 +69,31 @@ class Senses(BaseBlock):
         self.paths = paths
 
     def get_threathened_positions(self) -> List[Tuple[int,int]]:
-        """ given a position we get all neighbors (also diagonals), we use sets to do quickly and check they are in both visible dict and a path exist"""
+        """
+        Get all neighboring positions that this entity threatens (for opportunity attacks).
+
+        A position is threatened if it's:
+        1. Adjacent to this entity (including diagonals)
+        2. Visible to this entity
+        3. On a walkable tile (regardless of occupancy - an occupied cell is still threatened)
+
+        Note: Uses tile walkability (self.walkable), not paths, because paths exclude
+        occupied cells but an enemy standing in a cell is still threatened.
+        """
         position = self.position
-        neighbors = set([(position[0]+1,position[1]),
-                        (position[0]-1,position[1]),
-                        (position[0],position[1]+1),
-                        (position[0],position[1]-1),
-                        (position[0]+1,position[1]+1),
-                        (position[0]-1,position[1]-1)])
+        neighbors = set([
+            (position[0] + 1, position[1]),
+            (position[0] - 1, position[1]),
+            (position[0], position[1] + 1),
+            (position[0], position[1] - 1),
+            (position[0] + 1, position[1] + 1),
+            (position[0] - 1, position[1] - 1),
+            (position[0] + 1, position[1] - 1),
+            (position[0] - 1, position[1] + 1),
+        ])
         visible_set = set(self.visible.keys())
-        path_set = set(self.paths.keys())
-        return list(neighbors & visible_set & path_set)
+        walkable_set = set(pos for pos, is_walkable in self.walkable.items() if is_walkable)
+        return list(neighbors & visible_set & walkable_set)
         
 
     @classmethod
