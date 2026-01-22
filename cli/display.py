@@ -1,24 +1,254 @@
 """
-Display module for ASCII rendering with Rich.
+Display module for full-screen TUI with Rich.
 """
 
 from typing import Dict, Any, List, Optional, Tuple
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from rich.layout import Layout
 from rich import box
+import sys
+import shutil
 
 
 console = Console()
 
+# Track if we're in alternate screen mode
+_in_alternate_screen = False
+
+# Store rich combat log entries (full action data, not just strings)
+_combat_log: List[Dict[str, Any]] = []
+MAX_COMBAT_LOG = 10  # Max entries to show
+
+# Output buffer for command feedback (valid positions, attack options, etc.)
+_output_buffer: List[str] = []
+MAX_OUTPUT_LINES = 6
+
+# Session/connection info for header
+_session_info: Dict[str, Any] = {
+    "hero_connected": False,
+    "claude_connected": False,
+    "session_id": None,
+    "pvp_mode": False,
+}
+
+# Turn history for replay
+_turn_history: List[Dict[str, Any]] = []  # List of cached states
+_history_index: Optional[int] = None  # None = viewing current, int = viewing history
+
+
+def enter_alternate_screen():
+    """Enter alternate screen buffer (like vim/htop). Content won't scroll past terminal."""
+    global _in_alternate_screen
+    if not _in_alternate_screen and sys.stdout.isatty():
+        sys.stdout.write("\033[?1049h")
+        sys.stdout.flush()
+        _in_alternate_screen = True
+
+
+def exit_alternate_screen():
+    """Exit alternate screen buffer, returning to normal terminal."""
+    global _in_alternate_screen
+    if _in_alternate_screen:
+        sys.stdout.write("\033[?1049l")
+        sys.stdout.flush()
+        _in_alternate_screen = False
+
 
 def clear():
     """Clear the terminal."""
-    console.clear()
+    if _in_alternate_screen:
+        sys.stdout.write("\033[H\033[J")
+        sys.stdout.flush()
+    else:
+        console.clear()
 
 
-def render_map(
+def add_to_combat_log(entry: Dict[str, Any]):
+    """Add a rich entry to the combat log."""
+    global _combat_log
+    _combat_log.append(entry)
+    # Keep only recent entries
+    if len(_combat_log) > MAX_COMBAT_LOG * 2:
+        _combat_log = _combat_log[-MAX_COMBAT_LOG * 2:]
+
+
+def add_simple_log(message: str):
+    """Add a simple text message to the combat log."""
+    add_to_combat_log({"type": "message", "message": message})
+
+
+def clear_combat_log():
+    """Clear the combat log."""
+    global _combat_log
+    _combat_log = []
+
+
+def get_combat_log() -> List[Dict[str, Any]]:
+    """Get the combat log entries."""
+    return _combat_log.copy()
+
+
+# ============================================================================
+# Output Buffer (for command feedback)
+# ============================================================================
+
+def set_output(lines: List[str]):
+    """Set the output buffer content."""
+    global _output_buffer
+    _output_buffer = lines[-MAX_OUTPUT_LINES:]
+
+
+def add_output(line: str):
+    """Add a line to the output buffer."""
+    global _output_buffer
+    _output_buffer.append(line)
+    if len(_output_buffer) > MAX_OUTPUT_LINES:
+        _output_buffer = _output_buffer[-MAX_OUTPUT_LINES:]
+
+
+def clear_output():
+    """Clear the output buffer."""
+    global _output_buffer
+    _output_buffer = []
+
+
+def get_output() -> List[str]:
+    """Get the output buffer."""
+    return _output_buffer.copy()
+
+
+# ============================================================================
+# Session Info (for header)
+# ============================================================================
+
+def set_session_info(
+    hero_connected: bool = None,
+    claude_connected: bool = None,
+    session_id: str = None,
+    pvp_mode: bool = None
+):
+    """Update session info for header display."""
+    global _session_info
+    if hero_connected is not None:
+        _session_info["hero_connected"] = hero_connected
+    if claude_connected is not None:
+        _session_info["claude_connected"] = claude_connected
+    if session_id is not None:
+        _session_info["session_id"] = session_id
+    if pvp_mode is not None:
+        _session_info["pvp_mode"] = pvp_mode
+
+
+def get_session_info() -> Dict[str, Any]:
+    """Get session info."""
+    return _session_info.copy()
+
+
+# ============================================================================
+# Turn History Management
+# ============================================================================
+
+def save_turn_snapshot(
+    turn: Dict[str, Any],
+    entities: List[Dict[str, Any]],
+    grid: Dict[str, Any],
+    combat_log: Optional[List[Dict[str, Any]]] = None
+):
+    """Save a snapshot of the current turn state for history replay."""
+    global _turn_history, _combat_log
+
+    snapshot = {
+        "turn": turn.copy() if turn else {},
+        "entities": [e.copy() for e in entities] if entities else [],
+        "grid": grid,  # Grid doesn't change, just reference it
+        "combat_log": [e.copy() for e in (combat_log or _combat_log)],
+        "round": turn.get("round_number", 1) if turn else 1,
+        "entity_name": turn.get("current_entity_name", "???") if turn else "???",
+    }
+    _turn_history.append(snapshot)
+
+
+def get_history_count() -> int:
+    """Get total number of saved turns."""
+    return len(_turn_history)
+
+
+def get_history_index() -> Optional[int]:
+    """Get current history index (None = current turn)."""
+    return _history_index
+
+
+def is_viewing_history() -> bool:
+    """Check if we're viewing historical state."""
+    return _history_index is not None
+
+
+def goto_previous_turn() -> Optional[Dict[str, Any]]:
+    """Go to previous turn in history. Returns snapshot or None."""
+    global _history_index
+
+    if not _turn_history:
+        return None
+
+    if _history_index is None:
+        # Currently viewing current - go to last saved
+        _history_index = len(_turn_history) - 1
+    elif _history_index > 0:
+        _history_index -= 1
+
+    return _turn_history[_history_index] if _history_index is not None else None
+
+
+def goto_next_turn() -> Optional[Dict[str, Any]]:
+    """Go to next turn in history. Returns snapshot or None if at current."""
+    global _history_index
+
+    if _history_index is None:
+        return None  # Already at current
+
+    if _history_index < len(_turn_history) - 1:
+        _history_index += 1
+        return _turn_history[_history_index]
+    else:
+        # At end of history, return to current
+        _history_index = None
+        return None
+
+
+def goto_current_turn():
+    """Return to viewing current turn."""
+    global _history_index
+    _history_index = None
+
+
+def goto_first_turn() -> Optional[Dict[str, Any]]:
+    """Go to first turn in history."""
+    global _history_index
+
+    if not _turn_history:
+        return None
+
+    _history_index = 0
+    return _turn_history[0]
+
+
+def clear_history():
+    """Clear turn history."""
+    global _turn_history, _history_index
+    _turn_history = []
+    _history_index = None
+
+
+def get_terminal_size() -> Tuple[int, int]:
+    """Get terminal width and height."""
+    size = shutil.get_terminal_size((80, 24))
+    return size.columns, size.lines
+
+
+def render_map_content(
     grid: Dict[str, Any],
     entities: List[Dict[str, Any]],
     current_entity_uuid: Optional[str] = None,
@@ -26,38 +256,19 @@ def render_map(
     visibility: Optional[Dict[str, Any]] = None,
     movement_path: Optional[List[Tuple[int, int]]] = None
 ) -> Text:
-    """
-    Render ASCII map with Rich formatting.
-
-    Args:
-        grid: Grid data from API
-        entities: List of entities from API
-        current_entity_uuid: UUID of current player (shown as @)
-        valid_positions: Optional list of valid move positions (shown as *)
-        visibility: Optional visibility data from API (uuid -> visible_cells)
-        movement_path: Optional path to highlight (from last move)
-
-    Returns:
-        Rich Text object with colored map
-    """
-    # Build tile lookup
+    """Render ASCII map with Rich formatting."""
     tiles = {(t["x"], t["y"]): t for t in grid.get("tiles", [])}
     min_x, min_y = grid.get("min_x", 0), grid.get("min_y", 0)
     max_x, max_y = grid.get("max_x", 14), grid.get("max_y", 14)
 
-    # Build entity lookup
     entity_at = {}
     for e in entities:
         pos = tuple(e["position"])
         entity_at[pos] = e
 
-    # Valid positions set
     valid_set = set(tuple(p) for p in valid_positions) if valid_positions else set()
-
-    # Movement path set
     path_set = set(tuple(p) for p in movement_path) if movement_path else set()
 
-    # Build visibility sets: hero (green), enemy (red), both (yellow)
     hero_visible = set()
     enemy_visible = set()
     if visibility and current_entity_uuid:
@@ -68,7 +279,6 @@ def render_map(
             else:
                 enemy_visible.update(cells)
 
-    # Build the map with Rich Text for coloring
     result = Text()
 
     # Header row with column numbers
@@ -80,59 +290,496 @@ def render_map(
     # Top border
     result.append("  +" + "-" * ((max_x - min_x + 1) * 2 + 1) + "+\n")
 
-    for y in range(min_y, max_y + 1):
+    for y in range(max_y, min_y - 1, -1):
         result.append(f"{y:2}|")
         for x in range(min_x, max_x + 1):
             pos = (x, y)
             tile = tiles.get(pos)
             entity = entity_at.get(pos)
 
-            # Determine cell character
             if entity:
                 if entity["uuid"] == current_entity_uuid:
-                    char = "@"  # Player
-                    style = "bold green"
+                    char, style = "@", "bold green"
                 elif entity.get("is_dead"):
-                    char = "%"  # Corpse
-                    style = "dim"
+                    char, style = "%", "dim"
                 else:
-                    char = entity["name"][0].upper()  # First letter
-                    style = "bold red"
+                    char, style = entity["name"][0].upper(), "bold red"
             elif pos in path_set:
-                char = "+"  # Movement path
-                style = "bold magenta"
+                char, style = "+", "bold magenta"
             elif pos in valid_set:
-                char = "*"  # Valid move target
-                style = "bold yellow"
+                char, style = "*", "bold yellow"
             elif tile is None:
-                char = " "
-                style = ""
+                char, style = " ", ""
             elif not tile.get("walkable", True):
-                char = "#"  # Wall
-                style = "white"
+                char, style = "#", "white"
             else:
-                char = "."  # Floor
-                # Determine visibility coloring
+                char = "."
                 in_hero = pos in hero_visible
                 in_enemy = pos in enemy_visible
                 if in_hero and in_enemy:
-                    style = "yellow"  # Both see it
+                    style = "yellow"
                 elif in_hero:
-                    style = "green"  # Only hero sees it
+                    style = "green"
                 elif in_enemy:
-                    style = "red"  # Only enemy sees it
+                    style = "red"
                 else:
-                    style = "dim"  # Neither sees it
+                    style = "dim"
 
             result.append(" ")
             result.append(char, style=style)
         result.append(" |\n")
 
-    # Bottom border
-    result.append("  +" + "-" * ((max_x - min_x + 1) * 2 + 1) + "+")
+    result.append("  +" + "-" * ((max_x - min_x + 1) * 2 + 1) + "+\n")
+
+    # Legend
+    result.append("@ ", style="bold green")
+    result.append("You  ")
+    result.append("X ", style="bold red")
+    result.append("Enemy  ")
+    result.append("# ", style="white")
+    result.append("Wall  ")
+    result.append("+ ", style="bold magenta")
+    result.append("Path")
 
     return result
 
+
+def render_header_panel(
+    history_mode: bool = False,
+    history_position: Optional[str] = None
+) -> Panel:
+    """Render the header panel with app name and connection info only."""
+    global _session_info
+
+    content = Text()
+
+    if history_mode:
+        content.append(f"HISTORY MODE {history_position or ''}", style="bold yellow")
+    elif _session_info.get("pvp_mode"):
+        content.append("PvP Mode", style="bold")
+        content.append("  │  ")
+        # Hero connection
+        content.append("Hero: ", style="dim")
+        if _session_info.get("hero_connected"):
+            content.append("● Connected", style="green")
+        else:
+            content.append("○ Waiting", style="red")
+        content.append("  │  ")
+        # Claude connection
+        content.append("Claude: ", style="dim")
+        if _session_info.get("claude_connected"):
+            content.append("● Connected", style="green")
+        else:
+            content.append("○ Waiting", style="yellow")
+    else:
+        content.append("Solo Mode", style="bold")
+        content.append("  │  ")
+        content.append("Human vs AI", style="dim")
+
+    border_style = "yellow" if history_mode else "cyan"
+    return Panel(content, title="⚔ NEURODRAGON ⚔", box=box.DOUBLE, border_style=border_style)
+
+
+def render_combatants_panel(
+    entities: List[Dict[str, Any]],
+    turn: Dict[str, Any],
+    current_entity_uuid: Optional[str] = None,
+    is_my_turn: bool = True
+) -> Panel:
+    """Render the combatants table panel with turn info in title."""
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold", padding=(0, 1))
+    table.add_column("Entity", style="cyan")
+    table.add_column("HP", justify="right")
+    table.add_column("AC", justify="center")
+    table.add_column("Pos", justify="center")
+    table.add_column("Conditions")
+
+    active_uuid = turn.get("current_entity_uuid")
+    for e in entities:
+        is_active = e["uuid"] == active_uuid
+        is_me = e["uuid"] == current_entity_uuid
+        name = e['name']
+        if e.get("is_dead"):
+            name = f"[dim strikethrough]{name}[/dim strikethrough]"
+        elif is_active and is_my_turn:
+            name = f"[bold green]► {name}[/bold green]"
+        elif is_active:
+            name = f"[bold red]► {name}[/bold red]"
+        elif is_me:
+            name = f"[green]{name}[/green]"
+
+        hp_val = e["hp"]
+        max_hp = e["max_hp"]
+        hp_pct = hp_val / max_hp if max_hp > 0 else 0
+        hp_color = "green" if hp_pct > 0.5 else "yellow" if hp_pct > 0.25 else "red"
+        hp = f"[{hp_color}]{hp_val}/{max_hp}[/{hp_color}]"
+
+        conditions = ", ".join(e.get("conditions", [])) or "-"
+        pos = f"({e['position'][0]},{e['position'][1]})"
+        table.add_row(name, hp, str(e.get("ac", "?")), pos, conditions)
+
+    # Build title with round and turn info
+    round_num = turn.get("round_number", 1)
+    current_name = turn.get("current_entity_name", "???")
+    turn_indicator = "[green]YOUR TURN[/green]" if is_my_turn else "[red]OPPONENT[/red]"
+    title = f"Round {round_num} │ {current_name} │ {turn_indicator}"
+
+    border_style = "green" if is_my_turn else "red"
+    return Panel(table, title=title, box=box.ROUNDED, border_style=border_style)
+
+
+def render_output_panel() -> Optional[Panel]:
+    """Render the output buffer panel (command feedback)."""
+    global _output_buffer
+
+    if not _output_buffer:
+        return None
+
+    content = Text()
+    for i, line in enumerate(_output_buffer):
+        if i > 0:
+            content.append("\n")
+        content.append(line)
+
+    return Panel(content, title="Output", box=box.ROUNDED, border_style="magenta")
+
+
+def render_turn_info_panel(
+    turn: Dict[str, Any],
+    entities: List[Dict[str, Any]],
+    is_my_turn: bool,
+    actions: Optional[Dict[str, Any]] = None,
+    history_mode: bool = False,
+    history_position: Optional[str] = None
+) -> Panel:
+    """Render turn info and entity status as a panel."""
+    current_uuid = turn.get("current_entity_uuid")
+    current = next((e for e in entities if e["uuid"] == current_uuid), None)
+    round_num = turn.get("round_number", 1)
+
+    # Turn indicator
+    if history_mode:
+        turn_text = f"[bold yellow]HISTORY[/bold yellow] {history_position or ''}"
+    elif is_my_turn:
+        turn_text = "[bold green]YOUR TURN[/bold green]"
+    else:
+        turn_text = "[bold red]OPPONENT'S TURN[/bold red]"
+    current_name = current["name"] if current else "???"
+
+    # Entity table
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold", padding=(0, 1))
+    table.add_column("Entity", style="cyan")
+    table.add_column("HP", justify="right")
+    table.add_column("AC", justify="center")
+    table.add_column("Position", justify="center")
+    table.add_column("Conditions")
+
+    for e in entities:
+        is_current = e["uuid"] == current_uuid
+        name = e['name']
+        if e.get("is_dead"):
+            name = f"[dim strikethrough]{name}[/dim strikethrough]"
+        elif is_current and is_my_turn:
+            name = f"[bold green]{name}[/bold green]"
+        elif is_current:
+            name = f"[bold]{name}[/bold]"
+
+        hp_val = e["hp"]
+        max_hp = e["max_hp"]
+        hp_color = "green" if hp_val > max_hp // 2 else "yellow" if hp_val > 0 else "red"
+        hp = f"[{hp_color}]{hp_val}/{max_hp}[/{hp_color}]"
+
+        conditions = ", ".join(e.get("conditions", [])) or "-"
+        table.add_row(name, hp, str(e.get("ac", "?")), f"({e['position'][0]},{e['position'][1]})", conditions)
+
+    # Action economy line
+    economy_line = ""
+    if is_my_turn:
+        economy_line = (
+            f"\n[bold]Economy:[/bold] "
+            f"Actions:[cyan]{turn.get('actions_remaining', 0)}[/cyan] "
+            f"Bonus:[cyan]{turn.get('bonus_actions_remaining', 0)}[/cyan] "
+            f"Move:[cyan]{turn.get('movement_remaining', 0)}ft[/cyan] "
+            f"React:[cyan]{turn.get('reactions_remaining', 0)}[/cyan]"
+        )
+
+    content = Group(table, Text.from_markup(economy_line) if economy_line else Text(""))
+    title = f"Round {round_num} │ {current_name} │ {turn_text}"
+
+    return Panel(content, title=title, box=box.ROUNDED, border_style="blue")
+
+
+def _render_log_entry(entry: Dict[str, Any], content: Text):
+    """Render a single combat log entry with rich formatting."""
+    entry_type = entry.get("type", "message")
+
+    if entry_type == "attack":
+        attacker = entry.get("attacker", "Someone")
+        target = entry.get("target", "Unknown")
+        weapon = entry.get("weapon", "weapon")
+        d20 = entry.get("d20", 0)
+        all_rolls = entry.get("all_d20_rolls", [d20])
+        adv_status = entry.get("advantage_status", "none")
+        attack_bonus = entry.get("attack_bonus", 0)
+        attack_total = entry.get("attack_total", 0)
+        target_ac = entry.get("target_ac", 0)
+        outcome = (entry.get("outcome") or "").lower()
+        total_damage = entry.get("total_damage", 0)
+
+        # Attacker and target
+        content.append(f"{attacker}", style="bold cyan")
+        content.append(" → ")
+        content.append(f"{target}", style="bold yellow")
+
+        # Roll details
+        bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
+        if adv_status == "advantage" and len(all_rolls) >= 2:
+            content.append(f" ADV", style="green")
+            content.append(f" d20({all_rolls[0]},{all_rolls[1]}→{d20}){bonus_str}={attack_total}")
+        elif adv_status == "disadvantage" and len(all_rolls) >= 2:
+            content.append(f" DIS", style="red")
+            content.append(f" d20({all_rolls[0]},{all_rolls[1]}→{d20}){bonus_str}={attack_total}")
+        else:
+            content.append(f" d20({d20}){bonus_str}={attack_total}")
+
+        content.append(f" vs AC {target_ac} ")
+
+        # Outcome
+        if outcome == "crit":
+            content.append("CRIT!", style="bold yellow")
+            content.append(f" {total_damage}dmg", style="bold red")
+        elif outcome == "hit":
+            content.append("HIT", style="green")
+            content.append(f" {total_damage}dmg", style="red")
+        elif outcome == "crit miss":
+            content.append("FUMBLE!", style="bold red")
+        else:
+            content.append("MISS", style="dim")
+
+    elif entry_type == "move":
+        mover = entry.get("entity", "Someone")
+        from_pos = entry.get("from", [0, 0])
+        to_pos = entry.get("to", [0, 0])
+        content.append(f"{mover}", style="bold cyan")
+        content.append(" moved ")
+        content.append(f"({from_pos[0]},{from_pos[1]})→({to_pos[0]},{to_pos[1]})", style="green")
+
+    elif entry_type == "death":
+        entity = entry.get("entity", "Someone")
+        content.append(f"☠ {entity} defeated!", style="bold red")
+
+    elif entry_type == "action":
+        entity = entry.get("entity", "Someone")
+        action_name = entry.get("action", "action")
+        content.append(f"{entity}", style="bold cyan")
+        content.append(f" uses ", style="dim")
+        content.append(f"{action_name.title()}", style="bold magenta")
+
+    elif entry_type == "turn_end":
+        entity = entry.get("entity", "Someone")
+        content.append(f"─ {entity}'s turn ends ─", style="dim")
+
+    else:
+        # Simple message fallback
+        message = entry.get("message", str(entry))
+        content.append(f"{message}", style="dim")
+
+
+def render_combat_log_panel() -> Panel:
+    """Render the combat log with rich formatting."""
+    global _combat_log
+
+    content = Text()
+    entries = _combat_log[-MAX_COMBAT_LOG:]
+
+    if not entries:
+        content.append("No combat history yet", style="dim")
+    else:
+        for i, entry in enumerate(entries):
+            if i > 0:
+                content.append("\n")
+            _render_log_entry(entry, content)
+
+    return Panel(content, title="Combat Log", box=box.ROUNDED, border_style="blue")
+
+
+def render_available_actions_panel(
+    actions: Dict[str, Any],
+    entities: List[Dict[str, Any]],
+    turn: Dict[str, Any]
+) -> Panel:
+    """Render available actions as a compact panel with economy in title."""
+    content = Text()
+    entity_lookup = {e["uuid"]: e for e in entities}
+
+    actions_remaining = turn.get("actions_remaining", 0)
+    bonus_remaining = turn.get("bonus_actions_remaining", 0)
+    movement_remaining = actions.get("remaining_movement", 0)
+    reactions_remaining = turn.get("reactions_remaining", 0)
+
+    # Movement
+    if actions.get("can_move") and movement_remaining > 0:
+        content.append("MOVE", style="bold cyan")
+        content.append(f" ({movement_remaining}ft)  ")
+        content.append("[m X Y] or [m] to show positions\n", style="dim")
+
+    # Attacks
+    attacks = actions.get("attacks", [])
+    has_valid_attack = False
+    for atk in attacks:
+        targets = atk.get("valid_targets", [])
+        can_afford = atk.get("can_afford", False)
+        if targets and can_afford:
+            has_valid_attack = True
+            target_names = [entity_lookup.get(t, {}).get("name", "?") for t in targets[:2]]
+            content.append("ATTACK", style="bold red")
+            content.append(f" {atk['name']}  ")
+            content.append(f"[a 0] targets: {', '.join(target_names)}\n", style="dim")
+            break  # Just show first valid attack option
+
+    if not has_valid_attack and attacks:
+        content.append("ATTACK", style="dim")
+        content.append(" - no targets in range\n", style="dim")
+
+    # Other actions (horizontal)
+    other = actions.get("other_actions", [])
+    other_items = []
+    for act in other:
+        if act.get("can_afford"):
+            action_id = act.get("action_id", "")
+            if action_id == "dash":
+                other_items.append(("DASH", "bold magenta", "[d]"))
+            elif action_id == "dodge":
+                other_items.append(("DODGE", "bold blue", "[o]"))
+            elif action_id == "disengage":
+                other_items.append(("DISENGAGE", "bold green", "[i]"))
+
+    if other_items:
+        for i, (name, style, key) in enumerate(other_items):
+            if i > 0:
+                content.append("  ")
+            content.append(name, style=style)
+            content.append(f" {key}", style="dim")
+        content.append("\n")
+
+    # Always available
+    content.append("END", style="bold white")
+    content.append(" [e]  ", style="dim")
+    content.append("HELP", style="bold white")
+    content.append(" [?]  ", style="dim")
+    content.append("QUIT", style="bold white")
+    content.append(" [q]", style="dim")
+
+    # Build title with action economy
+    title = f"Actions:{actions_remaining} Bonus:{bonus_remaining} Move:{movement_remaining}ft React:{reactions_remaining}"
+
+    return Panel(content, title=title, box=box.ROUNDED, border_style="green")
+
+
+def render_history_snapshot(snapshot: Dict[str, Any], current_entity_uuid: Optional[str] = None):
+    """Render a historical turn snapshot."""
+    global _combat_log
+
+    # Temporarily set combat log from snapshot
+    old_combat_log = _combat_log
+    _combat_log = snapshot.get("combat_log", [])
+
+    history_pos = f"[{_history_index + 1}/{len(_turn_history)}]" if _history_index is not None else ""
+
+    clear()
+
+    # Header panel with history indicator
+    header_panel = render_header_panel(
+        history_mode=True,
+        history_position=history_pos
+    )
+
+    # Map panel
+    map_content = render_map_content(
+        snapshot["grid"],
+        snapshot["entities"],
+        current_entity_uuid,
+        None, None, None
+    )
+    map_panel = Panel(map_content, title="Battlefield (History)", box=box.ROUNDED, border_style="yellow")
+
+    # Combatants panel (showing historical state)
+    combatants_panel = render_combatants_panel(
+        snapshot["entities"],
+        snapshot["turn"],
+        current_entity_uuid,
+        is_my_turn=False  # In history mode, never "your turn"
+    )
+
+    # Combat log panel
+    log_panel = render_combat_log_panel()
+
+    # Print panels (with top padding to avoid cutoff)
+    console.print()  # Top margin
+    console.print(header_panel)
+    console.print(map_panel)
+    console.print(combatants_panel)
+    console.print(log_panel)
+
+    # History navigation help
+    console.print("[dim]History: [pt] prev [nt] next [ft] first [ct] current[/dim]")
+
+    # Restore
+    _combat_log = old_combat_log
+
+
+def render_full_screen(
+    grid: Dict[str, Any],
+    entities: List[Dict[str, Any]],
+    turn: Dict[str, Any],
+    current_entity_uuid: Optional[str] = None,
+    actions: Optional[Dict[str, Any]] = None,
+    visibility: Optional[Dict[str, Any]] = None,
+    movement_path: Optional[List[Tuple[int, int]]] = None,
+    valid_positions: Optional[List[Tuple[int, int]]] = None,
+    is_my_turn: bool = True
+):
+    """Render the full screen layout."""
+    clear()
+
+    # 1. Header panel (NEURODRAGON + connection info only)
+    header_panel = render_header_panel()
+
+    # 2. Battlefield panel (map)
+    map_content = render_map_content(
+        grid, entities, current_entity_uuid, valid_positions, visibility, movement_path
+    )
+    map_panel = Panel(map_content, title="Battlefield", box=box.ROUNDED, border_style="cyan")
+
+    # 3. Combatants panel (entity table with turn info in title)
+    combatants_panel = render_combatants_panel(entities, turn, current_entity_uuid, is_my_turn)
+
+    # 4. Combat log panel
+    log_panel = render_combat_log_panel()
+
+    # 5. Output panel (command feedback - only if there's content)
+    output_panel = render_output_panel()
+
+    # 6. Available actions panel (only on player's turn, with economy in title)
+    actions_panel = None
+    if is_my_turn and actions:
+        actions_panel = render_available_actions_panel(actions, entities, turn)
+
+    # Print all panels in order (with top padding to avoid cutoff)
+    console.print()  # Top margin
+    console.print(header_panel)
+    console.print(map_panel)
+    console.print(combatants_panel)
+    console.print(log_panel)
+    if output_panel:
+        console.print(output_panel)
+    if actions_panel:
+        console.print(actions_panel)
+
+
+# ============================================================================
+# Legacy functions for backward compatibility
+# ============================================================================
 
 def show_map(
     grid: Dict[str, Any],
@@ -143,157 +790,24 @@ def show_map(
     movement_path: Optional[List[Tuple[int, int]]] = None,
     title: str = "Battlefield"
 ):
-    """Display the map in a panel."""
-    map_text = render_map(grid, entities, current_entity_uuid, valid_positions, visibility, movement_path)
-
-    # Legend with visibility colors
-    legend = Text()
-    legend.append("@ ", style="bold green")
-    legend.append("= You  ")
-    legend.append("X ", style="bold red")
-    legend.append("= Enemy  ")
-    legend.append("* ", style="bold yellow")
-    legend.append("= Valid move  ")
-    legend.append("+ ", style="bold magenta")
-    legend.append("= Path\n")
-    legend.append(". ", style="green")
-    legend.append("= You see  ")
-    legend.append(". ", style="red")
-    legend.append("= Enemy sees  ")
-    legend.append(". ", style="yellow")
-    legend.append("= Both see  ")
-    legend.append("# ", style="white")
-    legend.append("= Wall")
-
-    # Combine map and legend
-    content = Text()
-    content.append_text(map_text)
-    content.append("\n\n")
-    content.append_text(legend)
-
-    console.print(Panel(content, title=title, box=box.ROUNDED))
+    """Display the map in a panel (legacy)."""
+    map_text = render_map_content(grid, entities, current_entity_uuid, valid_positions, visibility, movement_path)
+    console.print(Panel(map_text, title=title, box=box.ROUNDED))
 
 
 def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]], is_my_turn: bool = None):
-    """Display turn information and entity status.
+    """Display turn information (legacy)."""
+    panel = render_turn_info_panel(turn, entities, is_my_turn or False)
+    console.print(panel)
 
-    Args:
-        turn: Turn data from API
-        entities: List of entity data
-        is_my_turn: Whether it's THIS player's turn. If None, falls back to is_human_turn.
-    """
-    # Find current entity
-    current_uuid = turn.get("current_entity_uuid")
-    current = next((e for e in entities if e["uuid"] == current_uuid), None)
 
-    if not current:
-        console.print("[red]No current entity[/red]")
+def show_combat_log(messages: List[str], max_lines: int = 5):
+    """Display recent combat log messages (legacy)."""
+    if not messages:
         return
-
-    # Turn header - use explicit is_my_turn if provided, else fall back to is_human_turn
-    my_turn = is_my_turn if is_my_turn is not None else turn.get("is_human_turn", False)
-    turn_text = "[bold green]YOUR TURN[/bold green]" if my_turn else "[bold red]OPPONENT'S TURN[/bold red]"
-
-    console.print(Panel(
-        f"Round [bold]{turn['round_number']}[/bold] - {current['name']} - {turn_text}",
-        box=box.HEAVY
-    ))
-
-    # Entity status table
-    table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
-    table.add_column("Entity", style="cyan")
-    table.add_column("HP", justify="right")
-    table.add_column("AC", justify="right")
-    table.add_column("Position", justify="center")
-    table.add_column("Conditions")
-
-    for e in entities:
-        is_current = e["uuid"] == current_uuid
-        name = f"[bold]{e['name']}[/bold]" if is_current else e['name']
-        if e["uuid"] == current_uuid and my_turn:
-            name = f"[green]{name}[/green]"
-        elif e.get("is_dead"):
-            name = f"[dim strikethrough]{e['name']}[/dim strikethrough]"
-
-        hp_color = "green" if e["hp"] > e["max_hp"] // 2 else "yellow" if e["hp"] > 0 else "red"
-        hp = f"[{hp_color}]{e['hp']}/{e['max_hp']}[/{hp_color}]"
-
-        conditions = ", ".join(e.get("conditions", [])) or "-"
-
-        table.add_row(
-            name,
-            hp,
-            str(e.get("ac", "?")),
-            f"({e['position'][0]}, {e['position'][1]})",
-            conditions
-        )
-
-    console.print(table)
-
-    # Action economy for current entity if it's my turn
-    if my_turn:
-        console.print(
-            f"\n[bold]Action Economy:[/bold] "
-            f"Actions: [cyan]{turn['actions_remaining']}[/cyan]  "
-            f"Bonus: [cyan]{turn['bonus_actions_remaining']}[/cyan]  "
-            f"Movement: [cyan]{turn['movement_remaining']}ft[/cyan]  "
-            f"Reaction: [cyan]{turn['reactions_remaining']}[/cyan]"
-        )
-
-
-def show_available_actions(actions: Dict[str, Any], entities: List[Dict[str, Any]]):
-    """Display available actions."""
-    console.print("\n[bold underline]Available Actions:[/bold underline]\n")
-
-    # Entity lookup for names
-    entity_lookup = {e["uuid"]: e for e in entities}
-
-    # Attacks
-    attacks = actions.get("attacks", [])
-    if attacks:
-        console.print("[bold cyan]ATTACKS[/bold cyan] (1 action):")
-        for i, atk in enumerate(attacks, 1):
-            targets = atk.get("valid_targets", [])
-            can_afford = atk.get("can_afford", False)
-            status = "[green]ready[/green]" if can_afford else "[red]no targets[/red]"
-
-            target_names = []
-            for t_uuid in targets[:3]:  # Show first 3
-                t = entity_lookup.get(t_uuid, {})
-                target_names.append(t.get("name", "Unknown"))
-            targets_str = ", ".join(target_names) if target_names else "none in range"
-
-            console.print(f"  [{i}] {atk['name']} - {status}")
-            if targets:
-                console.print(f"      Targets: {targets_str}")
-
-    # Movement
-    if actions.get("can_move"):
-        console.print(f"\n[bold cyan]MOVEMENT[/bold cyan] ({actions['remaining_movement']}ft remaining):")
-        console.print("  [m] move X Y - Move to position")
-        console.print("  [m] move     - Show valid positions on map")
-
-    # Other actions
-    other = actions.get("other_actions", [])
-    if other:
-        console.print("\n[bold cyan]OTHER ACTIONS[/bold cyan] (1 action each):")
-        for act in other:
-            can = "[green]ready[/green]" if act.get("can_afford") else "[red]no action[/red]"
-            console.print(f"  [{act['action_id'][0]}] {act['name']} - {act['description']} - {can}")
-
-    # Free actions
-    free = actions.get("free_actions", [])
-    if free:
-        console.print("\n[bold cyan]FREE ACTIONS[/bold cyan]:")
-        for act in free:
-            console.print(f"  [p] {act['name']} - {act['description']}")
-
-    # Always available
-    console.print("\n[bold cyan]OTHER[/bold cyan]:")
-    console.print("  [e] end      - End your turn")
-    console.print("  [s] status   - Show detailed status")
-    console.print("  [?] help     - Show all commands")
-    console.print("  [q] quit     - Exit game")
+    console.print("\n[bold]Combat Log:[/bold]")
+    for msg in messages[-max_lines:]:
+        console.print(f"  [dim]{msg}[/dim]")
 
 
 def format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total, target_ac):
@@ -301,15 +815,12 @@ def format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attac
     bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
 
     if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
-        # Show both rolls, highlight the higher one (used)
         rolls_display = f"d20([green]{all_d20_rolls[0]}[/green], [green]{all_d20_rolls[1]}[/green] → [bold green]{d20}[/bold green])"
         adv_text = "[bold green]ADV[/bold green] "
     elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
-        # Show both rolls, highlight the lower one (used)
         rolls_display = f"d20([red]{all_d20_rolls[0]}[/red], [red]{all_d20_rolls[1]}[/red] → [bold red]{d20}[/bold red])"
         adv_text = "[bold red]DIS[/bold red] "
     else:
-        # Normal roll
         rolls_display = f"d20([cyan]{d20}[/cyan])"
         adv_text = ""
 
@@ -317,178 +828,113 @@ def format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attac
 
 
 def show_opponent_action(entry: Dict[str, Any]):
-    """
-    Display an opponent's action from a combat log entry with rich formatting.
-
-    Similar to show_action_result but for combat log entries.
-    """
-    entry_type = entry.get("type", "")
-    message = entry.get("message", "")
+    """Process a combat log entry from the server and add to our rich combat log."""
+    entry_type = entry.get("type", "").lower()
     details = entry.get("details", {})
 
-    if entry_type == "attack":
-        attacker = details.get("attacker", "Opponent")
-        target_name = details.get("target", "Unknown")
-        weapon = details.get("weapon", "weapon")
-        d20 = details.get("d20")
-        all_d20_rolls = details.get("all_d20_rolls", [])
-        advantage_status = details.get("advantage_status", "none")
-        attack_bonus = details.get("attack_bonus", 0)
-        attack_total = details.get("attack_total")
-        target_ac = details.get("target_ac")
-        outcome = (details.get("outcome") or "").lower()
-        total_damage = details.get("total_damage", 0)
-        target_hp = details.get("target_hp")
-
-        # Attack header
-        console.print(f"\n[bold red]{attacker}[/bold red] attacks [bold cyan]{target_name}[/bold cyan] with [white]{weapon}[/white]")
-
-        # Roll breakdown
-        if d20 is not None and attack_total is not None and target_ac is not None:
-            console.print(format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total, target_ac))
-
-        # Outcome
-        if outcome == "crit":
-            console.print(f"  Result: [bold yellow]*** CRITICAL HIT! ***[/bold yellow]")
-        elif outcome == "hit":
-            console.print(f"  Result: [bold green]HIT![/bold green]")
-        elif outcome == "crit miss":
-            console.print(f"  Result: [bold red]CRITICAL MISS![/bold red]")
-        else:
-            console.print(f"  Result: [dim]MISS[/dim]")
-
-        # Damage if hit
-        if outcome in ("hit", "crit") and total_damage > 0:
-            console.print(f"  Damage: [bold red]{total_damage}[/bold red]")
-
-        # Target HP
-        if target_hp is not None:
-            console.print(f"  {target_name} HP: [red]{target_hp}[/red]")
-
-    elif entry_type == "move":
-        entity = details.get("entity", "Opponent")
-        to_pos = details.get("to", [])
-        console.print(f"\n[yellow]{entity}[/yellow] moves to {tuple(to_pos)}")
-
-    elif entry_type == "opportunity_attack":
-        attacker = details.get("attacker", "Opponent")
-        target_name = details.get("target", "Unknown")
-        outcome = (details.get("outcome") or "").lower()
-        total_damage = details.get("total_damage", 0)
-        console.print(f"\n[red](Opportunity Attack)[/red] {attacker} attacks {target_name}!")
-        if outcome in ("hit", "crit"):
-            console.print(f"  Result: [green]HIT![/green] for [red]{total_damage}[/red] damage")
-        else:
-            console.print(f"  Result: [dim]MISS[/dim]")
-
-    elif entry_type == "action":
-        # Generic action (dash, dodge, disengage)
-        console.print(f"\n[yellow]{message}[/yellow]")
-
+    # Convert server entry to our rich format
+    if entry_type in ("attack", "opportunity_attack"):
+        add_to_combat_log({
+            "type": "attack",
+            "attacker": details.get("attacker", "Opponent"),
+            "target": details.get("target", "Unknown"),
+            "weapon": details.get("weapon", "weapon"),
+            "d20": details.get("d20"),
+            "all_d20_rolls": details.get("all_d20_rolls", []),
+            "advantage_status": details.get("advantage_status", "none"),
+            "attack_bonus": details.get("attack_bonus", 0),
+            "attack_total": details.get("attack_total"),
+            "target_ac": details.get("target_ac"),
+            "outcome": details.get("outcome"),
+            "total_damage": details.get("total_damage", 0),
+        })
+    elif entry_type in ("move", "movement"):
+        add_to_combat_log({
+            "type": "move",
+            "entity": details.get("entity", "Opponent"),
+            "from": details.get("from", [0, 0]),
+            "to": details.get("to", [0, 0]),
+        })
     elif entry_type == "death":
-        console.print(f"\n[bold red]{message}[/bold red]")
-
+        add_to_combat_log({
+            "type": "death",
+            "entity": details.get("entity", "Someone"),
+        })
+    elif entry_type == "action":
+        add_to_combat_log({
+            "type": "action",
+            "entity": details.get("entity", "Someone"),
+            "action": details.get("action", "action"),
+        })
     elif entry_type == "turn_end":
-        # Don't need to show turn end separately
-        pass
-
-    else:
-        # Unknown type, just show message
-        if message:
-            console.print(f"[dim]{message}[/dim]")
+        add_to_combat_log({
+            "type": "turn_end",
+            "entity": details.get("entity", "Someone"),
+        })
 
 
 def show_action_result(result: Dict[str, Any]):
-    """Display the result of an action."""
-    success = result.get("success", False)
+    """Process a player action result and add to rich combat log."""
     event_type = result.get("event_type", "")
+    message = result.get("message", "")
 
-    # Show attack details with full breakdown
-    event_data = result.get("event_data")
-    if event_data and event_type == "attack":
-        attacker = event_data.get("attacker", "You")
-        target_name = event_data.get("target", "Unknown")
-        weapon = event_data.get("weapon", "weapon")
-        d20 = event_data.get("d20")
-        all_d20_rolls = event_data.get("all_d20_rolls", [])
-        advantage_status = event_data.get("advantage_status", "none")
-        attack_bonus = event_data.get("attack_bonus", 0)
-        attack_total = event_data.get("attack_total")
-        target_ac = event_data.get("target_ac")
-        outcome = (event_data.get("outcome") or "").lower()
-        total_damage = event_data.get("total_damage", 0)
-        damage_rolls = event_data.get("damage_rolls", [])
-
-        # Attack header
-        console.print(f"\n[bold cyan]{attacker}[/bold cyan] attacks [bold yellow]{target_name}[/bold yellow] with [white]{weapon}[/white]")
-
-        # Roll breakdown with advantage/disadvantage info
-        console.print(format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total, target_ac))
-
-        # Outcome
-        if outcome == "crit":
-            console.print(f"  Result: [bold yellow]*** CRITICAL HIT! ***[/bold yellow]")
-        elif outcome == "hit":
-            console.print(f"  Result: [bold green]HIT![/bold green]")
-        elif outcome == "crit miss":
-            console.print(f"  Result: [bold red]CRITICAL MISS![/bold red]")
-        else:
-            console.print(f"  Result: [dim]MISS[/dim]")
-
-        # Damage breakdown if hit
-        if outcome in ("hit", "crit") and total_damage > 0:
-            damage_strs = []
-            for dr in damage_rolls:
-                dice = dr.get("dice", [])
-                bonus = dr.get("bonus", 0)
-                if isinstance(dice, list):
-                    dice_str = "+".join(str(d) for d in dice)
-                else:
-                    dice_str = str(dice)
-                if bonus != 0:
-                    bonus_str = f"+{bonus}" if bonus > 0 else str(bonus)
-                    damage_strs.append(f"({dice_str}){bonus_str}")
-                else:
-                    damage_strs.append(f"({dice_str})")
-            console.print(f"  Damage: {' + '.join(damage_strs)} = [bold red]{total_damage}[/bold red]")
-
-        # Target HP after attack
-        target_hp = result.get("target_hp")
-        if target_hp is not None:
-            console.print(f"  {target_name} HP: [red]{target_hp}[/red]")
-
+    # Add to rich combat log based on event type
+    if event_type == "attack":
+        data = result.get("event_data", {})
+        add_to_combat_log({
+            "type": "attack",
+            "attacker": data.get("attacker", "You"),
+            "target": data.get("target", "Unknown"),
+            "weapon": data.get("weapon", "weapon"),
+            "d20": data.get("d20"),
+            "all_d20_rolls": data.get("all_d20_rolls", []),
+            "advantage_status": data.get("advantage_status", "none"),
+            "attack_bonus": data.get("attack_bonus", 0),
+            "attack_total": data.get("attack_total"),
+            "target_ac": data.get("target_ac"),
+            "outcome": data.get("outcome"),
+            "total_damage": data.get("total_damage", 0),
+        })
     elif event_type == "movement":
-        # Movement result
-        if event_data:
-            start = event_data.get("start", [])
-            end = event_data.get("end", [])
-            console.print(f"[green]Moved from {tuple(start)} to {tuple(end)}[/green]")
-        else:
-            message = result.get("message", "Moved")
-            console.print(f"[green]{message}[/green]")
+        data = result.get("event_data", {})
+        add_to_combat_log({
+            "type": "move",
+            "entity": "You",
+            "from": data.get("start", [0, 0]),
+            "to": data.get("end", [0, 0]),
+        })
+    elif event_type in ("dash", "dodge", "disengage"):
+        add_to_combat_log({
+            "type": "action",
+            "entity": "You",
+            "action": event_type,
+        })
+    elif message:
+        add_to_combat_log({"type": "message", "message": message})
 
-        # Show any opportunity attacks triggered by movement
-        triggered = result.get("triggered_reactions", [])
-        for reaction in triggered:
-            if reaction.get("type") == "opportunity_attack":
-                show_opportunity_attack(reaction)
-
-    else:
-        # Generic action result
-        message = result.get("message", "Action completed")
-        if success:
-            console.print(f"[green]{message}[/green]")
-        else:
-            console.print(f"[red]{message}[/red]")
+    # Show any triggered reactions
+    triggered = result.get("triggered_reactions", [])
+    for reaction in triggered:
+        if reaction.get("type") == "opportunity_attack":
+            add_to_combat_log({
+                "type": "attack",
+                "attacker": reaction.get("attacker", "Enemy"),
+                "target": "You",
+                "weapon": reaction.get("weapon", "weapon"),
+                "d20": reaction.get("d20"),
+                "all_d20_rolls": reaction.get("all_d20_rolls", []),
+                "advantage_status": reaction.get("advantage_status", "none"),
+                "attack_bonus": reaction.get("attack_bonus", 0),
+                "attack_total": reaction.get("attack_total"),
+                "target_ac": reaction.get("target_ac"),
+                "outcome": reaction.get("outcome"),
+                "total_damage": reaction.get("total_damage", 0),
+            })
 
     # Show deaths
     deaths = result.get("deaths", [])
     for name in deaths:
-        console.print(f"\n[bold red]*** {name} has been slain! ***[/bold red]")
-
-    # Show encounter end
-    if result.get("encounter_ended"):
-        console.print("\n[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]")
+        add_to_combat_log({"type": "death", "entity": name})
 
 
 def show_error(message: str):
@@ -501,63 +947,25 @@ def show_info(message: str):
     console.print(f"[cyan]{message}[/cyan]")
 
 
+def show_available_actions(actions: Dict[str, Any], entities: List[Dict[str, Any]]):
+    """Display available actions (legacy - now integrated into full screen)."""
+    panel = render_available_actions_panel(actions, entities, {"actions_remaining": 1})
+    console.print(panel)
+
+
 def show_opportunity_attack(reaction: Dict[str, Any]):
     """Display an opportunity attack that was triggered."""
     attacker = reaction.get("attacker", "Unknown")
-    target_name = reaction.get("target", "You")
-    weapon = reaction.get("weapon", "weapon")
-    d20 = reaction.get("d20")
-    all_d20_rolls = reaction.get("all_d20_rolls", [])
-    advantage_status = reaction.get("advantage_status", "none")
-    attack_bonus = reaction.get("attack_bonus", 0)
-    attack_total = reaction.get("attack_total")
-    target_ac = reaction.get("target_ac")
     outcome = (reaction.get("outcome") or "").lower()
     total_damage = reaction.get("total_damage", 0)
-    damage_rolls = reaction.get("damage_rolls", [])
 
     console.print(f"\n[bold magenta]*** OPPORTUNITY ATTACK! ***[/bold magenta]")
-    console.print(f"[red]{attacker}[/red] attacks [cyan]{target_name}[/cyan] with [white]{weapon}[/white]")
+    console.print(f"[red]{attacker}[/red] attacks you!")
 
-    # Roll breakdown with advantage/disadvantage
-    if d20 is not None and attack_total is not None and target_ac is not None:
-        console.print(format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total, target_ac))
-
-    # Outcome
-    if outcome == "crit":
-        console.print(f"  Result: [bold yellow]*** CRITICAL HIT! ***[/bold yellow]")
-    elif outcome == "hit":
-        console.print(f"  Result: [bold green]HIT![/bold green]")
-    elif outcome == "crit miss":
-        console.print(f"  Result: [bold red]CRITICAL MISS![/bold red]")
+    if outcome in ("hit", "crit"):
+        console.print(f"  [green]HIT![/green] {total_damage} damage")
     else:
-        console.print(f"  Result: [dim]MISS[/dim]")
-
-    # Damage breakdown if hit
-    if outcome in ("hit", "crit") and total_damage > 0:
-        damage_strs = []
-        for dr in damage_rolls:
-            dice = dr.get("dice", [])
-            bonus = dr.get("bonus", 0)
-            if isinstance(dice, list):
-                dice_str = "+".join(str(d) for d in dice)
-            else:
-                dice_str = str(dice)
-            if bonus != 0:
-                b_str = f"+{bonus}" if bonus > 0 else str(bonus)
-                damage_strs.append(f"({dice_str}){b_str}")
-            else:
-                damage_strs.append(f"({dice_str})")
-        console.print(f"  Damage: {' + '.join(damage_strs)} = [bold red]{total_damage}[/bold red]")
-
-
-def show_combat_log(messages: List[str], max_lines: int = 5):
-    """Display recent combat log messages."""
-    if not messages:
-        return
-    console.print("\n[bold]Combat Log:[/bold]")
-    for msg in messages[-max_lines:]:
-        console.print(f"  [dim]{msg}[/dim]")
+        console.print(f"  [dim]MISS[/dim]")
 
 
 def show_ai_actions(actions: List[Dict[str, Any]]):
@@ -565,73 +973,30 @@ def show_ai_actions(actions: List[Dict[str, Any]]):
     if not actions:
         return
 
-    console.print("\n[bold red]━━━ AI TURN ━━━[/bold red]")
     for action in actions:
         action_type = action.get("type", "")
-
-        if action_type == "turn_start":
-            entity_name = action.get("entity", "Unknown")
-            console.print(f"\n[bold yellow]{entity_name}'s turn[/bold yellow]")
-
-        elif action_type == "attack":
-            attacker = action.get("attacker", "Unknown")
-            target_name = action.get("target", "Unknown")
-            weapon = action.get("weapon", "weapon")
-            d20 = action.get("d20")
-            all_d20_rolls = action.get("all_d20_rolls", [])
-            advantage_status = action.get("advantage_status", "none")
-            attack_bonus = action.get("attack_bonus", 0)
-            attack_total = action.get("attack_total")
-            target_ac = action.get("target_ac")
-            outcome = (action.get("outcome") or "").lower()
-            total_damage = action.get("total_damage", 0)
-            damage_rolls = action.get("damage_rolls", [])
-            is_opp_attack = action.get("is_opportunity_attack", False)
-
-            # Attack header
-            opp_text = "[bold magenta](OPPORTUNITY ATTACK)[/bold magenta] " if is_opp_attack else ""
-            console.print(f"\n  {opp_text}[red]{attacker}[/red] attacks [cyan]{target_name}[/cyan] with [white]{weapon}[/white]")
-
-            # Roll breakdown with advantage/disadvantage
-            if d20 is not None and attack_total is not None and target_ac is not None:
-                roll_line = format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total, target_ac)
-                # Add extra indent for AI actions
-                console.print(f"  {roll_line}")
-
-            # Outcome
-            if outcome == "crit":
-                console.print(f"    Result: [bold yellow]*** CRITICAL HIT! ***[/bold yellow]")
-            elif outcome == "hit":
-                console.print(f"    Result: [bold green]HIT![/bold green]")
-            elif outcome == "crit miss":
-                console.print(f"    Result: [bold red]CRITICAL MISS![/bold red]")
-            else:
-                console.print(f"    Result: [dim]MISS[/dim]")
-
-            # Damage breakdown if hit
-            if outcome in ("hit", "crit") and total_damage > 0:
-                damage_strs = []
-                for dr in damage_rolls:
-                    dice = dr.get("dice", [])
-                    bonus = dr.get("bonus", 0)
-                    if isinstance(dice, list):
-                        dice_str = "+".join(str(d) for d in dice)
-                    else:
-                        dice_str = str(dice)
-                    if bonus != 0:
-                        b_str = f"+{bonus}" if bonus > 0 else str(bonus)
-                        damage_strs.append(f"({dice_str}){b_str}")
-                    else:
-                        damage_strs.append(f"({dice_str})")
-                console.print(f"    Damage: {' + '.join(damage_strs)} = [bold red]{total_damage}[/bold red]")
-
+        if action_type == "attack":
+            add_to_combat_log({
+                "type": "attack",
+                "attacker": action.get("attacker", "AI"),
+                "target": action.get("target", "you"),
+                "weapon": action.get("weapon", "weapon"),
+                "d20": action.get("d20"),
+                "all_d20_rolls": action.get("all_d20_rolls", []),
+                "advantage_status": action.get("advantage_status", "none"),
+                "attack_bonus": action.get("attack_bonus", 0),
+                "attack_total": action.get("attack_total"),
+                "target_ac": action.get("target_ac"),
+                "outcome": action.get("outcome"),
+                "total_damage": action.get("total_damage", 0),
+            })
         elif action_type == "move":
-            entity = action.get("entity", "Unknown")
-            from_pos = action.get("from", [0, 0])
-            to_pos = action.get("to", [0, 0])
-            console.print(f"  [red]{entity}[/red] moves {tuple(from_pos)} → {tuple(to_pos)}")
-
-    console.print("[bold red]━━━ END AI TURN ━━━[/bold red]\n")
+            add_to_combat_log({
+                "type": "move",
+                "entity": action.get("entity", "AI"),
+                "from": action.get("from", [0, 0]),
+                "to": action.get("to", [0, 0]),
+            })
 
 
 def prompt_command() -> str:
@@ -646,31 +1011,30 @@ def show_help():
 [bold underline]Commands:[/bold underline]
 
 [bold cyan]Movement:[/bold cyan]
-  move X Y      Move to position (X, Y)
-  move          Show valid move positions on map
-  m X Y         Short form of move
+  m X Y / move X Y    Move to position (X, Y)
+  m / move            Show valid move positions on map
 
 [bold cyan]Combat:[/bold cyan]
-  attack N      Attack target number N from the list
-  a N           Short form of attack
+  a N / attack N      Attack target number N
 
 [bold cyan]Actions:[/bold cyan]
-  dash          Take the Dash action (double movement)
-  dodge         Take the Dodge action (disadvantage on attacks)
-  disengage     Take the Disengage action (no opportunity attacks)
-  d/o/i         Short forms
+  d / dash            Dash (double movement this turn)
+  o / dodge           Dodge (attackers have disadvantage)
+  i / disengage       Disengage (no opportunity attacks)
 
 [bold cyan]Turn:[/bold cyan]
-  end           End your turn
-  e             Short form of end
+  e / end             End your turn
+
+[bold cyan]History:[/bold cyan]
+  pt / prev           Previous turn
+  nt / next           Next turn
+  ft / first          First turn
+  ct / current        Return to current turn
 
 [bold cyan]Info:[/bold cyan]
-  status        Show detailed entity status
-  actions       List all available actions
-  map           Redraw the map
-  help / ?      Show this help
+  ? / help            Show this help
 
 [bold cyan]Game:[/bold cyan]
-  quit / q      Exit the game
+  q / quit            Exit the game
 """
     console.print(Panel(help_text, title="Help", box=box.ROUNDED))

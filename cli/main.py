@@ -69,32 +69,29 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: str = No
         my_entity_uuid: UUID of the entity THIS player controls (for @ symbol).
                        Falls back to client.current_entity_uuid if not provided.
     """
-    display.clear()
-
     # Use provided UUID or fall back to client's tracked entity
     player_uuid = my_entity_uuid or client.current_entity_uuid
-
-    # Show map with visibility and movement path
-    display.show_map(
-        state.grid,
-        state.entities,
-        player_uuid,
-        visibility=state.visibility,
-        movement_path=state.last_movement_path
-    )
-
-    # Clear the path after showing it once
-    state.last_movement_path = None
 
     # Determine if it's MY turn (for display)
     active_uuid = state.turn.get("current_entity_uuid")
     is_my_turn = (active_uuid == player_uuid) if player_uuid else state.turn.get("is_human_turn", False)
 
-    # Show turn info and entity status
-    display.show_turn_info(state.turn, state.entities, is_my_turn=is_my_turn)
+    # Use the new full-screen render
+    display.render_full_screen(
+        grid=state.grid,
+        entities=state.entities,
+        turn=state.turn,
+        current_entity_uuid=player_uuid,
+        actions=state.actions if is_my_turn else None,
+        visibility=state.visibility,
+        movement_path=state.last_movement_path,
+        valid_positions=state.valid_move_positions,
+        is_my_turn=is_my_turn
+    )
 
-    # Show combat log
-    display.show_combat_log(state.combat_log)
+    # Clear transient display state after showing
+    state.last_movement_path = None
+    state.valid_move_positions = None
 
 
 def wait_for_ai_turn(client: APIClient, state: GameState) -> bool:
@@ -152,29 +149,7 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
 
     while True:
         try:
-            # Check PvP status
-            response = httpx.get(f"{client.base_url}/pvp/status", timeout=5.0)
-            if response.status_code == 200:
-                pvp_status = response.json()
-
-                claude_connected = pvp_status.get("claude_connected", False)
-                is_hero_turn = pvp_status.get("is_hero_turn", False)
-                current_turn = pvp_status.get("current_turn", "???")
-
-                # Check if it's now hero's turn
-                if is_hero_turn:
-                    display.console.print("[green]Your turn![/green]")
-                    return True
-
-                # Show Claude connection status changes
-                if claude_connected and not last_connected:
-                    display.console.print("[green]Claude connected![/green]")
-                    last_connected = True
-                elif not claude_connected and not shown_waiting:
-                    display.console.print(f"[cyan]Opponent's turn ({current_turn})[/cyan] - [yellow]Waiting for Claude to connect...[/yellow]")
-                    shown_waiting = True
-
-            # Poll combat log for new entries
+            # Poll combat log FIRST to capture all opponent actions
             log_response = client.get_combat_log(since=combat_log_index)
             new_entries = log_response.get("entries", [])
             need_redraw = False
@@ -186,6 +161,28 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
                 state.add_to_log(entry.get("message", ""))
                 need_redraw = True
                 combat_log_index = entry.get("index", combat_log_index) + 1
+
+            # Check PvP status AFTER processing combat log
+            response = httpx.get(f"{client.base_url}/pvp/status", timeout=5.0)
+            if response.status_code == 200:
+                pvp_status = response.json()
+
+                claude_connected = pvp_status.get("claude_connected", False)
+                is_hero_turn = pvp_status.get("is_hero_turn", False)
+                current_turn = pvp_status.get("current_turn", "???")
+
+                # Check if it's now hero's turn (after processing opponent actions)
+                if is_hero_turn:
+                    display.console.print("[green]Your turn![/green]")
+                    return True
+
+                # Show Claude connection status changes
+                if claude_connected and not last_connected:
+                    display.set_session_info(claude_connected=True)
+                    last_connected = True
+                elif not claude_connected and not shown_waiting:
+                    display.set_session_info(claude_connected=False)
+                    shown_waiting = True
 
             # Check for visual state changes (position, HP)
             full_state = client.get_state()
@@ -227,115 +224,150 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
 
 def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = False, hero_uuid: str = None):
     """Main game loop."""
-    state = GameState()
+    # Enter alternate screen for clean full-screen display
+    display.enter_alternate_screen()
 
-    # Track which entity THIS player controls
-    my_entity_uuid = hero_uuid or client.current_entity_uuid
+    try:
+        state = GameState()
 
-    # Set initial AI path if provided (from AI turn before our first turn)
-    if initial_ai_path:
-        state.last_movement_path = initial_ai_path
+        # Track which entity THIS player controls
+        my_entity_uuid = hero_uuid or client.current_entity_uuid
 
-    # Initial state refresh
-    if not refresh_state(client, state):
-        display.show_info("Encounter has ended or not started.")
-        return
+        # Set initial AI path if provided (from AI turn before our first turn)
+        if initial_ai_path:
+            state.last_movement_path = initial_ai_path
 
-    need_redraw = True  # Track if we need to redraw the display
+        # Initial state refresh
+        if not refresh_state(client, state):
+            display.show_info("Encounter has ended or not started.")
+            display.console.print("[dim]Press Enter to exit...[/dim]")
+            input()
+            return
 
-    while True:
-        # Render display only when needed
-        if need_redraw:
-            render_display(client, state, my_entity_uuid=my_entity_uuid)
+        # Fetch and process any combat log entries from before we joined
+        # (e.g., if opponent moved first before our turn)
+        try:
+            log_response = client.get_combat_log(since=0)
+            for entry in log_response.get("entries", []):
+                display.show_opponent_action(entry)
+        except Exception:
+            pass  # Not critical if this fails
 
-            # Check whose turn
-            if pvp_mode and hero_uuid:
-                # PvP mode: check if it's MY (hero's) turn
-                active_uuid = state.turn.get("current_entity_uuid")
-                is_my_turn = active_uuid == hero_uuid
+        # Clear history and save initial snapshot
+        display.clear_history()
+        display.save_turn_snapshot(state.turn, state.entities, state.grid)
 
-                if not is_my_turn:
-                    # Opponent's turn - wait for Claude
-                    if not wait_for_opponent_turn(client, state, hero_uuid):
+        need_redraw = True  # Track if we need to redraw the display
+
+        while True:
+            # Render display only when needed
+            if need_redraw:
+                render_display(client, state, my_entity_uuid=my_entity_uuid)
+
+                # Check whose turn
+                if pvp_mode and hero_uuid:
+                    # PvP mode: check if it's MY (hero's) turn
+                    active_uuid = state.turn.get("current_entity_uuid")
+                    is_my_turn = active_uuid == hero_uuid
+
+                    if not is_my_turn:
+                        # Opponent's turn - wait for Claude
+                        if not wait_for_opponent_turn(client, state, hero_uuid):
+                            break
+                        # Refresh and continue
+                        if not refresh_state(client, state):
+                            break
+                        # Save snapshot after opponent's turn
+                        display.save_turn_snapshot(state.turn, state.entities, state.grid)
+                        continue
+                elif not state.turn.get("is_human_turn", False):
+                    # AI turn - wait for it to complete
+                    if not wait_for_ai_turn(client, state):
+                        # Encounter ended
                         break
                     # Refresh and continue
                     if not refresh_state(client, state):
                         break
+                    # Save snapshot after AI turn
+                    display.save_turn_snapshot(state.turn, state.entities, state.grid)
                     continue
-            elif not state.turn.get("is_human_turn", False):
-                # AI turn - wait for it to complete
-                if not wait_for_ai_turn(client, state):
-                    # Encounter ended
-                    break
-                # Refresh and continue
+
+                # Human turn - show available actions summary based on economy
+                can_move = state.actions.get("can_move", False) and state.actions.get("remaining_movement", 0) > 0
+                attacks = state.actions.get("attacks", [])
+                actions_remaining = state.turn.get("actions_remaining", 0)
+                has_attacks = actions_remaining > 0 and any(a.get("valid_targets") and a.get("can_afford") for a in attacks)
+
+                # Check for other actions (dash, dodge, disengage)
+                other_actions = state.actions.get("other_actions", [])
+                can_dash = any(a.get("action_id") == "dash" and a.get("can_afford") for a in other_actions)
+                can_dodge = any(a.get("action_id") == "dodge" and a.get("can_afford") for a in other_actions)
+                can_disengage = any(a.get("action_id") == "disengage" and a.get("can_afford") for a in other_actions)
+
+                hints = []
+                if can_move:
+                    hints.append(f"Move:{state.actions.get('remaining_movement', 0)}ft")
+                if has_attacks:
+                    hints.append("Attack")
+                if can_dash:
+                    hints.append("Dash")
+                if can_dodge:
+                    hints.append("Dodge")
+                if can_disengage:
+                    hints.append("Disengage")
+                hints.append("End")
+
+                display.show_info(f"Actions: {', '.join(hints)} | ? for help")
+
+            need_redraw = True  # Default to redraw next iteration
+
+            # Get command
+            cmd_str = display.prompt_command()
+            cmd = parse_command(cmd_str)
+
+            # Execute command
+            result = execute_command(cmd, client, state)
+
+            if result == "quit":
+                display.show_info("Goodbye!")
+                break
+            elif result == "encounter_ended":
+                break
+            elif result == "refresh":
+                # Refresh state after action
                 if not refresh_state(client, state):
                     break
-                continue
+                # Clear output after successful action (unless it was just showing info)
+                display.clear_output()
+                # Save snapshot after player action
+                display.save_turn_snapshot(state.turn, state.entities, state.grid)
+            elif result is None:
+                # Command handled itself (e.g., showing help, targets, positions)
+                # Don't redraw - let user see the output and enter another command
+                need_redraw = False
 
-            # Human turn - show available actions summary based on economy
-            can_move = state.actions.get("can_move", False) and state.actions.get("remaining_movement", 0) > 0
-            attacks = state.actions.get("attacks", [])
-            actions_remaining = state.turn.get("actions_remaining", 0)
-            has_attacks = actions_remaining > 0 and any(a.get("valid_targets") and a.get("can_afford") for a in attacks)
+        # Show final state
+        display.clear()
+        display.show_map(state.grid, state.entities, my_entity_uuid, visibility=state.visibility)
+        display.show_turn_info(state.turn, state.entities, is_my_turn=False)
 
-            # Check for other actions (dash, dodge, disengage)
-            other_actions = state.actions.get("other_actions", [])
-            can_dash = any(a.get("action_id") == "dash" and a.get("can_afford") for a in other_actions)
-            can_dodge = any(a.get("action_id") == "dodge" and a.get("can_afford") for a in other_actions)
-            can_disengage = any(a.get("action_id") == "disengage" and a.get("can_afford") for a in other_actions)
+        # Determine winner
+        alive = [e for e in state.entities if not e.get("is_dead", False)]
+        if len(alive) == 1:
+            winner = alive[0]
+            display.console.print(f"\n[bold green]*** {winner['name']} WINS! ***[/bold green]\n")
+        elif len(alive) == 0:
+            display.console.print("\n[bold red]*** EVERYONE IS DEAD ***[/bold red]\n")
+        else:
+            display.console.print("\n[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]\n")
 
-            hints = []
-            if can_move:
-                hints.append(f"Move:{state.actions.get('remaining_movement', 0)}ft")
-            if has_attacks:
-                hints.append("Attack")
-            if can_dash:
-                hints.append("Dash")
-            if can_dodge:
-                hints.append("Dodge")
-            if can_disengage:
-                hints.append("Disengage")
-            hints.append("End")
+        # Wait for user to see result before exiting alternate screen
+        display.console.print("[dim]Press Enter to exit...[/dim]")
+        input()
 
-            display.show_info(f"Actions: {', '.join(hints)} | ? for help")
-
-        need_redraw = True  # Default to redraw next iteration
-
-        # Get command
-        cmd_str = display.prompt_command()
-        cmd = parse_command(cmd_str)
-
-        # Execute command
-        result = execute_command(cmd, client, state)
-
-        if result == "quit":
-            display.show_info("Goodbye!")
-            break
-        elif result == "encounter_ended":
-            break
-        elif result == "refresh":
-            # Refresh state after action
-            if not refresh_state(client, state):
-                break
-        elif result is None:
-            # Command handled itself (e.g., showing help, targets, positions)
-            # Don't redraw - let user see the output and enter another command
-            need_redraw = False
-
-    # Show final state
-    display.clear()
-    display.show_map(state.grid, state.entities, my_entity_uuid, visibility=state.visibility)
-    display.show_turn_info(state.turn, state.entities, is_my_turn=False)
-
-    # Determine winner
-    alive = [e for e in state.entities if not e.get("is_dead", False)]
-    if len(alive) == 1:
-        winner = alive[0]
-        display.console.print(f"\n[bold green]*** {winner['name']} WINS! ***[/bold green]\n")
-    elif len(alive) == 0:
-        display.console.print("\n[bold red]*** EVERYONE IS DEAD ***[/bold red]\n")
-    else:
-        display.console.print("\n[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]\n")
+    finally:
+        # Always exit alternate screen mode
+        display.exit_alternate_screen()
 
 
 @app.command()
@@ -444,6 +476,13 @@ def playpvp(
         display.console.print(f"[red]Claude controls: Skeleton[/red]")
         display.console.print(f"[cyan]First turn: {entity_name}[/cyan]")
         display.console.print("[dim]Waiting for Claude to connect...[/dim]")
+
+        # Set session info for header display
+        display.set_session_info(
+            pvp_mode=True,
+            hero_connected=True,
+            claude_connected=False
+        )
 
         # Run the game loop in PvP mode
         game_loop(client, pvp_mode=True, hero_uuid=hero_uuid)
