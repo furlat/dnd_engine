@@ -27,10 +27,9 @@ D&D 5e game engine with event-driven architecture and component-based entities. 
 ### What Killed Previous Sessions
 
 - Making 5+ speculative fixes without user validation
-- Debugging TypeScript when the bug was in Python event flow
-- Not studying backend code before writing frontend code
-- Assuming WebSocket message delivery was reliable (it wasn't)
+- Not studying backend code before making changes
 - Continuing to flail instead of asking for help
+- Not using the PvP test loop to validate changes immediately
 
 ### The Right Pattern
 
@@ -48,6 +47,77 @@ Claude: I'll fix this. [change 1] Hmm that didn't work. [change 2] Still broken.
 User: What are you doing? That's all wrong.
 ```
 
+## Development & Testing: PvP CLI Loop (PRIMARY WORKFLOW)
+
+The primary way to develop and test features is through **live PvP combat** between the user and Claude. This provides immediate feedback and allows testing specific scenarios.
+
+### Quick Start
+
+```bash
+# Terminal 1: Start server
+source .venv/bin/activate
+uvicorn server.event_server:app --reload
+
+# Terminal 2: User plays as Hero
+python -m cli playpvp
+
+# Claude connects and plays as Skeleton (see Agent Commands below)
+```
+
+### Claude Agent Commands
+
+```bash
+# Connect to game (creates session, joins as Skeleton)
+python -m cli.agent connect
+
+# Watch for your turn (BLOCKS until it's your turn, shows opponent actions)
+python -m cli.agent watch
+
+# View current state
+python -m cli.agent state
+
+# View available actions
+python -m cli.agent actions
+
+# Take actions
+python -m cli.agent move X Y      # Move to position
+python -m cli.agent attack 0      # Attack target by index
+python -m cli.agent dash          # Dash action (double movement)
+python -m cli.agent dodge         # Dodge action
+python -m cli.agent disengage     # Disengage action
+python -m cli.agent end           # End turn
+
+# Disconnect (clear session for new game)
+python -m cli.agent disconnect
+```
+
+### Typical Development Loop
+
+1. User starts `playpvp`, Claude runs `connect` then `watch`
+2. `watch` blocks until it's Claude's turn, showing opponent actions as they happen
+3. Claude takes actions, ends turn, runs `watch` again
+4. Repeat until encounter ends (watch detects game end automatically)
+5. To test again: User restarts `playpvp`, Claude runs `disconnect` then `connect` then `watch`
+
+### Testing Specific Scenarios
+
+Instead of random combat, set up specific test scenarios:
+
+```python
+# In server/event_server.py or via API, you can:
+# - Position entities at specific locations
+# - Apply conditions before combat starts
+# - Give entities specific equipment/stats
+# - Test opportunity attacks by moving away from enemies
+# - Test advantage/disadvantage from conditions like Prone, Blinded, etc.
+```
+
+Example test scenarios:
+- **Opportunity Attack**: Move Claude adjacent to Hero, Hero moves away without Disengage
+- **Condition Effects**: Apply Poisoned to test disadvantage on attacks
+- **Range Combat**: Test ranged weapons by starting at distance
+- **Dash/Movement**: Test movement economy with obstacles
+
 ## Common Commands
 
 ```bash
@@ -63,7 +133,7 @@ pip install -e .
 # Run tests
 pytest
 
-# Run combat examples
+# Run combat examples (for quick local testing without server)
 python examples/combat_basic.py        # Basic attack exchange
 python examples/combat_conditions.py   # All condition effects tested
 
@@ -530,6 +600,9 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Tile class (BaseBlock, can have conditions) | `dnd/core/base_tiles.py` |
 | Shadowcast FOV algorithm | `dnd/core/shadowcast.py` |
 | Dijkstra pathfinding | `dnd/core/dijkstra.py` |
+| **Encounter & Combat** | |
+| Encounter/turn management | `dnd/encounter.py` |
+| Available actions query | `dnd/available_actions.py` |
 | **Conditions & Actions** | |
 | Base condition class | `dnd/core/base_conditions.py` |
 | All D&D conditions | `dnd/conditions.py` |
@@ -1107,24 +1180,20 @@ def process(event: "SpatialChangeEvent") -> None:  # Use string annotation
 
 ## CLI and Server Architecture
 
-### Running the Game
+### Overview
 
-```bash
-# Start the server
-uvicorn server.event_server:app --reload
+The D&D Engine uses a terminal-based CLI for gameplay. Two CLIs are provided:
+- **Human CLI** (`cli/main.py`): Rich terminal interface for human players
+- **Agent CLI** (`cli/agent.py`): Simple command interface for Claude to play as opponent
 
-# In another terminal - Human vs AI
-python -m cli play
+Both connect to a FastAPI server that manages game state, sessions, and combat.
 
-# Human vs Claude (PvP mode)
-python -m cli playpvp
+### Game Modes
 
-# Claude agent CLI (for PvP opponent)
-python -m cli.agent connect
-python -m cli.agent state
-python -m cli.agent attack 0
-python -m cli.agent end
-```
+| Mode | Command | Description |
+|------|---------|-------------|
+| Human vs AI | `python -m cli play` | Human controls Hero, AI controls Skeleton automatically |
+| Human vs Claude | `python -m cli playpvp` | Human controls Hero, Claude controls Skeleton via agent CLI |
 
 ### Session-Based Authority System
 
@@ -1139,10 +1208,11 @@ Key endpoints:
 - `POST /game/join` - Join game with session, get assigned entities
 - `POST /action/*` - All actions require `session_id` + `entity_uuid`
 - `GET /pvp/status` - Check whose turn, who's connected
+- `GET /combat-log` - Get server-side combat log entries
 
 ### Server-Side Combat Log
 
-The server maintains a unified combat log (`GET /combat-log`) that both players write to:
+The server maintains a unified combat log that both players write to. This ensures consistency and provides rich action details for display.
 
 ```python
 # Server adds entries on each action
@@ -1150,10 +1220,14 @@ sim.add_combat_log("attack", "Skeleton hits Hero. d20(17)+4=21 vs AC 15 → 8 da
     "attacker": "Skeleton",
     "target": "Hero",
     "d20": 17,
+    "all_d20_rolls": [17],
+    "advantage_status": "none",
     "attack_bonus": 4,
+    "attack_total": 21,
+    "target_ac": 15,
     "outcome": "hit",
     "total_damage": 8,
-    ...
+    "target_hp": 2
 })
 
 # CLI polls for new entries
@@ -1164,15 +1238,48 @@ for entry in entries:
 
 Entry types: `attack`, `move`, `action`, `opportunity_attack`, `death`, `turn_end`
 
-### CLI Architecture
+### Agent CLI Session Persistence
 
-- **cli/main.py**: Human player CLI with `play` and `playpvp` commands
-- **cli/agent.py**: Claude agent CLI with simple commands (connect, state, attack, move, end)
-- **cli/api_client.py**: HTTP client wrapper with session management
-- **cli/display.py**: Rich terminal rendering (map, entities, combat log, action results)
-- **cli/commands.py**: Command parsing and execution
+The agent CLI stores session info in `/tmp/dnd_agent_session.txt` so session persists between commands:
 
-The `wait_for_opponent_turn()` function polls `/combat-log` and `/pvp/status` to detect opponent actions and display them with rich formatting.
+```bash
+# First command creates session
+python -m cli.agent connect    # Creates session, saves to /tmp/dnd_agent_session.txt
+
+# Subsequent commands load session automatically
+python -m cli.agent state      # Loads session from file
+python -m cli.agent attack 0   # Uses same session
+
+# Clear session for new game
+python -m cli.agent disconnect # Removes session file
+```
+
+### Agent CLI: The `watch` Command
+
+The `watch` command is the primary way Claude stays engaged with the game:
+
+```bash
+python -m cli.agent watch
+```
+
+Behavior:
+1. Polls server every 2 seconds
+2. Shows opponent actions from combat log as they happen (attacks, moves, deaths)
+3. When it becomes Claude's turn, displays full state + available actions
+4. Detects encounter end (by HP check or encounter state) and exits cleanly
+5. Ctrl+C to interrupt manually
+
+This enables a smooth flow: `connect` → `watch` → take actions → `end` → `watch` → repeat
+
+### CLI Files
+
+| File | Purpose |
+|------|---------|
+| `cli/main.py` | Human player CLI with `play` and `playpvp` commands |
+| `cli/agent.py` | Claude agent CLI (connect, watch, state, actions, move, attack, end) |
+| `cli/api_client.py` | HTTP client wrapper with session management |
+| `cli/display.py` | Rich terminal rendering (map, entities, combat log, action results) |
+| `cli/commands.py` | Command parsing and execution for human CLI |
 
 ## Dependencies
 
@@ -1192,11 +1299,11 @@ Contains high-level architecture documents and implementation plans created duri
 | File | Purpose |
 |------|---------|
 | `MASTER_SUMMARY.md` | High-level implementation plan for encounter system, lists what exists vs what's needed, proposed new modules |
-| `CODEBASE_ANALYSIS.md` | Deep dive into existing primitives (Entity, Senses, GridMap, Events, Actions), how they integrate, and what's needed for turn-based combat |
+| `CODEBASE_ANALYSIS.md` | Deep dive into existing primitives (Entity, Senses, GridMap, Events, Actions), how they integrate |
 | `EXAMPLE_PATTERNS.md` | **IMPORTANT**: Correct patterns for writing examples and tests - read before writing any new example code |
 | `AVAILABLE_ACTIONS_DESIGN.md` | Design document for the available actions query system |
-| `UI_ARCHITECTURE.md` | **ABANDONED** - Design doc for a web UI that was never completed. Keep for reference only. |
-| `FRONTEND_POSTMORTEM.md` | **LESSONS LEARNED** - Post-mortem of failed UI attempt. Documents what went wrong (too autonomous, no user validation, debugging wrong layer). Read this to understand how NOT to work on this codebase. |
+| `UI_ARCHITECTURE.md` | Documents the CLI and Server architecture (session-based PvP, combat log, agent CLI) |
+| `FRONTEND_POSTMORTEM.md` | **LESSONS LEARNED** - Post-mortem of failed web UI attempt. Documents what went wrong. Read to understand how NOT to work on this codebase. |
 
 ### interactive_ruleset/
 
@@ -1217,33 +1324,38 @@ interactive_ruleset/
 
 The `*_NOTES.md` files compare SRD rules against our implementation, identifying gaps and implementation approaches.
 
-## Next Steps: Encounter Module
+## Current State & What's Working
 
-Based on codebase analysis, the next major feature is turn-based combat. Key components needed:
+### Implemented Systems
+- **Encounter System** (`dnd/encounter.py`): Turn-based combat with initiative, round tracking, turn management
+- **Available Actions** (`dnd/available_actions.py`): Query system for valid moves, attacks, and actions
+- **PvP CLI**: Full human vs Claude gameplay loop with session-based authority
+- **Combat Log**: Server-side unified log with rich action details
+- **Agent CLI**: Claude can connect, watch for turns, and play autonomously
 
-### 1. EncounterManager (new: `dnd/encounter.py`)
-- Track combatants, initiative order, current turn, round number
-- `start_turn()` must call `entity.action_economy.reset_all_costs()`
-- `end_turn()` must call `entity.advance_duration_condition()` for all conditions
-- Fire `TURN_START`, `TURN_END`, `ROUND_START`, `ROUND_END` events
+### Potential Next Features
 
-### 2. Available Actions Query
-- `get_attack_targets(entity)` - entities in weapon range from `senses.entities`
-- `get_movement_positions(entity)` - reachable cells from `senses.paths` filtered by remaining movement
-- Critical for both UI rendering and future AI decision-making
+1. **Scenario Testing Framework**
+   - Pre-configured test scenarios (specific positions, conditions, equipment)
+   - API endpoints to set up scenarios programmatically
+   - Regression testing for specific combat mechanics
 
-### 3. Perception/Stealth System
-- Hidden state tracking on Entity
-- Passive Perception = 10 + perception skill bonus
-- Filter `senses.entities` to exclude hidden entities
+2. **Perception/Stealth System**
+   - Hidden state tracking on Entity
+   - Passive Perception = 10 + perception skill bonus
+   - Filter `senses.entities` to exclude hidden entities
 
-### 4. Interactables (new: `dnd/interactables.py`)
-- `DestructibleObject` - HP, AC, damage threshold
-- `Trap` - trigger on spatial events, perception DC, disable DC
-- `PickableItem` - inventory integration
+3. **Interactables**
+   - `DestructibleObject` - HP, AC, damage threshold
+   - `Trap` - trigger on spatial events, perception DC, disable DC
+   - `PickableItem` - inventory integration
 
-### Integration Points Already Working
-- `ActionEconomy.reset_all_costs()` exists, just needs to be called at turn start
-- `GridMap` fires spatial events on movement (for trap triggers)
-- `EventHandler` system supports turn-based condition processing
-- `Senses` already tracks everything needed for available actions query
+4. **Ranged Combat Improvements**
+   - Cover mechanics (+2/+5 AC bonuses)
+   - Long range disadvantage
+   - Ammunition tracking
+
+5. **Spellcasting System**
+   - Spell slots and spell level management
+   - Concentration tracking
+   - Saving throw-based spells

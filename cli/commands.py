@@ -22,6 +22,11 @@ class CommandType(Enum):
     MAP = "map"
     HELP = "help"
     QUIT = "quit"
+    # History navigation
+    PREV_TURN = "pt"
+    NEXT_TURN = "nt"
+    CURRENT_TURN = "ct"
+    FIRST_TURN = "ft"
     UNKNOWN = "unknown"
 
 
@@ -55,6 +60,15 @@ def parse_command(input_str: str) -> Command:
         "h": "help",
         "q": "quit",
         "exit": "quit",
+        # History navigation
+        "pt": "pt",
+        "nt": "nt",
+        "ct": "ct",
+        "ft": "ft",
+        "prev": "pt",
+        "next": "nt",
+        "current": "ct",
+        "first": "ft",
     }
 
     cmd = aliases.get(cmd, cmd)
@@ -79,6 +93,7 @@ class GameState:
         self.combat_log: List[str] = []
         self.visibility: Dict[str, Any] = {}
         self.last_movement_path: Optional[List[Tuple[int, int]]] = None
+        self.valid_move_positions: Optional[List[Tuple[int, int]]] = None  # For showing valid moves
 
     def update_from_state(self, state: Dict[str, Any]):
         """Update from /state response."""
@@ -152,52 +167,68 @@ def execute_command(
         elif cmd.type == CommandType.END:
             return handle_end_turn(client, state)
 
+        # History navigation
+        elif cmd.type == CommandType.PREV_TURN:
+            return handle_history_prev(state)
+
+        elif cmd.type == CommandType.NEXT_TURN:
+            return handle_history_next(state)
+
+        elif cmd.type == CommandType.CURRENT_TURN:
+            return handle_history_current()
+
+        elif cmd.type == CommandType.FIRST_TURN:
+            return handle_history_first(state)
+
         else:
-            display.show_error(f"Unknown command: {cmd.raw}")
-            display.show_info("Type 'help' or '?' for available commands.")
-            return None
+            display.set_output([
+                f"Unknown command: {cmd.raw}",
+                "Type '?' for help"
+            ])
+            return "refresh"
 
     except Exception as e:
-        display.show_error(str(e))
-        return None
+        display.set_output([f"Error: {str(e)}"])
+        return "refresh"
 
 
 def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[str]:
     """Handle move command."""
     if len(cmd.args) < 2:
-        # Show valid positions on map
+        # Show valid positions - store them for next render and show in output
         movement = state.actions.get("movement", [])
         if movement:
             valid_pos = movement[0].get("valid_positions", [])
-            # Convert to tuples
             valid_tuples = [tuple(p) for p in valid_pos]
-            display.show_map(
-                state.grid,
-                state.entities,
-                client.current_entity_uuid,
-                valid_tuples,
-                title="Valid Move Positions (*)"
-            )
-            display.show_info(f"Enter 'move X Y' to move. {state.actions.get('remaining_movement', 0)}ft remaining.")
+            # Store valid positions for map display
+            state.valid_move_positions = valid_tuples
+            remaining = state.actions.get('remaining_movement', 0)
+            display.set_output([
+                f"Valid move positions shown on map (*)",
+                f"Movement remaining: {remaining}ft",
+                f"Enter 'm X Y' to move to position (X, Y)"
+            ])
         else:
-            display.show_error("No movement available.")
-        return None
+            display.set_output(["No movement available."])
+        return "refresh"  # Refresh to show valid positions on map
 
     try:
         x = int(cmd.args[0])
         y = int(cmd.args[1])
     except ValueError:
-        display.show_error("Invalid position. Usage: move X Y")
-        return None
+        display.set_output(["Invalid position. Usage: m X Y"])
+        return "refresh"
 
     # Check if position is valid
     movement = state.actions.get("movement", [])
     if movement:
         valid_pos = movement[0].get("valid_positions", [])
         if [x, y] not in valid_pos and (x, y) not in [tuple(p) for p in valid_pos]:
-            display.show_error(f"Position ({x}, {y}) is not a valid move target.")
-            display.show_info("Type 'move' to see valid positions.")
-            return None
+            display.set_output([
+                f"Position ({x}, {y}) is not reachable.",
+                "Type 'm' to see valid positions."
+            ])
+            return "refresh"
 
     result = client.move((x, y))
     display.show_action_result(result)
@@ -252,28 +283,31 @@ def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional
     valid_attacks = [a for a in attacks if a.get("valid_targets")]
 
     if not valid_attacks:
-        display.show_error("No targets in range.")
-        return None
+        display.set_output(["No targets in range."])
+        return "refresh"
 
     if len(cmd.args) < 1:
-        # Show attack options
-        display.show_info("Attack targets:")
+        # Show attack options in output panel
         entity_lookup = {e["uuid"]: e for e in state.entities}
-        for i, atk in enumerate(valid_attacks, 1):
-            for j, t_uuid in enumerate(atk.get("valid_targets", []), 1):
+        output_lines = ["Attack targets:"]
+        target_num = 1
+        for atk in valid_attacks:
+            for t_uuid in atk.get("valid_targets", []):
                 target = entity_lookup.get(t_uuid, {})
-                display.console.print(
-                    f"  [{i}.{j}] {atk['name']} -> {target.get('name', 'Unknown')} "
+                output_lines.append(
+                    f"  [{target_num}] {atk['name']} → {target.get('name', 'Unknown')} "
                     f"(HP: {target.get('hp', '?')}/{target.get('max_hp', '?')})"
                 )
-        display.show_info("Usage: attack N (target number)")
-        return None
+                target_num += 1
+        output_lines.append("Usage: a N (attack target number N)")
+        display.set_output(output_lines)
+        return "refresh"
 
     try:
         target_num = int(cmd.args[0])
     except ValueError:
-        display.show_error("Invalid target number. Usage: attack N")
-        return None
+        display.set_output(["Invalid target number. Usage: a N"])
+        return "refresh"
 
     # Find target (simple: just use first attack with targets, pick by index)
     all_targets = []
@@ -282,8 +316,8 @@ def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional
             all_targets.append((atk, t_uuid))
 
     if target_num < 1 or target_num > len(all_targets):
-        display.show_error(f"Invalid target number. Choose 1-{len(all_targets)}.")
-        return None
+        display.set_output([f"Invalid target. Choose 1-{len(all_targets)}."])
+        return "refresh"
 
     attack_info, target_uuid = all_targets[target_num - 1]
     weapon_slot = "main_hand"
@@ -393,3 +427,47 @@ def handle_end_turn(client: APIClient, state: GameState) -> Optional[str]:
     else:
         display.show_info(f"Turn ended. Status: {status}")
         return "refresh"
+
+
+# ============================================================================
+# History Navigation
+# ============================================================================
+
+def handle_history_prev(state: GameState) -> Optional[str]:
+    """Go to previous turn in history."""
+    snapshot = display.goto_previous_turn()
+    if snapshot:
+        display.render_history_snapshot(snapshot)
+        return None  # Don't refresh - we're showing history
+    else:
+        display.show_info("No earlier history available.")
+        return None
+
+
+def handle_history_next(state: GameState) -> Optional[str]:
+    """Go to next turn in history."""
+    snapshot = display.goto_next_turn()
+    if snapshot:
+        display.render_history_snapshot(snapshot)
+        return None
+    else:
+        # Returned to current
+        display.goto_current_turn()
+        return "refresh"  # Go back to live view
+
+
+def handle_history_current() -> Optional[str]:
+    """Return to current turn."""
+    display.goto_current_turn()
+    return "refresh"
+
+
+def handle_history_first(state: GameState) -> Optional[str]:
+    """Go to first turn in history."""
+    snapshot = display.goto_first_turn()
+    if snapshot:
+        display.render_history_snapshot(snapshot)
+        return None
+    else:
+        display.show_info("No history available.")
+        return None
