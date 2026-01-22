@@ -575,6 +575,39 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
 
     while True:
         try:
+            # Get state first to check for game end conditions
+            state = client.get_state()
+            if state:
+                encounter = state.get("encounter", {})
+                entities = state.get("entities", [])
+
+                # Check if encounter ended (multiple ways to detect)
+                encounter_active = encounter.get("encounter_active", True)
+                alive = [e for e in entities if not e.get("is_dead", False) and e.get("hp", 0) > 0]
+                dead = [e for e in entities if e.get("is_dead", False) or e.get("hp", 0) <= 0]
+
+                # Encounter is over if: explicitly ended, or only 1 combatant alive
+                if not encounter_active or len(alive) <= 1:
+                    print("")
+                    print("=" * 60)
+                    print("ENCOUNTER ENDED")
+                    print("=" * 60)
+
+                    # Show final state
+                    for e in entities:
+                        hp = e.get("hp", 0)
+                        max_hp = e.get("max_hp", 0)
+                        name = e.get("name", "???")
+                        status = "DEAD" if hp <= 0 else "ALIVE"
+                        print(f"  {name}: {hp}/{max_hp} HP - {status}")
+
+                    if len(alive) == 1:
+                        print(f"\nWINNER: {alive[0].get('name', '???')}")
+                    elif len(alive) == 0:
+                        print("\nEVERYONE IS DEAD")
+
+                    return 0
+
             # Check if it's my turn
             if is_my_turn(client):
                 print("")
@@ -632,27 +665,8 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
                 pass
 
             # Show whose turn it is (only when it changes)
-            state = client.get_state()
             if state:
                 encounter = state.get("encounter", {})
-
-                # Check if encounter ended
-                if not encounter.get("encounter_active", True):
-                    print("")
-                    print("=" * 60)
-                    print("ENCOUNTER ENDED")
-                    print("=" * 60)
-
-                    # Show winner
-                    entities = state.get("entities", [])
-                    alive = [e for e in entities if not e.get("is_dead", False)]
-                    if len(alive) == 1:
-                        print(f"WINNER: {alive[0].get('name', '???')}")
-                    elif len(alive) == 0:
-                        print("EVERYONE IS DEAD")
-
-                    return 0
-
                 active_uuid = encounter.get("current_entity_uuid")
                 for e in state.get("entities", []):
                     if e.get("uuid") == active_uuid:
