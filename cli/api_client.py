@@ -1,5 +1,7 @@
 """
 HTTP client for communicating with the D&D Engine server.
+
+Updated to use session-based authentication for all actions.
 """
 
 from typing import Optional, Dict, Any, List, Tuple
@@ -7,32 +9,123 @@ import httpx
 
 
 class APIClient:
-    """Client for the D&D Engine REST API."""
+    """Client for the D&D Engine REST API with session support."""
 
     def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 10.0):
         self.base_url = base_url
         self.client = httpx.Client(base_url=base_url, timeout=timeout)
         self._current_entity_uuid: Optional[str] = None
+        self._session_id: Optional[str] = None
 
     def close(self):
         """Close the HTTP client."""
         self.client.close()
 
     # =========================================================================
+    # Session Management
+    # =========================================================================
+
+    def create_session(self, player_type: str = "human", name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new player session.
+
+        Args:
+            player_type: "human" or "claude"
+            name: Optional display name
+
+        Returns:
+            Session info including session_id
+        """
+        payload = {"player_type": player_type}
+        if name:
+            payload["name"] = name
+
+        resp = self.client.post("/session/create", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        self._session_id = data.get("session_id")
+        return data
+
+    def ping_session(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Ping a session to update activity and get status.
+
+        Returns info about whether it's this session's turn.
+        """
+        sid = session_id or self._session_id
+        if not sid:
+            raise ValueError("No session ID - call create_session first")
+
+        resp = self.client.post(f"/session/{sid}/ping")
+        resp.raise_for_status()
+        return resp.json()
+
+    def join_game(self, session_id: Optional[str] = None, entity_uuids: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Join the active game with a session.
+
+        If entity_uuids is provided, controls those entities.
+        Otherwise auto-assigns based on player type.
+        """
+        sid = session_id or self._session_id
+        if not sid:
+            raise ValueError("No session ID - call create_session first")
+
+        payload: Dict[str, Any] = {"session_id": sid}
+        if entity_uuids:
+            payload["entity_uuids"] = entity_uuids
+
+        resp = self.client.post("/game/join", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Store the first controlled entity
+        controlled = data.get("controlled_entities", [])
+        if controlled:
+            self._current_entity_uuid = controlled[0]
+
+        return data
+
+    def get_game_status(self) -> Dict[str, Any]:
+        """Get current game status including all sessions."""
+        resp = self.client.get("/game/status")
+        resp.raise_for_status()
+        return resp.json()
+
+    @property
+    def session_id(self) -> Optional[str]:
+        """Get the current session ID."""
+        return self._session_id
+
+    # =========================================================================
     # Simulation Control
     # =========================================================================
 
     def start_human_game(self) -> Dict[str, Any]:
-        """Start a new game with human control."""
+        """Start a new game with human control (vs AI)."""
         resp = self.client.post("/simulation/start-human")
         resp.raise_for_status()
         data = resp.json()
-        self._current_entity_uuid = data.get("entity_uuid")
+        # Store hero UUID for joining
+        if data.get("hero_uuid"):
+            self._current_entity_uuid = data["hero_uuid"]
         return data
+
+    def start_pvp_game(self) -> Dict[str, Any]:
+        """Start a new PvP game (human vs claude)."""
+        resp = self.client.post("/simulation/start-pvp")
+        resp.raise_for_status()
+        return resp.json()
 
     def get_simulation_status(self) -> Dict[str, Any]:
         """Get simulation status."""
         resp = self.client.get("/simulation/status")
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_pvp_status(self) -> Dict[str, Any]:
+        """Get PvP game status including session connections."""
+        resp = self.client.get("/pvp/status")
         resp.raise_for_status()
         return resp.json()
 
@@ -51,8 +144,9 @@ class APIClient:
         resp = self.client.get("/encounter/current-turn")
         resp.raise_for_status()
         data = resp.json()
-        if data.get("current_entity_uuid"):
-            self._current_entity_uuid = data["current_entity_uuid"]
+        # NOTE: Don't update _current_entity_uuid here!
+        # That tracks the entity THIS client controls, not whose turn it is.
+        # The active turn entity is in data["current_entity_uuid"].
         return data
 
     def get_available_actions(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
@@ -82,16 +176,60 @@ class APIClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_events(self, limit: int = 50, event_type: Optional[str] = None, phase: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get recent events from the server.
+
+        Args:
+            limit: Max number of events to return
+            event_type: Filter by event type (e.g., "attack", "movement")
+            phase: Filter by phase (e.g., "completion")
+
+        Returns:
+            List of event dictionaries
+        """
+        params = {"limit": limit}
+        if event_type:
+            params["event_type"] = event_type
+        if phase:
+            params["phase"] = phase
+
+        resp = self.client.get("/events", params=params)
+        resp.raise_for_status()
+        return resp.json().get("events", [])
+
+    def get_combat_log(self, since: int = 0) -> Dict[str, Any]:
+        """
+        Get combat log entries from the server.
+
+        Args:
+            since: Only return entries with index >= since (for polling)
+
+        Returns:
+            Dict with 'entries', 'count', and 'total' keys
+        """
+        resp = self.client.get("/combat-log", params={"since": since})
+        resp.raise_for_status()
+        return resp.json()
+
     # =========================================================================
-    # Actions
+    # Actions (require session_id)
     # =========================================================================
+
+    def _require_session(self) -> str:
+        """Ensure we have a session ID."""
+        if not self._session_id:
+            raise ValueError("No session ID - call create_session and join_game first")
+        return self._session_id
 
     def move(self, position: Tuple[int, int], entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute a move action."""
+        session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
         resp = self.client.post("/action/move", json={
+            "session_id": session_id,
             "entity_uuid": uuid,
             "position": list(position)
         })
@@ -101,10 +239,12 @@ class APIClient:
     def attack(self, target_uuid: str, weapon_slot: str = "main_hand",
                entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute an attack action."""
+        session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
         resp = self.client.post("/action/attack", json={
+            "session_id": session_id,
             "entity_uuid": uuid,
             "target_uuid": target_uuid,
             "weapon_slot": weapon_slot
@@ -114,42 +254,58 @@ class APIClient:
 
     def dash(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute a dash action."""
+        session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
-        resp = self.client.post("/action/dash", json={"entity_uuid": uuid})
+        resp = self.client.post("/action/dash", json={
+            "session_id": session_id,
+            "entity_uuid": uuid
+        })
         resp.raise_for_status()
         return resp.json()
 
     def dodge(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute a dodge action."""
+        session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
-        resp = self.client.post("/action/dodge", json={"entity_uuid": uuid})
+        resp = self.client.post("/action/dodge", json={
+            "session_id": session_id,
+            "entity_uuid": uuid
+        })
         resp.raise_for_status()
         return resp.json()
 
     def disengage(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute a disengage action."""
+        session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
-        resp = self.client.post("/action/disengage", json={"entity_uuid": uuid})
+        resp = self.client.post("/action/disengage", json={
+            "session_id": session_id,
+            "entity_uuid": uuid
+        })
         resp.raise_for_status()
         return resp.json()
 
     def end_turn(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """End the current turn."""
+        session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
-        resp = self.client.post("/action/end-turn", json={"entity_uuid": uuid})
+        resp = self.client.post("/action/end-turn", json={
+            "session_id": session_id,
+            "entity_uuid": uuid
+        })
         resp.raise_for_status()
         data = resp.json()
-        # Update current entity if returned
-        if data.get("entity_uuid"):
-            self._current_entity_uuid = data["entity_uuid"]
+        # NOTE: Don't update _current_entity_uuid here!
+        # The returned entity_uuid is whoever's turn is NEXT, not who we control.
+        # Our controlled entity was set in join_game and doesn't change.
         return data
 
     @property

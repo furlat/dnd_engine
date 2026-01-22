@@ -2,7 +2,8 @@
 Main entry point for the D&D Engine CLI.
 
 Usage:
-    python -m cli play          # Start interactive combat
+    python -m cli play          # Start interactive combat (vs AI)
+    python -m cli playpvp       # Start PvP combat (vs Claude)
     python -m cli play --host localhost --port 8000
 """
 
@@ -59,15 +60,25 @@ def refresh_state(client: APIClient, state: GameState, clear_path: bool = False)
         return False
 
 
-def render_display(client: APIClient, state: GameState):
-    """Render the full display."""
+def render_display(client: APIClient, state: GameState, my_entity_uuid: str = None):
+    """Render the full display.
+
+    Args:
+        client: API client
+        state: Current game state
+        my_entity_uuid: UUID of the entity THIS player controls (for @ symbol).
+                       Falls back to client.current_entity_uuid if not provided.
+    """
     display.clear()
+
+    # Use provided UUID or fall back to client's tracked entity
+    player_uuid = my_entity_uuid or client.current_entity_uuid
 
     # Show map with visibility and movement path
     display.show_map(
         state.grid,
         state.entities,
-        client.current_entity_uuid,
+        player_uuid,
         visibility=state.visibility,
         movement_path=state.last_movement_path
     )
@@ -75,8 +86,12 @@ def render_display(client: APIClient, state: GameState):
     # Clear the path after showing it once
     state.last_movement_path = None
 
+    # Determine if it's MY turn (for display)
+    active_uuid = state.turn.get("current_entity_uuid")
+    is_my_turn = (active_uuid == player_uuid) if player_uuid else state.turn.get("is_human_turn", False)
+
     # Show turn info and entity status
-    display.show_turn_info(state.turn, state.entities)
+    display.show_turn_info(state.turn, state.entities, is_my_turn=is_my_turn)
 
     # Show combat log
     display.show_combat_log(state.combat_log)
@@ -115,9 +130,107 @@ def wait_for_ai_turn(client: APIClient, state: GameState) -> bool:
     return False
 
 
-def game_loop(client: APIClient, initial_ai_path: list = None):
+def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) -> bool:
+    """
+    Wait while opponent (Claude) takes their turn in PvP mode.
+
+    Polls the server-side combat log for new entries and updates display.
+    Returns True if game should continue, False if encounter ended.
+    """
+    import httpx
+
+    poll_interval = 0.5
+    last_connected = False
+    shown_waiting = False
+
+    # Track combat log position
+    combat_log_index = client.get_combat_log().get("total", 0)
+
+    # Track entity state for detecting visual changes
+    last_positions = {e["uuid"]: tuple(e["position"]) for e in state.entities}
+    last_hp = {e["uuid"]: e.get("hp", 0) for e in state.entities}
+
+    while True:
+        try:
+            # Check PvP status
+            response = httpx.get(f"{client.base_url}/pvp/status", timeout=5.0)
+            if response.status_code == 200:
+                pvp_status = response.json()
+
+                claude_connected = pvp_status.get("claude_connected", False)
+                is_hero_turn = pvp_status.get("is_hero_turn", False)
+                current_turn = pvp_status.get("current_turn", "???")
+
+                # Check if it's now hero's turn
+                if is_hero_turn:
+                    display.console.print("[green]Your turn![/green]")
+                    return True
+
+                # Show Claude connection status changes
+                if claude_connected and not last_connected:
+                    display.console.print("[green]Claude connected![/green]")
+                    last_connected = True
+                elif not claude_connected and not shown_waiting:
+                    display.console.print(f"[cyan]Opponent's turn ({current_turn})[/cyan] - [yellow]Waiting for Claude to connect...[/yellow]")
+                    shown_waiting = True
+
+            # Poll combat log for new entries
+            log_response = client.get_combat_log(since=combat_log_index)
+            new_entries = log_response.get("entries", [])
+            need_redraw = False
+
+            for entry in new_entries:
+                # Show rich display for opponent actions
+                display.show_opponent_action(entry)
+                # Add to local combat log
+                state.add_to_log(entry.get("message", ""))
+                need_redraw = True
+                combat_log_index = entry.get("index", combat_log_index) + 1
+
+            # Check for visual state changes (position, HP)
+            full_state = client.get_state()
+            if full_state:
+                new_entities = full_state.get("entities", [])
+
+                for e in new_entities:
+                    uuid = e["uuid"]
+                    new_pos = tuple(e["position"])
+                    new_hp = e.get("hp", 0)
+
+                    if last_positions.get(uuid) != new_pos:
+                        last_positions[uuid] = new_pos
+                        need_redraw = True
+
+                    if last_hp.get(uuid) != new_hp:
+                        last_hp[uuid] = new_hp
+                        need_redraw = True
+
+                # Redraw map if anything changed
+                if need_redraw:
+                    state.update_from_state(full_state)
+                    state.visibility = client.get_visibility()
+                    state.turn = client.get_current_turn()
+                    render_display(client, state, my_entity_uuid=hero_uuid)
+                    display.console.print("[dim]Opponent's turn...[/dim]")
+
+            # Check encounter status
+            state.turn = client.get_current_turn()
+            if not state.turn.get("encounter_active", False):
+                display.console.print("")
+                return False
+
+        except Exception as e:
+            pass  # Silently ignore connection hiccups during polling
+
+        time.sleep(poll_interval)
+
+
+def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = False, hero_uuid: str = None):
     """Main game loop."""
     state = GameState()
+
+    # Track which entity THIS player controls
+    my_entity_uuid = hero_uuid or client.current_entity_uuid
 
     # Set initial AI path if provided (from AI turn before our first turn)
     if initial_ai_path:
@@ -133,10 +246,23 @@ def game_loop(client: APIClient, initial_ai_path: list = None):
     while True:
         # Render display only when needed
         if need_redraw:
-            render_display(client, state)
+            render_display(client, state, my_entity_uuid=my_entity_uuid)
 
             # Check whose turn
-            if not state.turn.get("is_human_turn", False):
+            if pvp_mode and hero_uuid:
+                # PvP mode: check if it's MY (hero's) turn
+                active_uuid = state.turn.get("current_entity_uuid")
+                is_my_turn = active_uuid == hero_uuid
+
+                if not is_my_turn:
+                    # Opponent's turn - wait for Claude
+                    if not wait_for_opponent_turn(client, state, hero_uuid):
+                        break
+                    # Refresh and continue
+                    if not refresh_state(client, state):
+                        break
+                    continue
+            elif not state.turn.get("is_human_turn", False):
                 # AI turn - wait for it to complete
                 if not wait_for_ai_turn(client, state):
                     # Encounter ended
@@ -198,8 +324,8 @@ def game_loop(client: APIClient, initial_ai_path: list = None):
 
     # Show final state
     display.clear()
-    display.show_map(state.grid, state.entities, client.current_entity_uuid, visibility=state.visibility)
-    display.show_turn_info(state.turn, state.entities)
+    display.show_map(state.grid, state.entities, my_entity_uuid, visibility=state.visibility)
+    display.show_turn_info(state.turn, state.entities, is_my_turn=False)
 
     # Determine winner
     alive = [e for e in state.entities if not e.get("is_dead", False)]
@@ -236,8 +362,15 @@ def play(
         # NOW start the game (this rolls initiative and may run AI turn first)
         display.console.print("[cyan]Rolling initiative...[/cyan]")
         result = client.start_human_game()
-        entity_name = result.get("entity_name", "Unknown")
+        hero_uuid = result.get("hero_uuid")
 
+        # Create session and join game
+        display.console.print("[cyan]Creating session...[/cyan]")
+        client.create_session(player_type="human", name="Player")
+        join_result = client.join_game(entity_uuids=[hero_uuid] if hero_uuid else None)
+        display.console.print(f"[green]Joined as: {join_result.get('message')}[/green]")
+
+        entity_name = result.get("entity_name", "Unknown")
         display.console.print(f"[green]You control: {entity_name}[/green]")
 
         # Show any AI actions that occurred before our turn (if AI went first)
@@ -257,6 +390,63 @@ def play(
 
         # Run the game loop, passing initial AI path
         game_loop(client, initial_ai_path=initial_ai_path)
+
+    except Exception as e:
+        display.show_error(f"Connection failed: {e}")
+        display.show_info(f"Make sure the server is running: python -m server.event_server")
+        raise typer.Exit(1)
+
+    finally:
+        client.close()
+
+
+@app.command()
+def playpvp(
+    host: str = typer.Option("localhost", "--host", "-h", help="Server hostname"),
+    port: int = typer.Option(8000, "--port", "-p", help="Server port"),
+):
+    """
+    Start a PvP combat session (User vs Claude).
+
+    You control the Hero, Claude controls the Skeleton via agent CLI.
+    Both players take turns manually - no auto-AI.
+    """
+    base_url = f"http://{host}:{port}"
+    display.console.print(f"[cyan]Connecting to {base_url}...[/cyan]")
+
+    client = APIClient(base_url=base_url)
+
+    try:
+        # Prompt user before starting
+        display.console.print(f"[green]Connected to server![/green]")
+        display.console.print("[bold yellow]PvP MODE: You (Hero) vs Claude (Skeleton)[/bold yellow]")
+        display.console.print("[dim]Press Enter to begin combat...[/dim]")
+        input()
+
+        # Start PvP game
+        display.console.print("[cyan]Starting PvP match...[/cyan]")
+        result = client.start_pvp_game()
+
+        hero_uuid = result.get("hero_uuid")
+        skeleton_uuid = result.get("skeleton_uuid")
+
+        # Create session and join game
+        display.console.print("[cyan]Creating session...[/cyan]")
+        client.create_session(player_type="human", name="Player")
+        join_result = client.join_game(entity_uuids=[hero_uuid] if hero_uuid else None)
+        display.console.print(f"[green]Joined: {join_result.get('message')}[/green]")
+
+        # Get first turn info
+        turn_info = client.get_current_turn()
+        entity_name = turn_info.get("current_entity_name", "Unknown")
+
+        display.console.print(f"[green]You control: Hero[/green]")
+        display.console.print(f"[red]Claude controls: Skeleton[/red]")
+        display.console.print(f"[cyan]First turn: {entity_name}[/cyan]")
+        display.console.print("[dim]Waiting for Claude to connect...[/dim]")
+
+        # Run the game loop in PvP mode
+        game_loop(client, pvp_mode=True, hero_uuid=hero_uuid)
 
     except Exception as e:
         display.show_error(f"Connection failed: {e}")
