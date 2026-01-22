@@ -21,6 +21,7 @@ from typing import Set, Optional
 from uuid import UUID, uuid4
 from contextlib import asynccontextmanager
 
+from pydantic import Field
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,7 +42,13 @@ from dnd.reactions import add_opportunity_attack_handler
 from server.api_models import (
     APIEntitySummary, APIEntityFull, APIGrid, APIEncounter,
     APIGameState, APISimulationStatus,
-    APICurrentTurn, MoveRequest, AttackRequest, SimpleActionRequest, ActionResult
+    APICurrentTurn, MoveRequest, AttackRequest, SimpleActionRequest, ActionResult,
+    CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
+    JoinGameRequest, JoinGameResponse
+)
+from server.session import (
+    SessionManager, PlayerSession, GameSession,
+    PlayerType, ConnectionStatus, get_session_manager
 )
 
 
@@ -118,6 +125,30 @@ event_monitor = EventMonitor()
 # =============================================================================
 # AI Controller
 # =============================================================================
+
+class ClaudeController(Controller):
+    """
+    Controller for Claude-controlled entities.
+
+    Like HumanController, actions come via external API calls.
+    Has its own controller_type for proper identification and debugging.
+    """
+
+    name: str = Field(default="Claude Controller")
+    controller_type: str = Field(default="claude")
+
+    def get_next_action(
+        self,
+        entity: 'Entity',
+        context: TurnContext
+    ) -> Optional[BaseAction]:
+        # Actions come via API, not from this method
+        return None
+
+    def can_continue_turn(self, entity: 'Entity', context: TurnContext) -> bool:
+        # Return False to exit run_turn loop - server handles via API
+        return False
+
 
 class MeleeAIController(Controller):
     """
@@ -202,9 +233,73 @@ class SimulationState:
         self.turn_delay: float = 1.5  # seconds between turns
         self.auto_run_ai: bool = True  # Auto-advance through AI turns
 
-        # Human turn tracking
-        self.waiting_for_human: bool = False
-        self.human_entity_uuid: Optional[UUID] = None
+        # Session manager integration
+        self._session_manager = get_session_manager()
+        self._game_session: Optional[GameSession] = None
+
+        # Server-side combat log - unified log for all players
+        self._combat_log: list[dict] = []
+
+    def add_combat_log(self, entry_type: str, message: str, details: Optional[dict] = None) -> int:
+        """
+        Add an entry to the combat log.
+
+        Args:
+            entry_type: Type of entry (attack, move, action, turn_start, turn_end, etc.)
+            message: Human-readable message
+            details: Optional dict with structured data (rolls, damage, etc.)
+
+        Returns:
+            The index of the new entry
+        """
+        entry = {
+            "index": len(self._combat_log),
+            "type": entry_type,
+            "message": message,
+            "details": details or {}
+        }
+        self._combat_log.append(entry)
+        return entry["index"]
+
+    def get_combat_log(self, since: int = 0) -> list[dict]:
+        """Get combat log entries since a given index."""
+        return self._combat_log[since:]
+
+    def clear_combat_log(self):
+        """Clear the combat log (call when starting new game)."""
+        self._combat_log = []
+
+    @property
+    def game(self) -> Optional[GameSession]:
+        """Get the active game session."""
+        return self._game_session
+
+    @property
+    def waiting_for_human(self) -> bool:
+        """Check if waiting for a human/claude player (derived from session state)."""
+        if not self._game_session or not self.encounter:
+            return False
+        active_player = self._game_session.active_player
+        if not active_player:
+            return False
+        # Waiting if active player is human or claude (not AI)
+        return active_player.player_type in (PlayerType.HUMAN, PlayerType.CLAUDE)
+
+    @property
+    def human_entity_uuid(self) -> Optional[UUID]:
+        """Get the active entity UUID if it's a human/claude turn."""
+        if not self._game_session:
+            return None
+        return self._game_session.active_entity_uuid
+
+    def create_game_session(self, encounter: Encounter) -> GameSession:
+        """Create a new game session for the encounter."""
+        self._game_session = self._session_manager.create_game(encounter)
+        return self._game_session
+
+    def get_session_manager(self) -> SessionManager:
+        """Get the session manager."""
+        return self._session_manager
 
 
 # Global simulation state
@@ -250,6 +345,7 @@ def setup_combat_with_human(human_position: tuple = (2, 7), ai_position: tuple =
     Entity._entity_by_position.clear()
     Encounter.clear_registry()
     Controller._controller_registry.clear()
+    SessionManager.reset()  # Reset session manager
     EventQueue._all_events.clear()
     EventQueue._events_by_uuid.clear()
     EventQueue._events_by_type.clear()
@@ -282,6 +378,54 @@ def setup_combat_with_human(human_position: tuple = (2, 7), ai_position: tuple =
     encounter = Encounter(name="Arena Combat", source_entity_uuid=uuid4())
     encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
     encounter.add_combatant(enemy, MeleeAIController(source_entity_uuid=enemy.uuid))
+
+    return encounter
+
+
+def setup_combat_pvp(player_position: tuple = (2, 7), opponent_position: tuple = (12, 7)) -> Encounter:
+    """
+    Initialize PvP combat where both entities are human-controlled.
+
+    Player 1 (Hero) = controlled by user via CLI
+    Player 2 (Skeleton) = controlled by Claude via agent CLI
+    """
+    # Reset all state
+    reset_map()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+    Encounter.clear_registry()
+    Controller._controller_registry.clear()
+    SessionManager.reset()  # Reset session manager
+    EventQueue._all_events.clear()
+    EventQueue._events_by_uuid.clear()
+    EventQueue._events_by_type.clear()
+    EventQueue._events_by_phase.clear()
+    EventQueue._events_by_source.clear()
+    EventQueue._events_by_target.clear()
+
+    # Create grid
+    grid = get_map()
+    grid.create_rectangle(0, 0, 15, 15)
+
+    # Add a vertical wall in the middle (blocking LOS)
+    for y in range(3, 12):
+        if y != 7:  # Leave a gap in the middle
+            grid.set_tile(7, y, walkable=False, visible=False)
+
+    # Create combatants
+    player = create_goblin(name="Hero", position=player_position)
+    opponent = create_skeleton(name="Skeleton", position=opponent_position)
+
+    # Register opportunity attack handlers
+    add_opportunity_attack_handler(player)
+    add_opportunity_attack_handler(opponent)
+
+    Entity.update_all_entities_senses(max_distance=20)
+
+    # PvP: Hero uses HumanController, Skeleton uses ClaudeController
+    encounter = Encounter(name="PvP Arena", source_entity_uuid=uuid4())
+    encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
+    encounter.add_combatant(opponent, ClaudeController(source_entity_uuid=opponent.uuid))
 
     return encounter
 
@@ -425,18 +569,17 @@ async def advance_encounter() -> dict:
             if controller is None:
                 return {"status": "error", "message": "No controller for current entity"}
 
-            if controller.controller_type == "human":
-                # Human turn - start it and wait for input
+            if controller.controller_type in ("human", "claude"):
+                # Human or Claude turn - start it and wait for API input
                 if sim.encounter.turn_state != TurnState.IN_PROGRESS:
                     sim.encounter.start_turn()
 
                 entity = sim.encounter.get_current_entity()
-                sim.waiting_for_human = True
-                sim.human_entity_uuid = entity.uuid if entity else None
 
+                status = "waiting_for_human" if controller.controller_type == "human" else "waiting_for_claude"
                 return {
-                    "status": "waiting_for_human",
-                    "entity_uuid": str(sim.human_entity_uuid) if sim.human_entity_uuid else None,
+                    "status": status,
+                    "entity_uuid": str(entity.uuid) if entity else None,
                     "entity_name": entity.name if entity else None,
                     "round": sim.encounter.round_number,
                     "turn_index": sim.encounter.current_turn_index,
@@ -473,11 +616,19 @@ async def advance_encounter() -> dict:
         EventQueue.remove_on_event_callback(capture_ai_event)
 
 
-def validate_human_action(entity_uuid_str: str) -> Entity:
+def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity:
     """
-    Validate that it's the specified human's turn.
+    Validate that a session can perform an action with an entity.
+
+    This is the new session-based validation that replaces the old
+    validate_human_action. It checks:
+    1. Session exists and is connected
+    2. Session owns the entity
+    3. Entity is the active entity (it's their turn)
+    4. Turn is in progress
 
     Args:
+        session_id_str: UUID string of the session
         entity_uuid_str: UUID string of the entity trying to act
 
     Returns:
@@ -486,23 +637,22 @@ def validate_human_action(entity_uuid_str: str) -> Entity:
     Raises:
         HTTPException if invalid
     """
-    if not sim.waiting_for_human:
-        raise HTTPException(status_code=400, detail="Not waiting for human input")
+    # Parse UUIDs
+    try:
+        session_id = UUID(session_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
 
     try:
         entity_uuid = UUID(entity_uuid_str)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID format")
+        raise HTTPException(status_code=400, detail="Invalid entity UUID format")
 
-    if sim.human_entity_uuid != entity_uuid:
-        raise HTTPException(status_code=403, detail="Not this entity's turn")
+    # Use session manager validation
+    mgr = sim.get_session_manager()
+    _, _ = mgr.validate_action(session_id, entity_uuid)
 
-    if sim.encounter is None:
-        raise HTTPException(status_code=400, detail="No active encounter")
-
-    if sim.encounter.turn_state != TurnState.IN_PROGRESS:
-        raise HTTPException(status_code=400, detail="Turn not in progress")
-
+    # Get and return the entity
     entity = Entity.get(entity_uuid)
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
@@ -651,6 +801,25 @@ async def get_encounter():
     }
 
 
+@app.get("/combat-log")
+async def get_combat_log(since: int = 0):
+    """
+    Get combat log entries.
+
+    Args:
+        since: Only return entries with index >= since (for polling)
+
+    Returns:
+        List of log entries with index, type, message, and details
+    """
+    entries = sim.get_combat_log(since)
+    return {
+        "entries": entries,
+        "count": len(entries),
+        "total": len(sim._combat_log)
+    }
+
+
 # =============================================================================
 # Simulation Control Endpoints
 # =============================================================================
@@ -767,6 +936,201 @@ async def set_turn_delay(delay: float):
 
 
 # =============================================================================
+# Session Management Endpoints
+# =============================================================================
+
+@app.post("/session/create", response_model=CreateSessionResponse)
+async def create_session(request: CreateSessionRequest):
+    """
+    Create a new player session.
+
+    Args:
+        player_type: "human" or "claude"
+        name: Optional display name
+
+    Returns:
+        Session ID and details
+    """
+    # Parse player type
+    try:
+        ptype = PlayerType(request.player_type.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid player_type: {request.player_type}. Must be 'human' or 'claude'"
+        )
+
+    # Create session
+    mgr = sim.get_session_manager()
+    session = mgr.create_session(ptype, request.name)
+
+    return CreateSessionResponse(
+        session_id=str(session.session_id),
+        player_type=session.player_type.value,
+        name=session.name
+    )
+
+
+@app.post("/session/{session_id}/ping", response_model=SessionPingResponse)
+async def ping_session(session_id: str):
+    """
+    Ping a session to update activity and get current status.
+
+    Call this periodically to:
+    1. Keep the session alive (prevent timeout)
+    2. Check if it's your turn
+    3. Get the active entity info
+    """
+    try:
+        sid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    mgr = sim.get_session_manager()
+    session = mgr.get_session(sid)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Update activity
+    session.ping()
+
+    # Get game state
+    game = sim.game
+    is_my_turn = False
+    active_entity_uuid = None
+    active_entity_name = None
+
+    if game:
+        active_entity_uuid = game.active_entity_uuid
+        if active_entity_uuid:
+            entity = Entity.get(active_entity_uuid)
+            active_entity_name = entity.name if entity else None
+            # Check if this session's turn
+            is_my_turn = game.is_player_turn(session.session_id)
+
+    return SessionPingResponse(
+        status="ok",
+        session_id=str(session.session_id),
+        connection_status=session.connection_status.value,
+        is_my_turn=is_my_turn,
+        active_entity_uuid=str(active_entity_uuid) if active_entity_uuid else None,
+        active_entity_name=active_entity_name,
+        controlled_entities=[str(e) for e in session.controlled_entities]
+    )
+
+
+@app.delete("/session/{session_id}")
+async def delete_session(session_id: str):
+    """Delete/disconnect a session."""
+    try:
+        sid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    mgr = sim.get_session_manager()
+    session = mgr.get_session(sid)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    mgr.remove_session(sid)
+
+    return {"status": "deleted", "session_id": session_id}
+
+
+@app.post("/game/join", response_model=JoinGameResponse)
+async def join_game(request: JoinGameRequest):
+    """
+    Join the active game with a session.
+
+    If entity_uuids is provided, assigns those entities to the session.
+    Otherwise, auto-assigns based on player type (human gets Hero, claude gets Skeleton).
+    """
+    try:
+        sid = UUID(request.session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    mgr = sim.get_session_manager()
+    session = mgr.get_session(sid)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    game = sim.game
+    if not game:
+        raise HTTPException(status_code=400, detail="No active game to join")
+
+    # Add player to game if not already
+    if session.session_id not in game.players:
+        game.add_player(session)
+
+    # Assign entities
+    assigned = []
+    if request.entity_uuids:
+        # Assign specific entities
+        for uuid_str in request.entity_uuids:
+            try:
+                entity_uuid = UUID(uuid_str)
+                if game.assign_entity(entity_uuid, session.session_id):
+                    assigned.append(str(entity_uuid))
+            except ValueError:
+                pass  # Skip invalid UUIDs
+    else:
+        # Auto-assign based on player type and entity name
+        for entity in Entity.get_all_entities():
+            # Human players get "Hero", Claude players get other entities
+            if session.player_type == PlayerType.HUMAN and entity.name == "Hero":
+                if game.assign_entity(entity.uuid, session.session_id):
+                    assigned.append(str(entity.uuid))
+            elif session.player_type == PlayerType.CLAUDE and entity.name != "Hero":
+                if game.assign_entity(entity.uuid, session.session_id):
+                    assigned.append(str(entity.uuid))
+
+    return JoinGameResponse(
+        success=len(assigned) > 0,
+        game_id=str(game.game_id),
+        session_id=str(session.session_id),
+        controlled_entities=assigned,
+        message=f"Joined game, controlling {len(assigned)} entities"
+    )
+
+
+@app.get("/game/status")
+async def get_game_status():
+    """Get current game status including all sessions."""
+    game = sim.game
+
+    if not game:
+        return {
+            "active": False,
+            "game": None,
+            "sessions": []
+        }
+
+    # Build session info
+    sessions_info = []
+    for session in game.players.values():
+        sessions_info.append({
+            "session_id": str(session.session_id),
+            "player_type": session.player_type.value,
+            "name": session.name,
+            "connection_status": session.connection_status.value,
+            "controlled_entities": [str(e) for e in session.controlled_entities],
+            "is_their_turn": game.is_player_turn(session.session_id)
+        })
+
+    return {
+        "active": True,
+        "game_id": str(game.game_id),
+        "encounter_active": game.encounter is not None and game.encounter.state.value == "active",
+        "active_entity_uuid": str(game.active_entity_uuid) if game.active_entity_uuid else None,
+        "sessions": sessions_info
+    }
+
+
+# =============================================================================
 # Event Endpoints (existing)
 # =============================================================================
 
@@ -848,13 +1212,16 @@ async def get_current_turn():
         reactions = ae.reactions.normalized_score
         movement = ae.movement.normalized_score
 
+    # is_human_turn means "waiting for manual input" (human OR claude, not AI)
+    needs_input = controller.controller_type in ("human", "claude") if controller else False
+
     return APICurrentTurn(
         encounter_active=sim.encounter.state == EncounterState.ACTIVE,
         round_number=sim.encounter.round_number,
         turn_index=sim.encounter.current_turn_index,
         current_entity_uuid=str(entity.uuid) if entity else None,
         current_entity_name=entity.name if entity else None,
-        is_human_turn=controller.controller_type == "human" if controller else False,
+        is_human_turn=needs_input,
         waiting_for_input=sim.waiting_for_human,
         controller_type=controller.controller_type if controller else None,
         actions_remaining=actions,
@@ -911,8 +1278,8 @@ async def get_entity_available_actions(entity_uuid: str):
 
 @app.post("/action/move", response_model=ActionResult)
 async def execute_move(request: MoveRequest):
-    """Execute a move action for the current human."""
-    entity = validate_human_action(request.entity_uuid)
+    """Execute a move action for the session's entity."""
+    entity = validate_session_action(request.session_id, request.entity_uuid)
 
     # Track opportunity attacks triggered by this movement
     triggered_reactions: list = []
@@ -1030,6 +1397,43 @@ async def execute_move(request: MoveRequest):
             "path": [list(p) for p in event.path] if hasattr(event, 'path') and event.path else []
         }
 
+        # Add to combat log
+        sim.add_combat_log("move", f"{entity.name} moves to {tuple(event.end_position)}.", {
+            "entity": entity.name,
+            "from": list(event.start_position),
+            "to": list(event.end_position)
+        })
+
+        # Log opportunity attacks that were triggered
+        for reaction in triggered_reactions:
+            attacker = reaction.get("attacker", "Unknown")
+            target_name = reaction.get("target", entity.name)
+            d20 = reaction.get("d20", "?")
+            all_d20_rolls = reaction.get("all_d20_rolls", [])
+            adv_status = reaction.get("advantage_status", "none")
+            atk_bonus = reaction.get("attack_bonus", 0)
+            atk_total = reaction.get("attack_total", "?")
+            target_ac = reaction.get("target_ac", "?")
+            outcome = reaction.get("outcome", "unknown")
+            total_dmg = reaction.get("total_damage", 0)
+
+            bonus_str = f"+{atk_bonus}" if atk_bonus >= 0 else str(atk_bonus)
+            if adv_status == "advantage" and len(all_d20_rolls) >= 2:
+                roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20}){bonus_str}={atk_total}"
+            elif adv_status == "disadvantage" and len(all_d20_rolls) >= 2:
+                roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20}){bonus_str}={atk_total}"
+            else:
+                roll_str = f"d20({d20}){bonus_str}={atk_total}"
+
+            if outcome == "crit":
+                oa_msg = f"(OA) {attacker} CRITS {target_name}! {roll_str} vs AC {target_ac} → {total_dmg} damage!"
+            elif outcome == "hit":
+                oa_msg = f"(OA) {attacker} hits {target_name}. {roll_str} vs AC {target_ac} → {total_dmg} damage"
+            else:
+                oa_msg = f"(OA) {attacker} misses {target_name}. {roll_str} vs AC {target_ac}"
+
+            sim.add_combat_log("opportunity_attack", oa_msg, reaction)
+
     return ActionResult(
         success=not event.canceled if event else False,
         message=(event.status_message if event else None) or ("Moved successfully" if event and not event.canceled else "Move failed"),
@@ -1045,8 +1449,8 @@ async def execute_move(request: MoveRequest):
 
 @app.post("/action/attack", response_model=ActionResult)
 async def execute_attack(request: AttackRequest):
-    """Execute an attack action for the current human."""
-    entity = validate_human_action(request.entity_uuid)
+    """Execute an attack action for the session's entity."""
+    entity = validate_session_action(request.session_id, request.entity_uuid)
 
     try:
         target_uuid = UUID(request.target_uuid)
@@ -1151,6 +1555,44 @@ async def execute_attack(request: AttackRequest):
             "damage": total_damage
         }
 
+        # Add to combat log with formatted message
+        bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
+        if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
+            roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={dice_roll.total if dice_roll else '?'}"
+        elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
+            roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={dice_roll.total if dice_roll else '?'}"
+        else:
+            roll_str = f"d20({d20_result}){bonus_str}={dice_roll.total if dice_roll else '?'}"
+
+        outcome_str = (attack_outcome.value if attack_outcome else "unknown").lower()
+        if outcome_str == "crit":
+            log_msg = f"{entity.name} CRITS {target.name}! {roll_str} vs AC {target_ac} → {total_damage} damage!"
+        elif outcome_str == "hit":
+            log_msg = f"{entity.name} hits {target.name}. {roll_str} vs AC {target_ac} → {total_damage} damage"
+        elif outcome_str == "crit miss":
+            log_msg = f"{entity.name} critically misses {target.name}! {roll_str} vs AC {target_ac}"
+        else:
+            log_msg = f"{entity.name} misses {target.name}. {roll_str} vs AC {target_ac}"
+
+        sim.add_combat_log("attack", log_msg, {
+            "attacker": entity.name,
+            "target": target.name,
+            "weapon": weapon_name,
+            "d20": d20_result,
+            "all_d20_rolls": all_d20_rolls,
+            "advantage_status": advantage_status,
+            "attack_bonus": attack_bonus,
+            "attack_total": dice_roll.total if dice_roll else None,
+            "target_ac": target_ac,
+            "outcome": outcome_str,
+            "total_damage": total_damage,
+            "target_hp": target.get_hp()
+        })
+
+        # Log deaths
+        for death_name in death_names:
+            sim.add_combat_log("death", f"{death_name} has been defeated!", {"entity": death_name})
+
     return ActionResult(
         success=not event.canceled if event else False,
         message=(event.status_message if event else None) or "Attack executed",
@@ -1166,11 +1608,14 @@ async def execute_attack(request: AttackRequest):
 
 @app.post("/action/dash", response_model=ActionResult)
 async def execute_dash(request: SimpleActionRequest):
-    """Execute a dash action for the current human."""
-    entity = validate_human_action(request.entity_uuid)
+    """Execute a dash action for the session's entity."""
+    entity = validate_session_action(request.session_id, request.entity_uuid)
 
     dash = Dash(source_entity_uuid=entity.uuid)
     event = dash.apply()
+
+    # Add to combat log
+    sim.add_combat_log("action", f"{entity.name} takes the Dash action.", {"entity": entity.name, "action": "dash"})
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1184,11 +1629,14 @@ async def execute_dash(request: SimpleActionRequest):
 
 @app.post("/action/dodge", response_model=ActionResult)
 async def execute_dodge(request: SimpleActionRequest):
-    """Execute a dodge action for the current human."""
-    entity = validate_human_action(request.entity_uuid)
+    """Execute a dodge action for the session's entity."""
+    entity = validate_session_action(request.session_id, request.entity_uuid)
 
     dodge = Dodge(source_entity_uuid=entity.uuid)
     event = dodge.apply()
+
+    # Add to combat log
+    sim.add_combat_log("action", f"{entity.name} takes the Dodge action.", {"entity": entity.name, "action": "dodge"})
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1202,11 +1650,14 @@ async def execute_dodge(request: SimpleActionRequest):
 
 @app.post("/action/disengage", response_model=ActionResult)
 async def execute_disengage(request: SimpleActionRequest):
-    """Execute a disengage action for the current human."""
-    entity = validate_human_action(request.entity_uuid)
+    """Execute a disengage action for the session's entity."""
+    entity = validate_session_action(request.session_id, request.entity_uuid)
 
     disengage = Disengage(source_entity_uuid=entity.uuid)
     event = disengage.apply()
+
+    # Add to combat log
+    sim.add_combat_log("action", f"{entity.name} takes the Disengage action.", {"entity": entity.name, "action": "disengage"})
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1220,20 +1671,19 @@ async def execute_disengage(request: SimpleActionRequest):
 
 @app.post("/action/end-turn")
 async def end_human_turn(request: SimpleActionRequest):
-    """End the current human's turn and advance to next."""
-    _ = validate_human_action(request.entity_uuid)
+    """End the session's entity turn and advance to next."""
+    entity = validate_session_action(request.session_id, request.entity_uuid)
 
     if sim.encounter is None:
         raise HTTPException(status_code=400, detail="No active encounter")
 
+    # Add to combat log
+    sim.add_combat_log("turn_end", f"{entity.name} ends their turn.", {"entity": entity.name})
+
     # End the turn
     sim.encounter.end_turn()
 
-    # Clear human waiting state
-    sim.waiting_for_human = False
-    sim.human_entity_uuid = None
-
-    # Advance turn index
+    # Advance turn index (session state is derived, no need to clear manually)
     sim.encounter.current_turn_index += 1
     if sim.encounter.current_turn_index >= len(sim.encounter.initiative_order):
         sim.encounter._advance_round()
@@ -1247,7 +1697,13 @@ async def end_human_turn(request: SimpleActionRequest):
 
 @app.post("/simulation/start-human")
 async def start_human_simulation():
-    """Start a new combat with human control (player vs AI)."""
+    """
+    Start a new combat with human control (player vs AI).
+
+    This creates a game session and auto-assigns entities:
+    - Hero goes to the first human session that joins
+    - Skeleton is controlled by AI
+    """
     # Cancel existing task
     if sim.combat_task and not sim.combat_task.done():
         sim.combat_task.cancel()
@@ -1258,16 +1714,173 @@ async def start_human_simulation():
 
     sim.encounter = setup_combat_with_human()
     sim.paused = False
-    sim.waiting_for_human = False
-    sim.human_entity_uuid = None
+    sim.clear_combat_log()  # Clear combat log for new game
+
+    # Create game session
+    game = sim.create_game_session(sim.encounter)
+
+    # Create AI session for the Skeleton
+    mgr = sim.get_session_manager()
+    ai_session = mgr.create_session(PlayerType.AI, "AI Skeleton")
+    game.add_player(ai_session)
+
+    # Assign Skeleton to AI
+    for entity in Entity.get_all_entities():
+        if entity.name == "Skeleton":
+            game.assign_entity(entity.uuid, ai_session.session_id)
+            break
 
     # Advance to first turn (may be human or AI)
     result = await advance_encounter()
 
+    # Return info about which entity needs a human session
+    hero_uuid = None
+    for entity in Entity.get_all_entities():
+        if entity.name == "Hero":
+            hero_uuid = str(entity.uuid)
+            break
+
     return {
         "status": "started",
         "encounter_uuid": str(sim.encounter.uuid),
+        "hero_uuid": hero_uuid,  # Client should create session and join with this entity
+        "message": "Create a session and join with hero_uuid to control the Hero",
         **result
+    }
+
+
+@app.post("/simulation/start-pvp")
+async def start_pvp_simulation():
+    """
+    Start PvP combat where both entities are human-controlled.
+
+    Player 1 (Hero) = controlled by user via CLI (PlayerType.HUMAN)
+    Player 2 (Skeleton) = controlled by Claude via agent CLI (PlayerType.CLAUDE)
+
+    Both players create sessions and join to control their entities.
+    """
+    # Cancel existing task
+    if sim.combat_task and not sim.combat_task.done():
+        sim.combat_task.cancel()
+        try:
+            await sim.combat_task
+        except asyncio.CancelledError:
+            pass
+
+    sim.encounter = setup_combat_pvp()
+    sim.paused = False
+    sim.clear_combat_log()  # Clear combat log for new game
+
+    # Create game session
+    game = sim.create_game_session(sim.encounter)
+
+    # Get entity UUIDs
+    hero_uuid = None
+    skeleton_uuid = None
+    for entity in Entity.get_all_entities():
+        if entity.name == "Hero":
+            hero_uuid = entity.uuid
+        elif entity.name == "Skeleton":
+            skeleton_uuid = entity.uuid
+
+    # Roll initiative and start - will wait for first player
+    result = await advance_encounter()
+
+    return {
+        "status": "pvp_started",
+        "mode": "pvp",
+        "encounter_uuid": str(sim.encounter.uuid),
+        "hero_uuid": str(hero_uuid) if hero_uuid else None,
+        "skeleton_uuid": str(skeleton_uuid) if skeleton_uuid else None,
+        "message": "PvP mode: Create sessions and join - Hero (human) vs Skeleton (claude)",
+        **result
+    }
+
+
+@app.post("/agent/ping")
+async def agent_ping():
+    """
+    DEPRECATED: Use /session/{session_id}/ping instead.
+
+    Legacy endpoint for backward compatibility.
+    Agent should create a session and use session ping instead.
+    """
+    # This is kept for backward compat, but doesn't do much now
+    # Agents should use the session system
+    game = sim.game
+    is_my_turn = False
+    skeleton_uuid = None
+
+    if game and sim.encounter:
+        current_entity = sim.encounter.get_current_entity()
+        if current_entity and current_entity.name == "Skeleton":
+            is_my_turn = True
+            skeleton_uuid = str(current_entity.uuid)
+        else:
+            # Find skeleton UUID
+            for entity in Entity.get_all_entities():
+                if entity.name == "Skeleton":
+                    skeleton_uuid = str(entity.uuid)
+                    break
+
+    return {
+        "status": "ok",
+        "message": "DEPRECATED: Use /session/create and /session/{id}/ping instead",
+        "is_my_turn": is_my_turn,
+        "skeleton_uuid": skeleton_uuid
+    }
+
+
+@app.get("/pvp/status")
+async def get_pvp_status():
+    """
+    Get PvP game status including session connections.
+
+    Used by CLIs to check game state and who's connected.
+    """
+    game = sim.game
+
+    # Determine whose turn it is
+    current_turn = None
+    is_hero_turn = False
+    is_skeleton_turn = False
+    hero_uuid = None
+    skeleton_uuid = None
+
+    # Get entity UUIDs
+    for entity in Entity.get_all_entities():
+        if entity.name == "Hero":
+            hero_uuid = entity.uuid
+        elif entity.name == "Skeleton":
+            skeleton_uuid = entity.uuid
+
+    if sim.encounter:
+        current_entity = sim.encounter.get_current_entity()
+        if current_entity:
+            current_turn = current_entity.name
+            is_hero_turn = hero_uuid and current_entity.uuid == hero_uuid
+            is_skeleton_turn = skeleton_uuid and current_entity.uuid == skeleton_uuid
+
+    # Check session connections
+    human_connected = False
+    claude_connected = False
+
+    if game:
+        for session in game.players.values():
+            if session.player_type == PlayerType.HUMAN:
+                human_connected = session.connection_status == ConnectionStatus.CONNECTED
+            elif session.player_type == PlayerType.CLAUDE:
+                claude_connected = session.connection_status == ConnectionStatus.CONNECTED
+
+    return {
+        "pvp_mode": game is not None,
+        "human_connected": human_connected,
+        "claude_connected": claude_connected,
+        "current_turn": current_turn,
+        "is_hero_turn": is_hero_turn,
+        "is_skeleton_turn": is_skeleton_turn,
+        "hero_uuid": str(hero_uuid) if hero_uuid else None,
+        "skeleton_uuid": str(skeleton_uuid) if skeleton_uuid else None
     }
 
 
