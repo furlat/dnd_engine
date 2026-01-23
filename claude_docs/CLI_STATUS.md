@@ -2,7 +2,7 @@
 
 ## Current State (January 2026)
 
-The CLI provides a nethack-style terminal interface for D&D combat with ASCII map visualization.
+The CLI provides a nethack-style terminal interface for D&D combat with ASCII map visualization. **PvP mode is fully functional** with human vs Claude gameplay.
 
 ### Working Features
 
@@ -19,76 +19,71 @@ The CLI provides a nethack-style terminal interface for D&D combat with ASCII ma
 
 2. **Combat Actions**
    - `move X Y` / `m X Y` - Move to position
+   - `m` alone - Show valid move positions on map
    - `attack N` / `a N` - Attack target by number
+   - `a` alone - Show attack targets
    - `dash` / `d` - Double movement this turn
    - `dodge` / `o` - Attackers have disadvantage
    - `disengage` / `i` - No opportunity attacks when moving
    - `end` / `e` - End turn
-   - Action hints at bottom show available actions
 
-3. **Information Display**
-   - Full attack breakdown: d20 roll + bonus vs AC, outcome, damage dice
-   - **Advantage/Disadvantage**: Shows both dice rolls (e.g., `d20(14, 8 → 14)` for ADV)
+3. **Display Panels**
+   - Header: "NEURODRAGON" branding + connection status
+   - Battlefield: ASCII map with entities
+   - Combatants: Entity table with HP, AC, conditions
+   - Combat Log: Rich formatted action history
+   - Output: Command feedback (valid positions, targets)
+   - Available Actions: What you can do (with economy in title)
+
+4. **Information Display**
+   - Full attack breakdown: d20 roll + bonus vs AC, outcome, damage
+   - **Advantage/Disadvantage**: Shows both dice rolls (e.g., `ADV d20(14,8→14)`)
    - ADV/DIS indicators with color coding (green=ADV, red=DIS)
    - Entity status table with HP, AC, position, conditions
-   - Combat log with recent actions
-   - AI turn actions displayed with full details
 
-4. **AI Behavior**
-   - MeleeAIController moves toward enemies and attacks
-   - AI actions captured and displayed between turns
-   - AI movement paths now displayed
+5. **PvP Mode**
+   - Session-based authority (only control your own entity)
+   - Combat log polling to see opponent actions
+   - Connection status display in header
 
-### Known Issues
+### Agent CLI (for Claude)
 
-#### 1. Opportunity Attacks Not Triggering (ROOT CAUSE FOUND)
-
-**Problem**: When the player moves out of an enemy's threatened area, opportunity attacks should trigger but they don't.
-
-**Root cause**: `add_opportunity_attack_handler()` is NOT being called for entities in `setup_combat_with_human()`. The bestiary factory functions (`create_skeleton`, `create_goblin`) don't automatically add the handler.
-
-**How OA works in the engine** (`dnd/reactions.py`):
-- `EventHandler` registered on `MOVEMENT` events at `EFFECT` phase
-- `opportunity_attack_processor` checks:
-  1. Moving entity started in threatened position
-  2. Path goes outside threatened area
-  3. Moving entity doesn't have "Disengaging" condition
-- If conditions met, executes an `Attack` action
-
-**FIXED**: Added to `server/event_server.py:setup_combat_with_human()`:
-```python
-from dnd.reactions import add_opportunity_attack_handler
-
-# After creating entities:
-add_opportunity_attack_handler(player)
-add_opportunity_attack_handler(enemy)
-```
-
-**Capture mechanism** (already implemented in `execute_move`):
-- Registers callback via `EventQueue.add_on_event_callback()`
-- Captures attack events targeting the moving entity during movement
-- Returns in `triggered_reactions` array
-
-#### 2. Dash/Dodge/Disengage Availability (VERIFIED WORKING)
-
-**Tested**: API correctly returns these actions with `can_afford=True`.
+The agent CLI (`cli/agent.py`) provides a simple interface for Claude to play:
 
 ```bash
-# Test shows:
-other_actions:
-  dash: can_afford=True
-  dodge: can_afford=True
-  disengage: can_afford=True
+# Connection
+python -m cli.agent connect     # Create session, join game
+python -m cli.agent disconnect  # Clear session for new game
+
+# Turn Management
+python -m cli.agent watch       # BLOCKING - wait for turn, show opponent actions
+python -m cli.agent state       # Show current game state
+python -m cli.agent actions     # Show available actions
+
+# Actions
+python -m cli.agent move X Y    # Move to position
+python -m cli.agent attack N    # Attack target by index
+python -m cli.agent dash        # Dash action
+python -m cli.agent dodge       # Dodge action
+python -m cli.agent disengage   # Disengage action
+python -m cli.agent end         # End turn
 ```
 
-**CLI Commands**:
-- `d` or `dash` - Take Dash action (double movement)
-- `o` or `dodge` - Take Dodge action (attackers have disadvantage)
-- `i` or `disengage` - Take Disengage action (no opportunity attacks)
+**Important**: The `watch` command is the key for staying engaged. It:
+1. Polls server every 2 seconds
+2. Shows opponent actions from combat log as they happen
+3. When it becomes Claude's turn, displays full state + available actions
+4. Detects encounter end and exits cleanly
 
-**Display**: These appear in the "OTHER ACTIONS" section when running `actions` command.
-
-**Note**: The user may have missed these in the display. They show under a separate section from attacks and movement.
+**Typical Claude workflow**:
+```bash
+python -m cli.agent connect
+python -m cli.agent watch      # Blocks until your turn
+python -m cli.agent move 5 7
+python -m cli.agent attack 0
+python -m cli.agent end
+python -m cli.agent watch      # Wait for next turn
+```
 
 ### Configuration
 
@@ -109,30 +104,33 @@ See `CLI_API_REFERENCE.md` for full API documentation.
 
 **Key endpoints**:
 - `POST /simulation/start-human` - Start game (player vs AI)
-- `POST /simulation/start-pvp` - Start PvP game (both human controlled)
+- `POST /simulation/start-pvp` - Start PvP game
 - `GET /state` - Full game state
 - `GET /visibility` - Entity visibility data
 - `GET /entity/{uuid}/available-actions` - Available actions
-- `POST /action/move` - Move (includes `triggered_reactions`, `path`)
+- `GET /combat-log` - Server-side combat log
+- `GET /pvp/status` - Whose turn, who's connected
+- `POST /action/move` - Move (includes `triggered_reactions`)
 - `POST /action/attack` - Attack
 - `POST /action/dash` - Dash
 - `POST /action/dodge` - Dodge
 - `POST /action/disengage` - Disengage
-- `POST /action/end-turn` - End turn (includes `ai_actions` with paths in AI mode)
+- `POST /action/end-turn` - End turn
 
 ### Files Structure
 
 ```
 cli/
 ├── __main__.py      # Module entry point
-├── agent.py         # Non-interactive CLI for Claude agent
-├── api_client.py    # HTTP client for server
-├── commands.py      # Command parsing and execution
-├── display.py       # Rich-based ASCII rendering
-└── main.py          # Typer entry point and game loop
+├── agent.py         # Agent CLI for Claude (connect, watch, state, actions, move, attack, end)
+├── api_client.py    # HTTP client for server with session management
+├── commands.py      # Command parsing and execution for human CLI
+├── display.py       # Rich-based TUI rendering (panels, map, combat log)
+└── main.py          # Typer entry point (play, playpvp commands)
 
 server/
 ├── event_server.py  # FastAPI server with all endpoints
+├── session.py       # Session/game management, authority validation
 └── api_models.py    # Pydantic models for API
 ```
 
@@ -140,69 +138,35 @@ server/
 
 ```bash
 # Terminal 1: Start server
-python -m server.event_server --force
+source .venv/bin/activate
+uvicorn server.event_server:app --reload
 
-# Terminal 2: Start CLI (player vs AI)
-python -m cli play
+# Terminal 2: Human player
+python -m cli play       # vs AI
+python -m cli playpvp    # vs Claude
+
+# Claude (via agent CLI)
+python -m cli.agent connect
+python -m cli.agent watch
 ```
 
-### PvP Mode (User vs Claude)
+### Known Issues / Limitations
 
-PvP mode allows Claude to play against a human user via the agent CLI.
+1. **Polling-based updates**: Uses HTTP polling instead of WebSockets. Works fine but adds latency.
 
-```bash
-# Terminal 1: Start server
-python -m server.event_server --force
+2. **Single entity per player**: Each session controls one entity. Multi-entity control not implemented.
 
-# Terminal 2: User starts PvP game via regular CLI
-python -m cli play
-# Then use "start-pvp" command (or call POST /simulation/start-pvp)
+3. **No ranged weapon long range**: Ranged attacks work but long range disadvantage not implemented.
 
-# Claude uses agent CLI to control the Skeleton:
-python -m cli.agent state         # See board state
-python -m cli.agent actions       # See available actions
-python -m cli.agent move 5 3      # Move to position
-python -m cli.agent attack 0      # Attack target #0
-python -m cli.agent end           # End turn
-```
-
-**Agent CLI Commands:**
-- `state` - Show game state (map, entities, whose turn)
-- `actions` - Show available actions for active entity
-- `wait` - Check if it's my turn (exit code 0 = yes)
-- `move X Y` - Move to position
-- `attack N` - Attack target by index
-- `dash` - Take Dash action
-- `dodge` - Take Dodge action
-- `disengage` - Take Disengage action
-- `end` - End turn
-- `start-pvp` - Start new PvP game
+4. **No cover system**: No AC bonuses from cover/obstacles.
 
 ### Recent Fixes (January 2026)
 
-#### Dice Rolling Bug - FIXED
-**Problem**: Advantage/disadvantage was only rolling 1 die instead of 2.
-
-**Root cause**: `_roll_with_advantage()` and `_roll_with_disadvantage()` in `dnd/core/dice.py` used `range(self.count)` where `self.count=1` for d20 rolls.
-
-**Fix**: Changed both methods to always use `range(2)`:
-```python
-def _roll_with_advantage(self) -> Tuple[int, List[int]]:
-    rolls = [random.randint(1, self.value) for _ in range(2)]
-    return max(rolls), rolls
-```
-
-#### Advantage Status Case Sensitivity - FIXED
-**Problem**: Server wasn't correctly selecting min/max die for advantage/disadvantage.
-
-**Root cause**: `AdvantageStatus.DISADVANTAGE.value` is `"Disadvantage"` (capital D), but comparisons used lowercase `"disadvantage"`.
-
-**Fix**: Applied `.lower()` to all advantage status comparisons in `event_server.py`.
-
-### Next Steps
-
-1. ~~**Debug opportunity attacks**~~: FIXED - handlers now registered in setup_combat_with_human()
-2. ~~**Debug action availability**~~: FIXED - dash/dodge/disengage now shown in action hints
-3. ~~**Test dodge condition effect**~~: VERIFIED WORKING - `examples/test_dodging_attack.py` confirms attackers get disadvantage
-4. **Test disengage condition effect**: Verify no opportunity attacks trigger when Disengaging
-5. **Add ranged weapon support**: Currently only melee weapons work
+- **Dice Rolling Bug**: Fixed advantage/disadvantage rolling only 1 die instead of 2
+- **Advantage Status Case Sensitivity**: Fixed server not selecting correct min/max die
+- **Opportunity Attacks**: Fixed handlers not being registered in setup
+- **Agent CLI `watch` command**: Added blocking turn-wait with opponent action display
+- **Rich Combat Log**: Consolidated to single panel with color-coded actions
+- **Output Panel**: Added for command feedback (valid positions, attack targets)
+- **Header Panel**: Added NEURODRAGON branding + connection status
+- **Action Economy in Title**: Available actions panel shows remaining economy

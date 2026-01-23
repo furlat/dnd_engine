@@ -68,6 +68,52 @@ def create_shortsword(source_id: UUID) -> Weapon:
     )
 
 
+def create_shortbow(source_id: UUID) -> Weapon:
+    """Creates a shortbow - 1d6 piercing, ranged (80/320)"""
+    return Weapon(
+        source_entity_uuid=source_id,
+        name="Shortbow",
+        description="A small bow suitable for quick shots.",
+        damage_dice=6,
+        dice_numbers=1,
+        damage_type=DamageType.PIERCING,
+        properties=[WeaponProperty.RANGED, WeaponProperty.TWO_HANDED],
+        range=Range(type=RangeType.RANGE, normal=80, long=320),
+        attack_bonus=ModifiableValue.create(
+            source_entity_uuid=source_id,
+            base_value=0,
+            value_name="Attack Bonus"
+        ),
+        extra_damage_dices=[],
+        extra_damage_dices_numbers=[],
+        extra_damage_bonus=[],
+        extra_damage_type=[]
+    )
+
+
+def create_longbow(source_id: UUID) -> Weapon:
+    """Creates a longbow - 1d8 piercing, ranged (150/600), heavy"""
+    return Weapon(
+        source_entity_uuid=source_id,
+        name="Longbow",
+        description="A tall bow capable of long-range shots.",
+        damage_dice=8,
+        dice_numbers=1,
+        damage_type=DamageType.PIERCING,
+        properties=[WeaponProperty.RANGED, WeaponProperty.TWO_HANDED, WeaponProperty.HEAVY],
+        range=Range(type=RangeType.RANGE, normal=150, long=600),
+        attack_bonus=ModifiableValue.create(
+            source_entity_uuid=source_id,
+            base_value=0,
+            value_name="Attack Bonus"
+        ),
+        extra_damage_dices=[],
+        extra_damage_dices_numbers=[],
+        extra_damage_bonus=[],
+        extra_damage_type=[]
+    )
+
+
 def create_leather_armor(source_id: UUID) -> BodyArmor:
     """Creates leather armor - AC 11 + Dex"""
     return BodyArmor(
@@ -208,8 +254,8 @@ def create_goblin(
     shield = create_wooden_shield(entity.uuid)
 
     entity.equipment.equip(leather_armor)
-    entity.equipment.equip(scimitar, WeaponSlot.MAIN_HAND)
-    entity.equipment.equip(shield, WeaponSlot.OFF_HAND)
+    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
     return entity
 
@@ -295,7 +341,124 @@ def create_skeleton(
     armor_scraps = create_armor_scraps(entity.uuid)
 
     entity.equipment.equip(armor_scraps)
-    entity.equipment.equip(shortsword, WeaponSlot.MAIN_HAND)
+    entity.equipment.equip(shortsword, WeaponSlot.MELEE_MAIN)
+
+    return entity
+
+
+def create_dagger(source_id: UUID) -> Weapon:
+    """Creates a dagger - 1d4 piercing, finesse, light, thrown"""
+    return Weapon(
+        source_entity_uuid=source_id,
+        name="Dagger",
+        description="A simple blade for quick strikes.",
+        damage_dice=4,
+        dice_numbers=1,
+        damage_type=DamageType.PIERCING,
+        properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT, WeaponProperty.THROWN],
+        range=Range(type=RangeType.REACH, normal=5),
+        attack_bonus=ModifiableValue.create(
+            source_entity_uuid=source_id,
+            base_value=0,
+            value_name="Attack Bonus"
+        ),
+        extra_damage_dices=[],
+        extra_damage_dices_numbers=[],
+        extra_damage_bonus=[],
+        extra_damage_type=[]
+    )
+
+
+def create_goblin_archer(
+    source_id: Optional[UUID] = None,
+    name: str = "Goblin Archer",
+    position: Tuple[int, int] = (0, 0)
+) -> Entity:
+    """
+    Creates a Goblin Archer (CR 1/4) - Dual Wielder variant.
+
+    Stats:
+    - STR 8 (-1), DEX 14 (+2), CON 10 (+0), INT 10 (+0), WIS 8 (-1), CHA 8 (-1)
+    - HP: 7 (2d6)
+    - AC: 13 (leather armor, no shield for dual wield)
+    - Speed: 30ft
+    - Melee Main: Scimitar (1d6+2 slashing, finesse, light)
+    - Melee Off: Dagger (1d4 piercing, finesse, light) - NO ability modifier to damage
+    - Ranged: Shortbow (1d6+2 piercing, range 80/320)
+    - Proficient: Stealth (+6 with expertise-like bonus)
+    - Proficiency bonus: +2
+
+    Args:
+        source_id: UUID for the entity (generated if not provided)
+        name: Name for the goblin archer
+        position: Starting grid position
+
+    Returns:
+        Entity: A configured goblin archer entity
+    """
+    if source_id is None:
+        source_id = uuid4()
+
+    # Ability scores
+    ability_scores_config = AbilityScoresConfig(
+        strength=AbilityConfig(ability_score=8),
+        dexterity=AbilityConfig(ability_score=14),
+        constitution=AbilityConfig(ability_score=10),
+        intelligence=AbilityConfig(ability_score=10),
+        wisdom=AbilityConfig(ability_score=8),
+        charisma=AbilityConfig(ability_score=8)
+    )
+
+    # Skills - Stealth proficiency
+    skill_set_config = SkillSetConfig(
+        stealth=SkillConfig(proficiency=True, expertise=True)  # +6 total
+    )
+
+    # Health: 2d6 = 7 average HP
+    health_config = HealthConfig(
+        hit_dices=[HitDiceConfig(
+            hit_dice_value=6,
+            hit_dice_count=2,
+            mode="average",
+            ignore_first_level=False
+        )]
+    )
+
+    # Equipment config (base values)
+    equipment_config = EquipmentConfig()
+
+    # Action economy (standard)
+    action_economy_config = ActionEconomyConfig()
+
+    # Entity config
+    entity_config = EntityConfig(
+        ability_scores=ability_scores_config,
+        skill_set=skill_set_config,
+        health=health_config,
+        equipment=equipment_config,
+        action_economy=action_economy_config,
+        proficiency_bonus=2,
+        position=position
+    )
+
+    # Create entity
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        description="A small goblin wielding a shortbow, preferring to attack from range.",
+        config=entity_config
+    )
+
+    # Equip weapons and armor - dual wield melee + ranged backup
+    shortbow = create_shortbow(entity.uuid)
+    scimitar = create_scimitar(entity.uuid)
+    dagger = create_dagger(entity.uuid)
+    leather_armor = create_leather_armor(entity.uuid)
+
+    entity.equipment.equip(leather_armor)
+    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)  # Ranged weapon
+    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)   # Main melee weapon
+    entity.equipment.equip(dagger, WeaponSlot.MELEE_OFF)      # Off-hand (two-weapon fighting)
 
     return entity
 

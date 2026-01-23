@@ -192,8 +192,8 @@ def create_knight(name: str = "Knight", position: Tuple[int, int] = (0, 0)) -> E
     shield = create_steel_shield(entity.uuid)
 
     entity.equipment.equip(plate)
-    entity.equipment.equip(longsword, WeaponSlot.MAIN_HAND)
-    entity.equipment.equip(shield, WeaponSlot.OFF_HAND)
+    entity.equipment.equip(longsword, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
     return entity
 
@@ -228,7 +228,7 @@ def perform_attack(attacker: Entity, target: Entity):
     attack = Attack(
         source_entity_uuid=attacker.uuid,
         target_entity_uuid=target.uuid,
-        weapon_slot=WeaponSlot.MAIN_HAND,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
         name=f"{attacker.name}'s Attack"
     )
     event = attack.apply()

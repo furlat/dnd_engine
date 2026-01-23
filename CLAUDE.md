@@ -47,6 +47,36 @@ Claude: I'll fix this. [change 1] Hmm that didn't work. [change 2] Still broken.
 User: What are you doing? That's all wrong.
 ```
 
+### Dependency Direction (NO CIRCULAR IMPORTS)
+
+**CRITICAL**: Never use "late imports" or "import inside function" to avoid circular imports. If you need a late import, it means the design is wrong - the circular dependency still exists, you're just hiding it.
+
+**The Rule**: Dependencies flow DOWN the hierarchy, never UP.
+
+```
+Entity (high-level)
+   ↓ owns
+Senses, Equipment, Health (blocks/components)
+   ↓ uses
+ModifiableValue, Modifiers (primitives)
+   ↓ uses
+BaseObject, BaseBlock (base classes)
+```
+
+**Correct**: `Entity` imports and uses `Senses` (owner uses component)
+**Wrong**: `Senses` imports `Entity` (component reaching back to owner)
+
+**Example - where to put `is_threatened()`**:
+- This method needs to query other entities via `Entity.get()`
+- `Senses` cannot import `Entity` (circular!)
+- Therefore `is_threatened()` belongs on `Entity`, not `Senses`
+- Entity can call `other_entity.senses.get_threathened_positions()` - that direction is fine
+
+**If you find yourself wanting to import "up" the hierarchy**:
+1. STOP - the method is in the wrong place
+2. Move it to the higher-level class that already has access to both
+3. Or pass the needed data as parameters instead of importing
+
 ## Development & Testing: PvP CLI Loop (PRIMARY WORKFLOW)
 
 The primary way to develop and test features is through **live PvP combat** between the user and Claude. This provides immediate feedback and allows testing specific scenarios.
@@ -91,11 +121,44 @@ python -m cli.agent end           # End turn
 python -m cli.agent disconnect
 ```
 
-### Typical Development Loop
+### Typical Turn Sequence (IMPORTANT)
+
+**CRITICAL**: After ending your turn, you MUST run `watch` to stay connected and see opponent actions!
+
+```bash
+# 1. Connect once at start
+python -m cli.agent connect
+
+# 2. Wait for your turn (blocks until it's your turn)
+python -m cli.agent watch
+
+# 3. Take your turn
+python -m cli.agent state          # See the battlefield
+python -m cli.agent actions        # See what you can do
+python -m cli.agent move 5 7       # Move closer
+python -m cli.agent attack 0       # Attack target
+python -m cli.agent end            # End turn
+
+# 4. IMMEDIATELY run watch again to wait for next turn!
+python -m cli.agent watch          # Blocks, shows opponent actions
+
+# 5. When it's your turn again, take actions...
+python -m cli.agent attack 0
+python -m cli.agent end
+
+# 6. Run watch again...
+python -m cli.agent watch
+
+# Repeat steps 5-6 until combat ends
+```
+
+**What happens if you forget `watch`**: You'll be disconnected from the game flow and won't see opponent actions or know when it's your turn again.
+
+### Game Flow Summary
 
 1. User starts `playpvp`, Claude runs `connect` then `watch`
 2. `watch` blocks until it's Claude's turn, showing opponent actions as they happen
-3. Claude takes actions, ends turn, runs `watch` again
+3. Claude takes actions, ends turn, **runs `watch` again**
 4. Repeat until encounter ends (watch detects game end automatically)
 5. To test again: User restarts `playpvp`, Claude runs `disconnect` then `connect` then `watch`
 
@@ -167,7 +230,7 @@ Entity
 ├── skill_set: SkillSet               # 18 D&D 5e skills, linked to abilities
 ├── saving_throws: SavingThrowSet     # 6 saves, linked to abilities
 ├── health: Health                    # HP, hit dice, temp HP, damage resistances
-├── equipment: Equipment              # Weapons, armor, shield, AC calculation
+├── equipment: Equipment              # Weapons (4 slots: MELEE_MAIN/OFF, RANGED_MAIN/OFF), armor, shield, AC
 ├── action_economy: ActionEconomy     # actions, bonus_actions, reactions, movement
 ├── senses: Senses                    # position, visible cells, paths, visible entities
 ├── proficiency_bonus: ModifiableValue
@@ -227,7 +290,7 @@ Each has a **Contextual** variant (e.g., `ContextualAdvantageModifier`) that tak
 attacker.set_target_entity(target.uuid)
 target.set_target_entity(attacker.uuid)
 
-attack_bonus = attacker.attack_bonus(WeaponSlot.MAIN_HAND, target.uuid)
+attack_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
 ac = target.ac_bonus(attacker.uuid)
 
 # KEY: Propagate to_target modifiers between entities
@@ -385,11 +448,11 @@ def entity_action_economy_cost_evaluator(source_entity_uuid: UUID, cost_type: Co
 from dnd.actions import Attack
 from dnd.blocks.equipment import WeaponSlot
 
-# Create and execute an attack
+# Create and execute an attack (melee weapon in MELEE_MAIN slot)
 attack = Attack(
     source_entity_uuid=attacker.uuid,
     target_entity_uuid=target.uuid,
-    weapon_slot=WeaponSlot.MAIN_HAND,
+    weapon_slot=WeaponSlot.MELEE_MAIN,  # Or MELEE_OFF, RANGED_MAIN, RANGED_OFF
     name="Scimitar Attack"
 )
 event = attack.apply()  # Returns AttackEvent with all results
@@ -1090,7 +1153,7 @@ class MyCustomEvent(Event):
 - `RangeType` is in `dnd/core/events.py`, not `dnd/blocks/equipment.py`
 - Always use bestiary factories (`create_goblin`, `create_skeleton`) as reference for entity creation
 - **Bestiary factories use keyword args**: `create_goblin(name="Name", position=(0,0))` NOT `create_goblin("Name", ...)`
-- **No `get_weapon()` method**: Use `entity.equipment.weapon_main_hand` directly
+- **Weapon slots**: Use `entity.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)` to get weapons. 4 slots: `MELEE_MAIN`, `MELEE_OFF` (can hold shield), `RANGED_MAIN`, `RANGED_OFF`
 - **Ability modifier is int**: `entity.ability_scores.strength.modifier` returns `int`, not `ModifiableValue`
 - **Always call `Entity.update_all_entities_senses()`** after creating entities for LOS to work
 

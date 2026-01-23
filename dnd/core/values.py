@@ -2152,6 +2152,138 @@ class ModifiableValue(BaseValue):
         generated_from = [ModifiableValue.get(uuid) for uuid in self.generated_from if uuid is not None]
         return [x for x in generated_from if x is not None]
 
+    def get_breakdown(self) -> List[Dict[str, Any]]:
+        """
+        Get a breakdown of all numerical modifiers contributing to this value.
+
+        Returns a list of dicts with:
+        - name: Human-readable modifier name (cleaned up)
+        - value: The modifier value (int)
+        - source: Where the modifier comes from ("self", "from_target", "condition", etc.)
+        """
+        # Name cleanup mapping for known modifier names
+        name_cleanup = {
+            # Proficiency
+            "proficiency_bonus_base_value": "Prof",
+            "Value_base_value": "Prof",  # Often used for proficiency bonus
+            # Attack bonuses
+            "Attack Bonus_base_value": "Base",
+            "Melee Attack Bonus_base_value": "Melee",
+            "Ranged Attack Bonus_base_value": "Ranged",
+            # Damage bonuses
+            "Damage Bonus_base_value": "Base",
+            # Ability scores - raw
+            "strength_modifier_base_value": "STR",
+            "dexterity_modifier_base_value": "DEX",
+            "constitution_modifier_base_value": "CON",
+            "intelligence_modifier_base_value": "INT",
+            "wisdom_modifier_base_value": "WIS",
+            "charisma_modifier_base_value": "CHA",
+            # Ability scores - ability score block
+            "strength Ability Score_base_value": "STR",
+            "dexterity Ability Score_base_value": "DEX",
+            "constitution Ability Score_base_value": "CON",
+            "intelligence Ability Score_base_value": "INT",
+            "wisdom Ability Score_base_value": "WIS",
+            "charisma Ability Score_base_value": "CHA",
+            # Modifier bonuses from ability blocks
+            "strength Modifier Bonus_base_value": "STR Mod",
+            "dexterity Modifier Bonus_base_value": "DEX Mod",
+            "constitution Modifier Bonus_base_value": "CON Mod",
+            "intelligence Modifier Bonus_base_value": "INT Mod",
+            "wisdom Modifier Bonus_base_value": "WIS Mod",
+            "charisma Modifier Bonus_base_value": "CHA Mod",
+            # AC
+            "ac_bonus_base_value": "Base AC",
+            "AC Bonus_base_value": "Base AC",
+            "Armor Class_base_value": "Armor",
+            "Armor Class Bonus_base_value": "AC Bonus",
+            "Max Dex Bonus_base_value": "Max DEX",
+        }
+
+        def clean_name(raw_name: str) -> str:
+            if raw_name in name_cleanup:
+                return name_cleanup[raw_name]
+            # Strip common suffixes
+            cleaned = raw_name
+            for suffix in ["_base_value", "_bonus", "_modifier", " Bonus", " Modifier"]:
+                if cleaned.endswith(suffix):
+                    cleaned = cleaned[:-len(suffix)]
+            # Clean up "Ability Score" pattern
+            if " Ability Score" in cleaned:
+                cleaned = cleaned.replace(" Ability Score", "")
+            return cleaned.replace("_", " ").title()
+
+        result: List[Dict[str, Any]] = []
+
+        # If this value was combined from others, get breakdowns from sources
+        if self.generated_from:
+            source_values = self.get_generated_from()
+            for source_val in source_values:
+                result.extend(source_val.get_breakdown())
+            return result
+
+        # Otherwise, extract modifiers from our own components
+        components = [
+            (self.self_static, "self"),
+            (self.self_contextual, "self"),
+            (self.from_target_static, "from_target"),
+            (self.from_target_contextual, "from_target"),
+        ]
+
+        for component, source in components:
+            if component is None:
+                continue
+            for modifier in component.value_modifiers.values():
+                # Skip zero-value modifiers
+                value = modifier.normalized_value if hasattr(modifier, 'normalized_value') else modifier.value
+                if value == 0:
+                    continue
+                result.append({
+                    "name": clean_name(modifier.name or "Unknown"),
+                    "value": value,
+                    "source": source
+                })
+
+        return result
+
+    def get_advantage_breakdown(self) -> List[Dict[str, Any]]:
+        """
+        Get a breakdown of advantage/disadvantage modifiers.
+
+        Returns a list of dicts with:
+        - name: Modifier name
+        - value: "advantage" or "disadvantage"
+        - source: Where it comes from
+        """
+        result: List[Dict[str, Any]] = []
+
+        components = [
+            (self.self_static, "self"),
+            (self.self_contextual, "self"),
+            (self.from_target_static, "from_target"),
+            (self.from_target_contextual, "from_target"),
+        ]
+
+        for component, source in components:
+            if component is None:
+                continue
+            for modifier in component.advantage_modifiers.values():
+                if modifier.value == AdvantageStatus.ADVANTAGE:
+                    result.append({
+                        "name": modifier.name or "Unknown",
+                        "value": "advantage",
+                        "source": source
+                    })
+                elif modifier.value == AdvantageStatus.DISADVANTAGE:
+                    result.append({
+                        "name": modifier.name or "Unknown",
+                        "value": "disadvantage",
+                        "source": source
+                    })
+
+        return result
+
     def remove_modifier(self, uuid: UUID) -> None:
         """
         Remove a modifier from this ModifiableValue.
