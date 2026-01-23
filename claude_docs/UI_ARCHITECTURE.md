@@ -114,9 +114,9 @@ def validate_action(session_id, entity_uuid):
 
 ## Server-Side Combat Log
 
-The server maintains a unified combat log that both players write to. This ensures consistency and provides rich action details.
+The server maintains a unified combat log that both players write to. This ensures consistency and provides rich action details **with full modifier breakdowns**.
 
-### Entry Structure
+### Entry Structure (with breakdowns)
 
 ```python
 {
@@ -129,16 +129,45 @@ The server maintains a unified combat log that both players write to. This ensur
         "weapon": "Shortsword",
         "d20": 17,
         "all_d20_rolls": [17],
-        "advantage_status": "none",
+        "advantage_status": "none",  # "advantage", "disadvantage", or "none"
         "attack_bonus": 4,
         "attack_total": 21,
         "target_ac": 15,
-        "outcome": "hit",
+        "outcome": "hit",  # "hit", "miss", "crit", "crit miss"
         "total_damage": 8,
-        "target_hp": 2
+        "target_hp": 2,
+        # Modifier breakdowns for detailed display
+        "attack_breakdown": [{"name": "Prof", "value": 2}, {"name": "DEX", "value": 2}],
+        "ac_breakdown": [{"name": "Armor", "value": 13}],
+        "damage_breakdown": [{"name": "DEX", "value": 2}],
+        "damage_dice_results": [5],
+        "damage_dice_str": "1d6",
+        "is_opportunity_attack": False
     }
 }
 ```
+
+### Display Format
+
+The CLI renders combat log entries with full breakdowns:
+
+```
+Hero → Skeleton (Scimitar)
+  Attack: d20(15) +4 [Prof +2, DEX +2] = 19 vs AC 13 [Armor +13] → HIT
+  Damage: 1d6(5) +2 [DEX +2] = 7 slashing
+
+Skeleton → Hero (Shortsword) DIS
+  Attack: d20(12,7→7) +4 [Prof +2, DEX +2] = 11 vs AC 13 [Armor +11, DEX +2] → MISS
+
+Hero → Skeleton (Dagger) BONUS
+  Attack (OA): d20(18) +4 [Prof +2, DEX +2] = 22 vs AC 13 → HIT
+  Damage: 1d4(3) = 3 piercing
+```
+
+Labels:
+- `ADV` / `DIS` - Advantage/disadvantage (shows both rolls)
+- `BONUS` - Off-hand attack using bonus action
+- `(OA)` - Opportunity attack
 
 ### Polling
 
@@ -210,8 +239,14 @@ The Human CLI uses a full-screen TUI with Rich panels:
 ╰──────────────────────────────────────────────────╯
 
 ╭───────────────────── Combat Log ─────────────────────╮
-│ Hero → Skeleton d20(14)+4=18 vs AC 13 HIT 7dmg      │
-│ Skeleton → Hero d20(17)+4=21 vs AC 15 HIT 8dmg      │
+│ Hero → Skeleton (Scimitar)                           │
+│   Attack: d20(14) +4 [Prof +2, DEX +2] = 18 vs AC 13 │
+│           [Armor +13] → HIT                          │
+│   Damage: 1d6(5) +2 [DEX +2] = 7 slashing            │
+│ Skeleton → Hero (Shortsword)                         │
+│   Attack: d20(17) +4 [Prof +2, DEX +2] = 21 vs AC 15 │
+│           [Armor +13, DEX +2] → HIT                  │
+│   Damage: 1d6(6) +2 [DEX +2] = 8 slashing            │
 ╰──────────────────────────────────────────────────────╯
 
 ╭──────── Actions:1 Bonus:1 Move:30ft React:1 ─────────╮
@@ -293,9 +328,19 @@ python -m cli.agent watch      # Wait for next turn
 
 ---
 
+## Recent Improvements (January 2026)
+
+1. **Detailed modifier breakdowns** - Combat log shows `[Prof +2, DEX +2]` for every roll
+2. **Advantage/disadvantage display** - Shows both d20 rolls with arrow to used value
+3. **Opportunity attack labeling** - `(OA)` marker for triggered reactions
+4. **Two-weapon fighting** - Main-hand (action) + off-hand (bonus action) with `BONUS` label
+5. **Consistent attack numbering** - Display and command handler use same filtering logic
+6. **Windows/WSL compatibility** - Fixed input handling for PvP mode
+
 ## Future Improvements
 
 1. **WebSocket for real-time updates** - Replace polling with push notifications
 2. **Multiple entity control** - Support controlling multiple entities per player
 3. **Spectator mode** - Watch-only mode for combat viewing
 4. **Replay system** - Save and replay combat history
+5. **Condition display in combat log** - Show when conditions are applied/removed
