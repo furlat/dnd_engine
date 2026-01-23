@@ -78,8 +78,10 @@ SkillName = TypeLiteral[
 
 
 class WeaponSlot(str, Enum):
-    MAIN_HAND = "MAIN_HAND"
-    OFF_HAND = "OFF_HAND"
+    MELEE_MAIN = "MELEE_MAIN"
+    MELEE_OFF = "MELEE_OFF"
+    RANGED_MAIN = "RANGED_MAIN"
+    RANGED_OFF = "RANGED_OFF"
 
 class EventType(str, Enum):
     # Core events

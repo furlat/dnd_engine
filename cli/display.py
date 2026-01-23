@@ -235,6 +235,15 @@ def goto_first_turn() -> Optional[Dict[str, Any]]:
     return _turn_history[0]
 
 
+def get_current_snapshot() -> Optional[Dict[str, Any]]:
+    """Get the snapshot at current history index, or None if viewing current turn."""
+    if _history_index is None or not _turn_history:
+        return None
+    if 0 <= _history_index < len(_turn_history):
+        return _turn_history[_history_index]
+    return None
+
+
 def clear_history():
     """Clear turn history."""
     global _turn_history, _history_index
@@ -509,6 +518,20 @@ def render_turn_info_panel(
     return Panel(content, title=title, box=box.ROUNDED, border_style="blue")
 
 
+def _format_breakdown(breakdown: List[Dict[str, Any]]) -> str:
+    """Format breakdown list as '[DEX +2, Prof +2]'."""
+    if not breakdown:
+        return ""
+    parts = []
+    for m in breakdown:
+        val = m.get('value', 0)
+        if val == 0:
+            continue
+        name = m.get('name', 'Unknown')
+        parts.append(f"{name} {val:+d}")
+    return f"[{', '.join(parts)}]" if parts else ""
+
+
 def _render_log_entry(entry: Dict[str, Any], content: Text):
     """Render a single combat log entry with rich formatting."""
     entry_type = entry.get("type", "message")
@@ -526,35 +549,90 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
         outcome = (entry.get("outcome") or "").lower()
         total_damage = entry.get("total_damage", 0)
 
-        # Attacker and target
+        # Get breakdown data
+        attack_breakdown = entry.get("attack_breakdown", [])
+        ac_breakdown = entry.get("ac_breakdown", [])
+        damage_breakdown = entry.get("damage_breakdown", [])
+        damage_dice_str = entry.get("damage_dice_str", "")
+        damage_rolls = entry.get("damage_rolls", [])
+        is_opportunity_attack = entry.get("is_opportunity_attack", False)
+
+        # Header: Attacker → Target (Weapon)
         content.append(f"{attacker}", style="bold cyan")
         content.append(" → ")
         content.append(f"{target}", style="bold yellow")
+        content.append(f" ({weapon})", style="dim")
 
-        # Roll details
-        bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
-        if adv_status == "advantage" and len(all_rolls) >= 2:
-            content.append(f" ADV", style="green")
-            content.append(f" d20({all_rolls[0]},{all_rolls[1]}→{d20}){bonus_str}={attack_total}")
-        elif adv_status == "disadvantage" and len(all_rolls) >= 2:
-            content.append(f" DIS", style="red")
-            content.append(f" d20({all_rolls[0]},{all_rolls[1]}→{d20}){bonus_str}={attack_total}")
+        # Add advantage indicator
+        if adv_status == "advantage":
+            content.append(" ADV", style="green")
+        elif adv_status == "disadvantage":
+            content.append(" DIS", style="red")
+
+        content.append("\n")
+
+        # Attack roll line with breakdown - show (OA) after "Attack:"
+        if is_opportunity_attack:
+            content.append("  Attack ", style="dim")
+            content.append("(OA)", style="bold magenta")
+            content.append(": ", style="dim")
         else:
-            content.append(f" d20({d20}){bonus_str}={attack_total}")
+            content.append("  Attack: ", style="dim")
 
-        content.append(f" vs AC {target_ac} ")
+        # d20 roll(s)
+        if adv_status in ["advantage", "disadvantage"] and len(all_rolls) >= 2:
+            content.append(f"d20({all_rolls[0]},{all_rolls[1]}→{d20})", style="cyan")
+        else:
+            content.append(f"d20({d20})", style="cyan")
+
+        # Attack bonus with breakdown
+        bonus_str = f" {attack_bonus:+d}" if attack_bonus != 0 else ""
+        content.append(bonus_str)
+        if attack_breakdown:
+            content.append(f" {_format_breakdown(attack_breakdown)}", style="dim")
+
+        # = total vs AC
+        content.append(f" = {attack_total} vs AC {target_ac}")
+        if ac_breakdown:
+            content.append(f" {_format_breakdown(ac_breakdown)}", style="dim")
+
+        content.append(" → ")
 
         # Outcome
         if outcome == "crit":
             content.append("CRIT!", style="bold yellow")
-            content.append(f" {total_damage}dmg", style="bold red")
         elif outcome == "hit":
             content.append("HIT", style="green")
-            content.append(f" {total_damage}dmg", style="red")
         elif outcome == "crit miss":
             content.append("FUMBLE!", style="bold red")
         else:
             content.append("MISS", style="dim")
+
+        # Damage line (only on hit/crit)
+        if outcome in ["hit", "crit"] and total_damage > 0:
+            content.append("\n")
+            content.append("  Damage: ", style="dim")
+
+            # Show damage dice
+            if damage_rolls and len(damage_rolls) > 0:
+                dr = damage_rolls[0]
+                dice = dr.get("dice", [])
+                bonus = dr.get("bonus", 0)
+                if dice:
+                    dice_str = ",".join(str(d) for d in dice)
+                    content.append(f"{damage_dice_str}({dice_str})", style="red")
+                else:
+                    content.append(f"{damage_dice_str}", style="red")
+
+                # Damage bonus with breakdown
+                if bonus != 0:
+                    content.append(f" {bonus:+d}")
+                if damage_breakdown:
+                    content.append(f" {_format_breakdown(damage_breakdown)}", style="dim")
+
+                content.append(f" = {total_damage}", style="bold red")
+            else:
+                content.append(f"{total_damage}", style="bold red")
 
     elif entry_type == "move":
         mover = entry.get("entity", "Someone")
@@ -623,21 +701,34 @@ def render_available_actions_panel(
         content.append(f" ({movement_remaining}ft)  ")
         content.append("[m X Y] or [m] to show positions\n", style="dim")
 
-    # Attacks
+    # Attacks - show all available attack options with target numbers
     attacks = actions.get("attacks", [])
-    has_valid_attack = False
-    for atk in attacks:
-        targets = atk.get("valid_targets", [])
-        can_afford = atk.get("can_afford", False)
-        if targets and can_afford:
-            has_valid_attack = True
-            target_names = [entity_lookup.get(t, {}).get("name", "?") for t in targets[:2]]
-            content.append("ATTACK", style="bold red")
-            content.append(f" {atk['name']}  ")
-            content.append(f"[a 0] targets: {', '.join(target_names)}\n", style="dim")
-            break  # Just show first valid attack option
+    valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
 
-    if not has_valid_attack and attacks:
+    if valid_attacks:
+        content.append("ATTACKS:", style="bold red")
+        content.append("  [a N] to attack\n", style="dim")
+        target_num = 1
+        for atk in valid_attacks:
+            targets = atk.get("valid_targets", [])
+            cost_type = atk.get("cost_type", "actions")
+
+            # Cost label with color
+            if cost_type == "bonus_actions":
+                cost_label = ("BONUS", "magenta")
+            else:
+                cost_label = ("ACTION", "cyan")
+
+            for t_uuid in targets:
+                target_name = entity_lookup.get(t_uuid, {}).get("name", "?")
+                content.append(f"  [", style="dim")
+                content.append(f"{target_num}", style="bold yellow")
+                content.append(f"] ", style="dim")
+                content.append(f"{cost_label[0]} ", style=cost_label[1])
+                content.append(f"{atk['name']}", style="bold")
+                content.append(f" → {target_name}\n", style="dim")
+                target_num += 1
+    elif attacks:
         content.append("ATTACK", style="dim")
         content.append(" - no targets in range\n", style="dim")
 
@@ -827,6 +918,36 @@ def format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attac
     return f"  {adv_text}Attack Roll: {rolls_display} {bonus_str} = [bold]{attack_total}[/bold] vs AC [bold]{target_ac}[/bold]"
 
 
+def _build_attack_log_entry(data: Dict[str, Any], attacker_default: str = "Someone", target_default: str = "Unknown") -> Dict[str, Any]:
+    """Build a standardized attack log entry from server data.
+
+    This helper ensures all attack log entries have the same structure,
+    including breakdown fields for detailed display.
+    """
+    return {
+        "type": "attack",
+        "attacker": data.get("attacker", attacker_default),
+        "target": data.get("target", target_default),
+        "weapon": data.get("weapon", "weapon"),
+        "d20": data.get("d20"),
+        "all_d20_rolls": data.get("all_d20_rolls", []),
+        "advantage_status": data.get("advantage_status", "none"),
+        "attack_bonus": data.get("attack_bonus", 0),
+        "attack_total": data.get("attack_total"),
+        "target_ac": data.get("target_ac"),
+        "outcome": data.get("outcome"),
+        "total_damage": data.get("total_damage", 0),
+        # Breakdown fields for detailed display
+        "attack_breakdown": data.get("attack_breakdown", []),
+        "ac_breakdown": data.get("ac_breakdown", []),
+        "damage_breakdown": data.get("damage_breakdown", []),
+        "damage_dice_str": data.get("damage_dice_str", ""),
+        "damage_rolls": data.get("damage_rolls", []),
+        # Opportunity attack flag
+        "is_opportunity_attack": data.get("is_opportunity_attack", False),
+    }
+
+
 def show_opponent_action(entry: Dict[str, Any]):
     """Process a combat log entry from the server and add to our rich combat log."""
     entry_type = entry.get("type", "").lower()
@@ -834,20 +955,7 @@ def show_opponent_action(entry: Dict[str, Any]):
 
     # Convert server entry to our rich format
     if entry_type in ("attack", "opportunity_attack"):
-        add_to_combat_log({
-            "type": "attack",
-            "attacker": details.get("attacker", "Opponent"),
-            "target": details.get("target", "Unknown"),
-            "weapon": details.get("weapon", "weapon"),
-            "d20": details.get("d20"),
-            "all_d20_rolls": details.get("all_d20_rolls", []),
-            "advantage_status": details.get("advantage_status", "none"),
-            "attack_bonus": details.get("attack_bonus", 0),
-            "attack_total": details.get("attack_total"),
-            "target_ac": details.get("target_ac"),
-            "outcome": details.get("outcome"),
-            "total_damage": details.get("total_damage", 0),
-        })
+        add_to_combat_log(_build_attack_log_entry(details, "Opponent", "Unknown"))
     elif entry_type in ("move", "movement"):
         add_to_combat_log({
             "type": "move",
@@ -873,63 +981,49 @@ def show_opponent_action(entry: Dict[str, Any]):
         })
 
 
-def show_action_result(result: Dict[str, Any]):
-    """Process a player action result and add to rich combat log."""
+def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
+    """Process a player action result and add to rich combat log.
+
+    Args:
+        result: The action result from the server
+        player_entity_name: The name of the player's entity (e.g., "Hero")
+    """
     event_type = result.get("event_type", "")
     message = result.get("message", "")
 
     # Add to rich combat log based on event type
     if event_type == "attack":
         data = result.get("event_data", {})
-        add_to_combat_log({
-            "type": "attack",
-            "attacker": data.get("attacker", "You"),
-            "target": data.get("target", "Unknown"),
-            "weapon": data.get("weapon", "weapon"),
-            "d20": data.get("d20"),
-            "all_d20_rolls": data.get("all_d20_rolls", []),
-            "advantage_status": data.get("advantage_status", "none"),
-            "attack_bonus": data.get("attack_bonus", 0),
-            "attack_total": data.get("attack_total"),
-            "target_ac": data.get("target_ac"),
-            "outcome": data.get("outcome"),
-            "total_damage": data.get("total_damage", 0),
-        })
+        # Use attacker name from data, fallback to player_entity_name
+        add_to_combat_log(_build_attack_log_entry(data, player_entity_name, "Unknown"))
     elif event_type == "movement":
         data = result.get("event_data", {})
+        # Use entity name from data if available
+        entity_name = data.get("entity", player_entity_name)
         add_to_combat_log({
             "type": "move",
-            "entity": "You",
+            "entity": entity_name,
             "from": data.get("start", [0, 0]),
             "to": data.get("end", [0, 0]),
         })
     elif event_type in ("dash", "dodge", "disengage"):
         add_to_combat_log({
             "type": "action",
-            "entity": "You",
+            "entity": player_entity_name,
             "action": event_type,
         })
     elif message:
         add_to_combat_log({"type": "message", "message": message})
 
-    # Show any triggered reactions
+    # Show any triggered reactions (opportunity attacks against the player)
     triggered = result.get("triggered_reactions", [])
     for reaction in triggered:
         if reaction.get("type") == "opportunity_attack":
-            add_to_combat_log({
-                "type": "attack",
-                "attacker": reaction.get("attacker", "Enemy"),
-                "target": "You",
-                "weapon": reaction.get("weapon", "weapon"),
-                "d20": reaction.get("d20"),
-                "all_d20_rolls": reaction.get("all_d20_rolls", []),
-                "advantage_status": reaction.get("advantage_status", "none"),
-                "attack_bonus": reaction.get("attack_bonus", 0),
-                "attack_total": reaction.get("attack_total"),
-                "target_ac": reaction.get("target_ac"),
-                "outcome": reaction.get("outcome"),
-                "total_damage": reaction.get("total_damage", 0),
-            })
+            reaction_data = dict(reaction)
+            # Mark as opportunity attack and use player's actual name as target
+            reaction_data["is_opportunity_attack"] = True
+            reaction_data["target"] = player_entity_name
+            add_to_combat_log(_build_attack_log_entry(reaction_data, "Enemy", player_entity_name))
 
     # Show deaths
     deaths = result.get("deaths", [])
@@ -976,20 +1070,7 @@ def show_ai_actions(actions: List[Dict[str, Any]]):
     for action in actions:
         action_type = action.get("type", "")
         if action_type == "attack":
-            add_to_combat_log({
-                "type": "attack",
-                "attacker": action.get("attacker", "AI"),
-                "target": action.get("target", "you"),
-                "weapon": action.get("weapon", "weapon"),
-                "d20": action.get("d20"),
-                "all_d20_rolls": action.get("all_d20_rolls", []),
-                "advantage_status": action.get("advantage_status", "none"),
-                "attack_bonus": action.get("attack_bonus", 0),
-                "attack_total": action.get("attack_total"),
-                "target_ac": action.get("target_ac"),
-                "outcome": action.get("outcome"),
-                "total_damage": action.get("total_damage", 0),
-            })
+            add_to_combat_log(_build_attack_log_entry(action, "AI", "you"))
         elif action_type == "move":
             add_to_combat_log({
                 "type": "move",

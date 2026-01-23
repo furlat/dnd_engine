@@ -282,44 +282,57 @@ class Weapon(BaseBlock):
                 raise ValueError("All extra damage targets must be of the same length")
         return self
     
-    def get_main_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> Damage:
+    def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores, is_off_hand: bool = False) -> Damage:
+        """Get base damage for this weapon.
+
+        Args:
+            equipment_block: The Equipment block for general bonuses
+            ability_block: The AbilityScores for ability modifiers
+            is_off_hand: If True, don't add ability modifier (Two-Weapon Fighting rule)
+        """
         bonuses = []
         if self.damage_bonus is not None:
             bonuses.append(self.damage_bonus)
         if equipment_block.damage_bonus is not None:
             bonuses.append(equipment_block.damage_bonus)
+
+        # Only add ability modifier if NOT off-hand attack
+        if not is_off_hand:
+            if WeaponProperty.RANGED in self.properties:
+                # Ranged: DEX modifier
+                dex_bonus = ability_block.dexterity.get_combined_values()
+                bonuses.append(dex_bonus)
+            elif WeaponProperty.FINESSE in self.properties:
+                # Finesse: higher of STR or DEX
+                dex_bonus = ability_block.dexterity.get_combined_values()
+                strength_bonus = ability_block.strength.get_combined_values()
+                if dex_bonus.normalized_score > strength_bonus.normalized_score:
+                    bonuses.append(dex_bonus)
+                else:
+                    bonuses.append(strength_bonus)
+            else:
+                # Melee: STR modifier
+                strength_bonus = ability_block.strength.get_combined_values()
+                bonuses.append(strength_bonus)
+
+        # Add weapon type damage bonuses (these always apply)
         if WeaponProperty.RANGED in self.properties:
-            #get dex bonuses
-            dex_bonus = ability_block.dexterity.get_combined_values()
-            bonuses.append(dex_bonus)
-            #get ranged bonuses
             ranged_bonus = equipment_block.ranged_damage_bonus
             bonuses.append(ranged_bonus)
-        elif WeaponProperty.FINESSE in self.properties:
-            dex_bonus = ability_block.dexterity.get_combined_values()
-            strength_bonus = ability_block.strength.get_combined_values()
-            if dex_bonus.normalized_score > strength_bonus.normalized_score:
-                bonuses.append(dex_bonus)
-            else:
-                bonuses.append(strength_bonus)
-            melee_bonus = equipment_block.melee_damage_bonus
-            bonuses.append(melee_bonus)
         else:
-            strength_bonus = ability_block.strength.get_combined_values()
-            bonuses.append(strength_bonus)
             melee_bonus = equipment_block.melee_damage_bonus
             bonuses.append(melee_bonus)
 
         bonuses.append(equipment_block.damage_bonus)
-        combined_bonuses= bonuses[0].combine_values(bonuses[1:])
-        return Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.damage_dice, dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
+        combined_bonuses = bonuses[0].combine_values(bonuses[1:])
+        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid, damage_dice=self.damage_dice, dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
     def get_extra_damages(self) -> List[Damage]:
         damages = []
         for i in range(len(self.extra_damage_dices)):
             damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
         return damages
     def get_all_weapon_damages(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> List[Damage]:
-        damages = [self.get_main_damage(equipment_block, ability_block)]
+        damages = [self.get_base_damage(equipment_block, ability_block)]
         damages.extend(self.get_extra_damages())
         return damages
     
@@ -377,8 +390,12 @@ class Equipment(BaseBlock):
     ring_left: Optional[Ring] = Field(default=None, description="Left ring slot")
     ring_right: Optional[Ring] = Field(default=None, description="Right ring slot")
     cloak: Optional[Cloak] = Field(default=None, description="Cloak slot item")
-    weapon_main_hand: Optional[Weapon] = Field(default=None, description="Main hand weapon slot")
-    weapon_off_hand: Optional[Union[Weapon, Shield]] = Field(default=None, description="Off-hand weapon or shield slot")
+    # Melee weapon slots (off-hand can hold shield)
+    weapon_melee_main: Optional[Weapon] = Field(default=None, description="Main melee weapon slot")
+    weapon_melee_off: Optional[Union[Weapon, Shield]] = Field(default=None, description="Off-hand melee weapon or shield slot")
+    # Ranged weapon slots (cannot hold shields)
+    weapon_ranged_main: Optional[Weapon] = Field(default=None, description="Main ranged weapon slot")
+    weapon_ranged_off: Optional[Weapon] = Field(default=None, description="Off-hand ranged weapon slot")
     unarmored_ac_type: UnarmoredAc = Field(default=UnarmoredAc.NONE)
     unarmed_properties: List[WeaponProperty] = Field(
         default_factory=list,
@@ -466,19 +483,22 @@ class Equipment(BaseBlock):
 
     unarmed_dice_numbers: int = Field(default=1)
 
-    def is_unarmed(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> bool:
-        if weapon_slot == WeaponSlot.MAIN_HAND:
-            return self.weapon_main_hand is None
-        elif weapon_slot == WeaponSlot.OFF_HAND:
-            return self.weapon_off_hand is None
+    def _get_weapon_by_slot(self, slot: WeaponSlot) -> Optional[Union[Weapon, Shield]]:
+        """Helper to get weapon/shield by slot."""
+        return {
+            WeaponSlot.MELEE_MAIN: self.weapon_melee_main,
+            WeaponSlot.MELEE_OFF: self.weapon_melee_off,
+            WeaponSlot.RANGED_MAIN: self.weapon_ranged_main,
+            WeaponSlot.RANGED_OFF: self.weapon_ranged_off,
+        }.get(slot)
+
+    def is_unarmed(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> bool:
+        weapon = self._get_weapon_by_slot(weapon_slot)
+        return weapon is None or isinstance(weapon, Shield)
     
     def is_ranged(self, weapon_slot: WeaponSlot) -> bool:
-        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
-            return WeaponProperty.RANGED  in self.weapon_main_hand.properties
-        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
-            return WeaponProperty.RANGED in self.weapon_off_hand.properties
-        else:
-            return False
+        """Ranged slots are always ranged, melee slots are never ranged."""
+        return weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
         
     def _get_main_unarmed_damage(self, ability_block: AbilityScores) -> Damage:
         """ combines the unarmed damage bonus with the damage bonus and melee damage bonus into a single damage block"""
@@ -493,24 +513,20 @@ class Equipment(BaseBlock):
         unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.unarmed_damage_dice, dice_numbers=self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=self.unarmed_damage_type)
         return unarmed_damage
     
-    def _get_main_weapon_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> Optional[Damage]:
+    def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> Optional[Damage]:
         """ combines the weapon damage bonus with the damage bonus and melee damage bonus into a single damage block"""
-        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
-            damage= self.weapon_main_hand.get_main_damage(self, ability_block)
-        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
-            damage = self.weapon_off_hand.get_main_damage(self, ability_block)
-        else:
-            return None
-
-        return damage
+        weapon = self._get_weapon_by_slot(weapon_slot)
+        if isinstance(weapon, Weapon):
+            # Off-hand attacks don't add ability modifier to damage (Two-Weapon Fighting)
+            is_off_hand = weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF)
+            return weapon.get_base_damage(self, ability_block, is_off_hand=is_off_hand)
+        return None
     
     def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:
-        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
-            return self.weapon_main_hand.get_extra_damages()
-        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
-            return self.weapon_off_hand.get_extra_damages()
-        else:
-            return []
+        weapon = self._get_weapon_by_slot(weapon_slot)
+        if isinstance(weapon, Weapon):
+            return weapon.get_extra_damages()
+        return []
     
  
     def get_extra_attack_damage(self, weapon_slot: Optional[WeaponSlot] = None) -> List[Damage]:
@@ -527,19 +543,17 @@ class Equipment(BaseBlock):
             return [self._get_main_unarmed_damage(ability_block)]+self.get_extra_attack_damage()
         else:
             outs = []
-            main_damage = self._get_main_weapon_damage(weapon_slot, ability_block)
-            if main_damage is not None:
-                outs.append(main_damage)
+            base_damage = self._get_weapon_base_damage(weapon_slot, ability_block)
+            if base_damage is not None:
+                outs.append(base_damage)
             outs.extend(self.get_extra_attack_damage(weapon_slot))
             return outs
         
     def get_main_damage_type(self, weapon_slot: WeaponSlot) -> DamageType:
-        if weapon_slot == WeaponSlot.MAIN_HAND and isinstance(self.weapon_main_hand, Weapon):
-            return self.weapon_main_hand.damage_type
-        elif weapon_slot == WeaponSlot.OFF_HAND and isinstance(self.weapon_off_hand, Weapon):
-            return self.weapon_off_hand.damage_type
-        else:
-            return self.unarmed_damage_type
+        weapon = self._get_weapon_by_slot(weapon_slot)
+        if isinstance(weapon, Weapon):
+            return weapon.damage_type
+        return self.unarmed_damage_type
 
     def get_unarmored_abilities(self) -> List[AbilityName]:
         if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
@@ -560,16 +574,18 @@ class Equipment(BaseBlock):
             values.append(temporary_value)
         else:
             values.append(self.unarmored_ac)
-        if self.weapon_off_hand and isinstance(self.weapon_off_hand, Shield):
-            values.append(self.weapon_off_hand.ac_bonus)
+        # Shields are only in melee off-hand slot
+        if self.weapon_melee_off and isinstance(self.weapon_melee_off, Shield):
+            values.append(self.weapon_melee_off.ac_bonus)
         return values
 
     def get_armored_ac_values(self) -> List[ModifiableValue]:
         values = [self.ac_bonus]
         if self.body_armor is not None and self.body_armor.type != ArmorType.CLOTH:
             values.append(self.body_armor.ac)
-        if self.weapon_off_hand and isinstance(self.weapon_off_hand, Shield):
-            values.append(self.weapon_off_hand.ac_bonus)
+        # Shields are only in melee off-hand slot
+        if self.weapon_melee_off and isinstance(self.weapon_melee_off, Shield):
+            values.append(self.weapon_melee_off.ac_bonus)
         return values
     
     def get_armored_max_dex_bonus(self) -> Optional[ModifiableValue]:
@@ -633,43 +649,78 @@ class Equipment(BaseBlock):
             event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
             return
 
-        # Handle weapons and shields
-        if isinstance(item, (Weapon, Shield)):
-            if slot not in (WeaponSlot.MAIN_HAND, WeaponSlot.OFF_HAND):
-                slot = WeaponSlot.MAIN_HAND
-            assert slot is not None  # Type narrowing after validation
+        # Handle shields - only go in MELEE_OFF
+        if isinstance(item, Shield):
+            if slot is not None and slot != WeaponSlot.MELEE_OFF:
+                raise ValueError("Shields can only be equipped in MELEE_OFF slot")
+            slot = WeaponSlot.MELEE_OFF
 
-            #check if the weapon is already equipped in case unequip the previous weapon
-            if slot == WeaponSlot.MAIN_HAND and self.weapon_main_hand is not None:
-                self.unequip(WeaponSlot.MAIN_HAND)
-            elif slot == WeaponSlot.OFF_HAND and self.weapon_off_hand is not None:
-                self.unequip(WeaponSlot.OFF_HAND)
-            
-            if isinstance(item, Weapon):
-                event = WeaponEquipEvent(
-                    name=item.name,
-                    source_entity_uuid=self.source_entity_uuid,
-                    target_entity_uuid=self.target_entity_uuid,
-                    weapon=item,
-                    slot=slot
-                )
-            else:  # Shield
-                event = ShieldEquipEvent(
-                    name=item.name,
-                    source_entity_uuid=self.source_entity_uuid,
-                    target_entity_uuid=self.target_entity_uuid,
-                    shield=item,
-                    slot=slot
-                )
-            
+            # Unequip existing item if any
+            if self.weapon_melee_off is not None:
+                self.unequip(WeaponSlot.MELEE_OFF)
+
+            event = ShieldEquipEvent(
+                name=item.name,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                shield=item,
+                slot=slot
+            )
+
             if event.phase_to(EventPhase.EXECUTION).canceled:
                 return
-            
-            if slot == WeaponSlot.MAIN_HAND and isinstance(item, Weapon):
-                self.weapon_main_hand = item
-            else:
-                self.weapon_off_hand = item
-                
+
+            self.weapon_melee_off = item
+            event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+            return
+
+        # Handle weapons
+        if isinstance(item, Weapon):
+            is_ranged_weapon = WeaponProperty.RANGED in item.properties
+
+            # Validate slot matches weapon type, or auto-assign
+            is_light_weapon = WeaponProperty.LIGHT in item.properties
+
+            if slot is None:
+                # Auto-assign based on weapon type
+                slot = WeaponSlot.RANGED_MAIN if is_ranged_weapon else WeaponSlot.MELEE_MAIN
+            elif isinstance(slot, WeaponSlot):
+                # Validate slot matches weapon type
+                slot_is_ranged = slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
+                if is_ranged_weapon and not slot_is_ranged:
+                    raise ValueError(f"Ranged weapon cannot be equipped in melee slot {slot}")
+                if not is_ranged_weapon and slot_is_ranged:
+                    raise ValueError(f"Melee weapon cannot be equipped in ranged slot {slot}")
+                # Off-hand slots require LIGHT property (two-weapon fighting rule)
+                if slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF) and not is_light_weapon:
+                    raise ValueError(f"Only LIGHT weapons can be equipped in off-hand slot {slot}")
+
+            # Unequip existing item if any
+            current_weapon = self._get_weapon_by_slot(slot)
+            if current_weapon is not None:
+                self.unequip(slot)
+
+            event = WeaponEquipEvent(
+                name=item.name,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                weapon=item,
+                slot=slot
+            )
+
+            if event.phase_to(EventPhase.EXECUTION).canceled:
+                return
+
+            # Set the appropriate field
+            if slot == WeaponSlot.MELEE_MAIN:
+                self.weapon_melee_main = item
+            elif slot == WeaponSlot.MELEE_OFF:
+                self.weapon_melee_off = item
+            elif slot == WeaponSlot.RANGED_MAIN:
+                self.weapon_ranged_main = item
+            elif slot == WeaponSlot.RANGED_OFF:
+                self.weapon_ranged_off = item
+
             event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
             return
 
@@ -717,7 +768,13 @@ class Equipment(BaseBlock):
         if isinstance(slot, RingSlot):
             attribute_name = "ring_left" if slot == RingSlot.LEFT else "ring_right"
         elif isinstance(slot, WeaponSlot):
-            attribute_name = "weapon_main_hand" if slot == WeaponSlot.MAIN_HAND else "weapon_off_hand"
+            weapon_slot_mapping = {
+                WeaponSlot.MELEE_MAIN: "weapon_melee_main",
+                WeaponSlot.MELEE_OFF: "weapon_melee_off",
+                WeaponSlot.RANGED_MAIN: "weapon_ranged_main",
+                WeaponSlot.RANGED_OFF: "weapon_ranged_off",
+            }
+            attribute_name = weapon_slot_mapping[slot]
         elif isinstance(slot, BodyPart):
             if slot not in slot_mapping:
                 raise ValueError(f"Invalid equipment slot: {slot}")

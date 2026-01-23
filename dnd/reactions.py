@@ -32,7 +32,7 @@ def opportunity_attack_processor(event: MovementEvent, source_entity_uuid: UUID)
                                  source_entity_uuid=source_entity_uuid,
                                  target_entity_uuid=event.source_entity_uuid,
                                  parent_event=event,
-                                 weapon_slot=WeaponSlot.MAIN_HAND,
+                                 weapon_slot=WeaponSlot.MELEE_MAIN,
                                  use_register=False,
                                  costs=[Cost(name="Opportunity Attack Cost",cost_type="reactions",cost=1,evaluator=entity_action_economy_cost_evaluator)]
         )

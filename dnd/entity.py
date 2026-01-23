@@ -298,15 +298,12 @@ class Entity(BaseBlock):
         normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
         return normalized_proficiency_bonus, saving_throw_bonus, ability_bonus,ability_modifier_bonus
     
-    def _get_attack_bonuses(self,weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Tuple[ModifiableValue,ModifiableValue,List[ModifiableValue],List[ModifiableValue],Range ]:
-        """ We have to get from weapon and then from equipment 
-        attack_bonus 
+    def _get_attack_bonuses(self,weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Tuple[ModifiableValue,ModifiableValue,List[ModifiableValue],List[ModifiableValue],Range ]:
+        """ We have to get from weapon and then from equipment
+        attack_bonus
         ability bonuses
         weapon attack bonus """
-        if weapon_slot == WeaponSlot.MAIN_HAND:
-            weapon = self.equipment.weapon_main_hand
-        elif weapon_slot == WeaponSlot.OFF_HAND:
-            weapon = self.equipment.weapon_off_hand
+        weapon = self.equipment._get_weapon_by_slot(weapon_slot)
 
         ability_bonuses : List[ModifiableValue] = []
         dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
@@ -465,7 +462,7 @@ class Entity(BaseBlock):
         return ac_bonus
     
     
-    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
+    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
         """ missing effects from target armor bonus"""
         should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
@@ -481,7 +478,7 @@ class Entity(BaseBlock):
         return source_attack_bonus
     
 
-    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
+    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
         should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
@@ -509,26 +506,41 @@ class Entity(BaseBlock):
         con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
     
-    def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Range:
+    def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
         """
         Get the range of a weapon without calculating attack bonuses.
-        
+
         Args:
             weapon_slot: Which weapon slot to check
-            
+
         Returns:
             Range: The range of the weapon
         """
-        if weapon_slot == WeaponSlot.MAIN_HAND:
-            weapon = self.equipment.weapon_main_hand
-        elif weapon_slot == WeaponSlot.OFF_HAND:
-            weapon = self.equipment.weapon_off_hand
-            
+        weapon = self.equipment._get_weapon_by_slot(weapon_slot)
+
         if weapon is None or isinstance(weapon, Shield):
             return Range(type=RangeType.REACH, normal=5)
         else:
             return weapon.range
-            
+
+    def is_threatened(self) -> bool:
+        """
+        Check if any visible entity threatens this entity's position.
+
+        An entity is threatened if it's within the threatened positions
+        (adjacent cells) of any other visible entity. Used for ranged attack
+        disadvantage - making a ranged attack while threatened imposes disadvantage.
+
+        Returns:
+            bool: True if any visible entity threatens this entity's position
+        """
+        my_position = self.senses.position
+        for entity_uuid in self.senses.entities.keys():
+            other_entity = Entity.get(entity_uuid)
+            if other_entity and my_position in other_entity.senses.get_threathened_positions():
+                return True
+        return False
+
     def roll_d20(self, bonus: ModifiableValue,roll_type: RollType = RollType.ATTACK) -> DiceRoll:
         """
         Roll attack dice based on attack bonus.

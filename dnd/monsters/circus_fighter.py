@@ -241,8 +241,8 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     light_armor = create_light_armor(entity.uuid)
 
     entity.equipment.equip(light_armor)
-    entity.equipment.equip(flaming_scimitar, WeaponSlot.MAIN_HAND)
-    entity.equipment.equip(dagger, WeaponSlot.OFF_HAND)
+    entity.equipment.equip(flaming_scimitar, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
 
     # Add conditions
     dual_wielder = DualWielder(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)

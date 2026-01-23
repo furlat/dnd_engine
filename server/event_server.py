@@ -31,7 +31,7 @@ from dnd.core.events import Event, EventQueue, EventType, EventPhase
 from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary import create_goblin, create_skeleton, create_goblin_archer
 from dnd.controller import Controller, TurnContext, HumanController
 from dnd.available_actions import get_available_actions
 from dnd.actions import Attack, Move, Dash, Dodge, Disengage
@@ -50,6 +50,117 @@ from server.session import (
     SessionManager, PlayerSession, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
 )
+
+
+def extract_attack_data_from_event(event: Event, source: "Entity | None", target: "Entity | None", weapon_name: str) -> dict:
+    """
+    Extract standardized attack data from an AttackEvent.
+
+    This helper ensures consistent attack data extraction for both
+    player attacks and AI attacks, including modifier breakdowns.
+    """
+    attack_outcome = getattr(event, 'attack_outcome', None)
+    damage_rolls = getattr(event, 'damage_rolls', None)
+    dice_roll = getattr(event, 'dice_roll', None)
+    ac_mv = getattr(event, 'ac', None)
+    attack_bonus_mv = getattr(event, 'attack_bonus', None)
+
+    # Extract d20 results
+    all_d20_rolls = []
+    d20_result = None
+    advantage_status = "none"
+    attack_bonus = 0
+
+    if dice_roll:
+        results = getattr(dice_roll, 'results', None)
+        if isinstance(results, list):
+            all_d20_rolls = list(results)
+            if hasattr(dice_roll, 'advantage_status'):
+                adv = dice_roll.advantage_status
+                advantage_status = adv.value.lower() if hasattr(adv, 'value') else str(adv).lower()
+                if len(results) >= 2:
+                    if advantage_status == "advantage":
+                        d20_result = max(results)
+                    elif advantage_status == "disadvantage":
+                        d20_result = min(results)
+                    else:
+                        d20_result = results[0]
+                elif len(results) == 1:
+                    d20_result = results[0]
+        elif isinstance(results, int):
+            all_d20_rolls = [results]
+            d20_result = results
+        attack_bonus = getattr(dice_roll, 'bonus', 0)
+
+    # Get target AC
+    target_ac = None
+    if ac_mv:
+        target_ac = ac_mv.normalized_score
+    elif target:
+        target_ac = target.equipment.ac_bonus().normalized_score
+
+    # Calculate damage
+    total_damage = sum(r.total for r in damage_rolls) if damage_rolls else 0
+    outcome_str = attack_outcome.value if attack_outcome else "unknown"
+
+    # Build damage roll details
+    damage_details = []
+    damage_dice_str = ""
+    if damage_rolls:
+        for dr in damage_rolls:
+            damage_details.append({
+                "dice": list(dr.results) if hasattr(dr, 'results') else [],
+                "bonus": dr.bonus if hasattr(dr, 'bonus') else 0,
+                "total": dr.total
+            })
+        # Build damage dice string
+        if damage_rolls and hasattr(damage_rolls[0], 'results'):
+            num_dice = len(damage_rolls[0].results) if isinstance(damage_rolls[0].results, list) else 1
+            # Try to get dice size from weapon
+            weapon_slot = getattr(event, 'weapon_slot', None)
+            dice_size = 6
+            if source and weapon_slot:
+                weapon_obj = source.equipment._get_weapon_by_slot(weapon_slot)
+                if weapon_obj and hasattr(weapon_obj, 'damage_dice'):
+                    dice_size = weapon_obj.damage_dice
+            damage_dice_str = f"{num_dice}d{dice_size}"
+
+    # Extract modifier breakdowns
+    attack_breakdown = []
+    ac_breakdown = []
+    damage_breakdown = []
+
+    if attack_bonus_mv and hasattr(attack_bonus_mv, 'get_breakdown'):
+        attack_breakdown = attack_bonus_mv.get_breakdown()
+
+    if ac_mv and hasattr(ac_mv, 'get_breakdown'):
+        ac_breakdown = ac_mv.get_breakdown()
+
+    # Get damage bonus breakdown from event damages
+    damages = getattr(event, 'damages', None)
+    if damages:
+        for dmg in damages:
+            if hasattr(dmg, 'damage_bonus') and dmg.damage_bonus and hasattr(dmg.damage_bonus, 'get_breakdown'):
+                damage_breakdown.extend(dmg.damage_bonus.get_breakdown())
+
+    return {
+        "attacker": source.name if source else "Unknown",
+        "target": target.name if target else "Unknown",
+        "weapon": weapon_name,
+        "d20": d20_result,
+        "all_d20_rolls": all_d20_rolls,
+        "advantage_status": advantage_status,
+        "attack_bonus": attack_bonus,
+        "attack_total": dice_roll.total if dice_roll else None,
+        "target_ac": target_ac,
+        "outcome": outcome_str,
+        "damage_rolls": damage_details,
+        "total_damage": total_damage,
+        "attack_breakdown": attack_breakdown,
+        "ac_breakdown": ac_breakdown,
+        "damage_breakdown": damage_breakdown,
+        "damage_dice_str": damage_dice_str,
+    }
 
 
 class EventMonitor:
@@ -176,7 +287,7 @@ class MeleeAIController(Controller):
                 return Attack(
                     source_entity_uuid=entity.uuid,
                     target_entity_uuid=target_uuid,
-                    weapon_slot=attack.weapon_slot or WeaponSlot.MAIN_HAND,
+                    weapon_slot=attack.weapon_slot or WeaponSlot.MELEE_MAIN,
                     name=f"{entity.name}'s Attack"
                 )
 
@@ -363,8 +474,8 @@ def setup_combat_with_human(human_position: tuple = (2, 7), ai_position: tuple =
         if y != 7:  # Leave a gap in the middle for tactical play
             grid.set_tile(7, y, walkable=False, visible=False)
 
-    # Create combatants
-    player = create_goblin(name="Hero", position=human_position)
+    # Create combatants - Hero is a Goblin Archer with ranged weapon
+    player = create_goblin_archer(name="Hero", position=human_position)
     enemy = create_skeleton(name="Skeleton", position=ai_position)
 
     # Register opportunity attack handlers for both entities
@@ -386,7 +497,7 @@ def setup_combat_pvp(player_position: tuple = (2, 7), opponent_position: tuple =
     """
     Initialize PvP combat where both entities are human-controlled.
 
-    Player 1 (Hero) = controlled by user via CLI
+    Player 1 (Hero) = controlled by user via CLI (Goblin Archer with ranged weapon)
     Player 2 (Skeleton) = controlled by Claude via agent CLI
     """
     # Reset all state
@@ -412,8 +523,8 @@ def setup_combat_pvp(player_position: tuple = (2, 7), opponent_position: tuple =
         if y != 7:  # Leave a gap in the middle
             grid.set_tile(7, y, walkable=False, visible=False)
 
-    # Create combatants
-    player = create_goblin(name="Hero", position=player_position)
+    # Create combatants - Hero is now a Goblin Archer with ranged weapon
+    player = create_goblin_archer(name="Hero", position=player_position)
     opponent = create_skeleton(name="Skeleton", position=opponent_position)
 
     # Register opportunity attack handlers
@@ -459,87 +570,31 @@ async def advance_encounter() -> dict:
 
         # Capture attack events (including opportunity attacks)
         if event_type == "attack":
-            attack_outcome = getattr(event, 'attack_outcome', None)
-            damage_rolls = getattr(event, 'damage_rolls', None)
-            dice_roll = getattr(event, 'dice_roll', None)
-            ac_mv = getattr(event, 'ac', None)
             source = Entity.get(event.source_entity_uuid)
             target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
 
-            # Get weapon name
+            # Get weapon name from the event's weapon_slot
             weapon_name = "Unknown"
             if source:
-                weapon = source.equipment.weapon_main_hand
-                weapon_name = weapon.name if weapon else "Unarmed"
+                weapon_slot = getattr(event, 'weapon_slot', None)
+                if weapon_slot:
+                    weapon = source.equipment._get_weapon_by_slot(weapon_slot)
+                    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+                else:
+                    weapon_name = "Unarmed"
 
-            # Extract d20 results - may have multiple rolls for advantage/disadvantage
-            all_d20_rolls = []
-            d20_result = None
-            advantage_status = "none"
-            attack_bonus = 0
-            if dice_roll:
-                results = getattr(dice_roll, 'results', None)
-                if isinstance(results, list):
-                    all_d20_rolls = list(results)
-                    # The "used" roll depends on advantage status
-                    if hasattr(dice_roll, 'advantage_status'):
-                        adv = dice_roll.advantage_status
-                        advantage_status = adv.value.lower() if hasattr(adv, 'value') else str(adv).lower()
-                        if len(results) >= 2:
-                            if advantage_status == "advantage":
-                                d20_result = max(results)
-                            elif advantage_status == "disadvantage":
-                                d20_result = min(results)
-                            else:
-                                d20_result = results[0]
-                        elif len(results) == 1:
-                            d20_result = results[0]
-                elif isinstance(results, int):
-                    all_d20_rolls = [results]
-                    d20_result = results
-                attack_bonus = getattr(dice_roll, 'bonus', 0)
-
-            # Get target AC
-            target_ac = None
-            if ac_mv:
-                target_ac = ac_mv.normalized_score
-            elif target:
-                target_ac = target.equipment.ac_bonus().normalized_score
-
-            # Calculate damage
-            total_damage = sum(r.total for r in damage_rolls) if damage_rolls else 0
-            outcome_str = attack_outcome.value if attack_outcome else "unknown"
-
-            # Build damage breakdown
-            damage_details = []
-            if damage_rolls:
-                for dr in damage_rolls:
-                    damage_details.append({
-                        "dice": dr.results if hasattr(dr, 'results') else [],
-                        "bonus": dr.bonus if hasattr(dr, 'bonus') else 0,
-                        "total": dr.total
-                    })
+            # Use helper to extract all attack data including breakdowns
+            attack_data = extract_attack_data_from_event(event, source, target, weapon_name)
 
             # Check if this was an opportunity attack
             is_opportunity_attack = "opportunity" in (event.name or "").lower()
 
-            ai_actions.append({
-                "type": "attack",
-                "is_opportunity_attack": is_opportunity_attack,
-                "attacker": source.name if source else "Unknown",
-                "target": target.name if target else "Unknown",
-                "weapon": weapon_name,
-                "d20": d20_result,
-                "all_d20_rolls": all_d20_rolls,  # Both rolls for advantage/disadvantage
-                "advantage_status": advantage_status,  # "none", "advantage", "disadvantage"
-                "attack_bonus": attack_bonus,
-                "attack_total": dice_roll.total if dice_roll else None,
-                "target_ac": target_ac,
-                "outcome": outcome_str,
-                "damage_rolls": damage_details,
-                "total_damage": total_damage,
-                "message": f"{source.name if source else 'Unknown'} attacks {target.name if target else 'Unknown'} with {weapon_name}: {outcome_str}" + (f" for {total_damage} damage!" if outcome_str.lower() in ("hit", "crit") else "")
-            })
+            # Add type and message fields
+            attack_data["type"] = "attack"
+            attack_data["is_opportunity_attack"] = is_opportunity_attack
+            attack_data["message"] = f"{attack_data['attacker']} attacks {attack_data['target']} with {weapon_name}: {attack_data['outcome']}" + (f" for {attack_data['total_damage']} damage!" if attack_data['outcome'].lower() in ("hit", "crit") else "")
+
+            ai_actions.append(attack_data)
 
         # Capture movement events
         elif event_type == "movement":
@@ -1293,77 +1348,23 @@ async def execute_move(request: MoveRequest):
 
         # Only capture attacks targeting the moving entity
         if event_type == "attack" and event.target_entity_uuid == entity.uuid:
-            attack_outcome = getattr(event, 'attack_outcome', None)
-            damage_rolls = getattr(event, 'damage_rolls', None)
-            dice_roll = getattr(event, 'dice_roll', None)
-            ac_mv = getattr(event, 'ac', None)
             source = Entity.get(event.source_entity_uuid)
 
-            # Get weapon name
+            # Get weapon name from the event's weapon_slot
             weapon_name = "Unknown"
             if source:
-                weapon = source.equipment.weapon_main_hand
-                weapon_name = weapon.name if weapon else "Unarmed"
+                weapon_slot = getattr(event, 'weapon_slot', None)
+                if weapon_slot:
+                    weapon = source.equipment._get_weapon_by_slot(weapon_slot)
+                    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+                else:
+                    weapon_name = "Unarmed"
 
-            # Extract d20 results - may have multiple rolls for advantage/disadvantage
-            all_d20_rolls = []
-            d20_result = None
-            advantage_status = "none"
-            attack_bonus = 0
-            if dice_roll:
-                results = getattr(dice_roll, 'results', None)
-                if isinstance(results, list):
-                    all_d20_rolls = list(results)
-                    # The "used" roll depends on advantage status
-                    if hasattr(dice_roll, 'advantage_status'):
-                        adv = dice_roll.advantage_status
-                        advantage_status = adv.value.lower() if hasattr(adv, 'value') else str(adv).lower()
-                        if len(results) >= 2:
-                            if advantage_status == "advantage":
-                                d20_result = max(results)
-                            elif advantage_status == "disadvantage":
-                                d20_result = min(results)
-                            else:
-                                d20_result = results[0]
-                        elif len(results) == 1:
-                            d20_result = results[0]
-                elif isinstance(results, int):
-                    all_d20_rolls = [results]
-                    d20_result = results
-                attack_bonus = getattr(dice_roll, 'bonus', 0)
-
-            # Get target AC
-            target_ac = ac_mv.normalized_score if ac_mv else entity.equipment.ac_bonus().normalized_score
-
-            # Calculate damage
-            total_damage = sum(r.total for r in damage_rolls) if damage_rolls else 0
-            outcome_str = attack_outcome.value if attack_outcome else "unknown"
-
-            # Build damage breakdown
-            damage_details = []
-            if damage_rolls:
-                for dr in damage_rolls:
-                    damage_details.append({
-                        "dice": dr.results if hasattr(dr, 'results') else [],
-                        "bonus": dr.bonus if hasattr(dr, 'bonus') else 0,
-                        "total": dr.total
-                    })
-
-            triggered_reactions.append({
-                "type": "opportunity_attack",
-                "attacker": source.name if source else "Unknown",
-                "target": entity.name,
-                "weapon": weapon_name,
-                "d20": d20_result,
-                "all_d20_rolls": all_d20_rolls,  # Both rolls for advantage/disadvantage
-                "advantage_status": advantage_status,  # "none", "advantage", "disadvantage"
-                "attack_bonus": attack_bonus,
-                "attack_total": dice_roll.total if dice_roll else None,
-                "target_ac": target_ac,
-                "outcome": outcome_str,
-                "damage_rolls": damage_details,
-                "total_damage": total_damage
-            })
+            # Use helper to extract all attack data including breakdowns
+            reaction_data = extract_attack_data_from_event(event, source, entity, weapon_name)
+            reaction_data["type"] = "opportunity_attack"
+            reaction_data["is_opportunity_attack"] = True
+            triggered_reactions.append(reaction_data)
 
     # Register callback before move
     EventQueue.add_on_event_callback(capture_opportunity_attack)
@@ -1392,6 +1393,7 @@ async def execute_move(request: MoveRequest):
     event_data = None
     if event and hasattr(event, 'start_position') and hasattr(event, 'end_position'):
         event_data = {
+            "entity": entity.name,  # Include entity name for consistent logging
             "start": list(event.start_position),
             "end": list(event.end_position),
             "path": [list(p) for p in event.path] if hasattr(event, 'path') and event.path else []
@@ -1461,12 +1463,20 @@ async def execute_attack(request: AttackRequest):
     if not target:
         raise HTTPException(status_code=404, detail="Target not found")
 
-    # Parse weapon slot
-    slot = WeaponSlot.MAIN_HAND if request.weapon_slot == "main_hand" else WeaponSlot.OFF_HAND
+    # Parse weapon slot - support both old API (main_hand/off_hand) and new slot names
+    slot_mapping = {
+        "main_hand": WeaponSlot.MELEE_MAIN,      # Backward compat
+        "off_hand": WeaponSlot.MELEE_OFF,        # Backward compat
+        "melee_main": WeaponSlot.MELEE_MAIN,
+        "melee_off": WeaponSlot.MELEE_OFF,
+        "ranged_main": WeaponSlot.RANGED_MAIN,
+        "ranged_off": WeaponSlot.RANGED_OFF,
+    }
+    slot = slot_mapping.get(request.weapon_slot.lower(), WeaponSlot.MELEE_MAIN)
 
     # Get weapon name before attack
-    weapon = entity.equipment.weapon_main_hand if slot == WeaponSlot.MAIN_HAND else entity.equipment.weapon_off_hand
-    weapon_name = weapon.name if weapon else "Unarmed"
+    weapon = entity.equipment._get_weapon_by_slot(slot)
+    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
 
     # Create and execute attack
     attack = Attack(
@@ -1485,86 +1495,34 @@ async def execute_attack(request: AttackRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
-    # Build detailed event data
+    # Build detailed event data using helper
     event_data = None
     if event:
-        attack_outcome = getattr(event, 'attack_outcome', None)
-        dice_roll = getattr(event, 'dice_roll', None)
-        damage_rolls = getattr(event, 'damage_rolls', None)
-        ac_mv = getattr(event, 'ac', None)
-        attack_bonus_mv = getattr(event, 'attack_bonus', None)
+        # Use helper to extract all attack data including breakdowns
+        event_data = extract_attack_data_from_event(event, entity, target, weapon_name)
 
-        # Extract d20 results - may have multiple rolls for advantage/disadvantage
-        all_d20_rolls = []
-        d20_result = None
-        advantage_status = "none"
-        if dice_roll and hasattr(dice_roll, 'results'):
-            results = dice_roll.results
-            if isinstance(results, list):
-                all_d20_rolls = list(results)
-                # The "used" roll depends on advantage status
-                if hasattr(dice_roll, 'advantage_status'):
-                    adv = dice_roll.advantage_status
-                    advantage_status = adv.value.lower() if hasattr(adv, 'value') else str(adv).lower()
-                    if len(results) >= 2:
-                        if advantage_status == "advantage":
-                            d20_result = max(results)
-                        elif advantage_status == "disadvantage":
-                            d20_result = min(results)
-                        else:
-                            d20_result = results[0]
-                    elif len(results) == 1:
-                        d20_result = results[0]
-            elif isinstance(results, int):
-                all_d20_rolls = [results]
-                d20_result = results
+        # Add legacy fields for backwards compat
+        event_data["roll"] = event_data.get("attack_total")
+        event_data["damage"] = event_data.get("total_damage", 0)
 
-        # Get attack bonus
-        attack_bonus = dice_roll.bonus if dice_roll else 0
+        # Build log message
+        attack_bonus = event_data.get("attack_bonus", 0)
+        all_d20_rolls = event_data.get("all_d20_rolls", [])
+        d20_result = event_data.get("d20")
+        advantage_status = event_data.get("advantage_status", "none")
+        target_ac = event_data.get("target_ac", 0)
+        total_damage = event_data.get("total_damage", 0)
+        attack_total = event_data.get("attack_total", 0)
+        outcome_str = (event_data.get("outcome") or "unknown").lower()
 
-        # Get target AC
-        target_ac = ac_mv.normalized_score if ac_mv else target.equipment.ac_bonus().normalized_score
-
-        # Build damage breakdown
-        damage_details = []
-        total_damage = 0
-        if damage_rolls:
-            for dr in damage_rolls:
-                damage_details.append({
-                    "dice": dr.results if hasattr(dr, 'results') else [],
-                    "bonus": dr.bonus if hasattr(dr, 'bonus') else 0,
-                    "total": dr.total
-                })
-                total_damage += dr.total
-
-        event_data = {
-            "attacker": entity.name,
-            "target": target.name,
-            "weapon": weapon_name,
-            "d20": d20_result,
-            "all_d20_rolls": all_d20_rolls,  # Both rolls for advantage/disadvantage
-            "advantage_status": advantage_status,  # "none", "advantage", "disadvantage"
-            "attack_bonus": attack_bonus,
-            "attack_total": dice_roll.total if dice_roll else None,
-            "target_ac": target_ac,
-            "outcome": attack_outcome.value if attack_outcome else None,
-            "damage_rolls": damage_details,
-            "total_damage": total_damage,
-            # Legacy fields for backwards compat
-            "roll": dice_roll.total if dice_roll else None,
-            "damage": total_damage
-        }
-
-        # Add to combat log with formatted message
         bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
         if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
-            roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={dice_roll.total if dice_roll else '?'}"
+            roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
         elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
-            roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={dice_roll.total if dice_roll else '?'}"
+            roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
         else:
-            roll_str = f"d20({d20_result}){bonus_str}={dice_roll.total if dice_roll else '?'}"
+            roll_str = f"d20({d20_result}){bonus_str}={attack_total}"
 
-        outcome_str = (attack_outcome.value if attack_outcome else "unknown").lower()
         if outcome_str == "crit":
             log_msg = f"{entity.name} CRITS {target.name}! {roll_str} vs AC {target_ac} → {total_damage} damage!"
         elif outcome_str == "hit":
@@ -1574,20 +1532,10 @@ async def execute_attack(request: AttackRequest):
         else:
             log_msg = f"{entity.name} misses {target.name}. {roll_str} vs AC {target_ac}"
 
-        sim.add_combat_log("attack", log_msg, {
-            "attacker": entity.name,
-            "target": target.name,
-            "weapon": weapon_name,
-            "d20": d20_result,
-            "all_d20_rolls": all_d20_rolls,
-            "advantage_status": advantage_status,
-            "attack_bonus": attack_bonus,
-            "attack_total": dice_roll.total if dice_roll else None,
-            "target_ac": target_ac,
-            "outcome": outcome_str,
-            "total_damage": total_damage,
-            "target_hp": target.get_hp()
-        })
+        # Add target HP for combat log
+        log_data = dict(event_data)
+        log_data["target_hp"] = target.get_hp()
+        sim.add_combat_log("attack", log_msg, log_data)
 
         # Log deaths
         for death_name in death_names:
@@ -1862,6 +1810,10 @@ async def get_pvp_status():
             is_skeleton_turn = skeleton_uuid and current_entity.uuid == skeleton_uuid
 
     # Check session connections
+    # Claude is "connected" if they had activity in the last 5 seconds
+    import time
+    ACTIVITY_TIMEOUT = 5.0  # seconds
+
     human_connected = False
     claude_connected = False
 
@@ -1870,7 +1822,9 @@ async def get_pvp_status():
             if session.player_type == PlayerType.HUMAN:
                 human_connected = session.connection_status == ConnectionStatus.CONNECTED
             elif session.player_type == PlayerType.CLAUDE:
-                claude_connected = session.connection_status == ConnectionStatus.CONNECTED
+                # Check if Claude had recent activity (action or watch poll)
+                time_since_activity = time.time() - session.last_activity
+                claude_connected = time_since_activity < ACTIVITY_TIMEOUT
 
     return {
         "pvp_mode": game is not None,

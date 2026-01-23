@@ -41,7 +41,7 @@ def test_attack_vs_dodging():
     attack = Attack(
         source_entity_uuid=attacker.uuid,
         target_entity_uuid=target.uuid,
-        weapon_slot=WeaponSlot.MAIN_HAND,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
         name=f"{attacker.name} attacks {target.name}"
     )
 
@@ -93,7 +93,7 @@ def test_attack_without_dodging():
     attack = Attack(
         source_entity_uuid=attacker.uuid,
         target_entity_uuid=target.uuid,
-        weapon_slot=WeaponSlot.MAIN_HAND,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
         name=f"{attacker.name} attacks {target.name}"
     )
 

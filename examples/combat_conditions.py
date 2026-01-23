@@ -88,7 +88,7 @@ def get_attack_modifiers(attacker: Entity, target: Entity):
     """Get attack bonus with proper target setup."""
     attacker.set_target_entity(target.uuid)
     target.set_target_entity(attacker.uuid)
-    attack_bonus = attacker.attack_bonus(WeaponSlot.MAIN_HAND, target.uuid)
+    attack_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
     attacker.clear_target_entity()
     target.clear_target_entity()
     return attack_bonus
@@ -105,7 +105,7 @@ def get_defense_modifiers(defender: Entity, attacker: Entity):
     defender.set_target_entity(attacker.uuid)
     attacker.set_target_entity(defender.uuid)
 
-    attack_bonus = attacker.attack_bonus(WeaponSlot.MAIN_HAND, defender.uuid)
+    attack_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, defender.uuid)
     ac_bonus = defender.ac_bonus(attacker.uuid)
 
     # This is the key: propagate to_target modifiers from defender to attacker
@@ -185,7 +185,7 @@ def test_charmed() -> bool:
 
     # Check 1: Charmed creature auto-misses vs charmer (contextual)
     target.set_target_entity(attacker.uuid)
-    attack_bonus = target.attack_bonus(WeaponSlot.MAIN_HAND, attacker.uuid)
+    attack_bonus = target.attack_bonus(WeaponSlot.MELEE_MAIN, attacker.uuid)
     result.check(
         attack_bonus.auto_hit == AutoHitStatus.AUTOMISS,
         f"Charmed creature auto-misses vs charmer (got {attack_bonus.auto_hit})"
@@ -209,7 +209,7 @@ def test_charmed() -> bool:
     # Check 3: Removal cleans up
     target.remove_condition("Charmed")
     target.set_target_entity(attacker.uuid)
-    attack_bonus = target.attack_bonus(WeaponSlot.MAIN_HAND, attacker.uuid)
+    attack_bonus = target.attack_bonus(WeaponSlot.MELEE_MAIN, attacker.uuid)
     result.check(
         attack_bonus.auto_hit == AutoHitStatus.NONE,
         f"After removal: no auto-miss (got {attack_bonus.auto_hit})"
@@ -336,7 +336,7 @@ def test_frightened() -> bool:
 
     # Check 1: Disadvantage on attacks when frightener visible (contextual)
     target.set_target_entity(attacker.uuid)
-    attack_bonus = target.attack_bonus(WeaponSlot.MAIN_HAND, attacker.uuid)
+    attack_bonus = target.attack_bonus(WeaponSlot.MELEE_MAIN, attacker.uuid)
     result.check(
         attack_bonus.advantage == AdvantageStatus.DISADVANTAGE,
         f"Frightened has disadvantage on attacks when frightener visible (got {attack_bonus.advantage})"
@@ -813,7 +813,7 @@ def test_advantage_disadvantage_cancel() -> bool:
     attacker.set_target_entity(target.uuid)
     target.set_target_entity(attacker.uuid)
 
-    attack_bonus = attacker.attack_bonus(WeaponSlot.MAIN_HAND, target.uuid)
+    attack_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
     ac_bonus = target.ac_bonus(attacker.uuid)
 
     # KEY: Propagate to_target modifiers from prone target to attacker

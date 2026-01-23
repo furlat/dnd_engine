@@ -2,7 +2,7 @@
 
 ## Overview
 
-The D&D Engine uses a terminal-based CLI for gameplay instead of a web UI. Two CLIs are provided:
+The D&D Engine uses a terminal-based CLI for gameplay. Two CLIs are provided:
 - **Human CLI** (`cli/main.py`): Rich terminal interface for human players
 - **Agent CLI** (`cli/agent.py`): Simple command interface for Claude to play as opponent
 
@@ -41,6 +41,9 @@ Human controls Hero via CLI, Claude controls Skeleton via agent CLI. Both player
 │  │  POST /game/join       - join with session                 │ │
 │  │  POST /action/move     - move (requires session)           │ │
 │  │  POST /action/attack   - attack (requires session)         │ │
+│  │  POST /action/dash     - dash action                       │ │
+│  │  POST /action/dodge    - dodge action                      │ │
+│  │  POST /action/disengage - disengage action                 │ │
 │  │  POST /action/end-turn - end turn (requires session)       │ │
 │  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
@@ -50,12 +53,12 @@ Human controls Hero via CLI, Claude controls Skeleton via agent CLI. Both player
 │                     HUMAN CLI (cli/main.py)                      │
 │  ┌─────────────┐    ┌─────────────┐    ┌──────────────────────┐ │
 │  │  APIClient  │    │  GameState  │    │   Display (Rich)     │ │
-│  │  (HTTP)     │    │  (local)    │    │   - Map              │ │
-│  └─────────────┘    └─────────────┘    │   - Combat Log       │ │
-│                                         │   - Action Results   │ │
-│  ┌────────────────────────────────────┐│   - Turn Info        │ │
-│  │  wait_for_opponent_turn()         ││                       │ │
-│  │  - Polls /combat-log              ││                       │ │
+│  │  (HTTP)     │    │  (local)    │    │   - Header           │ │
+│  └─────────────┘    └─────────────┘    │   - Battlefield      │ │
+│                                         │   - Combatants       │ │
+│  ┌────────────────────────────────────┐│   - Combat Log       │ │
+│  │  wait_for_opponent_turn()         ││   - Output           │ │
+│  │  - Polls /combat-log              ││   - Actions          │ │
 │  │  - Polls /pvp/status              │└──────────────────────┘ │
 │  │  - Shows rich opponent actions    │                         │
 │  └────────────────────────────────────┘                         │
@@ -65,10 +68,15 @@ Human controls Hero via CLI, Claude controls Skeleton via agent CLI. Both player
 │                   AGENT CLI (cli/agent.py)                       │
 │  Simple command-based interface for Claude:                      │
 │  - connect     Create session, join game                         │
+│  - disconnect  Clear session for new game                        │
+│  - watch       Wait for turn, show opponent actions (BLOCKING)   │
 │  - state       Show map and entities                             │
 │  - actions     Show available actions                            │
 │  - move X Y    Move to position                                  │
 │  - attack N    Attack target by index                            │
+│  - dash        Dash action (double movement)                     │
+│  - dodge       Dodge action (attackers have disadvantage)        │
+│  - disengage   Disengage action (no opportunity attacks)         │
 │  - end         End turn                                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -139,54 +147,114 @@ The server maintains a unified combat log that both players write to. This ensur
 response = client.get("/combat-log", params={"since": last_index})
 for entry in response["entries"]:
     display.show_opponent_action(entry)  # Rich formatted display
-    state.add_to_log(entry["message"])   # Local log
     last_index = entry["index"] + 1
 ```
 
 ---
 
-## Display Components (cli/display.py)
+## Display Layout (cli/display.py)
 
-### Map View
+The Human CLI uses a full-screen TUI with Rich panels:
+
+### Panel Order (top to bottom)
+
+1. **Header Panel** - "NEURODRAGON" branding + connection status
+   - PvP Mode: Shows Hero/Claude connection status (● Connected / ○ Waiting)
+   - Solo Mode: Shows "Human vs AI"
+
+2. **Battlefield Panel** - ASCII map with entities
+   - `@` = You (green)
+   - First letter = Enemies (red)
+   - `#` = Walls
+   - `*` = Valid move positions (yellow)
+   - `+` = Movement path (magenta)
+
+3. **Combatants Panel** - Entity table with turn info in title
+   - Title: "Round X │ EntityName │ YOUR TURN" or "OPPONENT"
+   - Shows HP, AC, Position, Conditions
+   - `►` marker on active entity
+
+4. **Combat Log Panel** - Rich formatted action history
+   - Attacks show: attacker → target, roll details, outcome, damage
+   - Moves show: entity moved from→to
+   - Color-coded by action type
+
+5. **Output Panel** (conditional) - Command feedback
+   - Shows valid move positions when `m` typed without coords
+   - Shows attack targets when `a` typed without target
+   - Shows error messages
+
+6. **Available Actions Panel** (your turn only) - Action hints
+   - Title shows action economy: "Actions:1 Bonus:1 Move:30ft React:1"
+   - Lists available MOVE, ATTACK, DASH, DODGE, DISENGAGE, END
+
+### Example Display
 
 ```
-╭──────────────────────── Battlefield ────────────────────────╮
-│    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4                            │
-│   +-------------------------------+                         │
-│  7| . . @ . . . S . . . . . . . . |                         │
-│   +-------------------------------+                         │
-│ @ = You  S = Enemy  + = Path  # = Wall                      │
-╰─────────────────────────────────────────────────────────────╯
+╔════════════════════════ ⚔ NEURODRAGON ⚔ ════════════════════════╗
+║ PvP Mode  │  Hero: ● Connected  │  Claude: ● Connected          ║
+╚═════════════════════════════════════════════════════════════════╝
+
+╭──────────────────────── Battlefield ────────────────────────────╮
+│    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4                                │
+│   +-------------------------------+                             │
+│  7| . . @ . . . # . . . . . S . . |                             │
+│   +-------------------------------+                             │
+│ @ You  S Enemy  # Wall  + Path  * Valid                         │
+╰─────────────────────────────────────────────────────────────────╯
+
+╭─────────── Round 1 │ Hero │ YOUR TURN ───────────╮
+│ Entity     HP      AC   Pos      Conditions      │
+│ ► Hero     10/10   15   (2,7)    none            │
+│   Skeleton 17/17   13   (12,7)   none            │
+╰──────────────────────────────────────────────────╯
+
+╭───────────────────── Combat Log ─────────────────────╮
+│ Hero → Skeleton d20(14)+4=18 vs AC 13 HIT 7dmg      │
+│ Skeleton → Hero d20(17)+4=21 vs AC 15 HIT 8dmg      │
+╰──────────────────────────────────────────────────────╯
+
+╭──────── Actions:1 Bonus:1 Move:30ft React:1 ─────────╮
+│ MOVE (30ft)  [m X Y] or [m] to show positions        │
+│ ATTACK Scimitar  [a 0] targets: Skeleton             │
+│ DASH [d]  DODGE [o]  DISENGAGE [i]                   │
+│ END [e]  HELP [?]  QUIT [q]                          │
+╰──────────────────────────────────────────────────────╯
 ```
 
-### Action Results
+---
 
-When you attack:
-```
-Hero attacks Skeleton with Scimitar
-  Attack Roll: d20(14) +4 = 18 vs AC 13
-  Result: HIT!
-  Damage: (5)+2 = 7
-  Skeleton HP: 10
-```
+## Agent CLI: The `watch` Command
 
-When opponent attacks (same format via `show_opponent_action()`):
-```
-Skeleton attacks Hero with Shortsword
-  Attack Roll: d20(17) +4 = 21 vs AC 15
-  Result: HIT!
-  Damage: 8
-  Hero HP: 2
+The `watch` command is the primary way Claude stays engaged with the game:
+
+```bash
+python -m cli.agent watch
 ```
 
-### Combat Log
+Behavior:
+1. Polls server every 2 seconds
+2. Shows opponent actions from combat log as they happen (attacks, moves, deaths)
+3. When it becomes Claude's turn, displays full state + available actions
+4. Detects encounter end and exits cleanly
+5. Ctrl+C to interrupt manually
 
-```
-Combat Log:
-  Skeleton moves to (6, 7).
-  You move to (5, 7).
-  Hit! d20(14)+4=18 vs AC 13 → 7 dmg to Skeleton
-  Skeleton hits Hero. d20(17)+4=21 vs AC 15 → 8 damage
+This enables a smooth flow: `connect` → `watch` → take actions → `end` → `watch` → repeat
+
+### Session Persistence
+
+The agent CLI stores session info in `/tmp/dnd_agent_session.txt` so session persists between commands:
+
+```bash
+# First command creates session
+python -m cli.agent connect    # Creates session, saves to file
+
+# Subsequent commands load session automatically
+python -m cli.agent state      # Loads session from file
+python -m cli.agent attack 0   # Uses same session
+
+# Clear session for new game
+python -m cli.agent disconnect # Removes session file
 ```
 
 ---
@@ -209,23 +277,25 @@ Combat Log:
 
 ```bash
 # Terminal 1: Start server
+source .venv/bin/activate
 uvicorn server.event_server:app --reload
 
 # Terminal 2: Human player
 python -m cli playpvp
 
-# Terminal 3: Claude agent (or let Claude run these commands)
+# Claude agent (in separate process or Claude Code session)
 python -m cli.agent connect
-python -m cli.agent state
+python -m cli.agent watch      # Blocks until your turn
 python -m cli.agent attack 0
 python -m cli.agent end
+python -m cli.agent watch      # Wait for next turn
 ```
 
 ---
 
 ## Future Improvements
 
-1. **Movement path display for opponent moves** - Show path on map like player moves
-2. **WebSocket for real-time updates** - Replace polling with push notifications
-3. **Multiple entity control** - Support controlling multiple entities per player
-4. **Spectator mode** - Watch-only mode for combat viewing
+1. **WebSocket for real-time updates** - Replace polling with push notifications
+2. **Multiple entity control** - Support controlling multiple entities per player
+3. **Spectator mode** - Watch-only mode for combat viewing
+4. **Replay system** - Save and replay combat history
