@@ -1,11 +1,12 @@
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost,BaseCost, ActionEvent
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType,Event, EventType, WeaponSlot, Range, Damage,  EventPhase
-from pydantic import Field
-from typing import Optional, List, TypeVar,  Tuple
+from pydantic import Field, model_validator
+from typing import Optional, List, TypeVar, Tuple, Self
 from uuid import UUID
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone
@@ -211,6 +212,8 @@ class AttackEvent(ActionEvent):
     costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
     range: Optional[Range] = Field(default=None,description="The range of the attack")
+    is_long_range: bool = Field(default=False,description="True if attack is at long range (beyond normal, within long)")
+    is_threatened: bool = Field(default=False,description="True if attacker has hostile entity within 5ft")
     attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")
     ac: Optional[ModifiableValue] = Field(default=None,description="The ac of the target")
     dice_roll: Optional[DiceRoll] = Field(default=None,description="The result of the dice roll")
@@ -224,16 +227,37 @@ class AttackEvent(ActionEvent):
 class Attack(BaseAction):
     """An action that represents an attack using a weapon
     validation requires the source entity and target entity to be in range and the target entity to be in the line of sight
-    of the source entity"""
+    of the source entity.
+
+    Two-Weapon Fighting: Off-hand attacks (MELEE_OFF, RANGED_OFF) cost a bonus action instead of an action,
+    and don't add ability modifier to damage."""
     name: str = Field(default="Attack",description="An attack action")
     description: str = Field(default="An attack action",description="A description of the attack action")
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost",cost_type="actions",cost=1,evaluator=entity_action_economy_cost_evaluator)],description="A list of costs for the action")
+
+    @model_validator(mode="after")
+    def adjust_cost_for_off_hand(self) -> Self:
+        """Off-hand attacks cost bonus_action instead of action (Two-Weapon Fighting)."""
+        if self.weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF):
+            # Replace action cost with bonus_action cost
+            self.costs = [Cost(name="Off-Hand Attack Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
+        return self
     
     
     @staticmethod
-    def validate_range(declaration_event: AttackEvent,source_entity_uuid: UUID) -> Optional[AttackEvent]:
-        """Validate if the source entity and target entity are in range"""
+    def validate_range(declaration_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
+        """Validate if the source entity and target entity are in range.
+
+        For ranged weapons:
+        - Within normal range: attack allowed
+        - Beyond normal but within long range: attack allowed with is_long_range=True (disadvantage)
+        - Beyond long range: attack blocked
+
+        For melee weapons:
+        - Within reach: attack allowed
+        - Beyond reach: attack blocked
+        """
         source_entity = Entity.get(source_entity_uuid)
         if not source_entity:
             return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
@@ -244,20 +268,62 @@ class Attack(BaseAction):
         target_entity = Entity.get(declaration_event.target_entity_uuid)
         if not target_entity or not isinstance(target_entity, Entity):
             return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
-        
-        range = source_entity.get_weapon_range(declaration_event.weapon_slot)
-        if range is None:
+
+        weapon_range = source_entity.get_weapon_range(declaration_event.weapon_slot)
+        if weapon_range is None:
             return declaration_event.cancel(status_message=f"Weapon range not found for {declaration_event.name}")
-        if range.type == RangeType.RANGE:
-            if range.normal < source_entity.senses.get_distance(target_entity.position):
+
+        distance_feet = source_entity.senses.get_feet_distance(target_entity.position)
+        is_long_range = False
+
+        if weapon_range.type == RangeType.RANGE:
+            # Ranged weapon: check normal and long range
+            if distance_feet <= weapon_range.normal:
+                # Within normal range - no disadvantage from range
+                pass
+            elif weapon_range.long is not None and distance_feet <= weapon_range.long:
+                # Beyond normal but within long range - disadvantage
+                is_long_range = True
+            else:
+                # Beyond long range (or no long range defined and beyond normal)
                 return declaration_event.cancel(status_message=f"Target entity not in range for {declaration_event.name}")
-        elif range.type == RangeType.REACH:
-            if source_entity.senses.get_feet_distance(target_entity.position) > 5:
+
+        elif weapon_range.type == RangeType.REACH:
+            # Melee weapon: must be within reach (usually 5ft)
+            if distance_feet > weapon_range.normal:
                 return declaration_event.cancel(status_message=f"Target entity not in reach for {declaration_event.name}")
+
         return declaration_event.phase_to(
             new_phase=EventPhase.DECLARATION,
-            status_message=f"Validated range for {declaration_event.name} - added range to event",
-            range=range
+            status_message=f"Validated range for {declaration_event.name}",
+            range=weapon_range,
+            is_long_range=is_long_range
+        )
+
+    @staticmethod
+    def check_ranged_conditions(declaration_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
+        """Check conditions that affect ranged attacks.
+
+        Sets is_threatened=True if:
+        - Weapon is ranged AND
+        - Attacker has a hostile entity within 5ft (threatened)
+
+        This causes disadvantage on the ranged attack roll.
+        """
+        source_entity = Entity.get(source_entity_uuid)
+        if not source_entity or not isinstance(source_entity, Entity):
+            return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
+
+        is_threatened = False
+
+        # Only check for ranged weapons
+        if declaration_event.range and declaration_event.range.type == RangeType.RANGE:
+            is_threatened = source_entity.is_threatened()
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.DECLARATION,
+            status_message=f"Checked ranged conditions for {declaration_event.name}",
+            is_threatened=is_threatened
         )
     
     
@@ -303,6 +369,35 @@ class Attack(BaseAction):
             ac = target_entity.ac_bonus(source_entity.uuid)
             ac.set_from_target(attack_bonus)
             attack_bonus.set_from_target(ac)
+
+            # Apply ranged attack disadvantages (long range or threatened)
+            ranged_disadvantage_modifiers: List[UUID] = []
+            is_ranged = execution_event.range is not None and execution_event.range.type == RangeType.RANGE
+
+            if is_ranged and execution_event.is_long_range:
+                # Disadvantage for attacking beyond normal range
+                modifier_uuid = attack_bonus.self_static.add_advantage_modifier(
+                    AdvantageModifier(
+                        name="Long Range",
+                        value=AdvantageStatus.DISADVANTAGE,
+                        source_entity_uuid=source_entity_uuid,
+                        target_entity_uuid=target_entity_uuid
+                    )
+                )
+                ranged_disadvantage_modifiers.append(modifier_uuid)
+
+            if is_ranged and execution_event.is_threatened:
+                # Disadvantage for ranged attack while hostile within 5ft
+                modifier_uuid = attack_bonus.self_static.add_advantage_modifier(
+                    AdvantageModifier(
+                        name="Threatened (Ranged)",
+                        value=AdvantageStatus.DISADVANTAGE,
+                        source_entity_uuid=source_entity_uuid,
+                        target_entity_uuid=target_entity_uuid
+                    )
+                )
+                ranged_disadvantage_modifiers.append(modifier_uuid)
+
             # Transition to EXECUTION with attack values
             attack_event = execution_event.phase_to(
                 new_phase=EventPhase.EXECUTION,
@@ -387,18 +482,28 @@ class Attack(BaseAction):
     
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
         """Validate the attack action"""
-        range_validated_event = Attack.validate_range(declaration_event,self.source_entity_uuid)
+        # 1. Validate range (sets is_long_range for ranged weapons)
+        range_validated_event = Attack.validate_range(declaration_event, self.source_entity_uuid)
         if range_validated_event is None:
             return declaration_event.cancel(status_message=f"Range validation returned None for {self.name}")
         elif range_validated_event.canceled:
-            
             return range_validated_event
-        line_of_sight_validated_event = validate_line_of_sight(range_validated_event,self.source_entity_uuid)
+
+        # 2. Validate line of sight
+        line_of_sight_validated_event = validate_line_of_sight(range_validated_event, self.source_entity_uuid)
         if line_of_sight_validated_event is None:
             return declaration_event.cancel(status_message=f"Line of sight validation returned None for {self.name}")
         elif line_of_sight_validated_event.canceled:
             return line_of_sight_validated_event
-        return line_of_sight_validated_event.phase_to(
+
+        # 3. Check ranged conditions (sets is_threatened for ranged attacks)
+        ranged_conditions_event = Attack.check_ranged_conditions(line_of_sight_validated_event, self.source_entity_uuid)
+        if ranged_conditions_event is None:
+            return declaration_event.cancel(status_message=f"Ranged conditions check returned None for {self.name}")
+        elif ranged_conditions_event.canceled:
+            return ranged_conditions_event
+
+        return ranged_conditions_event.phase_to(
             new_phase=EventPhase.EXECUTION,
             status_message=f"Attack validated for {self.name}"
         )
@@ -735,7 +840,7 @@ class DropProne(BaseAction):
 #factories, these are redundant examples to create the same actions using the structured action approach
 # used for prompting LLMs that most likely will use the StructuredAction approach when implementing Content
 
-def attack_factory(source_entity_uuid: UUID, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MAIN_HAND) -> Optional[BaseAction]:
+def attack_factory(source_entity_uuid: UUID, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Optional[BaseAction]:
     attack = StructuredAction(
         source_entity_uuid=source_entity_uuid,
         target_entity_uuid=target_entity_uuid,

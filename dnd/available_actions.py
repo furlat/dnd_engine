@@ -110,15 +110,12 @@ def _get_blocking_conditions(entity: Entity) -> Tuple[bool, bool, List[str]]:
 
 
 def _get_weapon(entity: Entity, weapon_slot: WeaponSlot):
-    """Get the weapon in a slot (helper since Equipment doesn't have get_weapon)."""
+    """Get the weapon in a slot (helper using Equipment's _get_weapon_by_slot)."""
     from dnd.blocks.equipment import Weapon
-    if weapon_slot == WeaponSlot.MAIN_HAND:
-        return entity.equipment.weapon_main_hand
-    elif weapon_slot == WeaponSlot.OFF_HAND:
-        # Off-hand can be weapon or shield
-        if isinstance(entity.equipment.weapon_off_hand, Weapon):
-            return entity.equipment.weapon_off_hand
-        return None
+    item = entity.equipment._get_weapon_by_slot(weapon_slot)
+    # Return only if it's a Weapon (not a Shield)
+    if isinstance(item, Weapon):
+        return item
     return None
 
 
@@ -172,26 +169,36 @@ def _get_attack_options(entity: Entity, can_act: bool) -> List[AvailableAction]:
 
     attacks = []
     can_afford_action = entity.action_economy.can_afford("actions", 1)
+    can_afford_bonus = entity.action_economy.can_afford("bonus_actions", 1)
 
-    # Check each weapon slot
-    for slot in [WeaponSlot.MAIN_HAND, WeaponSlot.OFF_HAND]:
+    # Check each weapon slot (melee and ranged, main and off)
+    for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
         weapon = _get_weapon(entity, slot)
         if weapon is None:
             continue
 
         valid_targets = _get_valid_attack_targets(entity, slot)
-        slot_id = slot.value.lower().replace(" ", "_")
+        slot_id = slot.value.lower()  # e.g., "melee_main", "ranged_off"
+
+        # Two-Weapon Fighting: off-hand attacks cost a bonus action
+        is_off_hand = slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF)
+        cost_type: CostType = "bonus_actions" if is_off_hand else "actions"
+        can_afford = can_afford_bonus if is_off_hand else can_afford_action
+        category: ActionCategory = "bonus_action" if is_off_hand else "action"
+
+        # Add (off-hand) suffix for clarity
+        name_suffix = " (off-hand)" if is_off_hand else ""
 
         attacks.append(AvailableAction(
             action_id=f"attack_{slot_id}",
-            name=f"Attack ({weapon.name})",
-            description=f"{weapon.dice_numbers}d{weapon.damage_dice} {weapon.damage_type.value}",
-            cost_type="actions",
+            name=f"Attack ({weapon.name}){name_suffix}",
+            description=f"{weapon.dice_numbers}d{weapon.damage_dice} {weapon.damage_type.value}" + (" [no ability mod]" if is_off_hand else ""),
+            cost_type=cost_type,
             cost_amount=1,
-            can_afford=can_afford_action and len(valid_targets) > 0,
+            can_afford=can_afford and len(valid_targets) > 0,
             requires_target=True,
             valid_targets=valid_targets,
-            category="action",
+            category=category,
             weapon_slot=slot
         ))
 

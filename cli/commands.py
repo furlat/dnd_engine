@@ -107,6 +107,11 @@ class GameState:
         if len(self.combat_log) > 20:
             self.combat_log = self.combat_log[-20:]
 
+    @property
+    def player_entity_name(self) -> str:
+        """Get the current player's entity name."""
+        return self.turn.get("current_entity_name", "You")
+
 
 def execute_command(
     cmd: Command,
@@ -148,20 +153,20 @@ def execute_command(
 
         elif cmd.type == CommandType.DASH:
             result = client.dash()
-            display.show_action_result(result)
-            state.add_to_log(f"You dash! Movement doubled.")
+            display.show_action_result(result, state.player_entity_name)
+            state.add_to_log(f"{state.player_entity_name} dashes! Movement doubled.")
             return "refresh"
 
         elif cmd.type == CommandType.DODGE:
             result = client.dodge()
-            display.show_action_result(result)
-            state.add_to_log(f"You take the Dodge action.")
+            display.show_action_result(result, state.player_entity_name)
+            state.add_to_log(f"{state.player_entity_name} takes the Dodge action.")
             return "refresh"
 
         elif cmd.type == CommandType.DISENGAGE:
             result = client.disengage()
-            display.show_action_result(result)
-            state.add_to_log(f"You disengage.")
+            display.show_action_result(result, state.player_entity_name)
+            state.add_to_log(f"{state.player_entity_name} disengages.")
             return "refresh"
 
         elif cmd.type == CommandType.END:
@@ -231,8 +236,8 @@ def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[s
             return "refresh"
 
     result = client.move((x, y))
-    display.show_action_result(result)
-    state.add_to_log(f"You move to ({x}, {y}).")
+    display.show_action_result(result, state.player_entity_name)
+    state.add_to_log(f"{state.player_entity_name} moves to ({x}, {y}).")
 
     # Store the path for display on next render
     event_data = result.get("event_data", {})
@@ -247,7 +252,7 @@ def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[s
     for reaction in triggered:
         if reaction.get("type") == "opportunity_attack":
             attacker = reaction.get("attacker", "Unknown")
-            weapon = reaction.get("weapon", "weapon")
+            opp_weapon = reaction.get("weapon", "weapon")
             outcome = (reaction.get("outcome") or "miss").lower()
             total_damage = reaction.get("total_damage", 0)
             d20 = reaction.get("d20", "?")
@@ -266,11 +271,11 @@ def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[s
                 roll_str = f"d20({d20})+{attack_bonus}={attack_total}"
 
             if outcome == "crit":
-                state.add_to_log(f"(OA) {attacker} CRIT! {roll_str} vs AC {target_ac} → {total_damage} to you!")
+                state.add_to_log(f"(OA) {attacker} CRIT with {opp_weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you!")
             elif outcome == "hit":
-                state.add_to_log(f"(OA) {attacker} hit! {roll_str} vs AC {target_ac} → {total_damage} to you")
+                state.add_to_log(f"(OA) {attacker} hit with {opp_weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you")
             else:
-                state.add_to_log(f"(OA) {attacker} missed you {roll_str} vs AC {target_ac}")
+                state.add_to_log(f"(OA) {attacker} missed with {opp_weapon} {roll_str} vs AC {target_ac}")
 
     if result.get("encounter_ended"):
         return "encounter_ended"
@@ -280,28 +285,32 @@ def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[s
 def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional[str]:
     """Handle attack command."""
     attacks = state.actions.get("attacks", [])
-    valid_attacks = [a for a in attacks if a.get("valid_targets")]
+    # Filter by both valid_targets AND can_afford to match display numbering
+    valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
 
     if not valid_attacks:
         display.set_output(["No targets in range."])
         return "refresh"
 
     if len(cmd.args) < 1:
-        # Show attack options in output panel
+        # Show attack options directly to console (not output buffer, which gets cleared)
         entity_lookup = {e["uuid"]: e for e in state.entities}
-        output_lines = ["Attack targets:"]
+        display.console.print("\n[bold]Attack targets:[/bold]")
         target_num = 1
         for atk in valid_attacks:
+            # Show cost type (action vs bonus action for two-weapon fighting)
+            cost_type = atk.get("cost_type", "actions")
+            cost_label = "[magenta]BONUS[/magenta]" if cost_type == "bonus_actions" else "[cyan]ACTION[/cyan]"
+
             for t_uuid in atk.get("valid_targets", []):
                 target = entity_lookup.get(t_uuid, {})
-                output_lines.append(
-                    f"  [{target_num}] {atk['name']} → {target.get('name', 'Unknown')} "
+                display.console.print(
+                    f"  [{target_num}] {cost_label} {atk['name']} → [yellow]{target.get('name', 'Unknown')}[/yellow] "
                     f"(HP: {target.get('hp', '?')}/{target.get('max_hp', '?')})"
                 )
                 target_num += 1
-        output_lines.append("Usage: a N (attack target number N)")
-        display.set_output(output_lines)
-        return "refresh"
+        display.console.print("[dim]Usage: a N (attack target number N)[/dim]")
+        return None  # Don't redraw, let user see the options
 
     try:
         target_num = int(cmd.args[0])
@@ -320,9 +329,10 @@ def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional
         return "refresh"
 
     attack_info, target_uuid = all_targets[target_num - 1]
-    weapon_slot = "main_hand"
-    if attack_info.get("weapon_slot") == "off_hand":
-        weapon_slot = "off_hand"
+    # API returns uppercase enum value like "MELEE_MAIN", "RANGED_MAIN", etc.
+    # Pass through directly (lowercased) - server handles both old and new names
+    weapon_slot = (attack_info.get("weapon_slot") or "melee_main").lower()
+    weapon_name = attack_info.get("name", "weapon")
 
     # Get target name for log
     entity_lookup = {e["uuid"]: e for e in state.entities}
@@ -330,13 +340,12 @@ def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional
     target_name = target.get("name", "Unknown")
 
     result = client.attack(target_uuid, weapon_slot)
-    display.show_action_result(result)
+    display.show_action_result(result, state.player_entity_name)
 
     # Add to combat log with detailed info
     event_data = result.get("event_data", {})
     outcome = (event_data.get("outcome") or "miss").lower()
     total_damage = event_data.get("total_damage", 0)
-    weapon = event_data.get("weapon", "weapon")
     d20 = event_data.get("d20", "?")
     all_d20_rolls = event_data.get("all_d20_rolls", [])
     advantage_status = event_data.get("advantage_status", "none")
@@ -353,13 +362,13 @@ def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional
         roll_str = f"d20({d20})+{attack_bonus}={attack_total}"
 
     if outcome == "crit":
-        state.add_to_log(f"CRIT! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}!")
+        state.add_to_log(f"CRIT with {weapon_name}! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}!")
     elif outcome == "hit":
-        state.add_to_log(f"Hit! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}")
+        state.add_to_log(f"Hit with {weapon_name}! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}")
     elif outcome == "crit miss":
-        state.add_to_log(f"Critical miss vs {target_name}!")
+        state.add_to_log(f"Critical miss with {weapon_name} vs {target_name}!")
     else:
-        state.add_to_log(f"Miss vs {target_name} {roll_str} vs AC {target_ac}")
+        state.add_to_log(f"Miss with {weapon_name} vs {target_name} {roll_str} vs AC {target_ac}")
 
     if result.get("encounter_ended"):
         return "encounter_ended"
@@ -381,7 +390,7 @@ def handle_end_turn(client: APIClient, state: GameState) -> Optional[str]:
             if action_type == "attack":
                 attacker = action.get("attacker", "Unknown")
                 target_name = action.get("target", "Unknown")
-                weapon = action.get("weapon", "weapon")
+                ai_weapon = action.get("weapon", "weapon")
                 outcome = (action.get("outcome") or "miss").lower()
                 total_damage = action.get("total_damage", 0)
                 d20 = action.get("d20", "?")
@@ -402,11 +411,11 @@ def handle_end_turn(client: APIClient, state: GameState) -> Optional[str]:
                     roll_str = f"d20({d20})+{attack_bonus}={attack_total}"
 
                 if outcome == "crit":
-                    state.add_to_log(f"{opp_text}{attacker} CRIT! {roll_str} vs AC {target_ac} → {total_damage} dmg!")
+                    state.add_to_log(f"{opp_text}{attacker} CRIT with {ai_weapon}! {roll_str} vs AC {target_ac} → {total_damage} dmg!")
                 elif outcome == "hit":
-                    state.add_to_log(f"{opp_text}{attacker} hit! {roll_str} vs AC {target_ac} → {total_damage} dmg")
+                    state.add_to_log(f"{opp_text}{attacker} hit with {ai_weapon}! {roll_str} vs AC {target_ac} → {total_damage} dmg")
                 else:
-                    state.add_to_log(f"{opp_text}{attacker} missed {target_name} {roll_str} vs AC {target_ac}")
+                    state.add_to_log(f"{opp_text}{attacker} missed with {ai_weapon} vs {target_name} {roll_str} vs AC {target_ac}")
             elif action_type == "move":
                 entity = action.get("entity", "Unknown")
                 from_pos = action.get("from", [0, 0])

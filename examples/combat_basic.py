@@ -31,7 +31,7 @@ def print_entity_status(entity: Entity) -> None:
     """Print the current status of an entity."""
     hp = entity.get_hp()
     ac = entity.ac_bonus().normalized_score
-    attack_bonus = entity.attack_bonus(WeaponSlot.MAIN_HAND).normalized_score
+    attack_bonus = entity.attack_bonus(WeaponSlot.MELEE_MAIN).normalized_score
 
     print(f"  {entity.name}:")
     print(f"    HP: {hp}")
@@ -98,7 +98,7 @@ def main():
     goblin_attack = Attack(
         source_entity_uuid=goblin.uuid,
         target_entity_uuid=skeleton.uuid,
-        weapon_slot=WeaponSlot.MAIN_HAND,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
         name="Scimitar Attack"
     )
 
@@ -115,7 +115,7 @@ def main():
     skeleton_attack = Attack(
         source_entity_uuid=skeleton.uuid,
         target_entity_uuid=goblin.uuid,
-        weapon_slot=WeaponSlot.MAIN_HAND,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
         name="Shortsword Attack"
     )
 
@@ -138,7 +138,7 @@ def main():
     goblin_attack2 = Attack(
         source_entity_uuid=goblin.uuid,
         target_entity_uuid=skeleton.uuid,
-        weapon_slot=WeaponSlot.MAIN_HAND,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
         name="Scimitar Attack"
     )
     attack_event = goblin_attack2.apply()
@@ -149,7 +149,7 @@ def main():
     skeleton_attack2 = Attack(
         source_entity_uuid=skeleton.uuid,
         target_entity_uuid=goblin.uuid,
-        weapon_slot=WeaponSlot.MAIN_HAND,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
         name="Shortsword Attack"
     )
     attack_event = skeleton_attack2.apply()

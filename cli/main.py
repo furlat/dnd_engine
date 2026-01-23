@@ -12,8 +12,22 @@ from typing import Optional
 import time
 
 from cli.api_client import APIClient
-from cli.commands import parse_command, execute_command, GameState
+from cli.commands import parse_command, execute_command, GameState, CommandType
 from cli import display
+
+
+def prompt_with_connection_poll(client: APIClient, pvp_mode: bool = False, poll_interval: float = 2.0) -> str:
+    """
+    Prompt for input while polling connection status in PvP mode.
+
+    Returns the user's input string.
+
+    Note: select.select() doesn't work on Windows/WSL stdin, so we use
+    simple input for now. Connection status polling can be added via
+    a background thread if needed.
+    """
+    # Use normal input for all modes - select.select() doesn't work on Windows/WSL
+    return display.prompt_command()
 
 
 app = typer.Typer(
@@ -60,7 +74,7 @@ def refresh_state(client: APIClient, state: GameState, clear_path: bool = False)
         return False
 
 
-def render_display(client: APIClient, state: GameState, my_entity_uuid: str = None):
+def render_display(client: APIClient, state: GameState, my_entity_uuid: Optional[str] = None, pvp_mode: bool = False):
     """Render the full display.
 
     Args:
@@ -68,6 +82,7 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: str = No
         state: Current game state
         my_entity_uuid: UUID of the entity THIS player controls (for @ symbol).
                        Falls back to client.current_entity_uuid if not provided.
+        pvp_mode: If True, check and update Claude's connection status
     """
     # Use provided UUID or fall back to client's tracked entity
     player_uuid = my_entity_uuid or client.current_entity_uuid
@@ -75,6 +90,15 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: str = No
     # Determine if it's MY turn (for display)
     active_uuid = state.turn.get("current_entity_uuid")
     is_my_turn = (active_uuid == player_uuid) if player_uuid else state.turn.get("is_human_turn", False)
+
+    # Update connection status in PvP mode
+    if pvp_mode:
+        try:
+            pvp_status = client.get_pvp_status()
+            claude_connected = pvp_status.get("claude_connected", False)
+            display.set_session_info(claude_connected=claude_connected)
+        except Exception:
+            pass  # Don't fail render if status check fails
 
     # Use the new full-screen render
     display.render_full_screen(
@@ -207,7 +231,7 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
                     state.update_from_state(full_state)
                     state.visibility = client.get_visibility()
                     state.turn = client.get_current_turn()
-                    render_display(client, state, my_entity_uuid=hero_uuid)
+                    render_display(client, state, my_entity_uuid=hero_uuid, pvp_mode=True)
                     display.console.print("[dim]Opponent's turn...[/dim]")
 
             # Check encounter status
@@ -262,7 +286,7 @@ def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = 
         while True:
             # Render display only when needed
             if need_redraw:
-                render_display(client, state, my_entity_uuid=my_entity_uuid)
+                render_display(client, state, my_entity_uuid=my_entity_uuid, pvp_mode=pvp_mode)
 
                 # Check whose turn
                 if pvp_mode and hero_uuid:
@@ -321,8 +345,8 @@ def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = 
 
             need_redraw = True  # Default to redraw next iteration
 
-            # Get command
-            cmd_str = display.prompt_command()
+            # Get command (with connection status polling in PvP mode)
+            cmd_str = prompt_with_connection_poll(client, pvp_mode=pvp_mode)
             cmd = parse_command(cmd_str)
 
             # Execute command
@@ -332,6 +356,8 @@ def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = 
                 display.show_info("Goodbye!")
                 break
             elif result == "encounter_ended":
+                # Refresh state to get final HP values before showing end screen
+                refresh_state(client, state)
                 break
             elif result == "refresh":
                 # Refresh state after action
@@ -346,24 +372,57 @@ def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = 
                 # Don't redraw - let user see the output and enter another command
                 need_redraw = False
 
-        # Show final state
-        display.clear()
-        display.show_map(state.grid, state.entities, my_entity_uuid, visibility=state.visibility)
-        display.show_turn_info(state.turn, state.entities, is_my_turn=False)
+        # Show final state with full display (including combat log)
+        # Save final snapshot for history
+        display.save_turn_snapshot(state.turn, state.entities, state.grid)
 
-        # Determine winner
+        # Determine winner message
         alive = [e for e in state.entities if not e.get("is_dead", False)]
         if len(alive) == 1:
             winner = alive[0]
-            display.console.print(f"\n[bold green]*** {winner['name']} WINS! ***[/bold green]\n")
+            winner_msg = f"[bold green]*** {winner['name']} WINS! ***[/bold green]"
         elif len(alive) == 0:
-            display.console.print("\n[bold red]*** EVERYONE IS DEAD ***[/bold red]\n")
+            winner_msg = "[bold red]*** EVERYONE IS DEAD ***[/bold red]"
         else:
-            display.console.print("\n[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]\n")
+            winner_msg = "[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]"
 
-        # Wait for user to see result before exiting alternate screen
-        display.console.print("[dim]Press Enter to exit...[/dim]")
-        input()
+        # End-game loop: show final state and allow history navigation
+        viewing_history = False
+        while True:
+            # Render appropriate view
+            if viewing_history:
+                snapshot = display.get_current_snapshot()
+                if snapshot:
+                    display.render_history_snapshot(snapshot)
+            else:
+                render_display(client, state, my_entity_uuid=my_entity_uuid, pvp_mode=pvp_mode)
+
+            # Show winner and instructions
+            display.console.print(f"\n{winner_msg}")
+            display.console.print("[dim]History: pt/nt/ft/ct | Enter or q to exit[/dim]")
+
+            # Get command
+            cmd_str = display.prompt_command()
+            cmd = parse_command(cmd_str)
+
+            # Handle history navigation or quit
+            if cmd.type == CommandType.QUIT or cmd_str == "":
+                break
+            elif cmd.type == CommandType.PREV_TURN:
+                if display.goto_previous_turn():
+                    viewing_history = True
+            elif cmd.type == CommandType.NEXT_TURN:
+                if not display.goto_next_turn():
+                    display.goto_current_turn()
+                    viewing_history = False
+                else:
+                    viewing_history = True
+            elif cmd.type == CommandType.FIRST_TURN:
+                if display.goto_first_turn():
+                    viewing_history = True
+            elif cmd.type == CommandType.CURRENT_TURN:
+                display.goto_current_turn()
+                viewing_history = False
 
     finally:
         # Always exit alternate screen mode

@@ -67,7 +67,7 @@ class AggressiveAIController(Controller):
                 return Attack(
                     source_entity_uuid=entity.uuid,
                     target_entity_uuid=target_uuid,
-                    weapon_slot=attack.weapon_slot or WeaponSlot.MAIN_HAND,
+                    weapon_slot=attack.weapon_slot or WeaponSlot.MELEE_MAIN,
                     name=f"{entity.name}'s Attack"
                 )
 
