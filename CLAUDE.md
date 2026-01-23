@@ -1275,31 +1275,53 @@ Key endpoints:
 
 ### Server-Side Combat Log
 
-The server maintains a unified combat log that both players write to. This ensures consistency and provides rich action details for display.
+The server maintains a unified combat log that both players write to. This ensures consistency and provides rich action details for display, including **full modifier breakdowns**.
 
+**Combat Log Format (with breakdowns):**
+```
+Hero → Skeleton (Scimitar)
+  Attack: d20(15) +4 [Prof +2, DEX +2] = 19 vs AC 13 [Armor +13] → HIT
+  Damage: 1d6(5) +2 [DEX +2] = 7 slashing
+
+Skeleton → Hero (Shortsword) DIS
+  Attack: d20(12,7→7) +4 [Prof +2, DEX +2] = 11 vs AC 13 [Armor +11, DEX +2] → MISS
+
+Hero → Skeleton (Dagger) BONUS
+  Attack (OA): d20(18) +4 [Prof +2, DEX +2] = 22 vs AC 13 → HIT
+  Damage: 1d4(3) = 3 piercing
+```
+
+**Server-side data structure:**
 ```python
-# Server adds entries on each action
-sim.add_combat_log("attack", "Skeleton hits Hero. d20(17)+4=21 vs AC 15 → 8 damage", {
+sim.add_combat_log("attack", log_msg, {
     "attacker": "Skeleton",
     "target": "Hero",
+    "weapon": "Shortsword",
     "d20": 17,
     "all_d20_rolls": [17],
-    "advantage_status": "none",
+    "advantage_status": "none",  # "advantage", "disadvantage", or "none"
     "attack_bonus": 4,
     "attack_total": 21,
     "target_ac": 15,
-    "outcome": "hit",
+    "outcome": "hit",  # "hit", "miss", "crit", "crit miss"
     "total_damage": 8,
-    "target_hp": 2
+    "target_hp": 2,
+    # Modifier breakdowns for detailed display
+    "attack_breakdown": [{"name": "Prof", "value": 2}, {"name": "DEX", "value": 2}],
+    "ac_breakdown": [{"name": "Armor", "value": 13}],
+    "damage_breakdown": [{"name": "DEX", "value": 2}],
+    "damage_dice_results": [5],
+    "damage_dice_str": "1d6",
+    "is_opportunity_attack": False
 })
-
-# CLI polls for new entries
-entries = client.get_combat_log(since=last_index)
-for entry in entries:
-    display.show_opponent_action(entry)  # Rich formatted display
 ```
 
 Entry types: `attack`, `move`, `action`, `opportunity_attack`, `death`, `turn_end`
+
+**Modifier Breakdown System** (`dnd/core/values.py`):
+- `ModifiableValue.get_breakdown()` - Extracts numerical modifiers with cleaned names
+- `ModifiableValue.get_advantage_breakdown()` - Extracts advantage/disadvantage sources
+- Name cleanup: `"proficiency_bonus_base_value"` → `"Prof"`, `"dexterity Ability Score_base_value"` → `"DEX"`
 
 ### Agent CLI Session Persistence
 
@@ -1393,8 +1415,17 @@ The `*_NOTES.md` files compare SRD rules against our implementation, identifying
 - **Encounter System** (`dnd/encounter.py`): Turn-based combat with initiative, round tracking, turn management
 - **Available Actions** (`dnd/available_actions.py`): Query system for valid moves, attacks, and actions
 - **PvP CLI**: Full human vs Claude gameplay loop with session-based authority
-- **Combat Log**: Server-side unified log with rich action details
+- **Combat Log with Modifier Breakdowns**: Rich display showing `[DEX +2, Prof +2]` for every roll
 - **Agent CLI**: Claude can connect, watch for turns, and play autonomously
+- **Two-Weapon Fighting**: Main-hand (action) + off-hand (bonus action) attacks with proper cost tracking
+- **Opportunity Attacks**: Triggered on movement away from enemies, labeled `(OA)` in combat log
+- **Advantage/Disadvantage Display**: Shows both d20 rolls and which was used (e.g., `d20(12,7→7)`)
+
+### Recent Improvements (January 2026)
+- **Detailed modifier breakdowns** in combat log showing source of every bonus
+- **Consistent attack numbering** between display and command execution
+- **PvP input handling** fixed for Windows/WSL compatibility
+- **Encounter ending** now refreshes state before showing final screen
 
 ### Potential Next Features
 

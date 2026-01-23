@@ -36,12 +36,24 @@ The CLI provides a nethack-style terminal interface for D&D combat with ASCII ma
    - Available Actions: What you can do (with economy in title)
 
 4. **Information Display**
-   - Full attack breakdown: d20 roll + bonus vs AC, outcome, damage
-   - **Advantage/Disadvantage**: Shows both dice rolls (e.g., `ADV d20(14,8→14)`)
+   - Full attack breakdown with modifier sources: `d20(15) +4 [Prof +2, DEX +2] = 19`
+   - AC breakdown: `vs AC 13 [Armor +11, DEX +2]`
+   - Damage breakdown: `1d6(5) +2 [DEX +2] = 7 slashing`
+   - **Advantage/Disadvantage**: Shows both dice rolls (e.g., `DIS d20(12,7→7)`)
    - ADV/DIS indicators with color coding (green=ADV, red=DIS)
    - Entity status table with HP, AC, position, conditions
 
-5. **PvP Mode**
+5. **Two-Weapon Fighting**
+   - Main-hand attack costs 1 action
+   - Off-hand attack costs 1 bonus action (shown as `BONUS` in display)
+   - Attack numbering consistent between display and command handler
+
+6. **Opportunity Attacks**
+   - Triggered when moving away from enemies without Disengage
+   - Labeled `(OA)` in combat log
+   - Full breakdown display like regular attacks
+
+7. **PvP Mode**
    - Session-based authority (only control your own entity)
    - Combat log polling to see opponent actions
    - Connection status display in header
@@ -170,3 +182,7 @@ python -m cli.agent watch
 - **Output Panel**: Added for command feedback (valid positions, attack targets)
 - **Header Panel**: Added NEURODRAGON branding + connection status
 - **Action Economy in Title**: Available actions panel shows remaining economy
+- **Modifier Breakdowns**: Combat log now shows `[Prof +2, DEX +2]` for every roll
+- **Off-hand Attack Numbering**: Fixed inconsistent numbering between display and command execution
+- **PvP Input Handling**: Fixed Windows/WSL compatibility (removed select.select)
+- **Encounter Ending**: State now refreshes before showing final screen to display correct HP
