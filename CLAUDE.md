@@ -1387,6 +1387,7 @@ Contains high-level architecture documents and implementation plans created duri
 | `CODEBASE_ANALYSIS.md` | Deep dive into existing primitives (Entity, Senses, GridMap, Events, Actions), how they integrate |
 | `EXAMPLE_PATTERNS.md` | **IMPORTANT**: Correct patterns for writing examples and tests - read before writing any new example code |
 | `AVAILABLE_ACTIONS_DESIGN.md` | Design document for the available actions query system |
+| `CLASS_SYSTEM_DESIGN.md` | **NEXT FEATURE**: Complete design for class system (Fighter), action registry, resource system, condition extensions |
 | `UI_ARCHITECTURE.md` | Documents the CLI and Server architecture (session-based PvP, combat log, agent CLI) |
 | `FRONTEND_POSTMORTEM.md` | **LESSONS LEARNED** - Post-mortem of failed web UI attempt. Documents what went wrong. Read to understand how NOT to work on this codebase. |
 
@@ -1426,6 +1427,88 @@ The `*_NOTES.md` files compare SRD rules against our implementation, identifying
 - **Consistent attack numbering** between display and command execution
 - **PvP input handling** fixed for Windows/WSL compatibility
 - **Encounter ending** now refreshes state before showing final screen
+
+## Class System (PLANNED - NOT YET IMPLEMENTED)
+
+**Design Document**: `claude_docs/CLASS_SYSTEM_DESIGN.md`
+
+The class system will model D&D character classes as collections of conditions applied to entities. This is **designed but not yet implemented**.
+
+### Key Design Decisions
+
+| Component | Design |
+|-----------|--------|
+| **Classes as conditions** | Class features are conditions with `tags: List[str]` for filtering (e.g., `["class:fighter", "level:1"]`) |
+| **Action registry** | `Entity.registered_actions: Dict[str, RegisteredAction]` - entities can have custom actions |
+| **Resource system** | Extended `ActionEconomy` with `resources: Dict[str, Resource]` for limited-use features (Second Wind, spell slots) |
+| **Unified costs** | `ActionCost` model handles both turn-based (actions/bonus) AND resource-based costs |
+| **Auto-cleanup** | Conditions return `action_ids` and `resource_names` in `_apply()`, base class auto-cleans on removal (like sub-conditions) |
+
+### Condition `_apply()` Return Signature (After Implementation)
+
+```python
+def _apply(self, declaration_event: Event) -> Tuple[
+    List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
+    List[UUID],               # event_handler_uuids
+    List[UUID],               # subcondition_uuids
+    List[str],                # registered_action_ids (NEW)
+    List[str],                # registered_resource_names (NEW)
+    Optional[Event]           # completion event
+]:
+```
+
+### Resource System (ActionEconomy Extension)
+
+```python
+class RechargeType(str, Enum):
+    TURN_START = "turn_start"
+    SHORT_REST = "short_rest"
+    LONG_REST = "long_rest"
+    NEVER = "never"
+
+class Resource(BaseModel):
+    name: str
+    current: int
+    maximum: int
+    recharge_type: RechargeType
+
+# ActionEconomy gets:
+resources: Dict[str, Resource]
+add_resource(), remove_resource(), can_afford_resource(), consume_resource()
+on_short_rest(), on_long_rest(), on_turn_start()
+```
+
+### Example: Second Wind (Fighter Level 1)
+
+```python
+class SecondWind(BaseCondition):
+    tags: List[str] = ["class:fighter", "level:1", "feature:second_wind"]
+
+    def _apply(self, declaration_event):
+        target = Entity.get(self.target_entity_uuid)
+
+        # Register resource and action - base class will auto-clean on removal
+        target.action_economy.add_resource("second_wind", 1, RechargeType.SHORT_REST)
+        target.register_action("second_wind", SecondWindAction, {"fighter_level": 1})
+
+        return [], [], [], ["second_wind"], ["second_wind"], effect_event
+
+class SecondWindAction(BaseAction):
+    target_type: TargetType = TargetType.SELF
+    costs: List[ActionCost] = [
+        ActionCost(cost_type="bonus_actions", cost_amount=1),
+        ActionCost(resource_name="second_wind", resource_amount=1)
+    ]
+```
+
+### Implementation Phases
+
+1. **Phase 0**: Resource system + action registry infrastructure
+2. **Phase 1**: Extend BaseCondition (`tags`, `action_ids`, `resource_names` in return)
+3. **Phase 2**: Rest system (`Entity.short_rest()`, `long_rest()`)
+4. **Phase 3**: Fighter class (Fighting Styles, Second Wind)
+
+---
 
 ### Potential Next Features
 
