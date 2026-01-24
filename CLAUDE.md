@@ -665,12 +665,13 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Dijkstra pathfinding | `dnd/core/dijkstra.py` |
 | **Encounter & Combat** | |
 | Encounter/turn management | `dnd/encounter.py` |
-| Available actions query | `dnd/available_actions.py` |
-| **Conditions & Actions** | |
+| **Actions & Registry** | |
+| Base action class + data models | `dnd/core/base_actions.py` |
+| Attack, Move, Dash, Dodge, etc. | `dnd/actions.py` |
+| Functional API (setup, execute) | `dnd/actions_functional.py` |
+| **Conditions** | |
 | Base condition class | `dnd/core/base_conditions.py` |
 | All D&D conditions | `dnd/conditions.py` |
-| Base action class | `dnd/core/base_actions.py` |
-| Attack, Move actions | `dnd/actions.py` |
 | **Entity Blocks** | |
 | Ability scores | `dnd/blocks/abilities.py` |
 | Skills | `dnd/blocks/skills.py` |
@@ -1414,7 +1415,7 @@ The `*_NOTES.md` files compare SRD rules against our implementation, identifying
 
 ### Implemented Systems
 - **Encounter System** (`dnd/encounter.py`): Turn-based combat with initiative, round tracking, turn management
-- **Available Actions** (`dnd/available_actions.py`): Query system for valid moves, attacks, and actions
+- **Action Registry** (`dnd/actions_functional.py`, `dnd/entity.py`): Template-based action system with `get_available_actions()`, `execute_action()`, `execute_by_index()`
 - **PvP CLI**: Full human vs Claude gameplay loop with session-based authority
 - **Combat Log with Modifier Breakdowns**: Rich display showing `[DEX +2, Prof +2]` for every roll
 - **Agent CLI**: Claude can connect, watch for turns, and play autonomously

@@ -12,7 +12,7 @@ from typing import Optional
 import time
 
 from cli.api_client import APIClient
-from cli.commands import parse_command, execute_command, GameState, CommandType
+from cli.commands import parse_command, execute_command, GameState, MetaCommand
 from cli import display
 
 
@@ -63,9 +63,11 @@ def refresh_state(client: APIClient, state: GameState, clear_path: bool = False)
 
         # Get available actions if it's human turn
         if state.turn.get("is_human_turn", False):
-            state.actions = client.get_available_actions()
+            actions_data = client.get_available_actions()
+            state.update_actions(actions_data)
         else:
-            state.actions = {}
+            state.actions = None
+            state.actions_raw = {}
 
         return True
 
@@ -106,7 +108,7 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: Optional
         entities=state.entities,
         turn=state.turn,
         current_entity_uuid=player_uuid,
-        actions=state.actions if is_my_turn else None,
+        actions=state.actions_raw if is_my_turn else None,
         visibility=state.visibility,
         movement_path=state.last_movement_path,
         valid_positions=state.valid_move_positions,
@@ -317,28 +319,19 @@ def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = 
                     continue
 
                 # Human turn - show available actions summary based on economy
-                can_move = state.actions.get("can_move", False) and state.actions.get("remaining_movement", 0) > 0
-                attacks = state.actions.get("attacks", [])
-                actions_remaining = state.turn.get("actions_remaining", 0)
-                has_attacks = actions_remaining > 0 and any(a.get("valid_targets") and a.get("can_afford") for a in attacks)
-
-                # Check for other actions (dash, dodge, disengage)
-                other_actions = state.actions.get("other_actions", [])
-                can_dash = any(a.get("action_id") == "dash" and a.get("can_afford") for a in other_actions)
-                can_dodge = any(a.get("action_id") == "dodge" and a.get("can_afford") for a in other_actions)
-                can_disengage = any(a.get("action_id") == "disengage" and a.get("can_afford") for a in other_actions)
-
                 hints = []
-                if can_move:
-                    hints.append(f"Move:{state.actions.get('remaining_movement', 0)}ft")
-                if has_attacks:
-                    hints.append("Attack")
-                if can_dash:
-                    hints.append("Dash")
-                if can_dodge:
-                    hints.append("Dodge")
-                if can_disengage:
-                    hints.append("Disengage")
+                if state.actions:
+                    if state.actions.can_move:
+                        hints.append(f"Move:{state.actions.remaining_movement}ft")
+                    if state.actions.can_attack:
+                        hints.append("Attack")
+                    # Check for self-targeting actions
+                    if state.actions.get_self_action("Dash"):
+                        hints.append("Dash")
+                    if state.actions.get_self_action("Dodge"):
+                        hints.append("Dodge")
+                    if state.actions.get_self_action("Disengage"):
+                        hints.append("Disengage")
                 hints.append("End")
 
                 display.show_info(f"Actions: {', '.join(hints)} | ? for help")
@@ -406,21 +399,21 @@ def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = 
             cmd = parse_command(cmd_str)
 
             # Handle history navigation or quit
-            if cmd.type == CommandType.QUIT or cmd_str == "":
+            if cmd.command == "quit" or cmd_str == "":
                 break
-            elif cmd.type == CommandType.PREV_TURN:
+            elif cmd.command == MetaCommand.PREV_TURN.value:
                 if display.goto_previous_turn():
                     viewing_history = True
-            elif cmd.type == CommandType.NEXT_TURN:
+            elif cmd.command == MetaCommand.NEXT_TURN.value:
                 if not display.goto_next_turn():
                     display.goto_current_turn()
                     viewing_history = False
                 else:
                     viewing_history = True
-            elif cmd.type == CommandType.FIRST_TURN:
+            elif cmd.command == MetaCommand.FIRST_TURN.value:
                 if display.goto_first_turn():
                     viewing_history = True
-            elif cmd.type == CommandType.CURRENT_TURN:
+            elif cmd.command == MetaCommand.CURRENT_TURN.value:
                 display.goto_current_turn()
                 viewing_history = False
 

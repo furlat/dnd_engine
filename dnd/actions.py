@@ -1,4 +1,4 @@
-from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost,BaseCost, ActionEvent
+from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost, BaseCost, ActionEvent, TargetType
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -70,18 +70,25 @@ class MovementEvent(ActionEvent):
 class Move(BaseAction):
     """An action that represents a movement with a path it will automatically compute the path from the source entity position to the end position
     the cost is automatically computed from the path length and the use_movement_cost flag is true
-    
-    This is a simplified implmenetation that does not move the character through the path, hence not triggering any movement specific"""
-    name: str = Field(default="Movement",description="A movement action")
-    description: str = Field(default="A movement action",description="A description of the movement action")
-    end_position: Tuple[int,int] = Field(description="The end position of the movement")
-    path:Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
-    use_movement_cost: bool = Field(default=True,description="Whether to use the movement cost")
+
+    This is a simplified implmenetation that does not move the character through the path, hence not triggering any movement specific.
+
+    When used as a template (template=True), end_position can be None and should be set via set_target_position()
+    before pre_validate() or instantiate().
+    """
+    name: str = Field(default="Move", description="A movement action")
+    description: str = Field(default="Move to a position", description="A description of the movement action")
+    target_type: TargetType = Field(default=TargetType.POSITION, description="Move targets a position")
+    end_position: Optional[Tuple[int, int]] = Field(default=None, description="The end position of the movement")
+    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="The path of the movement")
+    use_movement_cost: bool = Field(default=True, description="Whether to use the movement cost")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._setup_path()
-        self._setup_costs_from_path()
+        # Only compute path and costs if we have an end_position (not a template)
+        if self.end_position is not None and not self.template:
+            self._setup_path()
+            self._setup_costs_from_path()
 
     def _setup_costs_from_path(self):
         if self.path is not None and self.use_movement_cost:
@@ -92,11 +99,48 @@ class Move(BaseAction):
 
     def _setup_path(self):
         """Check if the costs of the action are valid and sets up the path and the costs"""
-        if self.path is None:
+        if self.path is None and self.end_position is not None:
             source_entity = Entity.get(self.source_entity_uuid)
             if source_entity is None or not isinstance(source_entity, Entity):
                 return None
-            self.path = source_entity.senses.paths[self.end_position]
+            if self.end_position in source_entity.senses.paths:
+                self.path = source_entity.senses.paths[self.end_position]
+
+    def set_target_position(self, position: Tuple[int, int]) -> None:
+        """Set target position and compute path/costs for validation.
+
+        Overrides base implementation to also compute path and costs,
+        so that pre_validate() can properly check movement affordability.
+        """
+        # Clear previous path/costs if re-targeting
+        self.path = None
+        self.costs = []
+
+        # Set position via parent
+        super().set_target_position(position)
+
+        # Compute path and costs so check_costs() works
+        self._setup_path()
+        self._setup_costs_from_path()
+
+    def instantiate(self, **overrides) -> "Move":
+        """Create an executable Move instance from this template.
+
+        Overrides base to ensure path/costs are recomputed for new end_position,
+        not carried over from template's previous state.
+        """
+        if not self.template:
+            raise ValueError("Can only instantiate from a template")
+
+        # Copy all fields except uuid and path-related fields
+        # Path and costs must be recomputed for the new end_position
+        kwargs = self.model_dump(exclude={"uuid", "path", "costs"})
+        kwargs["template"] = False
+        kwargs["path"] = None  # Force recompute
+        kwargs["costs"] = []   # Force recompute
+        kwargs.update(overrides)
+
+        return Move(**kwargs)
 
     @staticmethod
     def validate_path(declaration_event: MovementEvent,source_entity_uuid: UUID) -> MovementEvent:
@@ -123,11 +167,35 @@ class Move(BaseAction):
                     status_message=f"Validated path for {declaration_event.name}"
                 )
             
-    def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the declaration event for the movement action"""
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        """Create the declaration event for the movement action.
+
+        For templates, this computes the path and costs on the fly based on the
+        current end_position.
+        """
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity or not isinstance(source_entity, Entity):
             return None
+
+        if self.end_position is None:
+            return None  # Can't create movement event without destination
+
+        # Store in local variable to help type checker
+        end_position: Tuple[int, int] = self.end_position
+
+        # Compute path on the fly if not already set (for templates)
+        path = self.path
+        if path is None and end_position in source_entity.senses.paths:
+            path = source_entity.senses.paths[end_position]
+
+        # Compute costs from path if using movement cost
+        costs = list(self.costs)  # Copy existing costs
+        if path is not None and self.use_movement_cost:
+            # Check if we already have a movement cost
+            has_movement_cost = any(c.cost_type == "movement" for c in costs)
+            if not has_movement_cost:
+                feet_cost = (len(path) - 1) * 5
+                costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=entity_action_economy_cost_evaluator))
 
         return MovementEvent(
             name=f"{self.name}",
@@ -135,9 +203,9 @@ class Move(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             start_position=source_entity.position,
-            end_position=self.end_position,
-            path=self.path,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            end_position=end_position,
+            path=path,
+            costs=[BaseCost.model_validate(cost) for cost in costs],
             use_register=use_register
         )
     
@@ -230,11 +298,16 @@ class Attack(BaseAction):
     of the source entity.
 
     Two-Weapon Fighting: Off-hand attacks (MELEE_OFF, RANGED_OFF) cost a bonus action instead of an action,
-    and don't add ability modifier to damage."""
-    name: str = Field(default="Attack",description="An attack action")
-    description: str = Field(default="An attack action",description="A description of the attack action")
+    and don't add ability modifier to damage.
+
+    When used as a template (template=True), target_entity_uuid should be set via set_target_entity()
+    before pre_validate() or instantiate().
+    """
+    name: str = Field(default="Attack", description="An attack action")
+    description: str = Field(default="Attack a target", description="A description of the attack action")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Attack targets an entity")
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
-    costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost",cost_type="actions",cost=1,evaluator=entity_action_economy_cost_evaluator)],description="A list of costs for the action")
+    costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="A list of costs for the action")
 
     @model_validator(mode="after")
     def adjust_cost_for_off_hand(self) -> Self:
@@ -530,6 +603,7 @@ class Dash(BaseAction):
     """
     name: str = Field(default="Dash")
     description: str = Field(default="Gain extra movement equal to your speed")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Dash targets self")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Dash Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ])
@@ -592,6 +666,7 @@ class Dodge(BaseAction):
     """
     name: str = Field(default="Dodge")
     description: str = Field(default="Attackers have disadvantage, advantage on DEX saves")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Dodge targets self")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Dodge Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ])
@@ -650,6 +725,7 @@ class Disengage(BaseAction):
     """
     name: str = Field(default="Disengage")
     description: str = Field(default="Movement doesn't provoke opportunity attacks")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Disengage targets self")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Disengage Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ])
@@ -711,6 +787,7 @@ class StandUp(BaseAction):
     """
     name: str = Field(default="Stand Up")
     description: str = Field(default="Stand up from prone")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Stand Up targets self")
     # Cost is set dynamically based on entity's base movement
 
     def __init__(self, **kwargs):
@@ -784,6 +861,7 @@ class DropProne(BaseAction):
     """
     name: str = Field(default="Drop Prone")
     description: str = Field(default="Drop to the ground")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Drop Prone targets self")
     costs: List[Cost] = Field(default_factory=list)  # Free action
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:

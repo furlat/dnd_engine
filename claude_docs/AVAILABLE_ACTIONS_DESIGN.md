@@ -1,5 +1,23 @@
 # Available Actions System Design
 
+## STATUS: IMPLEMENTED (January 2026)
+
+The design in this document has been implemented with some modifications:
+
+### Implementation Files
+- **`dnd/core/base_actions.py`**: Data models (`AvailableTarget`, `AvailableActionInfo`, `AvailableActionsResult`), `TargetType` enum, template system (`template`, `instantiate()`)
+- **`dnd/actions_functional.py`**: Functional API (`setup_standard_actions()`, `get_available_actions()`, `execute_action()`, `execute_by_index()`)
+- **`dnd/entity.py`**: Action registry on Entity (`registered_actions`, `register_action()`, `get_action_template()`, `get_available_actions()`)
+- **`dnd/actions.py`**: All action classes with `target_type` set
+
+### Key Differences from Design
+1. **Template-based**: Actions are registered as templates with `template=True`, then instantiated with specific targets
+2. **No separate `available_actions.py`**: Functionality split between `base_actions.py` (data models) and `actions_functional.py` (functions)
+3. **Entity.get_available_actions()**: Main query method is on Entity, not standalone function
+4. **Auto-updating weapon templates**: Event handlers auto-register attack templates when weapons equipped/unequipped
+
+---
+
 ## Purpose
 
 Query system to determine what actions an entity can currently perform, given:

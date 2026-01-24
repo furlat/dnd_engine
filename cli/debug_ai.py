@@ -11,7 +11,7 @@ from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.controller import Controller, TurnContext, HumanController
-from dnd.available_actions import get_available_actions
+from dnd.actions_functional import get_available_actions
 
 
 def setup_debug():
@@ -51,16 +51,16 @@ def setup_debug():
     # Check available actions for skeleton
     print(f"\n=== Skeleton's available actions ===")
     available = get_available_actions(skeleton)
-    print(f"  can_attack: {available.can_attack}")
-    print(f"  can_move: {available.can_move}")
     print(f"  remaining_movement: {available.remaining_movement}")
-    print(f"  blocking_conditions: {available.blocking_conditions}")
-    print(f"  attacks: {len(available.attacks)}")
-    for atk in available.attacks:
-        print(f"    - {atk.name}: can_afford={atk.can_afford}, valid_targets={atk.valid_targets}")
-    print(f"  movement: {len(available.movement)}")
-    for mov in available.movement:
-        print(f"    - {mov.name}: can_afford={mov.can_afford}, valid_positions count={len(mov.valid_positions)}")
+    print(f"  entity_actions: {len(available.entity_actions)}")
+    for atk in available.entity_actions:
+        print(f"    - {atk.display_name}: can_afford={atk.can_afford}, valid_targets={len(atk.valid_targets)}")
+    print(f"  position_actions: {len(available.position_actions)}")
+    for mov in available.position_actions:
+        print(f"    - {mov.display_name}: can_afford={mov.can_afford}, valid_targets count={len(mov.valid_targets)}")
+    print(f"  self_actions: {len(available.self_actions)}")
+    for self_act in available.self_actions:
+        print(f"    - {self_act.display_name}: can_afford={self_act.can_afford}")
 
     return hero, skeleton
 
@@ -90,25 +90,24 @@ def test_encounter_turn():
             print(f"  context.movement_remaining: {context.movement_remaining}")
 
             available = get_available_actions(entity)
-            print(f"  available.can_attack: {available.can_attack}")
-            print(f"  available.can_move: {available.can_move}")
+            print(f"  entity_actions: {len(available.entity_actions)}")
+            print(f"  position_actions: {len(available.position_actions)}")
 
             # Priority 1: Attack if we can
-            for attack in available.attacks:
-                print(f"    Checking attack {attack.name}: can_afford={attack.can_afford}, valid_targets={attack.valid_targets}")
-                if attack.can_afford and attack.valid_targets:
+            for attack_info in available.entity_actions:
+                print(f"    Checking attack {attack_info.display_name}: can_afford={attack_info.can_afford}, valid_targets={len(attack_info.valid_targets)}")
+                if attack_info.can_afford and attack_info.valid_targets:
                     print(f"    -> Would attack!")
                     return None  # Don't actually attack in debug
 
             # Priority 2: Move toward enemy
             can_still_attack = entity.action_economy.can_afford("actions", 1)
             print(f"  can_still_attack: {can_still_attack}")
-            print(f"  available.can_move: {available.can_move}")
-            print(f"  available.movement: {len(available.movement)} actions")
+            print(f"  position_actions: {len(available.position_actions)}")
 
-            if can_still_attack and available.can_move and available.movement:
-                move_action = available.movement[0]
-                print(f"  move_action.valid_positions count: {len(move_action.valid_positions)}")
+            if can_still_attack and available.position_actions:
+                move_info = available.position_actions[0]
+                print(f"  move_info.valid_targets count: {len(move_info.valid_targets)}")
 
                 # Find closest position to any enemy
                 closest_pos = None
@@ -133,7 +132,10 @@ def test_encounter_turn():
                 for enemy_uuid, enemy_pos in context.visible_enemies.items():
                     if enemy_uuid == entity.uuid:
                         continue
-                    for pos in move_action.valid_positions:
+                    for target in move_info.valid_targets:
+                        if target.position is None:
+                            continue
+                        pos = target.position
                         positions_checked += 1
                         dist = abs(pos[0] - enemy_pos[0]) + abs(pos[1] - enemy_pos[1])
                         if dist < closest_dist and dist < current_min_dist:
@@ -147,11 +149,9 @@ def test_encounter_turn():
 
                 if closest_pos and closest_pos != entity.position:
                     print(f"  -> Would move to {closest_pos}!")
-                    return Move(
-                        source_entity_uuid=entity.uuid,
-                        end_position=closest_pos,
-                        name=f"{entity.name}'s Movement"
-                    )
+                    template = entity.get_action_template(move_info.template_name)
+                    if template:
+                        return template.instantiate(end_position=closest_pos)
                 else:
                     print(f"  -> No closer position found!")
 
