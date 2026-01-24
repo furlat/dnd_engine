@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor
 from dnd.core.base_object import BaseObject
+from dnd.core.base_block import BaseBlock
 from typing import Optional, Callable, OrderedDict, List, Literal, Tuple
 from uuid import UUID
 from enum import Enum
@@ -17,12 +18,17 @@ class TargetType(str, Enum):
 CostEvaluator = Callable[[UUID,CostType,int],bool]
 
 class BaseCost(BaseModel):
-    name: str = Field(default="A Cost",description="The name of the cost")
+    """Cost for an action - can include both turn-based and resource costs."""
+    name: str = Field(default="A Cost", description="The name of the cost")
     cost_type: CostType
     cost: int
+    # Optional resource cost (can have both turn-based AND resource cost)
+    resource_name: Optional[str] = Field(default=None, description="Name of resource to consume (e.g., 'second_wind')")
+    resource_cost: int = Field(default=0, description="Amount of resource to consume")
+
 
 class Cost(BaseCost):
-    evaluator: Optional[CostEvaluator] = Field(default=None,description="The evaluator for the cost")
+    evaluator: Optional[CostEvaluator] = Field(default=None, description="The evaluator for the cost")
 
 class ActionEvent(Event):
     costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
@@ -104,8 +110,22 @@ class BaseAction(BaseObject):
         return type(self)(**kwargs)
 
     def check_costs(self) -> bool:
+        """Check if entity can afford all costs (turn-based and resource-based)."""
         for cost in self.costs:
-                if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid,cost.cost_type,cost.cost):
+            # Check turn-based cost via evaluator
+            if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid, cost.cost_type, cost.cost):
+                return False
+            # Check resource cost if present
+            if cost.resource_cost > 0 and cost.resource_name:
+                # Use BaseBlock.get() since Entity registers in BaseBlock._registry
+                entity = BaseBlock.get(self.source_entity_uuid)
+                if entity is None:
+                    return False
+                # Entity has action_economy, use getattr for type safety
+                action_economy = getattr(entity, 'action_economy', None)
+                if action_economy is None:
+                    return False
+                if not action_economy.can_afford_resource(cost.resource_name, cost.resource_cost):
                     return False
         return True
 

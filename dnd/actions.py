@@ -46,15 +46,23 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
     )
 
 def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> PolymorphicActionEvent:
-    """Apply the costs of the action"""
+    """Apply the costs of the action (turn-based and resource-based)."""
     entity = Entity.get(source_entity_uuid)
     if entity is None or not isinstance(entity, Entity):
         return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
     for cost in completion_event.costs:
-        entity.action_economy.consume(cost.cost_type,cost.cost)
+        # Apply turn-based cost
+        if cost.cost > 0:
+            entity.action_economy.consume(cost.cost_type, cost.cost)
+        # Apply resource cost if present
+        if cost.resource_cost > 0 and cost.resource_name:
+            if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
+                return completion_event.cancel(
+                    status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
+                )
     return completion_event.phase_to(
         new_phase=EventPhase.COMPLETION,
-        status_message=f"Succesfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
+        status_message=f"Successfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
     )
 
 

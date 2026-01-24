@@ -800,14 +800,20 @@ class Entity(BaseBlock):
         )
 
         # SELF actions - validate once, no targets needed
+        # Include all registered self actions, set can_afford based on check_costs()
         for template in self.self_actions:
-            if template.pre_validate():
-                template_name = template.name or "Unknown"
+            template_name = template.name or "Unknown"
+            can_afford = template.check_costs()
+            # Only check pre_validate if costs are affordable (avoid duplicate work)
+            is_valid = can_afford and template.pre_validate()
+            # Include action if it's valid OR if it just can't be afforded
+            # This allows UI to show grayed-out actions that exist but can't be used
+            if is_valid or not can_afford:
                 result.self_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.SELF,
-                    valid_targets=[AvailableTarget(index=0)],
-                    can_afford=True,
+                    valid_targets=[AvailableTarget(index=0)] if is_valid else [],
+                    can_afford=can_afford,
                     display_name=template_name,
                     description=template.description,
                     cost_type=template.costs[0].cost_type if template.costs else "actions",
