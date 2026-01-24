@@ -1,13 +1,51 @@
-from typing import  Optional,  List,Tuple
+from typing import Optional, List, Tuple, Dict
 from uuid import UUID, uuid4
+from enum import Enum
 from pydantic import BaseModel, Field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import CostType
 
-
-
 from dnd.core.base_block import BaseBlock
+
+
+class RechargeType(str, Enum):
+    """When a resource recharges to its maximum value."""
+    SHORT_REST = "short_rest"
+    LONG_REST = "long_rest"
+    TURN_START = "turn_start"
+    NEVER = "never"
+
+
+class Resource(BaseModel):
+    """
+    A limited-use resource (e.g., Second Wind, spell slots).
+
+    Attributes:
+        name: Resource identifier
+        current: Current uses remaining
+        maximum: Maximum uses
+        recharge_type: When the resource recharges
+    """
+    name: str
+    current: int
+    maximum: int
+    recharge_type: RechargeType
+
+    def can_afford(self, amount: int = 1) -> bool:
+        """Check if resource has enough uses."""
+        return self.current >= amount
+
+    def consume(self, amount: int = 1) -> bool:
+        """Consume uses. Returns True if successful, False if not enough."""
+        if not self.can_afford(amount):
+            return False
+        self.current -= amount
+        return True
+
+    def recharge(self) -> None:
+        """Restore resource to maximum."""
+        self.current = self.maximum
 
 class ActionEconomyConfig(BaseModel):
     """
@@ -66,6 +104,69 @@ class ActionEconomy(BaseBlock):
             value_name="Movement"
         )
     )
+    resources: Dict[str, Resource] = Field(default_factory=dict)
+
+    # =========================================================================
+    # Resource Management Methods
+    # =========================================================================
+
+    def add_resource(self, name: str, maximum: int, recharge_type: RechargeType) -> None:
+        """Add a new resource (e.g., 'second_wind' with max 1)."""
+        self.resources[name] = Resource(
+            name=name,
+            current=maximum,
+            maximum=maximum,
+            recharge_type=recharge_type
+        )
+
+    def remove_resource(self, name: str) -> None:
+        """Remove a resource by name."""
+        self.resources.pop(name, None)
+
+    def has_resource(self, name: str) -> bool:
+        """Check if a resource exists."""
+        return name in self.resources
+
+    def can_afford_resource(self, name: str, amount: int = 1) -> bool:
+        """Check if a resource has enough uses remaining."""
+        resource = self.resources.get(name)
+        if resource is None:
+            return False
+        return resource.can_afford(amount)
+
+    def consume_resource(self, name: str, amount: int = 1) -> bool:
+        """Consume uses of a resource. Returns True if successful."""
+        resource = self.resources.get(name)
+        if resource is None:
+            return False
+        return resource.consume(amount)
+
+    def get_resource_current(self, name: str) -> int:
+        """Get current uses of a resource. Returns 0 if not found."""
+        resource = self.resources.get(name)
+        return resource.current if resource else 0
+
+    def on_short_rest(self) -> None:
+        """Recharge resources that recharge on short rest."""
+        for resource in self.resources.values():
+            if resource.recharge_type in (RechargeType.SHORT_REST, RechargeType.LONG_REST):
+                resource.recharge()
+
+    def on_long_rest(self) -> None:
+        """Recharge resources that recharge on long rest."""
+        for resource in self.resources.values():
+            if resource.recharge_type == RechargeType.LONG_REST:
+                resource.recharge()
+
+    def on_turn_start(self) -> None:
+        """Recharge resources that recharge on turn start."""
+        for resource in self.resources.values():
+            if resource.recharge_type == RechargeType.TURN_START:
+                resource.recharge()
+
+    # =========================================================================
+    # Turn-Based Action Economy Methods
+    # =========================================================================
 
     def get_base_value(self, cost_type: CostType) -> int:
         """Get the base value for a given action type."""

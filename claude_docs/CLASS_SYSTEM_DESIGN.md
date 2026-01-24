@@ -13,240 +13,160 @@ The class system models D&D character classes as collections of **conditions** a
 
 ---
 
-## Action System Architecture Analysis
+## Action System Architecture (CURRENT IMPLEMENTATION)
 
-Before designing how class features add new actions (like Second Wind), we need to understand the current action architecture thoroughly.
+The action system uses a **template-based architecture** where actions are registered on entities as templates and validated/executed through a unified API.
 
-### Current Architecture: Three Disconnected Layers
+### Current Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          SERVER ENDPOINTS                                   │
 │  server/event_server.py                                                     │
 │                                                                             │
-│  @app.post("/action/move")     → manually creates Move(...)                 │
-│  @app.post("/action/attack")   → manually creates Attack(...)               │
-│  @app.post("/action/dash")     → manually creates Dash(...)                 │
-│  @app.post("/action/dodge")    → manually creates Dodge(...)                │
-│  @app.post("/action/disengage")→ manually creates Disengage(...)            │
-│  @app.post("/action/end-turn") → manages turn flow                          │
+│  GET  /entity/{uuid}/available-actions → entity.get_available_actions()     │
+│  POST /action/execute                  → execute_action(template_name, idx) │
+│  POST /action/end-turn                 → manages turn flow                  │
 │                                                                             │
-│  HARDCODED: Each endpoint manually maps action_id → action class            │
+│  UNIFIED: Single execute endpoint uses entity's registered templates        │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     ↑
-                    No registry connection - just string matching
+                          Uses entity's action_templates
                                     ↑
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      AVAILABLE ACTIONS QUERY                                │
-│  dnd/available_actions.py                                                   │
+│                          ENTITY ACTION REGISTRY                             │
+│  dnd/entity.py                                                              │
 │                                                                             │
-│  get_available_actions(entity) → AvailableActionsResult                     │
+│  Entity.action_templates: Dict[str, BaseAction]  # Registered templates     │
+│  Entity.register_action(action)    → adds action with template=True         │
+│  Entity.unregister_action(name)    → removes action template                │
+│  Entity.get_action_template(name)  → retrieves template                     │
+│  Entity.get_available_actions()    → validates all templates with targets   │
 │                                                                             │
-│  HARDCODED functions:                                                       │
-│  - _get_attack_options()   → iterates WeaponSlots, creates AvailableAction  │
-│  - _get_movement_options() → queries entity.senses.paths                    │
-│  - _get_other_actions()    → hardcoded Dash, Dodge, Disengage               │
-│  - _get_prone_actions()    → Stand Up, Drop Prone                           │
-│                                                                             │
-│  Returns DATA MODELS (AvailableAction), NOT action classes                  │
+│  Templates are BaseAction instances with template=True                      │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     ↑
-                        No connection to action classes
+                          Uses TargetType for validation
                                     ↑
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          ACTION CLASSES                                     │
-│  dnd/actions.py                                                             │
+│  dnd/actions.py + dnd/core/base_actions.py                                  │
 │                                                                             │
-│  class Move(BaseAction)       - end_position, use_movement_cost             │
-│  class Attack(BaseAction)     - target_uuid, weapon_slot                    │
-│  class Dash(BaseAction)       - applies Dashing condition                   │
-│  class Dodge(BaseAction)      - applies Dodging condition                   │
-│  class Disengage(BaseAction)  - applies Disengaging condition               │
+│  class BaseAction:                                                          │
+│    target_type: TargetType  # SELF, ENTITY, POSITION                        │
+│    template: bool           # True = registered template, False = executable│
+│    pre_validate() → bool    # Check if action can execute                   │
+│    instantiate(**overrides) → BaseAction  # Create executable from template │
 │                                                                             │
-│  dnd/reactions.py                                                           │
-│  - opportunity_attack_processor() - creates Attack with reactions cost      │
-│  - EventHandler triggers on MovementEvent                                   │
+│  class Attack(BaseAction):  target_type = ENTITY                            │
+│  class Move(BaseAction):    target_type = POSITION                          │
+│  class Dash(BaseAction):    target_type = SELF                              │
+│  class Dodge(BaseAction):   target_type = SELF                              │
+│  class Disengage(BaseAction): target_type = SELF                            │
+│  class StandUp(BaseAction): target_type = SELF                              │
+│  class DropProne(BaseAction): target_type = SELF                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    ↑
+                          Functional API for convenience
+                                    ↑
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          FUNCTIONAL API                                     │
+│  dnd/actions_functional.py                                                  │
+│                                                                             │
+│  setup_standard_actions(entity)  → Registers Move, Dash, Dodge, Disengage   │
+│                                    + weapon attacks from equipment          │
+│  get_available_actions(entity)   → Wrapper for entity.get_available_actions │
+│  execute_action(entity, name, target)  → Execute with specific target       │
+│  execute_by_index(entity, name, idx)   → Execute by target index            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Complete Action Inventory
+### Action Inventory (All Implemented)
 
-| Action | Class | Location | Cost | Parameters | Targets |
-|--------|-------|----------|------|------------|---------|
-| **Move** | `Move` | actions.py:43 | movement (variable) | `end_position: Tuple[int,int]` | Position |
-| **Attack** | `Attack` | actions.py:170 | 1 action (main) / 1 bonus (off-hand) | `target_uuid`, `weapon_slot` | Entity |
-| **Dash** | `Dash` | actions.py:524 | 1 action | - | Self |
-| **Dodge** | `Dodge` | actions.py:583 | 1 action | - | Self |
-| **Disengage** | `Disengage` | actions.py:644 | 1 action | - | Self |
-| **Opportunity Attack** | `Attack` | reactions.py:31 | 1 reaction | Same as Attack | Entity |
-| *(missing)* Stand Up | - | - | half movement | - | Self |
-| *(missing)* Drop Prone | - | - | free | - | Self |
-| *(missing)* Unarmed Strike | - | - | 1 action | `target_uuid` | Entity |
+| Action | Class | Cost | TargetType | Notes |
+|--------|-------|------|------------|-------|
+| **Move** | `Move` | movement (variable) | POSITION | Path computed from senses.paths |
+| **Attack** | `Attack` | 1 action (main) / 1 bonus (off-hand) | ENTITY | Per-weapon-slot templates |
+| **Dash** | `Dash` | 1 action | SELF | Applies Dashing condition |
+| **Dodge** | `Dodge` | 1 action | SELF | Applies Dodging condition |
+| **Disengage** | `Disengage` | 1 action | SELF | Applies Disengaging condition |
+| **Stand Up** | `StandUp` | half movement | SELF | Removes Prone condition |
+| **Drop Prone** | `DropProne` | free | SELF | Applies Prone condition |
+| **Opportunity Attack** | `Attack` | 1 reaction | ENTITY | Triggered via EventHandler |
 
-### How Weapon Attacks Work
-
-```python
-# In available_actions.py:_get_attack_options()
-
-for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
-             WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
-    weapon = entity.equipment._get_weapon_by_slot(slot)
-    if weapon is None:
-        continue
-
-    valid_targets = _get_valid_attack_targets(entity, slot)  # Range check
-
-    # Off-hand = bonus action, main = action
-    is_off_hand = slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF)
-    cost_type = "bonus_actions" if is_off_hand else "actions"
-
-    # Return AvailableAction data (NOT Attack class)
-    attacks.append(AvailableAction(
-        action_id=f"attack_{slot.value.lower()}",  # "attack_melee_main"
-        weapon_slot=slot,
-        valid_targets=valid_targets,
-        cost_type=cost_type,
-        ...
-    ))
-```
-
-**Key insight**: Weapons don't "register" actions. The query system iterates equipment slots and generates `AvailableAction` data on the fly.
-
-### How Server Executes Attacks
+### Template Registration Flow
 
 ```python
-# In server/event_server.py:execute_attack()
+# In dnd/actions_functional.py:setup_standard_actions()
 
-@app.post("/action/attack")
-async def execute_attack(request: AttackRequest):
-    entity = validate_session_action(request.session_id, request.entity_uuid)
+def setup_standard_actions(entity: Entity):
+    # Self-targeted actions
+    entity.register_action(Move(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(Dash(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(Dodge(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))
 
-    # Manual slot parsing from string
-    slot_mapping = {
-        "melee_main": WeaponSlot.MELEE_MAIN,
-        "melee_off": WeaponSlot.MELEE_OFF,
-        ...
-    }
-    slot = slot_mapping[request.weapon_slot]
-
-    # Manually construct Attack instance
-    attack = Attack(
-        source_entity_uuid=entity.uuid,
-        target_entity_uuid=target_uuid,
-        weapon_slot=slot,
-        name=f"{entity.name} attacks {target.name}"
-    )
-    event = attack.apply()
-    # ... build response
+    # Weapon attacks (one template per equipped weapon slot)
+    for slot in WeaponSlot:
+        weapon = entity.equipment._get_weapon_by_slot(slot)
+        if weapon:
+            entity.register_action(Attack(
+                source_entity_uuid=entity.uuid,
+                weapon_slot=slot,
+                name=f"Attack_{slot.value}",
+                template=True
+            ))
 ```
 
-**No registry**: The endpoint hardcodes the mapping from weapon_slot string → Attack class construction.
-
-### How Reactions Work
+### Available Actions Query
 
 ```python
-# In reactions.py
+# In Entity.get_available_actions()
 
-def opportunity_attack_processor(event: MovementEvent, source_entity_uuid: UUID):
-    """Called when ANY MovementEvent fires in EFFECT phase."""
+# For each registered template:
+# 1. Get potential targets based on target_type
+# 2. For each target, set it on template and call pre_validate()
+# 3. Collect valid targets with indices
 
-    reaction_source = Entity.get(source_entity_uuid)  # The potential attacker
-    event_source = Entity.get(event.source_entity_uuid)  # The mover
-
-    # Check if mover is leaving reaction_source's threatened area
-    threatened = reaction_source.senses.get_threathened_positions()
-    if event.start_position in threatened and any(pos not in threatened for pos in event.path):
-
-        # Create Attack with REACTION cost instead of ACTION
-        reaction_attack = Attack(
-            name="Opportunity Attack",
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=event.source_entity_uuid,
-            weapon_slot=WeaponSlot.MELEE_MAIN,
-            costs=[Cost(name="Opportunity Attack Cost",
-                       cost_type="reactions", cost=1,
-                       evaluator=entity_action_economy_cost_evaluator)]
-        )
-
-        if reaction_attack.pre_validate():
-            reaction_attack.apply(parent_event=event)
+# Returns AvailableActionsResult with:
+# - entity_actions: Attack templates with valid target UUIDs
+# - position_actions: Move template with valid positions
+# - self_actions: Dash, Dodge, Disengage, etc.
 ```
 
-**Key pattern**: Reactions are EventHandlers that trigger on specific events and can create/execute actions dynamically.
+### Server Execution
 
-### What's Missing for Class Features
+```python
+# POST /action/execute with { template_name, target_index, session_id, entity_uuid }
 
-1. **No Action Registry**: Can't add new actions (like Second Wind) without modifying:
-   - `available_actions.py` (hardcoded query)
-   - `server/event_server.py` (hardcoded endpoints)
+# 1. Validate session owns entity
+# 2. Get template: entity.get_action_template(template_name)
+# 3. Get target: available_actions.valid_targets[target_index]
+# 4. Instantiate and execute: template.instantiate(target=...).apply()
+```
 
-2. **No Action-Entity Association**: Actions are stateless classes instantiated on-demand. There's no "this entity HAS this action" relationship.
+### What's Working ✅
 
-3. **No Extension Points**: Conditions can add modifiers and event handlers, but NOT actions.
-
-4. **Missing Actions**: Stand Up, Drop Prone, Unarmed Strike are in the query but have no corresponding action classes.
+1. **Action Registry**: Entities have `action_templates` dict, can register/unregister
+2. **Template System**: Actions have `template=True`, can be instantiated with targets
+3. **TargetType**: Actions declare SELF/ENTITY/POSITION targeting
+4. **Available Actions Query**: Validates each template with each potential target
+5. **Unified Execution**: Single `/action/execute` endpoint
+6. **Functional API**: `setup_standard_actions()`, `execute_by_index()`
 
 ---
 
-## Proposed Action Registry Design
+## Remaining Implementation: Resource System + Condition Extensions
 
-Keep it simple: **no new wrapper classes**. Use `pre_validate()` from existing action classes, and extend `ActionEconomy` to track ALL resources.
+The action registry is **complete**. What remains:
 
-### Design Goals
-
-1. **Minimal changes to existing action classes** - Just add `target_type` field
-2. **Simple dictionary registry** - `Dict[str, RegisteredAction]` on Entity (like `active_conditions`)
-3. **Unified resource system** - ActionEconomy handles turn-based + limited-use resources
-4. **Use `pre_validate()`** - Action instances validate themselves, no duplicate logic
-5. **Follow Entity patterns** - Similar to how conditions are managed
+1. **Resource System** - Limited-use features (Second Wind, spell slots)
+2. **BaseCost Extension** - Resource-based costs alongside turn-based costs
+3. **Condition Extensions** - Tags for filtering, auto-cleanup of registered actions/resources
 
 ---
 
-### TargetType Enum
-
-```python
-# dnd/core/base_actions.py
-
-class TargetType(str, Enum):
-    SELF = "self"          # Dash, Dodge, Disengage, Second Wind
-    ENTITY = "entity"      # Attack
-    POSITION = "position"  # Move
-```
-
-### Add target_type to BaseAction
-
-```python
-class BaseAction(BaseObject):
-    # Existing fields
-    name: str
-    description: str
-    costs: List[Cost]
-
-    # NEW: declare what kind of target this action needs
-    target_type: TargetType = Field(default=TargetType.SELF)
-```
-
-Subclasses set their target_type:
-
-```python
-class Attack(BaseAction):
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    weapon_slot: WeaponSlot
-    # ... rest unchanged
-
-class Move(BaseAction):
-    target_type: TargetType = Field(default=TargetType.POSITION)
-    end_position: Tuple[int, int]
-    # ... rest unchanged
-
-class Dash(BaseAction):
-    target_type: TargetType = Field(default=TargetType.SELF)
-    # ... rest unchanged
-```
-
----
-
-### Extended Resource System (ActionEconomy)
+### Resource System (ActionEconomy)
 
 The current `ActionEconomy` handles turn-based resources:
 - `actions`, `bonus_actions`, `reactions`, `movement`
@@ -975,142 +895,78 @@ def get_class_level(self, class_name: str) -> int:
 
 ## Implementation Plan
 
-### Phase 0: Resource System + Action Registry Infrastructure
+### Phase 0: Action Registry Infrastructure ✅ COMPLETE
 
-Extend ActionEconomy with resources, add action registry to Entity, add TargetType to actions.
+| Step | Status | Notes |
+|------|--------|-------|
+| **0.1 TargetType enum** | ✅ DONE | In `dnd/core/base_actions.py` |
+| **0.2 Template system** | ✅ DONE | `BaseAction.template`, `instantiate()` |
+| **0.3 Action registry on Entity** | ✅ DONE | `Entity.action_templates`, `register_action()` |
+| **0.4 Available actions query** | ✅ DONE | `Entity.get_available_actions()` |
+| **0.5 Functional API** | ✅ DONE | `dnd/actions_functional.py` |
+| **0.6 Server endpoint** | ✅ DONE | `POST /action/execute` |
 
-#### Step 0.1: Resource System in ActionEconomy
+### Phase 1: Resource System ✅ COMPLETE
 
-**File**: `dnd/blocks/action_economy.py`
+| Step | Status | Notes |
+|------|--------|-------|
+| **1.1 RechargeType enum** | ✅ DONE | `dnd/blocks/action_economy.py` |
+| **1.2 Resource model** | ✅ DONE | `can_afford()`, `consume()`, `recharge()` |
+| **1.3 ActionEconomy.resources** | ✅ DONE | `Dict[str, Resource]` |
+| **1.4 Resource methods** | ✅ DONE | `add_resource()`, `remove_resource()`, `can_afford_resource()`, `consume_resource()` |
+| **1.5 Rest triggers** | ✅ DONE | `on_short_rest()`, `on_long_rest()`, `on_turn_start()` |
+| **1.6 BaseCost extension** | ✅ DONE | `resource_name`, `resource_cost` fields |
+| **1.7 check_costs() update** | ✅ DONE | Validates both turn-based and resource costs |
+| **1.8 Cost applier update** | ✅ DONE | Consumes both turn-based and resource costs |
 
-```python
-# Add RechargeType enum
-class RechargeType(str, Enum):
-    TURN_START = "turn_start"
-    TURN_END = "turn_end"
-    SHORT_REST = "short_rest"
-    LONG_REST = "long_rest"
-    NEVER = "never"
+### Phase 2: Second Wind Proof of Concept ✅ COMPLETE
 
-# Add Resource model
-class Resource(BaseModel):
-    name: str
-    current: int
-    maximum: int
-    recharge_type: RechargeType
+| Step | Status | Notes |
+|------|--------|-------|
+| **2.1 SecondWind action** | ✅ DONE | `examples/test_second_wind.py` |
+| **2.2 Integration test** | ✅ DONE | Full resource lifecycle verified |
 
-    def can_afford(self, amount: int = 1) -> bool: ...
-    def consume(self, amount: int = 1) -> bool: ...
-    def recharge(self, trigger: RechargeType) -> None: ...
+### Bug Fixes During Implementation
 
-# Extend ActionEconomy
-class ActionEconomy(BaseBlock):
-    # Existing: actions, bonus_actions, reactions, movement
+| Fix | Description |
+|-----|-------------|
+| `check_costs()` registry | Was using `BaseObject.get()`, fixed to `BaseBlock.get()` |
+| `get_available_actions()` | Now shows unaffordable actions with `can_afford=False` |
 
-    # NEW
-    resources: Dict[str, Resource] = Field(default_factory=dict)
+---
 
-    def add_resource(self, name: str, maximum: int, recharge_type: RechargeType) -> None: ...
-    def remove_resource(self, name: str) -> None: ...
-    def can_afford_resource(self, name: str, amount: int = 1) -> bool: ...
-    def consume_resource(self, name: str, amount: int = 1) -> bool: ...
-    def on_short_rest(self) -> None: ...
-    def on_long_rest(self) -> None: ...
-    def on_turn_start(self) -> None: ...  # Also resets turn-based costs
-```
+## Next Steps: Fighter Implementation
 
-#### Step 0.2: TargetType + ActionCost in BaseAction
+**See**: `claude_docs/FIGHTER_IMPLEMENTATION_PLAN.md` for detailed feature analysis.
 
-**File**: `dnd/core/base_actions.py`
+### Summary of Fighter Features by Difficulty
 
-```python
-# Add TargetType enum
-class TargetType(str, Enum):
-    SELF = "self"
-    ENTITY = "entity"
-    POSITION = "position"
+| Difficulty | Features |
+|------------|----------|
+| **Simple** | Archery, Defense, Dueling, Two-Weapon Fighting, Action Surge, ASI |
+| **Medium** | Extra Attack, Improved/Superior Critical, Protection, Indomitable |
+| **Complex** | Great Weapon Fighting (dice reroll), Survivor (turn start) |
 
-# Add unified ActionCost model
-class ActionCost(BaseModel):
-    cost_type: Optional[CostType] = None       # Turn-based
-    cost_amount: int = 0
-    resource_name: Optional[str] = None        # Resource-based
-    resource_amount: int = 0
+### Key Design Decisions
 
-# Update BaseAction
-class BaseAction(BaseObject):
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[ActionCost] = Field(default_factory=list)  # Updated type
+1. **Optional reactions**: Auto-trigger for now (like Opportunity Attacks). Player choice mechanism later.
 
-    def check_all_costs(self, entity: Entity) -> bool: ...
-    def apply_all_costs(self, entity: Entity) -> None: ...
-```
+2. **Dice rerolling**: Use EventHandler on new `DAMAGE_ROLLED` event type between roll and apply.
 
-**File**: `dnd/actions.py`
+3. **Critical threshold**: `crit_range = 20 - crit_threshold_modifier` where modifier defaults to 0.
 
-```python
-# Set target_type on each action class
-class Attack(BaseAction):
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+4. **Extra Attack**: Use `HasAttacked` marker condition + separate `ExtraAttack` action + resource.
 
-class Move(BaseAction):
-    target_type: TargetType = Field(default=TargetType.POSITION)
+### Event Handler Constraint
 
-class Dash(BaseAction):
-    target_type: TargetType = Field(default=TargetType.SELF)
-# etc.
-```
+**IMPORTANT**: Handlers can only respond BEFORE the COMPLETION phase.
 
-#### Step 0.3: Action Registry on Entity
+Once an event reaches COMPLETION, it cannot be modified or spawn sub-events.
+Reactions must trigger on DECLARATION, EXECUTION, or EFFECT phases.
 
-**File**: `dnd/entity.py`
+---
 
-```python
-# Add RegisteredAction model
-class RegisteredAction(BaseModel):
-    action_id: str
-    action_class: Type[BaseAction]
-    config: Dict[str, Any] = Field(default_factory=dict)
-
-# Add to Entity class
-class Entity(BaseBlock):
-    registered_actions: Dict[str, RegisteredAction] = Field(default_factory=dict)
-
-    def register_action(self, action_id, action_class, config=None): ...
-    def unregister_action(self, action_id): ...
-    def get_registered_action(self, action_id): ...
-    def get_potential_targets(self, target_type, config): ...
-    def create_action_instance(self, registered, target): ...
-    def execute_action(self, action_id, target=None): ...
-```
-
-**File**: `dnd/default_actions.py` (new)
-
-```python
-def register_default_actions(entity: Entity) -> None:
-    """Register Move, Dash, Dodge, Disengage."""
-
-def register_weapon_attacks(entity: Entity) -> None:
-    """Register attack actions from equipped weapons."""
-```
-
-#### Step 0.4: Refactor available_actions.py
-
-**File**: `dnd/available_actions.py`
-
-- Iterate `entity.registered_actions` instead of hardcoded functions
-- Use `entity.get_potential_targets()` to get candidates
-- Use `entity.create_action_instance()` + `pre_validate()` to filter valid ones
-- Keep same `AvailableActionsResult` output for backwards compatibility
-
-#### Step 0.5: Server endpoint
-
-**File**: `server/event_server.py`
-
-- Add generic `/action/execute` endpoint that uses `entity.execute_action()`
-- Keep existing endpoints (`/action/attack`, `/action/move`, etc.) as wrappers
-
-### Phase 1: Extend BaseCondition
+### Phase 3: Extend BaseCondition (FUTURE)
 
 **File**: `dnd/core/base_conditions.py`
 
@@ -1133,9 +989,6 @@ class BaseCondition(BaseObject):
         Optional[Event]
     ]: ...
 
-    # UPDATE: apply() stores the new return values
-    def apply(self, declaration_event): ...
-
     # UPDATE: _remove() auto-cleans actions and resources
     def _remove(self, event):
         target = Entity.get(self.target_entity_uuid)
@@ -1143,7 +996,6 @@ class BaseCondition(BaseObject):
             target.unregister_action(action_id)
         for resource_name in self.registered_resource_names:
             target.action_economy.remove_resource(resource_name)
-        # ... existing cleanup ...
 ```
 
 **File**: `dnd/entity.py`
@@ -1152,28 +1004,9 @@ class BaseCondition(BaseObject):
 def get_conditions_by_tag(self, tag: str) -> List[BaseCondition]:
     """Get all active conditions with a specific tag."""
     return [c for c in self.active_conditions.values() if tag in c.tags]
-
-def remove_conditions_by_tag(self, tag: str) -> int:
-    """Remove all conditions with a specific tag."""
-    to_remove = [name for name, c in self.active_conditions.items() if tag in c.tags]
-    for name in to_remove:
-        self.remove_condition(name)
-    return len(to_remove)
 ```
 
-**File**: `dnd/conditions.py` - Update existing conditions
-
-All existing conditions need their `_apply()` return updated to include empty lists for action_ids and resource_names:
-
-```python
-# Before:
-return outs, [], [], effect_event
-
-# After:
-return outs, [], [], [], [], effect_event
-```
-
-### Phase 2: Implement Fighting Styles
+### Phase 4: Implement Fighting Styles (FUTURE)
 
 **File**: `dnd/classes/fighter.py`
 
@@ -1274,9 +1107,9 @@ class FightingStyleDueling(BaseCondition):
         return outs, [], [], effect_event
 ```
 
-### Phase 3: Implement Second Wind
+### Phase 5: Implement Second Wind (FUTURE)
 
-**Resource Tracking**: Add a `uses` field to track limited-use abilities.
+**Resource Tracking**: Uses the resource system from Phase 1.
 
 ```python
 class SecondWind(BaseCondition):
@@ -1434,25 +1267,28 @@ This is separate from the condition system since proficiencies are binary (have 
 
 ## Files to Create/Modify
 
-| File | Changes |
-|------|---------|
-| **Phase 0: Resource System + Action Registry** |  |
-| `dnd/blocks/action_economy.py` | Add `RechargeType` enum, `Resource` model, extend `ActionEconomy` with `resources` dict, add resource methods, rest triggers |
-| `dnd/core/base_actions.py` | Add `TargetType` enum, `ActionCost` model, add `target_type` + `costs` to `BaseAction`, add `check_all_costs()`, `apply_all_costs()` |
-| `dnd/actions.py` | Set `target_type` on `Attack`, `Move`, `Dash`, `Dodge`, `Disengage`; update costs to use `ActionCost` |
-| `dnd/entity.py` | Add `RegisteredAction` model, add `registered_actions` dict, add `register_action()`, `unregister_action()`, `get_registered_action()`, add target-finding methods, add `create_action_instance()`, `execute_action()` |
-| `dnd/default_actions.py` | **NEW** - `register_default_actions()`, `register_weapon_attacks()` |
-| `dnd/available_actions.py` | Refactor to iterate registry, use `pre_validate()` per target |
-| `server/event_server.py` | Add generic `/action/execute` endpoint |
-| **Phase 1: Extend BaseCondition** |  |
-| `dnd/core/base_conditions.py` | Add `tags`, `registered_action_ids`, `registered_resource_names` fields; update `_apply()` return signature (add 2 lists); update `apply()` to store new values; update `_remove()` for auto-cleanup |
-| `dnd/conditions.py` | Update all existing conditions' `_apply()` to return 6-tuple (add empty `[], []` for actions/resources) |
-| `dnd/entity.py` | Add `get_conditions_by_tag()`, `remove_conditions_by_tag()` |
-| **Phase 2: Rest System Integration** |  |
-| `dnd/entity.py` | Add `short_rest()`, `long_rest()` methods that trigger `action_economy.on_short_rest()`, etc. |
-| **Phase 3-4: Fighter Class** |  |
-| `dnd/classes/__init__.py` | **NEW** - Module init |
-| `dnd/classes/fighter.py` | **NEW** - Fighting styles, `SecondWind` condition, `SecondWindAction`, `apply_fighter_level_1()` |
+| File | Changes | Status |
+|------|---------|--------|
+| **Phase 0: Action Registry (COMPLETE)** |  |  |
+| `dnd/core/base_actions.py` | `TargetType` enum, template system, `AvailableActionsResult` | ✅ DONE |
+| `dnd/actions.py` | `target_type` on all actions | ✅ DONE |
+| `dnd/entity.py` | `action_templates` dict, `register_action()`, `get_available_actions()` | ✅ DONE |
+| `dnd/actions_functional.py` | `setup_standard_actions()`, `execute_action()`, `execute_by_index()` | ✅ DONE |
+| `server/event_server.py` | `/action/execute` endpoint | ✅ DONE |
+| **Phase 1: Resource System (IN PROGRESS)** |  |  |
+| `dnd/blocks/action_economy.py` | `RechargeType` enum, `Resource` model, resource methods, rest triggers | 🔨 TODO |
+| `dnd/core/base_actions.py` | Add `resource_name`, `resource_cost` to `BaseCost` | 🔨 TODO |
+| `dnd/actions.py` | Update cost applier to handle resource costs | 🔨 TODO |
+| **Phase 2: SecondWind (Proof of Concept)** |  |  |
+| `dnd/actions.py` | Add `SecondWind` action class | 🔨 TODO |
+| `examples/test_second_wind.py` | Test script | 🔨 TODO |
+| **Phase 3: Extend BaseCondition (FUTURE)** |  |  |
+| `dnd/core/base_conditions.py` | Add `tags`, `registered_action_ids`, `registered_resource_names`; update `_apply()` return | ❌ TODO |
+| `dnd/conditions.py` | Update all conditions' `_apply()` to return 6-tuple | ❌ TODO |
+| `dnd/entity.py` | Add `get_conditions_by_tag()` | ❌ TODO |
+| **Phase 4-5: Fighter Class (FUTURE)** |  |  |
+| `dnd/classes/__init__.py` | **NEW** - Module init | ❌ TODO |
+| `dnd/classes/fighter.py` | **NEW** - Fighting styles, SecondWind condition | ❌ TODO |
 | `dnd/blocks/health.py` | (Future) Add `source_tag` to HitDice for multiclass support |
 
 ---
