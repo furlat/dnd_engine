@@ -617,6 +617,99 @@ else:
     pass
 ```
 
+## Action System (Template-Based)
+
+The action system uses **templates** registered on entities. Templates are `BaseAction` instances with `template=True` that can be validated and instantiated with targets.
+
+### Architecture
+
+```
+Entity
+├── action_templates: Dict[str, BaseAction]  # Registered action templates
+├── get_available_actions() → AvailableActionsResult
+│   ├── entity_actions: List[AvailableActionInfo]   # Attacks
+│   ├── position_actions: List[AvailableActionInfo] # Move
+│   └── self_actions: List[AvailableActionInfo]     # Dash, Dodge, etc.
+└── Methods: register_action(), unregister_action(), get_action_template()
+
+Functional API (dnd/actions_functional.py)
+├── setup_standard_actions(entity)      # Registers Move, Dash, Dodge, Disengage, attacks
+├── get_available_actions(entity)       # Wrapper for entity.get_available_actions()
+├── execute_action(entity, name, target)
+└── execute_by_index(entity, name, idx)
+
+Server Endpoints
+├── GET /entity/{uuid}/available-actions
+└── POST /action/execute  # Takes template_name + target_index + session_id
+```
+
+### Entity Action Methods
+
+| Method | Purpose |
+|--------|---------|
+| `register_action(action)` | Register an action template (action.template must be True) |
+| `unregister_action(name)` | Remove a template by name |
+| `get_action_template(name)` | Get template by name |
+| `get_available_actions()` | Returns AvailableActionsResult with all valid actions |
+
+### Functional API (dnd/actions_functional.py)
+
+| Function | Purpose |
+|----------|---------|
+| `setup_standard_actions(entity)` | Register Move, Dash, Dodge, Disengage + weapon attacks |
+| `get_available_actions(entity)` | Query available actions (wrapper) |
+| `execute_action(entity, name, target)` | Execute with specific target |
+| `execute_by_index(entity, name, idx)` | Execute by target index from valid_targets |
+
+### Template Pattern
+
+```python
+# Create template (doesn't execute, just registers)
+attack_template = Attack(
+    source_entity_uuid=entity.uuid,
+    weapon_slot=WeaponSlot.MELEE_MAIN,
+    template=True  # Marks this as a template
+)
+entity.register_action(attack_template)
+
+# Query available actions (validates each possible target)
+result = entity.get_available_actions()
+# result.entity_actions contains attacks with valid_targets list
+
+# Execute by index (from valid_targets)
+event = execute_by_index(entity, "Attack_MELEE_MAIN", target_index=0)
+```
+
+### Server Execution Flow
+
+1. Client calls `GET /entity/{uuid}/available-actions`
+2. Returns `AvailableActionsResult` with indexed targets
+3. Client calls `POST /action/execute` with:
+   - `session_id`: Player session
+   - `entity_uuid`: Acting entity
+   - `template_name`: e.g., "Attack_MELEE_MAIN"
+   - `target_index`: Index from valid_targets
+4. Server validates session authority, finds target, executes action
+
+### AvailableActionsResult Structure
+
+```python
+class AvailableActionsResult(BaseModel):
+    entity_uuid: UUID
+    entity_actions: List[AvailableActionInfo]    # Attacks
+    position_actions: List[AvailableActionInfo]  # Move
+    self_actions: List[AvailableActionInfo]      # Dash, Dodge, etc.
+    remaining_movement: int
+
+class AvailableActionInfo(BaseModel):
+    template_name: str              # For execution
+    target_type: TargetType         # SELF, ENTITY, POSITION
+    valid_targets: List[AvailableTarget]  # Indexed targets
+    can_afford: bool                # Can afford costs?
+    display_name: str               # Human-readable
+    cost_type: CostType             # actions, bonus_actions, etc.
+```
+
 ## Creating Monsters/Entities
 
 ### Factory Function Pattern (`dnd/monsters/bestiary.py`)
@@ -1387,8 +1480,7 @@ Contains high-level architecture documents and implementation plans created duri
 | `MASTER_SUMMARY.md` | High-level implementation plan for encounter system, lists what exists vs what's needed, proposed new modules |
 | `CODEBASE_ANALYSIS.md` | Deep dive into existing primitives (Entity, Senses, GridMap, Events, Actions), how they integrate |
 | `EXAMPLE_PATTERNS.md` | **IMPORTANT**: Correct patterns for writing examples and tests - read before writing any new example code |
-| `AVAILABLE_ACTIONS_DESIGN.md` | Design document for the available actions query system |
-| `CLASS_SYSTEM_DESIGN.md` | **NEXT FEATURE**: Complete design for class system (Fighter), action registry, resource system, condition extensions |
+| `CLASS_SYSTEM_DESIGN.md` | **NEXT FEATURE**: Complete design for class system (Fighter), resource system, condition extensions (action registry already implemented) |
 | `UI_ARCHITECTURE.md` | Documents the CLI and Server architecture (session-based PvP, combat log, agent CLI) |
 | `FRONTEND_POSTMORTEM.md` | **LESSONS LEARNED** - Post-mortem of failed web UI attempt. Documents what went wrong. Read to understand how NOT to work on this codebase. |
 
@@ -1429,42 +1521,33 @@ The `*_NOTES.md` files compare SRD rules against our implementation, identifying
 - **PvP input handling** fixed for Windows/WSL compatibility
 - **Encounter ending** now refreshes state before showing final screen
 
-## Class System (PLANNED - NOT YET IMPLEMENTED)
+## Class System (PARTIALLY IMPLEMENTED)
 
 **Design Document**: `claude_docs/CLASS_SYSTEM_DESIGN.md`
 
-The class system will model D&D character classes as collections of conditions applied to entities. This is **designed but not yet implemented**.
+The class system models D&D character classes as collections of conditions applied to entities. **Action registry is complete**, resource system is next.
 
-### Key Design Decisions
+### Implementation Status
 
-| Component | Design |
-|-----------|--------|
-| **Classes as conditions** | Class features are conditions with `tags: List[str]` for filtering (e.g., `["class:fighter", "level:1"]`) |
-| **Action registry** | `Entity.registered_actions: Dict[str, RegisteredAction]` - entities can have custom actions |
-| **Resource system** | Extended `ActionEconomy` with `resources: Dict[str, Resource]` for limited-use features (Second Wind, spell slots) |
-| **Unified costs** | `ActionCost` model handles both turn-based (actions/bonus) AND resource-based costs |
-| **Auto-cleanup** | Conditions return `action_ids` and `resource_names` in `_apply()`, base class auto-cleans on removal (like sub-conditions) |
-
-### Condition `_apply()` Return Signature (After Implementation)
-
-```python
-def _apply(self, declaration_event: Event) -> Tuple[
-    List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-    List[UUID],               # event_handler_uuids
-    List[UUID],               # subcondition_uuids
-    List[str],                # registered_action_ids (NEW)
-    List[str],                # registered_resource_names (NEW)
-    Optional[Event]           # completion event
-]:
-```
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Action registry** | ✅ DONE | `Entity.action_templates`, template-based system |
+| **Available actions query** | ✅ DONE | `get_available_actions()`, indexed targets |
+| **Server execution endpoint** | ✅ DONE | `/action/execute` with session auth |
+| **Resource system** | 🔨 IN PROGRESS | `ActionEconomy.resources` with recharge |
+| **Unified costs** | 🔨 IN PROGRESS | `BaseCost.resource_name/resource_cost` |
+| **Condition tags** | ❌ TODO | `tags: List[str]` for filtering |
+| **Auto-cleanup (actions/resources)** | ❌ TODO | Extend `_apply()` return signature |
+| **Rest system** | ❌ TODO | `Entity.short_rest()`, `long_rest()` |
+| **Fighter class** | ❌ TODO | Fighting Styles, Second Wind |
 
 ### Resource System (ActionEconomy Extension)
 
 ```python
 class RechargeType(str, Enum):
-    TURN_START = "turn_start"
     SHORT_REST = "short_rest"
     LONG_REST = "long_rest"
+    TURN_START = "turn_start"
     NEVER = "never"
 
 class Resource(BaseModel):
@@ -1476,38 +1559,48 @@ class Resource(BaseModel):
 # ActionEconomy gets:
 resources: Dict[str, Resource]
 add_resource(), remove_resource(), can_afford_resource(), consume_resource()
-on_short_rest(), on_long_rest(), on_turn_start()
+on_short_rest(), on_long_rest()
+```
+
+### Cost System Extension
+
+```python
+class BaseCost(BaseModel):
+    name: str
+    cost_type: CostType
+    cost: int
+    # NEW: Optional resource cost (can have both turn-based AND resource cost)
+    resource_name: Optional[str] = None
+    resource_cost: int = 0
 ```
 
 ### Example: Second Wind (Fighter Level 1)
 
 ```python
-class SecondWind(BaseCondition):
-    tags: List[str] = ["class:fighter", "level:1", "feature:second_wind"]
+# Register resource
+entity.action_economy.add_resource("second_wind", maximum=1, recharge_type=RechargeType.SHORT_REST)
 
-    def _apply(self, declaration_event):
-        target = Entity.get(self.target_entity_uuid)
+# Register action template
+second_wind = SecondWind(
+    source_entity_uuid=entity.uuid,
+    fighter_level=1,
+    template=True
+)
+entity.register_action(second_wind)
 
-        # Register resource and action - base class will auto-clean on removal
-        target.action_economy.add_resource("second_wind", 1, RechargeType.SHORT_REST)
-        target.register_action("second_wind", SecondWindAction, {"fighter_level": 1})
-
-        return [], [], [], ["second_wind"], ["second_wind"], effect_event
-
-class SecondWindAction(BaseAction):
-    target_type: TargetType = TargetType.SELF
-    costs: List[ActionCost] = [
-        ActionCost(cost_type="bonus_actions", cost_amount=1),
-        ActionCost(resource_name="second_wind", resource_amount=1)
-    ]
+# Action appears in get_available_actions().self_actions
+# Execute via execute_by_index(entity, "Second Wind", 0)
 ```
 
-### Implementation Phases
+### Remaining Implementation Phases
 
-1. **Phase 0**: Resource system + action registry infrastructure
-2. **Phase 1**: Extend BaseCondition (`tags`, `action_ids`, `resource_names` in return)
-3. **Phase 2**: Rest system (`Entity.short_rest()`, `long_rest()`)
-4. **Phase 3**: Fighter class (Fighting Styles, Second Wind)
+1. **Resource system in ActionEconomy** - `RechargeType`, `Resource`, recharge triggers
+2. **BaseCost extension** - `resource_name`, `resource_cost` fields
+3. **SecondWind action** - Proof-of-concept using new system
+4. **Condition tags** - `tags: List[str]` for class/level filtering
+5. **Extended `_apply()` return** - Include `action_ids`, `resource_names`
+6. **Rest system** - `Entity.short_rest()`, `long_rest()`
+7. **Fighter class** - Fighting Styles, SecondWind condition
 
 ---
 
