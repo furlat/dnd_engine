@@ -222,74 +222,94 @@ class APIClient:
             raise ValueError("No session ID - call create_session and join_game first")
         return self._session_id
 
-    def move(self, position: Tuple[int, int], entity_uuid: Optional[str] = None) -> Dict[str, Any]:
-        """Execute a move action."""
+    def execute_action(self, template_name: str, target_index: int = 0,
+                        entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+        """Execute any action by template name and target index.
+
+        This is the unified action execution method that works with all action types:
+        - Move: template_name="Move", target_index=position index from valid_targets
+        - Attack: template_name="Attack_MELEE_MAIN", target_index=target index
+        - Self actions: template_name="Dash"/"Dodge"/"Disengage", target_index=0
+
+        Args:
+            template_name: Action template name (from available_actions)
+            target_index: Index in valid_targets list (default 0 for self actions)
+            entity_uuid: Entity performing action (defaults to current entity)
+        """
         session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
-        resp = self.client.post("/action/move", json={
+        resp = self.client.post("/action/execute", json={
             "session_id": session_id,
             "entity_uuid": uuid,
-            "position": list(position)
+            "template_name": template_name,
+            "target_index": target_index
         })
         resp.raise_for_status()
         return resp.json()
 
-    def attack(self, target_uuid: str, weapon_slot: str = "main_hand",
-               entity_uuid: Optional[str] = None) -> Dict[str, Any]:
-        """Execute an attack action."""
-        session_id = self._require_session()
+    def move(self, position: Tuple[int, int], entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+        """Execute a move action to a position.
+
+        NOTE: This requires finding the target_index for the position from available_actions.
+        For simpler usage, call execute_action() directly with the index.
+        """
+        # Get available actions to find the position index
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
-        resp = self.client.post("/action/attack", json={
-            "session_id": session_id,
-            "entity_uuid": uuid,
-            "target_uuid": target_uuid,
-            "weapon_slot": weapon_slot
-        })
-        resp.raise_for_status()
-        return resp.json()
+
+        actions = self.get_available_actions(uuid)
+        position_actions = actions.get("position_actions", [])
+
+        for action in position_actions:
+            for target in action.get("valid_targets", []):
+                pos = target.get("position")
+                if pos and tuple(pos) == tuple(position):
+                    return self.execute_action(action["template_name"], target["index"], uuid)
+
+        raise ValueError(f"Position {position} not in valid move targets")
+
+    def attack(self, target_uuid: str, weapon_slot: str = "melee_main",
+               entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+        """Execute an attack action against a target.
+
+        Args:
+            target_uuid: UUID of the target entity
+            weapon_slot: Weapon slot (melee_main, melee_off, ranged_main, ranged_off)
+        """
+        uuid = entity_uuid or self._current_entity_uuid
+        if not uuid:
+            raise ValueError("No entity UUID")
+
+        actions = self.get_available_actions(uuid)
+        entity_actions = actions.get("entity_actions", [])
+
+        # Find matching attack action
+        for action in entity_actions:
+            # Match by weapon slot if specified
+            action_slot = action.get("weapon_slot", "").lower()
+            if weapon_slot and action_slot and weapon_slot.lower() != action_slot:
+                continue
+
+            for target in action.get("valid_targets", []):
+                if target.get("target_uuid") == target_uuid:
+                    return self.execute_action(action["template_name"], target["index"], uuid)
+
+        raise ValueError(f"Target {target_uuid} not in valid attack targets")
 
     def dash(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute a dash action."""
-        session_id = self._require_session()
-        uuid = entity_uuid or self._current_entity_uuid
-        if not uuid:
-            raise ValueError("No entity UUID")
-        resp = self.client.post("/action/dash", json={
-            "session_id": session_id,
-            "entity_uuid": uuid
-        })
-        resp.raise_for_status()
-        return resp.json()
+        return self.execute_action("Dash", 0, entity_uuid)
 
     def dodge(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute a dodge action."""
-        session_id = self._require_session()
-        uuid = entity_uuid or self._current_entity_uuid
-        if not uuid:
-            raise ValueError("No entity UUID")
-        resp = self.client.post("/action/dodge", json={
-            "session_id": session_id,
-            "entity_uuid": uuid
-        })
-        resp.raise_for_status()
-        return resp.json()
+        return self.execute_action("Dodge", 0, entity_uuid)
 
     def disengage(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Execute a disengage action."""
-        session_id = self._require_session()
-        uuid = entity_uuid or self._current_entity_uuid
-        if not uuid:
-            raise ValueError("No entity UUID")
-        resp = self.client.post("/action/disengage", json={
-            "session_id": session_id,
-            "entity_uuid": uuid
-        })
-        resp.raise_for_status()
-        return resp.json()
+        return self.execute_action("Disengage", 0, entity_uuid)
 
     def end_turn(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """End the current turn."""

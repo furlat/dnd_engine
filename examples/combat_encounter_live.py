@@ -25,7 +25,7 @@ from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.encounter import Encounter, EncounterState
 from dnd.controller import Controller, TurnContext
-from dnd.available_actions import get_available_actions
+from dnd.actions_functional import get_available_actions
 from dnd.actions import Attack, Move, Dodge
 from dnd.blocks.equipment import WeaponSlot
 from dnd.core.base_actions import BaseAction
@@ -49,7 +49,7 @@ class AggressiveAIController(Controller):
     ) -> Optional[BaseAction]:
         """Pick the next action based on available options."""
 
-        # Get all available actions
+        # Get all available actions using functional API
         available = get_available_actions(entity)
 
         # Debug output
@@ -57,25 +57,25 @@ class AggressiveAIController(Controller):
               f"Movement: {context.movement_remaining}ft")
 
         # Priority 1: Attack if we can
-        for attack in available.attacks:
-            if attack.can_afford and attack.valid_targets:
-                target_uuid = attack.valid_targets[0]  # Pick first target
-                target = Entity.get(target_uuid)
-                target_name = target.name if target else "Unknown"
+        for attack_info in available.entity_actions:
+            if attack_info.can_afford and attack_info.valid_targets:
+                target = attack_info.valid_targets[0]  # Pick first target
+                if target.target_uuid is None:
+                    continue
+                target_entity = Entity.get(target.target_uuid)
+                target_name = target_entity.name if target_entity else "Unknown"
                 print(f"    [{entity.name}] Attacking {target_name}!")
 
-                return Attack(
-                    source_entity_uuid=entity.uuid,
-                    target_entity_uuid=target_uuid,
-                    weapon_slot=attack.weapon_slot or WeaponSlot.MELEE_MAIN,
-                    name=f"{entity.name}'s Attack"
-                )
+                # Use template to create instance
+                template = entity.get_action_template(attack_info.template_name)
+                if template:
+                    return template.instantiate(target_entity_uuid=target.target_uuid)
 
         # Priority 2: Move toward enemy if we can't attack AND have action remaining
         # (Don't waste movement after attacking - stay in position)
         can_still_attack = entity.action_economy.can_afford("actions", 1)
-        if can_still_attack and available.can_move and available.movement:
-            move_action = available.movement[0]  # Get the move action descriptor
+        if can_still_attack and available.position_actions:
+            move_info = available.position_actions[0]  # Get the move action descriptor
 
             # Find closest enemy position we can move to
             closest_pos = None
@@ -96,7 +96,10 @@ class AggressiveAIController(Controller):
                     continue
 
                 # Find valid position closest to this enemy
-                for pos in move_action.valid_positions:
+                for target in move_info.valid_targets:
+                    if target.position is None:
+                        continue
+                    pos = target.position
                     # Manhattan distance to enemy
                     dist = abs(pos[0] - enemy_pos[0]) + abs(pos[1] - enemy_pos[1])
                     if dist < closest_dist and dist < current_min_dist:
@@ -105,11 +108,9 @@ class AggressiveAIController(Controller):
 
             if closest_pos and closest_pos != entity.position:
                 print(f"    [{entity.name}] Moving from {entity.position} to {closest_pos}")
-                return Move(
-                    source_entity_uuid=entity.uuid,
-                    end_position=closest_pos,
-                    name=f"{entity.name}'s Movement"
-                )
+                template = entity.get_action_template(move_info.template_name)
+                if template:
+                    return template.instantiate(end_position=closest_pos)
 
         # Priority 3: If we have action but nothing to attack, Dodge
         can_afford_action = entity.action_economy.can_afford("actions", 1)

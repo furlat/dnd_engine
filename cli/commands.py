@@ -1,22 +1,26 @@
 """
 Command parsing and execution.
+
+This module handles parsing user input into commands and executing them.
+Commands are dynamically validated against available actions rather than
+a hardcoded enum.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 from dataclasses import dataclass
 from enum import Enum
 
 from cli.api_client import APIClient
+from cli.action_model import AvailableActionsState
 from cli import display
 
 
-class CommandType(Enum):
-    MOVE = "move"
-    ATTACK = "attack"
-    DASH = "dash"
-    DODGE = "dodge"
-    DISENGAGE = "disengage"
-    END = "end"
+# =============================================================================
+# Meta Commands (not action-based)
+# =============================================================================
+
+class MetaCommand(Enum):
+    """Meta commands that aren't game actions."""
     STATUS = "status"
     ACTIONS = "actions"
     MAP = "map"
@@ -27,60 +31,105 @@ class CommandType(Enum):
     NEXT_TURN = "nt"
     CURRENT_TURN = "ct"
     FIRST_TURN = "ft"
-    UNKNOWN = "unknown"
+
+
+# Command aliases
+ALIASES: Dict[str, str] = {
+    # Action aliases
+    "m": "move",
+    "a": "attack",
+    "d": "dash",
+    "o": "dodge",
+    "i": "disengage",
+    "e": "end",
+    "su": "standup",
+    # Meta aliases
+    "s": "status",
+    "?": "help",
+    "h": "help",
+    "q": "quit",
+    "exit": "quit",
+    # History navigation
+    "pt": "pt",
+    "nt": "nt",
+    "ct": "ct",
+    "ft": "ft",
+    "prev": "pt",
+    "next": "nt",
+    "current": "ct",
+    "first": "ft",
+}
 
 
 @dataclass
-class Command:
-    """Parsed command."""
-    type: CommandType
-    args: List[str]
-    raw: str
+class ParsedCommand:
+    """A parsed command with type classification."""
+    command: str          # Normalized command name
+    args: List[str]       # Command arguments
+    raw: str              # Original input
+    is_meta: bool = False # True if this is a meta command (not a game action)
+
+    @property
+    def is_action(self) -> bool:
+        """True if this is a game action command."""
+        return not self.is_meta
 
 
-def parse_command(input_str: str) -> Command:
-    """Parse a command string into a Command object."""
+def parse_command(input_str: str, actions: Optional[AvailableActionsState] = None) -> ParsedCommand:
+    """
+    Parse a command string into a ParsedCommand.
+
+    Args:
+        input_str: Raw user input
+        actions: Available actions (for validation, optional)
+
+    Returns:
+        ParsedCommand with normalized command and args
+    """
     parts = input_str.strip().lower().split()
     if not parts:
-        return Command(CommandType.UNKNOWN, [], input_str)
+        return ParsedCommand(command="unknown", args=[], raw=input_str, is_meta=True)
 
     cmd = parts[0]
     args = parts[1:]
 
-    # Command aliases
-    aliases = {
-        "m": "move",
-        "a": "attack",
-        "d": "dash",
-        "o": "dodge",
-        "i": "disengage",
-        "e": "end",
-        "s": "status",
-        "?": "help",
-        "h": "help",
-        "q": "quit",
-        "exit": "quit",
-        # History navigation
-        "pt": "pt",
-        "nt": "nt",
-        "ct": "ct",
-        "ft": "ft",
-        "prev": "pt",
-        "next": "nt",
-        "current": "ct",
-        "first": "ft",
-    }
+    # Apply aliases
+    cmd = ALIASES.get(cmd, cmd)
 
-    cmd = aliases.get(cmd, cmd)
-
-    # Map to CommandType
+    # Check if meta command
+    is_meta = False
     try:
-        cmd_type = CommandType(cmd)
+        MetaCommand(cmd)
+        is_meta = True
     except ValueError:
-        cmd_type = CommandType.UNKNOWN
+        pass
 
-    return Command(cmd_type, args, input_str)
+    return ParsedCommand(command=cmd, args=args, raw=input_str, is_meta=is_meta)
 
+
+def get_valid_commands(actions: Optional[AvailableActionsState] = None) -> Set[str]:
+    """
+    Get set of valid commands based on available actions.
+
+    Args:
+        actions: Available actions state
+
+    Returns:
+        Set of valid command names
+    """
+    # Meta commands are always valid
+    valid: Set[str] = {m.value for m in MetaCommand}
+    valid.add("end")  # End turn is always available
+
+    if actions:
+        valid.update(actions.get_valid_commands())
+
+    return valid
+
+
+# =============================================================================
+# GameState (tracks CLI state)
+# =============================================================================
 
 class GameState:
     """Holds current game state for the CLI."""
@@ -89,16 +138,22 @@ class GameState:
         self.grid: Dict[str, Any] = {}
         self.entities: List[Dict[str, Any]] = []
         self.turn: Dict[str, Any] = {}
-        self.actions: Dict[str, Any] = {}
+        self.actions: Optional[AvailableActionsState] = None
+        self.actions_raw: Dict[str, Any] = {}  # Raw server response for display
         self.combat_log: List[str] = []
         self.visibility: Dict[str, Any] = {}
         self.last_movement_path: Optional[List[Tuple[int, int]]] = None
-        self.valid_move_positions: Optional[List[Tuple[int, int]]] = None  # For showing valid moves
+        self.valid_move_positions: Optional[List[Tuple[int, int]]] = None
 
     def update_from_state(self, state: Dict[str, Any]):
         """Update from /state response."""
         self.grid = state.get("grid", {})
         self.entities = state.get("entities", [])
+
+    def update_actions(self, actions_data: Dict[str, Any]):
+        """Update available actions from server response."""
+        self.actions_raw = actions_data
+        self.actions = AvailableActionsState.from_server(actions_data)
 
     def add_to_log(self, message: str):
         """Add a message to the combat log."""
@@ -113,76 +168,53 @@ class GameState:
         return self.turn.get("current_entity_name", "You")
 
 
-def execute_command(
-    cmd: Command,
+# =============================================================================
+# Command Execution (Meta Commands)
+# =============================================================================
+
+def execute_meta_command(
+    cmd: ParsedCommand,
     client: APIClient,
     state: GameState
 ) -> Optional[str]:
     """
-    Execute a command.
+    Execute a meta command (not a game action).
 
     Returns:
-        Optional message to display, or None if handled internally.
-        Returns "quit" if user wants to quit.
-        Returns "refresh" if display should be refreshed.
+        "quit" - user wants to quit
+        "refresh" - refresh display
+        None - command handled, no refresh needed
     """
     try:
-        if cmd.type == CommandType.QUIT:
+        if cmd.command == MetaCommand.QUIT.value:
             return "quit"
 
-        elif cmd.type == CommandType.HELP:
+        elif cmd.command == MetaCommand.HELP.value:
             display.show_help()
             return None
 
-        elif cmd.type == CommandType.STATUS:
+        elif cmd.command == MetaCommand.STATUS.value:
             display.show_turn_info(state.turn, state.entities)
             return None
 
-        elif cmd.type == CommandType.ACTIONS:
-            display.show_available_actions(state.actions, state.entities)
+        elif cmd.command == MetaCommand.ACTIONS.value:
+            display.show_available_actions(state.actions_raw, state.entities)
             return None
 
-        elif cmd.type == CommandType.MAP:
+        elif cmd.command == MetaCommand.MAP.value:
             return "refresh"
-
-        elif cmd.type == CommandType.MOVE:
-            return handle_move(cmd, client, state)
-
-        elif cmd.type == CommandType.ATTACK:
-            return handle_attack(cmd, client, state)
-
-        elif cmd.type == CommandType.DASH:
-            result = client.dash()
-            display.show_action_result(result, state.player_entity_name)
-            state.add_to_log(f"{state.player_entity_name} dashes! Movement doubled.")
-            return "refresh"
-
-        elif cmd.type == CommandType.DODGE:
-            result = client.dodge()
-            display.show_action_result(result, state.player_entity_name)
-            state.add_to_log(f"{state.player_entity_name} takes the Dodge action.")
-            return "refresh"
-
-        elif cmd.type == CommandType.DISENGAGE:
-            result = client.disengage()
-            display.show_action_result(result, state.player_entity_name)
-            state.add_to_log(f"{state.player_entity_name} disengages.")
-            return "refresh"
-
-        elif cmd.type == CommandType.END:
-            return handle_end_turn(client, state)
 
         # History navigation
-        elif cmd.type == CommandType.PREV_TURN:
+        elif cmd.command == MetaCommand.PREV_TURN.value:
             return handle_history_prev(state)
 
-        elif cmd.type == CommandType.NEXT_TURN:
+        elif cmd.command == MetaCommand.NEXT_TURN.value:
             return handle_history_next(state)
 
-        elif cmd.type == CommandType.CURRENT_TURN:
+        elif cmd.command == MetaCommand.CURRENT_TURN.value:
             return handle_history_current()
 
-        elif cmd.type == CommandType.FIRST_TURN:
+        elif cmd.command == MetaCommand.FIRST_TURN.value:
             return handle_history_first(state)
 
         else:
@@ -197,17 +229,83 @@ def execute_command(
         return "refresh"
 
 
-def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[str]:
+# =============================================================================
+# Legacy Command Execution (for backward compatibility)
+# =============================================================================
+
+def execute_command(
+    cmd: ParsedCommand,
+    client: APIClient,
+    state: GameState
+) -> Optional[str]:
+    """
+    Execute a command (legacy interface).
+
+    This handles meta commands and delegates action commands to the caller.
+    For a fully unified experience, use ActionExecutor for actions.
+
+    Returns:
+        "quit" - user wants to quit
+        "refresh" - refresh display
+        "encounter_ended" - encounter has ended
+        None - command handled, no refresh needed
+    """
+    if cmd.is_meta:
+        return execute_meta_command(cmd, client, state)
+
+    # Action commands - for legacy compatibility, handle basic ones here
+    try:
+        if cmd.command == "move":
+            return handle_move(cmd, client, state)
+        elif cmd.command == "attack":
+            return handle_attack(cmd, client, state)
+        elif cmd.command == "dash":
+            result = client.dash()
+            display.show_action_result(result, state.player_entity_name)
+            state.add_to_log(f"{state.player_entity_name} dashes! Movement doubled.")
+            return "refresh"
+        elif cmd.command == "dodge":
+            result = client.dodge()
+            display.show_action_result(result, state.player_entity_name)
+            state.add_to_log(f"{state.player_entity_name} takes the Dodge action.")
+            return "refresh"
+        elif cmd.command == "disengage":
+            result = client.disengage()
+            display.show_action_result(result, state.player_entity_name)
+            state.add_to_log(f"{state.player_entity_name} disengages.")
+            return "refresh"
+        elif cmd.command == "end":
+            return handle_end_turn(client, state)
+        else:
+            display.set_output([
+                f"Unknown command: {cmd.raw}",
+                "Type '?' for help"
+            ])
+            return "refresh"
+
+    except Exception as e:
+        display.set_output([f"Error: {str(e)}"])
+        return "refresh"
+
+
+# =============================================================================
+# Action Handlers (legacy, will be replaced by ActionExecutor)
+# =============================================================================
+
+def handle_move(cmd: ParsedCommand, client: APIClient, state: GameState) -> Optional[str]:
     """Handle move command."""
     if len(cmd.args) < 2:
-        # Show valid positions - store them for next render and show in output
-        movement = state.actions.get("movement", [])
+        # Show valid positions
+        movement = state.actions_raw.get("position_actions", [])
         if movement:
-            valid_pos = movement[0].get("valid_positions", [])
-            valid_tuples = [tuple(p) for p in valid_pos]
-            # Store valid positions for map display
-            state.valid_move_positions = valid_tuples
-            remaining = state.actions.get('remaining_movement', 0)
+            valid_pos = []
+            for m in movement:
+                for t in m.get("valid_targets", []):
+                    pos = t.get("position")
+                    if pos:
+                        valid_pos.append(tuple(pos))
+            state.valid_move_positions = valid_pos
+            remaining = state.actions_raw.get('remaining_movement', 0)
             display.set_output([
                 f"Valid move positions shown on map (*)",
                 f"Movement remaining: {remaining}ft",
@@ -215,7 +313,7 @@ def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[s
             ])
         else:
             display.set_output(["No movement available."])
-        return "refresh"  # Refresh to show valid positions on map
+        return "refresh"
 
     try:
         x = int(cmd.args[0])
@@ -224,93 +322,72 @@ def handle_move(cmd: Command, client: APIClient, state: GameState) -> Optional[s
         display.set_output(["Invalid position. Usage: m X Y"])
         return "refresh"
 
-    # Check if position is valid
-    movement = state.actions.get("movement", [])
-    if movement:
-        valid_pos = movement[0].get("valid_positions", [])
-        if [x, y] not in valid_pos and (x, y) not in [tuple(p) for p in valid_pos]:
-            display.set_output([
-                f"Position ({x}, {y}) is not reachable.",
-                "Type 'm' to see valid positions."
-            ])
-            return "refresh"
+    # Find position in valid targets and execute
+    position = (x, y)
+    if state.actions:
+        for move_action in state.actions.movement:
+            for target in move_action.valid_targets:
+                if target.position == position:
+                    result = client.execute_action(move_action.template_name, target.index)
+                    display.show_action_result(result, state.player_entity_name)
+                    state.add_to_log(f"{state.player_entity_name} moves to ({x}, {y}).")
 
-    result = client.move((x, y))
-    display.show_action_result(result, state.player_entity_name)
-    state.add_to_log(f"{state.player_entity_name} moves to ({x}, {y}).")
+                    # Store path for display
+                    event_data = result.get("event_data", {})
+                    path = event_data.get("path", [])
+                    if path:
+                        state.last_movement_path = [tuple(p) for p in path]
+                    else:
+                        state.last_movement_path = None
 
-    # Store the path for display on next render
-    event_data = result.get("event_data", {})
-    path = event_data.get("path", [])
-    if path:
-        state.last_movement_path = [tuple(p) for p in path]
-    else:
-        state.last_movement_path = None
+                    # Handle opportunity attacks
+                    triggered = result.get("triggered_reactions", [])
+                    for reaction in triggered:
+                        if reaction.get("type") == "opportunity_attack":
+                            _log_opportunity_attack(reaction, state)
 
-    # Log any opportunity attacks that were triggered
-    triggered = result.get("triggered_reactions", [])
-    for reaction in triggered:
-        if reaction.get("type") == "opportunity_attack":
-            attacker = reaction.get("attacker", "Unknown")
-            opp_weapon = reaction.get("weapon", "weapon")
-            outcome = (reaction.get("outcome") or "miss").lower()
-            total_damage = reaction.get("total_damage", 0)
-            d20 = reaction.get("d20", "?")
-            all_d20_rolls = reaction.get("all_d20_rolls", [])
-            advantage_status = reaction.get("advantage_status", "none")
-            attack_bonus = reaction.get("attack_bonus", 0)
-            attack_total = reaction.get("attack_total", "?")
-            target_ac = reaction.get("target_ac", "?")
+                    if result.get("encounter_ended"):
+                        return "encounter_ended"
+                    return "refresh"
 
-            # Format roll display with advantage info
-            if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
-                roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
-            elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
-                roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
-            else:
-                roll_str = f"d20({d20})+{attack_bonus}={attack_total}"
-
-            if outcome == "crit":
-                state.add_to_log(f"(OA) {attacker} CRIT with {opp_weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you!")
-            elif outcome == "hit":
-                state.add_to_log(f"(OA) {attacker} hit with {opp_weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you")
-            else:
-                state.add_to_log(f"(OA) {attacker} missed with {opp_weapon} {roll_str} vs AC {target_ac}")
-
-    if result.get("encounter_ended"):
-        return "encounter_ended"
+    display.set_output([
+        f"Position ({x}, {y}) is not reachable.",
+        "Type 'm' to see valid positions."
+    ])
     return "refresh"
 
 
-def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional[str]:
+def handle_attack(cmd: ParsedCommand, client: APIClient, state: GameState) -> Optional[str]:
     """Handle attack command."""
-    attacks = state.actions.get("attacks", [])
-    # Filter by both valid_targets AND can_afford to match display numbering
-    valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
+    if not state.actions:
+        display.set_output(["No actions available."])
+        return "refresh"
 
-    if not valid_attacks:
+    attacks = state.actions.affordable_attacks
+    if not attacks:
         display.set_output(["No targets in range."])
         return "refresh"
 
     if len(cmd.args) < 1:
-        # Show attack options directly to console (not output buffer, which gets cleared)
+        # Show attack options
         entity_lookup = {e["uuid"]: e for e in state.entities}
         display.console.print("\n[bold]Attack targets:[/bold]")
         target_num = 1
-        for atk in valid_attacks:
-            # Show cost type (action vs bonus action for two-weapon fighting)
-            cost_type = atk.get("cost_type", "actions")
-            cost_label = "[magenta]BONUS[/magenta]" if cost_type == "bonus_actions" else "[cyan]ACTION[/cyan]"
-
-            for t_uuid in atk.get("valid_targets", []):
-                target = entity_lookup.get(t_uuid, {})
+        for atk in attacks:
+            cost_label = "[magenta]BONUS[/magenta]" if atk.is_bonus_action else "[cyan]ACTION[/cyan]"
+            for target in atk.valid_targets:
+                target_entity = entity_lookup.get(target.target_uuid, {})
+                target_name = target.target_name or target_entity.get("name", "Unknown")
+                hp = target_entity.get("hp", "?")
+                max_hp = target_entity.get("max_hp", "?")
+                weapon_name = atk.weapon_name or atk.display_name
                 display.console.print(
-                    f"  [{target_num}] {cost_label} {atk['name']} → [yellow]{target.get('name', 'Unknown')}[/yellow] "
-                    f"(HP: {target.get('hp', '?')}/{target.get('max_hp', '?')})"
+                    f"  [{target_num}] {cost_label} {weapon_name} → [yellow]{target_name}[/yellow] "
+                    f"(HP: {hp}/{max_hp})"
                 )
                 target_num += 1
         display.console.print("[dim]Usage: a N (attack target number N)[/dim]")
-        return None  # Don't redraw, let user see the options
+        return None
 
     try:
         target_num = int(cmd.args[0])
@@ -318,59 +395,28 @@ def handle_attack(cmd: Command, client: APIClient, state: GameState) -> Optional
         display.set_output(["Invalid target number. Usage: a N"])
         return "refresh"
 
-    # Find target (simple: just use first attack with targets, pick by index)
-    all_targets = []
-    for atk in valid_attacks:
-        for t_uuid in atk.get("valid_targets", []):
-            all_targets.append((atk, t_uuid))
-
-    if target_num < 1 or target_num > len(all_targets):
-        display.set_output([f"Invalid target. Choose 1-{len(all_targets)}."])
+    result = state.actions.get_attack_target(target_num)
+    if not result:
+        total = state.actions.get_total_attack_count()
+        display.set_output([f"Invalid target. Choose 1-{total}."])
         return "refresh"
 
-    attack_info, target_uuid = all_targets[target_num - 1]
-    # API returns uppercase enum value like "MELEE_MAIN", "RANGED_MAIN", etc.
-    # Pass through directly (lowercased) - server handles both old and new names
-    weapon_slot = (attack_info.get("weapon_slot") or "melee_main").lower()
-    weapon_name = attack_info.get("name", "weapon")
+    attack_action, target = result
+    weapon_name = attack_action.weapon_name or attack_action.display_name
 
-    # Get target name for log
+    # Get target name for logging
     entity_lookup = {e["uuid"]: e for e in state.entities}
-    target = entity_lookup.get(target_uuid, {})
-    target_name = target.get("name", "Unknown")
+    target_entity = entity_lookup.get(target.target_uuid, {})
+    target_name = target.target_name or target_entity.get("name", "Unknown")
 
-    result = client.attack(target_uuid, weapon_slot)
-    display.show_action_result(result, state.player_entity_name)
+    # Execute using template name and target index directly
+    api_result = client.execute_action(attack_action.template_name, target.index)
+    display.show_action_result(api_result, state.player_entity_name)
 
-    # Add to combat log with detailed info
-    event_data = result.get("event_data", {})
-    outcome = (event_data.get("outcome") or "miss").lower()
-    total_damage = event_data.get("total_damage", 0)
-    d20 = event_data.get("d20", "?")
-    all_d20_rolls = event_data.get("all_d20_rolls", [])
-    advantage_status = event_data.get("advantage_status", "none")
-    attack_bonus = event_data.get("attack_bonus", 0)
-    attack_total = event_data.get("attack_total", "?")
-    target_ac = event_data.get("target_ac", "?")
+    # Log the attack
+    _log_attack(api_result, weapon_name, target_name, state)
 
-    # Format roll display with advantage info
-    if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
-        roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
-    elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
-        roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
-    else:
-        roll_str = f"d20({d20})+{attack_bonus}={attack_total}"
-
-    if outcome == "crit":
-        state.add_to_log(f"CRIT with {weapon_name}! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}!")
-    elif outcome == "hit":
-        state.add_to_log(f"Hit with {weapon_name}! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}")
-    elif outcome == "crit miss":
-        state.add_to_log(f"Critical miss with {weapon_name} vs {target_name}!")
-    else:
-        state.add_to_log(f"Miss with {weapon_name} vs {target_name} {roll_str} vs AC {target_ac}")
-
-    if result.get("encounter_ended"):
+    if api_result.get("encounter_ended"):
         return "encounter_ended"
     return "refresh"
 
@@ -384,47 +430,8 @@ def handle_end_turn(client: APIClient, state: GameState) -> Optional[str]:
     ai_actions = result.get("ai_actions", [])
     if ai_actions:
         display.show_ai_actions(ai_actions)
-        # Add to combat log with detailed info
         for action in ai_actions:
-            action_type = action.get("type", "")
-            if action_type == "attack":
-                attacker = action.get("attacker", "Unknown")
-                target_name = action.get("target", "Unknown")
-                ai_weapon = action.get("weapon", "weapon")
-                outcome = (action.get("outcome") or "miss").lower()
-                total_damage = action.get("total_damage", 0)
-                d20 = action.get("d20", "?")
-                all_d20_rolls = action.get("all_d20_rolls", [])
-                advantage_status = action.get("advantage_status", "none")
-                attack_bonus = action.get("attack_bonus", 0)
-                attack_total = action.get("attack_total", "?")
-                target_ac = action.get("target_ac", "?")
-                is_opp = action.get("is_opportunity_attack", False)
-                opp_text = "(OA) " if is_opp else ""
-
-                # Format roll display with advantage info
-                if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
-                    roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
-                elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
-                    roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
-                else:
-                    roll_str = f"d20({d20})+{attack_bonus}={attack_total}"
-
-                if outcome == "crit":
-                    state.add_to_log(f"{opp_text}{attacker} CRIT with {ai_weapon}! {roll_str} vs AC {target_ac} → {total_damage} dmg!")
-                elif outcome == "hit":
-                    state.add_to_log(f"{opp_text}{attacker} hit with {ai_weapon}! {roll_str} vs AC {target_ac} → {total_damage} dmg")
-                else:
-                    state.add_to_log(f"{opp_text}{attacker} missed with {ai_weapon} vs {target_name} {roll_str} vs AC {target_ac}")
-            elif action_type == "move":
-                entity = action.get("entity", "Unknown")
-                from_pos = action.get("from", [0, 0])
-                to_pos = action.get("to", [0, 0])
-                path = action.get("path", [])
-                state.add_to_log(f"{entity} moves {tuple(from_pos)} → {tuple(to_pos)}")
-                # Store the path for display (last AI move wins if multiple)
-                if path:
-                    state.last_movement_path = [tuple(p) for p in path]
+            _log_ai_action(action, state)
 
     status = result.get("status")
     if status == "encounter_ended":
@@ -438,16 +445,16 @@ def handle_end_turn(client: APIClient, state: GameState) -> Optional[str]:
         return "refresh"
 
 
-# ============================================================================
+# =============================================================================
 # History Navigation
-# ============================================================================
+# =============================================================================
 
 def handle_history_prev(state: GameState) -> Optional[str]:
     """Go to previous turn in history."""
     snapshot = display.goto_previous_turn()
     if snapshot:
         display.render_history_snapshot(snapshot)
-        return None  # Don't refresh - we're showing history
+        return None
     else:
         display.show_info("No earlier history available.")
         return None
@@ -460,9 +467,8 @@ def handle_history_next(state: GameState) -> Optional[str]:
         display.render_history_snapshot(snapshot)
         return None
     else:
-        # Returned to current
         display.goto_current_turn()
-        return "refresh"  # Go back to live view
+        return "refresh"
 
 
 def handle_history_current() -> Optional[str]:
@@ -480,3 +486,142 @@ def handle_history_first(state: GameState) -> Optional[str]:
     else:
         display.show_info("No history available.")
         return None
+
+
+# =============================================================================
+# Logging Helpers
+# =============================================================================
+
+def _log_opportunity_attack(reaction: Dict[str, Any], state: GameState):
+    """Log an opportunity attack to combat log."""
+    attacker = reaction.get("attacker", "Unknown")
+    weapon = reaction.get("weapon", "weapon")
+    outcome = (reaction.get("outcome") or "miss").lower()
+    total_damage = reaction.get("total_damage", 0)
+    d20 = reaction.get("d20", "?")
+    all_d20_rolls = reaction.get("all_d20_rolls", [])
+    advantage_status = reaction.get("advantage_status", "none")
+    attack_bonus = reaction.get("attack_bonus", 0)
+    attack_total = reaction.get("attack_total", "?")
+    target_ac = reaction.get("target_ac", "?")
+
+    roll_str = _format_roll_string(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total)
+
+    if outcome == "crit":
+        state.add_to_log(f"(OA) {attacker} CRIT with {weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you!")
+    elif outcome == "hit":
+        state.add_to_log(f"(OA) {attacker} hit with {weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you")
+    else:
+        state.add_to_log(f"(OA) {attacker} missed with {weapon} {roll_str} vs AC {target_ac}")
+
+
+def _log_attack(result: Dict[str, Any], weapon_name: str, target_name: str, state: GameState):
+    """Log a player attack to combat log."""
+    event_data = result.get("event_data", {})
+    outcome = (event_data.get("outcome") or "miss").lower()
+    total_damage = event_data.get("total_damage", 0)
+    d20 = event_data.get("d20", "?")
+    all_d20_rolls = event_data.get("all_d20_rolls", [])
+    advantage_status = event_data.get("advantage_status", "none")
+    attack_bonus = event_data.get("attack_bonus", 0)
+    attack_total = event_data.get("attack_total", "?")
+    target_ac = event_data.get("target_ac", "?")
+
+    roll_str = _format_roll_string(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total)
+
+    if outcome == "crit":
+        state.add_to_log(f"CRIT with {weapon_name}! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}!")
+    elif outcome == "hit":
+        state.add_to_log(f"Hit with {weapon_name}! {roll_str} vs AC {target_ac} → {total_damage} dmg to {target_name}")
+    elif outcome == "crit miss":
+        state.add_to_log(f"Critical miss with {weapon_name} vs {target_name}!")
+    else:
+        state.add_to_log(f"Miss with {weapon_name} vs {target_name} {roll_str} vs AC {target_ac}")
+
+
+def _log_ai_action(action: Dict[str, Any], state: GameState):
+    """Log an AI action to combat log."""
+    action_type = action.get("type", "")
+    if action_type == "attack":
+        attacker = action.get("attacker", "Unknown")
+        target_name = action.get("target", "Unknown")
+        weapon = action.get("weapon", "weapon")
+        outcome = (action.get("outcome") or "miss").lower()
+        total_damage = action.get("total_damage", 0)
+        d20 = action.get("d20", "?")
+        all_d20_rolls = action.get("all_d20_rolls", [])
+        advantage_status = action.get("advantage_status", "none")
+        attack_bonus = action.get("attack_bonus", 0)
+        attack_total = action.get("attack_total", "?")
+        target_ac = action.get("target_ac", "?")
+        is_opp = action.get("is_opportunity_attack", False)
+        opp_text = "(OA) " if is_opp else ""
+
+        roll_str = _format_roll_string(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total)
+
+        if outcome == "crit":
+            state.add_to_log(f"{opp_text}{attacker} CRIT with {weapon}! {roll_str} vs AC {target_ac} → {total_damage} dmg!")
+        elif outcome == "hit":
+            state.add_to_log(f"{opp_text}{attacker} hit with {weapon}! {roll_str} vs AC {target_ac} → {total_damage} dmg")
+        else:
+            state.add_to_log(f"{opp_text}{attacker} missed with {weapon} vs {target_name} {roll_str} vs AC {target_ac}")
+    elif action_type == "move":
+        entity = action.get("entity", "Unknown")
+        from_pos = action.get("from", [0, 0])
+        to_pos = action.get("to", [0, 0])
+        path = action.get("path", [])
+        state.add_to_log(f"{entity} moves {tuple(from_pos)} → {tuple(to_pos)}")
+        if path:
+            state.last_movement_path = [tuple(p) for p in path]
+
+
+def _format_roll_string(d20: Any, all_d20_rolls: List[Any], advantage_status: str, attack_bonus: int, attack_total: Any) -> str:
+    """Format a roll string with advantage/disadvantage info."""
+    if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
+        return f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
+    elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
+        return f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20})+{attack_bonus}={attack_total}"
+    else:
+        return f"d20({d20})+{attack_bonus}={attack_total}"
+
+
+# =============================================================================
+# Backward Compatibility (CommandType enum)
+# =============================================================================
+
+class CommandType(Enum):
+    """Legacy command types for backward compatibility."""
+    MOVE = "move"
+    ATTACK = "attack"
+    DASH = "dash"
+    DODGE = "dodge"
+    DISENGAGE = "disengage"
+    END = "end"
+    STATUS = "status"
+    ACTIONS = "actions"
+    MAP = "map"
+    HELP = "help"
+    QUIT = "quit"
+    PREV_TURN = "pt"
+    NEXT_TURN = "nt"
+    CURRENT_TURN = "ct"
+    FIRST_TURN = "ft"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class Command:
+    """Legacy command structure for backward compatibility."""
+    type: CommandType
+    args: List[str]
+    raw: str
+
+
+def parse_command_legacy(input_str: str) -> Command:
+    """Parse command (legacy interface)."""
+    parsed = parse_command(input_str)
+    try:
+        cmd_type = CommandType(parsed.command)
+    except ValueError:
+        cmd_type = CommandType.UNKNOWN
+    return Command(type=cmd_type, args=parsed.args, raw=parsed.raw)

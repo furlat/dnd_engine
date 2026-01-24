@@ -695,14 +695,16 @@ def render_available_actions_panel(
     movement_remaining = actions.get("remaining_movement", 0)
     reactions_remaining = turn.get("reactions_remaining", 0)
 
-    # Movement
-    if actions.get("can_move") and movement_remaining > 0:
+    # Movement - new format uses position_actions, old uses can_move
+    has_movement = actions.get("position_actions") or actions.get("can_move")
+    if has_movement and movement_remaining > 0:
         content.append("MOVE", style="bold cyan")
         content.append(f" ({movement_remaining}ft)  ")
         content.append("[m X Y] or [m] to show positions\n", style="dim")
 
     # Attacks - show all available attack options with target numbers
-    attacks = actions.get("attacks", [])
+    # Support both old format (attacks) and new format (entity_actions)
+    attacks = actions.get("entity_actions", actions.get("attacks", []))
     valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
 
     if valid_attacks:
@@ -719,31 +721,46 @@ def render_available_actions_panel(
             else:
                 cost_label = ("ACTION", "cyan")
 
-            for t_uuid in targets:
-                target_name = entity_lookup.get(t_uuid, {}).get("name", "?")
+            # Get weapon/action display name (new format: display_name/weapon_name, old: name)
+            action_name = atk.get("weapon_name") or atk.get("display_name") or atk.get("name", "Attack")
+
+            for target in targets:
+                # Handle both old format (UUID string) and new format (dict with target_uuid/target_name)
+                if isinstance(target, dict):
+                    target_uuid = target.get("target_uuid")
+                    target_name = target.get("target_name") or entity_lookup.get(target_uuid, {}).get("name", "?")
+                else:
+                    # Old format: target is just a UUID string
+                    target_uuid = target
+                    target_name = entity_lookup.get(target_uuid, {}).get("name", "?")
+
                 content.append(f"  [", style="dim")
                 content.append(f"{target_num}", style="bold yellow")
                 content.append(f"] ", style="dim")
                 content.append(f"{cost_label[0]} ", style=cost_label[1])
-                content.append(f"{atk['name']}", style="bold")
-                content.append(f" → {target_name}\n", style="dim")
+                content.append(f"{action_name}", style="bold")
+                content.append(f" -> {target_name}\n", style="dim")
                 target_num += 1
     elif attacks:
         content.append("ATTACK", style="dim")
         content.append(" - no targets in range\n", style="dim")
 
     # Other actions (horizontal)
-    other = actions.get("other_actions", [])
+    # Support both old format (other_actions with action_id) and new format (self_actions with template_name)
+    other = actions.get("self_actions", actions.get("other_actions", []))
     other_items = []
     for act in other:
         if act.get("can_afford"):
-            action_id = act.get("action_id", "")
+            # Get action name from template_name (new) or action_id (old)
+            action_id = (act.get("template_name") or act.get("action_id", "")).lower()
             if action_id == "dash":
                 other_items.append(("DASH", "bold magenta", "[d]"))
             elif action_id == "dodge":
                 other_items.append(("DODGE", "bold blue", "[o]"))
             elif action_id == "disengage":
                 other_items.append(("DISENGAGE", "bold green", "[i]"))
+            elif action_id == "standup":
+                other_items.append(("STAND UP", "bold yellow", "[su]"))
 
     if other_items:
         for i, (name, style, key) in enumerate(other_items):
@@ -992,11 +1009,12 @@ def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
     message = result.get("message", "")
 
     # Add to rich combat log based on event type
-    if event_type == "attack":
+    # Note: event_type is template name like "attack_melee_main", not just "attack"
+    if event_type.startswith("attack"):
         data = result.get("event_data", {})
         # Use attacker name from data, fallback to player_entity_name
         add_to_combat_log(_build_attack_log_entry(data, player_entity_name, "Unknown"))
-    elif event_type == "movement":
+    elif event_type in ("move", "movement"):
         data = result.get("event_data", {})
         # Use entity name from data if available
         entity_name = data.get("entity", player_entity_name)

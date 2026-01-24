@@ -1,10 +1,18 @@
 from pydantic import BaseModel, Field, ConfigDict
-from dnd.core.events import Event,EventType, EventPhase, EventProcessor
+from dnd.core.events import Event, EventType, EventPhase, EventProcessor
 from dnd.core.base_object import BaseObject
-from typing import Optional, Callable, OrderedDict, List, Literal
+from typing import Optional, Callable, OrderedDict, List, Literal, Tuple
 from uuid import UUID
+from enum import Enum
 
-CostType =  Literal["actions", "bonus_actions", "reactions", "movement"]
+CostType = Literal["actions", "bonus_actions", "reactions", "movement"]
+
+
+class TargetType(str, Enum):
+    """What kind of target an action requires."""
+    SELF = "self"          # Dash, Dodge, Disengage - no target needed
+    ENTITY = "entity"      # Attack - targets another entity
+    POSITION = "position"  # Move - targets a grid position
 
 CostEvaluator = Callable[[UUID,CostType,int],bool]
 
@@ -32,11 +40,68 @@ class ActionEvent(Event):
 class BaseAction(BaseObject):
     """Base class for all actions in the game. This class provides the basic structure
     for actions, allowing both direct implementation through _validate and _apply methods,
-    as well as structured implementation through the StructuredAction subclass."""
-    description: str  = Field(description="The description of the action, this is going to be displayed in the ui as a tooltip")
-    parent_event: Optional[Event] = Field(default=None,description="The parent event of the action, the first event to be created in the action will be a child of this event used to keep track of sub-actions triggered by other events")
-    costs: List[Cost] = Field(default_factory=list,description="A list of costs for the action")
+    as well as structured implementation through the StructuredAction subclass.
+
+    Actions can be created as templates (template=True) which are bound to a source entity
+    with fixed configuration (e.g., weapon_slot), but without a specific target. Templates
+    support pre_validate() but cannot be applied directly - use instantiate() to create
+    an executable instance with a specific target.
+    """
+    description: str = Field(default="", description="The description of the action, this is going to be displayed in the ui as a tooltip")
+    parent_event: Optional[Event] = Field(default=None, description="The parent event of the action, the first event to be created in the action will be a child of this event used to keep track of sub-actions triggered by other events")
+    costs: List[Cost] = Field(default_factory=list, description="A list of costs for the action")
+
+    # Template system fields
+    target_type: TargetType = Field(default=TargetType.SELF, description="What kind of target this action requires")
+    template: bool = Field(default=False, description="If True, this is a template that cannot be applied directly - use instantiate()")
+
+    # For POSITION actions (like Move), stored separately from target_entity_uuid
+    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target position for POSITION type actions")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def set_target_entity(self, target_uuid: UUID) -> None:
+        """Set target entity for ENTITY type actions.
+
+        Used with templates to set the target before pre_validate() or instantiate().
+        """
+        if self.target_type != TargetType.ENTITY:
+            raise ValueError(f"Action {self.name} doesn't target entities (target_type={self.target_type})")
+        self.target_entity_uuid = target_uuid
+
+    def set_target_position(self, position: Tuple[int, int]) -> None:
+        """Set target position for POSITION type actions.
+
+        Used with templates to set the target before pre_validate() or instantiate().
+        """
+        if self.target_type != TargetType.POSITION:
+            raise ValueError(f"Action {self.name} doesn't target positions (target_type={self.target_type})")
+        self.end_position = position
+
+    def instantiate(self, **overrides) -> "BaseAction":
+        """Create an executable instance from this template.
+
+        The instance will have the same configuration as the template but with
+        template=False, allowing it to be applied.
+
+        Args:
+            **overrides: Additional fields to override (e.g., target_entity_uuid, end_position)
+
+        Returns:
+            BaseAction: A new instance that can be applied
+
+        Raises:
+            ValueError: If this is not a template
+        """
+        if not self.template:
+            raise ValueError("Can only instantiate from a template")
+
+        # Copy all fields except uuid (which will be regenerated)
+        kwargs = self.model_dump(exclude={"uuid"})
+        kwargs["template"] = False
+        kwargs.update(overrides)
+
+        return type(self)(**kwargs)
 
     def check_costs(self) -> bool:
         for cost in self.costs:
@@ -93,9 +158,15 @@ class BaseAction(BaseObject):
             status_message=f"Succesfully applied costs for {self.name} for {completion_event.source_entity_uuid}"
         )
 
-    def apply(self,parent_event: Optional[Event] = None) -> Optional[Event]:
+    def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
         """Main entry point for applying an action. This method orchestrates the flow
-        through declaration, validation, and application phases."""
+        through declaration, validation, and application phases.
+
+        Raises:
+            ValueError: If this is a template (use instantiate() first)
+        """
+        if self.template:
+            raise ValueError(f"Cannot apply template action '{self.name}' - use instantiate() first")
         if not self.check_costs():
             return None
         # Create declaration event
@@ -213,3 +284,65 @@ class StructuredAction(BaseAction):
         if self.cost_applier is not None:
             return self.cost_applier(completion_event, self.source_entity_uuid)
         return completion_event
+
+
+# =============================================================================
+# Available Actions Data Models
+# =============================================================================
+
+class AvailableTarget(BaseModel):
+    """A valid target for an action, with index for selection.
+
+    Used in CLI/UI patterns like 'attack 0' or 'move 3' to select targets.
+    """
+    index: int = Field(description="Index for selection (e.g., 'attack 0')")
+    target_uuid: Optional[UUID] = Field(default=None, description="For ENTITY actions")
+    position: Optional[Tuple[int, int]] = Field(default=None, description="For POSITION actions")
+    # Additional info for display
+    target_name: Optional[str] = Field(default=None, description="Entity name if ENTITY action")
+    distance: Optional[int] = Field(default=None, description="Distance in feet")
+    path_cost: Optional[int] = Field(default=None, description="Movement cost if POSITION action")
+
+
+class AvailableActionInfo(BaseModel):
+    """Information about an available action and its valid targets.
+
+    This is returned by Entity.get_available_actions() and contains everything
+    needed to display the action in UI and execute it.
+    """
+    template_name: str = Field(description="Name of the template for execution")
+    target_type: TargetType = Field(description="What kind of target this action needs")
+    valid_targets: List[AvailableTarget] = Field(default_factory=list, description="All valid targets with indices")
+    can_afford: bool = Field(description="Can afford base cost (action/bonus/etc)")
+
+    # Display info
+    display_name: str = Field(description="Human-readable name (e.g., 'Scimitar')")
+    description: str = Field(default="", description="Action description")
+    cost_type: CostType = Field(description="Type of cost (actions, bonus_actions, etc.)")
+    cost_amount: int = Field(default=1, description="Cost amount (usually 1)")
+
+    # For attacks - optional weapon info
+    weapon_slot: Optional[str] = Field(default=None, description="Weapon slot for attacks")
+    weapon_name: Optional[str] = Field(default=None, description="Weapon name for display (e.g., 'Scimitar')")
+
+
+class AvailableActionsResult(BaseModel):
+    """Complete available actions query result.
+
+    Returned by Entity.get_available_actions(). Groups actions by type for
+    easy iteration and UI rendering.
+    """
+    entity_uuid: UUID = Field(description="UUID of the entity these actions are for")
+
+    # Grouped by target type for easy iteration
+    entity_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting entities (Attack)")
+    position_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting positions (Move)")
+    self_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Self-targeting actions (Dash, Dodge, etc.)")
+
+    # State info
+    remaining_movement: int = Field(default=0, description="Remaining movement in feet")
+
+    @property
+    def all_actions(self) -> List[AvailableActionInfo]:
+        """Get all available actions as a flat list."""
+        return self.entity_actions + self.position_actions + self.self_actions

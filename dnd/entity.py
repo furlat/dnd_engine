@@ -1,31 +1,28 @@
-from typing import DefaultDict, Dict, Optional, Any, List, ClassVar, Union, Tuple,  Set
+from typing import DefaultDict, Dict, Optional, Any, List, ClassVar, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 from collections import defaultdict
 
-
-
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import (
-    NumericalModifier
-)
-
-from dnd.core.values import   CriticalStatus, AutoHitStatus
-
+from dnd.core.modifiers import NumericalModifier
+from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-from dnd.core.events import  Event, RangeType, SavingThrowEvent, SkillCheckEvent
-
+from dnd.core.events import Event, RangeType, SavingThrowEvent, SkillCheckEvent
 from dnd.core.base_block import BaseBlock
-from dnd.blocks.abilities import (AbilityScoresConfig, AbilityScores)
-from dnd.blocks.saving_throws import (SavingThrowSetConfig,SavingThrowSet)
-from dnd.blocks.health import (HealthConfig,Health)
-from dnd.blocks.equipment import (EquipmentConfig,Equipment,WeaponSlot,WeaponProperty, Range, Shield, Damage)
-from dnd.blocks.action_economy import (ActionEconomyConfig,ActionEconomy)
-from dnd.blocks.skills import (SkillSetConfig,SkillSet)
+from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
+from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
+from dnd.blocks.health import HealthConfig, Health
+from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage
+from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
+from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.base_actions import (
+    BaseAction, TargetType,
+    AvailableTarget, AvailableActionInfo, AvailableActionsResult
+)
 
 
 def determine_attack_outcome(roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
@@ -79,7 +76,7 @@ class EntityConfig(BaseModel):
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
     require interactions between blocks """
-    
+
     name: str = Field(default="Entity")
     ability_scores: AbilityScores = Field(default_factory=lambda: AbilityScores.create(source_entity_uuid=uuid4()))
     skill_set: SkillSet = Field(default_factory=lambda: SkillSet.create(source_entity_uuid=uuid4()))
@@ -87,13 +84,17 @@ class Entity(BaseBlock):
     health: Health = Field(default_factory=lambda: Health.create(source_entity_uuid=uuid4()))
     equipment: Equipment = Field(default_factory=lambda: Equipment.create(source_entity_uuid=uuid4()))
     action_economy: ActionEconomy = Field(default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()))
-    proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="proficiency_bonus",base_value=2))
-    initiative: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),value_name="initiative",base_value=0))
+    proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="proficiency_bonus", base_value=2))
+    initiative: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="initiative", base_value=0))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
-    allow_events_conditions: bool = Field(default=True,description="If True, events and conditions will be allowed to be added to the block")
-    sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
+    allow_events_conditions: bool = Field(default=True, description="If True, events and conditions will be allowed to be added to the block")
+    sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the entity")
+
+    # Action registry - stores action templates for this entity
+    registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
+
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
-    _entity_by_position: ClassVar[DefaultDict[Tuple[int,int], List['Entity']]] = defaultdict(list)
+    _entity_by_position: ClassVar[DefaultDict[Tuple[int, int], List['Entity']]] = defaultdict(list)
 
     def __init__(self, **data):
         """
@@ -107,6 +108,8 @@ class Entity(BaseBlock):
         self.__class__._entity_by_position[self.position].append(self)
         # Also register with GridMap for spatial queries
         get_map().register_entity(self.uuid, self.position)
+        # Note: Action templates are set up via actions_functional.setup_standard_actions()
+        # Called from entity factories (e.g., bestiary.py) after entity creation
 
     @classmethod
     def update_entity_position(cls, entity: 'Entity', new_position: Tuple[int, int]):
@@ -729,3 +732,165 @@ class Entity(BaseBlock):
         """Update the senses for all entities."""
         for entity in cls.get_all_entities():
             entity.update_entity_senses(max_distance)
+
+    # =========================================================================
+    # Action Registry System
+    # =========================================================================
+
+    def register_action(self, action: BaseAction) -> None:
+        """Register an action template.
+
+        Args:
+            action: The action template to register (must have template=True)
+
+        Raises:
+            ValueError: If the action is not a template
+        """
+        if not action.template:
+            raise ValueError("Can only register templates (template=True)")
+        self.registered_actions.append(action)
+
+    def unregister_action(self, name: str) -> None:
+        """Remove an action template by name.
+
+        Args:
+            name: The name of the action template to remove
+        """
+        self.registered_actions = [a for a in self.registered_actions if a.name != name]
+
+    def get_action_template(self, name: str) -> Optional[BaseAction]:
+        """Get a registered action template by name.
+
+        Args:
+            name: The name of the action template
+
+        Returns:
+            The action template, or None if not found
+        """
+        return next((a for a in self.registered_actions if a.name == name), None)
+
+    @property
+    def entity_actions(self) -> List[BaseAction]:
+        """Actions that target other entities (Attack)."""
+        return [a for a in self.registered_actions if a.target_type == TargetType.ENTITY]
+
+    @property
+    def position_actions(self) -> List[BaseAction]:
+        """Actions that target positions (Move)."""
+        return [a for a in self.registered_actions if a.target_type == TargetType.POSITION]
+
+    @property
+    def self_actions(self) -> List[BaseAction]:
+        """Actions that target self (Dash, Dodge, etc.)."""
+        return [a for a in self.registered_actions if a.target_type == TargetType.SELF]
+
+    def get_available_actions(self) -> AvailableActionsResult:
+        """Get all available actions for this entity.
+
+        Returns an AvailableActionsResult with all actions the entity can currently
+        perform, grouped by target type. Each action includes valid targets with
+        indices for easy selection (e.g., 'attack 0', 'move 3').
+
+        This method is agnostic of specific action subclasses - it simply iterates
+        over registered actions by target type and calls pre_validate() on each.
+        """
+        result = AvailableActionsResult(
+            entity_uuid=self.uuid,
+            remaining_movement=self.action_economy.movement.normalized_score
+        )
+
+        # SELF actions - validate once, no targets needed
+        for template in self.self_actions:
+            if template.pre_validate():
+                template_name = template.name or "Unknown"
+                result.self_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.SELF,
+                    valid_targets=[AvailableTarget(index=0)],
+                    can_afford=True,
+                    display_name=template_name,
+                    description=template.description,
+                    cost_type=template.costs[0].cost_type if template.costs else "actions",
+                    cost_amount=template.costs[0].cost if template.costs else 0
+                ))
+
+        # ENTITY actions - validate for each visible entity
+        for template in self.entity_actions:
+            valid_targets: List[AvailableTarget] = []
+            idx = 0
+            for target_uuid, target_pos in self.senses.entities.items():
+                if target_uuid == self.uuid:
+                    continue
+                template.set_target_entity(target_uuid)
+                if template.pre_validate():
+                    target_entity = Entity.get(target_uuid)
+                    valid_targets.append(AvailableTarget(
+                        index=idx,
+                        target_uuid=target_uuid,
+                        target_name=target_entity.name if target_entity else None,
+                        distance=self.senses.get_feet_distance(target_pos)
+                    ))
+                    idx += 1
+
+            if valid_targets:
+                template_name = template.name or "Unknown"
+
+                # Extract weapon info for attacks
+                weapon_name: Optional[str] = None
+                weapon_slot_str: Optional[str] = None
+                display_name = template_name
+
+                # Check if template has weapon_slot (Attack actions)
+                weapon_slot_attr = getattr(template, 'weapon_slot', None)
+                if weapon_slot_attr is not None:
+                    weapon_slot_str = weapon_slot_attr.value if hasattr(weapon_slot_attr, 'value') else str(weapon_slot_attr)
+                    weapon = self.equipment._get_weapon_by_slot(weapon_slot_attr)
+                    if weapon and hasattr(weapon, 'name'):
+                        weapon_name = weapon.name
+                        display_name = weapon_name  # Use weapon name as display name
+
+                result.entity_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.ENTITY,
+                    valid_targets=valid_targets,
+                    can_afford=True,
+                    display_name=display_name,
+                    description=template.description,
+                    cost_type=template.costs[0].cost_type if template.costs else "actions",
+                    cost_amount=template.costs[0].cost if template.costs else 0,
+                    weapon_slot=weapon_slot_str,
+                    weapon_name=weapon_name
+                ))
+
+        # POSITION actions - validate for each reachable position
+        for template in self.position_actions:
+            valid_positions: List[AvailableTarget] = []
+            idx = 0
+            for pos, path in self.senses.paths.items():
+                if pos == self.senses.position:
+                    continue
+                template.set_target_position(pos)
+                if template.pre_validate():
+                    path_cost = (len(path) - 1) * 5  # feet
+                    valid_positions.append(AvailableTarget(
+                        index=idx,
+                        position=pos,
+                        distance=self.senses.get_feet_distance(pos),
+                        path_cost=path_cost
+                    ))
+                    idx += 1
+
+            if valid_positions:
+                template_name = template.name or "Unknown"
+                result.position_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION,
+                    valid_targets=valid_positions,
+                    can_afford=True,
+                    display_name=template_name,
+                    description=f"{result.remaining_movement}ft remaining",
+                    cost_type="movement",
+                    cost_amount=0
+                ))
+
+        return result

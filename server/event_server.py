@@ -33,18 +33,17 @@ from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.monsters.bestiary import create_goblin, create_skeleton, create_goblin_archer
 from dnd.controller import Controller, TurnContext, HumanController
-from dnd.available_actions import get_available_actions
-from dnd.actions import Attack, Move, Dash, Dodge, Disengage
-from dnd.blocks.equipment import WeaponSlot
-from dnd.core.base_actions import BaseAction
+from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
+from dnd.core.base_actions import BaseAction, TargetType, AvailableTarget
 from dnd.reactions import add_opportunity_attack_handler
 
 from server.api_models import (
     APIEntitySummary, APIEntityFull, APIGrid, APIEncounter,
     APIGameState, APISimulationStatus,
-    APICurrentTurn, MoveRequest, AttackRequest, SimpleActionRequest, ActionResult,
+    APICurrentTurn, SimpleActionRequest, ActionResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
-    JoinGameRequest, JoinGameResponse
+    JoinGameRequest, JoinGameResponse,
+    SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest
 )
 from server.session import (
     SessionManager, PlayerSession, GameSession,
@@ -281,20 +280,20 @@ class MeleeAIController(Controller):
         available = get_available_actions(entity)
 
         # Priority 1: Attack if we can
-        for attack in available.attacks:
-            if attack.can_afford and attack.valid_targets:
-                target_uuid = attack.valid_targets[0]
-                return Attack(
-                    source_entity_uuid=entity.uuid,
-                    target_entity_uuid=target_uuid,
-                    weapon_slot=attack.weapon_slot or WeaponSlot.MELEE_MAIN,
-                    name=f"{entity.name}'s Attack"
-                )
+        for attack_info in available.entity_actions:
+            if attack_info.can_afford and attack_info.valid_targets:
+                target = attack_info.valid_targets[0]
+                if target.target_uuid is None:
+                    continue
+                # Use the template to create an instance
+                template = entity.get_action_template(attack_info.template_name)
+                if template:
+                    return template.instantiate(target_entity_uuid=target.target_uuid)
 
         # Priority 2: Move toward enemy if we can still attack afterward
         can_still_attack = entity.action_economy.can_afford("actions", 1)
-        if can_still_attack and available.can_move and available.movement:
-            move_action = available.movement[0]
+        if can_still_attack and available.position_actions:
+            move_info = available.position_actions[0]
 
             # Find closest position to any enemy
             closest_pos = None
@@ -310,22 +309,23 @@ class MeleeAIController(Controller):
                     current_min_dist = dist
 
             # Find position that gets us closer
-            # (valid_positions already excludes occupied cells via GridMap.compute_paths)
+            # (valid_targets already excludes occupied cells via GridMap.compute_paths)
             for enemy_uuid, enemy_pos in context.visible_enemies.items():
                 if enemy_uuid == entity.uuid:
                     continue
-                for pos in move_action.valid_positions:
+                for target in move_info.valid_targets:
+                    if target.position is None:
+                        continue
+                    pos = target.position
                     dist = abs(pos[0] - enemy_pos[0]) + abs(pos[1] - enemy_pos[1])
                     if dist < closest_dist and dist < current_min_dist:
                         closest_dist = dist
                         closest_pos = pos
 
             if closest_pos and closest_pos != entity.position:
-                return Move(
-                    source_entity_uuid=entity.uuid,
-                    end_position=closest_pos,
-                    name=f"{entity.name}'s Movement"
-                )
+                template = entity.get_action_template(move_info.template_name)
+                if template:
+                    return template.instantiate(end_position=closest_pos)
 
         # No good action, end turn
         return None
@@ -1300,43 +1300,240 @@ async def get_entity_available_actions(entity_uuid: str):
 
     actions = get_available_actions(entity)
 
-    # Convert to JSON-serializable format
-    # AvailableActionsResult has UUIDs and tuples that need conversion
+    # Convert to JSON-serializable format using new AvailableActionsResult structure
+    def serialize_target(t):
+        result = {"index": t.index}
+        if t.target_uuid:
+            result["target_uuid"] = str(t.target_uuid)
+        if t.position:
+            result["position"] = list(t.position)
+        if t.target_name:
+            result["target_name"] = t.target_name
+        if t.distance is not None:
+            result["distance"] = t.distance
+        if t.path_cost is not None:
+            result["path_cost"] = t.path_cost
+        return result
+
+    def serialize_action(a):
+        return {
+            "template_name": a.template_name,
+            "target_type": a.target_type.value,
+            "valid_targets": [serialize_target(t) for t in a.valid_targets],
+            "can_afford": a.can_afford,
+            "display_name": a.display_name,
+            "description": a.description,
+            "cost_type": a.cost_type,
+            "cost_amount": a.cost_amount,
+            "weapon_slot": a.weapon_slot,
+            "weapon_name": a.weapon_name
+        }
+
     return {
         "entity_uuid": str(actions.entity_uuid),
-        "attacks": [
-            {
-                **a.model_dump(),
-                "valid_targets": [str(t) for t in a.valid_targets],
-                "valid_positions": [list(p) for p in a.valid_positions]
-            }
-            for a in actions.attacks
-        ],
-        "movement": [
-            {
-                **a.model_dump(),
-                "valid_targets": [str(t) for t in a.valid_targets],
-                "valid_positions": [list(p) for p in a.valid_positions]
-            }
-            for a in actions.movement
-        ],
-        "other_actions": [a.model_dump() for a in actions.other_actions],
-        "bonus_actions": [a.model_dump() for a in actions.bonus_actions],
-        "reactions": [a.model_dump() for a in actions.reactions],
-        "free_actions": [a.model_dump() for a in actions.free_actions],
-        "can_attack": actions.can_attack,
-        "can_move": actions.can_move,
-        "remaining_movement": actions.remaining_movement,
-        "blocking_conditions": actions.blocking_conditions
+        "entity_actions": [serialize_action(a) for a in actions.entity_actions],
+        "position_actions": [serialize_action(a) for a in actions.position_actions],
+        "self_actions": [serialize_action(a) for a in actions.self_actions],
+        "remaining_movement": actions.remaining_movement
     }
 
 
-@app.post("/action/move", response_model=ActionResult)
-async def execute_move(request: MoveRequest):
-    """Execute a move action for the session's entity."""
+@app.post("/action/end-turn")
+async def end_human_turn(request: SimpleActionRequest):
+    """End the session's entity turn and advance to next."""
     entity = validate_session_action(request.session_id, request.entity_uuid)
 
-    # Track opportunity attacks triggered by this movement
+    if sim.encounter is None:
+        raise HTTPException(status_code=400, detail="No active encounter")
+
+    # Add to combat log
+    sim.add_combat_log("turn_end", f"{entity.name} ends their turn.", {"entity": entity.name})
+
+    # End the turn
+    sim.encounter.end_turn()
+
+    # Advance turn index (session state is derived, no need to clear manually)
+    sim.encounter.current_turn_index += 1
+    if sim.encounter.current_turn_index >= len(sim.encounter.initiative_order):
+        sim.encounter._advance_round()
+    sim.encounter.turn_state = TurnState.NOT_STARTED
+
+    # Advance encounter (runs AI turns until next human or end)
+    result = await advance_encounter()
+
+    return result
+
+
+# =============================================================================
+# New Generic Action Endpoints (using functional API)
+# =============================================================================
+
+@app.post("/action/self", response_model=ActionResult)
+async def execute_self_action(request: SelfActionRequest):
+    """Execute a self-targeting action (Dash, Dodge, Disengage, StandUp).
+
+    Uses the new functional action API.
+    """
+    entity = validate_session_action(request.session_id, request.entity_uuid)
+
+    # Get and validate the template
+    template = entity.get_action_template(request.action_name)
+    if template is None:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
+
+    if template.target_type != TargetType.SELF:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Action {request.action_name} is not a SELF action (is {template.target_type.value})"
+        )
+
+    # Execute via functional API
+    target = AvailableTarget(index=0)
+    try:
+        event = execute_action(entity, request.action_name, target)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Add to combat log
+    sim.add_combat_log("action", f"{entity.name} takes the {request.action_name} action.", {
+        "entity": entity.name,
+        "action": request.action_name.lower()
+    })
+
+    return ActionResult(
+        success=not event.canceled if event else False,
+        message=(event.status_message if event else None) or f"{request.action_name} executed",
+        event_type=request.action_name.lower(),
+        entity_hp=entity.get_hp(),
+        turn_continues=True,
+        encounter_ended=False
+    )
+
+
+@app.post("/action/entity", response_model=ActionResult)
+async def execute_entity_action(request: EntityActionRequest):
+    """Execute an entity-targeting action (Attack).
+
+    Uses the new functional action API. Captures opportunity attacks.
+    """
+    entity = validate_session_action(request.session_id, request.entity_uuid)
+
+    # Parse and validate target
+    try:
+        target_uuid = UUID(request.target_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid target UUID format")
+
+    target = Entity.get(target_uuid)
+    if not target:
+        raise HTTPException(status_code=404, detail="Target not found")
+
+    # Get and validate the template
+    template = entity.get_action_template(request.action_name)
+    if template is None:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
+
+    if template.target_type != TargetType.ENTITY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Action {request.action_name} is not an ENTITY action (is {template.target_type.value})"
+        )
+
+    # Get weapon name for logging (if attack)
+    weapon_name = "Unknown"
+    weapon_slot = getattr(template, 'weapon_slot', None)
+    if weapon_slot:
+        weapon = entity.equipment._get_weapon_by_slot(weapon_slot)
+        weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+
+    # Execute via functional API
+    action_target = AvailableTarget(index=0, target_uuid=target_uuid, target_name=target.name)
+    try:
+        event = execute_action(entity, request.action_name, action_target)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Check for deaths
+    deaths = sim.encounter.check_deaths() if sim.encounter else []
+    death_names = [d.entity_name for d in deaths]
+
+    # Check if encounter ended
+    encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
+
+    # Build event data for attacks
+    event_data = None
+    if event and hasattr(event, 'attack_outcome'):
+        event_data = extract_attack_data_from_event(event, entity, target, weapon_name)
+        event_data["roll"] = event_data.get("attack_total")
+        event_data["damage"] = event_data.get("total_damage", 0)
+
+        # Build log message
+        attack_bonus = event_data.get("attack_bonus", 0)
+        all_d20_rolls = event_data.get("all_d20_rolls", [])
+        d20_result = event_data.get("d20")
+        advantage_status = event_data.get("advantage_status", "none")
+        target_ac = event_data.get("target_ac", 0)
+        total_damage = event_data.get("total_damage", 0)
+        attack_total = event_data.get("attack_total", 0)
+        outcome_str = (event_data.get("outcome") or "unknown").lower()
+
+        bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
+        if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
+            roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
+        elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
+            roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
+        else:
+            roll_str = f"d20({d20_result}){bonus_str}={attack_total}"
+
+        if outcome_str == "crit":
+            log_msg = f"{entity.name} CRITS {target.name}! {roll_str} vs AC {target_ac} → {total_damage} damage!"
+        elif outcome_str == "hit":
+            log_msg = f"{entity.name} hits {target.name}. {roll_str} vs AC {target_ac} → {total_damage} damage"
+        elif outcome_str == "crit miss":
+            log_msg = f"{entity.name} critically misses {target.name}! {roll_str} vs AC {target_ac}"
+        else:
+            log_msg = f"{entity.name} misses {target.name}. {roll_str} vs AC {target_ac}"
+
+        log_data = dict(event_data)
+        log_data["target_hp"] = target.get_hp()
+        sim.add_combat_log("attack", log_msg, log_data)
+
+        for death_name in death_names:
+            sim.add_combat_log("death", f"{death_name} has been defeated!", {"entity": death_name})
+
+    return ActionResult(
+        success=not event.canceled if event else False,
+        message=(event.status_message if event else None) or "Action executed",
+        event_type=request.action_name.lower().replace("_", " "),
+        event_data=event_data,
+        entity_hp=entity.get_hp(),
+        target_hp=target.get_hp(),
+        deaths=death_names,
+        turn_continues=not encounter_ended,
+        encounter_ended=encounter_ended
+    )
+
+
+@app.post("/action/position", response_model=ActionResult)
+async def execute_position_action(request: PositionActionRequest):
+    """Execute a position-targeting action (Move).
+
+    Uses the new functional action API. Captures opportunity attacks.
+    """
+    entity = validate_session_action(request.session_id, request.entity_uuid)
+
+    # Get and validate the template
+    template = entity.get_action_template(request.action_name)
+    if template is None:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
+
+    if template.target_type != TargetType.POSITION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Action {request.action_name} is not a POSITION action (is {template.target_type.value})"
+        )
+
+    # Track opportunity attacks triggered by movement
     triggered_reactions: list = []
 
     def capture_opportunity_attack(event: Event) -> None:
@@ -1346,11 +1543,9 @@ async def execute_move(request: MoveRequest):
 
         event_type = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
 
-        # Only capture attacks targeting the moving entity
         if event_type == "attack" and event.target_entity_uuid == entity.uuid:
             source = Entity.get(event.source_entity_uuid)
 
-            # Get weapon name from the event's weapon_slot
             weapon_name = "Unknown"
             if source:
                 weapon_slot = getattr(event, 'weapon_slot', None)
@@ -1360,7 +1555,6 @@ async def execute_move(request: MoveRequest):
                 else:
                     weapon_name = "Unarmed"
 
-            # Use helper to extract all attack data including breakdowns
             reaction_data = extract_attack_data_from_event(event, source, entity, weapon_name)
             reaction_data["type"] = "opportunity_attack"
             reaction_data["is_opportunity_attack"] = True
@@ -1370,43 +1564,40 @@ async def execute_move(request: MoveRequest):
     EventQueue.add_on_event_callback(capture_opportunity_attack)
 
     try:
-        # Create and execute move
-        move = Move(
-            source_entity_uuid=entity.uuid,
-            end_position=tuple(request.position),
-            name=f"{entity.name} moves"
-        )
-
-        event = move.apply()
+        # Execute via functional API
+        pos = (request.position[0], request.position[1])  # Ensure Tuple[int, int]
+        action_target = AvailableTarget(index=0, position=pos)
+        event = execute_action(entity, request.action_name, action_target)
+    except ValueError as e:
+        EventQueue.remove_on_event_callback(capture_opportunity_attack)
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
-        # Always remove the callback
         EventQueue.remove_on_event_callback(capture_opportunity_attack)
 
-    # Check for deaths - DeathEvent has entity_name attribute
+    # Check for deaths
     deaths = sim.encounter.check_deaths() if sim.encounter else []
     death_names = [d.entity_name for d in deaths]
 
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
-    # Extract event data safely (including path for display)
+    # Extract event data
     event_data = None
     if event and hasattr(event, 'start_position') and hasattr(event, 'end_position'):
         event_data = {
-            "entity": entity.name,  # Include entity name for consistent logging
+            "entity": entity.name,
             "start": list(event.start_position),
             "end": list(event.end_position),
             "path": [list(p) for p in event.path] if hasattr(event, 'path') and event.path else []
         }
 
-        # Add to combat log
         sim.add_combat_log("move", f"{entity.name} moves to {tuple(event.end_position)}.", {
             "entity": entity.name,
             "from": list(event.start_position),
             "to": list(event.end_position)
         })
 
-        # Log opportunity attacks that were triggered
+        # Log opportunity attacks
         for reaction in triggered_reactions:
             attacker = reaction.get("attacker", "Unknown")
             target_name = reaction.get("target", entity.name)
@@ -1449,198 +1640,127 @@ async def execute_move(request: MoveRequest):
     )
 
 
-@app.post("/action/attack", response_model=ActionResult)
-async def execute_attack(request: AttackRequest):
-    """Execute an attack action for the session's entity."""
+@app.post("/action/execute", response_model=ActionResult)
+async def execute_action_by_index(request: ExecuteByIndexRequest):
+    """Execute action by template name and target index.
+
+    Enables 'attack 0', 'move 3' style commands from the available actions list.
+    """
     entity = validate_session_action(request.session_id, request.entity_uuid)
 
+    # Get template to determine action type
+    template = entity.get_action_template(request.template_name)
+    if template is None:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {request.template_name}")
+
+    # For POSITION actions (Move), need to capture opportunity attacks
+    triggered_reactions: list = []
+
+    def capture_opportunity_attack(event: Event) -> None:
+        if event.phase != EventPhase.COMPLETION:
+            return
+        event_type = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
+        if event_type == "attack" and event.target_entity_uuid == entity.uuid:
+            source = Entity.get(event.source_entity_uuid)
+            weapon_name = "Unknown"
+            if source:
+                weapon_slot = getattr(event, 'weapon_slot', None)
+                if weapon_slot:
+                    weapon = source.equipment._get_weapon_by_slot(weapon_slot)
+                    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+            reaction_data = extract_attack_data_from_event(event, source, entity, weapon_name)
+            reaction_data["type"] = "opportunity_attack"
+            reaction_data["is_opportunity_attack"] = True
+            triggered_reactions.append(reaction_data)
+
+    # Register callback if this might trigger OAs
+    if template.target_type == TargetType.POSITION:
+        EventQueue.add_on_event_callback(capture_opportunity_attack)
+
     try:
-        target_uuid = UUID(request.target_uuid)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid target UUID format")
+        event = execute_by_index(entity, request.template_name, request.target_index)
+    except ValueError as e:
+        if template.target_type == TargetType.POSITION:
+            EventQueue.remove_on_event_callback(capture_opportunity_attack)
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if template.target_type == TargetType.POSITION:
+            EventQueue.remove_on_event_callback(capture_opportunity_attack)
 
-    target = Entity.get(target_uuid)
-    if not target:
-        raise HTTPException(status_code=404, detail="Target not found")
-
-    # Parse weapon slot - support both old API (main_hand/off_hand) and new slot names
-    slot_mapping = {
-        "main_hand": WeaponSlot.MELEE_MAIN,      # Backward compat
-        "off_hand": WeaponSlot.MELEE_OFF,        # Backward compat
-        "melee_main": WeaponSlot.MELEE_MAIN,
-        "melee_off": WeaponSlot.MELEE_OFF,
-        "ranged_main": WeaponSlot.RANGED_MAIN,
-        "ranged_off": WeaponSlot.RANGED_OFF,
-    }
-    slot = slot_mapping.get(request.weapon_slot.lower(), WeaponSlot.MELEE_MAIN)
-
-    # Get weapon name before attack
-    weapon = entity.equipment._get_weapon_by_slot(slot)
-    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
-
-    # Create and execute attack
-    attack = Attack(
-        source_entity_uuid=entity.uuid,
-        target_entity_uuid=target_uuid,
-        weapon_slot=slot,
-        name=f"{entity.name} attacks {target.name}"
-    )
-
-    event = attack.apply()
-
-    # Check for deaths - DeathEvent has entity_name attribute
+    # Check for deaths
     deaths = sim.encounter.check_deaths() if sim.encounter else []
     death_names = [d.entity_name for d in deaths]
 
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
-    # Build detailed event data using helper
+    # Build response based on action type
     event_data = None
-    if event:
-        # Use helper to extract all attack data including breakdowns
+    target_hp = None
+
+    if template.target_type == TargetType.ENTITY and event and hasattr(event, 'attack_outcome'):
+        # Attack - get target for data
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+        weapon_name = "Unknown"
+        weapon_slot = getattr(template, 'weapon_slot', None)
+        if weapon_slot:
+            weapon = entity.equipment._get_weapon_by_slot(weapon_slot)
+            weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+
         event_data = extract_attack_data_from_event(event, entity, target, weapon_name)
+        target_hp = target.get_hp() if target else None
 
-        # Add legacy fields for backwards compat
-        event_data["roll"] = event_data.get("attack_total")
-        event_data["damage"] = event_data.get("total_damage", 0)
-
-        # Build log message
-        attack_bonus = event_data.get("attack_bonus", 0)
-        all_d20_rolls = event_data.get("all_d20_rolls", [])
-        d20_result = event_data.get("d20")
-        advantage_status = event_data.get("advantage_status", "none")
+        # Log attack
+        outcome_str = (event_data.get("outcome") or "unknown").lower()
+        attack_total = event_data.get("attack_total", 0)
         target_ac = event_data.get("target_ac", 0)
         total_damage = event_data.get("total_damage", 0)
-        attack_total = event_data.get("attack_total", 0)
-        outcome_str = (event_data.get("outcome") or "unknown").lower()
-
-        bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
-        if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
-            roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
-        elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
-            roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
-        else:
-            roll_str = f"d20({d20_result}){bonus_str}={attack_total}"
+        target_name = target.name if target else "Unknown"
 
         if outcome_str == "crit":
-            log_msg = f"{entity.name} CRITS {target.name}! {roll_str} vs AC {target_ac} → {total_damage} damage!"
+            log_msg = f"{entity.name} CRITS {target_name}! Roll {attack_total} vs AC {target_ac} → {total_damage} damage!"
         elif outcome_str == "hit":
-            log_msg = f"{entity.name} hits {target.name}. {roll_str} vs AC {target_ac} → {total_damage} damage"
-        elif outcome_str == "crit miss":
-            log_msg = f"{entity.name} critically misses {target.name}! {roll_str} vs AC {target_ac}"
+            log_msg = f"{entity.name} hits {target_name}. Roll {attack_total} vs AC {target_ac} → {total_damage} damage"
         else:
-            log_msg = f"{entity.name} misses {target.name}. {roll_str} vs AC {target_ac}"
+            log_msg = f"{entity.name} misses {target_name}. Roll {attack_total} vs AC {target_ac}"
 
-        # Add target HP for combat log
         log_data = dict(event_data)
-        log_data["target_hp"] = target.get_hp()
+        log_data["target_hp"] = target_hp
         sim.add_combat_log("attack", log_msg, log_data)
 
-        # Log deaths
-        for death_name in death_names:
-            sim.add_combat_log("death", f"{death_name} has been defeated!", {"entity": death_name})
+    elif template.target_type == TargetType.POSITION and event and hasattr(event, 'end_position'):
+        # Move
+        event_data = {
+            "entity": entity.name,
+            "start": list(event.start_position) if hasattr(event, 'start_position') else None,
+            "end": list(event.end_position),
+            "path": [list(p) for p in event.path] if hasattr(event, 'path') and event.path else []
+        }
+        sim.add_combat_log("move", f"{entity.name} moves to {tuple(event.end_position)}.", event_data)
+
+    elif template.target_type == TargetType.SELF:
+        # Self action
+        sim.add_combat_log("action", f"{entity.name} takes the {request.template_name} action.", {
+            "entity": entity.name,
+            "action": request.template_name.lower()
+        })
+
+    # Log deaths
+    for death_name in death_names:
+        sim.add_combat_log("death", f"{death_name} has been defeated!", {"entity": death_name})
 
     return ActionResult(
         success=not event.canceled if event else False,
-        message=(event.status_message if event else None) or "Attack executed",
-        event_type="attack",
+        message=(event.status_message if event else None) or f"{request.template_name} executed",
+        event_type=request.template_name.lower(),
         event_data=event_data,
         entity_hp=entity.get_hp(),
-        target_hp=target.get_hp(),
+        target_hp=target_hp,
         deaths=death_names,
+        triggered_reactions=triggered_reactions,
         turn_continues=not encounter_ended,
         encounter_ended=encounter_ended
     )
-
-
-@app.post("/action/dash", response_model=ActionResult)
-async def execute_dash(request: SimpleActionRequest):
-    """Execute a dash action for the session's entity."""
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    dash = Dash(source_entity_uuid=entity.uuid)
-    event = dash.apply()
-
-    # Add to combat log
-    sim.add_combat_log("action", f"{entity.name} takes the Dash action.", {"entity": entity.name, "action": "dash"})
-
-    return ActionResult(
-        success=not event.canceled if event else False,
-        message=(event.status_message if event else None) or "Dashed",
-        event_type="dash",
-        entity_hp=entity.get_hp(),
-        turn_continues=True,
-        encounter_ended=False
-    )
-
-
-@app.post("/action/dodge", response_model=ActionResult)
-async def execute_dodge(request: SimpleActionRequest):
-    """Execute a dodge action for the session's entity."""
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    dodge = Dodge(source_entity_uuid=entity.uuid)
-    event = dodge.apply()
-
-    # Add to combat log
-    sim.add_combat_log("action", f"{entity.name} takes the Dodge action.", {"entity": entity.name, "action": "dodge"})
-
-    return ActionResult(
-        success=not event.canceled if event else False,
-        message=(event.status_message if event else None) or "Dodging",
-        event_type="dodge",
-        entity_hp=entity.get_hp(),
-        turn_continues=True,
-        encounter_ended=False
-    )
-
-
-@app.post("/action/disengage", response_model=ActionResult)
-async def execute_disengage(request: SimpleActionRequest):
-    """Execute a disengage action for the session's entity."""
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    disengage = Disengage(source_entity_uuid=entity.uuid)
-    event = disengage.apply()
-
-    # Add to combat log
-    sim.add_combat_log("action", f"{entity.name} takes the Disengage action.", {"entity": entity.name, "action": "disengage"})
-
-    return ActionResult(
-        success=not event.canceled if event else False,
-        message=(event.status_message if event else None) or "Disengaging",
-        event_type="disengage",
-        entity_hp=entity.get_hp(),
-        turn_continues=True,
-        encounter_ended=False
-    )
-
-
-@app.post("/action/end-turn")
-async def end_human_turn(request: SimpleActionRequest):
-    """End the session's entity turn and advance to next."""
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    if sim.encounter is None:
-        raise HTTPException(status_code=400, detail="No active encounter")
-
-    # Add to combat log
-    sim.add_combat_log("turn_end", f"{entity.name} ends their turn.", {"entity": entity.name})
-
-    # End the turn
-    sim.encounter.end_turn()
-
-    # Advance turn index (session state is derived, no need to clear manually)
-    sim.encounter.current_turn_index += 1
-    if sim.encounter.current_turn_index >= len(sim.encounter.initiative_order):
-        sim.encounter._advance_round()
-    sim.encounter.turn_state = TurnState.NOT_STARTED
-
-    # Advance encounter (runs AI turns until next human or end)
-    result = await advance_encounter()
-
-    return result
 
 
 @app.post("/simulation/start-human")
