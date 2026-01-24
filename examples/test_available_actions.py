@@ -1,5 +1,5 @@
 """
-Test Available Actions System
+Test Available Actions System (Action Registry)
 
 Tests:
 1. Available actions query returns correct options
@@ -15,8 +15,8 @@ from typing import List
 from dnd.core.gridmap import reset_map, get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.available_actions import get_available_actions
-from dnd.actions import Dash, Dodge, Disengage, StandUp, DropProne, Move
+from dnd.actions import Dash, Dodge, Disengage, StandUp, Move
+from dnd.actions_functional import get_available_actions, execute_by_index
 from dnd.conditions import Incapacitated, Grappled
 from dnd.encounter import Encounter
 from dnd.controller import PassController
@@ -81,57 +81,38 @@ def test_available_actions_basic():
 
     actions_result = get_available_actions(goblin)
 
-    # Should have attacks available (weapon + unarmed)
+    # Should have entity_actions available (attacks with weapons)
     result.check(
-        len(actions_result.attacks) > 0,
-        f"Has attack options ({len(actions_result.attacks)} found)"
+        len(actions_result.entity_actions) > 0,
+        f"Has attack options ({len(actions_result.entity_actions)} found)"
     )
 
     # Should have valid targets (skeleton is adjacent)
-    weapon_attacks = [a for a in actions_result.attacks if a.weapon_slot is not None]
-    if weapon_attacks:
+    if actions_result.entity_actions:
+        attack_info = actions_result.entity_actions[0]
         result.check(
-            len(weapon_attacks[0].valid_targets) > 0,
-            f"Has valid attack targets ({len(weapon_attacks[0].valid_targets)} found)"
+            len(attack_info.valid_targets) > 0,
+            f"Has valid attack targets ({len(attack_info.valid_targets)} found)"
         )
 
-    # Should have movement available
+    # Should have position_actions (movement) available
     result.check(
-        len(actions_result.movement) > 0,
+        len(actions_result.position_actions) > 0,
         f"Has movement option"
     )
-    if actions_result.movement:
+    if actions_result.position_actions:
+        move_info = actions_result.position_actions[0]
         result.check(
-            len(actions_result.movement[0].valid_positions) > 0,
-            f"Has valid movement positions ({len(actions_result.movement[0].valid_positions)} found)"
+            len(move_info.valid_targets) > 0,
+            f"Has valid movement positions ({len(move_info.valid_targets)} found)"
         )
 
-    # Should have other actions (Dash, Dodge, Disengage)
-    result.check(
-        len(actions_result.other_actions) == 3,
-        f"Has 3 other actions (Dash, Dodge, Disengage) - got {len(actions_result.other_actions)}"
-    )
-    action_ids = [a.action_id for a in actions_result.other_actions]
-    result.check("dash" in action_ids, "Has Dash action")
-    result.check("dodge" in action_ids, "Has Dodge action")
-    result.check("disengage" in action_ids, "Has Disengage action")
-
-    # Should have Drop Prone as free action (not prone yet)
-    result.check(
-        len(actions_result.free_actions) == 1,
-        f"Has 1 free action - got {len(actions_result.free_actions)}"
-    )
-    if actions_result.free_actions:
-        result.check(
-            actions_result.free_actions[0].action_id == "drop_prone",
-            "Free action is Drop Prone"
-        )
-
-    # No blocking conditions
-    result.check(
-        len(actions_result.blocking_conditions) == 0,
-        f"No blocking conditions - got {actions_result.blocking_conditions}"
-    )
+    # Should have self_actions (Dash, Dodge, Disengage)
+    # Note: StandUp only appears when Prone, DropProne is not a registered action
+    self_action_names = [a.template_name for a in actions_result.self_actions]
+    result.check("Dash" in self_action_names, "Has Dash action")
+    result.check("Dodge" in self_action_names, "Has Dodge action")
+    result.check("Disengage" in self_action_names, "Has Disengage action")
 
     return result.summary()
 
@@ -248,6 +229,14 @@ def test_disengage_action():
         f"Used 1 action (remaining: {goblin.action_economy.actions.normalized_score})"
     )
 
+    # Check duration
+    disengaging = goblin.active_conditions.get("Disengaging")
+    if disengaging:
+        result.check(
+            disengaging.duration.duration == 1,
+            f"Duration set to 1 round (got {disengaging.duration.duration})"
+        )
+
     return result.summary()
 
 
@@ -270,7 +259,6 @@ def test_disengage_prevents_opportunity_attack():
     disengage.apply()
     result.check("Disengaging" in goblin.active_conditions, "Goblin has Disengaging condition")
 
-    # Clear attack events before move
     # Goblin moves away from skeleton
     move = Move(source_entity_uuid=goblin.uuid, end_position=(5, 2))
     move_event = move.apply()
@@ -323,7 +311,11 @@ def test_opportunity_attack_without_disengage():
 
 
 def test_prone_actions():
-    """Test Drop Prone and Stand Up actions."""
+    """Test Prone condition and Stand Up action.
+
+    Note: DropProne is not a registered action - Prone is applied by effects/spells.
+    We test StandUp which is a registered action that requires Prone condition.
+    """
     print("\n=== Test: Prone Actions ===")
     result = TestResult()
 
@@ -338,32 +330,21 @@ def test_prone_actions():
     # Should not be prone initially
     result.check("Prone" not in goblin.active_conditions, "Not prone initially")
 
-    # Check available actions show Drop Prone, not Stand Up
+    # Check available actions - Stand Up should NOT be available (not prone)
     actions_result = get_available_actions(goblin)
-    result.check(
-        any(a.action_id == "drop_prone" for a in actions_result.free_actions),
-        "Drop Prone is available"
-    )
-    result.check(
-        not any(a.action_id == "stand_up" for a in actions_result.movement),
-        "Stand Up is NOT available"
-    )
+    self_action_names = [a.template_name for a in actions_result.self_actions]
+    result.check("Stand Up" not in self_action_names, "Stand Up is NOT available (not prone)")
 
-    # Drop prone
-    drop = DropProne(source_entity_uuid=goblin.uuid)
-    event = drop.apply()
-    assert event is not None
-    result.check(not event.canceled, "Drop Prone succeeded")
-    result.check("Prone" in goblin.active_conditions, "Now Prone")
+    # Apply Prone condition directly (simulating spell/effect knockdown)
+    from dnd.conditions import Prone
+    prone = Prone(source_entity_uuid=goblin.uuid, target_entity_uuid=goblin.uuid)
+    goblin.add_condition(prone)
+    result.check("Prone" in goblin.active_conditions, "Now Prone (from effect)")
 
-    # Check available actions now show Stand Up, not Drop Prone
+    # Check available actions now show Stand Up
     actions_result = get_available_actions(goblin)
-    result.check(
-        not any(a.action_id == "drop_prone" for a in actions_result.free_actions),
-        "Drop Prone is NOT available while prone"
-    )
-    stand_up_actions = [a for a in actions_result.movement if a.action_id == "stand_up"]
-    result.check(len(stand_up_actions) == 1, "Stand Up IS available")
+    self_action_names = [a.template_name for a in actions_result.self_actions]
+    result.check("Stand Up" in self_action_names, "Stand Up IS available")
 
     # Stand up (costs half movement)
     initial_movement = goblin.action_economy.movement.normalized_score
@@ -447,7 +428,7 @@ def test_condition_duration_at_turn_start():
 
 
 def test_blocking_conditions():
-    """Test that blocking conditions prevent actions."""
+    """Test that blocking conditions prevent actions via action economy."""
     print("\n=== Test: Blocking Conditions ===")
     result = TestResult()
 
@@ -455,39 +436,95 @@ def test_blocking_conditions():
 
     # Normal state - can act
     actions_result = get_available_actions(goblin)
-    result.check(actions_result.can_move, "Normal: can move")
-    result.check(len(actions_result.other_actions) > 0, "Normal: has actions")
+    result.check(len(actions_result.position_actions) > 0, "Normal: can move")
+    result.check(len(actions_result.self_actions) > 0, "Normal: has actions")
 
-    # Apply Incapacitated
+    # Apply Incapacitated - sets action economy to 0
     incap = Incapacitated(source_entity_uuid=goblin.uuid, target_entity_uuid=goblin.uuid)
     goblin.add_condition(incap)
 
     actions_result = get_available_actions(goblin)
-    result.check(not actions_result.can_move, "Incapacitated: cannot move")
+    # Incapacitated sets actions, bonus_actions, reactions, movement to 0
+    # So all actions should fail pre_validate() due to can't afford costs
     result.check(
-        len(actions_result.other_actions) == 0,
-        f"Incapacitated: no actions (got {len(actions_result.other_actions)})"
+        len(actions_result.self_actions) == 0,
+        f"Incapacitated: no self actions (got {len(actions_result.self_actions)})"
     )
     result.check(
-        "Incapacitated" in actions_result.blocking_conditions,
-        f"Reports Incapacitated blocking (got {actions_result.blocking_conditions})"
+        len(actions_result.position_actions) == 0,
+        f"Incapacitated: no movement (got {len(actions_result.position_actions)})"
     )
 
-    # Remove Incapacitated, apply Grappled (blocks movement only)
+    # Remove Incapacitated, apply Grappled (blocks movement only via max=0)
     goblin.remove_condition("Incapacitated")
     grappled = Grappled(source_entity_uuid=goblin.uuid, target_entity_uuid=goblin.uuid)
     goblin.add_condition(grappled)
 
     actions_result = get_available_actions(goblin)
-    result.check(not actions_result.can_move, "Grappled: cannot move")
     result.check(
-        len(actions_result.other_actions) > 0,
+        len(actions_result.position_actions) == 0,
+        f"Grappled: cannot move (got {len(actions_result.position_actions)})"
+    )
+    result.check(
+        len(actions_result.self_actions) > 0,
         "Grappled: CAN still take actions"
     )
-    result.check(
-        "Grappled" in actions_result.blocking_conditions,
-        f"Reports Grappled blocking (got {actions_result.blocking_conditions})"
-    )
+
+    return result.summary()
+
+
+def test_action_templates():
+    """Test that action templates work correctly."""
+    print("\n=== Test: Action Templates ===")
+    result = TestResult()
+
+    goblin, skeleton = setup_grid_and_entities(distance_tiles=1)
+
+    # Check templates are registered
+    result.check(len(goblin.registered_actions) > 0, f"Has registered actions ({len(goblin.registered_actions)})")
+
+    # Check we have attack templates
+    attack_templates = [a for a in goblin.registered_actions if a.target_type.value == "entity"]
+    result.check(len(attack_templates) > 0, f"Has attack templates ({len(attack_templates)})")
+
+    # Check we have move template
+    move_template = goblin.get_action_template("Move")
+    result.check(move_template is not None, "Has Move template")
+
+    # Test template instantiation
+    if attack_templates:
+        template = attack_templates[0]
+        result.check(template.template, "Template has template=True")
+
+        # Set target and instantiate
+        template.set_target_entity(skeleton.uuid)
+        instance = template.instantiate(target_entity_uuid=skeleton.uuid)
+        result.check(not instance.template, "Instance has template=False")
+        result.check(instance.target_entity_uuid == skeleton.uuid, "Instance has correct target")
+
+    return result.summary()
+
+
+def test_execute_by_index():
+    """Test executing actions by index."""
+    print("\n=== Test: Execute by Index ===")
+    result = TestResult()
+
+    goblin, skeleton = setup_grid_and_entities(distance_tiles=1)
+
+    # Get available actions
+    available = get_available_actions(goblin)
+
+    # Should have entity actions (attacks)
+    if available.entity_actions:
+        attack_info = available.entity_actions[0]
+        target_count = len(attack_info.valid_targets)
+        result.check(target_count > 0, f"Has attack targets ({target_count})")
+
+        # Execute attack on first target
+        event = execute_by_index(goblin, attack_info.template_name, 0)
+        result.check(event is not None, "Attack executed")
+        # HP might change depending on hit/miss
 
     return result.summary()
 
@@ -495,10 +532,10 @@ def test_blocking_conditions():
 def run_all_tests():
     """Run all tests."""
     print("=" * 60)
-    print("AVAILABLE ACTIONS SYSTEM TESTS")
+    print("AVAILABLE ACTIONS SYSTEM TESTS (Action Registry)")
     print("=" * 60)
 
-    all_tests = [
+    tests = [
         ("Basic Available Actions", test_available_actions_basic),
         ("Dash Action", test_dash_action),
         ("Dodge Action", test_dodge_action),
@@ -506,41 +543,37 @@ def run_all_tests():
         ("Disengage Prevents OA", test_disengage_prevents_opportunity_attack),
         ("OA Without Disengage", test_opportunity_attack_without_disengage),
         ("Prone Actions", test_prone_actions),
-        ("Condition Duration at Turn Start", test_condition_duration_at_turn_start),
+        ("Condition Duration", test_condition_duration_at_turn_start),
         ("Blocking Conditions", test_blocking_conditions),
+        ("Action Templates", test_action_templates),
+        ("Execute by Index", test_execute_by_index),
     ]
 
-    passed = 0
-    failed = 0
-    failed_tests = []
-
-    for name, test_fn in all_tests:
+    results = []
+    for name, test_fn in tests:
         try:
-            if test_fn():
-                passed += 1
-            else:
-                failed += 1
-                failed_tests.append(name)
+            passed = test_fn()
+            results.append((name, passed))
         except Exception as e:
-            failed += 1
-            failed_tests.append(f"{name} (EXCEPTION: {e})")
+            print(f"\n  ERROR in {name}: {e}")
             import traceback
             traceback.print_exc()
+            results.append((name, False))
 
+    # Summary
     print("\n" + "=" * 60)
     print("FINAL RESULTS")
     print("=" * 60)
-    print(f"\n  Tests passed: {passed}/{passed + failed}")
+    passed = sum(1 for _, p in results if p)
+    failed = len(results) - passed
+    print(f"\nPassed: {passed}/{len(results)}")
+    if failed:
+        print("Failed tests:")
+        for name, p in results:
+            if not p:
+                print(f"  - {name}")
 
-    if failed_tests:
-        print(f"\n  FAILED TESTS:")
-        for t in failed_tests:
-            print(f"    - {t}")
-        print("\n  SOME TESTS FAILED!")
-        return False
-    else:
-        print("\n  ALL TESTS PASSED!")
-        return True
+    return failed == 0
 
 
 if __name__ == "__main__":

@@ -177,27 +177,26 @@ def format_actions(actions: dict, entity_name: str) -> str:
     lines = [f"AVAILABLE ACTIONS FOR {entity_name}:"]
     lines.append("")
 
-    # Movement
+    # Movement - uses position_actions with valid_targets containing position objects
     movement = actions.get("remaining_movement", 0)
-    # valid_positions is inside movement[0], not at top level
-    movement_actions = actions.get("movement", [])
-    valid_positions = movement_actions[0].get("valid_positions", []) if movement_actions else []
-    lines.append(f"MOVEMENT: {movement} ft remaining, {len(valid_positions)} reachable positions")
-    if valid_positions:
-        # Show a few sample positions
-        sample = valid_positions[:10]
-        pos_strs = [f"({p[0]},{p[1]})" for p in sample]
+    position_actions = actions.get("position_actions", [])
+    valid_targets = position_actions[0].get("valid_targets", []) if position_actions else []
+    lines.append(f"MOVEMENT: {movement} ft remaining, {len(valid_targets)} reachable positions")
+    if valid_targets:
+        # Show a few sample positions - targets are objects with 'position' field
+        sample = valid_targets[:10]
+        pos_strs = [f"({t.get('position', [0,0])[0]},{t.get('position', [0,0])[1]})" for t in sample]
         lines.append(f"  Sample positions: {', '.join(pos_strs)}")
-        if len(valid_positions) > 10:
-            lines.append(f"  ... and {len(valid_positions) - 10} more")
+        if len(valid_targets) > 10:
+            lines.append(f"  ... and {len(valid_targets) - 10} more")
 
     lines.append("")
 
-    # Attacks
-    attacks = actions.get("attacks", [])
-    lines.append(f"ATTACKS: {len(attacks)} attack options")
-    for i, atk in enumerate(attacks):
-        name = atk.get("name", "???")
+    # Attacks - uses entity_actions
+    entity_actions = actions.get("entity_actions", [])
+    lines.append(f"ATTACKS: {len(entity_actions)} attack options")
+    for i, atk in enumerate(entity_actions):
+        name = atk.get("display_name", atk.get("template_name", "???"))
         can_afford = atk.get("can_afford", False)
         valid_targets = atk.get("valid_targets", [])
         num_targets = len(valid_targets)
@@ -206,11 +205,11 @@ def format_actions(actions: dict, entity_name: str) -> str:
 
     lines.append("")
 
-    # Other actions
-    other = actions.get("other_actions", [])
+    # Self actions (Dash, Dodge, Disengage)
+    self_actions = actions.get("self_actions", [])
     lines.append("OTHER ACTIONS:")
-    for action in other:
-        action_name = action.get("name", action.get("action_id", "???"))
+    for action in self_actions:
+        action_name = action.get("display_name", action.get("template_name", "???"))
         can_afford = action.get("can_afford", False)
         status = "READY" if can_afford else "NO ACTION"
         lines.append(f"  {action_name}: {status}")
@@ -399,23 +398,33 @@ def cmd_attack(client: APIClient, target_index: int) -> int:
 
     entity_uuid = client.current_entity_uuid
 
-    # Get available actions to find target UUID
+    # Get available actions to find attack action and target
     actions = client.get_available_actions(entity_uuid)
     if not actions:
         print("ERROR: Could not get available actions")
         return 1
 
-    attacks = actions.get("attacks", [])
-    if target_index < 0 or target_index >= len(attacks):
-        print(f"ERROR: Invalid target index {target_index}. Valid: 0-{len(attacks)-1}")
+    # entity_actions contains attacks (entity-targeting actions)
+    entity_actions = actions.get("entity_actions", [])
+    if not entity_actions:
+        print("ERROR: No attack actions available")
         return 1
 
-    attack_info = attacks[target_index]
+    if target_index < 0 or target_index >= len(entity_actions):
+        print(f"ERROR: Invalid target index {target_index}. Valid: 0-{len(entity_actions)-1}")
+        return 1
+
+    attack_info = entity_actions[target_index]
+    template_name = attack_info.get("template_name", "Attack")
     valid_targets = attack_info.get("valid_targets", [])
     if not valid_targets:
         print("ERROR: No valid targets for this attack")
         return 1
-    target_uuid = valid_targets[0]
+
+    # valid_targets are now objects with target_uuid and index
+    target_obj = valid_targets[0]
+    target_uuid = target_obj.get("target_uuid", "")
+    target_idx = target_obj.get("index", 0)
 
     # Get target name
     state = client.get_state()
@@ -427,7 +436,8 @@ def cmd_attack(client: APIClient, target_index: int) -> int:
                 break
 
     try:
-        result = client.attack(target_uuid)
+        # Use execute_action with template_name and target index
+        result = client.execute_action(template_name, target_idx)
     except Exception as e:
         print(f"ERROR: {e}")
         return 1

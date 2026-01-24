@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from typing import Optional, Tuple
 
 from dnd.entity import Entity, EntityConfig
+from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import (
@@ -248,7 +249,10 @@ def create_goblin(
         config=entity_config
     )
 
-    # Equip weapons and armor
+    # Set up action templates (Move, Dash, Dodge, etc.)
+    setup_standard_actions(entity)
+
+    # Equip weapons and armor (this triggers event handlers to register attack templates)
     scimitar = create_scimitar(entity.uuid)
     leather_armor = create_leather_armor(entity.uuid)
     shield = create_wooden_shield(entity.uuid)
@@ -336,7 +340,10 @@ def create_skeleton(
         config=entity_config
     )
 
-    # Equip weapons and armor
+    # Set up action templates (Move, Dash, Dodge, etc.)
+    setup_standard_actions(entity)
+
+    # Equip weapons and armor (this triggers event handlers to register attack templates)
     shortsword = create_shortsword(entity.uuid)
     armor_scraps = create_armor_scraps(entity.uuid)
 
@@ -448,6 +455,9 @@ def create_goblin_archer(
         description="A small goblin wielding a shortbow, preferring to attack from range.",
         config=entity_config
     )
+
+    # Set up action templates (Move, Dash, Dodge, etc.)
+    setup_standard_actions(entity)
 
     # Equip weapons and armor - dual wield melee + ranged backup
     shortbow = create_shortbow(entity.uuid)

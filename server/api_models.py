@@ -266,6 +266,44 @@ class SimpleActionRequest(BaseModel):
     entity_uuid: str
 
 
+# =============================================================================
+# Generic Action Request Models (New API)
+# =============================================================================
+
+class SelfActionRequest(BaseModel):
+    """Request for self-targeting actions (Dash, Dodge, Disengage, StandUp)."""
+    session_id: str
+    entity_uuid: str
+    action_name: str  # Template name: "Dash", "Dodge", "Disengage", "StandUp"
+
+
+class EntityActionRequest(BaseModel):
+    """Request for entity-targeting actions (Attack)."""
+    session_id: str
+    entity_uuid: str
+    action_name: str  # Template name: "Attack_MELEE_MAIN", etc.
+    target_uuid: str
+
+
+class PositionActionRequest(BaseModel):
+    """Request for position-targeting actions (Move)."""
+    session_id: str
+    entity_uuid: str
+    action_name: str  # Template name: "Move"
+    position: Tuple[int, int]
+
+
+class ExecuteByIndexRequest(BaseModel):
+    """Request to execute action by template name + target index.
+
+    Enables 'attack 0', 'move 3' style commands.
+    """
+    session_id: str
+    entity_uuid: str
+    template_name: str  # Action template name
+    target_index: int   # Index from valid_targets list
+
+
 # Response models
 
 class ActionResult(BaseModel):
