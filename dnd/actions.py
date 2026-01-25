@@ -5,6 +5,11 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent
+from dnd.core.combat_log import (
+    CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
+    DamageRollDisplay, AttackLogData, MovementLogData,
+    format_attack_roll_line, format_damage_line
+)
 from pydantic import Field, model_validator
 from typing import Optional, List, TypeVar, Tuple, Self, cast
 from uuid import UUID
@@ -74,6 +79,60 @@ class MovementEvent(ActionEvent):
     start_position: Tuple[int,int] = Field(description="The start position of the movement")
     end_position: Tuple[int,int] = Field(description="The end position of the movement")
     path: Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for this movement event.
+
+        Uses self.* fields only - no external lookups. Entity name must be
+        populated when the event is created.
+        """
+        # Use entity name from self - no external lookups
+        source_name = self.source_entity_name or "Unknown"
+
+        # Calculate distance
+        path = self.path or []
+        distance_feet = (len(path) - 1) * 5 if len(path) > 1 else 0
+
+        # Get movement cost
+        movement_cost = 0
+        for cost in self.costs:
+            if cost.cost_type == "movement":
+                movement_cost = cost.cost
+
+        # Build path string for detail line
+        path_str = " -> ".join(f"({p[0]}, {p[1]})" for p in path) if path else ""
+
+        # Build summary
+        summary = f"{source_name} moves {distance_feet}ft to ({self.end_position[0]}, {self.end_position[1]})"
+
+        # Build detail lines
+        detail_lines = []
+        if path_str:
+            detail_lines.append(f"Path: {path_str}")
+        if movement_cost > 0:
+            detail_lines.append(f"Cost: {movement_cost}ft movement")
+
+        # Build structured data
+        data = MovementLogData(
+            entity_name=source_name,
+            entity_uuid=str(self.source_entity_uuid),
+            start_position=self.start_position,
+            end_position=self.end_position,
+            path=path,
+            distance_feet=distance_feet,
+            movement_cost=movement_cost
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.MOVEMENT,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            summary=summary,
+            detail_lines=detail_lines,
+            data=data.model_dump(),
+            success=True
+        )
+
 
 class Move(BaseAction):
     """An action that represents a movement with a path it will automatically compute the path from the source entity position to the end position
@@ -214,7 +273,8 @@ class Move(BaseAction):
             end_position=end_position,
             path=path,
             costs=[BaseCost.model_validate(cost) for cost in costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_entity.name  # Populate for combat log generation
         )
     
     def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
@@ -303,6 +363,204 @@ class AttackEvent(ActionEvent):
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
     event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
 
+    # Weapon info for combat log generation (populated during event creation)
+    weapon_name: Optional[str] = Field(default=None, description="Name of the weapon used")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for this attack event.
+
+        Uses self.* fields only - no external lookups. Entity names and weapon name
+        must be populated when the event is created.
+        """
+        # Use entity names from self - no external lookups
+        source_name = self.source_entity_name or "Unknown"
+        target_name = self.target_entity_name or "Unknown"
+        weapon_name = self.weapon_name or "Unarmed"
+
+        # We still need target entity for HP lookup (this is acceptable as it's
+        # current state, not creation-time state)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        # Build attack roll display
+        attack_roll = DiceRollDisplay(
+            dice_str="d20",
+            results=[],
+            bonus=0,
+            total=0
+        )
+
+        if self.dice_roll:
+            results = self.dice_roll.results
+            if isinstance(results, list):
+                attack_roll.results = list(results)
+                attack_roll.all_d20_rolls = list(results)
+
+                # Determine advantage status and which d20 was used
+                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                if adv_status:
+                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    attack_roll.advantage_status = adv_value
+                    if len(results) >= 2:
+                        if adv_value == "advantage":
+                            attack_roll.d20_used = max(results)
+                        elif adv_value == "disadvantage":
+                            attack_roll.d20_used = min(results)
+                        else:
+                            attack_roll.d20_used = results[0]
+                    elif len(results) == 1:
+                        attack_roll.d20_used = results[0]
+                else:
+                    attack_roll.d20_used = results[0] if results else 0
+            elif isinstance(results, int):
+                attack_roll.results = [results]
+                attack_roll.d20_used = results
+
+            attack_roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            attack_roll.total = self.dice_roll.total
+
+        # Build attack breakdown from ModifiableValue
+        attack_breakdown: List[ModifierBreakdown] = []
+        if self.attack_bonus and hasattr(self.attack_bonus, 'get_breakdown'):
+            for mod in self.attack_bonus.get_breakdown():
+                attack_breakdown.append(ModifierBreakdown(
+                    name=mod.get('name', 'Unknown'),
+                    value=mod.get('value', 0),
+                    source=mod.get('source', 'self')
+                ))
+
+        # Get target AC
+        target_ac = 0
+        if self.ac:
+            target_ac = self.ac.normalized_score
+        elif target_entity:
+            target_ac = target_entity.ac_bonus().normalized_score
+
+        # Build AC breakdown
+        ac_breakdown: List[ModifierBreakdown] = []
+        if self.ac and hasattr(self.ac, 'get_breakdown'):
+            for mod in self.ac.get_breakdown():
+                ac_breakdown.append(ModifierBreakdown(
+                    name=mod.get('name', 'Unknown'),
+                    value=mod.get('value', 0),
+                    source=mod.get('source', 'self')
+                ))
+
+        # Determine outcome
+        outcome = "unknown"
+        is_hit = False
+        is_crit = False
+        if self.attack_outcome:
+            outcome_value = self.attack_outcome.value if hasattr(self.attack_outcome, 'value') else str(self.attack_outcome)
+            outcome = outcome_value.lower()
+            is_hit = outcome in ("hit", "crit")
+            is_crit = outcome == "crit"
+
+        # Build damage roll displays
+        damage_roll_displays: List[DamageRollDisplay] = []
+        total_damage = 0
+
+        if self.damage_rolls and self.damages:
+            for i, dr in enumerate(self.damage_rolls):
+                damage = self.damages[i] if i < len(self.damages) else None
+                damage_type = damage.damage_type.value if damage and hasattr(damage.damage_type, 'value') else "unknown"
+
+                # Get dice results
+                dice_results = []
+                if hasattr(dr, 'results'):
+                    if isinstance(dr.results, list):
+                        dice_results = list(dr.results)
+                    elif isinstance(dr.results, int):
+                        dice_results = [dr.results]
+
+                # Get damage bonus breakdown
+                damage_bonus_breakdown: List[ModifierBreakdown] = []
+                if damage and damage.damage_bonus and hasattr(damage.damage_bonus, 'get_breakdown'):
+                    for mod in damage.damage_bonus.get_breakdown():
+                        damage_bonus_breakdown.append(ModifierBreakdown(
+                            name=mod.get('name', 'Unknown'),
+                            value=mod.get('value', 0),
+                            source=mod.get('source', 'self')
+                        ))
+
+                # Build dice string (e.g., "1d6" or "2d6" for crits)
+                num_dice = len(dice_results)
+                dice_size = damage.damage_dice if damage else 6
+                dice_str = f"{num_dice}d{dice_size}"
+
+                damage_roll_displays.append(DamageRollDisplay(
+                    dice_str=dice_str,
+                    dice_results=dice_results,
+                    bonus=dr.bonus if hasattr(dr, 'bonus') else 0,
+                    total=dr.total,
+                    damage_type=damage_type,
+                    bonus_breakdown=damage_bonus_breakdown
+                ))
+
+                total_damage += dr.total
+
+        # Get target HP after attack
+        target_hp = target_entity.get_hp() if target_entity else None
+
+        # Check for opportunity attack marker in name
+        is_opportunity_attack = "opportunity" in (self.name or "").lower()
+
+        # Build summary
+        if is_crit:
+            summary = f"{source_name} CRITS {target_name} for {total_damage} damage!"
+        elif is_hit:
+            summary = f"{source_name} hits {target_name} for {total_damage} damage"
+        else:
+            summary = f"{source_name} misses {target_name}"
+
+        # Build detail lines
+        detail_lines = []
+
+        # Attack roll line
+        attack_line = format_attack_roll_line(
+            attack_roll, attack_breakdown, target_ac, ac_breakdown, outcome
+        )
+        detail_lines.append(attack_line)
+
+        # Damage line (only on hit)
+        if is_hit and damage_roll_displays:
+            damage_line = format_damage_line(damage_roll_displays)
+            if damage_line:
+                detail_lines.append(damage_line)
+
+        # Build structured data
+        data = AttackLogData(
+            attacker_name=source_name,
+            attacker_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+            weapon_name=weapon_name,
+            weapon_slot=self.weapon_slot.value if self.weapon_slot else None,
+            attack_roll=attack_roll,
+            attack_breakdown=attack_breakdown,
+            target_ac=target_ac,
+            ac_breakdown=ac_breakdown,
+            outcome=outcome,
+            is_hit=is_hit,
+            is_crit=is_crit,
+            damage_rolls=damage_roll_displays,
+            total_damage=total_damage,
+            target_hp=target_hp,
+            is_opportunity_attack=is_opportunity_attack,
+            is_long_range=self.is_long_range,
+            is_threatened=self.is_threatened
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ATTACK,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            summary=summary,
+            detail_lines=detail_lines,
+            data=data.model_dump(),
+            success=is_hit
+        )
 
 
 class Attack(BaseAction):
@@ -592,6 +850,19 @@ class Attack(BaseAction):
 
     def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """ Create the declaration event for the attack action"""
+        # Populate entity names and weapon name for combat log generation
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        source_name = source_entity.name if source_entity else None
+        target_name = target_entity.name if target_entity else None
+
+        # Get weapon name
+        weapon_name = None
+        if source_entity:
+            weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
+            weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+
         return AttackEvent(
             name=f"{self.name}",
             parent_event=parent_event.uuid if parent_event else None,
@@ -600,7 +871,10 @@ class Attack(BaseAction):
             target_entity_uuid=self.target_entity_uuid,
             weapon_slot=self.weapon_slot,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name,
+            target_entity_name=target_name,
+            weapon_name=weapon_name
         )
     
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
@@ -664,6 +938,10 @@ class Dash(BaseAction):
     ])
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        # Populate entity name for combat log generation
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+
         return ActionEvent(
             name=self.name,
             parent_event=parent_event.uuid if parent_event else None,
@@ -671,7 +949,8 @@ class Dash(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,  # Self-targeted
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name  # Populate for combat log generation
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
@@ -727,6 +1006,10 @@ class Dodge(BaseAction):
     ])
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        # Populate entity name for combat log generation
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+
         return ActionEvent(
             name=self.name,
             parent_event=parent_event.uuid if parent_event else None,
@@ -734,7 +1017,8 @@ class Dodge(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name  # Populate for combat log generation
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
@@ -786,6 +1070,10 @@ class Disengage(BaseAction):
     ])
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        # Populate entity name for combat log generation
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+
         return ActionEvent(
             name=self.name,
             parent_event=parent_event.uuid if parent_event else None,
@@ -793,7 +1081,8 @@ class Disengage(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name  # Populate for combat log generation
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
@@ -867,6 +1156,10 @@ class StandUp(BaseAction):
             )]
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        # Populate entity name for combat log generation
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+
         return ActionEvent(
             name=self.name,
             parent_event=parent_event.uuid if parent_event else None,
@@ -874,7 +1167,8 @@ class StandUp(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name  # Populate for combat log generation
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
@@ -920,6 +1214,10 @@ class DropProne(BaseAction):
     costs: List[Cost] = Field(default_factory=list)  # Free action
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        # Populate entity name for combat log generation
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+
         return ActionEvent(
             name=self.name,
             parent_event=parent_event.uuid if parent_event else None,
@@ -927,7 +1225,8 @@ class DropProne(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name  # Populate for combat log generation
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:

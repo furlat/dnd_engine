@@ -1264,6 +1264,19 @@ class ExtraAttack(BaseAction):
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the extra attack action."""
+        # Populate entity names and weapon name for combat log generation
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        source_name = source_entity.name if source_entity else None
+        target_name = target_entity.name if target_entity else None
+
+        # Get weapon name
+        weapon_name = None
+        if source_entity:
+            weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
+            weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+
         return AttackEvent(
             name=f"{self.name}",
             parent_event=parent_event.uuid if parent_event else None,
@@ -1272,7 +1285,10 @@ class ExtraAttack(BaseAction):
             target_entity_uuid=self.target_entity_uuid,
             weapon_slot=self.weapon_slot,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name,
+            target_entity_name=target_name,
+            weapon_name=weapon_name
         )
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:

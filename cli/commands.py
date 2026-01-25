@@ -433,6 +433,14 @@ def handle_end_turn(client: APIClient, state: GameState) -> Optional[str]:
         for action in ai_actions:
             _log_ai_action(action, state)
 
+        # Capture AI movement path for display on map
+        for action in ai_actions:
+            if action.get("entry_type") == "movement":
+                path = action.get("data", {}).get("path")
+                if path:
+                    state.last_movement_path = [tuple(p) for p in path]
+                    break
+
     status = result.get("status")
     if status == "encounter_ended":
         return "encounter_ended"
@@ -540,22 +548,30 @@ def _log_attack(result: Dict[str, Any], weapon_name: str, target_name: str, stat
 
 
 def _log_ai_action(action: Dict[str, Any], state: GameState):
-    """Log an AI action to combat log."""
-    action_type = action.get("type", "")
-    if action_type == "attack":
-        attacker = action.get("attacker", "Unknown")
-        target_name = action.get("target", "Unknown")
-        weapon = action.get("weapon", "weapon")
-        outcome = (action.get("outcome") or "miss").lower()
-        total_damage = action.get("total_damage", 0)
-        d20 = action.get("d20", "?")
-        all_d20_rolls = action.get("all_d20_rolls", [])
-        advantage_status = action.get("advantage_status", "none")
-        attack_bonus = action.get("attack_bonus", 0)
-        attack_total = action.get("attack_total", "?")
-        target_ac = action.get("target_ac", "?")
-        is_opp = action.get("is_opportunity_attack", False)
+    """Log an AI action to combat log.
+
+    Uses CombatLogEntry structure: entry_type, data dict.
+    """
+    entry_type = action.get("entry_type", "")
+    data = action.get("data", {})
+
+    if entry_type == "attack":
+        attacker = data.get("attacker_name", "Unknown")
+        target_name = data.get("target_name", "Unknown")
+        weapon = data.get("weapon_name", "weapon")
+        outcome = (data.get("outcome") or "miss").lower()
+        total_damage = data.get("total_damage", 0)
+        target_ac = data.get("target_ac", "?")
+        is_opp = data.get("is_opportunity_attack", False)
         opp_text = "(OA) " if is_opp else ""
+
+        # Extract from nested attack_roll
+        attack_roll = data.get("attack_roll", {})
+        d20 = attack_roll.get("d20_used", "?")
+        all_d20_rolls = attack_roll.get("all_d20_rolls", [])
+        advantage_status = attack_roll.get("advantage_status") or "none"
+        attack_bonus = attack_roll.get("bonus", 0)
+        attack_total = attack_roll.get("total", "?")
 
         roll_str = _format_roll_string(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total)
 
@@ -565,11 +581,11 @@ def _log_ai_action(action: Dict[str, Any], state: GameState):
             state.add_to_log(f"{opp_text}{attacker} hit with {weapon}! {roll_str} vs AC {target_ac} → {total_damage} dmg")
         else:
             state.add_to_log(f"{opp_text}{attacker} missed with {weapon} vs {target_name} {roll_str} vs AC {target_ac}")
-    elif action_type == "move":
-        entity = action.get("entity", "Unknown")
-        from_pos = action.get("from", [0, 0])
-        to_pos = action.get("to", [0, 0])
-        path = action.get("path", [])
+    elif entry_type == "movement":
+        entity = data.get("entity_name", "Unknown")
+        from_pos = data.get("start_position", [0, 0])
+        to_pos = data.get("end_position", [0, 0])
+        path = data.get("path", [])
         state.add_to_log(f"{entity} moves {tuple(from_pos)} → {tuple(to_pos)}")
         if path:
             state.last_movement_path = [tuple(p) for p in path]

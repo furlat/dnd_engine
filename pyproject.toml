@@ -1,5 +1,5 @@
 [tool.pyright]
-include = ["dnd", "examples"]
+include = ["dnd", "examples", "server", "cli"]
 exclude = ["**/__pycache__"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"

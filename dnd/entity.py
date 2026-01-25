@@ -670,7 +670,7 @@ class Entity(BaseBlock):
         """ request a saving throw from the target entity """
         #if dc is a uuid get the modifiable value ensure is coming from self (has self.uuid as source entity uuid)
         if isinstance(dc,UUID):
-            
+
             self.set_target_entity(dc)
             new_dc = ModifiableValue.get(dc)
             if new_dc is None or new_dc.source_entity_uuid != self.uuid:
@@ -681,7 +681,19 @@ class Entity(BaseBlock):
         else:
             int_dc = dc
         self.clear_target_entity()
-        return SavingThrowEvent(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, ability_name=ability_name, dc=int_dc)
+
+        # Get target entity name for combat log generation
+        target_entity = Entity.get(target_entity_uuid)
+        target_entity_name = target_entity.name if target_entity else None
+
+        return SavingThrowEvent(
+            source_entity_uuid=self.uuid,
+            target_entity_uuid=target_entity_uuid,
+            ability_name=ability_name,
+            dc=int_dc,
+            source_entity_name=self.name,
+            target_entity_name=target_entity_name
+        )
     
 
     def create_skill_check_request(self, target_entity_uuid: UUID, skill_name: SkillName, dc: Union[int,UUID]) -> SkillCheckEvent:
@@ -700,7 +712,19 @@ class Entity(BaseBlock):
         else:
             int_dc = dc
         self.clear_target_entity()
-        return SkillCheckEvent(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, skill_name=skill_name, dc=int_dc)
+
+        # Get target entity name for combat log generation
+        target_entity = Entity.get(target_entity_uuid)
+        target_entity_name = target_entity.name if target_entity else None
+
+        return SkillCheckEvent(
+            source_entity_uuid=self.uuid,
+            target_entity_uuid=target_entity_uuid,
+            skill_name=skill_name,
+            dc=int_dc,
+            source_entity_name=self.name,
+            target_entity_name=target_entity_name
+        )
     
     def saving_throw(self, request: SavingThrowEvent) -> Tuple[AttackOutcome, DiceRoll, bool]:
         """Make a saving throw with full event phase transitions.

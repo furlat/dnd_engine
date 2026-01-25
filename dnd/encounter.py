@@ -10,6 +10,13 @@ The Encounter class orchestrates combat:
 """
 
 from typing import Optional, Dict, List, ClassVar, Tuple
+
+__all__ = [
+    "EncounterState",
+    "TurnState",
+    "AdvanceResult",
+    "Encounter",
+]
 from uuid import UUID
 from datetime import datetime
 from pydantic import Field
@@ -18,12 +25,13 @@ from enum import Enum
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, RollType
 from dnd.core.events import (
-    EventPhase,
+    Event, EventPhase,
     EncounterStartEvent, EncounterEndEvent,
     RoundStartEvent, RoundEndEvent,
     TurnStartEvent, TurnEndEvent,
     DeathEvent
 )
+from dnd.core.combat_log import CombatLogEntry
 from dnd.entity import Entity
 from dnd.controller import Controller, TurnContext
 
@@ -41,6 +49,17 @@ class TurnState(str, Enum):
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     ENDED = "ended"
+
+
+class AdvanceResult(BaseObject):
+    """Result of advancing through turns via advance_until_player()."""
+
+    status: str = Field(description="Result status: waiting_for_human, waiting_for_claude, encounter_ended, error")
+    entity_uuid: Optional[UUID] = Field(default=None, description="UUID of entity waiting for input")
+    entity_name: Optional[str] = Field(default=None, description="Name of entity waiting for input")
+    round_number: int = Field(default=0, description="Current round number")
+    turn_index: int = Field(default=0, description="Current turn index")
+    log_start_index: int = Field(default=0, description="Combat log index before AI turns (for fetching new entries)")
 
 
 class CombatantState(BaseObject):
@@ -123,6 +142,9 @@ class Encounter(BaseObject):
     turn_state: TurnState = Field(default=TurnState.NOT_STARTED)
     started_at: Optional[datetime] = Field(default=None)
     ended_at: Optional[datetime] = Field(default=None)
+
+    # Combat log - unified log for all players
+    combat_log: List[CombatLogEntry] = Field(default_factory=list)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -630,6 +652,44 @@ class Encounter(BaseObject):
         return removed
 
     # =========================================================================
+    # Combat Log Management
+    # =========================================================================
+
+    def add_event_to_combat_log(self, event: Event) -> Optional[int]:
+        """
+        Add event's combat_log entry to encounter log.
+
+        Uses event.combat_log if available (auto-generated at COMPLETION phase).
+
+        Args:
+            event: The event containing the combat log entry.
+
+        Returns:
+            Log entry index if successful, None if no log entry was created.
+        """
+        if event is None or event.combat_log is None:
+            return None
+
+        self.combat_log.append(event.combat_log)
+        return len(self.combat_log) - 1
+
+    def get_combat_log(self, since: int = 0) -> List[CombatLogEntry]:
+        """
+        Get combat log entries since given index.
+
+        Args:
+            since: Return entries with index >= since (for polling)
+
+        Returns:
+            List of CombatLogEntry
+        """
+        return self.combat_log[since:]
+
+    def clear_combat_log(self) -> None:
+        """Clear the combat log (call when starting new game)."""
+        self.combat_log = []
+
+    # =========================================================================
     # Death Handling
     # =========================================================================
 
@@ -801,15 +861,20 @@ class Encounter(BaseObject):
                 break
 
             # Execute the action
-            _ = action.apply()
+            event = action.apply()
+
+            # AUTO-CAPTURE: Add event's combat log to encounter
+            if event:
+                self.add_event_to_combat_log(event)
 
             # Check for deaths after action
             deaths = self.check_deaths()
-            if deaths:
-                # Someone died - check if encounter ended
-                if self.state != EncounterState.ACTIVE:
-                    # Encounter ended
-                    return None
+            for death_event in deaths:
+                self.add_event_to_combat_log(death_event)
+
+            if deaths and self.state != EncounterState.ACTIVE:
+                # Someone died and encounter ended
+                return None
 
         # End turn and advance to next combatant
         end_event = self.end_turn()
@@ -821,3 +886,110 @@ class Encounter(BaseObject):
         self.turn_state = TurnState.NOT_STARTED
 
         return end_event
+
+    # =========================================================================
+    # Advance Until Player Turn
+    # =========================================================================
+
+    def advance_until_player(self) -> AdvanceResult:
+        """
+        Run AI turns until human/claude turn or encounter ends.
+
+        This method runs through the turn order, executing AI turns
+        automatically and stopping when it reaches a player-controlled
+        entity (human or claude) or when the encounter ends.
+
+        Combat log entries are auto-captured during AI turns via run_turn().
+
+        Returns:
+            AdvanceResult with status and context for the caller
+        """
+        log_start = len(self.combat_log)
+
+        while self.state == EncounterState.ACTIVE:
+            controller = self.get_current_controller()
+
+            if controller is None:
+                return AdvanceResult(
+                    source_entity_uuid=self.uuid,
+                    status="error",
+                    log_start_index=log_start
+                )
+
+            # Human or Claude: stop and wait for API
+            if controller.controller_type in ("human", "claude"):
+                # Start the turn if not already started
+                if self.turn_state != TurnState.IN_PROGRESS:
+                    self.start_turn()
+
+                entity = self.get_current_entity()
+                status = "waiting_for_human" if controller.controller_type == "human" else "waiting_for_claude"
+
+                return AdvanceResult(
+                    source_entity_uuid=self.uuid,
+                    status=status,
+                    entity_uuid=entity.uuid if entity else None,
+                    entity_name=entity.name if entity else None,
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index,
+                    log_start_index=log_start
+                )
+
+            # AI: run turn (auto-captures combat log)
+            self.run_turn()
+
+        return AdvanceResult(
+            source_entity_uuid=self.uuid,
+            status="encounter_ended",
+            round_number=self.round_number,
+            turn_index=self.current_turn_index,
+            log_start_index=log_start
+        )
+
+    # =========================================================================
+    # HTTP Action Execution (for API-controlled players)
+    # =========================================================================
+
+    def execute_action(
+        self,
+        entity_uuid: UUID,
+        template_name: str,
+        target_index: Optional[int] = None
+    ) -> Optional[Event]:
+        """
+        Execute action for HTTP-based players.
+
+        Uses template + index pattern for discovery/validation.
+        Auto-captures to combat log.
+        Checks for deaths after execution.
+
+        Args:
+            entity_uuid: UUID of the entity executing the action
+            template_name: Name of the action template to execute
+            target_index: Optional target index (required for ENTITY/POSITION actions)
+
+        Returns:
+            The resulting event, or None if action failed
+
+        Raises:
+            ValueError: If entity not found or action fails
+        """
+        from dnd.actions_functional import execute_by_index
+
+        entity = Entity.get(entity_uuid)
+        if not entity:
+            raise ValueError(f"Entity {entity_uuid} not found")
+
+        # Execute via functional API (handles template lookup + instantiation)
+        event = execute_by_index(entity, template_name, target_index or 0)
+
+        # Capture to combat log
+        if event:
+            self.add_event_to_combat_log(event)
+
+        # Check deaths
+        deaths = self.check_deaths()
+        for death_event in deaths:
+            self.add_event_to_combat_log(death_event)
+
+        return event

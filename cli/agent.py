@@ -449,13 +449,18 @@ def cmd_attack(client: APIClient, target_index: int) -> int:
     if success:
         event_data = result.get("event_data", {})
         outcome = event_data.get("outcome", "???")
-        d20 = event_data.get("d20", 0)
-        all_rolls = event_data.get("all_d20_rolls", [d20])
-        adv_status = event_data.get("advantage_status", "none")
-        attack_bonus = event_data.get("attack_bonus", 0)
-        attack_total = event_data.get("attack_total", 0)
         target_ac = event_data.get("target_ac", 0)
         total_damage = event_data.get("total_damage", 0)
+
+        # New AttackLogData structure
+        attack_roll = event_data.get("attack_roll", {})
+        d20 = attack_roll.get("d20_used", 0)
+        all_rolls = attack_roll.get("all_d20_rolls", [])
+        if not all_rolls and d20:
+            all_rolls = [d20]
+        adv_status = attack_roll.get("advantage_status") or "none"
+        attack_bonus = attack_roll.get("bonus", 0)
+        attack_total = attack_roll.get("total", 0)
 
         # Format roll string
         if adv_status == "advantage" and len(all_rolls) >= 2:
@@ -646,34 +651,57 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
                 new_entries = log_data.get("entries", [])
 
                 for entry in new_entries:
-                    entry_type = entry.get("type", "")
-                    message = entry.get("message", "")
-                    details = entry.get("details", {})
+                    entry_type = entry.get("entry_type", "")
+                    summary = entry.get("summary", "")
+                    data = entry.get("data", {})
 
-                    # Show opponent actions
+                    # Show opponent actions using CombatLogEntry structure
                     if entry_type == "attack":
-                        attacker = details.get("attacker", "???")
-                        target = details.get("target", "???")
-                        outcome = details.get("outcome", "???")
-                        d20 = details.get("d20", 0)
-                        attack_bonus = details.get("attack_bonus", 0)
-                        attack_total = details.get("attack_total", 0)
-                        target_ac = details.get("target_ac", 0)
-                        total_damage = details.get("total_damage", 0)
+                        attacker = data.get("attacker_name", "???")
+                        target = data.get("target_name", "???")
+                        outcome = data.get("outcome", "???")
+                        target_ac = data.get("target_ac", 0)
+                        total_damage = data.get("total_damage", 0)
+
+                        # Extract from nested attack_roll
+                        attack_roll = data.get("attack_roll", {})
+                        d20 = attack_roll.get("d20_used", 0)
+                        all_rolls = attack_roll.get("all_d20_rolls", [])
+                        if not all_rolls and d20:
+                            all_rolls = [d20]
+                        adv_status = attack_roll.get("advantage_status") or "none"
+                        attack_bonus = attack_roll.get("bonus", 0)
+                        attack_total = attack_roll.get("total", 0)
+
+                        # Format roll display
+                        if adv_status == "advantage" and len(all_rolls) >= 2:
+                            roll_str = f"ADV d20({all_rolls[0]},{all_rolls[1]}->{d20})"
+                        elif adv_status == "disadvantage" and len(all_rolls) >= 2:
+                            roll_str = f"DIS d20({all_rolls[0]},{all_rolls[1]}->{d20})"
+                        else:
+                            roll_str = f"d20({d20})"
+
+                        bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
 
                         print(f"[OPPONENT] {attacker} attacks {target}")
-                        print(f"  Roll: d20({d20}) +{attack_bonus} = {attack_total} vs AC {target_ac}")
+                        print(f"  Roll: {roll_str} {bonus_str} = {attack_total} vs AC {target_ac}")
                         print(f"  Result: {outcome.upper()}")
                         if outcome.lower() in ["hit", "crit"]:
                             print(f"  Damage: {total_damage}")
-                    elif entry_type == "move":
-                        print(f"[OPPONENT] {message}")
+                    elif entry_type == "movement":
+                        if summary:
+                            print(f"[OPPONENT] {summary}")
+                        else:
+                            entity_name = data.get("entity_name", "Opponent")
+                            end_pos = data.get("end_position", [0, 0])
+                            print(f"[OPPONENT] {entity_name} moves to ({end_pos[0]}, {end_pos[1]})")
                     elif entry_type == "turn_end":
-                        print(f"[TURN] {message}")
+                        print(f"[TURN] {summary}")
                     elif entry_type == "death":
-                        print(f"[DEATH] {message}")
+                        print(f"[DEATH] {summary}")
 
-                    combat_log_index = entry.get("index", combat_log_index) + 1
+                # Update index using total (new format doesn't have per-entry index)
+                combat_log_index = log_data.get("total", combat_log_index)
             except Exception:
                 pass
 

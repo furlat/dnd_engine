@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData
 from typing import Optional, Callable, OrderedDict, List, Literal, Tuple
 from uuid import UUID
 from enum import Enum
@@ -42,6 +43,60 @@ class ActionEvent(Event):
     def from_costs(cls,costs: List[Cost], source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, parent_event: Optional[Event] = None, use_register: bool = True):
         base_costs = [BaseCost.model_validate(cost) for cost in costs]
         return cls(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, costs=base_costs, parent_event=parent_event.uuid if parent_event else None, use_register=use_register)
+
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
+        """Generate a combat log entry for generic actions (Dash, Dodge, Disengage, etc.).
+
+        This is the default implementation for ActionEvent. Subclasses like AttackEvent
+        and MovementEvent override this with more detailed implementations.
+
+        Uses self.* fields only - no external lookups. Entity name must be
+        populated when the event is created.
+
+        Returns:
+            CombatLogEntry for self-targeting actions, or None for base events.
+        """
+        # Use entity name from self - no external lookups
+        source_name = self.source_entity_name or "Unknown"
+        action_name = self.name or "Action"
+
+        # Build summary
+        summary = f"{source_name} uses {action_name}"
+
+        # Determine effect description based on action name
+        effect_description = ""
+        action_lower = action_name.lower()
+        if "dash" in action_lower:
+            effect_description = "Movement speed doubled for this turn"
+        elif "dodge" in action_lower:
+            effect_description = "Attacks against have disadvantage, advantage on DEX saves"
+        elif "disengage" in action_lower:
+            effect_description = "Movement doesn't provoke opportunity attacks"
+        elif "second wind" in action_lower:
+            effect_description = "Heals for 1d10 + fighter level"
+        elif "action surge" in action_lower:
+            effect_description = "Gains an additional action this turn"
+        else:
+            effect_description = f"{action_name} effect applied"
+
+        # Build structured data
+        data = SelfActionLogData(
+            entity_name=source_name,
+            entity_uuid=str(self.source_entity_uuid),
+            action_name=action_name,
+            effect_description=effect_description
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ACTION,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            summary=summary,
+            detail_lines=[effect_description] if effect_description else [],
+            data=data.model_dump(),
+            success=True
+        )
+
 
 class BaseAction(BaseObject):
     """Base class for all actions in the game. This class provides the basic structure
