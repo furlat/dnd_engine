@@ -774,7 +774,8 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Action economy | `dnd/blocks/action_economy.py` |
 | Senses (vision, position) | `dnd/blocks/sensory.py` |
 | **Character Classes** | |
-| Fighter class (GWF, dice processors) | `dnd/classes/fighter.py` |
+| Fighter class (all features + Champion) | `dnd/classes/fighter.py` |
+| Dice processor utilities | `dnd/classes/dice_processor_utils.py` |
 | Class module exports | `dnd/classes/__init__.py` |
 | **Monsters & Examples** | |
 | Simple creatures (Goblin, Skeleton) | `dnd/monsters/bestiary.py` |
@@ -784,6 +785,12 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Spatial events test | `examples/spatial_events_test.py` |
 | Dice processor tests | `examples/test_dice_processors.py` |
 | Great Weapon Fighting tests | `examples/test_great_weapon_fighting.py` |
+| Second Wind tests | `examples/test_second_wind.py` |
+| Action Surge tests | `examples/test_action_surge.py` |
+| Extra Attack tests | `examples/test_extra_attack.py` |
+| Indomitable tests | `examples/test_indomitable.py` |
+| Protection tests | `examples/test_protection.py` |
+| Survivor tests | `examples/test_survivor.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
 | Session management | `server/session.py` |
@@ -817,6 +824,24 @@ All conditions in `dnd/conditions.py`:
 | **Restrained** | Speed=0, disadvantage attacks, fail DEX | Advantage | - |
 | **Stunned** | Auto-fail STR/DEX saves | Advantage | Incapacitated |
 | **Unconscious** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft, prone-like | Incapacitated |
+
+### Fighter Conditions (in `dnd/classes/fighter.py`)
+
+| Condition | Effect | Notes |
+|-----------|--------|-------|
+| **FightingStyleArchery** | +2 ranged attack bonus | Modifier on attack rolls |
+| **FightingStyleDefense** | +1 AC when wearing armor | AC modifier |
+| **FightingStyleDueling** | +2 damage with one-handed weapon | Damage modifier |
+| **GreatWeaponFighting** | Reroll 1s and 2s on damage dice | EventHandler on DAMAGE_ROLLED |
+| **FightingStyleProtection** | Impose disadvantage on attacks vs allies | EventHandler, uses reaction |
+| **FightingStyleTwoWeaponFighting** | Add ability mod to off-hand damage | Damage modifier |
+| **SecondWindFeature** | Grants Second Wind action + resource | Level-based healing |
+| **ActionSurgeFeature** | Grants Action Surge action + resource | Once per turn enforcement |
+| **ExtraAttackFeature** | Grants Extra Attack actions + resource | 1/2/3 at L5/L11/L20 |
+| **ImprovedCritical** | Crit on 19-20 | Critical modifier |
+| **SuperiorCritical** | Crit on 18-20 | Critical modifier |
+| **Indomitable** | Reroll failed saves | EventHandler on SAVING_THROW |
+| **Survivor** | Heal 5+CON at turn start when HP ≤ 50% | EventHandler on TURN_START |
 
 ## Global Registries
 
@@ -1526,7 +1551,7 @@ Contains high-level architecture documents and implementation plans created duri
 | `MASTER_SUMMARY.md` | High-level implementation plan for encounter system, lists what exists vs what's needed, proposed new modules |
 | `CODEBASE_ANALYSIS.md` | Deep dive into existing primitives (Entity, Senses, GridMap, Events, Actions), how they integrate |
 | `EXAMPLE_PATTERNS.md` | **IMPORTANT**: Correct patterns for writing examples and tests - read before writing any new example code |
-| `CLASS_SYSTEM_DESIGN.md` | **NEXT FEATURE**: Complete design for class system (Fighter), resource system, condition extensions (action registry already implemented) |
+| `CLASS_SYSTEM_DESIGN.md` | Design doc for class system - Fighter + Champion fully implemented, includes dice processor patterns |
 | `UI_ARCHITECTURE.md` | Documents the CLI and Server architecture (session-based PvP, combat log, agent CLI) |
 | `FRONTEND_POSTMORTEM.md` | **LESSONS LEARNED** - Post-mortem of failed web UI attempt. Documents what went wrong. Read to understand how NOT to work on this codebase. |
 
@@ -1567,11 +1592,11 @@ The `*_NOTES.md` files compare SRD rules against our implementation, identifying
 - **PvP input handling** fixed for Windows/WSL compatibility
 - **Encounter ending** now refreshes state before showing final screen
 
-## Class System (PARTIALLY IMPLEMENTED)
+## Class System (Fighter + Champion COMPLETE)
 
 **Design Document**: `claude_docs/CLASS_SYSTEM_DESIGN.md`
 
-The class system models D&D character classes as collections of conditions applied to entities. **Action registry is complete**, resource system is next.
+The class system models D&D character classes as collections of conditions applied to entities. Fighter class with Champion archetype is fully implemented.
 
 ### Implementation Status
 
@@ -1583,12 +1608,18 @@ The class system models D&D character classes as collections of conditions appli
 | **Resource system** | ✅ DONE | `ActionEconomy.resources` with recharge |
 | **Unified costs** | ✅ DONE | `BaseCost.resource_name/resource_cost` |
 | **DAMAGE_ROLLED event** | ✅ DONE | Event between dice roll and damage application |
-| **Dice processors** | ✅ DONE | `dnd/classes/fighter.py` - reroll, floor, ceiling, etc. |
-| **Great Weapon Fighting** | ✅ DONE | First fighting style using event handlers |
+| **Dice processors** | ✅ DONE | `dnd/classes/dice_processor_utils.py` |
+| **Entity.on_turn_start()** | ✅ DONE | Turn start event with handler support |
+| **Fighter: All Fighting Styles** | ✅ DONE | Archery, Defense, Dueling, GWF, Protection, TWF |
+| **Fighter: Second Wind** | ✅ DONE | Bonus action heal, short rest recharge |
+| **Fighter: Action Surge** | ✅ DONE | Extra action, once per turn, short rest recharge |
+| **Fighter: Extra Attack** | ✅ DONE | 1/2/3 extra attacks at L5/L11/L20 |
+| **Fighter: Indomitable** | ✅ DONE | Reroll failed saves, long rest recharge |
+| **Champion: Improved Critical** | ✅ DONE | Crit on 19-20 at L3 |
+| **Champion: Superior Critical** | ✅ DONE | Crit on 18-20 at L15 |
+| **Champion: Survivor** | ✅ DONE | Heal 5+CON at turn start when HP ≤ 50% |
 | **Condition tags** | ❌ TODO | `tags: List[str]` for filtering |
-| **Auto-cleanup (actions/resources)** | ❌ TODO | Extend `_apply()` return signature |
-| **Rest system** | ❌ TODO | `Entity.short_rest()`, `long_rest()` |
-| **Fighter class (remaining)** | ❌ TODO | Other Fighting Styles, Second Wind |
+| **Fighter factory** | ❌ TODO | `create_fighter(level, fighting_style)` helper |
 
 ### Resource System (ActionEconomy Extension)
 
@@ -1623,33 +1654,42 @@ class BaseCost(BaseModel):
     resource_cost: int = 0
 ```
 
-### Example: Second Wind (Fighter Level 1)
+### Fighter Feature Conditions (in `dnd/classes/fighter.py`)
+
+| Level | Feature | Condition/Action | Notes |
+|-------|---------|------------------|-------|
+| 1 | Fighting Style | `FightingStyleArchery`, `FightingStyleDefense`, `FightingStyleDueling`, `GreatWeaponFighting`, `FightingStyleProtection`, `FightingStyleTwoWeaponFighting` | Choose one |
+| 1 | Second Wind | `SecondWindFeature` (condition) + `SecondWind` (action) | 1d10+level heal, short rest |
+| 2 | Action Surge | `ActionSurgeFeature` (condition) + `ActionSurge` (action) | +1 action, short rest |
+| 3 | Champion: Improved Critical | `ImprovedCritical` | Crit on 19-20 |
+| 5 | Extra Attack | `ExtraAttackFeature` + `ExtraAttack` (action) | 1 extra (2 at L11, 3 at L20) |
+| 9 | Indomitable | `Indomitable` | Reroll failed save, long rest |
+| 15 | Champion: Superior Critical | `SuperiorCritical` | Crit on 18-20 |
+| 18 | Champion: Survivor | `Survivor` | Heal 5+CON at turn start |
+
+### Example: Applying Fighter Features
 
 ```python
-# Register resource
-entity.action_economy.add_resource("second_wind", maximum=1, recharge_type=RechargeType.SHORT_REST)
-
-# Register action template
-second_wind = SecondWind(
-    source_entity_uuid=entity.uuid,
-    fighter_level=1,
-    template=True
+from dnd.classes.fighter import (
+    SecondWindFeature, ActionSurgeFeature, ExtraAttackFeature,
+    GreatWeaponFighting, ImprovedCritical, Indomitable, Survivor
 )
-entity.register_action(second_wind)
 
-# Action appears in get_available_actions().self_actions
-# Execute via execute_by_index(entity, "Second Wind", 0)
+# Level 5 Fighter with GWF
+fighter.add_condition(GreatWeaponFighting(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
+fighter.add_condition(SecondWindFeature(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid, fighter_level=5))
+fighter.add_condition(ActionSurgeFeature(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
+fighter.add_condition(ExtraAttackFeature(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid, extra_attacks=1))
+
+# Level 18 Champion
+fighter.add_condition(ImprovedCritical(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
+fighter.add_condition(Indomitable(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid, num_uses=2))
+fighter.add_condition(Survivor(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
 ```
 
-### Remaining Implementation Phases
+### Next Steps: Fighter Factory
 
-1. **Resource system in ActionEconomy** - `RechargeType`, `Resource`, recharge triggers
-2. **BaseCost extension** - `resource_name`, `resource_cost` fields
-3. **SecondWind action** - Proof-of-concept using new system
-4. **Condition tags** - `tags: List[str]` for class/level filtering
-5. **Extended `_apply()` return** - Include `action_ids`, `resource_names`
-6. **Rest system** - `Entity.short_rest()`, `long_rest()`
-7. **Fighter class** - Fighting Styles, SecondWind condition
+TODO: Create `create_fighter(level, fighting_style, archetype)` factory that applies all appropriate features for a given level.
 
 ---
 
