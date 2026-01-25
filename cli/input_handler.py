@@ -7,10 +7,13 @@ Provides abstract base class and implementations for:
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 
 from cli.action_model import AvailableActionsState
 from cli import display
+
+if TYPE_CHECKING:
+    from cli.action_model import ShortcutRegistry
 
 
 class InputHandler(ABC):
@@ -33,7 +36,8 @@ class InputHandler(ABC):
         current_entity_uuid: Optional[str] = None,
         valid_positions: Optional[List[Tuple[int, int]]] = None,
         movement_path: Optional[List[Tuple[int, int]]] = None,
-        visibility: Optional[Dict[str, Any]] = None
+        visibility: Optional[Dict[str, Any]] = None,
+        shortcut_registry: Optional["ShortcutRegistry"] = None
     ) -> None:
         """Display the current game state."""
         pass
@@ -92,9 +96,11 @@ class TUIInputHandler(InputHandler):
         current_entity_uuid: Optional[str] = None,
         valid_positions: Optional[List[Tuple[int, int]]] = None,
         movement_path: Optional[List[Tuple[int, int]]] = None,
-        visibility: Optional[Dict[str, Any]] = None
+        visibility: Optional[Dict[str, Any]] = None,
+        shortcut_registry: Optional["ShortcutRegistry"] = None
     ) -> None:
         """Render full-screen TUI."""
+        _ = actions  # Available via actions_raw for display
         display.render_full_screen(
             grid=grid,
             entities=entities,
@@ -104,7 +110,8 @@ class TUIInputHandler(InputHandler):
             visibility=visibility,
             movement_path=movement_path,
             valid_positions=valid_positions,
-            is_my_turn=is_my_turn
+            is_my_turn=is_my_turn,
+            shortcut_registry=shortcut_registry
         )
 
     def show_result(self, result: Dict[str, Any], player_name: str = "You") -> None:
@@ -162,9 +169,13 @@ class HeadlessInputHandler(InputHandler):
         current_entity_uuid: Optional[str] = None,
         valid_positions: Optional[List[Tuple[int, int]]] = None,
         movement_path: Optional[List[Tuple[int, int]]] = None,
-        visibility: Optional[Dict[str, Any]] = None
+        visibility: Optional[Dict[str, Any]] = None,
+        shortcut_registry: Optional["ShortcutRegistry"] = None
     ) -> None:
         """Print simple text state summary."""
+        # Unused params in headless mode
+        _ = grid, actions_raw, valid_positions, movement_path, visibility, shortcut_registry
+
         if self.silent:
             return
 

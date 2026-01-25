@@ -13,7 +13,49 @@ import time
 
 from cli.api_client import APIClient
 from cli.commands import parse_command, execute_command, GameState, MetaCommand
+from cli.action_model import ShortcutRegistry
 from cli import display
+
+# Module-level shortcut registry for session-stable shortcuts
+_shortcut_registry: Optional[ShortcutRegistry] = None
+
+
+def get_shortcut_registry() -> ShortcutRegistry:
+    """Get or create the session shortcut registry."""
+    global _shortcut_registry
+    if _shortcut_registry is None:
+        _shortcut_registry = ShortcutRegistry()
+    return _shortcut_registry
+
+
+def reset_shortcut_registry():
+    """Reset the shortcut registry (for new games)."""
+    global _shortcut_registry
+    _shortcut_registry = ShortcutRegistry()
+
+
+def try_execute_dynamic_self_action(cmd_str: str, client: APIClient, state: GameState) -> Optional[str]:
+    """
+    Try to execute a dynamic self-action using the shortcut registry.
+
+    Returns:
+        "refresh" if action was executed
+        None if command wasn't a self-action (fall through to execute_command)
+    """
+    if not state.actions:
+        return None
+
+    registry = get_shortcut_registry()
+    action = state.actions.get_self_action_by_command(cmd_str.strip().lower(), registry)
+
+    if action:
+        # Execute the self-action
+        result = client.execute_action(action.template_name, 0)
+        display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+        state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name}.")
+        return "refresh"
+
+    return None  # Not a self-action, fall through
 
 
 def prompt_with_connection_poll(client: APIClient, pvp_mode: bool = False, poll_interval: float = 2.0) -> str:
@@ -65,6 +107,9 @@ def refresh_state(client: APIClient, state: GameState, clear_path: bool = False)
         if state.turn.get("is_human_turn", False):
             actions_data = client.get_available_actions()
             state.update_actions(actions_data)
+            # Register actions with session-stable shortcut registry
+            if state.actions:
+                state.actions.register_actions(get_shortcut_registry())
         else:
             state.actions = None
             state.actions_raw = {}
@@ -102,7 +147,7 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: Optional
         except Exception:
             pass  # Don't fail render if status check fails
 
-    # Use the new full-screen render
+    # Use the new full-screen render with session-stable shortcuts
     display.render_full_screen(
         grid=state.grid,
         entities=state.entities,
@@ -112,7 +157,8 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: Optional
         visibility=state.visibility,
         movement_path=state.last_movement_path,
         valid_positions=state.valid_move_positions,
-        is_my_turn=is_my_turn
+        is_my_turn=is_my_turn,
+        shortcut_registry=get_shortcut_registry()
     )
 
     # Clear transient display state after showing
@@ -254,6 +300,9 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
 
 def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mode: bool = False, hero_uuid: Optional[str] = None, initial_log_index: int = 0):
     """Main game loop."""
+    # Reset shortcut registry for new game session
+    reset_shortcut_registry()
+
     # Enter alternate screen for clean full-screen display
     display.enter_alternate_screen()
 
@@ -330,13 +379,12 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
                         hints.append(f"Move:{state.actions.remaining_movement}ft")
                     if state.actions.can_attack:
                         hints.append("Attack")
-                    # Check for self-targeting actions
-                    if state.actions.get_self_action("Dash"):
-                        hints.append("Dash")
-                    if state.actions.get_self_action("Dodge"):
-                        hints.append("Dodge")
-                    if state.actions.get_self_action("Disengage"):
-                        hints.append("Disengage")
+                    # Dynamic self-action hints using registry
+                    registry = get_shortcut_registry()
+                    for act in state.actions.self_actions:
+                        if act.can_afford:
+                            shortcut = registry.get_or_create_shortcut(act.template_name)
+                            hints.append(f"{act.display_name}[{shortcut}]")
                 hints.append("End")
 
                 display.show_info(f"Actions: {', '.join(hints)} | ? for help")
@@ -347,8 +395,19 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
             cmd_str = prompt_with_connection_poll(client, pvp_mode=pvp_mode)
             cmd = parse_command(cmd_str)
 
-            # Execute command
-            result = execute_command(cmd, client, state)
+            # Handle "la" (list actions) command
+            if cmd.command == "la":
+                panel = display.render_all_actions(get_shortcut_registry(), state.actions)
+                display.console.print(panel)
+                need_redraw = False
+                continue
+
+            # Try dynamic self-action first (before legacy execute_command)
+            result = try_execute_dynamic_self_action(cmd_str, client, state)
+
+            # Fall through to legacy command handling if not a self-action
+            if result is None:
+                result = execute_command(cmd, client, state)
 
             if result == "quit":
                 display.show_info("Goodbye!")

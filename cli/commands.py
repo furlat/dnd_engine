@@ -26,6 +26,7 @@ class MetaCommand(Enum):
     MAP = "map"
     HELP = "help"
     QUIT = "quit"
+    LIST_ACTIONS = "la"
     # History navigation
     PREV_TURN = "pt"
     NEXT_TURN = "nt"
@@ -34,21 +35,21 @@ class MetaCommand(Enum):
 
 
 # Command aliases
+# NOTE: Self-action shortcuts (d, o, i, sw, as, etc.) are dynamically managed
+# by ShortcutRegistry - do NOT add them here as hardcoded aliases.
 ALIASES: Dict[str, str] = {
-    # Action aliases
+    # Structural commands only
     "m": "move",
     "a": "attack",
-    "d": "dash",
-    "o": "dodge",
-    "i": "disengage",
     "e": "end",
-    "su": "standup",
     # Meta aliases
     "s": "status",
     "?": "help",
     "h": "help",
     "q": "quit",
     "exit": "quit",
+    "la": "la",  # list actions
+    "list": "la",
     # History navigation
     "pt": "pt",
     "nt": "nt",
@@ -244,6 +245,9 @@ def execute_command(
     This handles meta commands and delegates action commands to the caller.
     For a fully unified experience, use ActionExecutor for actions.
 
+    NOTE: Self-actions are now handled dynamically by GameLoop using
+    ShortcutRegistry. This legacy function only handles move/attack/end.
+
     Returns:
         "quit" - user wants to quit
         "refresh" - refresh display
@@ -259,27 +263,13 @@ def execute_command(
             return handle_move(cmd, client, state)
         elif cmd.command == "attack":
             return handle_attack(cmd, client, state)
-        elif cmd.command == "dash":
-            result = client.dash()
-            display.show_action_result(result, state.player_entity_name)
-            state.add_to_log(f"{state.player_entity_name} dashes! Movement doubled.")
-            return "refresh"
-        elif cmd.command == "dodge":
-            result = client.dodge()
-            display.show_action_result(result, state.player_entity_name)
-            state.add_to_log(f"{state.player_entity_name} takes the Dodge action.")
-            return "refresh"
-        elif cmd.command == "disengage":
-            result = client.disengage()
-            display.show_action_result(result, state.player_entity_name)
-            state.add_to_log(f"{state.player_entity_name} disengages.")
-            return "refresh"
         elif cmd.command == "end":
             return handle_end_turn(client, state)
         else:
+            # Self-actions should be handled by GameLoop with ShortcutRegistry
             display.set_output([
                 f"Unknown command: {cmd.raw}",
-                "Type '?' for help"
+                "Type '?' for help or 'la' to list actions"
             ])
             return "refresh"
 

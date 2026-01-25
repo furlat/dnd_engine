@@ -87,6 +87,19 @@ from dnd.classes.dice_processor_utils import (
     reroll_ones_once,
 )
 
+# Fighter factory
+from dnd.classes.fighter_factory import (
+    FighterConfig,
+    FightingStyleChoice,
+    EquipmentPreset,
+    create_fighter,
+    get_proficiency_bonus,
+    get_extra_attacks,
+    get_action_surge_uses,
+    get_indomitable_uses,
+    calculate_final_ability_scores,
+)
+
 __all__ = [
     # Dice manipulation - core utility
     "create_modified_dice_roll",
@@ -139,4 +152,14 @@ __all__ = [
     "Survivor",
     "create_survivor_handler",
     "survivor_processor",
+    # Fighter Factory
+    "FighterConfig",
+    "FightingStyleChoice",
+    "EquipmentPreset",
+    "create_fighter",
+    "get_proficiency_bonus",
+    "get_extra_attacks",
+    "get_action_surge_uses",
+    "get_indomitable_uses",
+    "calculate_final_ability_scores",
 ]

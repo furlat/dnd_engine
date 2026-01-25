@@ -13,127 +13,23 @@ from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import (
-    EquipmentConfig, Weapon, BodyArmor, Shield,
-    WeaponSlot, WeaponProperty, ArmorType, BodyPart, Range
+    EquipmentConfig, BodyArmor,
+    WeaponSlot, ArmorType, BodyPart
 )
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.modifiers import DamageType
 from dnd.core.values import ModifiableValue
-from dnd.core.events import RangeType
 
-
-def create_scimitar(source_id: UUID) -> Weapon:
-    """Creates a scimitar - 1d6 slashing, finesse, light"""
-    return Weapon(
-        source_entity_uuid=source_id,
-        name="Scimitar",
-        description="A curved slashing sword favored by goblins.",
-        damage_dice=6,
-        dice_numbers=1,
-        damage_type=DamageType.SLASHING,
-        properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT],
-        range=Range(type=RangeType.REACH, normal=5),
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        ),
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[]
-    )
-
-
-def create_shortsword(source_id: UUID) -> Weapon:
-    """Creates a shortsword - 1d6 piercing, finesse, light"""
-    return Weapon(
-        source_entity_uuid=source_id,
-        name="Shortsword",
-        description="A short blade suitable for quick strikes.",
-        damage_dice=6,
-        dice_numbers=1,
-        damage_type=DamageType.PIERCING,
-        properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT],
-        range=Range(type=RangeType.REACH, normal=5),
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        ),
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[]
-    )
-
-
-def create_shortbow(source_id: UUID) -> Weapon:
-    """Creates a shortbow - 1d6 piercing, ranged (80/320)"""
-    return Weapon(
-        source_entity_uuid=source_id,
-        name="Shortbow",
-        description="A small bow suitable for quick shots.",
-        damage_dice=6,
-        dice_numbers=1,
-        damage_type=DamageType.PIERCING,
-        properties=[WeaponProperty.RANGED, WeaponProperty.TWO_HANDED],
-        range=Range(type=RangeType.RANGE, normal=80, long=320),
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        ),
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[]
-    )
-
-
-def create_longbow(source_id: UUID) -> Weapon:
-    """Creates a longbow - 1d8 piercing, ranged (150/600), heavy"""
-    return Weapon(
-        source_entity_uuid=source_id,
-        name="Longbow",
-        description="A tall bow capable of long-range shots.",
-        damage_dice=8,
-        dice_numbers=1,
-        damage_type=DamageType.PIERCING,
-        properties=[WeaponProperty.RANGED, WeaponProperty.TWO_HANDED, WeaponProperty.HEAVY],
-        range=Range(type=RangeType.RANGE, normal=150, long=600),
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        ),
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[]
-    )
-
-
-def create_leather_armor(source_id: UUID) -> BodyArmor:
-    """Creates leather armor - AC 11 + Dex"""
-    return BodyArmor(
-        source_entity_uuid=source_id,
-        name="Leather Armor",
-        description="Basic leather armor providing light protection.",
-        type=ArmorType.LIGHT,
-        body_part=BodyPart.BODY,
-        ac=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=11,
-            value_name="Armor Class"
-        ),
-        max_dex_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=10,  # No cap for light armor
-            value_name="Max Dex Bonus"
-        )
-    )
+# Import weapons and armor from items module
+from dnd.items import (
+    create_scimitar,
+    create_shortsword,
+    create_shortbow,
+    create_dagger,
+    create_leather_armor,
+    create_wooden_shield,
+)
 
 
 def create_armor_scraps(source_id: UUID) -> BodyArmor:
@@ -153,20 +49,6 @@ def create_armor_scraps(source_id: UUID) -> BodyArmor:
             source_entity_uuid=source_id,
             base_value=0,  # No dex bonus for this armor type
             value_name="Max Dex Bonus"
-        )
-    )
-
-
-def create_wooden_shield(source_id: UUID) -> Shield:
-    """Creates a basic wooden shield - +2 AC"""
-    return Shield(
-        source_entity_uuid=source_id,
-        name="Wooden Shield",
-        description="A crude wooden shield.",
-        ac_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=2,
-            value_name="Shield AC Bonus"
         )
     )
 
@@ -351,29 +233,6 @@ def create_skeleton(
     entity.equipment.equip(shortsword, WeaponSlot.MELEE_MAIN)
 
     return entity
-
-
-def create_dagger(source_id: UUID) -> Weapon:
-    """Creates a dagger - 1d4 piercing, finesse, light, thrown"""
-    return Weapon(
-        source_entity_uuid=source_id,
-        name="Dagger",
-        description="A simple blade for quick strikes.",
-        damage_dice=4,
-        dice_numbers=1,
-        damage_type=DamageType.PIERCING,
-        properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT, WeaponProperty.THROWN],
-        range=Range(type=RangeType.REACH, normal=5),
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        ),
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[]
-    )
 
 
 def create_goblin_archer(

@@ -40,7 +40,6 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | Cover System (+2/+5 AC) | MEDIUM | Medium |
 | Difficult Terrain | MEDIUM | Easy |
 | Ranged Long Range Disadvantage | MEDIUM | Easy |
-| Fighter Factory Function | MEDIUM | Easy |
 | Spellcasting | LOW | High |
 
 ---
@@ -96,7 +95,8 @@ pyright
 dnd/
 ├── core/           # Base classes, events, dice, gridmap, values
 ├── blocks/         # Entity components (abilities, health, equipment, etc.)
-├── classes/        # Character classes (fighter.py)
+├── classes/        # Character classes (fighter.py, fighter_factory.py)
+├── items/          # Weapon/armor factories (WEAPONS, ARMORS, SHIELDS dicts)
 ├── monsters/       # Creature factories (bestiary.py)
 ├── actions.py      # Attack, Move, Dash, Dodge, Disengage
 ├── conditions.py   # All D&D conditions
