@@ -16,8 +16,7 @@ from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton, create_goblin
 from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
-from dnd.classes.fighter import ExtraAttackFeature, ExtraAttack, HasAttacked
-from dnd.blocks.action_economy import RechargeType
+from dnd.classes.fighter import ExtraAttackFeature, ExtraAttack
 from dnd.core.events import WeaponSlot, EventQueue
 
 

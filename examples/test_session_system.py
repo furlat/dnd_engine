@@ -17,13 +17,14 @@ import sys
 # Add project root to path
 sys.path.insert(0, '.')
 
+from fastapi import HTTPException
 from server.session import (
     SessionManager, PlayerSession, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
 )
 from dnd.entity import Entity
-from dnd.encounter import Encounter, TurnState
-from dnd.controller import HumanController, Controller
+from dnd.encounter import Encounter
+from dnd.controller import HumanController
 from dnd.monsters.bestiary import create_skeleton
 from dnd.core.gridmap import get_map, reset_map
 
@@ -215,6 +216,10 @@ def test_turn_validation():
     # Test validation
     active_entity = game.active_entity_uuid
     active_player = game.active_player
+    if active_player is None or active_entity is None:
+        print(f"  FAILED: No active player or entity")
+        return False
+
     other_entity = skeleton.uuid if active_entity == hero.uuid else hero.uuid
     other_player = claude_session if active_player == human_session else human_session
 
@@ -222,10 +227,10 @@ def test_turn_validation():
 
     # Should succeed: active player acting with their entity
     try:
-        session, g = mgr.validate_action(active_player.session_id, active_entity)
+        _, _ = mgr.validate_action(active_player.session_id, active_entity)
         print(f"  Valid action (correct player, correct entity): OK")
-    except Exception as e:
-        print(f"  FAILED: {e}")
+    except HTTPException as e:
+        print(f"  FAILED: {e.detail}")
         return False
 
     # Should fail: other player trying to act
@@ -233,7 +238,7 @@ def test_turn_validation():
         mgr.validate_action(other_player.session_id, other_entity)
         print(f"  FAILED: Should have rejected wrong player's turn")
         return False
-    except Exception as e:
+    except HTTPException as e:
         print(f"  Rejected wrong player: OK ({e.detail})")
 
     # Should fail: active player trying to use other's entity
@@ -241,7 +246,7 @@ def test_turn_validation():
         mgr.validate_action(active_player.session_id, other_entity)
         print(f"  FAILED: Should have rejected wrong entity")
         return False
-    except Exception as e:
+    except HTTPException as e:
         print(f"  Rejected wrong entity: OK ({e.detail})")
 
     # Should fail: invalid session
@@ -249,7 +254,7 @@ def test_turn_validation():
         mgr.validate_action(uuid4(), active_entity)
         print(f"  FAILED: Should have rejected invalid session")
         return False
-    except Exception as e:
+    except HTTPException as e:
         print(f"  Rejected invalid session: OK ({e.detail})")
 
     print("  PASSED")
@@ -289,6 +294,7 @@ def test_turn_switching():
     encounter.start_turn()
 
     first_entity = encounter.get_current_entity()
+    assert first_entity is not None, "First entity should exist"
     print(f"  First turn: {first_entity.name}")
 
     # Setup session manager
@@ -303,6 +309,7 @@ def test_turn_switching():
     game.assign_entity(skeleton.uuid, claude_session.session_id)
 
     first_player = game.active_player
+    assert first_player is not None, "First player should exist"
     print(f"  First player: {first_player.name}")
 
     # End turn and advance to next turn
@@ -310,6 +317,8 @@ def test_turn_switching():
 
     second_entity = encounter.get_current_entity()
     second_player = game.active_player
+    assert second_entity is not None, "Second entity should exist"
+    assert second_player is not None, "Second player should exist"
     print(f"  Second turn: {second_entity.name}")
     print(f"  Second player: {second_player.name}")
 
@@ -330,7 +339,7 @@ def test_turn_switching():
         mgr.validate_action(first_player.session_id, first_entity.uuid)
         print(f"  FAILED: Old player should not be able to act")
         return False
-    except Exception as e:
+    except HTTPException as e:
         print(f"  Old player rejected: OK ({e.detail})")
 
     print("  PASSED")

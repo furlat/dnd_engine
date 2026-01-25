@@ -162,7 +162,7 @@ async def test_multiple_listeners():
     grid = get_map()
     grid.create_rectangle(0, 0, 5, 5)
 
-    entity = Entity.create(
+    _ = Entity.create(
         source_entity_uuid=uuid4(),
         name="TestEntity",
         config=EntityConfig(position=(1, 1))

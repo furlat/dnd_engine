@@ -34,6 +34,7 @@ from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.monsters.bestiary import create_goblin, create_skeleton, create_goblin_archer
 from dnd.controller import Controller, TurnContext, HumanController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
+from dnd.actions import MovementEvent
 from dnd.core.base_actions import BaseAction, TargetType, AvailableTarget
 from dnd.reactions import add_opportunity_attack_handler
 
@@ -46,7 +47,7 @@ from server.api_models import (
     SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest
 )
 from server.session import (
-    SessionManager, PlayerSession, GameSession,
+    SessionManager, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
 )
 
@@ -96,7 +97,7 @@ def extract_attack_data_from_event(event: Event, source: "Entity | None", target
     if ac_mv:
         target_ac = ac_mv.normalized_score
     elif target:
-        target_ac = target.equipment.ac_bonus().normalized_score
+        target_ac = target.ac_bonus().normalized_score
 
     # Calculate damage
     total_damage = sum(r.total for r in damage_rolls) if damage_rolls else 0
@@ -120,8 +121,9 @@ def extract_attack_data_from_event(event: Event, source: "Entity | None", target
             dice_size = 6
             if source and weapon_slot:
                 weapon_obj = source.equipment._get_weapon_by_slot(weapon_slot)
+                # Only Weapon has damage_dice, Shield does not
                 if weapon_obj and hasattr(weapon_obj, 'damage_dice'):
-                    dice_size = weapon_obj.damage_dice
+                    dice_size = getattr(weapon_obj, 'damage_dice', 6)
             damage_dice_str = f"{num_dice}d{dice_size}"
 
     # Extract modifier breakdowns
@@ -1583,12 +1585,12 @@ async def execute_position_action(request: PositionActionRequest):
 
     # Extract event data
     event_data = None
-    if event and hasattr(event, 'start_position') and hasattr(event, 'end_position'):
+    if isinstance(event, MovementEvent):
         event_data = {
             "entity": entity.name,
             "start": list(event.start_position),
             "end": list(event.end_position),
-            "path": [list(p) for p in event.path] if hasattr(event, 'path') and event.path else []
+            "path": [list(p) for p in event.path] if event.path else []
         }
 
         sim.add_combat_log("move", f"{entity.name} moves to {tuple(event.end_position)}.", {
@@ -1728,13 +1730,13 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         log_data["target_hp"] = target_hp
         sim.add_combat_log("attack", log_msg, log_data)
 
-    elif template.target_type == TargetType.POSITION and event and hasattr(event, 'end_position'):
+    elif template.target_type == TargetType.POSITION and isinstance(event, MovementEvent):
         # Move
         event_data = {
             "entity": entity.name,
-            "start": list(event.start_position) if hasattr(event, 'start_position') else None,
+            "start": list(event.start_position),
             "end": list(event.end_position),
-            "path": [list(p) for p in event.path] if hasattr(event, 'path') and event.path else []
+            "path": [list(p) for p in event.path] if event.path else []
         }
         sim.add_combat_log("move", f"{entity.name} moves to {tuple(event.end_position)}.", event_data)
 
@@ -1839,8 +1841,8 @@ async def start_pvp_simulation():
     sim.paused = False
     sim.clear_combat_log()  # Clear combat log for new game
 
-    # Create game session
-    game = sim.create_game_session(sim.encounter)
+    # Create game session (side effect sets up session manager)
+    _ = sim.create_game_session(sim.encounter)
 
     # Get entity UUIDs
     hero_uuid = None

@@ -10,7 +10,7 @@ sys.path.insert(0, '.')
 from uuid import uuid4
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue
+from dnd.core.events import EventQueue, DamageRolledEvent
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.classes.fighter import GreatWeaponFighting, create_modified_dice_roll
@@ -164,6 +164,7 @@ def test_great_weapon_fighting_attack():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     print("\nGreatWeaponFighting attack test")
     print(f"  Attack outcome: {event.attack_outcome}")
@@ -176,7 +177,7 @@ def test_great_weapon_fighting_attack():
         from dnd.core.events import EventType
         damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
         for de in damage_events:
-            if de.roll_modifications:
+            if isinstance(de, DamageRolledEvent) and de.roll_modifications:
                 print(f"  GWF modifications: {de.roll_modifications}")
 
     print("  Attack test completed (results depend on RNG)")
@@ -216,6 +217,7 @@ def test_gwf_does_not_apply_to_ranged():
         weapon_slot=WeaponSlot.RANGED_MAIN
     )
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     print("\nGWF ranged weapon test")
     print(f"  Attack outcome: {event.attack_outcome}")
@@ -225,7 +227,7 @@ def test_gwf_does_not_apply_to_ranged():
     damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
     gwf_applied = False
     for de in damage_events:
-        if de.roll_modifications:
+        if isinstance(de, DamageRolledEvent) and de.roll_modifications:
             gwf_applied = True
 
     if not gwf_applied:
@@ -280,6 +282,7 @@ def test_gwf_does_not_apply_to_one_handed():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     print("\nGWF one-handed weapon test")
     print(f"  Attack outcome: {event.attack_outcome}")
@@ -289,7 +292,7 @@ def test_gwf_does_not_apply_to_one_handed():
     damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
     gwf_applied = False
     for de in damage_events:
-        if de.roll_modifications:
+        if isinstance(de, DamageRolledEvent) and de.roll_modifications:
             gwf_applied = True
 
     if not gwf_applied:
@@ -373,9 +376,9 @@ def test_gwf_statistics(num_runs: int = 20):
         # Check for GWF modifications
         damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
         for de in damage_events:
-            if hasattr(de, 'roll_modifications') and de.roll_modifications:
+            if isinstance(de, DamageRolledEvent) and de.roll_modifications:
                 for mod in de.roll_modifications:
-                    handler_name, roll_idx, old_total, new_total, reason = mod
+                    handler_name, _, old_total, new_total, reason = mod
                     if handler_name == "Great Weapon Fighting":
                         gwf_rerolls += 1
                         gwf_damage_gained += (new_total - old_total)

@@ -7,7 +7,6 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.layout import Layout
 from rich import box
 import sys
 import shutil
@@ -125,10 +124,10 @@ def get_output() -> List[str]:
 # ============================================================================
 
 def set_session_info(
-    hero_connected: bool = None,
-    claude_connected: bool = None,
-    session_id: str = None,
-    pvp_mode: bool = None
+    hero_connected: Optional[bool] = None,
+    claude_connected: Optional[bool] = None,
+    session_id: Optional[str] = None,
+    pvp_mode: Optional[bool] = None
 ):
     """Update session info for header display."""
     global _session_info
@@ -903,7 +902,7 @@ def show_map(
     console.print(Panel(map_text, title=title, box=box.ROUNDED))
 
 
-def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]], is_my_turn: bool = None):
+def show_turn_info(turn: Dict[str, Any], entities: List[Dict[str, Any]], is_my_turn: Optional[bool] = None):
     """Display turn information (legacy)."""
     panel = render_turn_info_panel(turn, entities, is_my_turn or False)
     console.print(panel)

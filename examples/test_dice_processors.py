@@ -7,6 +7,7 @@ Tests all dice manipulation patterns for damage roll modification.
 import sys
 sys.path.insert(0, '.')
 
+from typing import List, cast
 from uuid import uuid4
 from dnd.core.dice import DiceRoll, RollType
 from dnd.core.values import AdvantageStatus, CriticalStatus, AutoHitStatus
@@ -41,6 +42,11 @@ def create_test_roll(results: list, bonus: int = 2) -> DiceRoll:
         source_entity_uuid=uuid4(),
         target_entity_uuid=uuid4()
     )
+
+
+def get_results(roll: DiceRoll) -> List[int]:
+    """Helper to get roll results as a list (test rolls always have list results)."""
+    return cast(List[int], roll.results)
 
 
 def test_create_modified_dice_roll():
@@ -157,11 +163,12 @@ def test_reroll_below_and_substitute():
         rerolled = reroll_below_and_substitute(roll, threshold=2, dice_size=6)
 
         # Third die (5) should never change
-        if rerolled.results[2] == 5:
+        rerolled_results = get_results(rerolled)
+        if rerolled_results[2] == 5:
             successes += 1
 
         # All results should be 1-6
-        for r in rerolled.results:
+        for r in rerolled_results:
             assert 1 <= r <= 6, f"Invalid result: {r}"
 
     assert successes == 100, "Third die was modified when it shouldn't be"
@@ -183,10 +190,10 @@ def test_reroll_below_keep_best():
 
     for _ in range(100):
         roll = create_test_roll([1, 1, 1], bonus=0)  # All 1s
-        original_total = sum(roll.results)
+        original_total = sum(get_results(roll))
 
         rerolled = reroll_below_keep_best(roll, threshold=1, dice_size=6)
-        new_total = sum(rerolled.results)
+        new_total = sum(get_results(rerolled))
 
         # Should never be worse (kept best)
         assert new_total >= original_total, f"Got worse: {original_total} -> {new_total}"
@@ -212,8 +219,9 @@ def test_reroll_ones_once():
         rerolled = reroll_ones_once(roll, dice_size=6)
 
         # 2 and 3 should never change
-        assert rerolled.results[1] == 2, f"2 was changed to {rerolled.results[1]}"
-        assert rerolled.results[2] == 3, f"3 was changed to {rerolled.results[2]}"
+        rerolled_results = get_results(rerolled)
+        assert rerolled_results[1] == 2, f"2 was changed to {rerolled_results[1]}"
+        assert rerolled_results[2] == 3, f"3 was changed to {rerolled_results[2]}"
 
     # Show one example
     roll = create_test_roll([1, 2, 3], bonus=0)
@@ -238,11 +246,12 @@ def test_chained_processors():
     print(f"  After EA: {after_ea.results}")
 
     # Verify no result is below 2
-    for r in after_ea.results:
+    after_ea_results = get_results(after_ea)
+    for r in after_ea_results:
         assert r >= 2, f"Result {r} is below minimum 2"
 
     # Verify third die (4) was never changed
-    assert after_ea.results[2] == 4, "Third die was modified incorrectly"
+    assert after_ea_results[2] == 4, "Third die was modified incorrectly"
 
     print("  PASSED")
 

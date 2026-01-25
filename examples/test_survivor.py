@@ -49,8 +49,7 @@ def create_fighter(name: str, con_score: int = 14, position: tuple = (0, 0)) -> 
             charisma=AbilityConfig(ability_score=10)
         ),
         health=HealthConfig(
-            hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=18)],  # Champion Level 18
-            mode="average"  # 18d10 average = 99 + CON*18 = 99+36 = 135 HP with CON 14
+            hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=18, mode="average")],  # Champion Level 18: 18d10 average = 99 + CON*18 = 99+36 = 135 HP with CON 14
         ),
         position=position
     )
@@ -212,7 +211,7 @@ def test_survivor_multiple_turns():
     fighter = create_fighter("Champion", con_score=14)  # CON +2
     max_hp = fighter.get_hp()
     con_mod = fighter.ability_scores.constitution.modifier
-    healing_per_turn = 5 + con_mod  # 7
+    _ = 5 + con_mod  # Expected healing per turn: 7
 
     # Apply Survivor
     survivor = Survivor(

@@ -225,6 +225,9 @@ def cmd_connect(client: APIClient) -> int:
     try:
         session_result = client.create_session(player_type="claude", name="Claude")
         session_id = session_result.get("session_id")
+        if not session_id:
+            print("ERROR: No session_id returned from server")
+            return 1
         print(f"Session created: {session_id[:8]}...")
     except Exception as e:
         print(f"ERROR: Failed to create session: {e}")
@@ -594,7 +597,7 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
                 # Check if encounter ended (multiple ways to detect)
                 encounter_active = encounter.get("encounter_active", True)
                 alive = [e for e in entities if not e.get("is_dead", False) and e.get("hp", 0) > 0]
-                dead = [e for e in entities if e.get("is_dead", False) or e.get("hp", 0) <= 0]
+                _ = [e for e in entities if e.get("is_dead", False) or e.get("hp", 0) <= 0]
 
                 # Encounter is over if: explicitly ended, or only 1 combatant alive
                 if not encounter_active or len(alive) <= 1:

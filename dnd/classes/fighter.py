@@ -19,15 +19,21 @@ from dnd.core.base_actions import (
 )
 from dnd.core.events import (
     Event, EventPhase, EventType, EventQueue,
-    Trigger, EventHandler, DamageRolledEvent, RangeType, WeaponSlot
+    Trigger, EventHandler, DamageRolledEvent, RangeType, WeaponSlot, SavingThrowEvent
 )
-from dnd.core.dice import DiceRoll, Dice, RollType
-from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus
+from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
+from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
 from dnd.core.values import ModifiableValue
-from dnd.blocks.equipment import WeaponProperty, Weapon, Shield
+from dnd.blocks.equipment import WeaponProperty, Weapon, Shield, ArmorType
 from dnd.blocks.action_economy import RechargeType
-from dnd.entity import Entity
-from typing import Optional, List, Tuple
+from dnd.entity import Entity, determine_attack_outcome
+from dnd.actions import (
+    entity_action_economy_cost_evaluator,
+    entity_action_economy_cost_applier,
+    AttackEvent,
+    Attack
+)
+from typing import Optional, List, Tuple, cast
 from uuid import UUID
 import random
 
@@ -127,8 +133,6 @@ def defense_ac_check(
     Contextual check for Defense fighting style.
     Returns +1 AC only if the entity is wearing armor.
     """
-    from dnd.blocks.equipment import ArmorType
-
     # Suppress unused parameter warnings (required by callable signature)
     _ = target_entity_uuid
     _ = context
@@ -164,8 +168,6 @@ class FightingStyleDefense(BaseCondition):
         List[UUID],               # subcondition_uuids
         Optional[Event]           # completion event
     ]:
-        from dnd.core.modifiers import ContextualNumericalModifier
-
         if not self.target_entity_uuid:
             return [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
@@ -256,8 +258,6 @@ class FightingStyleDueling(BaseCondition):
         List[UUID],               # subcondition_uuids
         Optional[Event]           # completion event
     ]:
-        from dnd.core.modifiers import ContextualNumericalModifier
-
         if not self.target_entity_uuid:
             return [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
@@ -645,8 +645,6 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
         List[UUID],               # subcondition_uuids
         Optional[Event]           # completion event
     ]:
-        from dnd.core.modifiers import ContextualNumericalModifier
-
         if not self.target_entity_uuid:
             return [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
@@ -709,8 +707,6 @@ class SecondWind(BaseAction):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Import here to avoid module-level circular import
-        from dnd.actions import entity_action_economy_cost_evaluator
         self.costs = [
             Cost(
                 name="Second Wind Cost",
@@ -781,7 +777,6 @@ class SecondWind(BaseAction):
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        from dnd.actions import entity_action_economy_cost_applier
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
@@ -979,7 +974,6 @@ class ActionSurge(BaseAction):
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
         """Apply the costs (consume action_surge resource)."""
-        from dnd.actions import entity_action_economy_cost_applier
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
@@ -1270,7 +1264,6 @@ class ExtraAttack(BaseAction):
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the extra attack action."""
-        from dnd.actions import AttackEvent
         return AttackEvent(
             name=f"{self.name}",
             parent_event=parent_event.uuid if parent_event else None,
@@ -1284,8 +1277,6 @@ class ExtraAttack(BaseAction):
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:
         """Validate the extra attack action."""
-        from dnd.actions import Attack
-
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
@@ -1309,7 +1300,9 @@ class ExtraAttack(BaseAction):
             return declaration_event.cancel(status_message="Target not visible")
 
         # Validate range (reuse Attack's range validation)
-        range_validated = Attack.validate_range(declaration_event, self.source_entity_uuid)
+        # Cast to AttackEvent since _create_declaration_event creates an AttackEvent
+        attack_event = cast(AttackEvent, declaration_event)
+        range_validated = Attack.validate_range(attack_event, self.source_entity_uuid)
         if range_validated is None or range_validated.canceled:
             return range_validated
 
@@ -1325,13 +1318,13 @@ class ExtraAttack(BaseAction):
 
     def _apply(self, execution_event) -> Optional[Event]:
         """Apply the extra attack - execute the actual attack logic."""
-        from dnd.actions import Attack
         # Reuse the Attack.attack_consequences method for the actual attack
-        return Attack.attack_consequences(execution_event, self.source_entity_uuid)
+        # Cast to AttackEvent since _create_declaration_event creates an AttackEvent
+        attack_event = cast(AttackEvent, execution_event)
+        return Attack.attack_consequences(attack_event, self.source_entity_uuid)
 
     def _apply_costs(self, completion_event) -> Optional[Event]:
         """Apply the costs (consume extra_attacks resource)."""
-        from dnd.actions import entity_action_economy_cost_applier
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
@@ -1442,10 +1435,6 @@ def indomitable_processor(
 
     Per RAW: Must use the new roll, even if it's worse.
     """
-    from dnd.core.dice import AttackOutcome
-    from dnd.core.events import SavingThrowEvent
-    from dnd.entity import determine_attack_outcome
-
     # Only process own saves (target of save is the one making it)
     if event.target_entity_uuid != source_entity_uuid:
         return None
