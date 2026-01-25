@@ -9,6 +9,14 @@ Subclass this for different control modes:
 """
 
 from typing import Optional, Dict, List, ClassVar, TYPE_CHECKING
+
+__all__ = [
+    "TurnContext",
+    "Controller",
+    "HumanController",
+    "ClaudeController",
+    "MeleeAIController",
+]
 from uuid import UUID
 from pydantic import Field
 
@@ -167,3 +175,103 @@ class HumanController(Controller):
         # Always return False to exit run_turn loop immediately
         # Server will handle human turn via API endpoints
         return False
+
+
+class ClaudeController(Controller):
+    """
+    Controller for Claude-controlled entities.
+
+    Like HumanController, actions come via external API calls.
+    Has its own controller_type for proper identification and debugging.
+    """
+
+    name: str = Field(default="Claude Controller")
+    controller_type: str = Field(default="claude")
+
+    def get_next_action(
+        self,
+        entity: 'Entity',
+        context: TurnContext
+    ) -> Optional['BaseAction']:
+        # Actions come via API, not from this method
+        return None
+
+    def can_continue_turn(self, entity: 'Entity', context: TurnContext) -> bool:
+        # Return False to exit run_turn loop - server handles via API
+        return False
+
+
+class MeleeAIController(Controller):
+    """
+    Simple AI that moves toward enemies and attacks in melee.
+
+    Priority:
+    1. If enemy in weapon range -> Attack
+    2. If can still attack after moving -> Move closer, then Attack
+    3. Otherwise -> End turn
+    """
+
+    name: str = Field(default="Melee AI")
+    controller_type: str = Field(default="melee_ai")
+
+    def get_next_action(
+        self,
+        entity: 'Entity',
+        context: TurnContext
+    ) -> Optional['BaseAction']:
+        """Pick the next action based on available options."""
+        # Import here to avoid circular imports at module level
+        from dnd.actions_functional import get_available_actions
+
+        available = get_available_actions(entity)
+
+        # Priority 1: Attack if we can
+        for attack_info in available.entity_actions:
+            if attack_info.can_afford and attack_info.valid_targets:
+                target = attack_info.valid_targets[0]
+                if target.target_uuid is None:
+                    continue
+                # Use the template to create an instance
+                template = entity.get_action_template(attack_info.template_name)
+                if template:
+                    return template.instantiate(target_entity_uuid=target.target_uuid)
+
+        # Priority 2: Move toward enemy if we can still attack afterward
+        can_still_attack = entity.action_economy.can_afford("actions", 1)
+        if can_still_attack and available.position_actions:
+            move_info = available.position_actions[0]
+
+            # Find closest position to any enemy
+            closest_pos = None
+            closest_dist = float('inf')
+            current_min_dist = float('inf')
+
+            # Current distance to nearest enemy
+            for enemy_uuid, enemy_pos in context.visible_enemies.items():
+                if enemy_uuid == entity.uuid:
+                    continue
+                dist = abs(entity.position[0] - enemy_pos[0]) + abs(entity.position[1] - enemy_pos[1])
+                if dist < current_min_dist:
+                    current_min_dist = dist
+
+            # Find position that gets us closer
+            # (valid_targets already excludes occupied cells via GridMap.compute_paths)
+            for enemy_uuid, enemy_pos in context.visible_enemies.items():
+                if enemy_uuid == entity.uuid:
+                    continue
+                for target in move_info.valid_targets:
+                    if target.position is None:
+                        continue
+                    pos = target.position
+                    dist = abs(pos[0] - enemy_pos[0]) + abs(pos[1] - enemy_pos[1])
+                    if dist < closest_dist and dist < current_min_dist:
+                        closest_dist = dist
+                        closest_pos = pos
+
+            if closest_pos and closest_pos != entity.position:
+                template = entity.get_action_template(move_info.template_name)
+                if template:
+                    return template.instantiate(end_position=closest_pos)
+
+        # No good action, end turn
+        return None

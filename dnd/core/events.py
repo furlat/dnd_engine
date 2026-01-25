@@ -27,6 +27,13 @@ from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple
 from dnd.core.values import ModifiableValue
+
+# Import combat log utilities for generate_combat_log methods and combat_log field
+from dnd.core.combat_log import (
+    CombatLogEntry,
+    CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
+    SavingThrowLogData, SkillCheckLogData, format_d20_roll_line
+)
 from dnd.core.modifiers import DamageType
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
@@ -165,6 +172,10 @@ class Event(BaseObject):
     timestamp : datetime = Field(default_factory=datetime.now,description="The timestamp of the event")
     event_type: EventType = Field(description="The type of event")
     phase: EventPhase = Field(default=EventPhase.DECLARATION,description="The phase of the event")
+
+    # Entity names (populated by actions at creation/execution time for combat log generation)
+    source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
+    target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
     
     
     # Flag to indicate if event was modified by reactions
@@ -178,9 +189,24 @@ class Event(BaseObject):
     # Track children events differently
     lineage_children_events: List[UUID] = Field(default_factory=list,description="All children events that happened throughout this event's lifetime")
     children_events: List[UUID] = Field(default_factory=list,description="Children events that happened during the current phase")
-    
+
+    # Auto-generated combat log entry (populated at COMPLETION phase)
+    # Excluded from serialization - generated on demand via generate_combat_log()
+    combat_log: Optional[CombatLogEntry] = Field(default=None, exclude=True, description="Auto-generated combat log entry")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    
+
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
+        """Generate a combat log entry for this event.
+
+        Default implementation returns None. Subclasses that want combat log
+        generation should override this method.
+
+        Returns:
+            CombatLogEntry if this event type supports combat logging, None otherwise.
+        """
+        return None
+
     def get_trigger(self) -> 'Trigger':
         """ get the trigger for the event """
         return Trigger(event_type=self.event_type, event_phase=self.phase,event_source_entity_uuid=self.source_entity_uuid,event_target_entity_uuid=self.target_entity_uuid)
@@ -227,7 +253,18 @@ class Event(BaseObject):
         # Preserve lineage_children_events but clear children_events for new phase
         phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
         phase_updates['children_events'] = []
-        
+
+        # Auto-generate combat log at COMPLETION phase
+        if new_phase == EventPhase.COMPLETION:
+            try:
+                # Update self with phase_updates first so generate_combat_log has access to final state
+                temp_event = self.model_copy(update=phase_updates)
+                combat_log = temp_event.generate_combat_log()
+                if combat_log is not None:
+                    phase_updates['combat_log'] = combat_log
+            except Exception:
+                pass  # Don't break event flow if log generation fails
+
         # Post the updated event
         return self.post(**phase_updates)
     
@@ -680,11 +717,211 @@ class SavingThrowEvent(D20Event):
     ability_name: AbilityName = Field(description="The ability that is being saved against")
     event_type: EventType = Field(default=EventType.SAVING_THROW,description="The type of event")
 
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for this saving throw event.
+
+        Uses self.* fields only - no external lookups. Entity names must be
+        populated when the event is created.
+        """
+        # Use entity names from self - no external lookups
+        target_name = self.target_entity_name or "Unknown"
+        source_name = self.source_entity_name or "Unknown"
+
+        # Get DC
+        dc = self.get_dc() or 0
+
+        # Build dice roll display
+        roll = DiceRollDisplay(
+            dice_str="d20",
+            results=[],
+            bonus=0,
+            total=0
+        )
+
+        if self.dice_roll:
+            results = self.dice_roll.results
+            if isinstance(results, list):
+                roll.results = list(results)
+                roll.all_d20_rolls = list(results)
+                roll.d20_used = results[0] if results else 0
+
+                # Check for advantage/disadvantage
+                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                if adv_status:
+                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    roll.advantage_status = adv_value
+                    if len(results) >= 2:
+                        if adv_value == "advantage":
+                            roll.d20_used = max(results)
+                        elif adv_value == "disadvantage":
+                            roll.d20_used = min(results)
+            elif isinstance(results, int):
+                roll.results = [results]
+                roll.d20_used = results
+
+            roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            roll.total = self.dice_roll.total
+
+        # Build bonus breakdown
+        bonus_breakdown: List[ModifierBreakdown] = []
+        if self.bonus and isinstance(self.bonus, ModifiableValue) and hasattr(self.bonus, 'get_breakdown'):
+            for mod in self.bonus.get_breakdown():
+                bonus_breakdown.append(ModifierBreakdown(
+                    name=mod.get('name', 'Unknown'),
+                    value=mod.get('value', 0),
+                    source=mod.get('source', 'self')
+                ))
+
+        # Determine success
+        success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
+
+        # Build ability name display
+        ability_display = self.ability_name.upper()[:3]  # STR, DEX, etc.
+
+        # Build summary
+        result_str = "succeeds" if success else "fails"
+        summary = f"{target_name} {result_str} {ability_display} save (DC {dc})"
+
+        # Build detail line
+        detail_lines = []
+        detail_line = format_d20_roll_line(roll, bonus_breakdown, dc, success or False, "Save")
+        detail_lines.append(detail_line)
+
+        # Build structured data
+        data = SavingThrowLogData(
+            entity_name=target_name,
+            entity_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else str(self.source_entity_uuid),
+            ability=self.ability_name,
+            dc=dc,
+            roll=roll,
+            bonus_breakdown=bonus_breakdown,
+            success=success or False,
+            source_name=source_name if source_name != target_name else None
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SAVING_THROW,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            summary=summary,
+            detail_lines=detail_lines,
+            data=data.model_dump(),
+            success=success
+        )
+
+
 class SkillCheckEvent(D20Event):
     """An event that represents a skill check"""
     name: str = Field(default="Skill Check",description="A skill check event")
     skill_name: SkillName = Field(description="The skill that is being checked")
     event_type: EventType = Field(default=EventType.SKILL_CHECK,description="The type of event")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for this skill check event.
+
+        Uses self.* fields only - no external lookups. Entity names must be
+        populated when the event is created.
+        """
+        # Use entity name from self - no external lookups
+        source_name = self.source_entity_name or "Unknown"
+
+        # Get DC (may not exist for opposed checks)
+        dc = self.get_dc()
+
+        # Build dice roll display
+        roll = DiceRollDisplay(
+            dice_str="d20",
+            results=[],
+            bonus=0,
+            total=0
+        )
+
+        if self.dice_roll:
+            results = self.dice_roll.results
+            if isinstance(results, list):
+                roll.results = list(results)
+                roll.all_d20_rolls = list(results)
+                roll.d20_used = results[0] if results else 0
+
+                # Check for advantage/disadvantage
+                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                if adv_status:
+                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    roll.advantage_status = adv_value
+                    if len(results) >= 2:
+                        if adv_value == "advantage":
+                            roll.d20_used = max(results)
+                        elif adv_value == "disadvantage":
+                            roll.d20_used = min(results)
+            elif isinstance(results, int):
+                roll.results = [results]
+                roll.d20_used = results
+
+            roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            roll.total = self.dice_roll.total
+
+        # Build bonus breakdown
+        bonus_breakdown: List[ModifierBreakdown] = []
+        if self.bonus and isinstance(self.bonus, ModifiableValue) and hasattr(self.bonus, 'get_breakdown'):
+            for mod in self.bonus.get_breakdown():
+                bonus_breakdown.append(ModifierBreakdown(
+                    name=mod.get('name', 'Unknown'),
+                    value=mod.get('value', 0),
+                    source=mod.get('source', 'self')
+                ))
+
+        # Determine success
+        success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
+
+        # Build skill name display (capitalize first letter)
+        skill_display = self.skill_name.replace('_', ' ').title()
+
+        # Build summary
+        if dc is not None:
+            result_str = "succeeds" if success else "fails"
+            summary = f"{source_name} {result_str} {skill_display} check (DC {dc})"
+        else:
+            summary = f"{source_name} rolls {skill_display} check: {roll.total}"
+
+        # Build detail line
+        detail_lines = []
+        if dc is not None:
+            detail_line = format_d20_roll_line(roll, bonus_breakdown, dc, success or False, skill_display)
+        else:
+            # No DC - just show the roll
+            bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
+            if bonus_breakdown:
+                breakdown_str = " [" + ", ".join(
+                    f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in bonus_breakdown
+                ) + "]"
+            else:
+                breakdown_str = ""
+            d20_val = roll.d20_used if roll.d20_used is not None else (roll.results[0] if roll.results else "?")
+            detail_line = f"{skill_display}: d20({d20_val}) {bonus_str}{breakdown_str} = {roll.total}"
+        detail_lines.append(detail_line)
+
+        # Build structured data
+        data = SkillCheckLogData(
+            entity_name=source_name,
+            entity_uuid=str(self.source_entity_uuid),
+            skill=self.skill_name,
+            dc=dc,
+            roll=roll,
+            bonus_breakdown=bonus_breakdown,
+            success=success
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SKILL_CHECK,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            summary=summary,
+            detail_lines=detail_lines,
+            data=data.model_dump(),
+            success=success
+        )
 
 
 class SpatialChangeEvent(Event):

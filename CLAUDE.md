@@ -121,65 +121,17 @@ python -m cli.agent end           # End turn
 python -m cli.agent disconnect
 ```
 
-### Typical Turn Sequence (IMPORTANT)
+### Turn Flow
 
-**CRITICAL**: After ending your turn, you MUST run `watch` to stay connected and see opponent actions!
+**CRITICAL**: After `end`, you MUST run `watch` again to stay connected!
 
 ```bash
-# 1. Connect once at start
-python -m cli.agent connect
-
-# 2. Wait for your turn (blocks until it's your turn)
-python -m cli.agent watch
-
-# 3. Take your turn
-python -m cli.agent state          # See the battlefield
-python -m cli.agent actions        # See what you can do
-python -m cli.agent move 5 7       # Move closer
-python -m cli.agent attack 0       # Attack target
-python -m cli.agent end            # End turn
-
-# 4. IMMEDIATELY run watch again to wait for next turn!
-python -m cli.agent watch          # Blocks, shows opponent actions
-
-# 5. When it's your turn again, take actions...
-python -m cli.agent attack 0
-python -m cli.agent end
-
-# 6. Run watch again...
-python -m cli.agent watch
-
-# Repeat steps 5-6 until combat ends
+connect → watch → [state/actions/move/attack/end] → watch → repeat
 ```
 
-**What happens if you forget `watch`**: You'll be disconnected from the game flow and won't see opponent actions or know when it's your turn again.
+`watch` blocks until your turn, shows opponent actions, detects game end.
 
-### Game Flow Summary
-
-1. User starts `playpvp`, Claude runs `connect` then `watch`
-2. `watch` blocks until it's Claude's turn, showing opponent actions as they happen
-3. Claude takes actions, ends turn, **runs `watch` again**
-4. Repeat until encounter ends (watch detects game end automatically)
-5. To test again: User restarts `playpvp`, Claude runs `disconnect` then `connect` then `watch`
-
-### Testing Specific Scenarios
-
-Instead of random combat, set up specific test scenarios:
-
-```python
-# In server/event_server.py or via API, you can:
-# - Position entities at specific locations
-# - Apply conditions before combat starts
-# - Give entities specific equipment/stats
-# - Test opportunity attacks by moving away from enemies
-# - Test advantage/disadvantage from conditions like Prone, Blinded, etc.
-```
-
-Example test scenarios:
-- **Opportunity Attack**: Move Claude adjacent to Hero, Hero moves away without Disengage
-- **Condition Effects**: Apply Poisoned to test disadvantage on attacks
-- **Range Combat**: Test ranged weapons by starting at distance
-- **Dash/Movement**: Test movement economy with obstacles
+To restart: User restarts `playpvp`, Claude runs `disconnect` → `connect` → `watch`
 
 ## Common Commands
 
@@ -392,353 +344,97 @@ return outs, [], sub_conditions_uuids, effect_event
 
 ## The Action System
 
-Actions (`dnd/core/base_actions.py`, `dnd/actions.py`) are the primary way to modify game state. All actions go through events, enabling reactions and modifications.
-
-### Two Implementation Patterns
-
-| Pattern | Use Case | Example |
-|---------|----------|---------|
-| **BaseAction** | Direct override of `_validate()` and `_apply()` | `Attack`, `Move` |
-| **StructuredAction** | Pipeline with `prerequisites` and `consequences` OrderedDicts | `attack_factory()` |
+Actions (`dnd/core/base_actions.py`, `dnd/actions.py`) modify game state through events.
 
 ### BaseAction Flow
 
 ```
 BaseAction.apply()
-    │
-    ├── check_costs() → CostEvaluator callable validates affordability
-    │
-    ├── _create_declaration_event() → ActionEvent in DECLARATION phase
-    │
-    ├── _validate() → Check prerequisites
-    │       └── Returns event in EXECUTION phase if valid
-    │       └── Returns canceled event if invalid
-    │
-    ├── _apply() → Execute the action logic
-    │       └── EXECUTION → EFFECT → COMPLETION phases
-    │
-    └── _apply_costs() → Deduct from action economy
-            └── entity.action_economy.consume(cost_type, cost)
+├── check_costs() → validates affordability
+├── _validate() → returns EXECUTION or CANCEL
+├── _apply() → EXECUTION → EFFECT → COMPLETION
+└── _apply_costs() → deducts from action_economy
 ```
 
-### Cost System
+### Template-Based Actions
 
-Actions have costs validated before execution and applied after completion:
-
-```python
-from dnd.actions import Cost, entity_action_economy_cost_evaluator
-
-# Define a cost
-Cost(
-    name="Attack Cost",
-    cost_type="actions",      # "actions" | "bonus_actions" | "reactions" | "movement"
-    cost=1,
-    evaluator=entity_action_economy_cost_evaluator  # Checks can_afford()
-)
-
-# Cost evaluator signature
-def entity_action_economy_cost_evaluator(source_entity_uuid: UUID, cost_type: CostType, cost: int) -> bool:
-    entity = Entity.get(source_entity_uuid)
-    return entity.action_economy.can_afford(cost_type, cost)
-```
-
-### Attack Action (Complete Flow)
-
-```python
-from dnd.actions import Attack
-from dnd.blocks.equipment import WeaponSlot
-
-# Create and execute an attack (melee weapon in MELEE_MAIN slot)
-attack = Attack(
-    source_entity_uuid=attacker.uuid,
-    target_entity_uuid=target.uuid,
-    weapon_slot=WeaponSlot.MELEE_MAIN,  # Or MELEE_OFF, RANGED_MAIN, RANGED_OFF
-    name="Scimitar Attack"
-)
-event = attack.apply()  # Returns AttackEvent with all results
-
-# AttackEvent contains:
-event.dice_roll        # DiceRoll object
-event.attack_bonus     # ModifiableValue used for the roll
-event.ac               # Target's AC as ModifiableValue
-event.attack_outcome   # AttackOutcome.HIT, MISS, CRIT, CRIT_MISS
-event.damages          # List[Damage] - damage specs
-event.damage_rolls     # List[DiceRoll] - actual damage rolled
-event.canceled         # bool - True if attack was canceled
-event.status_message   # str - description of what happened
-```
-
-### Attack Validation Pipeline
-
-```python
-# In Attack._validate():
-1. validate_range()          # Check weapon range vs distance to target
-2. validate_line_of_sight()  # Check target in source's senses.entities
-```
-
-### Attack Execution (attack_consequences)
-
-```python
-# In Attack._apply() → attack_consequences():
-
-# 1. Set up cross-entity targeting
-source_entity.set_target_entity(target_entity_uuid)
-target_entity.set_target_entity(source_entity_uuid)
-
-# 2. Get bonuses
-attack_bonus = source_entity.attack_bonus(weapon_slot, target_entity_uuid)
-ac = target_entity.ac_bonus(source_entity.uuid)
-
-# 3. Cross-propagate modifiers (KEY STEP!)
-ac.set_from_target(attack_bonus)
-attack_bonus.set_from_target(ac)
-
-# 4. Roll and determine outcome
-dice_roll = source_entity.roll_d20(attack_bonus, RollType.ATTACK)
-attack_outcome = determine_attack_outcome(dice_roll, ac)
-
-# 5. Apply damage on hit
-if attack_outcome in [AttackOutcome.HIT, AttackOutcome.CRIT]:
-    damages = source_entity.get_damages(weapon_slot, target_entity_uuid)
-    damage_rolls = target_entity.take_damage(damages, attack_outcome)
-
-# 6. Clean up
-ac.reset_from_target()
-attack_bonus.reset_from_target()
-source_entity.clear_target_entity()
-target_entity.clear_target_entity()
-```
-
-### Move Action
-
-```python
-from dnd.actions import Move
-
-# Move to a position (path computed automatically from senses.paths)
-move = Move(
-    source_entity_uuid=entity.uuid,
-    end_position=(5, 3),
-    use_movement_cost=True  # Deducts from action_economy.movement
-)
-event = move.apply()
-
-# MovementEvent contains:
-event.start_position   # Where movement started
-event.end_position     # Where movement ended
-event.path             # List of positions traversed
-```
-
-### StructuredAction Pattern
-
-Alternative way to define actions using pipelines:
-
-```python
-from dnd.actions import StructuredAction, Attack, validate_line_of_sight
-from collections import OrderedDict
-
-attack = StructuredAction(
-    source_entity_uuid=attacker.uuid,
-    target_entity_uuid=target.uuid,
-    name="Attack",
-    description="An attack action",
-    costs=[Cost(name="Attack Cost", cost_type="actions", cost=1,
-                evaluator=entity_action_economy_cost_evaluator)],
-    prerequisites=OrderedDict({
-        "validate_range": Attack.validate_range,
-        "validate_line_of_sight": validate_line_of_sight
-    }),
-    consequences=OrderedDict({
-        "attack_consequences": Attack.attack_consequences
-    }),
-    cost_applier=entity_action_economy_cost_applier
-)
-event = attack.apply()
-```
-
-### Implementing a New Action
-
-```python
-class MyAction(BaseAction):
-    name: str = Field(default="MyAction")
-    description: str = Field(default="Does something")
-    costs: List[Cost] = Field(default_factory=lambda: [
-        Cost(name="Action Cost", cost_type="actions", cost=1,
-             evaluator=entity_action_economy_cost_evaluator)
-    ])
-
-    # Custom fields for this action
-    my_param: int = Field(description="Custom parameter")
-
-    def _create_declaration_event(self, parent_event=None, use_register=True):
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            costs=[BaseCost.model_validate(c) for c in self.costs],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register
-        )
-
-    def _validate(self, declaration_event):
-        # Check prerequisites, return canceled event if invalid
-        source = Entity.get(self.source_entity_uuid)
-        if not source:
-            return declaration_event.cancel(status_message="Source not found")
-
-        return declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message="Validated"
-        )
-
-    def _apply(self, execution_event):
-        # Do the thing
-        effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message="Applying")
-
-        # ... actual logic here ...
-
-        return effect_event.phase_to(EventPhase.COMPLETION, status_message="Done")
-
-    def _apply_costs(self, completion_event):
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-```
-
-### Pre-validation (UI Support)
-
-Check if an action can be performed without executing it:
-
-```python
-attack = Attack(source_entity_uuid=..., target_entity_uuid=..., weapon_slot=...)
-
-if attack.pre_validate():
-    # Action is valid, can show as enabled in UI
-    event = attack.apply()
-else:
-    # Action would fail, show as disabled
-    pass
-```
-
-## Action System (Template-Based)
-
-The action system uses **templates** registered on entities. Templates are `BaseAction` instances with `template=True` that can be validated and instantiated with targets.
-
-### Architecture
+Actions are registered as templates on entities with `template=True`:
 
 ```
-Entity
-├── action_templates: Dict[str, BaseAction]  # Registered action templates
-├── get_available_actions() → AvailableActionsResult
-│   ├── entity_actions: List[AvailableActionInfo]   # Attacks
-│   ├── position_actions: List[AvailableActionInfo] # Move
-│   └── self_actions: List[AvailableActionInfo]     # Dash, Dodge, etc.
-└── Methods: register_action(), unregister_action(), get_action_template()
-
-Functional API (dnd/actions_functional.py)
-├── setup_standard_actions(entity)      # Registers Move, Dash, Dodge, Disengage, attacks
-├── get_available_actions(entity)       # Wrapper for entity.get_available_actions()
-├── execute_action(entity, name, target)
-└── execute_by_index(entity, name, idx)
-
-Server Endpoints
-├── GET /entity/{uuid}/available-actions
-└── POST /action/execute  # Takes template_name + target_index + session_id
+Entity.action_templates → get_available_actions() → AvailableActionsResult
+    ├── entity_actions (attacks with valid_targets)
+    ├── position_actions (movement)
+    └── self_actions (dash, dodge, disengage)
 ```
 
-### Entity Action Methods
+**Functional API** (`dnd/actions_functional.py`):
+- `setup_standard_actions(entity)` - Registers Move, Dash, Dodge, Disengage + weapon attacks
+- `execute_by_index(entity, name, idx)` - Execute by target index
 
-| Method | Purpose |
-|--------|---------|
-| `register_action(action)` | Register an action template (action.template must be True) |
-| `unregister_action(name)` | Remove a template by name |
-| `get_action_template(name)` | Get template by name |
-| `get_available_actions()` | Returns AvailableActionsResult with all valid actions |
+### Attack Action
 
-### Functional API (dnd/actions_functional.py)
+Attack validates range and LOS, then:
+1. Cross-propagate modifiers via `set_from_target()`
+2. Roll d20 with attack bonus vs AC
+3. Apply damage on hit
 
-| Function | Purpose |
-|----------|---------|
-| `setup_standard_actions(entity)` | Register Move, Dash, Dodge, Disengage + weapon attacks |
-| `get_available_actions(entity)` | Query available actions (wrapper) |
-| `execute_action(entity, name, target)` | Execute with specific target |
-| `execute_by_index(entity, name, idx)` | Execute by target index from valid_targets |
+**AttackEvent fields**: `dice_roll`, `attack_outcome`, `damages`, `damage_rolls`
 
-### Template Pattern
+### Cost Types
 
-```python
-# Create template (doesn't execute, just registers)
-attack_template = Attack(
-    source_entity_uuid=entity.uuid,
-    weapon_slot=WeaponSlot.MELEE_MAIN,
-    template=True  # Marks this as a template
-)
-entity.register_action(attack_template)
-
-# Query available actions (validates each possible target)
-result = entity.get_available_actions()
-# result.entity_actions contains attacks with valid_targets list
-
-# Execute by index (from valid_targets)
-event = execute_by_index(entity, "Attack_MELEE_MAIN", target_index=0)
-```
-
-### Server Execution Flow
-
-1. Client calls `GET /entity/{uuid}/available-actions`
-2. Returns `AvailableActionsResult` with indexed targets
-3. Client calls `POST /action/execute` with:
-   - `session_id`: Player session
-   - `entity_uuid`: Acting entity
-   - `template_name`: e.g., "Attack_MELEE_MAIN"
-   - `target_index`: Index from valid_targets
-4. Server validates session authority, finds target, executes action
-
-### AvailableActionsResult Structure
-
-```python
-class AvailableActionsResult(BaseModel):
-    entity_uuid: UUID
-    entity_actions: List[AvailableActionInfo]    # Attacks
-    position_actions: List[AvailableActionInfo]  # Move
-    self_actions: List[AvailableActionInfo]      # Dash, Dodge, etc.
-    remaining_movement: int
-
-class AvailableActionInfo(BaseModel):
-    template_name: str              # For execution
-    target_type: TargetType         # SELF, ENTITY, POSITION
-    valid_targets: List[AvailableTarget]  # Indexed targets
-    can_afford: bool                # Can afford costs?
-    display_name: str               # Human-readable
-    cost_type: CostType             # actions, bonus_actions, etc.
-```
+`actions`, `bonus_actions`, `reactions`, `movement` + optional `resource_name/resource_cost`
 
 ## Creating Monsters/Entities
 
 ### Factory Function Pattern (`dnd/monsters/bestiary.py`)
 
 ```python
-def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> Entity:
-    config = EntityConfig(
+def create_goblin(
+    source_id: Optional[UUID] = None,
+    name: str = "Goblin",
+    position: Tuple[int, int] = (0, 0)
+) -> Entity:
+    if source_id is None:
+        source_id = uuid4()
+
+    # 1. Create config with ability scores and health
+    entity_config = EntityConfig(
         ability_scores=AbilityScoresConfig(
-            strength=8, dexterity=14, constitution=10,
-            intelligence=10, wisdom=8, charisma=8
+            strength=AbilityConfig(ability_score=8),
+            dexterity=AbilityConfig(ability_score=14),
+            constitution=AbilityConfig(ability_score=10),
+            intelligence=AbilityConfig(ability_score=10),
+            wisdom=AbilityConfig(ability_score=8),
+            charisma=AbilityConfig(ability_score=8)
         ),
-        health=HealthConfig(hit_dice_count=2, hit_dice_value=6),
-        equipment=EquipmentConfig(
-            weapon_main_hand=Weapon(
-                name="Scimitar",
-                damage_dice=6, damage_type=DamageType.SLASHING,
-                attack_bonus=0, damage_bonus=0,
-                properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT],
-                range=Range(type=RangeType.REACH, normal=5)
-            ),
-            armor=Armor(name="Leather", base_ac=11, armor_type=ArmorType.LIGHT),
-            shield=Shield(name="Shield", ac_bonus=2)
-        ),
-        action_economy=ActionEconomyConfig(movement=30),
+        health=HealthConfig(hit_dices=[HitDiceConfig(
+            hit_dice_value=6, hit_dice_count=2, mode="average"
+        )]),
+        equipment=EquipmentConfig(),
+        action_economy=ActionEconomyConfig(),
         proficiency_bonus=2,
         position=position
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+
+    # 2. Create entity
+    entity = Entity.create(name=name, source_entity_uuid=source_id, config=entity_config)
+
+    # 3. Set up action templates (Move, Dash, Dodge, etc.)
+    setup_standard_actions(entity)
+
+    # 4. Create and equip weapons/armor
+    scimitar = create_scimitar(entity.uuid)  # Helper function
+    leather_armor = create_leather_armor(entity.uuid)
+    shield = create_wooden_shield(entity.uuid)
+
+    entity.equipment.equip(leather_armor)
+    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
+
+    return entity
 ```
+
+**Key pattern**: Create entity first, then equip weapons via `entity.equipment.equip(item, slot)`.
 
 ## Key Files Reference
 
@@ -750,6 +446,7 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Modifiers (Advantage, Critical, etc.) | `dnd/core/modifiers.py` |
 | Base classes | `dnd/core/base_object.py`, `base_block.py` |
 | Event system | `dnd/core/events.py` |
+| Combat log models | `dnd/core/combat_log.py` |
 | Dice rolling | `dnd/core/dice.py` |
 | **Spatial System** | |
 | GridMap (central spatial manager) | `dnd/core/gridmap.py` |
@@ -866,331 +563,33 @@ entity.senses.get_feet_distance(target.position)  # Distance in feet (1 grid = 5
 
 ## Spatial System (GridMap)
 
-The `GridMap` (`dnd/core/gridmap.py`) is a singleton that centralizes all spatial data management. It replaces scattered tile loops with efficient lookups.
-
-### GridMap Architecture
+`GridMap` (`dnd/core/gridmap.py`) is a singleton centralizing spatial data.
 
 ```
-GridMap (singleton via get_map())
-├── Tile Storage
-│   ├── _tiles: Dict[Tuple[int,int], Tile]         # Tile objects (BaseBlock, can have conditions)
-│   └── _bounds_dirty + cached min/max             # Lazy bounds calculation
-│
-├── Entity Position Tracking
-│   ├── _entity_positions: Dict[UUID, position]    # Entity → position
-│   └── _entities_by_position: Dict[pos, Set[UUID]]# Position → entities
-│
-├── Cell Subscription System
-│   ├── _cell_subscribers: Dict[pos, Set[UUID]]    # Cell → subscribed entities
-│   └── _entity_subscriptions: Dict[UUID, Set[pos]]# Entity → subscribed cells
-│
-└── Spatial Algorithms
-    ├── compute_fov(origin, max_distance)                           # Shadowcast
-    └── compute_paths(start, max_distance, requesting_entity_uuid)  # Dijkstra with occupancy
+GridMap (get_map())
+├── _tiles: Dict[pos, Tile]              # Tile objects (can have conditions)
+├── _entity_positions: Dict[UUID, pos]   # Entity → position
+├── _entities_by_position: Dict[pos, Set[UUID]]
+└── compute_fov(), compute_paths()       # Shadowcast + Dijkstra
 ```
 
-### Basic Usage
+**Key methods**: `is_walkable()`, `is_walkable_for()`, `get_entities_at()`, `move_entity()`, `compute_fov()`, `compute_paths()`
 
-```python
-from dnd.core.gridmap import get_map, reset_map
+**Spatial events**: `SPATIAL_ENTITY_ENTERED`, `SPATIAL_ENTITY_LEFT`, `SPATIAL_TILE_CHANGED` - fired automatically by GridMap.
 
-grid = get_map()  # Get singleton instance
+**Tiles** are `BaseBlock` objects that can have conditions (fire, traps, difficult terrain).
 
-# Create tiles
-grid.create_rectangle(0, 0, 10, 10)  # 10x10 floor
-grid.create_room(0, 0, 10, 10)       # Room with walls
+## The Event System
 
-# Query tiles
-grid.is_walkable(5, 5)                      # bool - tile property only
-grid.is_walkable_for(5, 5, entity_uuid)     # bool - tile + occupancy check
-grid.is_visible(5, 5)                       # bool (can see through)
-grid.get_tile(5, 5)                         # Tile object or None
-
-# Entity position tracking (auto-registered on Entity creation)
-grid.get_entity_position(entity_uuid)  # Tuple[int, int]
-grid.get_entities_at((5, 5))           # Set[UUID]
-grid.move_entity(uuid, (new_x, new_y)) # Updates + fires events
-
-# Spatial queries (with occupancy awareness)
-grid.compute_fov((5, 5), max_distance=10)                    # List of visible positions
-grid.compute_paths((5, 5), max_distance=20)                  # Tile-only walkability
-grid.compute_paths((5, 5), max_distance=20, entity_uuid)     # Excludes occupied cells
-grid.get_visible_entities((5, 5), max_distance)              # Dict[UUID, position]
-
-# Tiles can have conditions (fire, traps, difficult terrain)
-tile = grid.get_tile(5, 5)
-tile.add_condition(OnFire(source_entity_uuid=caster.uuid, target_entity_uuid=tile.uuid))
-```
-
-### Cell Subscription System
-
-Entities subscribe to cells they can see. When something changes in a subscribed cell, `SpatialChangeEvent`s are fired, enabling reactive updates.
-
-```python
-# Entities auto-subscribe when updating senses
-entity.update_entity_senses(max_distance=10)
-# This internally calls: get_map().subscribe_to_cells(entity.uuid, visible_cells)
-
-# Query subscriptions
-grid.get_entity_subscriptions(entity.uuid)  # Set of cells entity watches
-grid.get_subscribers_at((5, 5))             # Set of entities watching cell
-
-# Manual subscription (rarely needed)
-grid.subscribe_to_cells(entity.uuid, {(1,1), (1,2), (2,1)})
-grid.unsubscribe_entity(entity.uuid)
-```
-
-### Spatial Events
-
-GridMap fires `SpatialChangeEvent`s when spatial state changes:
-
-| Event Type | Fired When | Key Fields |
-|------------|------------|------------|
-| `SPATIAL_ENTITY_ENTERED` | Entity moves into a cell | `position`, `entity_uuid`, `old_position` |
-| `SPATIAL_ENTITY_LEFT` | Entity leaves a cell | `position`, `entity_uuid`, `old_position` (new pos) |
-| `SPATIAL_TILE_CHANGED` | Tile walkable/visible changes | `position`, `tile_walkable`, `tile_visible` |
-
-```python
-# Events are fired automatically by GridMap methods:
-grid.move_entity(uuid, new_pos)  # Fires LEFT for old pos, ENTERED for new pos
-grid.set_tile(x, y, walkable=False)  # Fires TILE_CHANGED if properties differ
-Entity.update_entity_position(entity, new_pos)  # Also fires events
-
-# Events go through EventQueue and can be queried:
-from dnd.core.events import EventQueue, EventType
-
-entered_events = EventQueue.get_events_by_type(EventType.SPATIAL_ENTITY_ENTERED)
-```
-
-### Shadowcast FOV Algorithm
-
-`dnd/core/shadowcast.py` implements recursive shadowcasting for field-of-view:
-
-```python
-from dnd.core.shadowcast import compute_fov
-
-def is_blocking(x, y) -> bool:
-    return not grid.is_visible(x, y)  # Walls block vision
-
-visible = []
-def mark_visible(x, y):
-    visible.append((x, y))
-
-compute_fov(origin=(5, 5), is_blocking=is_blocking,
-            mark_visible=mark_visible, max_distance=10)
-```
-
-### Dijkstra Pathfinding Algorithm
-
-`dnd/core/dijkstra.py` implements Dijkstra's algorithm with diagonal movement:
-
-```python
-from dnd.core.dijkstra import dijkstra
-
-distances, paths = dijkstra(
-    start=(0, 0),
-    is_walkable=lambda x, y: grid.is_walkable(x, y),
-    grid_width=20,
-    grid_height=20,
-    diagonal=True,      # Allow diagonal movement
-    max_distance=30     # Stop after this distance
-)
-
-# distances: Dict[pos, int] - walking distance to each reachable cell
-# paths: Dict[pos, List[pos]] - full path to each reachable cell
-```
-
-### Tile as BaseBlock
-
-`Tile` (`dnd/core/base_tiles.py`) is now a proper `BaseBlock` that can have conditions:
-
-```python
-from dnd.core.base_tiles import Tile, floor_factory, wall_factory
-
-# Create tiles via GridMap (recommended)
-grid.create_rectangle(0, 0, 10, 10)
-
-# Or create individual tiles
-tile = Tile.create(position=(5, 5), walkable=True, visible=True, name="Floor")
-
-# Tiles can have conditions attached
-tile.add_condition(OnFire(...))       # Tile is on fire
-tile.add_condition(DifficultTerrain())  # Costs double movement
-tile.add_condition(TrapCondition(...))  # Triggered on entry
-```
-
-## The Event System (Deep Dive)
-
-The event system (`dnd/core/events.py`) is the backbone of the engine. **All game state changes flow through events**, enabling reactions, logging, and external consumers (like websockets).
-
-### Event Architecture
-
-```
-EventQueue (static class)
-├── Storage Indices (all events stored in multiple lookups)
-│   ├── _events_by_uuid: Dict[UUID, Event]
-│   ├── _events_by_lineage: Dict[UUID, List[Event]]    # Event history
-│   ├── _events_by_type: Dict[EventType, List[Event]]
-│   ├── _events_by_phase: Dict[EventPhase, List[Event]]
-│   ├── _events_by_source: Dict[UUID, List[Event]]
-│   ├── _events_by_target: Dict[UUID, List[Event]]
-│   ├── _events_by_timestamp: Dict[datetime, List[Event]]
-│   └── _all_events: List[Event]                       # Chronological
-│
-├── Handler Registry
-│   ├── _event_handlers: Dict[UUID, EventHandler]
-│   ├── _event_handlers_by_trigger: Dict[Trigger, List[EventHandler]]
-│   └── _event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]]
-│
-└── Core Methods
-    ├── register(event) → Event    # Store + notify handlers
-    ├── add_event_handler(handler) # Subscribe to events
-    └── remove_event_handler(handler)
-```
+The event system (`dnd/core/events.py`) is the backbone of the engine. **All game state changes flow through events**.
 
 ### Event Lifecycle
 
 ```
-1. DECLARATION  ──┐
-                  │  event.phase_to() creates new event with next phase
-2. EXECUTION   ───┤  (new UUID, same lineage_uuid)
-                  │
-3. EFFECT      ───┤  At each phase, EventQueue notifies matching handlers
-                  │
-4. COMPLETION  ───┘  Final state, no further transitions
-       │
-       └── CANCEL (alternative end state)
+DECLARATION → EXECUTION → EFFECT → COMPLETION (or CANCEL)
 ```
 
-### Event Class Hierarchy
-
-```
-Event (BaseObject)
-├── name, event_type, phase, timestamp
-├── lineage_uuid (shared across phases)
-├── parent_event, children_events
-├── modified, canceled, status_message
-│
-├── phase_to(new_phase) → Event    # Transition to next phase
-├── cancel(message) → Event        # Cancel the event
-├── post(**updates) → Event        # Update and re-broadcast
-│
-└── Subclasses
-    ├── ActionEvent          # Base for all action events
-    ├── AttackEvent          # Attack-specific fields
-    ├── MovementEvent        # Movement-specific fields
-    ├── SpatialChangeEvent   # GridMap spatial changes
-    ├── D20Event             # Base for dice-based events
-    │   ├── SavingThrowEvent
-    │   └── SkillCheckEvent
-    └── (more in dnd/core/events.py)
-```
-
-### Event Registration Flow
-
-```python
-# When an event is created with use_register=True (default):
-event = AttackEvent(source_entity_uuid=..., target_entity_uuid=..., ...)
-
-# In Event.__init__():
-if self.use_register:
-    EventQueue.register(self)
-
-# EventQueue.register():
-1. Store event in all indices (_events_by_uuid, _events_by_type, etc.)
-2. Find matching handlers via Trigger matching
-3. Call each handler, which may return modified event
-4. Return final event (possibly modified by handlers)
-```
-
-### Triggers and EventHandlers
-
-Triggers define when a handler should fire:
-
-```python
-from dnd.core.events import Trigger, EventHandler, EventType, EventPhase
-
-# A trigger matches events by type, phase, and optionally source/target
-trigger = Trigger(
-    event_type=EventType.ATTACK,
-    event_phase=EventPhase.EXECUTION,
-    event_source_entity_uuid=attacker.uuid,  # Optional: only from this entity
-    event_target_entity_uuid=None             # Optional: only targeting this entity
-)
-
-# Handler with trigger
-def my_reaction(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    # Can modify event, cancel it, or return None (no change)
-    return event.model_copy(update={"modified": True, "status_message": "Reacted!"})
-
-handler = EventHandler(
-    source_entity_uuid=reactor.uuid,
-    trigger_conditions=[trigger],
-    event_processor=my_reaction
-)
-
-# Register handler
-EventQueue.add_event_handler(handler)
-
-# Now when a matching event occurs, my_reaction is called
-```
-
-### Simple vs Complex Triggers
-
-```python
-# Simple trigger: only type + phase (most common)
-simple = Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT)
-simple.is_simple()  # True
-
-# Complex trigger: includes source/target filters
-complex = Trigger(
-    event_type=EventType.ATTACK,
-    event_phase=EventPhase.EFFECT,
-    event_source_entity_uuid=enemy.uuid  # Only attacks FROM this enemy
-)
-complex.is_simple()  # False
-
-# EventQueue uses separate indices for fast lookup:
-# - Simple triggers: _event_handlers_by_simple_trigger
-# - Complex triggers: _event_handlers_by_trigger (checked after simple)
-```
-
-### Event History (Lineage)
-
-Events maintain history via `lineage_uuid`:
-
-```python
-# Initial event
-attack = AttackEvent(...)  # Gets new uuid AND new lineage_uuid
-
-# Phase transition creates new event with SAME lineage_uuid
-execution_event = attack.phase_to(EventPhase.EXECUTION)
-# execution_event.uuid != attack.uuid (new UUID)
-# execution_event.lineage_uuid == attack.lineage_uuid (same lineage)
-
-# Get full history of an event
-history = EventQueue.get_event_history(execution_event.uuid)
-# Returns all events with same lineage_uuid, sorted by timestamp
-```
-
-### Parent-Child Events
-
-Events can have parent-child relationships (different from lineage):
-
-```python
-# Attack spawns damage events as children
-attack_event = AttackEvent(...)
-
-damage_event = DamageEvent(
-    parent_event=attack_event.uuid,  # Links to parent
-    ...
-)
-attack_event.add_child_event(damage_event)
-
-# Query relationships
-attack_event.get_children_events()  # List of child events
-damage_event.get_parent_event()     # The attack event
-```
+Each `phase_to()` creates new event with same `lineage_uuid`. EventQueue notifies matching handlers at each phase.
 
 ### Key EventTypes
 
@@ -1198,108 +597,17 @@ damage_event.get_parent_event()     # The attack event
 |------|---------|
 | `ATTACK` | Attack action |
 | `MOVEMENT` | Move action |
-| `DAMAGE_ROLLED` | After damage dice rolled, before applied (for dice manipulation) |
+| `DAMAGE_ROLLED` | After dice rolled, before applied (for dice manipulation) |
 | `TAKE_DAMAGE` | Damage application |
-| `HEAL` | Healing |
-| `CONDITION_APPLICATION` | Condition added |
-| `CONDITION_REMOVAL` | Condition removed |
 | `SAVING_THROW` | Save requested/resolved |
-| `SKILL_CHECK` | Skill check requested/resolved |
+| `CONDITION_APPLICATION` | Condition added |
 | `SPATIAL_ENTITY_ENTERED` | Entity moved into cell |
-| `SPATIAL_ENTITY_LEFT` | Entity left cell |
-| `SPATIAL_TILE_CHANGED` | Tile properties changed |
-| `TRIGGER_EVENT` | An event handler triggered |
 
-### Querying Events
+### EventHandlers
 
-```python
-from dnd.core.events import EventQueue, EventType, EventPhase
+Handlers subscribe to events via `Trigger(event_type, event_phase, source_uuid?, target_uuid?)`. Register with `EventQueue.add_event_handler()`.
 
-# By type
-attacks = EventQueue.get_events_by_type(EventType.ATTACK)
-
-# By phase
-completed = EventQueue.get_events_by_phase(EventPhase.COMPLETION)
-
-# By source/target entity
-from_attacker = EventQueue.get_events_by_source(attacker.uuid)
-targeting_defender = EventQueue.get_events_by_target(defender.uuid)
-
-# Chronological
-recent = EventQueue.get_latest_events(count=10)
-all_events = EventQueue.get_events_chronological()
-time_range = EventQueue.get_events_chronological(start_time=t1, end_time=t2)
-
-# Single event by UUID
-event = EventQueue.get_event_by_uuid(some_uuid)
-```
-
-### Creating Custom Events
-
-```python
-from dnd.core.events import Event, EventType, EventPhase
-
-class MyCustomEvent(Event):
-    name: str = Field(default="My Custom Event")
-    event_type: EventType = Field(default=EventType.BASE_ACTION)  # Or add new type
-
-    # Custom fields
-    custom_data: str = Field(description="Whatever you need")
-    result: Optional[int] = Field(default=None)
-
-    @classmethod
-    def create(cls, source_uuid: UUID, data: str) -> 'MyCustomEvent':
-        return cls(
-            source_entity_uuid=source_uuid,
-            custom_data=data,
-            phase=EventPhase.DECLARATION
-        )
-```
-
-### Event System Best Practices
-
-1. **Always use events for state changes** - Don't modify entity state directly
-2. **Let events flow through phases** - DECLARATION → EXECUTION → EFFECT → COMPLETION
-3. **Use handlers for reactions** - Don't poll; subscribe to relevant event types
-4. **Clean up handlers** - Call `handler.remove()` when done
-5. **Query via EventQueue** - Don't store events yourself; use the indices
-
-### DAMAGE_ROLLED Pattern (Dice Manipulation)
-
-The `DAMAGE_ROLLED` event enables dice manipulation abilities like Great Weapon Fighting. It fires between rolling and applying damage.
-
-```python
-# Quick example: Condition that rerolls 1s and 2s
-from dnd.classes.fighter import (
-    GreatWeaponFighting,
-    create_modified_dice_roll,
-    reroll_below_and_substitute,
-    floor_results,  # For Elemental Adept
-)
-
-# Apply the fighting style
-gwf = GreatWeaponFighting(
-    source_entity_uuid=fighter.uuid,
-    target_entity_uuid=fighter.uuid
-)
-fighter.add_condition(gwf)
-
-# The condition registers an EventHandler that:
-# 1. Triggers on DAMAGE_ROLLED events at EFFECT phase
-# 2. Checks if weapon is two-handed melee
-# 3. Rerolls 1s and 2s, must use new result
-# 4. Updates event.final_rolls with new DiceRoll objects
-```
-
-**Key principle**: Original dice rolls are immutable. Handlers create NEW DiceRoll objects.
-
-**Full guide**: See `claude_docs/CLASS_SYSTEM_DESIGN.md` section "Event Processors Guide".
-
-**Available processors** in `dnd/classes/fighter.py`:
-- `maximize_all()`, `minimize_all()`, `set_all_to()` - Deterministic
-- `floor_results()`, `ceiling_results()` - Clamp values (Elemental Adept)
-- `reroll_below_and_substitute()` - GWF style (must use new roll)
-- `reroll_below_keep_best()` - Lucky style (keep better result)
+For dice manipulation patterns (Great Weapon Fighting, etc.), see `claude_docs/IMPLEMENTATION_GUIDE.md`.
 
 ## Code Verification Rules
 
@@ -1440,48 +748,38 @@ Key endpoints:
 
 ### Server-Side Combat Log
 
-The server maintains a unified combat log that both players write to. This ensures consistency and provides rich action details for display, including **full modifier breakdowns**.
+The server maintains a unified combat log using `CombatLogEntry` objects (`dnd/core/combat_log.py`). Events auto-generate their combat log entries at COMPLETION phase via `generate_combat_log()`.
 
-**Combat Log Format (with breakdowns):**
-```
-Hero → Skeleton (Scimitar)
-  Attack: d20(15) +4 [Prof +2, DEX +2] = 19 vs AC 13 [Armor +13] → HIT
-  Damage: 1d6(5) +2 [DEX +2] = 7 slashing
-
-Skeleton → Hero (Shortsword) DIS
-  Attack: d20(12,7→7) +4 [Prof +2, DEX +2] = 11 vs AC 13 [Armor +11, DEX +2] → MISS
-
-Hero → Skeleton (Dagger) BONUS
-  Attack (OA): d20(18) +4 [Prof +2, DEX +2] = 22 vs AC 13 → HIT
-  Damage: 1d4(3) = 3 piercing
-```
-
-**Server-side data structure:**
+**CombatLogEntry Structure:**
 ```python
-sim.add_combat_log("attack", log_msg, {
-    "attacker": "Skeleton",
-    "target": "Hero",
-    "weapon": "Shortsword",
-    "d20": 17,
-    "all_d20_rolls": [17],
-    "advantage_status": "none",  # "advantage", "disadvantage", or "none"
-    "attack_bonus": 4,
-    "attack_total": 21,
-    "target_ac": 15,
-    "outcome": "hit",  # "hit", "miss", "crit", "crit miss"
-    "total_damage": 8,
-    "target_hp": 2,
-    # Modifier breakdowns for detailed display
-    "attack_breakdown": [{"name": "Prof", "value": 2}, {"name": "DEX", "value": 2}],
-    "ac_breakdown": [{"name": "Armor", "value": 13}],
-    "damage_breakdown": [{"name": "DEX", "value": 2}],
-    "damage_dice_results": [5],
-    "damage_dice_str": "1d6",
-    "is_opportunity_attack": False
-})
+class CombatLogEntry(BaseModel):
+    entry_type: CombatLogEntryType  # "attack", "movement", "action", etc.
+    source_name: str
+    source_uuid: str
+    target_name: Optional[str]
+    target_uuid: Optional[str]
+    summary: str                    # One-line summary for display
+    detail_lines: List[str]         # Verbose breakdown lines
+    data: Dict[str, Any]            # Typed data (AttackLogData, MovementLogData, etc.)
+    success: Optional[bool]
 ```
 
-Entry types: `attack`, `move`, `action`, `opportunity_attack`, `death`, `turn_end`
+**Entry Types** (`CombatLogEntryType`):
+- `ATTACK`, `MOVEMENT`, `ACTION` (Dash/Dodge/Disengage)
+- `SAVING_THROW`, `SKILL_CHECK`
+- `CONDITION_APPLIED`, `CONDITION_REMOVED`
+- `DAMAGE_TAKEN`, `HEAL`, `DEATH`
+- `TURN_START`, `TURN_END`
+
+**Typed Data Models** (in `data` field):
+- `AttackLogData`: attacker_name, target_name, weapon_name, attack_roll (DiceRollDisplay), attack_breakdown, target_ac, ac_breakdown, outcome, damage_rolls, total_damage
+- `MovementLogData`: entity_name, start_position, end_position, path, distance_feet
+- `SavingThrowLogData`: entity_name, ability, dc, roll, bonus_breakdown, success
+- `SkillCheckLogData`: entity_name, skill, dc, roll, bonus_breakdown, success
+
+**API Endpoints:**
+- `GET /combat-log?since=N` - Returns `CombatLogEntry.to_dict()` (raw `model_dump()`)
+- CLI uses proper field names: `entry_type`, `summary`, `data["entity_name"]`, etc.
 
 **Modifier Breakdown System** (`dnd/core/values.py`):
 - `ModifiableValue.get_breakdown()` - Extracts numerical modifiers with cleaned names
@@ -1544,16 +842,16 @@ This enables a smooth flow: `connect` → `watch` → take actions → `end` →
 
 ### claude_docs/
 
-Contains high-level architecture documents and implementation plans created during Claude sessions:
+Contains focused implementation guides:
 
 | File | Purpose |
 |------|---------|
-| `MASTER_SUMMARY.md` | High-level implementation plan for encounter system, lists what exists vs what's needed, proposed new modules |
-| `CODEBASE_ANALYSIS.md` | Deep dive into existing primitives (Entity, Senses, GridMap, Events, Actions), how they integrate |
-| `EXAMPLE_PATTERNS.md` | **IMPORTANT**: Correct patterns for writing examples and tests - read before writing any new example code |
-| `CLASS_SYSTEM_DESIGN.md` | Design doc for class system - Fighter + Champion fully implemented, includes dice processor patterns |
-| `UI_ARCHITECTURE.md` | Documents the CLI and Server architecture (session-based PvP, combat log, agent CLI) |
-| `FRONTEND_POSTMORTEM.md` | **LESSONS LEARNED** - Post-mortem of failed web UI attempt. Documents what went wrong. Read to understand how NOT to work on this codebase. |
+| `MASTER_SUMMARY.md` | Project status, what's implemented, roadmap |
+| `CLI_GUIDE.md` | How to use CLI and Agent commands |
+| `IMPLEMENTATION_GUIDE.md` | **READ FIRST** - How to implement conditions, actions, event handlers |
+| `CLASS_SYSTEM.md` | Fighter implementation, feature condition patterns, dice processors |
+| `EXAMPLE_PATTERNS.md` | Code snippets for writing examples/tests |
+| `archive/` | Completed planning docs (historical reference) |
 
 ### interactive_ruleset/
 
@@ -1574,148 +872,10 @@ interactive_ruleset/
 
 The `*_NOTES.md` files compare SRD rules against our implementation, identifying gaps and implementation approaches.
 
-## Current State & What's Working
+## Class System
 
-### Implemented Systems
-- **Encounter System** (`dnd/encounter.py`): Turn-based combat with initiative, round tracking, turn management
-- **Action Registry** (`dnd/actions_functional.py`, `dnd/entity.py`): Template-based action system with `get_available_actions()`, `execute_action()`, `execute_by_index()`
-- **PvP CLI**: Full human vs Claude gameplay loop with session-based authority
-- **Combat Log with Modifier Breakdowns**: Rich display showing `[DEX +2, Prof +2]` for every roll
-- **Agent CLI**: Claude can connect, watch for turns, and play autonomously
-- **Two-Weapon Fighting**: Main-hand (action) + off-hand (bonus action) attacks with proper cost tracking
-- **Opportunity Attacks**: Triggered on movement away from enemies, labeled `(OA)` in combat log
-- **Advantage/Disadvantage Display**: Shows both d20 rolls and which was used (e.g., `d20(12,7→7)`)
+Fighter + Champion archetype fully implemented (L1-L18). See `dnd/classes/fighter.py` and `claude_docs/IMPLEMENTATION_GUIDE.md` for patterns.
 
-### Recent Improvements (January 2026)
-- **Detailed modifier breakdowns** in combat log showing source of every bonus
-- **Consistent attack numbering** between display and command execution
-- **PvP input handling** fixed for Windows/WSL compatibility
-- **Encounter ending** now refreshes state before showing final screen
+## Project Status
 
-## Class System (Fighter + Champion COMPLETE)
-
-**Design Document**: `claude_docs/CLASS_SYSTEM_DESIGN.md`
-
-The class system models D&D character classes as collections of conditions applied to entities. Fighter class with Champion archetype is fully implemented.
-
-### Implementation Status
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| **Action registry** | ✅ DONE | `Entity.action_templates`, template-based system |
-| **Available actions query** | ✅ DONE | `get_available_actions()`, indexed targets |
-| **Server execution endpoint** | ✅ DONE | `/action/execute` with session auth |
-| **Resource system** | ✅ DONE | `ActionEconomy.resources` with recharge |
-| **Unified costs** | ✅ DONE | `BaseCost.resource_name/resource_cost` |
-| **DAMAGE_ROLLED event** | ✅ DONE | Event between dice roll and damage application |
-| **Dice processors** | ✅ DONE | `dnd/classes/dice_processor_utils.py` |
-| **Entity.on_turn_start()** | ✅ DONE | Turn start event with handler support |
-| **Fighter: All Fighting Styles** | ✅ DONE | Archery, Defense, Dueling, GWF, Protection, TWF |
-| **Fighter: Second Wind** | ✅ DONE | Bonus action heal, short rest recharge |
-| **Fighter: Action Surge** | ✅ DONE | Extra action, once per turn, short rest recharge |
-| **Fighter: Extra Attack** | ✅ DONE | 1/2/3 extra attacks at L5/L11/L20 |
-| **Fighter: Indomitable** | ✅ DONE | Reroll failed saves, long rest recharge |
-| **Champion: Improved Critical** | ✅ DONE | Crit on 19-20 at L3 |
-| **Champion: Superior Critical** | ✅ DONE | Crit on 18-20 at L15 |
-| **Champion: Survivor** | ✅ DONE | Heal 5+CON at turn start when HP ≤ 50% |
-| **Condition tags** | ❌ TODO | `tags: List[str]` for filtering |
-| **Fighter factory** | ❌ TODO | `create_fighter(level, fighting_style)` helper |
-
-### Resource System (ActionEconomy Extension)
-
-```python
-class RechargeType(str, Enum):
-    SHORT_REST = "short_rest"
-    LONG_REST = "long_rest"
-    TURN_START = "turn_start"
-    NEVER = "never"
-
-class Resource(BaseModel):
-    name: str
-    current: int
-    maximum: int
-    recharge_type: RechargeType
-
-# ActionEconomy gets:
-resources: Dict[str, Resource]
-add_resource(), remove_resource(), can_afford_resource(), consume_resource()
-on_short_rest(), on_long_rest()
-```
-
-### Cost System Extension
-
-```python
-class BaseCost(BaseModel):
-    name: str
-    cost_type: CostType
-    cost: int
-    # NEW: Optional resource cost (can have both turn-based AND resource cost)
-    resource_name: Optional[str] = None
-    resource_cost: int = 0
-```
-
-### Fighter Feature Conditions (in `dnd/classes/fighter.py`)
-
-| Level | Feature | Condition/Action | Notes |
-|-------|---------|------------------|-------|
-| 1 | Fighting Style | `FightingStyleArchery`, `FightingStyleDefense`, `FightingStyleDueling`, `GreatWeaponFighting`, `FightingStyleProtection`, `FightingStyleTwoWeaponFighting` | Choose one |
-| 1 | Second Wind | `SecondWindFeature` (condition) + `SecondWind` (action) | 1d10+level heal, short rest |
-| 2 | Action Surge | `ActionSurgeFeature` (condition) + `ActionSurge` (action) | +1 action, short rest |
-| 3 | Champion: Improved Critical | `ImprovedCritical` | Crit on 19-20 |
-| 5 | Extra Attack | `ExtraAttackFeature` + `ExtraAttack` (action) | 1 extra (2 at L11, 3 at L20) |
-| 9 | Indomitable | `Indomitable` | Reroll failed save, long rest |
-| 15 | Champion: Superior Critical | `SuperiorCritical` | Crit on 18-20 |
-| 18 | Champion: Survivor | `Survivor` | Heal 5+CON at turn start |
-
-### Example: Applying Fighter Features
-
-```python
-from dnd.classes.fighter import (
-    SecondWindFeature, ActionSurgeFeature, ExtraAttackFeature,
-    GreatWeaponFighting, ImprovedCritical, Indomitable, Survivor
-)
-
-# Level 5 Fighter with GWF
-fighter.add_condition(GreatWeaponFighting(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
-fighter.add_condition(SecondWindFeature(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid, fighter_level=5))
-fighter.add_condition(ActionSurgeFeature(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
-fighter.add_condition(ExtraAttackFeature(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid, extra_attacks=1))
-
-# Level 18 Champion
-fighter.add_condition(ImprovedCritical(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
-fighter.add_condition(Indomitable(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid, num_uses=2))
-fighter.add_condition(Survivor(source_entity_uuid=fighter.uuid, target_entity_uuid=fighter.uuid))
-```
-
-### Next Steps: Fighter Factory
-
-TODO: Create `create_fighter(level, fighting_style, archetype)` factory that applies all appropriate features for a given level.
-
----
-
-### Potential Next Features
-
-1. **Scenario Testing Framework**
-   - Pre-configured test scenarios (specific positions, conditions, equipment)
-   - API endpoints to set up scenarios programmatically
-   - Regression testing for specific combat mechanics
-
-2. **Perception/Stealth System**
-   - Hidden state tracking on Entity
-   - Passive Perception = 10 + perception skill bonus
-   - Filter `senses.entities` to exclude hidden entities
-
-3. **Interactables**
-   - `DestructibleObject` - HP, AC, damage threshold
-   - `Trap` - trigger on spatial events, perception DC, disable DC
-   - `PickableItem` - inventory integration
-
-4. **Ranged Combat Improvements**
-   - Cover mechanics (+2/+5 AC bonuses)
-   - Long range disadvantage
-   - Ammunition tracking
-
-5. **Spellcasting System**
-   - Spell slots and spell level management
-   - Concentration tracking
-   - Saving throw-based spells
+See `claude_docs/MASTER_SUMMARY.md` for current state and roadmap.

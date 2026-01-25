@@ -183,10 +183,14 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
             for entry in new_entries:
                 # Show rich display for opponent actions
                 display.show_opponent_action(entry)
-                # Add to local combat log
-                state.add_to_log(entry.get("message", ""))
+                # Add to local combat log (CombatLogEntry uses "summary")
+                summary = entry.get("summary", "")
+                if summary:
+                    state.add_to_log(summary)
                 need_redraw = True
-                combat_log_index = entry.get("index", combat_log_index) + 1
+
+            # Update combat log index to total (new format doesn't have per-entry index)
+            combat_log_index = log_response.get("total", combat_log_index)
 
             # Check PvP status AFTER processing combat log
             response = httpx.get(f"{client.base_url}/pvp/status", timeout=5.0)
@@ -248,7 +252,7 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
         time.sleep(poll_interval)
 
 
-def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mode: bool = False, hero_uuid: Optional[str] = None):
+def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mode: bool = False, hero_uuid: Optional[str] = None, initial_log_index: int = 0):
     """Main game loop."""
     # Enter alternate screen for clean full-screen display
     display.enter_alternate_screen()
@@ -272,8 +276,9 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
 
         # Fetch and process any combat log entries from before we joined
         # (e.g., if opponent moved first before our turn)
+        # Start from initial_log_index to avoid duplicates with ai_actions already shown
         try:
-            log_response = client.get_combat_log(since=0)
+            log_response = client.get_combat_log(since=initial_log_index)
             for entry in log_response.get("entries", []):
                 display.show_opponent_action(entry)
         except Exception:
@@ -457,23 +462,22 @@ def play(
         entity_name = result.get("entity_name", "Unknown")
         display.console.print(f"[green]You control: {entity_name}[/green]")
 
-        # Show any AI actions that occurred before our turn (if AI went first)
-        ai_actions = result.get("ai_actions", [])
-        if ai_actions:
-            display.show_ai_actions(ai_actions)
-            # Capture any AI movement path for display
-            for action in ai_actions:
-                if action.get("type") == "move" and action.get("path"):
-                    # Store the last AI movement path
-                    initial_ai_path = [tuple(p) for p in action.get("path", [])]
-                    break
-            else:
-                initial_ai_path = None
-        else:
-            initial_ai_path = None
+        # Get initial combat log index (AI actions already in log)
+        # game_loop will fetch from this index, so no duplicates
+        initial_log_index = result.get("new_log_since", 0)
 
-        # Run the game loop, passing initial AI path
-        game_loop(client, initial_ai_path=initial_ai_path)
+        # Check for AI movement path in ai_actions (CombatLogEntry structure)
+        ai_actions = result.get("ai_actions", [])
+        initial_ai_path = None
+        for action in ai_actions:
+            if action.get("entry_type") == "movement":
+                path = action.get("data", {}).get("path")
+                if path:
+                    initial_ai_path = [tuple(p) for p in path]
+                    break
+
+        # Run the game loop
+        game_loop(client, initial_ai_path=initial_ai_path, initial_log_index=initial_log_index)
 
     except Exception as e:
         display.show_error(f"Connection failed: {e}")
