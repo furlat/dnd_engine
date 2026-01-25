@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType,Event, EventType, WeaponSlot, Range, Damage,  EventPhase
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent
 from pydantic import Field, model_validator
 from typing import Optional, List, TypeVar, Tuple, Self
 from uuid import UUID
@@ -493,7 +493,8 @@ class Attack(BaseAction):
             
             # Roll attack and post results using the helper methods
             dice_roll = source_entity.roll_d20(attack_bonus,RollType.ATTACK)
-            attack_outcome = determine_attack_outcome(dice_roll, ac)
+            crit_threshold = source_entity.get_crit_threshold(weapon_slot)
+            attack_outcome = determine_attack_outcome(dice_roll, ac, crit_threshold)
             
             attack_event = attack_event.post(
                 dice_roll=dice_roll,
@@ -515,8 +516,8 @@ class Attack(BaseAction):
             
             # Move to EFFECT phase for damage
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid)
-            attack_event = attack_event.post(
-                new_phase=EventPhase.EFFECT,
+            attack_event = attack_event.phase_to(
+                EventPhase.EFFECT,
                 status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.damage_bonus.normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
                 damages=damages
             )
@@ -527,7 +528,43 @@ class Attack(BaseAction):
             
             # Apply damage if there is an attack outcome
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-                damage_rolls = target_entity.take_damage(damages, attack_event.attack_outcome)
+                # Step 1: Roll damage dice (creates immutable DiceRoll objects)
+                original_rolls = []
+                for damage in damages:
+                    dice = damage.get_dice(attack_outcome=attack_event.attack_outcome)
+                    roll = dice.roll
+                    original_rolls.append(roll)
+
+                # Step 2: Create DAMAGE_ROLLED event
+                # final_rolls starts as copy of original_rolls - handlers will replace entries
+                damage_rolled_event = DamageRolledEvent(
+                    source_entity_uuid=source_entity.uuid,
+                    target_entity_uuid=target_entity.uuid,
+                    weapon_slot=weapon_slot,
+                    attack_outcome=attack_event.attack_outcome,
+                    damages=damages,
+                    original_rolls=original_rolls,
+                    final_rolls=list(original_rolls),  # Copy - handlers will replace
+                    parent_event=attack_event.uuid,
+                    phase=EventPhase.DECLARATION
+                )
+
+                # Step 3: Transition to EFFECT phase - handlers intercept here
+                damage_rolled_event = damage_rolled_event.phase_to(
+                    EventPhase.EFFECT,
+                    status_message="Damage dice rolled"
+                )
+
+                # Step 4: Apply final_rolls (possibly modified by handlers)
+                damage_rolls = damage_rolled_event.final_rolls
+                for i, roll in enumerate(damage_rolls):
+                    damage_type = damages[i].damage_type
+                    target_entity.health.take_damage(
+                        roll.total,
+                        damage_type,
+                        source_entity_uuid=source_entity.uuid
+                    )
+
                 attack_event = attack_event.phase_to(
                     new_phase=EventPhase.EFFECT,
                     damage_rolls=damage_rolls,

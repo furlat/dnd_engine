@@ -282,13 +282,16 @@ class Weapon(BaseBlock):
                 raise ValueError("All extra damage targets must be of the same length")
         return self
     
-    def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores, is_off_hand: bool = False) -> Damage:
+    def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores,
+                        is_off_hand: bool = False,
+                        off_hand_ability_bonus: Optional[ModifiableValue] = None) -> Damage:
         """Get base damage for this weapon.
 
         Args:
             equipment_block: The Equipment block for general bonuses
             ability_block: The AbilityScores for ability modifiers
-            is_off_hand: If True, don't add ability modifier (Two-Weapon Fighting rule)
+            is_off_hand: If True, use off_hand_ability_bonus instead of direct ability modifier
+            off_hand_ability_bonus: ModifiableValue for off-hand ability bonus (0 by default, TWF adds ability via contextual)
         """
         bonuses = []
         if self.damage_bonus is not None:
@@ -296,8 +299,9 @@ class Weapon(BaseBlock):
         if equipment_block.damage_bonus is not None:
             bonuses.append(equipment_block.damage_bonus)
 
-        # Only add ability modifier if NOT off-hand attack
+        # Ability modifier handling
         if not is_off_hand:
+            # Main-hand: add ability modifier directly
             if WeaponProperty.RANGED in self.properties:
                 # Ranged: DEX modifier
                 dex_bonus = ability_block.dexterity.get_combined_values()
@@ -314,6 +318,10 @@ class Weapon(BaseBlock):
                 # Melee: STR modifier
                 strength_bonus = ability_block.strength.get_combined_values()
                 bonuses.append(strength_bonus)
+        else:
+            # Off-hand: use off_hand_ability_bonus (0 by default, TWF adds ability via contextual)
+            if off_hand_ability_bonus is not None:
+                bonuses.append(off_hand_ability_bonus)
 
         # Add weapon type damage bonuses (these always apply)
         if WeaponProperty.RANGED in self.properties:
@@ -461,6 +469,19 @@ class Equipment(BaseBlock):
         value_name="Unarmed Damage Bonus"
     ))
 
+    # Off-hand ability bonuses - base_value=0 by default
+    # TWF fighting style adds ability modifier via contextual modifier
+    off_hand_melee_ability_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Off-Hand Melee Ability Bonus"
+    ))
+    off_hand_ranged_ability_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Off-Hand Ranged Ability Bonus"
+    ))
+
     extra_attack_damage_dices: List[Literal[4,6,8,10,12,20]] = Field(
         default_factory=list,
         description="Extra damage dice for the weapon"
@@ -482,6 +503,25 @@ class Equipment(BaseBlock):
     unarmed_damage_dice: Literal[4,6,8,10,12,20] = Field(default=4)
 
     unarmed_dice_numbers: int = Field(default=1)
+
+    # Critical threshold modifiers (higher value = crit on lower natural rolls)
+    # Default 0 means crit on nat 20, +1 means crit on 19-20, +2 means crit on 18-20
+    # General threshold applies to all attacks, specific ones stack for melee/ranged only
+    crit_threshold: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Crit Threshold"
+    ))
+    crit_threshold_melee: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Melee Crit Threshold"
+    ))
+    crit_threshold_ranged: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Ranged Crit Threshold"
+    ))
 
     def _get_weapon_by_slot(self, slot: WeaponSlot) -> Optional[Union[Weapon, Shield]]:
         """Helper to get weapon/shield by slot."""
@@ -517,9 +557,17 @@ class Equipment(BaseBlock):
         """ combines the weapon damage bonus with the damage bonus and melee damage bonus into a single damage block"""
         weapon = self._get_weapon_by_slot(weapon_slot)
         if isinstance(weapon, Weapon):
-            # Off-hand attacks don't add ability modifier to damage (Two-Weapon Fighting)
+            # Off-hand attacks use off_hand_ability_bonus (0 by default, TWF adds ability via contextual)
             is_off_hand = weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF)
-            return weapon.get_base_damage(self, ability_block, is_off_hand=is_off_hand)
+            is_ranged = weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
+
+            # Select the appropriate off-hand ability bonus if applicable
+            off_hand_ability_bonus = None
+            if is_off_hand:
+                off_hand_ability_bonus = self.off_hand_ranged_ability_bonus if is_ranged else self.off_hand_melee_ability_bonus
+
+            return weapon.get_base_damage(self, ability_block, is_off_hand=is_off_hand,
+                                          off_hand_ability_bonus=off_hand_ability_bonus)
         return None
     
     def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:

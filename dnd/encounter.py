@@ -403,10 +403,12 @@ class Encounter(BaseObject):
         """
         Start the current entity's turn.
 
-        1. Reset action economy
+        1. Call entity.on_turn_start() which handles:
+           - TurnStartEvent firing through phases (handlers can respond)
+           - Condition duration advancement
+           - Action economy reset and resource recharge
         2. Update senses
         3. Notify controller
-        4. Fire TurnStartEvent
         """
         if self.state != EncounterState.ACTIVE:
             return None
@@ -433,12 +435,16 @@ class Encounter(BaseObject):
 
         self.turn_state = TurnState.IN_PROGRESS
 
-        # Advance condition durations (at start of turn, not end)
-        # This makes Dodge work correctly per SRD ("until start of your next turn")
-        self._advance_entity_conditions(entity)
-
-        # Reset action economy
-        entity.action_economy.reset_all_costs()
+        # Entity handles turn-start logic:
+        # - Fires TurnStartEvent through DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
+        # - Handlers (like Survivor) trigger at EXECUTION phase
+        # - Advances condition durations
+        # - Resets action economy and recharges TURN_START resources
+        event = entity.on_turn_start(
+            encounter_uuid=self.uuid,
+            round_number=self.round_number,
+            turn_index=self.current_turn_index
+        )
 
         # Update senses (use larger range to cover typical combat arenas)
         entity.update_entity_senses(max_distance=20)
@@ -447,27 +453,6 @@ class Encounter(BaseObject):
         if controller:
             context = self._build_turn_context(entity)
             controller.on_turn_start(entity, context)
-
-        # Get current action economy values
-        actions = entity.action_economy.actions.normalized_score
-        bonus_actions = entity.action_economy.bonus_actions.normalized_score
-        movement = entity.action_economy.movement.normalized_score
-        reactions = entity.action_economy.reactions.normalized_score
-
-        # Fire event
-        event = TurnStartEvent(
-            source_entity_uuid=entity.uuid,
-            target_entity_uuid=entity.uuid,
-            encounter_uuid=self.uuid,
-            entity_uuid=entity.uuid,
-            round_number=self.round_number,
-            turn_index=self.current_turn_index,
-            actions_available=actions,
-            bonus_actions_available=bonus_actions,
-            movement_available=movement,
-            reaction_available=reactions,
-            phase=EventPhase.COMPLETION
-        )
 
         return event
 

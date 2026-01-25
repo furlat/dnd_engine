@@ -70,10 +70,10 @@ Attack Event Phases:
 | **Archery** | Fighting Style | Simple | Static +2 modifier on ranged attack |
 | **Defense** | Fighting Style | Simple | Contextual +1 AC if armor equipped |
 | **Dueling** | Fighting Style | Simple | Contextual +2 melee damage if one-handed |
-| **Great Weapon Fighting** | Fighting Style | Complex | EventHandler on damage dice, reroll 1s/2s |
-| **Protection** | Fighting Style | Medium | Auto-reaction EventHandler on ally attacked |
+| **Great Weapon Fighting** | Fighting Style | ✅ Done | EventHandler on damage dice, reroll 1s/2s |
+| **Protection** | Fighting Style | ✅ Done | EventHandler on ATTACK EXECUTION, impose disadvantage |
 | **Two-Weapon Fighting** | Fighting Style | Simple | Enable ability mod on off-hand damage |
-| **Second Wind** | Class Feature | Done | Resource + Action |
+| **Second Wind** | Class Feature | ✅ Done | Resource + Action |
 
 ### Level 2
 
@@ -85,7 +85,7 @@ Attack Event Phases:
 
 | Feature | Type | Difficulty | Approach |
 |---------|------|------------|----------|
-| **Improved Critical** | Archetype | Medium | New `crit_threshold` ModifiableValue |
+| **Improved Critical** | Archetype | ✅ Done | `crit_threshold` ModifiableValue on Equipment |
 
 ### Level 4, 6, 8, 12, 14, 16, 19
 
@@ -97,7 +97,7 @@ Attack Event Phases:
 
 | Feature | Type | Difficulty | Approach |
 |---------|------|------------|----------|
-| **Extra Attack** | Class Feature | Medium | HasAttacked condition + ExtraAttack action + resource |
+| **Extra Attack** | Class Feature | ✅ Done | HasAttacked condition + ExtraAttack action + resource |
 
 ### Level 7 (Champion)
 
@@ -600,29 +600,29 @@ class Survivor(BaseCondition):
 ## Implementation Priority
 
 ### Phase 1: Simple Fighting Styles
-1. Archery (static modifier)
-2. Defense (contextual modifier)
-3. Dueling (contextual modifier)
-4. Two-Weapon Fighting (flag/modifier)
+1. Archery (static modifier) - ❌ TODO
+2. Defense (contextual modifier) - ❌ TODO
+3. Dueling (contextual modifier) - ❌ TODO
+4. Two-Weapon Fighting (flag/modifier) - ❌ TODO
 
 ### Phase 2: Core Class Features
 5. Second Wind - ✅ DONE
-6. Action Surge (resource + action)
-7. Extra Attack (HasAttacked + ExtraAttack action + resource)
+6. Action Surge (resource + action) - ❌ TODO
+7. Extra Attack (HasAttacked + ExtraAttack action + resource) - ✅ DONE
 
 ### Phase 3: Critical System
-8. Add `crit_threshold` to Entity
-9. Improved Critical condition
-10. Superior Critical condition
+8. Add `crit_threshold` to Entity - ✅ DONE
+9. Improved Critical condition - ✅ DONE
+10. Superior Critical condition - ✅ DONE
 
 ### Phase 4: Reactions
-11. Protection (auto-reaction handler)
-12. Indomitable (auto-reroll handler)
+11. Protection (auto-reaction handler) - ✅ DONE
+12. Indomitable (auto-reroll handler) - ❌ TODO
 
 ### Phase 5: Complex Features
-13. Great Weapon Fighting (DAMAGE_ROLLED event)
-14. Survivor (turn start hook)
-15. Remarkable Athlete (half-proficiency check)
+13. Great Weapon Fighting (DAMAGE_ROLLED event) - ✅ DONE
+14. Survivor (turn start hook) - ❌ TODO
+15. Remarkable Athlete (half-proficiency check) - ❌ TODO
 
 ---
 
