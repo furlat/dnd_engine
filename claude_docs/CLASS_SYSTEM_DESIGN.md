@@ -878,8 +878,8 @@ def get_class_level(self, class_name: str) -> int:
 | **Archery** | +2 to ranged attack rolls | Static modifier on ranged attack bonus |
 | **Defense** | +1 AC when wearing armor | Contextual modifier on AC (checks armor equipped) |
 | **Dueling** | +2 damage with single melee weapon | Contextual modifier on damage (checks weapon slots) |
-| **Great Weapon Fighting** | Reroll 1s and 2s on damage | Event handler on damage rolls (complex) |
-| **Protection** | Reaction to impose disadvantage | New action + reaction consumption |
+| **Great Weapon Fighting** | Reroll 1s and 2s on damage | ✅ DONE - Event handler on `DAMAGE_ROLLED` event |
+| **Protection** | Reaction to impose disadvantage | ✅ DONE - Event handler on `ATTACK` EXECUTION phase |
 | **Two-Weapon Fighting** | Add ability mod to off-hand damage | Contextual modifier on off-hand damage |
 
 ### 2. Second Wind
@@ -926,12 +926,25 @@ def get_class_level(self, class_name: str) -> int:
 | **2.1 SecondWind action** | ✅ DONE | `examples/test_second_wind.py` |
 | **2.2 Integration test** | ✅ DONE | Full resource lifecycle verified |
 
+### Phase 2.5: Extra Attack ✅ COMPLETE
+
+| Step | Status | Notes |
+|------|--------|-------|
+| **2.5.1 HasAttacked condition** | ✅ DONE | Marker condition in `dnd/conditions.py` |
+| **2.5.2 HasAttacked handler** | ✅ DONE | Triggers on ATTACK EXECUTION phase |
+| **2.5.3 ExtraAttack action** | ✅ DONE | Requires HasAttacked, costs `extra_attacks` resource |
+| **2.5.4 ExtraAttackFeature** | ✅ DONE | Grants resource + action templates + handler |
+| **2.5.5 Test suite** | ✅ DONE | `examples/test_extra_attack.py` - 7 tests |
+
+**Key Learning**: Event handlers trigger on EXECUTION phase, not EFFECT (EFFECT only fires on HIT) or COMPLETION (closed to handlers).
+
 ### Bug Fixes During Implementation
 
 | Fix | Description |
 |-----|-------------|
 | `check_costs()` registry | Was using `BaseObject.get()`, fixed to `BaseBlock.get()` |
 | `get_available_actions()` | Now shows unaffordable actions with `can_afford=False` |
+| Extra Attack handler phase | Changed from COMPLETION to EXECUTION (COMPLETION is closed) |
 
 ---
 
@@ -941,28 +954,116 @@ def get_class_level(self, class_name: str) -> int:
 
 ### Summary of Fighter Features by Difficulty
 
-| Difficulty | Features |
-|------------|----------|
-| **Simple** | Archery, Defense, Dueling, Two-Weapon Fighting, Action Surge, ASI |
-| **Medium** | Extra Attack, Improved/Superior Critical, Protection, Indomitable |
-| **Complex** | Great Weapon Fighting (dice reroll), Survivor (turn start) |
+| Difficulty | Features | Status |
+|------------|----------|--------|
+| **Simple** | Archery, Defense, Dueling, Two-Weapon Fighting, ASI | ❌ TODO |
+| **Medium** | Action Surge, Indomitable | ✅ DONE |
+| **Complex - Dice Reroll** | Great Weapon Fighting | ✅ DONE |
+| **Complex - Critical** | Improved Critical, Superior Critical | ✅ DONE |
+| **Complex - Multi-Attack** | Extra Attack (L5/11/20) | ✅ DONE |
+| **Complex - Reaction** | Protection (reaction when ally attacked) | ✅ DONE |
+| **Complex - Turn Start** | Survivor (heal at turn start) | ❌ TODO |
+
+### What's Implemented ✅
+
+1. **Great Weapon Fighting**: ✅ Event handler on `DAMAGE_ROLLED` at EFFECT phase. Rerolls 1s and 2s on two-handed melee weapons.
+
+2. **Improved/Superior Critical**: ✅ Modifies `crit_threshold` ModifiableValue. Crits on 19-20 (L3) or 18-20 (L15).
+
+3. **Extra Attack**: ✅ JUST COMPLETED
+   - `HasAttacked` marker condition (applied on EXECUTION phase of action-cost attacks)
+   - `ExtraAttack` action (requires HasAttacked, consumes `extra_attacks` resource)
+   - `ExtraAttackFeature` condition (grants resource + registers action templates + event handler)
+   - Resource recharges at turn start
+   - Scales: 1 extra at L5, 2 at L11, 3 at L20
+
+4. **Second Wind**: ✅ Resource-based action (1d10 + fighter level healing, bonus action, short rest recharge)
+
+5. **Resource System**: ✅ `ActionEconomy.resources` with `RechargeType.TURN_START/SHORT_REST/LONG_REST`
+
+6. **Action Surge**: ✅ COMPLETE
+   - `ActionSurging` condition (+1 action, 1 round duration, also serves as once-per-turn marker)
+   - `ActionSurge` action (free action, costs 1 `action_surge` resource)
+   - `ActionSurgeFeature` condition (grants resource + registers action template)
+   - Resource recharges on short rest (1 use at L2, 2 uses at L17)
+
+7. **Indomitable**: ✅ COMPLETE
+   - EventHandler on SAVING_THROW at EFFECT phase
+   - Rerolls failed saves, must use new roll
+   - Resource recharges on long rest (1 use at L9, 2 at L13, 3 at L17)
+
+### What's Left (Ordered by Difficulty)
+
+#### Simple (Static Modifiers)
+| Feature | Effect | Implementation |
+|---------|--------|----------------|
+| **Archery** | +2 ranged attack | Static modifier on ranged attack bonus |
+| **Defense** | +1 AC with armor | Contextual modifier (check armor equipped) |
+| **Dueling** | +2 damage single melee | Contextual modifier (check weapon slots) |
+| **Two-Weapon Fighting** | Add ability mod to off-hand | Modifier on off-hand damage |
+| **ASI** | +2 to ability score | Direct ability score modification |
+
+#### Medium (Resource + Action) - COMPLETED
+| Feature | Effect | Status |
+|---------|--------|--------|
+| **Action Surge** (L2) | Extra action, 1/short rest | ✅ DONE - `ActionSurgeFeature` + `ActionSurge` action |
+| **Indomitable** (L9) | Reroll failed save | ✅ DONE - EventHandler on SAVING_THROW EFFECT phase |
+
+#### Medium (Reaction System) - COMPLETED
+| Feature | Effect | Status |
+|---------|--------|--------|
+| **Protection** (L1) | Impose disadvantage on attack vs adjacent ally | ✅ DONE - EventHandler on ATTACK EXECUTION |
+
+#### Turn-Start Effects
+| Feature | Effect | Implementation |
+|---------|--------|----------------|
+| **Survivor** (L18) | Heal 5+CON mod at turn start if below half HP | Turn start event handler |
 
 ### Key Design Decisions
 
-1. **Optional reactions**: Auto-trigger for now (like Opportunity Attacks). Player choice mechanism later.
+1. **Extra Attack pattern**: ✅ VALIDATED
+   - Marker condition (`HasAttacked`) + resource (`extra_attacks`) + action (`ExtraAttack`)
+   - Handler triggers on EXECUTION phase (not EFFECT, since EFFECT only fires on HIT)
+   - Only action-cost attacks trigger HasAttacked (not OA, not bonus action attacks)
 
-2. **Dice rerolling**: Use EventHandler on new `DAMAGE_ROLLED` event type between roll and apply.
+2. **Event Handler Constraint**: Handlers can only respond BEFORE COMPLETION phase.
 
-3. **Critical threshold**: `crit_range = 20 - crit_threshold_modifier` where modifier defaults to 0.
+3. **Dice rerolling**: ✅ IMPLEMENTED - EventHandler on `DAMAGE_ROLLED` at EFFECT phase.
 
-4. **Extra Attack**: Use `HasAttacked` marker condition + separate `ExtraAttack` action + resource.
+4. **Critical threshold**: ✅ IMPLEMENTED - ModifiableValue with stacking modifiers.
 
-### Event Handler Constraint
+### Protection Fighting Style ✅ IMPLEMENTED
 
-**IMPORTANT**: Handlers can only respond BEFORE the COMPLETION phase.
+**Effect**: When a creature you can see attacks a target other than you that is within 5 feet of you, you can use your reaction to impose disadvantage on the attack roll. You must be wielding a shield.
 
-Once an event reaches COMPLETION, it cannot be modified or spawn sub-events.
-Reactions must trigger on DECLARATION, EXECUTION, or EFFECT phases.
+**Implementation**: `FightingStyleProtection` condition in `dnd/classes/fighter.py`
+
+**How It Works**:
+```
+ATTACK event at EXECUTION phase (after attack_bonus is set, before d20 roll)
+    ↓
+protection_processor checks:
+  - Am I NOT the target? (target_entity_uuid != protector.uuid)
+  - Is target within 5ft of me? (senses.get_feet_distance)
+  - Can I see attacker? (source_entity_uuid in senses.entities)
+  - Do I have shield equipped? (weapon_melee_off is Shield)
+  - Do I have reaction available? (can_afford("reactions", 1))
+    ↓
+If all true:
+  - Add DISADVANTAGE modifier to event.attack_bonus.self_static
+  - Consume reaction (action_economy.consume("reactions", 1))
+  - Return modified event
+```
+
+**Key Insights**:
+1. Trigger on EXECUTION phase - `attack_bonus` exists on event at this point (set by `attack_consequences()`)
+2. Handler modifies `attack_bonus.self_static` directly (adds disadvantage to attacker's roll)
+3. Shield is stored in `weapon_melee_off` slot (can be `Weapon` or `Shield`)
+4. Prevents stacking by checking if "Protection" modifier already exists
+
+**Files**:
+- `dnd/classes/fighter.py`: `protection_processor`, `create_protection_handler`, `FightingStyleProtection`
+- `examples/test_protection.py`: Comprehensive test suite (8 tests)
 
 ---
 
@@ -1275,21 +1376,41 @@ This is separate from the condition system since proficiencies are binary (have 
 | `dnd/entity.py` | `action_templates` dict, `register_action()`, `get_available_actions()` | ✅ DONE |
 | `dnd/actions_functional.py` | `setup_standard_actions()`, `execute_action()`, `execute_by_index()` | ✅ DONE |
 | `server/event_server.py` | `/action/execute` endpoint | ✅ DONE |
-| **Phase 1: Resource System (IN PROGRESS)** |  |  |
-| `dnd/blocks/action_economy.py` | `RechargeType` enum, `Resource` model, resource methods, rest triggers | 🔨 TODO |
-| `dnd/core/base_actions.py` | Add `resource_name`, `resource_cost` to `BaseCost` | 🔨 TODO |
-| `dnd/actions.py` | Update cost applier to handle resource costs | 🔨 TODO |
-| **Phase 2: SecondWind (Proof of Concept)** |  |  |
-| `dnd/actions.py` | Add `SecondWind` action class | 🔨 TODO |
-| `examples/test_second_wind.py` | Test script | 🔨 TODO |
+| **Phase 1: Resource System (COMPLETE)** |  |  |
+| `dnd/blocks/action_economy.py` | `RechargeType` enum, `Resource` model, resource methods, rest triggers | ✅ DONE |
+| `dnd/core/base_actions.py` | Add `resource_name`, `resource_cost` to `BaseCost` | ✅ DONE |
+| `dnd/actions.py` | Update cost applier to handle resource costs | ✅ DONE |
+| **Phase 2: SecondWind (COMPLETE)** |  |  |
+| `dnd/actions.py` | Add `SecondWind` action class | ✅ DONE |
+| `examples/test_second_wind.py` | Test script | ✅ DONE |
+| **Phase 2.5: Extra Attack (COMPLETE)** |  |  |
+| `dnd/conditions.py` | Add `HasAttacked` marker condition | ✅ DONE |
+| `dnd/actions.py` | Add `ExtraAttack` action class | ✅ DONE |
+| `dnd/classes/fighter.py` | Add `ExtraAttackFeature`, `has_attacked_processor`, `create_has_attacked_handler` | ✅ DONE |
+| `dnd/classes/__init__.py` | Export new fighter features | ✅ DONE |
+| `examples/test_extra_attack.py` | Test script (7 tests) | ✅ DONE |
+| **Phase 2.6: Protection Fighting Style (COMPLETE)** |  |  |
+| `dnd/classes/fighter.py` | Add `FightingStyleProtection`, `protection_processor`, `create_protection_handler` | ✅ DONE |
+| `dnd/classes/__init__.py` | Export Protection features | ✅ DONE |
+| `examples/test_protection.py` | Test script (8 tests) | ✅ DONE |
+| **Phase 2.7: Action Surge (COMPLETE)** |  |  |
+| `dnd/conditions.py` | Add `ActionSurging` condition (+1 action, 1 round duration) | ✅ DONE |
+| `dnd/actions.py` | Add `ActionSurge` action class | ✅ DONE |
+| `dnd/classes/fighter.py` | Add `ActionSurgeFeature` | ✅ DONE |
+| `dnd/classes/__init__.py` | Export Action Surge features | ✅ DONE |
+| `examples/test_action_surge.py` | Test script (7 tests) | ✅ DONE |
+| **Phase 2.8: Indomitable (COMPLETE)** |  |  |
+| `dnd/classes/fighter.py` | Add `Indomitable`, `indomitable_processor`, `create_indomitable_handler` | ✅ DONE |
+| `dnd/classes/__init__.py` | Export Indomitable features | ✅ DONE |
+| `examples/test_indomitable.py` | Test script | ✅ DONE |
 | **Phase 3: Extend BaseCondition (FUTURE)** |  |  |
 | `dnd/core/base_conditions.py` | Add `tags`, `registered_action_ids`, `registered_resource_names`; update `_apply()` return | ❌ TODO |
 | `dnd/conditions.py` | Update all conditions' `_apply()` to return 6-tuple | ❌ TODO |
 | `dnd/entity.py` | Add `get_conditions_by_tag()` | ❌ TODO |
-| **Phase 4-5: Fighter Class (FUTURE)** |  |  |
-| `dnd/classes/__init__.py` | **NEW** - Module init | ❌ TODO |
-| `dnd/classes/fighter.py` | **NEW** - Fighting styles, SecondWind condition | ❌ TODO |
-| `dnd/blocks/health.py` | (Future) Add `source_tag` to HitDice for multiclass support |
+| **Phase 4: Remaining Fighter Features (FUTURE)** |  |  |
+| `dnd/classes/fighter.py` | Fighting styles (Archery, Defense, Dueling, Two-Weapon) | ❌ TODO |
+| `dnd/classes/fighter.py` | Survivor (L18 Champion) | ❌ TODO |
+| `dnd/blocks/health.py` | (Future) Add `source_tag` to HitDice for multiclass support | ❌ TODO |
 
 ---
 
@@ -1382,3 +1503,386 @@ This is separate from the condition system since proficiencies are binary (have 
 2. **Multiclassing**: How do we prevent duplicate fighting styles?
 3. **UI updates**: How does the CLI know a new action was registered?
 4. **AI behavior**: How should AI know to use class features like Second Wind?
+
+---
+
+## Event Processors Guide (DAMAGE_ROLLED Pattern)
+
+**Status**: ✅ IMPLEMENTED - This pattern worked smoothly and is now the standard approach for dice manipulation.
+
+### Overview
+
+The `DAMAGE_ROLLED` event pattern allows intercepting dice rolls between rolling and application. This enables:
+- Great Weapon Fighting (reroll 1s and 2s)
+- Elemental Adept (treat 1s as 2s)
+- Halfling Lucky (reroll 1s, keep best)
+- Any future dice manipulation ability
+
+### Architecture
+
+```
+Attack._apply()
+    │
+    ├─ Roll damage dice → List[DiceRoll] (immutable)
+    │
+    ├─ Fire DamageRolledEvent(DECLARATION → EFFECT)
+    │   │
+    │   └─ EventHandler intercepts at EFFECT phase
+    │       └─ Modifies event.final_rolls (creates new DiceRoll objects)
+    │
+    └─ Apply event.final_rolls to target health
+```
+
+### Key Design Principle: Immutable DiceRolls
+
+**Original rolls are NEVER modified.** Handlers create NEW DiceRoll objects with modified results.
+
+```python
+# WRONG: Modifying original
+roll.results[0] = 6  # Don't do this!
+
+# RIGHT: Create new roll with modified results
+new_roll = create_modified_dice_roll(original, [6, 4, 5])
+event.replace_roll(index, new_roll, "Handler Name", "Reason")
+```
+
+Benefits:
+- Audit trail preserved (can see original vs final)
+- Multiple handlers can chain modifications
+- No side effects on shared objects
+
+### DamageRolledEvent Structure
+
+```python
+class DamageRolledEvent(Event):
+    event_type: EventType = EventType.DAMAGE_ROLLED
+
+    # Attack context (read-only)
+    weapon_slot: WeaponSlot
+    attack_outcome: AttackOutcome
+    damages: List[Damage]
+
+    # IMMUTABLE: Original rolls
+    original_rolls: List[DiceRoll]
+
+    # MUTABLE: Current best rolls (handlers replace entries)
+    final_rolls: List[DiceRoll]
+
+    # AUDIT: Modification history
+    roll_modifications: List[Tuple[str, int, int, int, str]]
+    # (handler_name, roll_index, old_total, new_total, reason)
+
+    def replace_roll(self, index: int, new_roll: DiceRoll, handler_name: str, reason: str):
+        """Helper for handlers to replace a roll and track the change."""
+```
+
+### Implementing a Dice Manipulation Ability
+
+#### Step 1: Create Processor Function
+
+```python
+def my_ability_processor(
+    event: DamageRolledEvent,
+    source_entity_uuid: UUID
+) -> Optional[DamageRolledEvent]:
+    """
+    Event processor signature:
+    - Receives event and source_entity_uuid (who registered the handler)
+    - Returns modified event, or None if no changes
+    """
+    # Only process own attacks
+    if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    # Check conditions (weapon type, damage type, etc.)
+    entity = Entity.get(source_entity_uuid)
+    weapon = entity.equipment._get_weapon_by_slot(event.weapon_slot)
+    if not meets_requirements(weapon):
+        return None
+
+    # Process each damage roll
+    any_modified = False
+    for i, original_roll in enumerate(event.final_rolls):
+        # Apply your dice manipulation logic
+        new_roll = manipulate_dice(original_roll)
+
+        if new_roll.results != original_roll.results:
+            event.replace_roll(i, new_roll, "My Ability", "Description")
+            any_modified = True
+
+    if any_modified:
+        return event.model_copy(update={"modified": True})
+    return None
+```
+
+#### Step 2: Create Condition Class
+
+```python
+class MyAbility(BaseCondition):
+    name: str = "My Ability"
+
+    def _apply(self, declaration_event: Event) -> Tuple[...]:
+        target = Entity.get(self.target_entity_uuid)
+
+        # Create event handler
+        handler = EventHandler(
+            name="My Ability",
+            source_entity_uuid=target.uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.DAMAGE_ROLLED,
+                    event_phase=EventPhase.EFFECT
+                )
+            ],
+            event_processor=my_ability_processor
+        )
+
+        # Register handler
+        EventQueue.add_event_handler(handler)
+        target.add_event_handler(handler)
+
+        effect_event = declaration_event.phase_to(EventPhase.EFFECT, ...)
+        return [], [handler.uuid], [], effect_event
+```
+
+### Available Dice Processor Functions
+
+Located in `dnd/classes/fighter.py` and exported via `dnd/classes/__init__.py`:
+
+| Function | Type | Description |
+|----------|------|-------------|
+| `create_modified_dice_roll(original, new_results)` | Utility | Create new DiceRoll with different results |
+| `maximize_all(roll, dice_size)` | Deterministic | All dice show maximum |
+| `minimize_all(roll)` | Deterministic | All dice show 1 |
+| `set_all_to(roll, value)` | Deterministic | All dice show specific value |
+| `substitute_value(roll, from, to)` | Deterministic | Replace specific values |
+| `floor_results(roll, minimum)` | Deterministic | No result below minimum (Elemental Adept) |
+| `ceiling_results(roll, maximum)` | Deterministic | No result above maximum |
+| `reroll_below_and_substitute(roll, threshold, dice_size)` | Stochastic | Reroll low dice, must use new (GWF) |
+| `reroll_below_keep_best(roll, threshold, dice_size)` | Stochastic | Reroll low dice, keep best (Lucky) |
+| `reroll_ones_once(roll, dice_size)` | Stochastic | Reroll 1s once |
+
+### Example: Elemental Adept (Fire)
+
+```python
+def elemental_adept_fire_processor(event, source_entity_uuid):
+    if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    any_modified = False
+    for i, (damage, roll) in enumerate(zip(event.damages, event.final_rolls)):
+        # Only affect fire damage
+        if damage.damage_type != DamageType.FIRE:
+            continue
+
+        # Treat 1s as 2s
+        new_roll = floor_results(roll, minimum=2)
+        if new_roll.results != roll.results:
+            event.replace_roll(i, new_roll, "Elemental Adept", "Fire damage min 2")
+            any_modified = True
+
+    return event.model_copy(update={"modified": True}) if any_modified else None
+```
+
+### Chaining Multiple Handlers
+
+Handlers are called in registration order. Each sees the `final_rolls` from previous handlers:
+
+```
+Original: [1, 2, 4]
+    ↓
+GWF Handler: rerolls 1 and 2 → [3, 1, 4]
+    ↓
+Elemental Adept: floors to 2 → [3, 2, 4]
+    ↓
+Final applied to target
+```
+
+### Testing
+
+See `examples/test_dice_processors.py` for comprehensive processor tests and `examples/test_great_weapon_fighting.py` for integration tests with statistics.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `dnd/core/events.py` | `DAMAGE_ROLLED` EventType, `DamageRolledEvent` class |
+| `dnd/actions.py` | Attack fires event between roll and apply |
+| `dnd/classes/fighter.py` | `GreatWeaponFighting` + all processor utilities |
+| `dnd/classes/__init__.py` | Exports processors for easy import |
+| `examples/test_dice_processors.py` | Unit tests for all processors |
+| `examples/test_great_weapon_fighting.py` | Integration tests with statistics |
+
+---
+
+## Improved Critical System (IMPLEMENTED)
+
+**Status**: ✅ COMPLETE
+
+### Overview
+
+The Improved Critical system enables Champion Fighters (and similar features) to crit on lower natural rolls:
+- **Default**: Crit on natural 20 (threshold = 20)
+- **Improved Critical** (Champion L3): Crit on 19-20 (threshold = 19)
+- **Superior Critical** (Champion L15): Crit on 18-20 (threshold = 18)
+
+### Architecture
+
+```
+Equipment (dnd/blocks/equipment.py)
+├── crit_threshold: ModifiableValue         # General - applies to ALL attacks
+├── crit_threshold_melee: ModifiableValue   # Melee-only bonus (stacks with general)
+└── crit_threshold_ranged: ModifiableValue  # Ranged-only bonus (stacks with general)
+
+Entity.get_crit_threshold(weapon_slot)
+    → 20 - (general + specific)
+
+determine_attack_outcome(roll, ac, crit_threshold=20)
+    → Uses get_natural_roll() to check used die vs threshold
+```
+
+### Three-Tier Threshold System
+
+The crit threshold uses three stacking ModifiableValues:
+
+| ModifiableValue | Purpose | Example Use |
+|-----------------|---------|-------------|
+| `crit_threshold` | General, all attacks | Improved Critical (+1), Superior Critical (+2) |
+| `crit_threshold_melee` | Melee-only bonus | Future: melee-specific crit abilities |
+| `crit_threshold_ranged` | Ranged-only bonus | Future: ranged-specific crit abilities |
+
+**Formula**: `actual_threshold = 20 - (general + specific)`
+
+This design allows:
+- Universal crit improvements (Improved Critical) to add to general only
+- Weapon-type-specific abilities to add to specific only
+- Both to stack when needed
+
+### Implementation Details
+
+#### Equipment Block
+
+```python
+# dnd/blocks/equipment.py
+class Equipment(BaseBlock):
+    crit_threshold: ModifiableValue  # General threshold modifier
+    crit_threshold_melee: ModifiableValue  # Stacks for melee
+    crit_threshold_ranged: ModifiableValue  # Stacks for ranged
+```
+
+#### Entity Method
+
+```python
+# dnd/entity.py
+def get_crit_threshold(self, weapon_slot: WeaponSlot) -> int:
+    general = self.equipment.crit_threshold.normalized_score
+    if weapon_slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF]:
+        specific = self.equipment.crit_threshold_melee.normalized_score
+    else:
+        specific = self.equipment.crit_threshold_ranged.normalized_score
+    return 20 - (general + specific)
+```
+
+#### Natural Roll Extraction
+
+```python
+# dnd/entity.py
+def get_natural_roll(roll: DiceRoll) -> int:
+    """Get the natural d20 value that was used for the attack.
+    Handles advantage/disadvantage correctly."""
+    if isinstance(roll.results, int):
+        return roll.results
+    if roll.advantage_status == AdvantageStatus.ADVANTAGE:
+        return max(roll.results)
+    elif roll.advantage_status == AdvantageStatus.DISADVANTAGE:
+        return min(roll.results)
+    return roll.results[0]
+```
+
+#### Attack Outcome Determination
+
+```python
+# dnd/entity.py
+def determine_attack_outcome(roll, ac, crit_threshold=20):
+    natural_roll = get_natural_roll(roll)
+
+    # Natural 1 always misses
+    if natural_roll == 1:
+        return AttackOutcome.CRIT_MISS
+
+    # Check crit threshold (not just == 20)
+    if natural_roll >= crit_threshold:
+        return AttackOutcome.CRIT
+    # ... rest of logic
+```
+
+### Condition Classes
+
+```python
+# dnd/classes/fighter.py
+
+class ImprovedCritical(BaseCondition):
+    """Champion Fighter L3: Crit on 19-20"""
+    name: str = "Improved Critical"
+
+    def _apply(self, declaration_event):
+        target = Entity.get(self.target_entity_uuid)
+
+        # Add +1 to general crit threshold (affects all attacks)
+        crit_mod = NumericalModifier.create(
+            source_entity_uuid=self.target_entity_uuid,
+            name="Improved Critical",
+            value=1
+        )
+        mod_uuid = target.equipment.crit_threshold.self_static.add_value_modifier(crit_mod)
+
+        return [(target.equipment.crit_threshold.uuid, mod_uuid)], [], [], effect_event
+
+
+class SuperiorCritical(BaseCondition):
+    """Champion Fighter L15: Crit on 18-20"""
+    name: str = "Superior Critical"
+    # Same pattern but value=2
+```
+
+### Usage
+
+```python
+# Apply Improved Critical to a fighter
+improved = ImprovedCritical(
+    source_entity_uuid=fighter.uuid,
+    target_entity_uuid=fighter.uuid
+)
+fighter.add_condition(improved)
+
+# Check threshold
+print(fighter.get_crit_threshold())  # 19
+
+# Attacks now crit on 19-20
+# Removal restores threshold to 20
+fighter.remove_condition("Improved Critical")
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `dnd/blocks/equipment.py` | Added `crit_threshold`, `crit_threshold_melee`, `crit_threshold_ranged` |
+| `dnd/entity.py` | Added `get_natural_roll()`, `get_crit_threshold()`, updated `determine_attack_outcome()` |
+| `dnd/actions.py` | Pass `crit_threshold` to `determine_attack_outcome()` in `attack_consequences()` |
+| `dnd/classes/fighter.py` | Added `ImprovedCritical`, `SuperiorCritical` conditions |
+| `examples/test_improved_critical.py` | Comprehensive test suite |
+
+### Testing
+
+```bash
+python examples/test_improved_critical.py
+```
+
+Tests cover:
+- Default threshold (nat 20)
+- Improved Critical threshold (nat 19)
+- Superior Critical threshold (nat 18)
+- Advantage/disadvantage handling
+- Condition application and removal
+- Separate melee/ranged thresholds

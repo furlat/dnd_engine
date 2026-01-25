@@ -773,12 +773,17 @@ def create_goblin(name: str = "Goblin", position: Tuple[int, int] = (0, 0)) -> E
 | Equipment (weapons, armor) | `dnd/blocks/equipment.py` |
 | Action economy | `dnd/blocks/action_economy.py` |
 | Senses (vision, position) | `dnd/blocks/sensory.py` |
+| **Character Classes** | |
+| Fighter class (GWF, dice processors) | `dnd/classes/fighter.py` |
+| Class module exports | `dnd/classes/__init__.py` |
 | **Monsters & Examples** | |
 | Simple creatures (Goblin, Skeleton) | `dnd/monsters/bestiary.py` |
 | Complex creature example | `dnd/monsters/circus_fighter.py` |
 | Basic combat demo | `examples/combat_basic.py` |
 | Condition tests | `examples/combat_conditions.py` |
 | Spatial events test | `examples/spatial_events_test.py` |
+| Dice processor tests | `examples/test_dice_processors.py` |
+| Great Weapon Fighting tests | `examples/test_great_weapon_fighting.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
 | Session management | `server/session.py` |
@@ -794,13 +799,16 @@ All conditions in `dnd/conditions.py`:
 
 | Condition | Self Effects | Effects on Attackers | Sub-conditions |
 |-----------|--------------|---------------------|----------------|
+| **ActionSurging** | +1 action this turn (1 round duration) | - | - |
 | **Blinded** | Disadvantage attacks, auto-fail sight skills | Advantage | - |
 | **Charmed** | Auto-miss vs charmer | Charmer: advantage social skills | - |
 | **Dashing** | +movement = base speed | - | - |
 | **Deafened** | Auto-fail hearing skills | - | - |
+| **Disengaging** | Movement doesn't provoke OA | - | - |
 | **Dodging** | Advantage DEX saves | Disadvantage | - |
 | **Frightened** | Disadvantage attacks/checks (contextual), speed=0 | - | - |
 | **Grappled** | Speed max = 0 | - | - |
+| **HasAttacked** | Marker for Extra Attack (no modifiers) | - | - |
 | **Incapacitated** | All action economy = 0 | - | - |
 | **Invisible** | Advantage attacks (contextual) | Disadvantage (contextual) | - |
 | **Paralyzed** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft | Incapacitated |
@@ -1165,6 +1173,7 @@ damage_event.get_parent_event()     # The attack event
 |------|---------|
 | `ATTACK` | Attack action |
 | `MOVEMENT` | Move action |
+| `DAMAGE_ROLLED` | After damage dice rolled, before applied (for dice manipulation) |
 | `TAKE_DAMAGE` | Damage application |
 | `HEAL` | Healing |
 | `CONDITION_APPLICATION` | Condition added |
@@ -1229,6 +1238,43 @@ class MyCustomEvent(Event):
 3. **Use handlers for reactions** - Don't poll; subscribe to relevant event types
 4. **Clean up handlers** - Call `handler.remove()` when done
 5. **Query via EventQueue** - Don't store events yourself; use the indices
+
+### DAMAGE_ROLLED Pattern (Dice Manipulation)
+
+The `DAMAGE_ROLLED` event enables dice manipulation abilities like Great Weapon Fighting. It fires between rolling and applying damage.
+
+```python
+# Quick example: Condition that rerolls 1s and 2s
+from dnd.classes.fighter import (
+    GreatWeaponFighting,
+    create_modified_dice_roll,
+    reroll_below_and_substitute,
+    floor_results,  # For Elemental Adept
+)
+
+# Apply the fighting style
+gwf = GreatWeaponFighting(
+    source_entity_uuid=fighter.uuid,
+    target_entity_uuid=fighter.uuid
+)
+fighter.add_condition(gwf)
+
+# The condition registers an EventHandler that:
+# 1. Triggers on DAMAGE_ROLLED events at EFFECT phase
+# 2. Checks if weapon is two-handed melee
+# 3. Rerolls 1s and 2s, must use new result
+# 4. Updates event.final_rolls with new DiceRoll objects
+```
+
+**Key principle**: Original dice rolls are immutable. Handlers create NEW DiceRoll objects.
+
+**Full guide**: See `claude_docs/CLASS_SYSTEM_DESIGN.md` section "Event Processors Guide".
+
+**Available processors** in `dnd/classes/fighter.py`:
+- `maximize_all()`, `minimize_all()`, `set_all_to()` - Deterministic
+- `floor_results()`, `ceiling_results()` - Clamp values (Elemental Adept)
+- `reroll_below_and_substitute()` - GWF style (must use new roll)
+- `reroll_below_keep_best()` - Lucky style (keep better result)
 
 ## Code Verification Rules
 
@@ -1534,12 +1580,15 @@ The class system models D&D character classes as collections of conditions appli
 | **Action registry** | ✅ DONE | `Entity.action_templates`, template-based system |
 | **Available actions query** | ✅ DONE | `get_available_actions()`, indexed targets |
 | **Server execution endpoint** | ✅ DONE | `/action/execute` with session auth |
-| **Resource system** | 🔨 IN PROGRESS | `ActionEconomy.resources` with recharge |
-| **Unified costs** | 🔨 IN PROGRESS | `BaseCost.resource_name/resource_cost` |
+| **Resource system** | ✅ DONE | `ActionEconomy.resources` with recharge |
+| **Unified costs** | ✅ DONE | `BaseCost.resource_name/resource_cost` |
+| **DAMAGE_ROLLED event** | ✅ DONE | Event between dice roll and damage application |
+| **Dice processors** | ✅ DONE | `dnd/classes/fighter.py` - reroll, floor, ceiling, etc. |
+| **Great Weapon Fighting** | ✅ DONE | First fighting style using event handlers |
 | **Condition tags** | ❌ TODO | `tags: List[str]` for filtering |
 | **Auto-cleanup (actions/resources)** | ❌ TODO | Extend `_apply()` return signature |
 | **Rest system** | ❌ TODO | `Entity.short_rest()`, `long_rest()` |
-| **Fighter class** | ❌ TODO | Fighting Styles, Second Wind |
+| **Fighter class (remaining)** | ❌ TODO | Other Fighting Styles, Second Wind |
 
 ### Resource System (ActionEconomy Extension)
 

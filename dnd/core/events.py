@@ -13,6 +13,8 @@ __all__ = [
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
     # Spatial events
     "SpatialChangeEvent",
+    # Combat events
+    "DamageRolledEvent",
     # Combat data
     "Range", "Damage",
     # Encounter/Turn events
@@ -113,6 +115,7 @@ class EventType(str, Enum):
     #Dice roll events
     DICE_ROLL = "dice_roll"
     DICE_ROLL_RESULT = "dice_roll_result"
+    DAMAGE_ROLLED = "damage_rolled"  # After damage dice rolled, before applied
 
     # Combat events
     ENEMY_SPOTTED = "enemy_spotted"
@@ -632,6 +635,25 @@ class EventQueue:
     def get_events_by_timestamp(cls, timestamp: datetime) -> List[Event]:
         """Get all events with a specific timestamp"""
         return cls._events_by_timestamp.get(timestamp, [])
+
+    @classmethod
+    def is_first_at_phase(cls, event: Event) -> bool:
+        """Check if this event is the first of its lineage at its current phase.
+
+        Useful for handlers that should only trigger once per logical action,
+        even if the action uses multiple post() calls at the same phase.
+
+        Returns:
+            True if no other events with the same lineage_uuid exist at this phase
+            (considering only events registered before this one).
+        """
+        history = cls._events_by_lineage.get(event.lineage_uuid, [])
+        for e in history:
+            if e.uuid == event.uuid:
+                continue  # Skip self
+            if e.phase == event.phase and e.timestamp < event.timestamp:
+                return False  # Found an earlier event at same phase
+        return True
     
 
 
@@ -771,6 +793,51 @@ class Damage(BaseObject):
     
     def get_dice(self, attack_outcome: AttackOutcome) -> Dice:
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome)
+
+
+# =============================================================================
+# Damage Rolled Event (for damage dice manipulation)
+# =============================================================================
+
+class DamageRolledEvent(Event):
+    """
+    Event fired after damage dice are rolled but before damage is applied.
+
+    Handlers create new DiceRoll versions - original rolls are immutable.
+    After all handlers run, final_rolls contains the versions to apply.
+
+    This enables:
+    - Reroll and substitute (Great Weapon Fighting)
+    - Reroll and keep best (Halfling Lucky, Elemental Adept)
+    - Partial rerolls (only lightning damage dice)
+    - Audit trail (see what changed and why)
+    """
+    name: str = Field(default="Damage Rolled")
+    event_type: EventType = Field(default=EventType.DAMAGE_ROLLED)
+
+    # Attack context (read-only)
+    weapon_slot: WeaponSlot = Field(description="The weapon slot used for the attack")
+    attack_outcome: AttackOutcome = Field(description="The outcome of the attack (HIT, CRIT, etc.)")
+    damages: List[Damage] = Field(description="Damage specifications")
+
+    # IMMUTABLE: Original rolls (never modified)
+    original_rolls: List[DiceRoll] = Field(description="Original dice rolls before any modifications")
+
+    # MUTABLE: Current best rolls (handlers replace with new versions)
+    # Initialized to copy of original_rolls
+    final_rolls: List[DiceRoll] = Field(description="Final dice rolls after handler modifications")
+
+    # AUDIT: History of modifications [(handler_name, roll_index, old_total, new_total, reason), ...]
+    roll_modifications: List[Tuple[str, int, int, int, str]] = Field(
+        default_factory=list,
+        description="Audit trail of roll modifications: (handler_name, roll_index, old_total, new_total, reason)"
+    )
+
+    def replace_roll(self, index: int, new_roll: DiceRoll, handler_name: str, reason: str) -> None:
+        """Helper for handlers to replace a roll and track the change."""
+        old_roll = self.final_rolls[index]
+        self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
+        self.final_rolls[index] = new_roll
 
 
 # =============================================================================

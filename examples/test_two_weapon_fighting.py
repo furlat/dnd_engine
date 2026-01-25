@@ -3,6 +3,7 @@ Test Two-Weapon Fighting rules:
 1. Only LIGHT weapons can be equipped in off-hand slots
 2. Off-hand attacks cost a bonus action (not an action)
 3. Off-hand attacks don't add ability modifier to damage
+4. Two-Weapon Fighting style adds ability modifier to off-hand damage
 """
 
 from dnd.monsters.bestiary import create_goblin
@@ -12,6 +13,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.events import RangeType, Range
 from dnd.entity import Entity
 from dnd.actions import Attack
+from dnd.classes.fighter import FightingStyleTwoWeaponFighting
 
 
 def reset_entities():
@@ -235,21 +237,236 @@ def test_full_two_weapon_combat():
         return False
 
 
+def test_twf_style_adds_ability_modifier():
+    """Test that TWF fighting style adds ability modifier to off-hand damage."""
+    print("\n" + "=" * 70)
+    print(" TEST 5: TWF style adds ability modifier to off-hand")
+    print("=" * 70)
+
+    reset_entities()
+    attacker = create_goblin(name="Attacker", position=(0, 0))
+    target = create_goblin(name="Target", position=(1, 0))
+
+    # Equip light dagger in off-hand
+    dagger = create_light_dagger(attacker.uuid)
+    attacker.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
+    Entity.update_all_entities_senses()
+
+    # Get off-hand damage WITHOUT TWF style
+    off_damages_before = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    off_bonus_before = off_damages_before[0].damage_bonus.normalized_score
+
+    print(f"\nAttacker DEX modifier: {attacker.ability_scores.dexterity.modifier}")
+    print(f"Off-hand damage bonus WITHOUT TWF: {off_bonus_before}")
+
+    # Apply TWF fighting style
+    twf = FightingStyleTwoWeaponFighting(
+        source_entity_uuid=attacker.uuid,
+        target_entity_uuid=attacker.uuid
+    )
+    attacker.add_condition(twf)
+
+    # Get off-hand damage WITH TWF style
+    off_damages_after = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    off_bonus_after = off_damages_after[0].damage_bonus.normalized_score
+
+    print(f"Off-hand damage bonus WITH TWF: {off_bonus_after}")
+
+    # The difference should be the ability modifier (DEX for finesse weapon)
+    dex_mod = attacker.ability_scores.dexterity.modifier
+    expected_bonus = off_bonus_before + dex_mod
+
+    result = off_bonus_after == expected_bonus
+    if result:
+        print(f"[PASS] TWF adds DEX modifier (+{dex_mod}): {off_bonus_before} -> {off_bonus_after}")
+    else:
+        print(f"[FAIL] Expected {expected_bonus}, got {off_bonus_after}")
+
+    return result
+
+
+def test_twf_finesse_uses_higher_ability():
+    """Test that TWF with finesse weapon uses higher of STR/DEX."""
+    print("\n" + "=" * 70)
+    print(" TEST 6: TWF finesse uses higher of STR/DEX")
+    print("=" * 70)
+
+    reset_entities()
+    # Create a strong fighter (high STR, low DEX)
+    from uuid import uuid4
+    from dnd.entity import Entity, EntityConfig
+    from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
+    from dnd.blocks.health import HealthConfig, HitDiceConfig
+    from dnd.blocks.action_economy import ActionEconomyConfig
+
+    config = EntityConfig(
+        ability_scores=AbilityScoresConfig(
+            strength=AbilityConfig(ability_score=18),  # +4 modifier
+            dexterity=AbilityConfig(ability_score=10),  # +0 modifier
+            constitution=AbilityConfig(ability_score=10),
+            intelligence=AbilityConfig(ability_score=10),
+            wisdom=AbilityConfig(ability_score=10),
+            charisma=AbilityConfig(ability_score=10)
+        ),
+        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=1)]),
+        action_economy=ActionEconomyConfig(movement=30),
+        position=(0, 0)
+    )
+    attacker = Entity.create(source_entity_uuid=uuid4(), name="Strong Fighter", config=config)
+    target = create_goblin(name="Target", position=(1, 0))
+
+    # Equip finesse dagger in off-hand (should use STR because STR > DEX)
+    dagger = create_light_dagger(attacker.uuid)
+    attacker.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
+    Entity.update_all_entities_senses()
+
+    print(f"\nAttacker STR modifier: {attacker.ability_scores.strength.modifier}")
+    print(f"Attacker DEX modifier: {attacker.ability_scores.dexterity.modifier}")
+
+    # Apply TWF fighting style
+    twf = FightingStyleTwoWeaponFighting(
+        source_entity_uuid=attacker.uuid,
+        target_entity_uuid=attacker.uuid
+    )
+    attacker.add_condition(twf)
+
+    # Get off-hand damage WITH TWF style
+    off_damages = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    off_bonus = off_damages[0].damage_bonus.normalized_score
+
+    print(f"Off-hand damage bonus WITH TWF: {off_bonus}")
+
+    # Should use STR (+4) because it's higher than DEX (+0)
+    str_mod = attacker.ability_scores.strength.modifier
+    dex_mod = attacker.ability_scores.dexterity.modifier
+    expected_mod = max(str_mod, dex_mod)
+
+    result = off_bonus == expected_mod
+    if result:
+        print(f"[PASS] TWF uses higher modifier (STR +{str_mod} > DEX +{dex_mod}): bonus = {off_bonus}")
+    else:
+        print(f"[FAIL] Expected {expected_mod}, got {off_bonus}")
+
+    return result
+
+
+def test_twf_main_hand_unaffected():
+    """Test that main-hand damage is unaffected by TWF style."""
+    print("\n" + "=" * 70)
+    print(" TEST 7: Main-hand unaffected by TWF style")
+    print("=" * 70)
+
+    reset_entities()
+    attacker = create_goblin(name="Attacker", position=(0, 0))
+    target = create_goblin(name="Target", position=(1, 0))
+
+    # Equip light dagger in off-hand
+    dagger = create_light_dagger(attacker.uuid)
+    attacker.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
+    Entity.update_all_entities_senses()
+
+    # Get main-hand damage BEFORE TWF style
+    main_damages_before = attacker.get_damages(WeaponSlot.MELEE_MAIN, target.uuid)
+    main_bonus_before = main_damages_before[0].damage_bonus.normalized_score
+
+    print(f"\nMain-hand damage bonus BEFORE TWF: {main_bonus_before}")
+
+    # Apply TWF fighting style
+    twf = FightingStyleTwoWeaponFighting(
+        source_entity_uuid=attacker.uuid,
+        target_entity_uuid=attacker.uuid
+    )
+    attacker.add_condition(twf)
+
+    # Get main-hand damage AFTER TWF style
+    main_damages_after = attacker.get_damages(WeaponSlot.MELEE_MAIN, target.uuid)
+    main_bonus_after = main_damages_after[0].damage_bonus.normalized_score
+
+    print(f"Main-hand damage bonus AFTER TWF: {main_bonus_after}")
+
+    result = main_bonus_before == main_bonus_after
+    if result:
+        print(f"[PASS] Main-hand bonus unchanged: {main_bonus_before} -> {main_bonus_after}")
+    else:
+        print(f"[FAIL] Main-hand bonus changed: {main_bonus_before} -> {main_bonus_after}")
+
+    return result
+
+
+def test_twf_condition_removal():
+    """Test that removing TWF style reverts off-hand damage."""
+    print("\n" + "=" * 70)
+    print(" TEST 8: TWF condition removal reverts off-hand damage")
+    print("=" * 70)
+
+    reset_entities()
+    attacker = create_goblin(name="Attacker", position=(0, 0))
+    target = create_goblin(name="Target", position=(1, 0))
+
+    # Equip light dagger in off-hand
+    dagger = create_light_dagger(attacker.uuid)
+    attacker.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
+    Entity.update_all_entities_senses()
+
+    # Get off-hand damage WITHOUT TWF style
+    off_damages_before = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    off_bonus_before = off_damages_before[0].damage_bonus.normalized_score
+
+    print(f"\nOff-hand damage bonus WITHOUT TWF: {off_bonus_before}")
+
+    # Apply TWF fighting style
+    twf = FightingStyleTwoWeaponFighting(
+        source_entity_uuid=attacker.uuid,
+        target_entity_uuid=attacker.uuid
+    )
+    attacker.add_condition(twf)
+
+    # Verify TWF is active
+    off_damages_with = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    off_bonus_with = off_damages_with[0].damage_bonus.normalized_score
+    print(f"Off-hand damage bonus WITH TWF: {off_bonus_with}")
+
+    # Remove TWF style
+    attacker.remove_condition("Fighting Style: Two-Weapon Fighting")
+
+    # Get off-hand damage AFTER removal
+    off_damages_after = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    off_bonus_after = off_damages_after[0].damage_bonus.normalized_score
+
+    print(f"Off-hand damage bonus AFTER removal: {off_bonus_after}")
+
+    result = off_bonus_after == off_bonus_before
+    if result:
+        print(f"[PASS] Off-hand bonus reverted: {off_bonus_before} -> {off_bonus_with} -> {off_bonus_after}")
+    else:
+        print(f"[FAIL] Off-hand bonus not reverted: expected {off_bonus_before}, got {off_bonus_after}")
+
+    return result
+
+
 if __name__ == "__main__":
     result1 = test_light_weapon_requirement()
     result2 = test_off_hand_costs_bonus_action()
     result3 = test_off_hand_no_ability_modifier()
     result4 = test_full_two_weapon_combat()
+    result5 = test_twf_style_adds_ability_modifier()
+    result6 = test_twf_finesse_uses_higher_ability()
+    result7 = test_twf_main_hand_unaffected()
+    result8 = test_twf_condition_removal()
 
     print("\n" + "=" * 70)
     print(" SUMMARY")
     print("=" * 70)
-    print(f"LIGHT weapon requirement:     {'PASS' if result1 else 'FAIL'}")
-    print(f"Off-hand costs bonus action:  {'PASS' if result2 else 'FAIL'}")
-    print(f"Off-hand no ability modifier: {'PASS' if result3 else 'FAIL'}")
-    print(f"Full combat round:            {'PASS' if result4 else 'FAIL'}")
+    print(f"LIGHT weapon requirement:      {'PASS' if result1 else 'FAIL'}")
+    print(f"Off-hand costs bonus action:   {'PASS' if result2 else 'FAIL'}")
+    print(f"Off-hand no ability modifier:  {'PASS' if result3 else 'FAIL'}")
+    print(f"Full combat round:             {'PASS' if result4 else 'FAIL'}")
+    print(f"TWF adds ability modifier:     {'PASS' if result5 else 'FAIL'}")
+    print(f"TWF finesse uses higher:       {'PASS' if result6 else 'FAIL'}")
+    print(f"Main-hand unaffected:          {'PASS' if result7 else 'FAIL'}")
+    print(f"TWF removal reverts:           {'PASS' if result8 else 'FAIL'}")
 
-    if all([result1, result2, result3, result4]):
+    if all([result1, result2, result3, result4, result5, result6, result7, result8]):
         print("\nALL TESTS PASSED!")
     else:
         print("\nSOME TESTS FAILED!")
