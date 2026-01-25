@@ -3,12 +3,31 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 from collections import defaultdict
 
-from dnd.core.values import ModifiableValue
+from dnd.core.values import ModifiableValue, AdvantageStatus
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
-from dnd.core.events import Event, RangeType, SavingThrowEvent, SkillCheckEvent
+
+
+def get_natural_roll(roll: DiceRoll) -> int:
+    """Get the natural d20 value that was used for the attack.
+
+    For single rolls, returns the result directly.
+    For advantage, returns the higher roll.
+    For disadvantage, returns the lower roll.
+    """
+    if isinstance(roll.results, int):
+        return roll.results
+    # For advantage/disadvantage, determine which die was used
+    if roll.advantage_status == AdvantageStatus.ADVANTAGE:
+        return max(roll.results)
+    elif roll.advantage_status == AdvantageStatus.DISADVANTAGE:
+        return min(roll.results)
+    else:
+        # No advantage, first roll
+        return roll.results[0] if roll.results else 0
+from dnd.core.events import Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, EventType
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
@@ -25,34 +44,43 @@ from dnd.core.base_actions import (
 )
 
 
-def determine_attack_outcome(roll: DiceRoll, ac: Union[int, ModifiableValue]) -> AttackOutcome:
+def determine_attack_outcome(
+    roll: DiceRoll,
+    ac: Union[int, ModifiableValue],
+    crit_threshold: int = 20
+) -> AttackOutcome:
         """
         Determine attack outcome based on roll and AC.
-        
+
         Args:
             roll: The dice roll result
             ac: The armor class to check against
-            
+            crit_threshold: Minimum natural roll for a critical hit (default 20,
+                           19 for Improved Critical, 18 for Superior Critical)
+
         Returns:
             AttackOutcome: The outcome of the attack
         """
         target_ac = ac.normalized_score if isinstance(ac, ModifiableValue) else ac
-        
+
+        # Get the natural roll value (handles advantage/disadvantage)
+        natural_roll = get_natural_roll(roll)
+
         # First check auto miss which overrides everything else
         if roll.auto_hit_status == AutoHitStatus.AUTOMISS:
             return AttackOutcome.MISS
         # Second check if the roll is an auto hit (with critical check)
         elif roll.auto_hit_status == AutoHitStatus.AUTOHIT:
-            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or natural_roll >= crit_threshold:
                 return AttackOutcome.CRIT
             else:
                 return AttackOutcome.HIT
         # Check for natural 1 (critical miss)
-        elif roll.results == 1:
+        elif natural_roll == 1:
             return AttackOutcome.CRIT_MISS
         # Check if roll meets or exceeds AC (with critical check)
         elif roll.total >= target_ac:
-            if roll.critical_status == CriticalStatus.AUTOCRIT or roll.results == 20:
+            if roll.critical_status == CriticalStatus.AUTOCRIT or natural_roll >= crit_threshold:
                 return AttackOutcome.CRIT
             else:
                 return AttackOutcome.HIT
@@ -272,10 +300,66 @@ class Entity(BaseBlock):
             self.active_conditions.pop(condition_name)
             self._remove_condition_from_dicts(condition)
         return removed
-    
 
-    
-    
+    def on_turn_start(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0) -> TurnStartEvent:
+        """
+        Handle turn start for this entity.
+
+        Called by Encounter.start_turn(). Consolidates turn-start logic:
+        1. Fire TurnStartEvent through phases (handlers can respond at EXECUTION)
+        2. Advance condition durations
+        3. Reset and recharge action economy
+
+        Args:
+            encounter_uuid: UUID of the encounter (optional for standalone use)
+            round_number: Current round number
+            turn_index: Position in initiative order
+
+        Returns:
+            TurnStartEvent after all phases complete
+        """
+        # Create event at DECLARATION phase
+        event = TurnStartEvent(
+            source_entity_uuid=self.uuid,
+            target_entity_uuid=self.uuid,
+            entity_uuid=self.uuid,
+            encounter_uuid=encounter_uuid or self.uuid,  # Use entity UUID if no encounter
+            round_number=round_number,
+            turn_index=turn_index,
+            phase=EventPhase.DECLARATION
+        )
+
+        # Advance to EXECUTION - handlers like Survivor trigger here
+        event = event.phase_to(EventPhase.EXECUTION)
+
+        # Advance condition durations (at start of turn per SRD)
+        # This makes Dodge work correctly ("until start of your next turn")
+        condition_names = list(self.active_conditions.keys())
+        for condition_name in condition_names:
+            self.advance_duration_condition(condition_name)
+
+        # Reset action economy
+        self.action_economy.reset_all_costs()
+        self.action_economy.on_turn_start()  # Recharge TURN_START resources
+
+        # Get current action economy values for event
+        actions = self.action_economy.actions.normalized_score
+        bonus_actions = self.action_economy.bonus_actions.normalized_score
+        movement = self.action_economy.movement.normalized_score
+        reactions = self.action_economy.reactions.normalized_score
+
+        # Continue through phases with action economy info
+        event = event.phase_to(
+            EventPhase.EFFECT,
+            actions_available=actions,
+            bonus_actions_available=bonus_actions,
+            movement_available=movement,
+            reaction_available=reactions
+        )
+        event = event.phase_to(EventPhase.COMPLETION)
+
+        return event
+
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
         proficiency_bonus = self.proficiency_bonus
         skill = self.skill_set.get_skill(skill_name)
@@ -471,14 +555,35 @@ class Entity(BaseBlock):
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
-    
+
         proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, _ = self._get_attack_bonuses(weapon_slot)
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
-        
+
         if should_clear_target:
             self.clear_target_entity()
         return source_attack_bonus
+
+    def get_crit_threshold(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> int:
+        """Get the minimum natural roll needed for a critical hit.
+
+        Args:
+            weapon_slot: Which weapon slot to check (determines melee vs ranged)
+
+        Returns:
+            int: The minimum natural d20 roll for a critical hit.
+                 Default is 20, Improved Critical = 19, Superior Critical = 18.
+        """
+        # General threshold applies to all attacks
+        general = self.equipment.crit_threshold.normalized_score
+
+        # Specific threshold stacks (for melee-only or ranged-only bonuses)
+        if weapon_slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF]:
+            specific = self.equipment.crit_threshold_melee.normalized_score
+        else:
+            specific = self.equipment.crit_threshold_ranged.normalized_score
+
+        return 20 - (general + specific)  # Default 20, +1 = 19, +2 = 18
     
 
     def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
@@ -594,28 +699,65 @@ class Entity(BaseBlock):
         self.clear_target_entity()
         return SkillCheckEvent(source_entity_uuid=self.uuid, target_entity_uuid=target_entity_uuid, skill_name=skill_name, dc=int_dc)
     
-    def saving_throw(self, request: SavingThrowEvent) -> Tuple[AttackOutcome,DiceRoll,bool]:
-        """ make a saving throw"""
-        #first assert that the target of the saving throw is self
+    def saving_throw(self, request: SavingThrowEvent) -> Tuple[AttackOutcome, DiceRoll, bool]:
+        """Make a saving throw with full event phase transitions.
+
+        This enables event handlers (like Indomitable) to intercept and modify
+        saving throw results at the EFFECT phase.
+        """
+        from dnd.core.events import EventPhase
+
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
-        #second set the target to the requester source entity
-        self.set_target_entity(request.source_entity_uuid)
-        #second get the saving throw from the request
-        saving_throw = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
-        #third get the dc for the saving throw
-        
-        dc = request.get_dc()
 
+        self.set_target_entity(request.source_entity_uuid)
+
+        # Get save bonus and DC
+        save_bonus = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
+        dc = request.get_dc()
         if dc is None:
             raise ValueError(f"DC is not set for {request.ability_name} saving throw with event id {request.uuid}")
-        #create the dice
-        roll = self.roll_d20(saving_throw,RollType.SAVE)
 
-        saving_throw_outcome = determine_attack_outcome(roll,dc)
+        # EXECUTION phase - bonus calculated, about to roll
+        execution_event = request.phase_to(
+            EventPhase.EXECUTION,
+            bonus=save_bonus,
+            status_message=f"Rolling {request.ability_name} save vs DC {dc}"
+        )
+
+        # Roll the dice
+        roll = self.roll_d20(save_bonus, RollType.SAVE)
+        outcome = determine_attack_outcome(roll, dc)
+        success = outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
+
+        # EFFECT phase - roll made, result determined (Indomitable hooks here!)
+        effect_event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            dice_roll=roll,
+            result=success,
+            status_message=f"Rolled {roll.total} vs DC {dc}: {'Success' if success else 'Failure'}"
+        )
+
+        # COMPLETION phase - finalized
+        completion_event = effect_event.phase_to(
+            EventPhase.COMPLETION,
+            status_message=f"{request.ability_name} save complete"
+        )
 
         self.clear_target_entity()
-        return saving_throw_outcome, roll, True if saving_throw_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
+
+        # Return from final event (may have been modified by handlers)
+        final_roll = completion_event.dice_roll or roll
+        final_success = completion_event.result if completion_event.result is not None else success
+        final_outcome = outcome
+        # Recalculate outcome if result was changed by a handler
+        if final_success != success:
+            if final_success:
+                final_outcome = AttackOutcome.HIT  # Success
+            else:
+                final_outcome = AttackOutcome.MISS  # Failure
+
+        return final_outcome, final_roll, final_success
     
     def skill_check(self, request: SkillCheckEvent) -> Tuple[AttackOutcome,DiceRoll,bool]:
         """ make a skill check """

@@ -207,7 +207,7 @@ class BaseCondition(BaseObject):
         return completed_event
     
     def remove_condition_modifiers(self) -> bool:
-        """ Remove the condition """
+        """ Remove the condition modifiers (does NOT set self.applied = False) """
         if not self.applied:
             return False
 
@@ -217,7 +217,8 @@ class BaseCondition(BaseObject):
                 raise ValueError(f"Trying to remove value with UUID {value_uuid} not found")
             for modifier_uuid in modifiers_uuids:
                 value.remove_modifier(modifier_uuid)
-        self.applied = False
+        # Note: self.applied = False is now set at the end of remove() method
+        # to ensure all cleanup methods (including remove_event_handlers) can run
 
         return True
     
@@ -283,6 +284,9 @@ class BaseCondition(BaseObject):
         if not skip_parent_removal:
             self.remove_condition_from_parent()
         self.remove_event_handlers()
+
+        # Mark as no longer applied AFTER all cleanup is done
+        self.applied = False
 
         # Complete the event
         if event:

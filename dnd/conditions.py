@@ -670,10 +670,12 @@ class Unconscious(BaseCondition):
             
 
 class ConditionType(str, Enum):
+    # NOTE: Fighter-specific conditions (HasAttacked, ActionSurging) moved to dnd/classes/fighter.py
     BLINDED = "BLINDED"
     CHARMED = "CHARMED"
     DASHING = "DASHING"
     DEAFENED = "DEAFENED"
+    DISENGAGING = "DISENGAGING"
     DODGING = "DODGING"
     FRIGHTENED = "FRIGHTENED"
     GRAPPLED = "GRAPPLED"
@@ -692,6 +694,7 @@ CONDITION_MAP: Dict[ConditionType, Type[BaseCondition]] = {
     ConditionType.CHARMED: Charmed,
     ConditionType.DASHING: Dashing,
     ConditionType.DEAFENED: Deafened,
+    ConditionType.DISENGAGING: Disengaging,
     ConditionType.DODGING: Dodging,
     ConditionType.FRIGHTENED: Frightened,
     ConditionType.GRAPPLED: Grappled,
