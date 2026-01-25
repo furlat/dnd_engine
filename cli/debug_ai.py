@@ -8,9 +8,9 @@ from uuid import uuid4
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
-from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.encounter import Encounter, TurnState
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.controller import Controller, TurnContext, HumanController
+from dnd.controller import Controller, HumanController
 from dnd.actions_functional import get_available_actions
 
 
@@ -75,8 +75,6 @@ def test_encounter_turn():
 
     # Test with the actual MeleeAIController logic
     from dnd.controller import Controller
-    from dnd.actions import Attack, Move
-    from dnd.blocks.equipment import WeaponSlot
 
     class DebugAI(Controller):
         name: str = "Debug AI"

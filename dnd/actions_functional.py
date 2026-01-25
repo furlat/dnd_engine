@@ -19,17 +19,16 @@ Usage:
     event = execute_action(entity, "Attack_MELEE_MAIN", target)
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 from uuid import UUID
 
 from dnd.core.base_actions import (
     TargetType, AvailableTarget, AvailableActionInfo, AvailableActionsResult
 )
 from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
-from dnd.blocks.equipment import WeaponSlot, Weapon
-
-if TYPE_CHECKING:
-    from dnd.entity import Entity
+from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
+from dnd.entity import Entity
+from dnd.actions import Move, Dash, Dodge, Disengage, StandUp, Attack
 
 
 def setup_standard_actions(entity: 'Entity') -> None:
@@ -46,8 +45,6 @@ def setup_standard_actions(entity: 'Entity') -> None:
     Args:
         entity: The entity to set up actions for
     """
-    from dnd.actions import Move, Dash, Dodge, Disengage, StandUp
-
     # Clear existing templates
     entity.registered_actions = []
 
@@ -72,9 +69,6 @@ def _setup_weapon_event_handlers(entity: 'Entity') -> None:
     Args:
         entity: The entity to set up handlers for
     """
-    from dnd.entity import Entity
-    from dnd.blocks.equipment import WeaponEquipEvent, WeaponUnequipEvent
-
     entity_uuid = entity.uuid
 
     def _on_weapon_equip(event: Event, _source: UUID) -> Optional[Event]:
@@ -120,8 +114,6 @@ def update_weapon_template(entity: 'Entity', slot: WeaponSlot) -> None:
         entity: The entity whose template to update
         slot: The weapon slot to update
     """
-    from dnd.actions import Attack
-
     # Remove existing template for this slot if any
     template_name = f"Attack_{slot.value}"
     entity.unregister_action(template_name)

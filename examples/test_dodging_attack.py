@@ -50,7 +50,7 @@ def test_attack_vs_dodging():
 
     # Check the dice roll
     dice_roll = getattr(event, 'dice_roll', None)
-    attack_bonus_mv = getattr(event, 'attack_bonus', None)
+    _ = getattr(event, 'attack_bonus', None)  # Unused but documents event has attack_bonus
 
     print(f"\n--- RESULTS ---")
 

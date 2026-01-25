@@ -125,6 +125,10 @@ class GameLoop:
                 display.set_output(["No movement available"])
             return "refresh"
 
+        if not self.state.actions:
+            self.handler.show_error("No actions available")
+            return "refresh"
+
         result = self.executor.execute("move", args, self.state.actions)
         self.handler.show_result(result, self.state.player_entity_name)
 
@@ -172,6 +176,10 @@ class GameLoop:
 
     def _handle_self_action(self, action_name: str) -> Optional[str]:
         """Handle self-targeting action (Dash, Dodge, etc.)."""
+        if not self.state.actions:
+            self.handler.show_error("No actions available")
+            return "refresh"
+
         result = self.executor.execute(action_name.lower(), [], self.state.actions)
         self.handler.show_result(result, self.state.player_entity_name)
         return "refresh"

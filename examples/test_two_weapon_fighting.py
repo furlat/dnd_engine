@@ -158,6 +158,8 @@ def test_off_hand_no_ability_modifier():
     main_damages = attacker.get_damages(WeaponSlot.MELEE_MAIN, target.uuid)
     off_damages = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
 
+    assert main_damages[0].damage_bonus is not None, "Main hand damage bonus should exist"
+    assert off_damages[0].damage_bonus is not None, "Off-hand damage bonus should exist"
     main_bonus = main_damages[0].damage_bonus.normalized_score
     off_bonus = off_damages[0].damage_bonus.normalized_score
 
@@ -206,6 +208,7 @@ def test_full_two_weapon_combat():
         name="Scimitar attack"
     )
     main_event = main_attack.apply()
+    assert main_event is not None, "Main attack event should not be None"
     print(f"Result: {main_event.attack_outcome}")
     print(f"Actions remaining: {attacker.action_economy.actions.normalized_score}")
 
@@ -218,6 +221,7 @@ def test_full_two_weapon_combat():
         name="Dagger attack"
     )
     off_event = off_attack.apply()
+    assert off_event is not None, "Off-hand attack event should not be None"
     print(f"Result: {off_event.attack_outcome}")
     print(f"Bonus actions remaining: {attacker.action_economy.bonus_actions.normalized_score}")
 
@@ -254,6 +258,7 @@ def test_twf_style_adds_ability_modifier():
 
     # Get off-hand damage WITHOUT TWF style
     off_damages_before = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    assert off_damages_before[0].damage_bonus is not None, "Damage bonus should exist"
     off_bonus_before = off_damages_before[0].damage_bonus.normalized_score
 
     print(f"\nAttacker DEX modifier: {attacker.ability_scores.dexterity.modifier}")
@@ -268,6 +273,7 @@ def test_twf_style_adds_ability_modifier():
 
     # Get off-hand damage WITH TWF style
     off_damages_after = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    assert off_damages_after[0].damage_bonus is not None, "Damage bonus should exist"
     off_bonus_after = off_damages_after[0].damage_bonus.normalized_score
 
     print(f"Off-hand damage bonus WITH TWF: {off_bonus_after}")
@@ -332,6 +338,7 @@ def test_twf_finesse_uses_higher_ability():
 
     # Get off-hand damage WITH TWF style
     off_damages = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    assert off_damages[0].damage_bonus is not None, "Damage bonus should exist"
     off_bonus = off_damages[0].damage_bonus.normalized_score
 
     print(f"Off-hand damage bonus WITH TWF: {off_bonus}")
@@ -367,6 +374,7 @@ def test_twf_main_hand_unaffected():
 
     # Get main-hand damage BEFORE TWF style
     main_damages_before = attacker.get_damages(WeaponSlot.MELEE_MAIN, target.uuid)
+    assert main_damages_before[0].damage_bonus is not None, "Damage bonus should exist"
     main_bonus_before = main_damages_before[0].damage_bonus.normalized_score
 
     print(f"\nMain-hand damage bonus BEFORE TWF: {main_bonus_before}")
@@ -380,6 +388,7 @@ def test_twf_main_hand_unaffected():
 
     # Get main-hand damage AFTER TWF style
     main_damages_after = attacker.get_damages(WeaponSlot.MELEE_MAIN, target.uuid)
+    assert main_damages_after[0].damage_bonus is not None, "Damage bonus should exist"
     main_bonus_after = main_damages_after[0].damage_bonus.normalized_score
 
     print(f"Main-hand damage bonus AFTER TWF: {main_bonus_after}")
@@ -410,6 +419,7 @@ def test_twf_condition_removal():
 
     # Get off-hand damage WITHOUT TWF style
     off_damages_before = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    assert off_damages_before[0].damage_bonus is not None, "Damage bonus should exist"
     off_bonus_before = off_damages_before[0].damage_bonus.normalized_score
 
     print(f"\nOff-hand damage bonus WITHOUT TWF: {off_bonus_before}")
@@ -423,6 +433,7 @@ def test_twf_condition_removal():
 
     # Verify TWF is active
     off_damages_with = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    assert off_damages_with[0].damage_bonus is not None, "Damage bonus should exist"
     off_bonus_with = off_damages_with[0].damage_bonus.normalized_score
     print(f"Off-hand damage bonus WITH TWF: {off_bonus_with}")
 
@@ -431,6 +442,7 @@ def test_twf_condition_removal():
 
     # Get off-hand damage AFTER removal
     off_damages_after = attacker.get_damages(WeaponSlot.MELEE_OFF, target.uuid)
+    assert off_damages_after[0].damage_bonus is not None, "Damage bonus should exist"
     off_bonus_after = off_damages_after[0].damage_bonus.normalized_score
 
     print(f"Off-hand damage bonus AFTER removal: {off_bonus_after}")

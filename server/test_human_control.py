@@ -7,7 +7,6 @@ Requires server running: python -m server.event_server
 """
 
 import httpx
-import time
 
 BASE_URL = "http://localhost:8000"
 
