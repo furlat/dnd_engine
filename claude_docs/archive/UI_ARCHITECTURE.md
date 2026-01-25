@@ -114,36 +114,66 @@ def validate_action(session_id, entity_uuid):
 
 ## Server-Side Combat Log
 
-The server maintains a unified combat log that both players write to. This ensures consistency and provides rich action details **with full modifier breakdowns**.
+The server maintains a unified combat log using `CombatLogEntry` objects (`dnd/core/combat_log.py`). Events auto-generate their combat log entries at COMPLETION phase via `generate_combat_log()`.
 
-### Entry Structure (with breakdowns)
+### CombatLogEntry Structure
 
 ```python
+class CombatLogEntry(BaseModel):
+    entry_type: CombatLogEntryType  # "attack", "movement", "action", etc.
+    source_name: str
+    source_uuid: str
+    target_name: Optional[str]
+    target_uuid: Optional[str]
+    summary: str                    # One-line summary for display
+    detail_lines: List[str]         # Verbose breakdown lines
+    data: Dict[str, Any]            # Typed data (AttackLogData, MovementLogData, etc.)
+    success: Optional[bool]
+```
+
+### Entry Types (`CombatLogEntryType`)
+
+- `ATTACK`, `MOVEMENT`, `ACTION` (Dash/Dodge/Disengage)
+- `SAVING_THROW`, `SKILL_CHECK`
+- `CONDITION_APPLIED`, `CONDITION_REMOVED`
+- `DAMAGE_TAKEN`, `HEAL`, `DEATH`
+- `TURN_START`, `TURN_END`
+
+### Typed Data Models (in `data` field)
+
+**AttackLogData:**
+```python
 {
-    "index": 5,
-    "type": "attack",  # attack, move, action, opportunity_attack, death, turn_end
-    "message": "Skeleton hits Hero. d20(17)+4=21 vs AC 15 → 8 damage",
-    "details": {
-        "attacker": "Skeleton",
-        "target": "Hero",
-        "weapon": "Shortsword",
-        "d20": 17,
+    "attacker_name": "Skeleton",
+    "target_name": "Hero",
+    "weapon_name": "Shortsword",
+    "attack_roll": {
+        "dice_str": "d20",
+        "d20_used": 17,
         "all_d20_rolls": [17],
-        "advantage_status": "none",  # "advantage", "disadvantage", or "none"
-        "attack_bonus": 4,
-        "attack_total": 21,
-        "target_ac": 15,
-        "outcome": "hit",  # "hit", "miss", "crit", "crit miss"
-        "total_damage": 8,
-        "target_hp": 2,
-        # Modifier breakdowns for detailed display
-        "attack_breakdown": [{"name": "Prof", "value": 2}, {"name": "DEX", "value": 2}],
-        "ac_breakdown": [{"name": "Armor", "value": 13}],
-        "damage_breakdown": [{"name": "DEX", "value": 2}],
-        "damage_dice_results": [5],
-        "damage_dice_str": "1d6",
-        "is_opportunity_attack": False
-    }
+        "bonus": 4,
+        "total": 21,
+        "advantage_status": "none"  # "advantage", "disadvantage", or None
+    },
+    "attack_breakdown": [{"name": "Prof", "value": 2}, {"name": "DEX", "value": 2}],
+    "target_ac": 15,
+    "ac_breakdown": [{"name": "Armor", "value": 13}],
+    "outcome": "hit",  # "hit", "miss", "crit", "crit_miss"
+    "damage_rolls": [...],
+    "total_damage": 8,
+    "is_opportunity_attack": False
+}
+```
+
+**MovementLogData:**
+```python
+{
+    "entity_name": "Hero",
+    "entity_uuid": "...",
+    "start_position": [2, 7],
+    "end_position": [5, 7],
+    "path": [[2,7], [3,7], [4,7], [5,7]],
+    "distance_feet": 15
 }
 ```
 
@@ -169,14 +199,31 @@ Labels:
 - `BONUS` - Off-hand attack using bonus action
 - `(OA)` - Opportunity attack
 
-### Polling
+### API Endpoint
 
 ```python
-# Client polls for new entries
+# GET /combat-log?since=N returns CombatLogEntry.to_dict() (raw model_dump())
 response = client.get("/combat-log", params={"since": last_index})
+# Returns: {"entries": [...], "count": N, "total": M}
+
 for entry in response["entries"]:
-    display.show_opponent_action(entry)  # Rich formatted display
-    last_index = entry["index"] + 1
+    # CLI uses proper field names - NO conversion hacks
+    entry_type = entry["entry_type"]  # NOT "type"
+    data = entry["data"]              # Nested typed data
+    summary = entry["summary"]        # Human-readable summary
+
+    if entry_type == "attack":
+        attacker = data["attacker_name"]
+        attack_roll = data["attack_roll"]
+        d20 = attack_roll["d20_used"]
+        # ...
+    elif entry_type == "movement":
+        entity = data["entity_name"]
+        end_pos = data["end_position"]
+        # ...
+
+# Update index using total (entries don't have per-entry index)
+last_index = response["total"]
 ```
 
 ---
@@ -298,7 +345,8 @@ python -m cli.agent disconnect # Removes session file
 
 | File | Purpose |
 |------|---------|
-| `server/event_server.py` | FastAPI server, all endpoints, combat log |
+| `dnd/core/combat_log.py` | CombatLogEntry, typed data models (AttackLogData, etc.) |
+| `server/event_server.py` | FastAPI server, all endpoints |
 | `server/session.py` | Session/game management, authority validation |
 | `cli/main.py` | Human CLI, game loop, opponent turn polling |
 | `cli/agent.py` | Claude agent CLI, simple commands |
@@ -330,12 +378,13 @@ python -m cli.agent watch      # Wait for next turn
 
 ## Recent Improvements (January 2026)
 
-1. **Detailed modifier breakdowns** - Combat log shows `[Prof +2, DEX +2]` for every roll
-2. **Advantage/disadvantage display** - Shows both d20 rolls with arrow to used value
-3. **Opportunity attack labeling** - `(OA)` marker for triggered reactions
-4. **Two-weapon fighting** - Main-hand (action) + off-hand (bonus action) with `BONUS` label
-5. **Consistent attack numbering** - Display and command handler use same filtering logic
-6. **Windows/WSL compatibility** - Fixed input handling for PvP mode
+1. **Combat Log Refactor COMPLETE** - Events auto-generate `CombatLogEntry` at COMPLETION phase via `generate_combat_log()`. Typed data models (`AttackLogData`, `MovementLogData`, etc.) replace ad-hoc dicts. API returns raw `model_dump()`, CLI uses proper field names (`entry_type`, `data["entity_name"]`, etc.) - no conversion hacks.
+2. **Detailed modifier breakdowns** - Combat log shows `[Prof +2, DEX +2]` for every roll
+3. **Advantage/disadvantage display** - Shows both d20 rolls with arrow to used value
+4. **Opportunity attack labeling** - `(OA)` marker for triggered reactions
+5. **Two-weapon fighting** - Main-hand (action) + off-hand (bonus action) with `BONUS` label
+6. **Consistent attack numbering** - Display and command handler use same filtering logic
+7. **Windows/WSL compatibility** - Fixed input handling for PvP mode
 
 ## Future Improvements
 

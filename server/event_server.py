@@ -21,7 +21,6 @@ from typing import Set, Optional
 from uuid import UUID, uuid4
 from contextlib import asynccontextmanager
 
-from pydantic import Field
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,10 +31,10 @@ from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.monsters.bestiary import create_goblin, create_skeleton, create_goblin_archer
-from dnd.controller import Controller, TurnContext, HumanController
+from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
 from dnd.actions import MovementEvent
-from dnd.core.base_actions import BaseAction, TargetType, AvailableTarget
+from dnd.core.base_actions import TargetType, AvailableTarget
 from dnd.reactions import add_opportunity_attack_handler
 
 from server.api_models import (
@@ -52,116 +51,31 @@ from server.session import (
 )
 
 
-def extract_attack_data_from_event(event: Event, source: "Entity | None", target: "Entity | None", weapon_name: str) -> dict:
+def add_event_to_combat_log(sim_state: "SimulationState", event: Event, entry_type_override: Optional[str] = None) -> Optional[int]:
+    """Add event's combat log entry to encounter's combat log.
+
+    Uses event.combat_log if available (auto-generated at COMPLETION phase).
+    Returns the log entry index, or None if no log entry was created.
+
+    Args:
+        sim_state: The SimulationState (used to access encounter).
+        event: The event containing the combat log.
+        entry_type_override: Unused, kept for backward compatibility.
+
+    Returns:
+        Log entry index if successful, None otherwise.
     """
-    Extract standardized attack data from an AttackEvent.
+    # entry_type_override is kept for backward compatibility but not used
+    del entry_type_override
 
-    This helper ensures consistent attack data extraction for both
-    player attacks and AI attacks, including modifier breakdowns.
-    """
-    attack_outcome = getattr(event, 'attack_outcome', None)
-    damage_rolls = getattr(event, 'damage_rolls', None)
-    dice_roll = getattr(event, 'dice_roll', None)
-    ac_mv = getattr(event, 'ac', None)
-    attack_bonus_mv = getattr(event, 'attack_bonus', None)
+    if event.combat_log is None:
+        return None
 
-    # Extract d20 results
-    all_d20_rolls = []
-    d20_result = None
-    advantage_status = "none"
-    attack_bonus = 0
+    # Use encounter's combat log directly
+    if sim_state.encounter:
+        return sim_state.encounter.add_event_to_combat_log(event)
 
-    if dice_roll:
-        results = getattr(dice_roll, 'results', None)
-        if isinstance(results, list):
-            all_d20_rolls = list(results)
-            if hasattr(dice_roll, 'advantage_status'):
-                adv = dice_roll.advantage_status
-                advantage_status = adv.value.lower() if hasattr(adv, 'value') else str(adv).lower()
-                if len(results) >= 2:
-                    if advantage_status == "advantage":
-                        d20_result = max(results)
-                    elif advantage_status == "disadvantage":
-                        d20_result = min(results)
-                    else:
-                        d20_result = results[0]
-                elif len(results) == 1:
-                    d20_result = results[0]
-        elif isinstance(results, int):
-            all_d20_rolls = [results]
-            d20_result = results
-        attack_bonus = getattr(dice_roll, 'bonus', 0)
-
-    # Get target AC
-    target_ac = None
-    if ac_mv:
-        target_ac = ac_mv.normalized_score
-    elif target:
-        target_ac = target.ac_bonus().normalized_score
-
-    # Calculate damage
-    total_damage = sum(r.total for r in damage_rolls) if damage_rolls else 0
-    outcome_str = attack_outcome.value if attack_outcome else "unknown"
-
-    # Build damage roll details
-    damage_details = []
-    damage_dice_str = ""
-    if damage_rolls:
-        for dr in damage_rolls:
-            damage_details.append({
-                "dice": list(dr.results) if hasattr(dr, 'results') else [],
-                "bonus": dr.bonus if hasattr(dr, 'bonus') else 0,
-                "total": dr.total
-            })
-        # Build damage dice string
-        if damage_rolls and hasattr(damage_rolls[0], 'results'):
-            num_dice = len(damage_rolls[0].results) if isinstance(damage_rolls[0].results, list) else 1
-            # Try to get dice size from weapon
-            weapon_slot = getattr(event, 'weapon_slot', None)
-            dice_size = 6
-            if source and weapon_slot:
-                weapon_obj = source.equipment._get_weapon_by_slot(weapon_slot)
-                # Only Weapon has damage_dice, Shield does not
-                if weapon_obj and hasattr(weapon_obj, 'damage_dice'):
-                    dice_size = getattr(weapon_obj, 'damage_dice', 6)
-            damage_dice_str = f"{num_dice}d{dice_size}"
-
-    # Extract modifier breakdowns
-    attack_breakdown = []
-    ac_breakdown = []
-    damage_breakdown = []
-
-    if attack_bonus_mv and hasattr(attack_bonus_mv, 'get_breakdown'):
-        attack_breakdown = attack_bonus_mv.get_breakdown()
-
-    if ac_mv and hasattr(ac_mv, 'get_breakdown'):
-        ac_breakdown = ac_mv.get_breakdown()
-
-    # Get damage bonus breakdown from event damages
-    damages = getattr(event, 'damages', None)
-    if damages:
-        for dmg in damages:
-            if hasattr(dmg, 'damage_bonus') and dmg.damage_bonus and hasattr(dmg.damage_bonus, 'get_breakdown'):
-                damage_breakdown.extend(dmg.damage_bonus.get_breakdown())
-
-    return {
-        "attacker": source.name if source else "Unknown",
-        "target": target.name if target else "Unknown",
-        "weapon": weapon_name,
-        "d20": d20_result,
-        "all_d20_rolls": all_d20_rolls,
-        "advantage_status": advantage_status,
-        "attack_bonus": attack_bonus,
-        "attack_total": dice_roll.total if dice_roll else None,
-        "target_ac": target_ac,
-        "outcome": outcome_str,
-        "damage_rolls": damage_details,
-        "total_damage": total_damage,
-        "attack_breakdown": attack_breakdown,
-        "ac_breakdown": ac_breakdown,
-        "damage_breakdown": damage_breakdown,
-        "damage_dice_str": damage_dice_str,
-    }
+    return None
 
 
 class EventMonitor:
@@ -235,105 +149,6 @@ event_monitor = EventMonitor()
 
 
 # =============================================================================
-# AI Controller
-# =============================================================================
-
-class ClaudeController(Controller):
-    """
-    Controller for Claude-controlled entities.
-
-    Like HumanController, actions come via external API calls.
-    Has its own controller_type for proper identification and debugging.
-    """
-
-    name: str = Field(default="Claude Controller")
-    controller_type: str = Field(default="claude")
-
-    def get_next_action(
-        self,
-        entity: 'Entity',
-        context: TurnContext
-    ) -> Optional[BaseAction]:
-        # Actions come via API, not from this method
-        return None
-
-    def can_continue_turn(self, entity: 'Entity', context: TurnContext) -> bool:
-        # Return False to exit run_turn loop - server handles via API
-        return False
-
-
-class MeleeAIController(Controller):
-    """
-    Simple AI that moves toward enemies and attacks in melee.
-    1. If enemy in weapon range -> Attack
-    2. If can still attack after moving -> Move closer, then Attack
-    3. Otherwise -> End turn
-    """
-
-    name: str = "Melee AI"
-    controller_type: str = "melee_ai"
-
-    def get_next_action(
-        self,
-        entity: 'Entity',
-        context: TurnContext
-    ) -> Optional[BaseAction]:
-        """Pick the next action based on available options."""
-        available = get_available_actions(entity)
-
-        # Priority 1: Attack if we can
-        for attack_info in available.entity_actions:
-            if attack_info.can_afford and attack_info.valid_targets:
-                target = attack_info.valid_targets[0]
-                if target.target_uuid is None:
-                    continue
-                # Use the template to create an instance
-                template = entity.get_action_template(attack_info.template_name)
-                if template:
-                    return template.instantiate(target_entity_uuid=target.target_uuid)
-
-        # Priority 2: Move toward enemy if we can still attack afterward
-        can_still_attack = entity.action_economy.can_afford("actions", 1)
-        if can_still_attack and available.position_actions:
-            move_info = available.position_actions[0]
-
-            # Find closest position to any enemy
-            closest_pos = None
-            closest_dist = float('inf')
-            current_min_dist = float('inf')
-
-            # Current distance to nearest enemy
-            for enemy_uuid, enemy_pos in context.visible_enemies.items():
-                if enemy_uuid == entity.uuid:
-                    continue
-                dist = abs(entity.position[0] - enemy_pos[0]) + abs(entity.position[1] - enemy_pos[1])
-                if dist < current_min_dist:
-                    current_min_dist = dist
-
-            # Find position that gets us closer
-            # (valid_targets already excludes occupied cells via GridMap.compute_paths)
-            for enemy_uuid, enemy_pos in context.visible_enemies.items():
-                if enemy_uuid == entity.uuid:
-                    continue
-                for target in move_info.valid_targets:
-                    if target.position is None:
-                        continue
-                    pos = target.position
-                    dist = abs(pos[0] - enemy_pos[0]) + abs(pos[1] - enemy_pos[1])
-                    if dist < closest_dist and dist < current_min_dist:
-                        closest_dist = dist
-                        closest_pos = pos
-
-            if closest_pos and closest_pos != entity.position:
-                template = entity.get_action_template(move_info.template_name)
-                if template:
-                    return template.instantiate(end_position=closest_pos)
-
-        # No good action, end turn
-        return None
-
-
-# =============================================================================
 # Simulation State & Control
 # =============================================================================
 
@@ -349,38 +164,6 @@ class SimulationState:
         # Session manager integration
         self._session_manager = get_session_manager()
         self._game_session: Optional[GameSession] = None
-
-        # Server-side combat log - unified log for all players
-        self._combat_log: list[dict] = []
-
-    def add_combat_log(self, entry_type: str, message: str, details: Optional[dict] = None) -> int:
-        """
-        Add an entry to the combat log.
-
-        Args:
-            entry_type: Type of entry (attack, move, action, turn_start, turn_end, etc.)
-            message: Human-readable message
-            details: Optional dict with structured data (rolls, damage, etc.)
-
-        Returns:
-            The index of the new entry
-        """
-        entry = {
-            "index": len(self._combat_log),
-            "type": entry_type,
-            "message": message,
-            "details": details or {}
-        }
-        self._combat_log.append(entry)
-        return entry["index"]
-
-    def get_combat_log(self, since: int = 0) -> list[dict]:
-        """Get combat log entries since a given index."""
-        return self._combat_log[since:]
-
-    def clear_combat_log(self):
-        """Clear the combat log (call when starting new game)."""
-        self._combat_log = []
 
     @property
     def game(self) -> Optional[GameSession]:
@@ -547,7 +330,8 @@ async def advance_encounter() -> dict:
     """
     Advance encounter, auto-run AI turns, stop on human turn.
 
-    Returns status dict indicating what happened, including AI actions.
+    Uses Encounter.advance_until_player() which auto-captures combat logs.
+    Returns status dict indicating what happened.
     """
     if sim.encounter is None:
         return {"status": "no_encounter"}
@@ -559,118 +343,25 @@ async def advance_encounter() -> dict:
     if sim.encounter.state == EncounterState.ENDED:
         return {"status": "encounter_ended"}
 
-    # Track AI actions during this call
-    ai_actions: list = []
+    # Get log index before advancing (to fetch new AI entries later)
+    log_start = len(sim.encounter.combat_log)
 
-    def capture_ai_event(event: Event) -> None:
-        """Capture events during AI turn for logging."""
-        # Only capture COMPLETION phase events (final state)
-        if event.phase != EventPhase.COMPLETION:
-            return
+    # Use encounter's advance_until_player - it auto-captures combat logs
+    result = sim.encounter.advance_until_player()
 
-        event_type = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
+    # Build ai_actions from new combat log entries (raw CombatLogEntry.to_dict())
+    new_entries = sim.encounter.get_combat_log(log_start)
+    ai_actions = [e.to_dict() for e in new_entries]
 
-        # Capture attack events (including opportunity attacks)
-        if event_type == "attack":
-            source = Entity.get(event.source_entity_uuid)
-            target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
-
-            # Get weapon name from the event's weapon_slot
-            weapon_name = "Unknown"
-            if source:
-                weapon_slot = getattr(event, 'weapon_slot', None)
-                if weapon_slot:
-                    weapon = source.equipment._get_weapon_by_slot(weapon_slot)
-                    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
-                else:
-                    weapon_name = "Unarmed"
-
-            # Use helper to extract all attack data including breakdowns
-            attack_data = extract_attack_data_from_event(event, source, target, weapon_name)
-
-            # Check if this was an opportunity attack
-            is_opportunity_attack = "opportunity" in (event.name or "").lower()
-
-            # Add type and message fields
-            attack_data["type"] = "attack"
-            attack_data["is_opportunity_attack"] = is_opportunity_attack
-            attack_data["message"] = f"{attack_data['attacker']} attacks {attack_data['target']} with {weapon_name}: {attack_data['outcome']}" + (f" for {attack_data['total_damage']} damage!" if attack_data['outcome'].lower() in ("hit", "crit") else "")
-
-            ai_actions.append(attack_data)
-
-        # Capture movement events
-        elif event_type == "movement":
-            source = Entity.get(event.source_entity_uuid)
-            start_pos = getattr(event, 'start_position', None)
-            end_pos = getattr(event, 'end_position', None)
-            path = getattr(event, 'path', None)
-
-            if source and start_pos and end_pos:
-                ai_actions.append({
-                    "type": "move",
-                    "entity": source.name,
-                    "from": list(start_pos),
-                    "to": list(end_pos),
-                    "path": [list(p) for p in path] if path else [],
-                    "message": f"{source.name} moves from {start_pos} to {end_pos}"
-                })
-
-    # Register callback to capture events
-    EventQueue.add_on_event_callback(capture_ai_event)
-
-    try:
-        # Loop through turns until we hit a human
-        while sim.encounter.state == EncounterState.ACTIVE:
-            controller = sim.encounter.get_current_controller()
-
-            if controller is None:
-                return {"status": "error", "message": "No controller for current entity"}
-
-            if controller.controller_type in ("human", "claude"):
-                # Human or Claude turn - start it and wait for API input
-                if sim.encounter.turn_state != TurnState.IN_PROGRESS:
-                    sim.encounter.start_turn()
-
-                entity = sim.encounter.get_current_entity()
-
-                status = "waiting_for_human" if controller.controller_type == "human" else "waiting_for_claude"
-                return {
-                    "status": status,
-                    "entity_uuid": str(entity.uuid) if entity else None,
-                    "entity_name": entity.name if entity else None,
-                    "round": sim.encounter.round_number,
-                    "turn_index": sim.encounter.current_turn_index,
-                    "ai_actions": ai_actions  # Include what AI did
-                }
-
-            else:
-                # AI turn - run it completely
-                ai_entity = sim.encounter.get_current_entity()
-                ai_actions.append({
-                    "type": "turn_start",
-                    "entity": ai_entity.name if ai_entity else "Unknown",
-                    "message": f"{ai_entity.name if ai_entity else 'Unknown'}'s turn"
-                })
-
-                sim.encounter.run_turn()
-
-                if not sim.auto_run_ai:
-                    # Manual stepping mode - return after each AI turn
-                    return {
-                        "status": "ai_turn_complete",
-                        "round": sim.encounter.round_number,
-                        "turn_index": sim.encounter.current_turn_index,
-                        "ai_actions": ai_actions
-                    }
-
-                # Brief delay for AI turns (only in auto mode)
-                await asyncio.sleep(sim.turn_delay)
-
-        return {"status": "encounter_ended", "ai_actions": ai_actions}
-
-    finally:
-        # Always remove the callback
-        EventQueue.remove_on_event_callback(capture_ai_event)
+    return {
+        "status": result.status,
+        "entity_uuid": str(result.entity_uuid) if result.entity_uuid else None,
+        "entity_name": result.entity_name,
+        "round": result.round_number,
+        "turn_index": result.turn_index,
+        "ai_actions": ai_actions,
+        "new_log_since": log_start
+    }
 
 
 def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity:
@@ -861,19 +552,22 @@ async def get_encounter():
 @app.get("/combat-log")
 async def get_combat_log(since: int = 0):
     """
-    Get combat log entries.
+    Get combat log entries from Encounter.
 
     Args:
         since: Only return entries with index >= since (for polling)
 
     Returns:
-        List of log entries with index, type, message, and details
+        List of log entries as CombatLogEntry.to_dict() (raw model_dump)
     """
-    entries = sim.get_combat_log(since)
+    if not sim.encounter:
+        return {"entries": [], "count": 0, "total": 0}
+
+    entries = sim.encounter.get_combat_log(since)
     return {
-        "entries": entries,
+        "entries": [e.to_dict() for e in entries],
         "count": len(entries),
-        "total": len(sim._combat_log)
+        "total": len(sim.encounter.combat_log)
     }
 
 
@@ -1342,25 +1036,22 @@ async def get_entity_available_actions(entity_uuid: str):
 
 @app.post("/action/end-turn")
 async def end_human_turn(request: SimpleActionRequest):
-    """End the session's entity turn and advance to next."""
-    entity = validate_session_action(request.session_id, request.entity_uuid)
+    """End the session's entity turn and advance through AI turns."""
+    _ = validate_session_action(request.session_id, request.entity_uuid)  # Validates session/entity
 
     if sim.encounter is None:
         raise HTTPException(status_code=400, detail="No active encounter")
 
-    # Add to combat log
-    sim.add_combat_log("turn_end", f"{entity.name} ends their turn.", {"entity": entity.name})
-
-    # End the turn
+    # End turn (fires TurnEndEvent) and advance to next combatant
     sim.encounter.end_turn()
 
-    # Advance turn index (session state is derived, no need to clear manually)
+    # Advance turn index for next turn
     sim.encounter.current_turn_index += 1
     if sim.encounter.current_turn_index >= len(sim.encounter.initiative_order):
         sim.encounter._advance_round()
     sim.encounter.turn_state = TurnState.NOT_STARTED
 
-    # Advance encounter (runs AI turns until next human or end)
+    # Advance through AI turns until next human/claude or encounter ends
     result = await advance_encounter()
 
     return result
@@ -1396,11 +1087,9 @@ async def execute_self_action(request: SelfActionRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Add to combat log
-    sim.add_combat_log("action", f"{entity.name} takes the {request.action_name} action.", {
-        "entity": entity.name,
-        "action": request.action_name.lower()
-    })
+    # Add to combat log using event.combat_log
+    if event and event.combat_log:
+        add_event_to_combat_log(sim, event)
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1441,13 +1130,6 @@ async def execute_entity_action(request: EntityActionRequest):
             detail=f"Action {request.action_name} is not an ENTITY action (is {template.target_type.value})"
         )
 
-    # Get weapon name for logging (if attack)
-    weapon_name = "Unknown"
-    weapon_slot = getattr(template, 'weapon_slot', None)
-    if weapon_slot:
-        weapon = entity.equipment._get_weapon_by_slot(weapon_slot)
-        weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
-
     # Execute via functional API
     action_target = AvailableTarget(index=0, target_uuid=target_uuid, target_name=target.name)
     try:
@@ -1462,46 +1144,19 @@ async def execute_entity_action(request: EntityActionRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
-    # Build event data for attacks
+    # Build event data for attacks using event.combat_log
     event_data = None
-    if event and hasattr(event, 'attack_outcome'):
-        event_data = extract_attack_data_from_event(event, entity, target, weapon_name)
-        event_data["roll"] = event_data.get("attack_total")
-        event_data["damage"] = event_data.get("total_damage", 0)
+    if event and hasattr(event, 'attack_outcome') and event.combat_log:
+        add_event_to_combat_log(sim, event)
+        # Pass through the full combat log data - CLI now supports new structure
+        event_data = dict(event.combat_log.data)
+        # Add target_hp for ActionResult
+        event_data["target_hp"] = target.get_hp()
 
-        # Build log message
-        attack_bonus = event_data.get("attack_bonus", 0)
-        all_d20_rolls = event_data.get("all_d20_rolls", [])
-        d20_result = event_data.get("d20")
-        advantage_status = event_data.get("advantage_status", "none")
-        target_ac = event_data.get("target_ac", 0)
-        total_damage = event_data.get("total_damage", 0)
-        attack_total = event_data.get("attack_total", 0)
-        outcome_str = (event_data.get("outcome") or "unknown").lower()
-
-        bonus_str = f"+{attack_bonus}" if attack_bonus >= 0 else str(attack_bonus)
-        if advantage_status == "advantage" and len(all_d20_rolls) >= 2:
-            roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
-        elif advantage_status == "disadvantage" and len(all_d20_rolls) >= 2:
-            roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20_result}){bonus_str}={attack_total}"
-        else:
-            roll_str = f"d20({d20_result}){bonus_str}={attack_total}"
-
-        if outcome_str == "crit":
-            log_msg = f"{entity.name} CRITS {target.name}! {roll_str} vs AC {target_ac} → {total_damage} damage!"
-        elif outcome_str == "hit":
-            log_msg = f"{entity.name} hits {target.name}. {roll_str} vs AC {target_ac} → {total_damage} damage"
-        elif outcome_str == "crit miss":
-            log_msg = f"{entity.name} critically misses {target.name}! {roll_str} vs AC {target_ac}"
-        else:
-            log_msg = f"{entity.name} misses {target.name}. {roll_str} vs AC {target_ac}"
-
-        log_data = dict(event_data)
-        log_data["target_hp"] = target.get_hp()
-        sim.add_combat_log("attack", log_msg, log_data)
-
-        for death_name in death_names:
-            sim.add_combat_log("death", f"{death_name} has been defeated!", {"entity": death_name})
+    # Log death events to encounter's combat log
+    for death_event in deaths:
+        if sim.encounter and death_event.combat_log:
+            sim.encounter.add_event_to_combat_log(death_event)
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1536,7 +1191,7 @@ async def execute_position_action(request: PositionActionRequest):
         )
 
     # Track opportunity attacks triggered by movement
-    triggered_reactions: list = []
+    captured_oa_events: list = []  # Store events for combat_log usage
 
     def capture_opportunity_attack(event: Event) -> None:
         """Capture attack events targeting the moving entity (opportunity attacks)."""
@@ -1546,21 +1201,7 @@ async def execute_position_action(request: PositionActionRequest):
         event_type = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
 
         if event_type == "attack" and event.target_entity_uuid == entity.uuid:
-            source = Entity.get(event.source_entity_uuid)
-
-            weapon_name = "Unknown"
-            if source:
-                weapon_slot = getattr(event, 'weapon_slot', None)
-                if weapon_slot:
-                    weapon = source.equipment._get_weapon_by_slot(weapon_slot)
-                    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
-                else:
-                    weapon_name = "Unarmed"
-
-            reaction_data = extract_attack_data_from_event(event, source, entity, weapon_name)
-            reaction_data["type"] = "opportunity_attack"
-            reaction_data["is_opportunity_attack"] = True
-            triggered_reactions.append(reaction_data)
+            captured_oa_events.append(event)  # Store event for combat_log
 
     # Register callback before move
     EventQueue.add_on_event_callback(capture_opportunity_attack)
@@ -1585,49 +1226,32 @@ async def execute_position_action(request: PositionActionRequest):
 
     # Extract event data
     event_data = None
+    triggered_reactions: list = []
+
     if isinstance(event, MovementEvent):
-        event_data = {
-            "entity": entity.name,
-            "start": list(event.start_position),
-            "end": list(event.end_position),
-            "path": [list(p) for p in event.path] if event.path else []
-        }
+        # Log move using event.combat_log
+        if event.combat_log:
+            add_event_to_combat_log(sim, event)
+            # Pass through the full combat log data
+            event_data = dict(event.combat_log.data)
+        else:
+            # Fallback if no combat_log (shouldn't happen)
+            event_data = {
+                "entity_name": entity.name,
+                "start_position": list(event.start_position),
+                "end_position": list(event.end_position),
+                "path": [list(p) for p in event.path] if event.path else []
+            }
 
-        sim.add_combat_log("move", f"{entity.name} moves to {tuple(event.end_position)}.", {
-            "entity": entity.name,
-            "from": list(event.start_position),
-            "to": list(event.end_position)
-        })
-
-        # Log opportunity attacks
-        for reaction in triggered_reactions:
-            attacker = reaction.get("attacker", "Unknown")
-            target_name = reaction.get("target", entity.name)
-            d20 = reaction.get("d20", "?")
-            all_d20_rolls = reaction.get("all_d20_rolls", [])
-            adv_status = reaction.get("advantage_status", "none")
-            atk_bonus = reaction.get("attack_bonus", 0)
-            atk_total = reaction.get("attack_total", "?")
-            target_ac = reaction.get("target_ac", "?")
-            outcome = reaction.get("outcome", "unknown")
-            total_dmg = reaction.get("total_damage", 0)
-
-            bonus_str = f"+{atk_bonus}" if atk_bonus >= 0 else str(atk_bonus)
-            if adv_status == "advantage" and len(all_d20_rolls) >= 2:
-                roll_str = f"ADV d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20}){bonus_str}={atk_total}"
-            elif adv_status == "disadvantage" and len(all_d20_rolls) >= 2:
-                roll_str = f"DIS d20({all_d20_rolls[0]},{all_d20_rolls[1]}→{d20}){bonus_str}={atk_total}"
-            else:
-                roll_str = f"d20({d20}){bonus_str}={atk_total}"
-
-            if outcome == "crit":
-                oa_msg = f"(OA) {attacker} CRITS {target_name}! {roll_str} vs AC {target_ac} → {total_dmg} damage!"
-            elif outcome == "hit":
-                oa_msg = f"(OA) {attacker} hits {target_name}. {roll_str} vs AC {target_ac} → {total_dmg} damage"
-            else:
-                oa_msg = f"(OA) {attacker} misses {target_name}. {roll_str} vs AC {target_ac}"
-
-            sim.add_combat_log("opportunity_attack", oa_msg, reaction)
+        # Log opportunity attacks using event.combat_log
+        for oa_event in captured_oa_events:
+            if oa_event.combat_log:
+                add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
+                # Pass through full combat log data - CLI now supports new structure
+                oa_data = dict(oa_event.combat_log.data)
+                oa_data["type"] = "opportunity_attack"
+                oa_data["is_opportunity_attack"] = True
+                triggered_reactions.append(oa_data)
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1656,24 +1280,14 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         raise HTTPException(status_code=400, detail=f"Unknown action: {request.template_name}")
 
     # For POSITION actions (Move), need to capture opportunity attacks
-    triggered_reactions: list = []
+    captured_oa_events: list = []  # Store events for combat_log usage
 
     def capture_opportunity_attack(event: Event) -> None:
         if event.phase != EventPhase.COMPLETION:
             return
         event_type = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
         if event_type == "attack" and event.target_entity_uuid == entity.uuid:
-            source = Entity.get(event.source_entity_uuid)
-            weapon_name = "Unknown"
-            if source:
-                weapon_slot = getattr(event, 'weapon_slot', None)
-                if weapon_slot:
-                    weapon = source.equipment._get_weapon_by_slot(weapon_slot)
-                    weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
-            reaction_data = extract_attack_data_from_event(event, source, entity, weapon_name)
-            reaction_data["type"] = "opportunity_attack"
-            reaction_data["is_opportunity_attack"] = True
-            triggered_reactions.append(reaction_data)
+            captured_oa_events.append(event)  # Store event for combat_log
 
     # Register callback if this might trigger OAs
     if template.target_type == TargetType.POSITION:
@@ -1700,56 +1314,50 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     event_data = None
     target_hp = None
 
-    if template.target_type == TargetType.ENTITY and event and hasattr(event, 'attack_outcome'):
-        # Attack - get target for data
-        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
-        weapon_name = "Unknown"
-        weapon_slot = getattr(template, 'weapon_slot', None)
-        if weapon_slot:
-            weapon = entity.equipment._get_weapon_by_slot(weapon_slot)
-            weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+    triggered_reactions: list = []
 
-        event_data = extract_attack_data_from_event(event, entity, target, weapon_name)
+    if template.target_type == TargetType.ENTITY and event and hasattr(event, 'attack_outcome') and event.combat_log:
+        # Attack - pass through full combat log data (CLI now supports new structure)
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         target_hp = target.get_hp() if target else None
 
-        # Log attack
-        outcome_str = (event_data.get("outcome") or "unknown").lower()
-        attack_total = event_data.get("attack_total", 0)
-        target_ac = event_data.get("target_ac", 0)
-        total_damage = event_data.get("total_damage", 0)
-        target_name = target.name if target else "Unknown"
-
-        if outcome_str == "crit":
-            log_msg = f"{entity.name} CRITS {target_name}! Roll {attack_total} vs AC {target_ac} → {total_damage} damage!"
-        elif outcome_str == "hit":
-            log_msg = f"{entity.name} hits {target_name}. Roll {attack_total} vs AC {target_ac} → {total_damage} damage"
-        else:
-            log_msg = f"{entity.name} misses {target_name}. Roll {attack_total} vs AC {target_ac}"
-
-        log_data = dict(event_data)
-        log_data["target_hp"] = target_hp
-        sim.add_combat_log("attack", log_msg, log_data)
+        add_event_to_combat_log(sim, event)
+        event_data = dict(event.combat_log.data)
+        event_data["target_hp"] = target_hp
 
     elif template.target_type == TargetType.POSITION and isinstance(event, MovementEvent):
-        # Move
-        event_data = {
-            "entity": entity.name,
-            "start": list(event.start_position),
-            "end": list(event.end_position),
-            "path": [list(p) for p in event.path] if event.path else []
-        }
-        sim.add_combat_log("move", f"{entity.name} moves to {tuple(event.end_position)}.", event_data)
+        # Move - pass through full combat log data
+        if event.combat_log:
+            add_event_to_combat_log(sim, event)
+            event_data = dict(event.combat_log.data)
+        else:
+            # Fallback if no combat_log
+            event_data = {
+                "entity_name": entity.name,
+                "start_position": list(event.start_position),
+                "end_position": list(event.end_position),
+                "path": [list(p) for p in event.path] if event.path else []
+            }
+
+        # Log opportunity attacks using event.combat_log
+        for oa_event in captured_oa_events:
+            if oa_event.combat_log:
+                add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
+                # Pass through full combat log data - CLI now supports new structure
+                oa_data = dict(oa_event.combat_log.data)
+                oa_data["type"] = "opportunity_attack"
+                oa_data["is_opportunity_attack"] = True
+                triggered_reactions.append(oa_data)
 
     elif template.target_type == TargetType.SELF:
-        # Self action
-        sim.add_combat_log("action", f"{entity.name} takes the {request.template_name} action.", {
-            "entity": entity.name,
-            "action": request.template_name.lower()
-        })
+        # Self action - use event.combat_log
+        if event and event.combat_log:
+            add_event_to_combat_log(sim, event)
 
-    # Log deaths
-    for death_name in death_names:
-        sim.add_combat_log("death", f"{death_name} has been defeated!", {"entity": death_name})
+    # Log deaths to encounter's combat log
+    for death_event in deaths:
+        if sim.encounter and death_event.combat_log:
+            sim.encounter.add_event_to_combat_log(death_event)
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1784,7 +1392,7 @@ async def start_human_simulation():
 
     sim.encounter = setup_combat_with_human()
     sim.paused = False
-    sim.clear_combat_log()  # Clear combat log for new game
+    sim.encounter.clear_combat_log()  # Clear combat log for new game
 
     # Create game session
     game = sim.create_game_session(sim.encounter)
@@ -1839,7 +1447,7 @@ async def start_pvp_simulation():
 
     sim.encounter = setup_combat_pvp()
     sim.paused = False
-    sim.clear_combat_log()  # Clear combat log for new game
+    sim.encounter.clear_combat_log()  # Clear combat log for new game
 
     # Create game session (side effect sets up session manager)
     _ = sim.create_game_session(sim.encounter)

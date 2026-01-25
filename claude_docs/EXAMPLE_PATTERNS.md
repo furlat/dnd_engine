@@ -78,14 +78,14 @@ ac = ac_bonus.normalized_score
 ### Attack Bonus
 
 ```python
-from dnd.blocks.equipment import WeaponSlot
+from dnd.core.events import WeaponSlot
 
 # Basic attack bonus
-attack_bonus = entity.attack_bonus(WeaponSlot.MAIN_HAND)
+attack_bonus = entity.attack_bonus(WeaponSlot.MELEE_MAIN)
 bonus = attack_bonus.normalized_score
 
 # With target context
-attack_bonus = entity.attack_bonus(WeaponSlot.MAIN_HAND, target.uuid)
+attack_bonus = entity.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
 ```
 
 ### Ability Scores and Modifiers
@@ -135,30 +135,37 @@ entity.action_economy.reset_all_costs()
 ## Accessing Weapons
 
 ```python
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import Weapon, Shield, WeaponSlot
 
-# CORRECT: Access weapon attributes directly
-weapon = entity.equipment.weapon_main_hand  # Returns Weapon or None
-off_hand = entity.equipment.weapon_off_hand  # Returns Weapon, Shield, or None
+# Access weapon by slot attribute
+weapon = entity.equipment.weapon_melee_main  # Returns Weapon or None
+off_hand = entity.equipment.weapon_melee_off  # Returns Weapon, Shield, or None
+
+# 4 weapon slots available:
+# - weapon_melee_main: Main melee weapon
+# - weapon_melee_off: Off-hand melee weapon OR shield
+# - weapon_ranged_main: Main ranged weapon
+# - weapon_ranged_off: Off-hand ranged weapon
 
 # Check if off-hand is a weapon (not shield)
-if isinstance(entity.equipment.weapon_off_hand, Weapon):
-    off_hand_weapon = entity.equipment.weapon_off_hand
+if isinstance(entity.equipment.weapon_melee_off, Weapon):
+    off_hand_weapon = entity.equipment.weapon_melee_off
 
-# WRONG: There is no get_weapon() method
-# weapon = entity.equipment.get_weapon(WeaponSlot.MAIN_HAND)  # ERROR!
+# Use _get_weapon_by_slot for slot-based access (internal method)
+from dnd.core.events import WeaponSlot
+weapon = entity.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)
 ```
 
 ### Weapon Properties
 
 ```python
-weapon = entity.equipment.weapon_main_hand
+weapon = entity.equipment.weapon_melee_main
 if weapon:
     name = weapon.name
     damage_dice = weapon.damage_dice
     damage_type = weapon.damage_type
     weapon_range = weapon.range
-    properties = weapon.properties
+    properties = weapon.properties  # List of WeaponProperty enum values
 ```
 
 ---
@@ -170,10 +177,12 @@ When testing conditions that have contextual effects (e.g., Frightened disadvant
 ```python
 def get_attack_modifiers(attacker: Entity, target: Entity):
     """Get attack bonus with proper target setup."""
+    from dnd.core.events import WeaponSlot
+
     attacker.set_target_entity(target.uuid)
     target.set_target_entity(attacker.uuid)
 
-    attack_bonus = attacker.attack_bonus(WeaponSlot.MAIN_HAND, target.uuid)
+    attack_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
 
     attacker.clear_target_entity()
     target.clear_target_entity()
@@ -185,10 +194,12 @@ def get_defense_modifiers(defender: Entity, attacker: Entity):
     Get combined modifiers when attacking a defender.
     Propagates to_target modifiers from defender to attacker.
     """
+    from dnd.core.events import WeaponSlot
+
     defender.set_target_entity(attacker.uuid)
     attacker.set_target_entity(defender.uuid)
 
-    attack_bonus = attacker.attack_bonus(WeaponSlot.MAIN_HAND, defender.uuid)
+    attack_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, defender.uuid)
     ac_bonus = defender.ac_bonus(attacker.uuid)
 
     # KEY: Propagate to_target modifiers from defender to attacker
@@ -207,12 +218,12 @@ def get_defense_modifiers(defender: Entity, attacker: Entity):
 
 ```python
 from dnd.actions import Attack
-from dnd.blocks.equipment import WeaponSlot
+from dnd.core.events import WeaponSlot
 
 attack = Attack(
     source_entity_uuid=attacker.uuid,
     target_entity_uuid=target.uuid,
-    weapon_slot=WeaponSlot.MAIN_HAND,
+    weapon_slot=WeaponSlot.MELEE_MAIN,
     name="Scimitar Attack"
 )
 event = attack.apply()
@@ -418,8 +429,9 @@ def test_something():
 | Mistake | Correct |
 |---------|---------|
 | `create_goblin("Name", ...)` | `create_goblin(name="Name", ...)` |
-| `entity.equipment.get_weapon(slot)` | `entity.equipment.weapon_main_hand` |
-| `entity.ability_scores.strength.modifier.normalized_score` | `entity.ability_scores.strength.modifier` |
+| `entity.equipment.weapon_main_hand` | `entity.equipment.weapon_melee_main` |
+| `WeaponSlot.MAIN_HAND` | `WeaponSlot.MELEE_MAIN` |
+| `entity.ability_scores.strength.modifier.normalized_score` | `entity.ability_scores.strength.modifier` (returns int) |
 | `EventQueue.clear_all()` | Clear individual registries or don't clear |
 | Forgetting `update_entity_senses()` | Always call after creating entities |
 | Using `attacker.attack_bonus(slot)` for contextual checks | Use `set_target_entity()` first |

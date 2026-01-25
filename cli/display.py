@@ -536,24 +536,32 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
     entry_type = entry.get("type", "message")
 
     if entry_type == "attack":
-        attacker = entry.get("attacker", "Someone")
-        target = entry.get("target", "Unknown")
-        weapon = entry.get("weapon", "weapon")
-        d20 = entry.get("d20", 0)
-        all_rolls = entry.get("all_d20_rolls", [d20])
-        adv_status = entry.get("advantage_status", "none")
-        attack_bonus = entry.get("attack_bonus", 0)
-        attack_total = entry.get("attack_total", 0)
+        # New nested structure (AttackLogData)
+        attacker = entry.get("attacker_name", "Someone")
+        target = entry.get("target_name", "Unknown")
+        weapon = entry.get("weapon_name", "weapon")
+
+        # Extract from nested attack_roll
+        attack_roll = entry.get("attack_roll", {})
+        d20 = attack_roll.get("d20_used", 0)
+        all_rolls = attack_roll.get("all_d20_rolls", [])
+        if not all_rolls and d20:
+            all_rolls = [d20]
+        adv_status = attack_roll.get("advantage_status") or "none"
+        attack_bonus = attack_roll.get("bonus", 0)
+        attack_total = attack_roll.get("total", 0)
+
         target_ac = entry.get("target_ac", 0)
         outcome = (entry.get("outcome") or "").lower()
         total_damage = entry.get("total_damage", 0)
 
-        # Get breakdown data
+        # Breakdown data
         attack_breakdown = entry.get("attack_breakdown", [])
         ac_breakdown = entry.get("ac_breakdown", [])
-        damage_breakdown = entry.get("damage_breakdown", [])
-        damage_dice_str = entry.get("damage_dice_str", "")
+
+        # Damage from damage_rolls list
         damage_rolls = entry.get("damage_rolls", [])
+
         is_opportunity_attack = entry.get("is_opportunity_attack", False)
 
         # Header: Attacker → Target (Weapon)
@@ -602,8 +610,8 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
             content.append("CRIT!", style="bold yellow")
         elif outcome == "hit":
             content.append("HIT", style="green")
-        elif outcome == "crit miss":
-            content.append("FUMBLE!", style="bold red")
+        elif outcome == "crit miss" or outcome == "crit_miss":
+            content.append("CRIT MISS", style="bold red")
         else:
             content.append("MISS", style="dim")
 
@@ -612,31 +620,35 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
             content.append("\n")
             content.append("  Damage: ", style="dim")
 
-            # Show damage dice
+            # Show damage from DamageRollDisplay structure
             if damage_rolls and len(damage_rolls) > 0:
                 dr = damage_rolls[0]
-                dice = dr.get("dice", [])
+                dice = dr.get("dice_results", [])
                 bonus = dr.get("bonus", 0)
+                roll_dice_str = dr.get("dice_str", "")
+                roll_breakdown = dr.get("bonus_breakdown", [])
+
                 if dice:
-                    dice_str = ",".join(str(d) for d in dice)
-                    content.append(f"{damage_dice_str}({dice_str})", style="red")
-                else:
-                    content.append(f"{damage_dice_str}", style="red")
+                    dice_str_display = ",".join(str(d) for d in dice)
+                    content.append(f"{roll_dice_str}({dice_str_display})", style="red")
+                elif roll_dice_str:
+                    content.append(f"{roll_dice_str}", style="red")
 
                 # Damage bonus with breakdown
                 if bonus != 0:
                     content.append(f" {bonus:+d}")
-                if damage_breakdown:
-                    content.append(f" {_format_breakdown(damage_breakdown)}", style="dim")
+                if roll_breakdown:
+                    content.append(f" {_format_breakdown(roll_breakdown)}", style="dim")
 
                 content.append(f" = {total_damage}", style="bold red")
             else:
                 content.append(f"{total_damage}", style="bold red")
 
     elif entry_type == "move":
-        mover = entry.get("entity", "Someone")
-        from_pos = entry.get("from", [0, 0])
-        to_pos = entry.get("to", [0, 0])
+        # MovementLogData structure
+        mover = entry.get("entity_name", "Someone")
+        from_pos = entry.get("start_position", [0, 0])
+        to_pos = entry.get("end_position", [0, 0])
         content.append(f"{mover}", style="bold cyan")
         content.append(" moved ")
         content.append(f"({from_pos[0]},{from_pos[1]})→({to_pos[0]},{to_pos[1]})", style="green")
@@ -646,8 +658,9 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
         content.append(f"☠ {entity} defeated!", style="bold red")
 
     elif entry_type == "action":
-        entity = entry.get("entity", "Someone")
-        action_name = entry.get("action", "action")
+        # SelfActionLogData structure
+        entity = entry.get("entity_name", "Someone")
+        action_name = entry.get("action_name", "action")
         content.append(f"{entity}", style="bold cyan")
         content.append(f" uses ", style="dim")
         content.append(f"{action_name.title()}", style="bold magenta")
@@ -694,16 +707,15 @@ def render_available_actions_panel(
     movement_remaining = actions.get("remaining_movement", 0)
     reactions_remaining = turn.get("reactions_remaining", 0)
 
-    # Movement - new format uses position_actions, old uses can_move
-    has_movement = actions.get("position_actions") or actions.get("can_move")
+    # Movement
+    has_movement = actions.get("position_actions")
     if has_movement and movement_remaining > 0:
         content.append("MOVE", style="bold cyan")
         content.append(f" ({movement_remaining}ft)  ")
         content.append("[m X Y] or [m] to show positions\n", style="dim")
 
     # Attacks - show all available attack options with target numbers
-    # Support both old format (attacks) and new format (entity_actions)
-    attacks = actions.get("entity_actions", actions.get("attacks", []))
+    attacks = actions.get("entity_actions", [])
     valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
 
     if valid_attacks:
@@ -720,18 +732,12 @@ def render_available_actions_panel(
             else:
                 cost_label = ("ACTION", "cyan")
 
-            # Get weapon/action display name (new format: display_name/weapon_name, old: name)
-            action_name = atk.get("weapon_name") or atk.get("display_name") or atk.get("name", "Attack")
+            # Get weapon/action display name
+            action_name = atk.get("weapon_name") or atk.get("display_name", "Attack")
 
             for target in targets:
-                # Handle both old format (UUID string) and new format (dict with target_uuid/target_name)
-                if isinstance(target, dict):
-                    target_uuid = target.get("target_uuid")
-                    target_name = target.get("target_name") or entity_lookup.get(target_uuid, {}).get("name", "?")
-                else:
-                    # Old format: target is just a UUID string
-                    target_uuid = target
-                    target_name = entity_lookup.get(target_uuid, {}).get("name", "?")
+                target_uuid = target.get("target_uuid")
+                target_name = target.get("target_name") or entity_lookup.get(target_uuid, {}).get("name", "?")
 
                 content.append(f"  [", style="dim")
                 content.append(f"{target_num}", style="bold yellow")
@@ -745,13 +751,11 @@ def render_available_actions_panel(
         content.append(" - no targets in range\n", style="dim")
 
     # Other actions (horizontal)
-    # Support both old format (other_actions with action_id) and new format (self_actions with template_name)
-    other = actions.get("self_actions", actions.get("other_actions", []))
+    other = actions.get("self_actions", [])
     other_items = []
     for act in other:
         if act.get("can_afford"):
-            # Get action name from template_name (new) or action_id (old)
-            action_id = (act.get("template_name") or act.get("action_id", "")).lower()
+            action_id = act.get("template_name", "").lower()
             if action_id == "dash":
                 other_items.append(("DASH", "bold magenta", "[d]"))
             elif action_id == "dodge":
@@ -937,63 +941,81 @@ def format_attack_roll(d20, all_d20_rolls, advantage_status, attack_bonus, attac
 def _build_attack_log_entry(data: Dict[str, Any], attacker_default: str = "Someone", target_default: str = "Unknown") -> Dict[str, Any]:
     """Build a standardized attack log entry from server data.
 
-    This helper ensures all attack log entries have the same structure,
-    including breakdown fields for detailed display.
+    Uses the new AttackLogData structure exclusively.
     """
+    # Extract from nested attack_roll
+    attack_roll = data.get("attack_roll", {})
+
+    # Get attacker/target/weapon from new field names
+    attacker = data.get("attacker_name", attacker_default)
+    target = data.get("target_name", target_default)
+    weapon = data.get("weapon_name", "weapon")
+
+    # Extract attack roll values from nested structure
+    d20 = attack_roll.get("d20_used", 0)
+    all_rolls = attack_roll.get("all_d20_rolls", [])
+    if not all_rolls and d20:
+        all_rolls = [d20]
+    adv_status = attack_roll.get("advantage_status") or "none"
+    attack_bonus = attack_roll.get("bonus", 0)
+    attack_total = attack_roll.get("total", 0)
+
     return {
         "type": "attack",
-        "attacker": data.get("attacker", attacker_default),
-        "target": data.get("target", target_default),
-        "weapon": data.get("weapon", "weapon"),
-        "d20": data.get("d20"),
-        "all_d20_rolls": data.get("all_d20_rolls", []),
-        "advantage_status": data.get("advantage_status", "none"),
-        "attack_bonus": data.get("attack_bonus", 0),
-        "attack_total": data.get("attack_total"),
-        "target_ac": data.get("target_ac"),
-        "outcome": data.get("outcome"),
+        "attacker_name": attacker,
+        "target_name": target,
+        "weapon_name": weapon,
+        "attack_roll": {
+            "d20_used": d20,
+            "all_d20_rolls": all_rolls,
+            "advantage_status": adv_status,
+            "bonus": attack_bonus,
+            "total": attack_total,
+        },
+        "target_ac": data.get("target_ac", 0),
+        "outcome": data.get("outcome", ""),
         "total_damage": data.get("total_damage", 0),
-        # Breakdown fields for detailed display
         "attack_breakdown": data.get("attack_breakdown", []),
         "ac_breakdown": data.get("ac_breakdown", []),
-        "damage_breakdown": data.get("damage_breakdown", []),
-        "damage_dice_str": data.get("damage_dice_str", ""),
         "damage_rolls": data.get("damage_rolls", []),
-        # Opportunity attack flag
         "is_opportunity_attack": data.get("is_opportunity_attack", False),
     }
 
 
 def show_opponent_action(entry: Dict[str, Any]):
-    """Process a combat log entry from the server and add to our rich combat log."""
-    entry_type = entry.get("type", "").lower()
-    details = entry.get("details", {})
+    """Process a combat log entry from the server and add to our rich combat log.
+
+    Uses CombatLogEntry structure: entry_type, data dict, summary.
+    """
+    entry_type = entry.get("entry_type", "")
+    entry_type = entry_type.lower() if entry_type else ""
+    data = entry.get("data", {})
 
     # Convert server entry to our rich format
     if entry_type in ("attack", "opportunity_attack"):
-        add_to_combat_log(_build_attack_log_entry(details, "Opponent", "Unknown"))
-    elif entry_type in ("move", "movement"):
+        add_to_combat_log(_build_attack_log_entry(data, "Opponent", "Unknown"))
+    elif entry_type == "movement":
         add_to_combat_log({
             "type": "move",
-            "entity": details.get("entity", "Opponent"),
-            "from": details.get("from", [0, 0]),
-            "to": details.get("to", [0, 0]),
+            "entity_name": data.get("entity_name", "Opponent"),
+            "start_position": data.get("start_position", [0, 0]),
+            "end_position": data.get("end_position", [0, 0]),
         })
     elif entry_type == "death":
         add_to_combat_log({
             "type": "death",
-            "entity": details.get("entity", "Someone"),
+            "entity": data.get("entity_name", "Someone"),
         })
     elif entry_type == "action":
         add_to_combat_log({
             "type": "action",
-            "entity": details.get("entity", "Someone"),
-            "action": details.get("action", "action"),
+            "entity_name": data.get("entity_name", "Someone"),
+            "action_name": data.get("action_name", "action"),
         })
     elif entry_type == "turn_end":
         add_to_combat_log({
             "type": "turn_end",
-            "entity": details.get("entity", "Someone"),
+            "entity": data.get("entity_name", "Someone"),
         })
 
 
@@ -1011,23 +1033,22 @@ def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
     # Note: event_type is template name like "attack_melee_main", not just "attack"
     if event_type.startswith("attack"):
         data = result.get("event_data", {})
-        # Use attacker name from data, fallback to player_entity_name
         add_to_combat_log(_build_attack_log_entry(data, player_entity_name, "Unknown"))
     elif event_type in ("move", "movement"):
         data = result.get("event_data", {})
-        # Use entity name from data if available
-        entity_name = data.get("entity", player_entity_name)
+        # Use new field names from MovementLogData
         add_to_combat_log({
             "type": "move",
-            "entity": entity_name,
-            "from": data.get("start", [0, 0]),
-            "to": data.get("end", [0, 0]),
+            "entity_name": data.get("entity_name", player_entity_name),
+            "start_position": data.get("start_position", [0, 0]),
+            "end_position": data.get("end_position", [0, 0]),
         })
     elif event_type in ("dash", "dodge", "disengage"):
+        # Use new field names from SelfActionLogData
         add_to_combat_log({
             "type": "action",
-            "entity": player_entity_name,
-            "action": event_type,
+            "entity_name": player_entity_name,
+            "action_name": event_type,
         })
     elif message:
         add_to_combat_log({"type": "message", "message": message})
@@ -1037,9 +1058,8 @@ def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
     for reaction in triggered:
         if reaction.get("type") == "opportunity_attack":
             reaction_data = dict(reaction)
-            # Mark as opportunity attack and use player's actual name as target
             reaction_data["is_opportunity_attack"] = True
-            reaction_data["target"] = player_entity_name
+            reaction_data["target_name"] = player_entity_name
             add_to_combat_log(_build_attack_log_entry(reaction_data, "Enemy", player_entity_name))
 
     # Show deaths
@@ -1080,20 +1100,25 @@ def show_opportunity_attack(reaction: Dict[str, Any]):
 
 
 def show_ai_actions(actions: List[Dict[str, Any]]):
-    """Display AI actions that occurred during AI turn."""
+    """Display AI actions that occurred during AI turn.
+
+    Uses CombatLogEntry structure: entry_type, data dict.
+    """
     if not actions:
         return
 
     for action in actions:
-        action_type = action.get("type", "")
-        if action_type == "attack":
-            add_to_combat_log(_build_attack_log_entry(action, "AI", "you"))
-        elif action_type == "move":
+        entry_type = action.get("entry_type", "")
+        data = action.get("data", {})
+
+        if entry_type == "attack":
+            add_to_combat_log(_build_attack_log_entry(data, "AI", "you"))
+        elif entry_type == "movement":
             add_to_combat_log({
                 "type": "move",
-                "entity": action.get("entity", "AI"),
-                "from": action.get("from", [0, 0]),
-                "to": action.get("to", [0, 0]),
+                "entity_name": data.get("entity_name", "AI"),
+                "start_position": data.get("start_position", [0, 0]),
+                "end_position": data.get("end_position", [0, 0]),
             })
 
 
