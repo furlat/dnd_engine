@@ -613,6 +613,24 @@ class EventQueue:
         event_handler = cls._event_handlers.get(uuid)
         if event_handler:
             cls.remove_event_handler(event_handler)
+
+    @classmethod
+    def reset(cls) -> None:
+        """Clear all events and handlers. Call when starting a new game."""
+        # Clear events
+        cls._all_events.clear()
+        cls._events_by_uuid.clear()
+        cls._events_by_type.clear()
+        cls._events_by_phase.clear()
+        cls._events_by_source.clear()
+        cls._events_by_target.clear()
+        cls._events_by_lineage.clear()
+        cls._events_by_timestamp.clear()
+        # Clear handlers
+        cls._event_handlers.clear()
+        cls._event_handlers_by_trigger.clear()
+        cls._event_handlers_by_simple_trigger.clear()
+        cls._event_handlers_by_source_entity_uuid.clear()
     
 
     @classmethod

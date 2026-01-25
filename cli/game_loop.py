@@ -11,6 +11,7 @@ import time
 from cli.api_client import APIClient
 from cli.action_executor import ActionExecutor
 from cli.input_handler import InputHandler
+from cli.action_model import ShortcutRegistry
 from cli.commands import parse_command, execute_meta_command, GameState
 from cli import display
 
@@ -40,6 +41,8 @@ class GameLoop:
         self.poll_interval = poll_interval
         self.state = GameState()
         self.running = False
+        # Session-stable shortcut registry for self-actions
+        self.shortcut_registry = ShortcutRegistry()
 
     def _is_my_turn(self, entity_uuid: str) -> bool:
         """Check if it's the given entity's turn."""
@@ -61,6 +64,10 @@ class GameLoop:
             actions_resp = self.client.get_available_actions(entity_uuid)
             self.state.update_actions(actions_resp)
 
+            # Register actions with session-stable shortcut registry
+            if self.state.actions:
+                self.state.actions.register_actions(self.shortcut_registry)
+
             return True
         except Exception as e:
             self.handler.show_error(f"Failed to refresh state: {e}")
@@ -78,6 +85,7 @@ class GameLoop:
             "encounter_ended" - encounter ended
             None - no action needed
         """
+        _ = entity_uuid  # Reserved for future use
         parsed = parse_command(cmd_str, self.state.actions)
 
         # Meta commands (help, quit, history)
@@ -85,17 +93,29 @@ class GameLoop:
             result = execute_meta_command(parsed, self.client, self.state)
             return result
 
+        # Handle "la" (list actions) command
+        if parsed.command == "la":
+            panel = display.render_all_actions(self.shortcut_registry, self.state.actions)
+            display.console.print(panel)
+            return None
+
         # Action commands
         try:
             if parsed.command == "move":
                 return self._handle_move(parsed.args)
             elif parsed.command == "attack":
                 return self._handle_attack(parsed.args)
-            elif parsed.command in ("dash", "dodge", "disengage", "standup"):
-                return self._handle_self_action(parsed.command.title())
             elif parsed.command == "end":
                 return self._handle_end_turn()
             else:
+                # Dynamic self-action routing using registry
+                if self.state.actions:
+                    action = self.state.actions.get_self_action_by_command(
+                        parsed.command, self.shortcut_registry
+                    )
+                    if action:
+                        return self._handle_self_action(action.template_name)
+
                 self.handler.show_error(f"Unknown command: {parsed.command}")
                 return "refresh"
         except ValueError as e:
@@ -174,13 +194,19 @@ class GameLoop:
             return "encounter_ended"
         return "refresh"
 
-    def _handle_self_action(self, action_name: str) -> Optional[str]:
-        """Handle self-targeting action (Dash, Dodge, etc.)."""
+    def _handle_self_action(self, template_name: str) -> Optional[str]:
+        """Handle self-targeting action by template name.
+
+        Args:
+            template_name: Full template name like "Dash", "Second Wind", etc.
+        """
         if not self.state.actions:
             self.handler.show_error("No actions available")
             return "refresh"
 
-        result = self.executor.execute(action_name.lower(), [], self.state.actions)
+        result = self.executor.execute_self_action(
+            template_name, self.state.actions, self.shortcut_registry
+        )
         self.handler.show_result(result, self.state.player_entity_name)
         return "refresh"
 
@@ -295,7 +321,8 @@ class GameLoop:
                     current_entity_uuid=entity_uuid,
                     valid_positions=self.state.valid_move_positions,
                     movement_path=self.state.last_movement_path,
-                    visibility=self.state.visibility
+                    visibility=self.state.visibility,
+                    shortcut_registry=self.shortcut_registry
                 )
 
                 # Clear temporary display state

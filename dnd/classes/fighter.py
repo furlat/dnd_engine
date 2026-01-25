@@ -719,13 +719,18 @@ class SecondWind(BaseAction):
         ]
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
+        # Populate entity name for combat log generation
+        entity = Entity.get(self.source_entity_uuid)
+        source_name = entity.name if entity else None
+
         return ActionEvent(
             name=self.name,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(c) for c in self.costs],
             parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name
         )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
@@ -925,6 +930,10 @@ class ActionSurge(BaseAction):
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
         """Create the declaration event for Action Surge."""
+        # Populate entity name for combat log generation
+        entity = Entity.get(self.source_entity_uuid)
+        source_name = entity.name if entity else None
+
         return ActionEvent(
             name=self.name,
             parent_event=parent_event.uuid if parent_event else None,
@@ -932,7 +941,8 @@ class ActionSurge(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,  # Self-targeted
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register
+            use_register=use_register,
+            source_entity_name=source_name
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
@@ -1277,8 +1287,11 @@ class ExtraAttack(BaseAction):
             weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
             weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
 
+        # Use clean name for combat log (e.g., "Extra Attack (Shortbow)")
+        display_name = f"Extra Attack ({weapon_name})" if weapon_name else "Extra Attack"
+
         return AttackEvent(
-            name=f"{self.name}",
+            name=display_name,
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,

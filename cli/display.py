@@ -2,7 +2,7 @@
 Display module for full-screen TUI with Rich.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
@@ -10,6 +10,19 @@ from rich.text import Text
 from rich import box
 import sys
 import shutil
+
+if TYPE_CHECKING:
+    from cli.action_model import ShortcutRegistry, AvailableActionsState
+
+
+# Color mapping based on cost_type (derived from API data)
+COST_TYPE_COLORS = {
+    "bonus_actions": "bold cyan",
+    "actions": "bold magenta",
+    "reactions": "bold yellow",
+    "movement": "bold green",
+}
+DEFAULT_ACTION_COLOR = "bold white"
 
 
 console = Console()
@@ -696,9 +709,17 @@ def render_combat_log_panel() -> Panel:
 def render_available_actions_panel(
     actions: Dict[str, Any],
     entities: List[Dict[str, Any]],
-    turn: Dict[str, Any]
+    turn: Dict[str, Any],
+    registry: Optional["ShortcutRegistry"] = None
 ) -> Panel:
-    """Render available actions as a compact panel with economy in title."""
+    """Render available actions as a compact panel with economy in title.
+
+    Args:
+        actions: Raw actions dict from server
+        entities: List of entities for name lookup
+        turn: Turn info for economy display
+        registry: Session-stable shortcut registry for self_actions
+    """
     content = Text()
     entity_lookup = {e["uuid"]: e for e in entities}
 
@@ -725,9 +746,12 @@ def render_available_actions_panel(
         for atk in valid_attacks:
             targets = atk.get("valid_targets", [])
             cost_type = atk.get("cost_type", "actions")
+            cost_amount = atk.get("cost_amount", 1)
 
-            # Cost label with color
-            if cost_type == "bonus_actions":
+            # Cost label with color - handle Extra Attack (cost_amount=0)
+            if cost_amount == 0:
+                cost_label = ("EXTRA", "green")  # Free extra attack
+            elif cost_type == "bonus_actions":
                 cost_label = ("BONUS", "magenta")
             else:
                 cost_label = ("ACTION", "cyan")
@@ -750,20 +774,31 @@ def render_available_actions_panel(
         content.append("ATTACK", style="dim")
         content.append(" - no targets in range\n", style="dim")
 
-    # Other actions (horizontal)
+    # Self-actions - fully dynamic using registry
     other = actions.get("self_actions", [])
     other_items = []
+
     for act in other:
         if act.get("can_afford"):
-            action_id = act.get("template_name", "").lower()
-            if action_id == "dash":
-                other_items.append(("DASH", "bold magenta", "[d]"))
-            elif action_id == "dodge":
-                other_items.append(("DODGE", "bold blue", "[o]"))
-            elif action_id == "disengage":
-                other_items.append(("DISENGAGE", "bold green", "[i]"))
-            elif action_id == "standup":
-                other_items.append(("STAND UP", "bold yellow", "[su]"))
+            template_name = act.get("template_name", "")
+            display_name = act.get("display_name", template_name).upper()
+            cost_type = act.get("cost_type", "actions")
+
+            # Get session-stable shortcut from registry
+            if registry:
+                shortcut = registry.get_or_create_shortcut(template_name)
+            else:
+                # Fallback: derive shortcut from template_name
+                words = template_name.split()
+                if len(words) > 1:
+                    shortcut = "".join(w[0].lower() for w in words)
+                else:
+                    shortcut = template_name[0].lower() if template_name else "?"
+
+            # Color based on cost_type
+            color = COST_TYPE_COLORS.get(cost_type, DEFAULT_ACTION_COLOR)
+
+            other_items.append((display_name, color, f"[{shortcut}]"))
 
     if other_items:
         for i, (name, style, key) in enumerate(other_items):
@@ -776,6 +811,8 @@ def render_available_actions_panel(
     # Always available
     content.append("END", style="bold white")
     content.append(" [e]  ", style="dim")
+    content.append("LIST", style="bold white")
+    content.append(" [la]  ", style="dim")
     content.append("HELP", style="bold white")
     content.append(" [?]  ", style="dim")
     content.append("QUIT", style="bold white")
@@ -785,6 +822,46 @@ def render_available_actions_panel(
     title = f"Actions:{actions_remaining} Bonus:{bonus_remaining} Move:{movement_remaining}ft React:{reactions_remaining}"
 
     return Panel(content, title=title, box=box.ROUNDED, border_style="green")
+
+
+def render_all_actions(
+    registry: "ShortcutRegistry",
+    current_actions: Optional["AvailableActionsState"] = None
+) -> Panel:
+    """Show all actions encountered this session with availability status.
+
+    Args:
+        registry: Session shortcut registry with all known actions
+        current_actions: Current available actions state for availability check
+
+    Returns:
+        Panel with list of all actions and their shortcuts
+    """
+    content = Text()
+    content.append("All Actions (this session):\n\n", style="bold")
+
+    all_actions = registry.get_all_actions()  # template_name -> shortcut
+
+    if not all_actions:
+        content.append("  No actions registered yet.", style="dim")
+    else:
+        for template_name, shortcut in sorted(all_actions.items(), key=lambda x: x[1]):
+            # Check if currently available
+            action = None
+            if current_actions:
+                action = current_actions.get_self_action(template_name)
+            available = action is not None and action.can_afford
+
+            if available:
+                content.append(f"  [{shortcut}] ", style="bold green")
+                content.append(f"{template_name}", style="bold")
+                content.append(" - AVAILABLE\n", style="green")
+            else:
+                content.append(f"  [{shortcut}] ", style="dim")
+                content.append(f"{template_name}", style="dim")
+                content.append(" - unavailable\n", style="dim")
+
+    return Panel(content, title="Actions List", box=box.ROUNDED, border_style="blue")
 
 
 def render_history_snapshot(snapshot: Dict[str, Any], current_entity_uuid: Optional[str] = None):
@@ -848,9 +925,23 @@ def render_full_screen(
     visibility: Optional[Dict[str, Any]] = None,
     movement_path: Optional[List[Tuple[int, int]]] = None,
     valid_positions: Optional[List[Tuple[int, int]]] = None,
-    is_my_turn: bool = True
+    is_my_turn: bool = True,
+    shortcut_registry: Optional["ShortcutRegistry"] = None
 ):
-    """Render the full screen layout."""
+    """Render the full screen layout.
+
+    Args:
+        grid: Map grid data
+        entities: List of entity data
+        turn: Turn state info
+        current_entity_uuid: UUID of current player's entity
+        actions: Raw actions dict from server
+        visibility: Visibility data
+        movement_path: Path to highlight on map
+        valid_positions: Valid move positions to highlight
+        is_my_turn: Whether it's the player's turn
+        shortcut_registry: Session-stable shortcut registry for actions
+    """
     clear()
 
     # 1. Header panel (NEURODRAGON + connection info only)
@@ -874,7 +965,7 @@ def render_full_screen(
     # 6. Available actions panel (only on player's turn, with economy in title)
     actions_panel = None
     if is_my_turn and actions:
-        actions_panel = render_available_actions_panel(actions, entities, turn)
+        actions_panel = render_available_actions_panel(actions, entities, turn, shortcut_registry)
 
     # Print all panels in order (with top padding to avoid cutoff)
     console.print()  # Top margin
@@ -1030,12 +1121,12 @@ def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
     message = result.get("message", "")
 
     # Add to rich combat log based on event type
-    # Note: event_type is template name like "attack_melee_main", not just "attack"
-    if event_type.startswith("attack"):
-        data = result.get("event_data", {})
+    # Note: event_type is template name like "attack_melee_main" or "extra attack_ranged_main"
+    if event_type.startswith("attack") or "extra attack" in event_type.lower():
+        data = result.get("event_data") or {}  # Handle None explicitly
         add_to_combat_log(_build_attack_log_entry(data, player_entity_name, "Unknown"))
     elif event_type in ("move", "movement"):
-        data = result.get("event_data", {})
+        data = result.get("event_data") or {}  # Handle None explicitly
         # Use new field names from MovementLogData
         add_to_combat_log({
             "type": "move",
@@ -1043,12 +1134,23 @@ def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
             "start_position": data.get("start_position", [0, 0]),
             "end_position": data.get("end_position", [0, 0]),
         })
-    elif event_type in ("dash", "dodge", "disengage"):
-        # Use new field names from SelfActionLogData
+    elif not event_type.startswith("attack") and event_type not in ("move", "movement"):
+        # Self-action (Dash, Dodge, Disengage, Second Wind, Action Surge, Extra Attack, etc.)
+        # Note: use `or {}` because event_data may be explicitly None (not missing)
+        data = result.get("event_data") or {}
+        # Prefer display_name, then action_name, then fall back to event_type
+        action_name = data.get("display_name") or data.get("action_name") or event_type
+        # Clean up ugly template names like "Extra Attack_Ranged_Main"
+        if "_" in action_name and " " not in action_name:
+            # This looks like a template name, extract the base action name
+            action_name = action_name.split("_")[0]
+            # Handle "Extra Attack" case
+            if action_name.lower() == "extra":
+                action_name = "Extra Attack"
         add_to_combat_log({
             "type": "action",
             "entity_name": player_entity_name,
-            "action_name": event_type,
+            "action_name": action_name,
         })
     elif message:
         add_to_combat_log({"type": "message", "message": message})
@@ -1141,21 +1243,21 @@ def show_help():
   a N / attack N      Attack target number N
 
 [bold cyan]Actions:[/bold cyan]
-  d / dash            Dash (double movement this turn)
-  o / dodge           Dodge (attackers have disadvantage)
-  i / disengage       Disengage (no opportunity attacks)
+  Use shortcuts shown in brackets, e.g. [d] for Dash
+  New actions get shortcuts automatically (initials for multi-word)
 
 [bold cyan]Turn:[/bold cyan]
   e / end             End your turn
+
+[bold cyan]Info:[/bold cyan]
+  la / list           List all actions with shortcuts
+  ? / help            Show this help
 
 [bold cyan]History:[/bold cyan]
   pt / prev           Previous turn
   nt / next           Next turn
   ft / first          First turn
   ct / current        Return to current turn
-
-[bold cyan]Info:[/bold cyan]
-  ? / help            Show this help
 
 [bold cyan]Game:[/bold cyan]
   q / quit            Exit the game

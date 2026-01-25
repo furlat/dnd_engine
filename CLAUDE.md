@@ -472,8 +472,12 @@ def create_goblin(
 | Senses (vision, position) | `dnd/blocks/sensory.py` |
 | **Character Classes** | |
 | Fighter class (all features + Champion) | `dnd/classes/fighter.py` |
+| Fighter factory (create L1-20 fighters) | `dnd/classes/fighter_factory.py` |
 | Dice processor utilities | `dnd/classes/dice_processor_utils.py` |
 | Class module exports | `dnd/classes/__init__.py` |
+| **Items** | |
+| Weapon factories (WEAPONS dict) | `dnd/items/weapons.py` |
+| Armor factories (ARMORS, SHIELDS dicts) | `dnd/items/armors.py` |
 | **Monsters & Examples** | |
 | Simple creatures (Goblin, Skeleton) | `dnd/monsters/bestiary.py` |
 | Complex creature example | `dnd/monsters/circus_fighter.py` |

@@ -30,7 +30,10 @@ from dnd.core.events import Event, EventQueue, EventType, EventPhase
 from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
-from dnd.monsters.bestiary import create_goblin, create_skeleton, create_goblin_archer
+from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.classes.fighter_factory import create_fighter, FighterConfig
+from dnd.items import create_shortsword, create_dagger, create_longbow
+from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
 from dnd.actions import MovementEvent
@@ -209,12 +212,7 @@ def setup_combat() -> Encounter:
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     Encounter.clear_registry()
-    EventQueue._all_events.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
+    EventQueue.reset()
 
     # Create grid
     grid = get_map()
@@ -233,57 +231,19 @@ def setup_combat() -> Encounter:
     return encounter
 
 
-def setup_combat_with_human(human_position: tuple = (2, 7), ai_position: tuple = (12, 7)) -> Encounter:
-    """Initialize combat with one human-controlled entity vs one AI."""
-    # Reset all state
-    reset_map()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Encounter.clear_registry()
-    Controller._controller_registry.clear()
-    SessionManager.reset()  # Reset session manager
-    EventQueue._all_events.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-
-    # Create grid
-    grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
-
-    # Add a vertical wall in the middle (blocking LOS)
-    # Wall from (7, 3) to (7, 11) with a gap at (7, 7)
-    for y in range(3, 12):
-        if y != 7:  # Leave a gap in the middle for tactical play
-            grid.set_tile(7, y, walkable=False, visible=False)
-
-    # Create combatants - Hero is a Goblin Archer with ranged weapon
-    player = create_goblin_archer(name="Hero", position=human_position)
-    enemy = create_skeleton(name="Skeleton", position=ai_position)
-
-    # Register opportunity attack handlers for both entities
-    add_opportunity_attack_handler(player)
-    add_opportunity_attack_handler(enemy)
-
-    # Use larger vision range to cover the arena
-    Entity.update_all_entities_senses(max_distance=20)
-
-    # Create encounter with human + AI controllers
-    encounter = Encounter(name="Arena Combat", source_entity_uuid=uuid4())
-    encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
-    encounter.add_combatant(enemy, MeleeAIController(source_entity_uuid=enemy.uuid))
-
-    return encounter
-
-
-def setup_combat_pvp(player_position: tuple = (2, 7), opponent_position: tuple = (12, 7)) -> Encounter:
+def setup_arena_combat(
+    player_position: tuple = (2, 7),
+    opponent_position: tuple = (12, 7),
+    pvp_mode: bool = False
+) -> Encounter:
     """
-    Initialize PvP combat where both entities are human-controlled.
+    Initialize arena combat with Hero vs Skeleton.
 
-    Player 1 (Hero) = controlled by user via CLI (Goblin Archer with ranged weapon)
-    Player 2 (Skeleton) = controlled by Claude via agent CLI
+    Args:
+        player_position: Starting position for Hero
+        opponent_position: Starting position for Skeleton
+        pvp_mode: If True, Skeleton uses ClaudeController (PvP).
+                  If False, Skeleton uses MeleeAIController (vs AI).
     """
     # Reset all state
     reset_map()
@@ -291,13 +251,8 @@ def setup_combat_pvp(player_position: tuple = (2, 7), opponent_position: tuple =
     Entity._entity_by_position.clear()
     Encounter.clear_registry()
     Controller._controller_registry.clear()
-    SessionManager.reset()  # Reset session manager
-    EventQueue._all_events.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
+    SessionManager.reset()
+    EventQueue.reset()
 
     # Create grid
     grid = get_map()
@@ -308,8 +263,8 @@ def setup_combat_pvp(player_position: tuple = (2, 7), opponent_position: tuple =
         if y != 7:  # Leave a gap in the middle
             grid.set_tile(7, y, walkable=False, visible=False)
 
-    # Create combatants - Hero is now a Goblin Archer with ranged weapon
-    player = create_goblin_archer(name="Hero", position=player_position)
+    # Create combatants - Hero is a Level 5 DEX Fighter
+    player = create_dex_fighter(name="Hero", position=player_position)
     opponent = create_skeleton(name="Skeleton", position=opponent_position)
 
     # Register opportunity attack handlers
@@ -318,12 +273,66 @@ def setup_combat_pvp(player_position: tuple = (2, 7), opponent_position: tuple =
 
     Entity.update_all_entities_senses(max_distance=20)
 
-    # PvP: Hero uses HumanController, Skeleton uses ClaudeController
-    encounter = Encounter(name="PvP Arena", source_entity_uuid=uuid4())
+    # Create encounter with appropriate controllers
+    encounter_name = "PvP Arena" if pvp_mode else "Arena Combat"
+    encounter = Encounter(name=encounter_name, source_entity_uuid=uuid4())
     encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
-    encounter.add_combatant(opponent, ClaudeController(source_entity_uuid=opponent.uuid))
+
+    if pvp_mode:
+        encounter.add_combatant(opponent, ClaudeController(source_entity_uuid=opponent.uuid))
+    else:
+        encounter.add_combatant(opponent, MeleeAIController(source_entity_uuid=opponent.uuid))
 
     return encounter
+
+
+def create_dex_fighter(name: str = "Hero", position: tuple = (0, 0)) -> Entity:
+    """
+    Create a Level 5 DEX-based Fighter with dual wielding and archery.
+
+    Stats: High DEX, high CON, decent STR
+    Fighting Style: Two Weapon Fighting
+    Equipment: Shortsword + Dagger (melee), Longbow (ranged)
+    """
+    config = FighterConfig(
+        level=5,
+        name=name,
+        position=position,
+        # DEX-based: High DEX, high CON, decent STR
+        base_strength=12,      # Decent STR
+        base_dexterity=15,     # High DEX (will be 17 with +2 bonus)
+        base_constitution=14,  # High CON (will be 15 with +1 bonus)
+        base_intelligence=10,
+        base_wisdom=10,
+        base_charisma=8,
+        # Racial bonuses
+        bonus_plus_2="dexterity",     # DEX = 17
+        bonus_plus_1="constitution",  # CON = 15
+        # Two Weapon Fighting for dual wield damage
+        fighting_style="two_weapon",
+        # Use studded leather for DEX build (no preset fits, so use archery preset base)
+        equipment_preset="archery",  # We'll replace weapons below
+        # ASI at L4: +2 DEX to hit 19
+        asi_4=[("dexterity", 2)],
+    )
+
+    fighter = create_fighter(config)
+
+    # Replace weapons: Shortsword + Dagger for melee, keep Longbow for ranged
+    # First unequip the default archery preset weapons
+    fighter.equipment.unequip(WeaponSlot.MELEE_MAIN)
+    fighter.equipment.unequip(WeaponSlot.RANGED_MAIN)
+
+    # Equip dual wield melee weapons
+    shortsword = create_shortsword(fighter.uuid)
+    dagger = create_dagger(fighter.uuid)
+    longbow = create_longbow(fighter.uuid)
+
+    fighter.equipment.equip(shortsword, WeaponSlot.MELEE_MAIN)
+    fighter.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
+    fighter.equipment.equip(longbow, WeaponSlot.RANGED_MAIN)
+
+    return fighter
 
 
 async def advance_encounter() -> dict:
@@ -1353,6 +1362,13 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         # Self action - use event.combat_log
         if event and event.combat_log:
             add_event_to_combat_log(sim, event)
+            event_data = dict(event.combat_log.data)
+        elif event:
+            # Fallback if no combat_log
+            event_data = {
+                "entity_name": entity.name,
+                "action_name": request.template_name,
+            }
 
     # Log deaths to encounter's combat log
     for death_event in deaths:
@@ -1390,7 +1406,7 @@ async def start_human_simulation():
         except asyncio.CancelledError:
             pass
 
-    sim.encounter = setup_combat_with_human()
+    sim.encounter = setup_arena_combat(pvp_mode=False)
     sim.paused = False
     sim.encounter.clear_combat_log()  # Clear combat log for new game
 
@@ -1445,7 +1461,7 @@ async def start_pvp_simulation():
         except asyncio.CancelledError:
             pass
 
-    sim.encounter = setup_combat_pvp()
+    sim.encounter = setup_arena_combat(pvp_mode=True)
     sim.paused = False
     sim.encounter.clear_combat_log()  # Clear combat log for new game
 
