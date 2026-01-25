@@ -948,7 +948,7 @@ def get_class_level(self, class_name: str) -> int:
 
 ---
 
-## Next Steps: Fighter Implementation
+## Fighter Implementation Status: COMPLETE ✅
 
 **See**: `claude_docs/FIGHTER_IMPLEMENTATION_PLAN.md` for detailed feature analysis.
 
@@ -956,23 +956,41 @@ def get_class_level(self, class_name: str) -> int:
 
 | Difficulty | Features | Status |
 |------------|----------|--------|
-| **Simple** | Archery, Defense, Dueling, Two-Weapon Fighting, ASI | ❌ TODO |
+| **Simple** | Archery, Defense, Dueling, Two-Weapon Fighting | ✅ DONE |
 | **Medium** | Action Surge, Indomitable | ✅ DONE |
 | **Complex - Dice Reroll** | Great Weapon Fighting | ✅ DONE |
 | **Complex - Critical** | Improved Critical, Superior Critical | ✅ DONE |
 | **Complex - Multi-Attack** | Extra Attack (L5/11/20) | ✅ DONE |
 | **Complex - Reaction** | Protection (reaction when ally attacked) | ✅ DONE |
-| **Complex - Turn Start** | Survivor (heal at turn start) | ❌ TODO |
+| **Complex - Turn Start** | Survivor (heal at turn start) | ✅ DONE |
 
 ### What's Implemented ✅
 
-1. **Great Weapon Fighting**: ✅ Event handler on `DAMAGE_ROLLED` at EFFECT phase. Rerolls 1s and 2s on two-handed melee weapons.
+**All Fighter + Champion features are now implemented!**
 
-2. **Improved/Superior Critical**: ✅ Modifies `crit_threshold` ModifiableValue. Crits on 19-20 (L3) or 18-20 (L15).
+1. **Fighting Styles** (Level 1):
+   - `FightingStyleArchery`: +2 ranged attack bonus
+   - `FightingStyleDefense`: +1 AC when wearing armor
+   - `FightingStyleDueling`: +2 damage with one-handed weapon
+   - `GreatWeaponFighting`: Reroll 1s/2s on damage (DAMAGE_ROLLED event handler)
+   - `FightingStyleProtection`: Disadvantage on attacks vs allies (reaction)
+   - `FightingStyleTwoWeaponFighting`: Add ability mod to off-hand damage
 
-3. **Extra Attack**: ✅ JUST COMPLETED
+2. **Second Wind** (Level 1): Heal 1d10+level as bonus action, short rest recharge
+
+3. **Action Surge** (Level 2): +1 action, once per turn, short rest recharge
+
+4. **Improved/Superior Critical** (Level 3/15): Crits on 19-20 (L3) or 18-20 (L15)
+
+5. **Extra Attack** (Level 5/11/20): 1/2/3 extra attacks
    - `HasAttacked` marker condition (applied on EXECUTION phase of action-cost attacks)
    - `ExtraAttack` action (requires HasAttacked, consumes `extra_attacks` resource)
+
+6. **Indomitable** (Level 9): Reroll failed saves, long rest recharge
+
+7. **Survivor** (Level 18 Champion): Heal 5+CON at turn start when HP ≤ 50%
+   - Uses `Entity.on_turn_start()` which fires TurnStartEvent through phases
+   - Handler triggers at EXECUTION phase (before conditions expire)
    - `ExtraAttackFeature` condition (grants resource + registers action templates + event handler)
    - Resource recharges at turn start
    - Scales: 1 extra at L5, 2 at L11, 3 at L20
@@ -1017,7 +1035,7 @@ def get_class_level(self, class_name: str) -> int:
 #### Turn-Start Effects
 | Feature | Effect | Implementation |
 |---------|--------|----------------|
-| **Survivor** (L18) | Heal 5+CON mod at turn start if below half HP | Turn start event handler |
+| **Survivor** (L18) | Heal 5+CON mod at turn start if below half HP | ✅ DONE - Turn start event handler |
 
 ### Key Design Decisions
 
@@ -1407,9 +1425,14 @@ This is separate from the condition system since proficiencies are binary (have 
 | `dnd/core/base_conditions.py` | Add `tags`, `registered_action_ids`, `registered_resource_names`; update `_apply()` return | ❌ TODO |
 | `dnd/conditions.py` | Update all conditions' `_apply()` to return 6-tuple | ❌ TODO |
 | `dnd/entity.py` | Add `get_conditions_by_tag()` | ❌ TODO |
-| **Phase 4: Remaining Fighter Features (FUTURE)** |  |  |
-| `dnd/classes/fighter.py` | Fighting styles (Archery, Defense, Dueling, Two-Weapon) | ❌ TODO |
-| `dnd/classes/fighter.py` | Survivor (L18 Champion) | ❌ TODO |
+| **Phase 4: Fighter Implementation COMPLETE** |  |  |
+| `dnd/classes/fighter.py` | All Fighting Styles (Archery, Defense, Dueling, GWF, Protection, TWF) | ✅ DONE |
+| `dnd/classes/fighter.py` | Second Wind, Action Surge, Extra Attack, Indomitable | ✅ DONE |
+| `dnd/classes/fighter.py` | Champion: Improved/Superior Critical, Survivor | ✅ DONE |
+| `dnd/classes/dice_processor_utils.py` | Dice manipulation utilities (moved from fighter.py) | ✅ DONE |
+| `dnd/entity.py` | `Entity.on_turn_start()` for turn-start event handlers | ✅ DONE |
+| **Phase 5: Future Enhancements** |  |  |
+| `dnd/classes/fighter.py` | `create_fighter(level, fighting_style)` factory | ❌ TODO |
 | `dnd/blocks/health.py` | (Future) Add `source_tag` to HitDice for multiclass support | ❌ TODO |
 
 ---
