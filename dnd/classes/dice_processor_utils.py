@@ -12,7 +12,6 @@ as it's used directly by Great Weapon Fighting.
 """
 
 from dnd.core.dice import DiceRoll
-from typing import List
 import random
 
 # Import the core utility from fighter (avoids duplication)

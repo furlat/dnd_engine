@@ -20,8 +20,6 @@ Note: This is a manual integration test, not a unit test.
 
 import requests
 import sys
-from typing import Optional
-from uuid import UUID
 
 BASE_URL = "http://localhost:8000"
 
@@ -80,7 +78,7 @@ def test_session_flow():
         "session_id": session_id,
         "entity_uuids": [hero_uuid]
     })
-    join_data = print_result("Join Game", resp)
+    _ = print_result("Join Game", resp)
 
     return session_id, hero_uuid, skeleton_uuid
 
@@ -202,10 +200,13 @@ def main():
     print("[PASS] Server is running")
 
     # Test session flow
-    session_id, hero_uuid, skeleton_uuid = test_session_flow()
-    if not session_id:
+    session_id, hero_uuid, _ = test_session_flow()
+    if not session_id or not hero_uuid:
         print("\n[FAIL] Session setup failed")
         sys.exit(1)
+
+    # Type narrow: we know these are now valid strings
+    assert isinstance(session_id, str) and isinstance(hero_uuid, str)
 
     # Test available actions
     actions_data = test_available_actions(hero_uuid)

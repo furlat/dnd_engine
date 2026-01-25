@@ -33,8 +33,8 @@ def elemental_advantage(source_uuid: UUID, target_uuid: Optional[UUID], context:
 
     # Check both weapons for elemental damage
     weapons = [
-        source_entity.equipment.weapon_main_hand,
-        source_entity.equipment.weapon_off_hand
+        source_entity.equipment.weapon_melee_main,
+        source_entity.equipment.weapon_melee_off
     ]
 
     # Check if it's a weapon with elemental damage
@@ -103,8 +103,8 @@ def dual_wielder_ac_bonus(source_uuid: UUID, target_uuid: Optional[UUID], contex
         return None
         
     # Check both weapon slots
-    main_hand = source_entity.equipment.weapon_main_hand
-    off_hand = source_entity.equipment.weapon_off_hand
+    main_hand = source_entity.equipment.weapon_melee_main
+    off_hand = source_entity.equipment.weapon_melee_off
     
     # Both slots must have weapons (not shields)
     if not (isinstance(main_hand, Weapon) and isinstance(off_hand, Weapon)):

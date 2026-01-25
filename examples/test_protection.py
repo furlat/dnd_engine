@@ -113,6 +113,7 @@ def test_basic_protection():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     # Check that attack had disadvantage applied
     attack_bonus = event.attack_bonus
@@ -162,6 +163,7 @@ def test_no_shield():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     # Check advantage status
     attack_bonus = event.attack_bonus
@@ -214,6 +216,7 @@ def test_target_too_far():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     attack_bonus = event.attack_bonus
     advantage = attack_bonus.advantage if attack_bonus else AdvantageStatus.NONE
@@ -295,6 +298,7 @@ def test_protecting_self():
     Entity.update_all_entities_senses(max_distance=20)
 
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     attack_bonus = event.attack_bonus
     advantage = attack_bonus.advantage if attack_bonus else AdvantageStatus.NONE
@@ -325,6 +329,7 @@ def test_no_reaction_available():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event = attack.apply()
+    assert event is not None, "Attack event should not be None"
 
     attack_bonus = event.attack_bonus
     advantage = attack_bonus.advantage if attack_bonus else AdvantageStatus.NONE
@@ -376,6 +381,7 @@ def test_second_attack_no_protection():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event1 = attack1.apply()
+    assert event1 is not None, "Attack event should not be None"
 
     advantage1 = event1.attack_bonus.advantage if event1.attack_bonus else AdvantageStatus.NONE
     print(f"  First attack advantage: {advantage1}")
@@ -391,6 +397,7 @@ def test_second_attack_no_protection():
         weapon_slot=WeaponSlot.MELEE_MAIN
     )
     event2 = attack2.apply()
+    assert event2 is not None, "Attack event should not be None"
 
     advantage2 = event2.attack_bonus.advantage if event2.attack_bonus else AdvantageStatus.NONE
     print(f"  Second attack advantage: {advantage2}")

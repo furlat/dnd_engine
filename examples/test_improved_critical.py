@@ -42,7 +42,7 @@ def create_mock_dice_roll(
     natural_roll: int,
     bonus: int = 0,
     advantage_status: AdvantageStatus = AdvantageStatus.NONE,
-    all_rolls: list = None
+    all_rolls: "list[int] | None" = None
 ) -> DiceRoll:
     """Create a mock DiceRoll for testing."""
     source_uuid = uuid4()

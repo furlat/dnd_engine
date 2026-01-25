@@ -5,7 +5,6 @@ Run with server running: python -m cli.debug_api
 
 import httpx
 import json
-from pprint import pprint
 
 BASE_URL = "http://localhost:8000"
 

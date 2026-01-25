@@ -9,16 +9,14 @@ Manages:
 - Cell subscriptions for spatial events
 """
 
-from typing import Dict, List, Optional, Tuple, Set, DefaultDict, TYPE_CHECKING
+from typing import Dict, List, Optional, Tuple, Set, DefaultDict
 from uuid import UUID, uuid4
 from collections import defaultdict
 
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
 from dnd.core.base_tiles import Tile
-
-if TYPE_CHECKING:
-    from dnd.core.events import SpatialChangeEvent
+from dnd.core.events import SpatialChangeEvent, SpatialChangeType
 
 
 class GridMap:
@@ -173,7 +171,6 @@ class GridMap:
             old_walkable = old_tile.walkable if old_tile else None
             old_visible = old_tile.visible if old_tile else None
             if old_tile is None or old_walkable != walkable or old_visible != visible:
-                from dnd.core.events import SpatialChangeEvent
                 event = SpatialChangeEvent.tile_changed(position, walkable, visible)
                 self._fire_spatial_event(event)
 
@@ -187,7 +184,6 @@ class GridMap:
             self._bounds_dirty = True
 
             if fire_event and self._events_enabled:
-                from dnd.core.events import SpatialChangeEvent, SpatialChangeType
                 event = SpatialChangeEvent(
                     source_entity_uuid=uuid4(),
                     change_type=SpatialChangeType.TILE_REMOVED,
@@ -346,7 +342,6 @@ class GridMap:
             self._entities_by_position[old_pos].discard(entity_uuid)
             # Fire entity left event
             if self._events_enabled:
-                from dnd.core.events import SpatialChangeEvent
                 event = SpatialChangeEvent.entity_left(old_pos, entity_uuid, position)
                 self._fire_spatial_event(event)
 
@@ -356,7 +351,6 @@ class GridMap:
 
         # Fire entity entered event
         if self._events_enabled:
-            from dnd.core.events import SpatialChangeEvent
             event = SpatialChangeEvent.entity_entered(position, entity_uuid, old_pos)
             self._fire_spatial_event(event)
 
@@ -368,7 +362,6 @@ class GridMap:
 
             # Fire entity left event
             if self._events_enabled:
-                from dnd.core.events import SpatialChangeEvent
                 event = SpatialChangeEvent.entity_left(pos, entity_uuid)
                 self._fire_spatial_event(event)
 
@@ -387,7 +380,6 @@ class GridMap:
 
             # Fire entity left event for old position
             if self._events_enabled:
-                from dnd.core.events import SpatialChangeEvent
                 event = SpatialChangeEvent.entity_left(old_position, entity_uuid, new_position)
                 self._fire_spatial_event(event)
 
@@ -396,7 +388,6 @@ class GridMap:
 
         # Fire entity entered event for new position
         if self._events_enabled:
-            from dnd.core.events import SpatialChangeEvent
             event = SpatialChangeEvent.entity_entered(new_position, entity_uuid, old_position)
             self._fire_spatial_event(event)
 

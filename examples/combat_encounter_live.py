@@ -26,8 +26,7 @@ from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.encounter import Encounter, EncounterState
 from dnd.controller import Controller, TurnContext
 from dnd.actions_functional import get_available_actions
-from dnd.actions import Attack, Move, Dodge
-from dnd.blocks.equipment import WeaponSlot
+from dnd.actions import Dodge
 from dnd.core.base_actions import BaseAction
 
 

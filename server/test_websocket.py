@@ -7,12 +7,9 @@ Usage:
     python -m server.test_websocket
 """
 
-import asyncio
-import json
 from uuid import uuid4
 from typing import List, Dict, Any
 
-import httpx
 from fastapi.testclient import TestClient
 
 from server.event_server import app, event_monitor
@@ -69,7 +66,7 @@ def test_http_endpoints():
         grid = get_map()
         grid.create_rectangle(0, 0, 5, 5)
 
-        entity = Entity.create(
+        _ = Entity.create(
             source_entity_uuid=uuid4(),
             name="TestEntity",
             config=EntityConfig(position=(2, 2))

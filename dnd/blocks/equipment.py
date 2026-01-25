@@ -744,6 +744,8 @@ class Equipment(BaseBlock):
                     raise ValueError(f"Only LIGHT weapons can be equipped in off-hand slot {slot}")
 
             # Unequip existing item if any
+            # Type narrowing: slot is WeaponSlot after the if/elif above
+            assert isinstance(slot, WeaponSlot)
             current_weapon = self._get_weapon_by_slot(slot)
             if current_weapon is not None:
                 self.unequip(slot)

@@ -188,7 +188,7 @@ class APIClient:
         Returns:
             List of event dictionaries
         """
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
         if event_type:
             params["event_type"] = event_type
         if phase:

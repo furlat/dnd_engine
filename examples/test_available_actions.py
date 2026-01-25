@@ -77,7 +77,7 @@ def test_available_actions_basic():
     print("\n=== Test: Basic Available Actions Query ===")
     result = TestResult()
 
-    goblin, _skeleton = setup_grid_and_entities(distance_tiles=1)
+    goblin, _ = setup_grid_and_entities(distance_tiles=1)
 
     actions_result = get_available_actions(goblin)
 
@@ -510,7 +510,7 @@ def test_execute_by_index():
     print("\n=== Test: Execute by Index ===")
     result = TestResult()
 
-    goblin, skeleton = setup_grid_and_entities(distance_tiles=1)
+    goblin, _ = setup_grid_and_entities(distance_tiles=1)
 
     # Get available actions
     available = get_available_actions(goblin)

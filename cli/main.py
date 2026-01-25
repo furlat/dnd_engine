@@ -195,7 +195,7 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
 
                 claude_connected = pvp_status.get("claude_connected", False)
                 is_hero_turn = pvp_status.get("is_hero_turn", False)
-                current_turn = pvp_status.get("current_turn", "???")
+                _ = pvp_status.get("current_turn", "???")
 
                 # Check if it's now hero's turn (after processing opponent actions)
                 if is_hero_turn:
@@ -248,7 +248,7 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
         time.sleep(poll_interval)
 
 
-def game_loop(client: APIClient, initial_ai_path: list = None, pvp_mode: bool = False, hero_uuid: str = None):
+def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mode: bool = False, hero_uuid: Optional[str] = None):
     """Main game loop."""
     # Enter alternate screen for clean full-screen display
     display.enter_alternate_screen()
@@ -512,7 +512,7 @@ def playpvp(
         result = client.start_pvp_game()
 
         hero_uuid = result.get("hero_uuid")
-        skeleton_uuid = result.get("skeleton_uuid")
+        _ = result.get("skeleton_uuid")
 
         # Create session and join game
         display.console.print("[cyan]Creating session...[/cyan]")

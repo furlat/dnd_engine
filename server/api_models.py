@@ -58,7 +58,7 @@ class APIEntityFull(APIEntitySummary):
         con_mod = entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
         max_hp = entity.health.get_max_hit_dices_points(con_mod) + entity.health.max_hit_points_bonus.score
 
-        weapon = entity.equipment.weapon_main_hand
+        weapon = entity.equipment.weapon_melee_main
         return cls(
             uuid=str(entity.uuid),
             name=entity.name,

@@ -10,6 +10,24 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 
+from dnd.core.events import Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent
+from dnd.core.base_block import BaseBlock
+from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
+from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
+from dnd.blocks.health import HealthConfig, Health
+from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage
+from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
+from dnd.blocks.skills import SkillSetConfig, SkillSet
+from dnd.blocks.sensory import Senses
+from dnd.core.events import AbilityName, SkillName
+from dnd.core.gridmap import get_map
+from dnd.core.base_actions import (
+    BaseAction, TargetType,
+    AvailableTarget, AvailableActionInfo, AvailableActionsResult
+)
+
+
+
 def get_natural_roll(roll: DiceRoll) -> int:
     """Get the natural d20 value that was used for the attack.
 
@@ -27,22 +45,7 @@ def get_natural_roll(roll: DiceRoll) -> int:
     else:
         # No advantage, first roll
         return roll.results[0] if roll.results else 0
-from dnd.core.events import Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, EventType
-from dnd.core.base_block import BaseBlock
-from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
-from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
-from dnd.blocks.health import HealthConfig, Health
-from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage
-from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
-from dnd.blocks.skills import SkillSetConfig, SkillSet
-from dnd.blocks.sensory import Senses
-from dnd.core.events import AbilityName, SkillName
-from dnd.core.gridmap import get_map
-from dnd.core.base_actions import (
-    BaseAction, TargetType,
-    AvailableTarget, AvailableActionInfo, AvailableActionsResult
-)
-
+    
 
 def determine_attack_outcome(
     roll: DiceRoll,

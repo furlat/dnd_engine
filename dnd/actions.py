@@ -6,7 +6,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent
 from pydantic import Field, model_validator
-from typing import Optional, List, TypeVar, Tuple, Self
+from typing import Optional, List, TypeVar, Tuple, Self, cast
 from uuid import UUID
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone
@@ -280,7 +280,12 @@ class Move(BaseAction):
     def _apply_costs(self, completion_event: MovementEvent) -> Optional[MovementEvent]:
         """Apply the costs of the action"""
         return entity_action_economy_cost_applier(completion_event,self.source_entity_uuid)
-        
+
+    def apply(self, parent_event: Optional[Event] = None) -> Optional[MovementEvent]:
+        """Override to provide specific return type."""
+        result = super().apply(parent_event)
+        return cast(MovementEvent, result) if result else None
+
 
 class AttackEvent(ActionEvent):
     """An event that represents an attack"""
@@ -633,6 +638,11 @@ class Attack(BaseAction):
     def _apply_costs(self, completion_event: AttackEvent) -> Optional[AttackEvent]:
         """Apply the costs of the action"""
         return entity_action_economy_cost_applier(completion_event,self.source_entity_uuid)
+
+    def apply(self, parent_event: Optional[Event] = None) -> Optional[AttackEvent]:
+        """Override to provide specific return type."""
+        result = super().apply(parent_event)
+        return cast(AttackEvent, result) if result else None
 
 
 # =============================================================================
