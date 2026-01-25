@@ -5,9 +5,9 @@ This module provides a unified interface for executing actions via the API,
 handling the translation from CLI commands to API calls.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from cli.api_client import APIClient
-from cli.action_model import AvailableActionsState
+from cli.action_model import AvailableActionsState, ShortcutRegistry
 
 
 class ActionExecutor:
@@ -20,7 +20,8 @@ class ActionExecutor:
         self,
         command: str,
         args: List[str],
-        actions: AvailableActionsState
+        actions: AvailableActionsState,
+        registry: Optional[ShortcutRegistry] = None
     ) -> Dict[str, Any]:
         """
         Execute an action by command name.
@@ -29,6 +30,7 @@ class ActionExecutor:
             command: Command name (e.g., "attack", "move", "dash")
             args: Command arguments
             actions: Available actions state
+            registry: Optional shortcut registry for dynamic self-action lookup
 
         Returns:
             Action result dict from server
@@ -42,11 +44,18 @@ class ActionExecutor:
             return self._execute_attack(args, actions)
         elif cmd == "move":
             return self._execute_move(args, actions)
-        elif cmd in ("dash", "dodge", "disengage", "standup"):
-            return self._execute_self_action(cmd.title(), actions)
         elif cmd == "end":
             return self.client.end_turn()
         else:
+            # Dynamic self-action lookup
+            if registry:
+                action = actions.get_self_action_by_command(cmd, registry)
+                if action:
+                    return self._execute_self_action_by_template(action.template_name, actions)
+            # Fallback: try direct template name match (for backward compat)
+            action = actions.get_self_action(cmd.title())
+            if action:
+                return self._execute_self_action_by_template(action.template_name, actions)
             raise ValueError(f"Unknown command: {command}")
 
     def _execute_attack(
@@ -98,17 +107,42 @@ class ActionExecutor:
 
         raise ValueError(f"Position ({x}, {y}) is not reachable")
 
-    def _execute_self_action(
+    def _execute_self_action_by_template(
         self,
-        action_name: str,
+        template_name: str,
         actions: AvailableActionsState
     ) -> Dict[str, Any]:
-        """Execute a self-targeting action (Dash, Dodge, Disengage, StandUp)."""
-        action = actions.get_self_action(action_name)
+        """Execute a self-targeting action by its exact template name."""
+        action = actions.get_self_action(template_name)
         if not action:
-            raise ValueError(f"Action '{action_name}' not available")
+            raise ValueError(f"Action '{template_name}' not available")
 
         return self.client.execute_action(action.template_name, 0)
+
+    def execute_self_action(
+        self,
+        template_name: str,
+        actions: AvailableActionsState,
+        registry: ShortcutRegistry
+    ) -> Dict[str, Any]:
+        """Execute a self-targeting action by template name.
+
+        This is the preferred method for game_loop to use, as it handles
+        the registry properly for dynamic action lookup.
+
+        Args:
+            template_name: Full template name like "Dash", "Second Wind"
+            actions: Available actions state
+            registry: Session shortcut registry (for potential future use)
+
+        Returns:
+            Action result from server
+
+        Raises:
+            ValueError: If action not available
+        """
+        _ = registry  # Reserved for potential future validation
+        return self._execute_self_action_by_template(template_name, actions)
 
     def execute_by_index(
         self,

@@ -10,6 +10,66 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Tuple
 
 
+class ShortcutRegistry:
+    """Session-stable registry mapping actions to shortcuts.
+
+    Once an action gets a shortcut, it keeps it for the entire session.
+    This ensures consistent shortcuts even as actions become available/unavailable.
+    """
+
+    def __init__(self):
+        self._action_to_shortcut: Dict[str, str] = {}  # template_name -> shortcut
+        self._shortcut_to_action: Dict[str, str] = {}  # shortcut -> template_name
+
+    def get_or_create_shortcut(self, template_name: str) -> str:
+        """Get existing shortcut or create a new one.
+
+        Multi-word names use full initials (Second Wind -> sw).
+        Single-word names start with first letter and expand as needed.
+        """
+        if template_name in self._action_to_shortcut:
+            return self._action_to_shortcut[template_name]
+
+        # Generate new shortcut
+        words = template_name.split()
+        if len(words) > 1:
+            # Multi-word: use full initials (e.g., "Second Wind" -> "sw")
+            base = "".join(w[0].lower() for w in words if w)
+            shortcut = base  # Start with full initials
+        else:
+            # Single-word: start with first letter
+            base = words[0].lower() if words else "x"
+            shortcut = base[0]
+
+        # Find non-colliding shortcut
+        i = 2
+        original_shortcut = shortcut
+        while shortcut in self._shortcut_to_action:
+            if len(words) > 1:
+                # Multi-word collision: append number
+                shortcut = original_shortcut + str(i - 1)
+            elif i <= len(base):
+                # Single-word: expand to more letters
+                shortcut = base[:i]
+            else:
+                # Fallback: append number
+                shortcut = base + str(i - len(base))
+            i += 1
+
+        # Register
+        self._action_to_shortcut[template_name] = shortcut
+        self._shortcut_to_action[shortcut] = template_name
+        return shortcut
+
+    def get_action_by_shortcut(self, shortcut: str) -> Optional[str]:
+        """Get template_name for a shortcut."""
+        return self._shortcut_to_action.get(shortcut.lower())
+
+    def get_all_actions(self) -> Dict[str, str]:
+        """Get all registered actions with their shortcuts (template_name -> shortcut)."""
+        return dict(self._action_to_shortcut)
+
+
 @dataclass
 class ActionTarget:
     """A valid target for an action."""
@@ -141,6 +201,45 @@ class AvailableActionsState:
         for action in self.self_actions:
             if action.template_name.lower() == name.lower() and action.can_afford:
                 return action
+        return None
+
+    def register_actions(self, registry: ShortcutRegistry) -> None:
+        """Register all current self_actions with the session registry.
+
+        This should be called after fetching actions to ensure all available
+        actions have stable shortcuts assigned.
+        """
+        for action in self.self_actions:
+            registry.get_or_create_shortcut(action.template_name)
+
+    def get_self_action_by_command(
+        self, command: str, registry: ShortcutRegistry
+    ) -> Optional[AvailableAction]:
+        """Find self_action by shortcut OR template_name.
+
+        Args:
+            command: User input (could be shortcut like "sw" or full name like "secondwind")
+            registry: Session shortcut registry
+
+        Returns:
+            Matching available action if found and affordable, None otherwise
+        """
+        cmd = command.lower().replace(" ", "").replace("_", "")
+
+        # Check shortcut registry first
+        template = registry.get_action_by_shortcut(cmd)
+        if template:
+            return next(
+                (a for a in self.self_actions if a.template_name == template and a.can_afford),
+                None
+            )
+
+        # Check full template_name (no spaces/underscores)
+        for action in self.self_actions:
+            normalized_name = action.template_name.lower().replace(" ", "").replace("_", "")
+            if action.can_afford and normalized_name == cmd:
+                return action
+
         return None
 
     def get_attack_target(self, index: int) -> Optional[Tuple[AvailableAction, ActionTarget]]:

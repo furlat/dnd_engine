@@ -2223,19 +2223,18 @@ class ModifiableValue(BaseValue):
                 result.extend(source_val.get_breakdown())
             return result
 
-        # Otherwise, extract modifiers from our own components
-        components = [
+        # Only extract from static components - contextual modifiers can't be
+        # reliably re-evaluated later (context may have changed) and their effects
+        # are already reflected in normalized_score
+        static_components = [
             (self.self_static, "self"),
-            (self.self_contextual, "self"),
             (self.from_target_static, "from_target"),
-            (self.from_target_contextual, "from_target"),
         ]
 
-        for component, source in components:
+        for component, source in static_components:
             if component is None:
                 continue
             for modifier in component.value_modifiers.values():
-                # Skip zero-value modifiers
                 value = modifier.normalized_value if hasattr(modifier, 'normalized_value') else modifier.value
                 if value == 0:
                     continue
@@ -2258,14 +2257,17 @@ class ModifiableValue(BaseValue):
         """
         result: List[Dict[str, Any]] = []
 
-        components = [
+        # Only extract from static components - contextual modifiers can't be
+        # reliably re-evaluated later (context may have changed)
+        static_components = [
             (self.self_static, "self"),
-            (self.self_contextual, "self"),
             (self.from_target_static, "from_target"),
-            (self.from_target_contextual, "from_target"),
         ]
 
-        for component, source in components:
+        # Process static modifiers only - contextual modifiers can't be reliably
+        # re-evaluated later (context may have changed) and their effects are
+        # already reflected in the computed advantage status
+        for component, source in static_components:
             if component is None:
                 continue
             for modifier in component.advantage_modifiers.values():
