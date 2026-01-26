@@ -10,7 +10,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 
-from dnd.core.events import Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent
+from dnd.core.events import Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
@@ -363,6 +363,60 @@ class Entity(BaseBlock):
 
         return event
 
+    def on_turn_end(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0) -> TurnEndEvent:
+        """
+        Handle turn end for this entity.
+
+        Called by Encounter.end_turn(). Provides phase progression for handlers.
+
+        Phase sequence:
+        1. DECLARATION - Event created
+        2. EXECUTION - Handlers run (e.g., rage maintenance check)
+        3. EFFECT - Post-handler effects
+        4. COMPLETION - Turn officially ends
+
+        Note: Condition durations advance at TURN_START, not TURN_END.
+
+        Args:
+            encounter_uuid: UUID of the encounter (optional for standalone use)
+            round_number: Current round number
+            turn_index: Position in initiative order
+
+        Returns:
+            TurnEndEvent after all phases complete
+        """
+        # Calculate used resources for event
+        actions_used = max(0, 1 - self.action_economy.actions.normalized_score)
+        bonus_used = max(0, 1 - self.action_economy.bonus_actions.normalized_score)
+        base_mod = self.action_economy.movement.get_base_modifier()
+        base_movement = base_mod.value if base_mod else 30
+        movement_used = max(0, base_movement - self.action_economy.movement.normalized_score)
+
+        # Create event at DECLARATION
+        event = TurnEndEvent(
+            source_entity_uuid=self.uuid,
+            target_entity_uuid=self.uuid,
+            entity_uuid=self.uuid,
+            encounter_uuid=encounter_uuid or self.uuid,  # Use entity UUID if no encounter
+            round_number=round_number,
+            turn_index=turn_index,
+            actions_used=actions_used,
+            bonus_actions_used=bonus_used,
+            movement_used=movement_used,
+            phase=EventPhase.DECLARATION
+        )
+
+        # EXECUTION - handlers like rage maintenance run here
+        event = event.phase_to(EventPhase.EXECUTION)
+
+        # EFFECT
+        event = event.phase_to(EventPhase.EFFECT)
+
+        # COMPLETION
+        event = event.phase_to(EventPhase.COMPLETION)
+
+        return event
+
     def _get_bonuses_for_skill(self, skill_name: SkillName) -> Tuple[ModifiableValue,ModifiableValue,ModifiableValue,ModifiableValue]:
         proficiency_bonus = self.proficiency_bonus
         skill = self.skill_set.get_skill(skill_name)
@@ -587,7 +641,29 @@ class Entity(BaseBlock):
             specific = self.equipment.crit_threshold_ranged.normalized_score
 
         return 20 - (general + specific)  # Default 20, +1 = 19, +2 = 18
-    
+
+    def get_crit_extra_dice(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> int:
+        """Get the number of extra dice to roll on critical hits.
+
+        Combines general extra dice with weapon-type specific extra dice.
+        Used by Brutal Critical and similar features.
+
+        Args:
+            weapon_slot: The weapon slot being used for the attack.
+
+        Returns:
+            int: Extra dice count (0 by default, +1/+2/+3 for Brutal Critical).
+        """
+        # General modifier applies to all attacks
+        general = self.equipment.crit_extra_dice.normalized_score
+
+        # Specific modifier based on weapon type
+        if weapon_slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF]:
+            specific = self.equipment.crit_extra_dice_melee.normalized_score
+        else:
+            specific = self.equipment.crit_extra_dice_ranged.normalized_score
+
+        return general + specific
 
     def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
         should_clear_target = False

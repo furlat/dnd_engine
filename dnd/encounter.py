@@ -29,7 +29,7 @@ from dnd.core.events import (
     EncounterStartEvent, EncounterEndEvent,
     RoundStartEvent, RoundEndEvent,
     TurnStartEvent, TurnEndEvent,
-    DeathEvent
+    DeathEvent, UnconsciousEvent
 )
 from dnd.core.combat_log import CombatLogEntry
 from dnd.entity import Entity
@@ -482,10 +482,10 @@ class Encounter(BaseObject):
         """
         End the current entity's turn.
 
-        1. Advance condition durations
+        1. Entity handles turn-end logic via on_turn_end():
+           - Fires TurnEndEvent through phases (handlers can respond at EXECUTION)
         2. Notify controller
-        3. Fire TurnEndEvent
-        4. Move to next turn (may advance round)
+        3. Update combatant state
         """
         if self.state != EncounterState.ACTIVE:
             return None
@@ -500,17 +500,13 @@ class Encounter(BaseObject):
         if not entity or not combatant:
             return None
 
-        # Calculate used resources for event
-        actions_used = 1 - entity.action_economy.actions.normalized_score
-        bonus_used = 1 - entity.action_economy.bonus_actions.normalized_score
-        # Get base movement from the base modifier
-        base_mod = entity.action_economy.movement.get_base_modifier()
-        base_movement = base_mod.value if base_mod else 30
-        current_movement = entity.action_economy.movement.normalized_score
-        movement_used = base_movement - current_movement
-
-        # Note: Condition durations are advanced at start of turn, not end
-        # This makes turn-based conditions (Dash, Dodge, Disengage) last until next turn
+        # Entity handles turn-end logic with proper phase progression
+        # Handlers (like rage maintenance) trigger at EXECUTION phase
+        event = entity.on_turn_end(
+            encounter_uuid=self.uuid,
+            round_number=self.round_number,
+            turn_index=self.current_turn_index
+        )
 
         # Notify controller
         if controller:
@@ -521,20 +517,6 @@ class Encounter(BaseObject):
         combatant.has_acted_this_round = True
         combatant.turn_count += 1
         self.turn_state = TurnState.ENDED
-
-        # Fire event
-        event = TurnEndEvent(
-            source_entity_uuid=entity.uuid,
-            target_entity_uuid=entity.uuid,
-            encounter_uuid=self.uuid,
-            entity_uuid=entity.uuid,
-            round_number=self.round_number,
-            turn_index=self.current_turn_index,
-            actions_used=max(0, actions_used),
-            bonus_actions_used=max(0, bonus_used),
-            movement_used=max(0, movement_used),
-            phase=EventPhase.COMPLETION
-        )
 
         return event
 
@@ -698,6 +680,7 @@ class Encounter(BaseObject):
         Check all combatants for death and handle any that died.
 
         Called after actions to detect and handle deaths.
+        Fires UnconsciousEvent first to allow handlers to react (e.g., rage ending).
 
         Returns:
             List of DeathEvent for any combatants that died
@@ -713,6 +696,22 @@ class Encounter(BaseObject):
                 continue
 
             if entity.get_hp() <= 0:
+                # Fire UnconsciousEvent first - allows handlers to react
+                # (e.g., Barbarian rage ending when unconscious)
+                unconscious_event = UnconsciousEvent(
+                    source_entity_uuid=entity.uuid,
+                    target_entity_uuid=entity.uuid,
+                    entity_uuid=entity.uuid,
+                    entity_name=entity.name,
+                    final_hp=entity.get_hp(),
+                    phase=EventPhase.DECLARATION
+                )
+                # Progress through phases so handlers can react
+                unconscious_event = unconscious_event.phase_to(EventPhase.EXECUTION)
+                unconscious_event = unconscious_event.phase_to(EventPhase.EFFECT)
+                unconscious_event = unconscious_event.phase_to(EventPhase.COMPLETION)
+
+                # Now handle death (entity is still at 0 HP)
                 event = self._handle_death(combatant)
                 if event:
                     death_events.append(event)
