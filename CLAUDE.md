@@ -473,6 +473,8 @@ def create_goblin(
 | **Character Classes** | |
 | Fighter class (all features + Champion) | `dnd/classes/fighter.py` |
 | Fighter factory (create L1-20 fighters) | `dnd/classes/fighter_factory.py` |
+| Barbarian class (all features + Berserker) | `dnd/classes/barbarian.py` |
+| Barbarian factory (create L1-20 barbarians) | `dnd/classes/barbarian_factory.py` |
 | Dice processor utilities | `dnd/classes/dice_processor_utils.py` |
 | Class module exports | `dnd/classes/__init__.py` |
 | **Items** | |
@@ -492,6 +494,10 @@ def create_goblin(
 | Indomitable tests | `examples/test_indomitable.py` |
 | Protection tests | `examples/test_protection.py` |
 | Survivor tests | `examples/test_survivor.py` |
+| Barbarian rage tests | `examples/test_barbarian_rage.py` |
+| Barbarian frenzy tests | `examples/test_barbarian_frenzy.py` |
+| Barbarian features tests | `examples/test_barbarian_srd_features.py` |
+| Barbarian vs Fighter combat | `examples/test_barbarian_fighter_combat.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
 | Session management | `server/session.py` |
@@ -543,6 +549,30 @@ All conditions in `dnd/conditions.py`:
 | **SuperiorCritical** | Crit on 18-20 | Critical modifier |
 | **Indomitable** | Reroll failed saves | EventHandler on SAVING_THROW |
 | **Survivor** | Heal 5+CON at turn start when HP ≤ 50% | EventHandler on TURN_START |
+
+### Barbarian Conditions (in `dnd/classes/barbarian.py`)
+
+| Condition | Effect | Notes |
+|-----------|--------|-------|
+| **RageFeature** | Grants Rage + End Rage actions, rage resource | Level-scaled uses and damage |
+| **Raging** | STR adv, rage damage, B/P/S resistance | Maintained by attacking/taking damage |
+| **KeepRage** | Marker for rage maintenance | 1-round duration |
+| **UnarmoredDefense** | AC = 10 + DEX + CON when unarmored | Contextual modifier |
+| **RecklessAttackFeature** | Grants Reckless Attack action | Free action |
+| **RecklessAttacking** | Adv on melee attacks, attackers have adv | 1-round duration |
+| **DangerSense** | Adv on DEX saves vs visible effects | Contextual, disabled when blind/deaf/incap |
+| **FrenzyFeature** | Grants Frenzy action | Berserker L3 |
+| **Frenzied** | Rage + bonus action melee attacks | BG3-style, no exhaustion |
+| **FastMovement** | +10 speed when not in heavy armor | Contextual modifier |
+| **MindlessRage** | Immune to charm/frighten while raging | Contextual immunity |
+| **FeralInstinct** | Advantage on initiative | Modifier |
+| **BrutalCritical** | +1/2/3 extra melee crit dice | L9/13/17 |
+| **IntimidatingPresenceFeature** | Grants Intimidating Presence actions | Berserker L10 |
+| **RelentlessRage** | CON save to drop to 1 HP instead of 0 | Escalating DC |
+| **Retaliation** | Reaction melee attack when hit | Berserker L14 |
+| **PersistentRage** | Rage doesn't end from inactivity | Marker condition |
+| **IndomitableMight** | STR checks can't be below STR score | EventHandler |
+| **PrimalChampion** | +4 STR and CON | L20 capstone |
 
 ## Global Registries
 
@@ -885,7 +915,12 @@ The `*_NOTES.md` files compare SRD rules against our implementation, identifying
 
 ## Class System
 
-Fighter + Champion archetype fully implemented (L1-L18). See `dnd/classes/fighter.py` and `claude_docs/IMPLEMENTATION_GUIDE.md` for patterns.
+Two character classes are fully implemented:
+
+- **Fighter** (L1-L18) + Champion archetype: `dnd/classes/fighter.py`, `dnd/classes/fighter_factory.py`
+- **Barbarian** (L1-L20) + Berserker path: `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`
+
+See `claude_docs/CLASS_SYSTEM.md` for feature details and `claude_docs/IMPLEMENTATION_GUIDE.md` for implementation patterns.
 
 ## Project Status
 
