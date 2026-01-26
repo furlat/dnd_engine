@@ -17,6 +17,7 @@ from dnd.items.weapons import (
     create_shortbow,
     # Martial Melee
     create_battleaxe,
+    create_greataxe,
     create_greatsword,
     create_longsword,
     create_rapier,
@@ -64,6 +65,7 @@ WEAPONS = {
     "shortbow": create_shortbow,
     # Martial Melee
     "battleaxe": create_battleaxe,
+    "greataxe": create_greataxe,
     "greatsword": create_greatsword,
     "longsword": create_longsword,
     "rapier": create_rapier,
@@ -112,6 +114,7 @@ __all__ = [
     "create_shortbow",
     # Martial Melee
     "create_battleaxe",
+    "create_greataxe",
     "create_greatsword",
     "create_longsword",
     "create_rapier",
