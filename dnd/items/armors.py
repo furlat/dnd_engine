@@ -184,6 +184,23 @@ def create_plate_armor(source_id: UUID) -> BodyArmor:
 
 
 # =============================================================================
+# CLOTH (No Armor)
+# =============================================================================
+
+def create_cloth_armor(source_id: UUID) -> BodyArmor:
+    """Cloth - No AC bonus, counts as unarmored for class features."""
+    return BodyArmor(
+        source_entity_uuid=source_id,
+        name="Cloth Armor",
+        description="Simple clothing that provides no protection.",
+        type=ArmorType.CLOTH,
+        body_part=BodyPart.BODY,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+    )
+
+
+# =============================================================================
 # SHIELDS
 # =============================================================================
 

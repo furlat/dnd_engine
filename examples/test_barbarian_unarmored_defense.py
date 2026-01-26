@@ -19,7 +19,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.events import EventQueue, WeaponSlot
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greataxe
-from dnd.items.armors import create_leather_armor, create_chain_shirt, create_shield
+from dnd.items.armors import create_leather_armor, create_chain_shirt, create_shield, create_cloth_armor
 
 from dnd.classes.barbarian import UnarmoredDefense
 
@@ -277,6 +277,39 @@ def test_unarmored_defense_low_con():
     print("  [PASS] Low CON Unarmored Defense correctly provides no bonus")
 
 
+def test_unarmored_defense_with_cloth_armor():
+    """Test that cloth armor doesn't disable Unarmored Defense."""
+    print("\n=== Test: Cloth Armor Allows Unarmored Defense ===")
+    reset_test_state()
+
+    # DEX 14 (+2), CON 16 (+3)
+    barbarian = create_test_barbarian(dex_score=14, con_score=16)
+
+    # Apply Unarmored Defense
+    unarmored = UnarmoredDefense(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid
+    )
+    barbarian.add_condition(unarmored)
+
+    # AC with Unarmored Defense: 10 + 2 + 3 = 15
+    unarmored_ac = barbarian.ac_bonus().normalized_score
+    print(f"  AC with Unarmored Defense (no armor): {unarmored_ac}")
+    assert unarmored_ac == 15, f"Expected unarmored AC 15, got {unarmored_ac}"
+
+    # Equip cloth armor (should NOT disable Unarmored Defense)
+    cloth = create_cloth_armor(barbarian.uuid)
+    barbarian.equipment.equip(cloth)
+
+    # AC should STILL be unarmored: 10 + DEX + CON = 15
+    cloth_ac = barbarian.ac_bonus().normalized_score
+    print(f"  AC with Cloth Armor: {cloth_ac}")
+    print(f"  (Cloth counts as unarmored, so CON bonus still applies)")
+
+    assert cloth_ac == unarmored_ac, f"Expected cloth AC {unarmored_ac}, got {cloth_ac}"
+    print("  [PASS] Cloth armor correctly allows Unarmored Defense")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("BARBARIAN UNARMORED DEFENSE TESTS")
@@ -288,6 +321,7 @@ if __name__ == "__main__":
     test_removing_armor_restores_unarmored()
     test_unarmored_defense_high_con()
     test_unarmored_defense_low_con()
+    test_unarmored_defense_with_cloth_armor()
 
     print("\n" + "=" * 60)
     print("ALL TESTS COMPLETE")
