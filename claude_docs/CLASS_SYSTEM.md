@@ -372,12 +372,46 @@ Core utility `create_modified_dice_roll(original, new_results)` is in fighter.py
 
 ---
 
+## Fighter Factory
+
+`dnd/classes/fighter_factory.py` provides BG3-style character creation:
+
+```python
+from dnd.classes.fighter_factory import create_fighter, FighterConfig
+
+config = FighterConfig(
+    level=5,
+    name="Ser Roland",
+    # BG3-style: base scores + L1 bonuses
+    base_strength=15,
+    base_dexterity=14,
+    bonus_plus_2="strength",
+    bonus_plus_1="constitution",
+    # Fighting style
+    fighting_style="defense",
+    # ASI at L4
+    asi_4=[("strength", 2)],
+    # Equipment preset
+    equipment_preset="sword_shield"
+)
+fighter = create_fighter(config)
+```
+
+Equipment presets: `"sword_shield"`, `"greatsword"`, `"dual_wield"`, `"archery"`
+
+Fighting styles: `"archery"`, `"defense"`, `"dueling"`, `"great_weapon"`, `"protection"`, `"two_weapon"`
+
+---
+
 ## Files Reference
 
 | File | Contents |
 |------|----------|
-| `dnd/classes/__init__.py` | Exports all fighter classes and utilities |
+| `dnd/classes/__init__.py` | Exports all class features and utilities |
 | `dnd/classes/fighter.py` | All Fighter features + Champion archetype |
+| `dnd/classes/fighter_factory.py` | Fighter character factory (L1-20) |
+| `dnd/classes/barbarian.py` | All Barbarian features + Berserker path |
+| `dnd/classes/barbarian_factory.py` | Barbarian character factory (L1-20) |
 | `dnd/classes/dice_processor_utils.py` | Reference dice manipulation functions |
 | `dnd/blocks/action_economy.py` | Resource system (RechargeType, Resource) |
 
@@ -398,32 +432,55 @@ Core utility `create_modified_dice_roll(original, new_results)` is in fighter.py
 | Superior Critical | Complete | L15 Champion, 18-20 |
 | Survivor | Complete | L18 Champion, heal at turn start |
 
+Fighter test files: `test_fighter_factory.py`, `test_fighter_combat_simulation.py`, `test_second_wind.py`, `test_action_surge.py`, `test_extra_attack.py`, `test_indomitable.py`, `test_protection.py`, `test_survivor.py`, `test_great_weapon_fighting.py`, `test_improved_critical.py`, `test_two_weapon_fighting.py`
+
+### Barbarian (Complete)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Rage | Complete | Bonus action, long rest recharge, maintenance tracking |
+| Unarmored Defense | Complete | AC = 10 + DEX + CON when unarmored |
+| Reckless Attack | Complete | Free action, advantage attacks but exposed |
+| Danger Sense | Complete | Advantage DEX saves vs visible effects |
+| Frenzy (Berserker) | Complete | BG3-style, no exhaustion, bonus action attacks |
+| Extra Attack | Complete | Reuses Fighter's ExtraAttackFeature |
+| Fast Movement | Complete | +10 speed when not in heavy armor |
+| Mindless Rage | Complete | Immune to charm/frighten while raging |
+| Feral Instinct | Complete | Advantage on initiative |
+| Brutal Critical | Complete | L9/13/17, +1/+2/+3 dice on melee crits |
+| Intimidating Presence | Complete | Action to frighten, WIS save, extend action |
+| Relentless Rage | Complete | CON save to drop to 1 HP, escalating DC |
+| Retaliation | Complete | Reaction attack when hit by adjacent creature |
+| Persistent Rage | Complete | Rage doesn't end early |
+| Indomitable Might | Complete | STR checks can't be below STR score |
+| Primal Champion | Complete | +4 STR and CON (max 24) |
+
 ---
 
-## Barbarian Implementation (In Progress)
+## Barbarian Implementation (Complete)
 
 All Barbarian features are in `dnd/classes/barbarian.py`. Uses BG3-style adaptations (no exhaustion for Frenzy).
 
 ### Level Progression
 
-| Level | Feature | Implementation Type | Class | Status |
-|-------|---------|---------------------|-------|--------|
-| 1 | Rage | Feature Condition + Action | `RageFeature`, `Rage`, `Raging` | Complete |
-| 1 | Unarmored Defense | Condition (contextual) | `UnarmoredDefense` | Complete |
-| 2 | Reckless Attack | Feature Condition + Action | `RecklessAttackFeature`, `RecklessAttack` | Complete |
-| 2 | Danger Sense | Condition | `DangerSense` | Complete |
-| 3 | Berserker: Frenzy | Feature Condition + Action | `FrenzyFeature`, `Frenzy`, `Frenzied` | Complete |
-| 5 | Extra Attack | Reuse Fighter's `ExtraAttackFeature` | — | Complete |
-| 5 | Fast Movement | Condition (contextual) | `FastMovement` | Complete |
-| 6 | Berserker: Mindless Rage | Condition + EventHandler | `MindlessRage` | Complete |
-| 7 | Feral Instinct | Condition | `FeralInstinct` | Complete |
-| 9/13/17 | Brutal Critical | Condition (ModifiableValue) | `BrutalCritical` | Complete |
-| 10 | Berserker: Intimidating Presence | — | — | **Not Started** |
-| 11 | Relentless Rage | Condition + EventHandler | `RelentlessRage` | Partial (needs testing) |
-| 14 | Berserker: Retaliation | — | — | **Not Started** |
-| 15 | Persistent Rage | Marker Condition | `PersistentRage` | Complete |
-| 18 | Indomitable Might | — | — | **Not Started** |
-| 20 | Primal Champion | — | — | **Not Started** |
+| Level | Feature | Implementation Type | Class |
+|-------|---------|---------------------|-------|
+| 1 | Rage | Feature Condition + Action | `RageFeature`, `Rage`, `Raging`, `EndRage`, `KeepRage` |
+| 1 | Unarmored Defense | Condition (contextual) | `UnarmoredDefense` |
+| 2 | Reckless Attack | Feature Condition + Action | `RecklessAttackFeature`, `RecklessAttack`, `RecklessAttacking` |
+| 2 | Danger Sense | Condition (contextual) | `DangerSense` |
+| 3 | Berserker: Frenzy | Feature Condition + Action | `FrenzyFeature`, `Frenzy`, `Frenzied`, `FrenziedStrike` |
+| 5 | Extra Attack | Reuse Fighter's `ExtraAttackFeature` | — |
+| 5 | Fast Movement | Condition (contextual) | `FastMovement` |
+| 6 | Berserker: Mindless Rage | Condition (contextual immunity) | `MindlessRage` |
+| 7 | Feral Instinct | Condition | `FeralInstinct` |
+| 9/13/17 | Brutal Critical | Condition (ModifiableValue) | `BrutalCritical` |
+| 10 | Berserker: Intimidating Presence | Feature + Actions | `IntimidatingPresenceFeature`, `IntimidatingPresence`, `ExtendIntimidatingPresence` |
+| 11 | Relentless Rage | Condition + EventHandler | `RelentlessRage` |
+| 14 | Berserker: Retaliation | Condition + EventHandler | `Retaliation` |
+| 15 | Persistent Rage | Marker Condition | `PersistentRage` |
+| 18 | Indomitable Might | Condition + EventHandler | `IndomitableMight` |
+| 20 | Primal Champion | Condition | `PrimalChampion` |
 
 ### Rage System
 
@@ -472,18 +529,44 @@ class BrutalCritical(BaseCondition):
 
 The `Entity.get_crit_extra_dice(weapon_slot)` method combines general + type-specific modifiers.
 
-### Missing Features
+### Barbarian Factory
 
-| Feature | Level | Description |
-|---------|-------|-------------|
-| Intimidating Presence | 10 | Frighten creatures (contested CHA check) |
-| Retaliation | 14 | Reaction attack when taking damage |
-| Indomitable Might | 18 | Use STR score as minimum for STR checks |
-| Primal Champion | 20 | +4 STR and CON (max 24) |
+`dnd/classes/barbarian_factory.py` provides BG3-style character creation:
+
+```python
+from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
+
+config = BarbarianConfig(
+    level=5,
+    name="Krusk",
+    # BG3-style: base scores + L1 bonuses
+    base_strength=15,
+    base_constitution=14,
+    bonus_plus_2="strength",
+    bonus_plus_1="constitution",
+    # Primal Path (required at L3+)
+    primal_path=PrimalPathChoice.BERSERKER,
+    # ASI at L4
+    asi_4=[("strength", 2)],
+    # Equipment preset
+    equipment_preset="greataxe"
+)
+barbarian = create_barbarian(config)
+```
+
+Equipment presets: `"greataxe"`, `"dual_axes"`, `"sword_shield"`
 
 ### Test Files
 
 | File | Coverage |
 |------|----------|
 | `examples/test_barbarian_rage.py` | Rage activation, maintenance, benefits, armor restrictions |
+| `examples/test_barbarian_frenzy.py` | Frenzy action, FrenziedStrike bonus action attacks |
+| `examples/test_barbarian_fast_movement.py` | +10 speed when not in heavy armor |
+| `examples/test_barbarian_mindless_rage.py` | Charm/frighten immunity while raging |
+| `examples/test_barbarian_persistent_rage.py` | Rage maintenance at L15+ |
+| `examples/test_barbarian_minor_features.py` | Danger Sense, Feral Instinct |
+| `examples/test_barbarian_retaliation.py` | Reaction attack when hit |
+| `examples/test_barbarian_srd_features.py` | Relentless Rage, Indomitable Might, Primal Champion |
+| `examples/test_barbarian_fighter_combat.py` | Barbarian vs Fighter combat simulation |
 | `examples/test_brutal_critical.py` | crit_extra_dice system, melee-only, dice counts |
