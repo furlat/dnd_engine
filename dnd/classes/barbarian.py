@@ -819,9 +819,9 @@ def unarmored_defense_check(
     if not entity:
         return None
 
-    # Only applies when NOT wearing armor
+    # Only applies when NOT wearing armor (cloth doesn't count as armor)
     body_armor = entity.equipment.body_armor
-    if body_armor is not None:
+    if body_armor is not None and body_armor.type != ArmorType.CLOTH:
         return None  # Wearing armor - Unarmored Defense doesn't apply
 
     # Add CON modifier to AC
