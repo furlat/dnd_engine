@@ -91,13 +91,25 @@ from dnd.classes.dice_processor_utils import (
 from dnd.classes.fighter_factory import (
     FighterConfig,
     FightingStyleChoice,
-    EquipmentPreset,
+    EquipmentPreset as FighterEquipmentPreset,
     create_fighter,
     get_proficiency_bonus,
     get_extra_attacks,
     get_action_surge_uses,
     get_indomitable_uses,
     calculate_final_ability_scores,
+)
+
+# Barbarian factory
+from dnd.classes.barbarian_factory import (
+    BarbarianConfig,
+    PrimalPathChoice,
+    EquipmentPreset as BarbarianEquipmentPreset,
+    create_barbarian,
+    get_rage_uses,
+    get_rage_damage,
+    get_brutal_critical_dice,
+    # Note: get_proficiency_bonus and get_extra_attacks already imported from fighter
 )
 
 __all__ = [
@@ -155,11 +167,19 @@ __all__ = [
     # Fighter Factory
     "FighterConfig",
     "FightingStyleChoice",
-    "EquipmentPreset",
+    "FighterEquipmentPreset",
     "create_fighter",
     "get_proficiency_bonus",
     "get_extra_attacks",
     "get_action_surge_uses",
     "get_indomitable_uses",
     "calculate_final_ability_scores",
+    # Barbarian Factory
+    "BarbarianConfig",
+    "PrimalPathChoice",
+    "BarbarianEquipmentPreset",
+    "create_barbarian",
+    "get_rage_uses",
+    "get_rage_damage",
+    "get_brutal_critical_dice",
 ]
