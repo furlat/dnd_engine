@@ -11,8 +11,8 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | **Core Engine** | Complete | Entity/component model, ModifiableValue 6-channel system, event lifecycle |
 | **Combat** | Complete | Action economy, attacks, movement, opportunity attacks, initiative |
 | **Conditions** | 13/15 SRD | All except Exhaustion, Petrified |
-| **Fighter Class** | Complete | All features L1-L20 including Champion archetype |
-| **Barbarian Class** | ~80% | Most features L1-L17 + Berserker path, missing L18-20 |
+| **Fighter Class** | Complete | All features L1-L18 including Champion archetype |
+| **Barbarian Class** | Complete | All features L1-L20 + Berserker path (BG3-style) |
 | **Spatial** | Complete | GridMap, FOV (shadowcast), pathfinding (Dijkstra) |
 | **Server** | Complete | FastAPI REST API, session-based PvP authority |
 | **CLI** | Complete | Human TUI + Claude agent interface |
@@ -29,23 +29,23 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | 15 | Champion: Superior Critical (18-20) |
 | 18 | Champion: Survivor |
 
-### Barbarian Features
+### Barbarian Features (All Complete)
 
-| Level | Feature | Status |
-|-------|---------|--------|
-| 1 | Rage, Unarmored Defense | Complete |
-| 2 | Reckless Attack, Danger Sense | Complete |
-| 3 | Berserker: Frenzy | Complete |
-| 5 | Extra Attack, Fast Movement | Complete |
-| 6 | Berserker: Mindless Rage | Complete |
-| 7 | Feral Instinct | Complete |
-| 9/13/17 | Brutal Critical (+1/+2/+3 dice) | Complete |
-| 10 | Berserker: Intimidating Presence | Not Started |
-| 11 | Relentless Rage | Partial |
-| 14 | Berserker: Retaliation | Not Started |
-| 15 | Persistent Rage | Complete |
-| 18 | Indomitable Might | Not Started |
-| 20 | Primal Champion | Not Started |
+| Level | Feature |
+|-------|---------|
+| 1 | Rage, Unarmored Defense |
+| 2 | Reckless Attack, Danger Sense |
+| 3 | Berserker: Frenzy (BG3-style, no exhaustion) |
+| 5 | Extra Attack (reuses Fighter's), Fast Movement |
+| 6 | Berserker: Mindless Rage |
+| 7 | Feral Instinct |
+| 9/13/17 | Brutal Critical (+1/+2/+3 dice) |
+| 10 | Berserker: Intimidating Presence + Extend |
+| 11 | Relentless Rage |
+| 14 | Berserker: Retaliation |
+| 15 | Persistent Rage |
+| 18 | Indomitable Might |
+| 20 | Primal Champion (+4 STR/CON) |
 
 ---
 
@@ -114,7 +114,9 @@ pyright
 dnd/
 ├── core/           # Base classes, events, dice, gridmap, values
 ├── blocks/         # Entity components (abilities, health, equipment, etc.)
-├── classes/        # Character classes (fighter.py, fighter_factory.py)
+├── classes/        # Character classes
+│   ├── fighter.py, fighter_factory.py      # Fighter + Champion archetype
+│   └── barbarian.py, barbarian_factory.py  # Barbarian + Berserker path
 ├── items/          # Weapon/armor factories (WEAPONS, ARMORS, SHIELDS dicts)
 ├── monsters/       # Creature factories (bestiary.py)
 ├── actions.py      # Attack, Move, Dash, Dodge, Disengage
