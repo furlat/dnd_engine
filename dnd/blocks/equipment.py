@@ -523,6 +523,25 @@ class Equipment(BaseBlock):
         value_name="Ranged Crit Threshold"
     ))
 
+    # Extra dice on critical hits (Brutal Critical, etc.)
+    # Default 0 means normal crit (double dice). +1 means +1 extra die on crit, etc.
+    # General modifier applies to all attacks, specific ones stack for melee/ranged only
+    crit_extra_dice: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Critical Extra Dice"
+    ))
+    crit_extra_dice_melee: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Melee Critical Extra Dice"
+    ))
+    crit_extra_dice_ranged: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(
+        source_entity_uuid=uuid4(),
+        base_value=0,
+        value_name="Ranged Critical Extra Dice"
+    ))
+
     def _get_weapon_by_slot(self, slot: WeaponSlot) -> Optional[Union[Weapon, Shield]]:
         """Helper to get weapon/shield by slot."""
         return {

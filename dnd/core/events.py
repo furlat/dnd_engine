@@ -14,13 +14,15 @@ __all__ = [
     # Spatial events
     "SpatialChangeEvent",
     # Combat events
-    "DamageRolledEvent",
+    "DamageRolledEvent", "TakeDamageEvent",
     # Combat data
     "Range", "Damage",
     # Encounter/Turn events
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
     "TurnEvent", "TurnStartEvent", "TurnEndEvent",
+    # Death/Unconscious events
+    "DeathEvent", "UnconsciousEvent",
 ]
 
 from enum import Enum
@@ -142,6 +144,7 @@ class EventType(str, Enum):
     TURN_START = "turn_start"
     TURN_END = "turn_end"
     DEATH = "death"
+    UNCONSCIOUS = "unconscious"  # Entity dropped to 0 HP (before death determination)
 
 
 class SpatialChangeType(str, Enum):
@@ -1046,8 +1049,8 @@ class Damage(BaseObject):
         description="Type of damage dealt by the weapon"
     )
     
-    def get_dice(self, attack_outcome: AttackOutcome) -> Dice:
-        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome)
+    def get_dice(self, attack_outcome: AttackOutcome, crit_extra_dice: int = 0) -> Dice:
+        return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
 
 
 # =============================================================================
@@ -1093,6 +1096,48 @@ class DamageRolledEvent(Event):
         old_roll = self.final_rolls[index]
         self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
         self.final_rolls[index] = new_roll
+
+
+# =============================================================================
+# Take Damage Event (for damage tracking and interception)
+# =============================================================================
+
+class TakeDamageEvent(Event):
+    """
+    Event fired when an entity is about to take damage.
+
+    This event enables:
+    - Tracking damage taken (e.g., rage maintenance - KeepRage marker)
+    - Modifying damage (e.g., resistance, vulnerability, reduction)
+    - Canceling damage (e.g., immunity, absorption)
+    - Reacting to lethal damage (e.g., Relentless Rage)
+
+    Phases:
+    - DECLARATION: Damage is about to be applied
+    - EXECUTION: Processing begins
+    - EFFECT: Handlers can modify/reduce/cancel damage
+    - COMPLETION: Damage has been applied (or canceled)
+
+    Handlers should check `canceled` flag before applying damage.
+    If `final_damage` is set, use that instead of `total_damage`.
+    """
+    name: str = Field(default="Take Damage")
+    event_type: EventType = Field(default=EventType.TAKE_DAMAGE)
+
+    # Damage details
+    total_damage: int = Field(description="Total damage before any modifications")
+    damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
+    damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
+
+    # For handlers that need to modify damage
+    final_damage: Optional[int] = Field(
+        default=None,
+        description="Modified damage after handlers. If None, use total_damage."
+    )
+
+    def get_effective_damage(self) -> int:
+        """Get the damage amount to apply (final_damage if set, else total_damage)."""
+        return self.final_damage if self.final_damage is not None else self.total_damage
 
 
 # =============================================================================
@@ -1177,4 +1222,25 @@ class DeathEvent(Event):
     killer_name: str = Field(default="", description="Name of killer if known")
     final_hp: int = Field(default=0, description="Final HP value (typically negative)")
     encounter_uuid: Optional[UUID] = Field(default=None, description="UUID of encounter if in combat")
+
+
+class UnconsciousEvent(Event):
+    """
+    Fired when an entity drops to 0 HP (before death determination).
+
+    This event allows handlers to react to becoming unconscious:
+    - Rage ending (Barbarian)
+    - Concentration checks
+    - Other features that trigger on dropping to 0 HP
+
+    Note: This fires AFTER damage is applied, so RelentlessRage (which modifies
+    damage at TAKE_DAMAGE EFFECT) has already had its chance to prevent this.
+    If RelentlessRage succeeds, HP stays at 1 and this event never fires.
+    """
+    name: str = Field(default="Unconscious", description="Entity dropped to 0 HP")
+    event_type: EventType = Field(default=EventType.UNCONSCIOUS)
+    entity_uuid: UUID = Field(description="UUID of the entity that dropped to 0 HP")
+    entity_name: str = Field(default="", description="Name of the entity")
+    damage_source_uuid: Optional[UUID] = Field(default=None, description="UUID of entity that caused the unconsciousness")
+    final_hp: int = Field(default=0, description="HP after damage (typically 0 or negative)")
 
