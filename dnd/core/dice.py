@@ -181,6 +181,10 @@ class Dice(BaseModel):
         default=None,
         description="The outcome of an attack, if applicable."
     )
+    crit_extra_dice: int = Field(
+        default=0,
+        description="Extra dice to roll on critical hits (e.g., Brutal Critical). Added on top of doubled dice."
+    )
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -284,6 +288,7 @@ class Dice(BaseModel):
         Perform a roll based on the current dice configuration.
 
         This method handles normal rolls, advantage, disadvantage, and critical hits.
+        For critical hits, dice are doubled (2x) plus any crit_extra_dice added on top.
 
         Args:
             crit (bool): Whether this is a critical hit roll. Defaults to False.
@@ -291,7 +296,8 @@ class Dice(BaseModel):
         Returns:
             List[Tuple[int, List[int]]]: A list of tuples, each containing the roll result and a list of all roll results.
         """
-        count = self.count if not crit else self.count * 2
+        # On crit: double the dice (count * 2) plus any extra dice from features like Brutal Critical
+        count = self.count if not crit else (self.count * 2 + self.crit_extra_dice)
         advantage_status = self.bonus.advantage
         if advantage_status == AdvantageStatus.ADVANTAGE:
             return [self._roll_with_advantage() for _ in range(count)]

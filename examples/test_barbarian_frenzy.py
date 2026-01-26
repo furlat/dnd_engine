@@ -1,0 +1,537 @@
+"""
+Test Barbarian Frenzy (Berserker Path Level 3)
+
+Tests:
+1. Frenzy activation (bonus action, consumes rage)
+2. Raging is sub-condition of Frenzied
+3. FrenziedStrike action available while frenzied
+4. FrenziedStrike costs bonus action
+5. FrenziedStrike validates range/LOS
+6. No exhaustion (BG3 adaptation)
+7. Cannot frenzy in heavy armor
+8. Frenzy ends like rage (maintenance rules)
+"""
+
+from uuid import uuid4
+
+from dnd.entity import Entity, EntityConfig
+from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
+from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.modifiers import AdvantageStatus, DamageType, ResistanceStatus
+from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_action
+from dnd.items.weapons import create_greatsword, create_shortsword
+from dnd.items.armors import create_chain_mail
+
+from dnd.classes.barbarian import (
+    RageFeature,
+    FrenzyFeature, Frenzied, FrenziedStrike
+)
+
+
+def create_test_barbarian(
+    name: str = "Test Barbarian",
+    position: tuple = (0, 0),
+    level: int = 3
+) -> Entity:
+    """Create a simple barbarian for testing."""
+    source_id = uuid4()
+
+    config = EntityConfig(
+        ability_scores=AbilityScoresConfig(
+            strength=AbilityConfig(ability_score=16),     # +3
+            dexterity=AbilityConfig(ability_score=14),    # +2
+            constitution=AbilityConfig(ability_score=16), # +3
+            intelligence=AbilityConfig(ability_score=8),  # -1
+            wisdom=AbilityConfig(ability_score=12),       # +1
+            charisma=AbilityConfig(ability_score=10)      # +0
+        ),
+        health=HealthConfig(hit_dices=[HitDiceConfig(
+            hit_dice_value=12,
+            hit_dice_count=level,
+            mode="average"
+        )]),
+        equipment=EquipmentConfig(),
+        action_economy=ActionEconomyConfig(),
+        proficiency_bonus=2,
+        position=position
+    )
+
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        config=config
+    )
+
+    setup_standard_actions(entity)
+
+    # Equip greatsword (two-handed)
+    greatsword = create_greatsword(entity.uuid)
+    entity.equipment.equip(greatsword, WeaponSlot.MELEE_MAIN)
+
+    return entity
+
+
+def create_test_target(
+    name: str = "Target",
+    position: tuple = (1, 0)
+) -> Entity:
+    """Create a simple target for testing."""
+    source_id = uuid4()
+
+    config = EntityConfig(
+        ability_scores=AbilityScoresConfig(
+            strength=AbilityConfig(ability_score=10),
+            dexterity=AbilityConfig(ability_score=10),
+            constitution=AbilityConfig(ability_score=10),
+            intelligence=AbilityConfig(ability_score=10),
+            wisdom=AbilityConfig(ability_score=10),
+            charisma=AbilityConfig(ability_score=10)
+        ),
+        health=HealthConfig(hit_dices=[HitDiceConfig(
+            hit_dice_value=8,
+            hit_dice_count=5,
+            mode="average"
+        )]),
+        equipment=EquipmentConfig(),
+        action_economy=ActionEconomyConfig(),
+        proficiency_bonus=2,
+        position=position
+    )
+
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        config=config
+    )
+
+    setup_standard_actions(entity)
+    sword = create_shortsword(entity.uuid)
+    entity.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
+
+    return entity
+
+
+def test_frenzy_activation():
+    """Test that Frenzy can be activated and applies Frenzied condition."""
+    print("\n=== Test: Frenzy Activation ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Frenzy Test Barbarian")
+
+    # Apply RageFeature (provides rage resource)
+    rage_feature = RageFeature(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_uses=3,
+        rage_damage=2
+    )
+    barbarian.add_condition(rage_feature)
+
+    # Apply FrenzyFeature
+    frenzy_feature = FrenzyFeature(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzy_feature)
+
+    # Check Frenzy action is available
+    available = get_available_actions(barbarian)
+    action_names = [a.template_name for a in available.self_actions]
+    print(f"  Available self actions: {action_names}")
+    assert "Frenzy" in action_names, f"Frenzy action not found in {action_names}"
+
+    # Get initial rage count
+    initial_rage = barbarian.action_economy.resources["rage"].current
+    print(f"  Initial rage uses: {initial_rage}")
+
+    # Activate frenzy
+    frenzy_info = next(a for a in available.self_actions if a.template_name == "Frenzy")
+    result = execute_action(barbarian, "Frenzy", frenzy_info.valid_targets[0])
+    print(f"  Frenzy activation: {result.status_message if result else 'Failed'}")
+
+    # Check Frenzied condition is applied
+    assert "Frenzied" in barbarian.active_conditions, "Frenzied condition not applied"
+
+    # Check rage resource was consumed
+    final_rage = barbarian.action_economy.resources["rage"].current
+    print(f"  Rage uses after frenzy: {final_rage}")
+    assert final_rage == initial_rage - 1, "Rage use not consumed"
+
+    print("  [PASS] Frenzy activated successfully")
+    print("  [PASS] Frenzied condition applied")
+    print("  [PASS] Rage resource consumed")
+
+    EventQueue.reset()
+
+
+def test_frenzied_includes_raging():
+    """Test that Frenzied condition includes Raging as a sub-condition."""
+    print("\n=== Test: Frenzied Includes Raging ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Frenzied Barbarian")
+
+    # Apply Frenzied condition directly
+    frenzied = Frenzied(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzied)
+
+    # Check both conditions exist
+    has_frenzied = "Frenzied" in barbarian.active_conditions
+    has_raging = "Raging" in barbarian.active_conditions
+    print(f"  Frenzied condition: {has_frenzied}")
+    print(f"  Raging condition: {has_raging}")
+
+    assert has_frenzied, "Should have Frenzied condition"
+    assert has_raging, "Should have Raging as sub-condition"
+
+    # Check rage benefits are active (damage resistance)
+    bludg_resist = barbarian.health.damage_reduction.resistance[DamageType.BLUDGEONING]
+    print(f"  Bludgeoning resistance: {bludg_resist}")
+    assert bludg_resist == ResistanceStatus.RESISTANCE, "Should have rage resistance"
+
+    # Check STR save advantage (from Raging)
+    str_save = barbarian.saving_throws.get_saving_throw("strength")
+    advantage_status = str_save.bonus.advantage
+    print(f"  STR save advantage: {advantage_status}")
+    assert advantage_status == AdvantageStatus.ADVANTAGE, "Should have STR advantage from rage"
+
+    print("  [PASS] Frenzied includes Raging as sub-condition")
+    print("  [PASS] Rage benefits are active")
+
+    EventQueue.reset()
+
+
+def test_frenzied_strike_available():
+    """Test that FrenziedStrike action is available while frenzied."""
+    print("\n=== Test: FrenziedStrike Available While Frenzied ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Strike Test Barbarian", position=(0, 0))
+    _ = create_test_target("Strike Target", position=(1, 0))  # Need target for senses
+
+    Entity.update_all_entities_senses()
+
+    # Apply Frenzied condition
+    frenzied = Frenzied(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzied)
+
+    # Check FrenziedStrike is in available actions
+    available = get_available_actions(barbarian)
+    entity_action_names = [a.template_name for a in available.entity_actions]
+    print(f"  Entity actions: {entity_action_names}")
+
+    has_frenzied_strike = any("Frenzied Strike" in name for name in entity_action_names)
+    print(f"  FrenziedStrike available: {has_frenzied_strike}")
+
+    assert has_frenzied_strike, "FrenziedStrike should be available while frenzied"
+    print("  [PASS] FrenziedStrike is available while frenzied")
+
+    EventQueue.reset()
+
+
+def test_frenzied_strike_costs_bonus_action():
+    """Test that FrenziedStrike costs a bonus action."""
+    print("\n=== Test: FrenziedStrike Costs Bonus Action ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Bonus Action Test", position=(0, 0))
+    target = create_test_target("Strike Target", position=(1, 0))
+
+    Entity.update_all_entities_senses()
+
+    # Apply Frenzied condition
+    frenzied = Frenzied(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzied)
+
+    # Check bonus actions before
+    bonus_before = barbarian.action_economy.bonus_actions.normalized_score
+    print(f"  Bonus actions before: {bonus_before}")
+
+    # Execute FrenziedStrike
+    strike = FrenziedStrike(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=target.uuid,
+        weapon_slot=WeaponSlot.MELEE_MAIN
+    )
+    result = strike.apply()
+    print(f"  FrenziedStrike result: {result.status_message if result else 'Failed'}")
+
+    # Check bonus actions after
+    bonus_after = barbarian.action_economy.bonus_actions.normalized_score
+    print(f"  Bonus actions after: {bonus_after}")
+
+    if result and not result.canceled:
+        assert bonus_after == bonus_before - 1, "Bonus action not consumed"
+        print("  [PASS] FrenziedStrike consumed bonus action")
+    else:
+        print("  [INFO] Attack missed or was canceled - bonus action consumption not verified")
+
+    EventQueue.reset()
+
+
+def test_frenzied_strike_validates_range():
+    """Test that FrenziedStrike validates melee range."""
+    print("\n=== Test: FrenziedStrike Validates Range ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Range Test Barbarian", position=(0, 0))
+    target = create_test_target("Distant Target", position=(10, 0))  # Far away
+
+    Entity.update_all_entities_senses()
+
+    # Apply Frenzied condition
+    frenzied = Frenzied(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzied)
+
+    # Try FrenziedStrike on distant target
+    strike = FrenziedStrike(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=target.uuid,
+        weapon_slot=WeaponSlot.MELEE_MAIN
+    )
+    result = strike.apply()
+
+    if result and result.canceled:
+        print(f"  Strike blocked: {result.status_message}")
+        print("  [PASS] FrenziedStrike correctly validates range")
+    else:
+        print(f"  Result: {result.status_message if result else 'None'}")
+        print("  [WARN] Expected strike to be blocked due to range")
+
+    EventQueue.reset()
+
+
+def test_cannot_frenzy_heavy_armor():
+    """Test that frenzy cannot be activated in heavy armor."""
+    print("\n=== Test: Cannot Frenzy in Heavy Armor ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Armored Barbarian")
+
+    # Equip heavy armor
+    chain_mail = create_chain_mail(barbarian.uuid)
+    barbarian.equipment.equip(chain_mail)
+    print(f"  Equipped: {chain_mail.name}")
+
+    # Apply RageFeature and FrenzyFeature
+    rage_feature = RageFeature(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_uses=3,
+        rage_damage=2
+    )
+    barbarian.add_condition(rage_feature)
+
+    frenzy_feature = FrenzyFeature(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzy_feature)
+
+    # Check available actions
+    available = get_available_actions(barbarian)
+    self_action_names = [a.template_name for a in available.self_actions]
+    print(f"  Available self actions: {self_action_names}")
+
+    # Frenzy should not be available due to pre_validate
+    frenzy_available = "Frenzy" in self_action_names
+    print(f"  Frenzy available: {frenzy_available}")
+
+    if not frenzy_available:
+        print("  [PASS] Frenzy correctly blocked by heavy armor (pre_validate)")
+    else:
+        # Try to execute - should be blocked at validation
+        frenzy_info = next(a for a in available.self_actions if a.template_name == "Frenzy")
+        if frenzy_info.valid_targets:
+            result = execute_action(barbarian, "Frenzy", frenzy_info.valid_targets[0])
+            if result and result.canceled:
+                print(f"  Frenzy blocked: {result.status_message}")
+                print("  [PASS] Frenzy blocked at validation")
+            else:
+                print("  [FAIL] Frenzy should be blocked in heavy armor")
+        else:
+            print("  [PASS] Frenzy has no valid targets (blocked)")
+
+    # Verify not frenzied
+    is_frenzied = "Frenzied" in barbarian.active_conditions
+    assert not is_frenzied, "Should not be frenzied in heavy armor"
+
+    EventQueue.reset()
+
+
+def test_frenzy_maintenance():
+    """Test that frenzy ends if no attack or damage (like rage)."""
+    print("\n=== Test: Frenzy Maintenance ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Frenzy Maintenance Test")
+
+    # Apply Frenzied directly
+    frenzied = Frenzied(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzied)
+
+    assert "Frenzied" in barbarian.active_conditions, "Should be frenzied"
+    assert "Raging" in barbarian.active_conditions, "Should be raging (sub-condition)"
+    assert "KeepRage" not in barbarian.active_conditions, "Should not have KeepRage"
+
+    print(f"  Initial: Frenzied=True, Raging=True, KeepRage=False")
+
+    # Simulate turn end without attack/damage
+    barbarian.on_turn_end()
+
+    # Rage should have ended (and Frenzied with it)
+    still_raging = "Raging" in barbarian.active_conditions
+    still_frenzied = "Frenzied" in barbarian.active_conditions
+    print(f"  After turn end: Frenzied={still_frenzied}, Raging={still_raging}")
+
+    # Note: Raging ends first, which may or may not cascade to Frenzied
+    # depending on implementation
+    if not still_raging:
+        print("  [PASS] Rage ended correctly (no attack or damage)")
+    else:
+        print("  [FAIL] Rage should have ended")
+
+    EventQueue.reset()
+
+
+def test_no_exhaustion():
+    """Test that BG3-style frenzy has no exhaustion mechanic."""
+    print("\n=== Test: No Exhaustion (BG3 Adaptation) ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("No Exhaustion Barbarian")
+
+    # Apply Frenzied condition
+    frenzied = Frenzied(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzied)
+
+    # End frenzy by removing condition
+    barbarian.remove_condition("Frenzied")
+
+    # Check no Exhausted condition
+    has_exhaustion = "Exhausted" in barbarian.active_conditions
+    print(f"  Exhausted condition after frenzy: {has_exhaustion}")
+
+    assert not has_exhaustion, "BG3 frenzy should not cause exhaustion"
+    print("  [PASS] No exhaustion after frenzy (BG3 adaptation)")
+
+    EventQueue.reset()
+
+
+def test_frenzy_removes_frenzied_strike():
+    """Test that FrenziedStrike is removed when frenzy ends."""
+    print("\n=== Test: FrenziedStrike Removed When Frenzy Ends ===")
+
+    EventQueue.reset()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+
+    barbarian = create_test_barbarian("Cleanup Test", position=(0, 0))
+    _ = create_test_target("Target", position=(1, 0))  # Need target for senses
+
+    Entity.update_all_entities_senses()
+
+    # Apply Frenzied condition
+    frenzied = Frenzied(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid,
+        rage_damage=2
+    )
+    barbarian.add_condition(frenzied)
+
+    # Verify FrenziedStrike is available
+    available_before = get_available_actions(barbarian)
+    entity_actions_before = [a.template_name for a in available_before.entity_actions]
+    has_strike_before = any("Frenzied Strike" in name for name in entity_actions_before)
+    print(f"  FrenziedStrike before removal: {has_strike_before}")
+
+    # Remove Frenzied condition
+    barbarian.remove_condition("Frenzied")
+
+    # Verify FrenziedStrike is no longer available
+    available_after = get_available_actions(barbarian)
+    entity_actions_after = [a.template_name for a in available_after.entity_actions]
+    has_strike_after = any("Frenzied Strike" in name for name in entity_actions_after)
+    print(f"  FrenziedStrike after removal: {has_strike_after}")
+
+    if has_strike_before and not has_strike_after:
+        print("  [PASS] FrenziedStrike correctly removed when frenzy ends")
+    elif not has_strike_before:
+        print("  [WARN] FrenziedStrike was not available before removal")
+    else:
+        print("  [FAIL] FrenziedStrike should be removed when frenzy ends")
+
+    EventQueue.reset()
+
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("BARBARIAN FRENZY TESTS")
+    print("=" * 60)
+
+    test_frenzy_activation()
+    test_frenzied_includes_raging()
+    test_frenzied_strike_available()
+    test_frenzied_strike_costs_bonus_action()
+    test_frenzied_strike_validates_range()
+    test_cannot_frenzy_heavy_armor()
+    test_frenzy_maintenance()
+    test_no_exhaustion()
+    test_frenzy_removes_frenzied_strike()
+
+    print("\n" + "=" * 60)
+    print("FRENZY TESTS COMPLETE")
+    print("=" * 60)

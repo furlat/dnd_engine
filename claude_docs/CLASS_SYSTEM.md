@@ -385,6 +385,8 @@ Core utility `create_modified_dice_roll(original, new_results)` is in fighter.py
 
 ## Implementation Status
 
+### Fighter (Complete)
+
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Fighting Styles (6) | Complete | All 6 PHB styles |
@@ -395,3 +397,93 @@ Core utility `create_modified_dice_roll(original, new_results)` is in fighter.py
 | Indomitable | Complete | L9/13/17, 1/2/3 uses |
 | Superior Critical | Complete | L15 Champion, 18-20 |
 | Survivor | Complete | L18 Champion, heal at turn start |
+
+---
+
+## Barbarian Implementation (In Progress)
+
+All Barbarian features are in `dnd/classes/barbarian.py`. Uses BG3-style adaptations (no exhaustion for Frenzy).
+
+### Level Progression
+
+| Level | Feature | Implementation Type | Class | Status |
+|-------|---------|---------------------|-------|--------|
+| 1 | Rage | Feature Condition + Action | `RageFeature`, `Rage`, `Raging` | Complete |
+| 1 | Unarmored Defense | Condition (contextual) | `UnarmoredDefense` | Complete |
+| 2 | Reckless Attack | Feature Condition + Action | `RecklessAttackFeature`, `RecklessAttack` | Complete |
+| 2 | Danger Sense | Condition | `DangerSense` | Complete |
+| 3 | Berserker: Frenzy | Feature Condition + Action | `FrenzyFeature`, `Frenzy`, `Frenzied` | Complete |
+| 5 | Extra Attack | Reuse Fighter's `ExtraAttackFeature` | — | Complete |
+| 5 | Fast Movement | Condition (contextual) | `FastMovement` | Complete |
+| 6 | Berserker: Mindless Rage | Condition + EventHandler | `MindlessRage` | Complete |
+| 7 | Feral Instinct | Condition | `FeralInstinct` | Complete |
+| 9/13/17 | Brutal Critical | Condition (ModifiableValue) | `BrutalCritical` | Complete |
+| 10 | Berserker: Intimidating Presence | — | — | **Not Started** |
+| 11 | Relentless Rage | Condition + EventHandler | `RelentlessRage` | Partial (needs testing) |
+| 14 | Berserker: Retaliation | — | — | **Not Started** |
+| 15 | Persistent Rage | Marker Condition | `PersistentRage` | Complete |
+| 18 | Indomitable Might | — | — | **Not Started** |
+| 20 | Primal Champion | — | — | **Not Started** |
+
+### Rage System
+
+Rage is the core Barbarian mechanic with maintenance tracking:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          RAGE SYSTEM                                         │
+│                                                                              │
+│  RageFeature       → adds rage Resource + registers Rage Action              │
+│  Rage (Action)     → applies Raging condition when activated                 │
+│  Raging            → the active rage state with all benefits                 │
+│  KeepRage          → marker for rage maintenance (attacked/took damage)      │
+│                                                                              │
+│  Event Handlers (registered by Raging):                                      │
+│    • rage_attack_tracker    → applies KeepRage on ATTACK                     │
+│    • rage_damage_tracker    → applies KeepRage on TAKE_DAMAGE                │
+│    • rage_maintenance       → ends rage at TURN_END if no KeepRage           │
+│    • rage_armor_equip       → ends rage if heavy armor equipped              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Brutal Critical (ModifiableValue Pattern)
+
+Uses `crit_extra_dice_melee` ModifiableValue instead of EventHandler:
+
+```python
+class BrutalCritical(BaseCondition):
+    """L9: +1 die, L13: +2 dice, L17: +3 dice on melee crits."""
+    extra_dice: int = 1
+
+    def _apply(self, declaration_event: Event) -> Tuple[...]:
+        target = Entity.get(self.target_entity_uuid)
+
+        # Add to crit_extra_dice_melee (melee-only per SRD)
+        brutal_mod = NumericalModifier.create(
+            source_entity_uuid=self.target_entity_uuid,
+            name="Brutal Critical",
+            value=self.extra_dice
+        )
+        mod_uuid = target.equipment.crit_extra_dice_melee.self_static.add_value_modifier(brutal_mod)
+        outs.append((target.equipment.crit_extra_dice_melee.uuid, mod_uuid))
+
+        return outs, [], [], effect_event
+```
+
+The `Entity.get_crit_extra_dice(weapon_slot)` method combines general + type-specific modifiers.
+
+### Missing Features
+
+| Feature | Level | Description |
+|---------|-------|-------------|
+| Intimidating Presence | 10 | Frighten creatures (contested CHA check) |
+| Retaliation | 14 | Reaction attack when taking damage |
+| Indomitable Might | 18 | Use STR score as minimum for STR checks |
+| Primal Champion | 20 | +4 STR and CON (max 24) |
+
+### Test Files
+
+| File | Coverage |
+|------|----------|
+| `examples/test_barbarian_rage.py` | Rage activation, maintenance, benefits, armor restrictions |
+| `examples/test_brutal_critical.py` | crit_extra_dice system, melee-only, dice counts |

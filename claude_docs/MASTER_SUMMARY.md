@@ -12,6 +12,7 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | **Combat** | Complete | Action economy, attacks, movement, opportunity attacks, initiative |
 | **Conditions** | 13/15 SRD | All except Exhaustion, Petrified |
 | **Fighter Class** | Complete | All features L1-L20 including Champion archetype |
+| **Barbarian Class** | ~80% | Most features L1-L17 + Berserker path, missing L18-20 |
 | **Spatial** | Complete | GridMap, FOV (shadowcast), pathfinding (Dijkstra) |
 | **Server** | Complete | FastAPI REST API, session-based PvP authority |
 | **CLI** | Complete | Human TUI + Claude agent interface |
@@ -27,6 +28,24 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | 9/13/17 | Indomitable (1/2/3 uses) |
 | 15 | Champion: Superior Critical (18-20) |
 | 18 | Champion: Survivor |
+
+### Barbarian Features
+
+| Level | Feature | Status |
+|-------|---------|--------|
+| 1 | Rage, Unarmored Defense | Complete |
+| 2 | Reckless Attack, Danger Sense | Complete |
+| 3 | Berserker: Frenzy | Complete |
+| 5 | Extra Attack, Fast Movement | Complete |
+| 6 | Berserker: Mindless Rage | Complete |
+| 7 | Feral Instinct | Complete |
+| 9/13/17 | Brutal Critical (+1/+2/+3 dice) | Complete |
+| 10 | Berserker: Intimidating Presence | Not Started |
+| 11 | Relentless Rage | Partial |
+| 14 | Berserker: Retaliation | Not Started |
+| 15 | Persistent Rage | Complete |
+| 18 | Indomitable Might | Not Started |
+| 20 | Primal Champion | Not Started |
 
 ---
 

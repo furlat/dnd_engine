@@ -228,6 +228,25 @@ def create_greatsword(source_id: UUID) -> Weapon:
     )
 
 
+def create_greataxe(source_id: UUID) -> Weapon:
+    """Greataxe - 1d12 slashing, heavy, two-handed"""
+    return Weapon(
+        source_entity_uuid=source_id,
+        name="Greataxe",
+        description="A massive two-handed axe favored by barbarians.",
+        damage_dice=12,
+        dice_numbers=1,
+        damage_type=DamageType.SLASHING,
+        properties=[WeaponProperty.HEAVY, WeaponProperty.TWO_HANDED, WeaponProperty.MARTIAL],
+        range=Range(type=RangeType.REACH, normal=5),
+        attack_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Attack Bonus"),
+        extra_damage_dices=[],
+        extra_damage_dices_numbers=[],
+        extra_damage_bonus=[],
+        extra_damage_type=[]
+    )
+
+
 def create_longsword(source_id: UUID) -> Weapon:
     """Longsword - 1d8 slashing, versatile (1d10)"""
     return Weapon(

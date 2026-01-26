@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData,
@@ -792,9 +792,11 @@ class Attack(BaseAction):
             # Apply damage if there is an attack outcome
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
                 # Step 1: Roll damage dice (creates immutable DiceRoll objects)
+                # Get extra crit dice (for Brutal Critical, etc.)
+                crit_extra_dice = source_entity.get_crit_extra_dice(weapon_slot)
                 original_rolls = []
                 for damage in damages:
-                    dice = damage.get_dice(attack_outcome=attack_event.attack_outcome)
+                    dice = damage.get_dice(attack_outcome=attack_event.attack_outcome, crit_extra_dice=crit_extra_dice)
                     roll = dice.roll
                     original_rolls.append(roll)
 
@@ -820,13 +822,46 @@ class Attack(BaseAction):
 
                 # Step 4: Apply final_rolls (possibly modified by handlers)
                 damage_rolls = damage_rolled_event.final_rolls
-                for i, roll in enumerate(damage_rolls):
-                    damage_type = damages[i].damage_type
-                    target_entity.health.take_damage(
-                        roll.total,
-                        damage_type,
-                        source_entity_uuid=source_entity.uuid
-                    )
+                total_damage = sum(roll.total for roll in damage_rolls)
+
+                # Step 5: Create TAKE_DAMAGE event (allows handlers to track/modify/cancel)
+                take_damage_event = TakeDamageEvent(
+                    name="Take Damage",
+                    source_entity_uuid=source_entity.uuid,
+                    target_entity_uuid=target_entity.uuid,
+                    total_damage=total_damage,
+                    damage_rolls=damage_rolls,
+                    damages=damages,
+                    parent_event=attack_event.uuid,
+                    phase=EventPhase.DECLARATION
+                )
+
+                # Progress through phases - handlers can intercept at EFFECT
+                take_damage_event = take_damage_event.phase_to(EventPhase.EXECUTION)
+                take_damage_event = take_damage_event.phase_to(EventPhase.EFFECT)
+
+                # Step 6: Apply damage if not canceled
+                if not take_damage_event.canceled:
+                    effective_damage = take_damage_event.get_effective_damage()
+                    # Apply damage for each roll, proportionally if modified
+                    if take_damage_event.final_damage is not None and total_damage > 0:
+                        # Damage was modified - apply as single amount with first damage type
+                        target_entity.health.take_damage(
+                            effective_damage,
+                            damages[0].damage_type,
+                            source_entity_uuid=source_entity.uuid
+                        )
+                    else:
+                        # Apply each damage roll individually
+                        for i, roll in enumerate(damage_rolls):
+                            damage_type = damages[i].damage_type
+                            target_entity.health.take_damage(
+                                roll.total,
+                                damage_type,
+                                source_entity_uuid=source_entity.uuid
+                            )
+
+                take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
 
                 attack_event = attack_event.phase_to(
                     new_phase=EventPhase.EFFECT,

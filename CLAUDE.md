@@ -609,7 +609,13 @@ Each `phase_to()` creates new event with same `lineage_uuid`. EventQueue notifie
 
 ### EventHandlers
 
-Handlers subscribe to events via `Trigger(event_type, event_phase, source_uuid?, target_uuid?)`. Register with `EventQueue.add_event_handler()`.
+Handlers subscribe to events via `Trigger(event_type, event_phase, source_uuid?, target_uuid?)`.
+
+**IMPORTANT: Only use ONE registration method:**
+- `entity.add_event_handler(handler)` - **Preferred**. This automatically registers with EventQueue AND tracks on the entity.
+- `EventQueue.add_event_handler(handler)` - Direct registration, doesn't track on entity.
+
+**DO NOT call both** - this registers the handler twice and it will fire twice!
 
 For dice manipulation patterns (Great Weapon Fighting, etc.), see `claude_docs/IMPLEMENTATION_GUIDE.md`.
 
@@ -633,6 +639,7 @@ For dice manipulation patterns (Great Weapon Fighting, etc.), see `claude_docs/I
 - **Weapon slots**: Use `entity.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)` to get weapons. 4 slots: `MELEE_MAIN`, `MELEE_OFF` (can hold shield), `RANGED_MAIN`, `RANGED_OFF`
 - **Ability modifier is int**: `entity.ability_scores.strength.modifier` returns `int`, not `ModifiableValue`
 - **Always call `Entity.update_all_entities_senses()`** after creating entities for LOS to work
+- **EventHandler registration**: Only call `entity.add_event_handler(handler)` - it auto-registers with EventQueue. Do NOT also call `EventQueue.add_event_handler()` or handler fires twice!
 
 **For writing examples and tests**, see `claude_docs/EXAMPLE_PATTERNS.md` for complete patterns.
 
