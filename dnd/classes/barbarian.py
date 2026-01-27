@@ -26,7 +26,7 @@ from dnd.core.base_actions import (
 )
 from dnd.core.events import (
     Event, EventPhase, EventType,
-    Trigger, EventHandler,
+    Trigger, EventHandler, EventQueue,
     WeaponSlot,
     TakeDamageEvent, SkillCheckEvent
 )
@@ -139,13 +139,22 @@ def rage_attack_tracker(event: Event, source_entity_uuid: UUID) -> Optional[Even
     Apply KeepRage marker when attacking while raging.
 
     Triggers on ATTACK at EXECUTION phase (own attacks only).
+    Uses same pattern as has_attacked_processor for reliability.
     """
-    # Only own attacks
+    # Only trigger for the attacker's own attacks
     if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    # Only on non-canceled events
+    if event.canceled:
         return None
 
     entity = Entity.get(source_entity_uuid)
     if not entity:
+        return None
+
+    # Only process FIRST event at EXECUTION phase for this attack
+    if not EventQueue.is_first_at_phase(event):
         return None
 
     # Must be raging
@@ -558,6 +567,35 @@ class Rage(BaseAction):
             use_register=use_register,
             source_entity_name=source_name
         )
+
+    def pre_validate(self) -> bool:
+        """Check if rage can be activated (for action availability filtering)."""
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return False
+
+        # If Frenzy is available, don't show Rage (Frenzy is strictly better)
+        if "Frenzy Feature" in entity.active_conditions:
+            return False
+
+        # Cannot rage in heavy armor (per BG3)
+        body_armor = entity.equipment.body_armor
+        if body_armor and body_armor.type == ArmorType.HEAVY:
+            return False
+
+        # Cannot already be raging/frenzied
+        if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
+            return False
+
+        # Check rage resource
+        if not entity.action_economy.can_afford_resource("rage", 1):
+            return False
+
+        # Check bonus action
+        if not entity.action_economy.can_afford("bonus_actions", 1):
+            return False
+
+        return True
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Validate Rage can be used."""
@@ -1177,6 +1215,11 @@ class Frenzied(BaseCondition):
     - NO exhaustion (BG3 adaptation)
 
     Duration: Same as Rage (ends on conditions outlined in Raging)
+
+    NOTE: This condition is a sub-condition of Raging (set by Frenzy action).
+    When rage maintenance removes Raging, the cascade automatically removes
+    Frenzied. The parent-child relationship is inverted from intuition to
+    make rage decay work correctly.
     """
     name: str = "Frenzied"
     description: str = "In a frenzied rage - can make bonus action melee attacks"
@@ -1199,21 +1242,8 @@ class Frenzied(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        outs: List[Tuple[UUID, UUID]] = []
-        handler_uuids: List[UUID] = []
-        sub_conditions: List[UUID] = []
-
-        # Apply Raging as a sub-condition (get all rage benefits)
-        raging = Raging(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            rage_damage=self.rage_damage,
-            parent_condition=self.uuid
-        )
-        target.add_condition(raging)
-        sub_conditions.append(raging.uuid)
-
-        # Register FrenziedStrike action (bonus action melee attack)
+        # Only register FrenziedStrike action - Raging is already applied by Frenzy action
+        # (Frenzied is now a sub-condition of Raging, not the parent)
         frenzied_strike = FrenziedStrike(
             source_entity_uuid=target.uuid,
             template=True
@@ -1222,17 +1252,18 @@ class Frenzied(BaseCondition):
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"{target.name} enters a frenzy!"
+            status_message=f"{target.name} is frenzied!"
         )
 
-        return outs, handler_uuids, sub_conditions, effect_event
+        return [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up FrenziedStrike action on removal."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
             target.unregister_action("Frenzied Strike")
-            # Note: Raging sub-condition is auto-removed by parent tracking
+            # Note: Frenzied is now a sub-condition of Raging, so it gets
+            # removed automatically when rage maintenance removes Raging
 
         return super()._remove(event)
 
@@ -1383,6 +1414,21 @@ class Frenzy(BaseAction):
             )
         ]
 
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
+        """Create the declaration event for Frenzy."""
+        entity = Entity.get(self.source_entity_uuid)
+        source_name = entity.name if entity else None
+
+        return ActionEvent(
+            name=self.name,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(c) for c in self.costs],
+            parent_event=parent_event.uuid if parent_event else None,
+            use_register=use_register,
+            source_entity_name=source_name
+        )
+
     def pre_validate(self) -> bool:
         """Check if frenzy can be activated."""
         entity = Entity.get(self.source_entity_uuid)
@@ -1429,13 +1475,30 @@ class Frenzy(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Apply Frenzied condition (which includes Raging as sub-condition)
-        frenzied = Frenzied(
+        # 1. Apply Raging condition first (will be the parent)
+        # This is reversed from the intuitive order so that rage maintenance
+        # can remove Raging and cascade to remove Frenzied automatically
+        raging = Raging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             rage_damage=self.rage_damage
         )
+        entity.add_condition(raging)
+
+        # 2. Apply Frenzied as sub-condition of Raging
+        # KEY: Frenzied is child of Raging, so when rage maintenance removes
+        # Raging (due to no attacks), Frenzied is automatically removed too
+        frenzied = Frenzied(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            rage_damage=self.rage_damage,
+            parent_condition=raging.uuid  # Frenzied is child of Raging
+        )
         entity.add_condition(frenzied)
+
+        # 3. Link parent-child: add Frenzied to Raging's sub_conditions list
+        # This enables cascade removal when Raging is removed by rage maintenance
+        raging.sub_conditions.append(frenzied.uuid)
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,

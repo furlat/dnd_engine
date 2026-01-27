@@ -309,7 +309,7 @@ def render_map_content(
     entity_icons: Dict[str, Tuple[str, int]] = {}  # uuid -> (letter, number)
 
     for e in entities:
-        if e["uuid"] != current_entity_uuid and not e.get("is_dead"):
+        if e["uuid"] != current_entity_uuid:
             letter = e["name"][0].upper()
             letter_counts[letter] = letter_counts.get(letter, 0) + 1
             entity_icons[e["uuid"]] = (letter, letter_counts[letter])
@@ -378,20 +378,25 @@ def render_map_content(
     result.append("You  ")
 
     # Build legend entries from entity_icons (grouped by display icon)
-    icon_to_names: Dict[str, List[str]] = {}
+    icon_to_names: Dict[str, List[Tuple[str, bool]]] = {}  # icon -> [(name, is_dead), ...]
     for e in entities:
-        if e["uuid"] != current_entity_uuid and not e.get("is_dead"):
+        if e["uuid"] != current_entity_uuid:
             letter, num = entity_icons.get(e["uuid"], (e["name"][0].upper(), 1))
             total_with_letter = letter_counts.get(letter, 1)
             icon = str(num) if total_with_letter > 1 else letter
             if icon not in icon_to_names:
                 icon_to_names[icon] = []
-            icon_to_names[icon].append(e["name"])
+            icon_to_names[icon].append((e["name"], e.get("is_dead", False)))
 
     # Show each icon -> name mapping
-    for icon, names in sorted(icon_to_names.items()):
-        result.append(f"{icon} ", style="bold red")
-        result.append(f"{names[0]}  ")  # Show first name (they share icon)
+    for icon, name_dead_list in sorted(icon_to_names.items()):
+        name, is_dead = name_dead_list[0]
+        if is_dead:
+            result.append("% ", style="dim")
+            result.append(f"[dim strikethrough]{name}[/dim strikethrough]  ")
+        else:
+            result.append(f"{icon} ", style="bold red")
+            result.append(f"{name}  ")
 
     result.append("# ", style="white")
     result.append("Wall  ")
@@ -444,6 +449,12 @@ def render_combatants_panel(
     is_my_turn: bool = True
 ) -> Panel:
     """Render the combatants table panel with turn info in title."""
+    # Sort entities by initiative order
+    initiative_order = turn.get("initiative_order", [])
+    if initiative_order:
+        order_map = {c["uuid"]: i for i, c in enumerate(initiative_order)}
+        entities = sorted(entities, key=lambda e: order_map.get(e["uuid"], 999))
+
     table = Table(box=box.SIMPLE, show_header=True, header_style="bold", padding=(0, 1))
     table.add_column("Entity", style="cyan")
     table.add_column("HP", justify="right")

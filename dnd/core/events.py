@@ -496,25 +496,23 @@ class EventQueue:
         # Process through listeners
         current_event = event
         for handler in handlers:
-            #declare the reaction event
-            # reaction_event = handler.get_declaration_event(current_event)
-            # Executehandler
+            # Execute handler
             result = handler(current_event)
-            
-            # If listener returned None or canceled event, stop processing
-            if result and result.canceled:
-                # Store the canceled event
+
+            # If listener returned None, continue to next handler
+            if result is None:
+                continue
+
+            # If event was canceled, stop processing
+            if result.canceled:
                 cls._store_event(result)
                 return result
-            elif not result:
-                return current_event
-            
-            elif result and result.modified:
-                # Update current event for next listener
+
+            # If event was modified, update for next handler
+            if result.modified:
                 current_event = result
-                # Update the event in the registry
                 cls._store_event(current_event)
-            
+
         return current_event
     
     @classmethod
@@ -574,12 +572,11 @@ class EventQueue:
             simple_trigger = trigger_condition.get_simple_trigger()
             simple_handlers = cls._event_handlers_by_simple_trigger.get(simple_trigger, [])
             complex_handlers = cls._event_handlers_by_trigger.get(trigger_condition, [])
-   
+
             all_handlers = simple_handlers + complex_handlers
         else:
              all_handlers = cls._event_handlers_by_trigger.get(trigger_condition, [])
-        
-        
+
         return all_handlers
     
     @classmethod
