@@ -452,3 +452,195 @@ grid.create_rectangle(0, 0, 15, 15)
 # Create a room with walls
 grid.create_room(0, 0, 10, 10)
 ```
+
+---
+
+## Faction System
+
+### Creating Entities with Factions
+
+```python
+from dnd.monsters.bestiary import create_skeleton
+from dnd.entity import Entity
+
+# Create entities with faction assignment
+hero1 = create_skeleton(name="Hero 1", position=(0, 0), faction="heroes")
+hero2 = create_skeleton(name="Hero 2", position=(1, 0), faction="heroes")
+enemy1 = create_skeleton(name="Enemy 1", position=(5, 0), faction="monsters")
+enemy2 = create_skeleton(name="Enemy 2", position=(5, 1), faction="monsters")
+
+Entity.update_all_entities_senses()
+
+# Faction relationship checks
+hero1.is_ally(hero2)    # True - same faction
+hero1.is_enemy(enemy1)  # True - different faction
+hero1.is_ally(enemy1)   # False
+
+# Get visible enemies/allies (returns Dict[UUID, Tuple[int, int]])
+enemies = hero1.get_visible_enemies()  # {enemy1.uuid: (5,0), enemy2.uuid: (5,1)}
+allies = hero1.get_visible_allies()    # {hero2.uuid: (1,0)}
+
+# Include dead entities (for targeting healing spells, etc.)
+all_allies = hero1.get_visible_allies(include_dead=True)
+
+# Class methods for faction queries
+Entity.get_entities_by_faction("heroes")  # [hero1, hero2]
+Entity.get_alive_by_faction("heroes")     # Only alive heroes
+```
+
+### Faction-Based Action Targeting
+
+```python
+# Get available actions filtered by faction
+actions = hero1.get_available_actions(target_filter="enemies")  # Default
+ally_actions = hero1.get_available_actions(target_filter="allies")
+all_actions = hero1.get_available_actions(target_filter="all")
+
+# Actions include valid_targets filtered by faction
+for attack in actions.entity_actions:
+    print(f"{attack.name}: targets {attack.valid_targets}")
+```
+
+---
+
+## Test Utilities
+
+The `dnd/utils/test_utils.py` module provides reusable helpers. **USE THESE** instead of writing your own.
+
+### Available Functions
+
+```python
+from dnd.utils import (
+    # State management
+    reset_combat_state,      # Clear all registries for fresh test
+    setup_combat_arena,      # Create encounter with two entities
+
+    # HP manipulation
+    get_hp,                  # Get current HP
+    get_max_hp,              # Get max HP
+    set_hp,                  # Set HP to specific value
+    heal_entity,             # Heal by amount
+    deal_damage_to,          # Deal typed damage (fires events)
+
+    # Attack forcing (for deterministic tests)
+    force_attack_hit,        # +100 attack bonus
+    force_attack_miss,       # -100 attack penalty
+    force_attack_crit,       # AUTOCRIT modifier
+    remove_attack_modifier,  # Remove forced modifier
+
+    # Position/movement
+    get_position,            # Get entity position
+    move_entity,             # Teleport entity (bypasses movement)
+
+    # Conditions
+    has_condition,           # Check if entity has condition by name
+    count_conditions,        # Count conditions with name
+
+    # Debug output
+    print_combat_state,      # Print HP and conditions for two entities
+)
+```
+
+### Example Usage
+
+```python
+from dnd.utils import (
+    reset_combat_state, setup_combat_arena,
+    force_attack_hit, get_hp, set_hp, has_condition
+)
+from dnd.monsters.bestiary import create_skeleton
+
+# Fresh test setup
+reset_combat_state()
+
+attacker = create_skeleton(name="Attacker", position=(0, 0))
+target = create_skeleton(name="Target", position=(1, 0))
+encounter = setup_combat_arena(attacker, target)
+
+# Force deterministic outcomes
+mod_uuid = force_attack_hit(attacker)
+
+# Manipulate HP for specific test scenarios
+set_hp(target, 5)  # Low HP for kill test
+
+# Check conditions
+if has_condition(target, "Prone"):
+    print("Target is prone")
+
+# Clean up forced modifier after test
+from dnd.utils import remove_attack_modifier
+remove_attack_modifier(attacker, mod_uuid)
+```
+
+---
+
+## Multi-Entity Encounters
+
+### Creating a 2v2 Encounter
+
+```python
+from uuid import uuid4
+from dnd.entity import Entity
+from dnd.monsters.bestiary import create_skeleton
+from dnd.encounter import Encounter
+from dnd.controller import PassController
+from dnd.utils import reset_combat_state
+
+reset_combat_state()
+
+# Create teams with factions
+hero1 = create_skeleton(name="Hero 1", position=(0, 0), faction="heroes")
+hero2 = create_skeleton(name="Hero 2", position=(1, 0), faction="heroes")
+enemy1 = create_skeleton(name="Enemy 1", position=(5, 0), faction="monsters")
+enemy2 = create_skeleton(name="Enemy 2", position=(5, 1), faction="monsters")
+
+Entity.update_all_entities_senses()
+
+# Build encounter with all combatants
+encounter = Encounter(name="Team Battle", source_entity_uuid=uuid4())
+
+combatants = [hero1, hero2, enemy1, enemy2]
+for entity in combatants:
+    controller = PassController(source_entity_uuid=entity.uuid)
+    encounter.add_combatant(entity, controller)
+
+# Start combat
+encounter.roll_initiative()
+encounter.start_encounter()
+encounter.start_turn()
+
+# Get current combatant
+current = encounter.get_current_entity()
+print(f"Turn: {current.name}")
+
+# Encounter ends when only one faction has survivors
+```
+
+### Encounter Turn Flow
+
+```python
+# Each combatant's turn
+while not encounter.state == EncounterState.ENDED:
+    current = encounter.get_current_entity()
+
+    # Get actions targeting enemies only
+    actions = current.get_available_actions(target_filter="enemies")
+
+    # ... execute actions ...
+
+    # Advance to next turn (handles death checks, faction victory)
+    encounter.next_turn()
+```
+
+---
+
+## Untested Scenarios (Supported but Need Verification)
+
+The following multi-entity scenarios are implemented but not thoroughly tested:
+
+- PvP with multiple agents per player
+- User + Claude on same team vs AI
+- Claude controlling multiple entities
+- User controlling multiple entities
+
+Use `examples/test_faction_system.py` as a starting point for testing these.

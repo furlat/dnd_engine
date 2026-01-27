@@ -610,6 +610,55 @@ Entity.get_alive_by_faction("heroes")     # Alive entities in faction
 
 **Encounter End**: Combat ends when only one faction has survivors (factionless entities each count as their own faction).
 
+### Faction Method Signatures
+
+```python
+# Instance methods
+entity.is_ally(other: Entity) -> bool       # Same faction = ally
+entity.is_enemy(other: Entity) -> bool      # Different faction = enemy
+
+# Visibility with dead entity filtering
+entity.get_visible_enemies(include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]
+entity.get_visible_allies(include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]
+
+# Class methods for faction queries
+Entity.get_entities_by_faction(faction: str) -> List[Entity]  # All entities
+Entity.get_alive_by_faction(faction: str) -> List[Entity]     # Alive only
+
+# Action filtering by faction
+entity.get_available_actions(
+    target_filter: str = "enemies",  # "enemies" | "allies" | "all"
+    include_dead: bool = False
+) -> AvailableActionsResult
+```
+
+### Multi-Entity Encounter Example
+
+```python
+from dnd.monsters.bestiary import create_skeleton
+from dnd.encounter import Encounter
+from dnd.controller import PassController
+from uuid import uuid4
+
+# Create 2v2 encounter
+hero1 = create_skeleton(name="Hero 1", position=(0, 0), faction="heroes")
+hero2 = create_skeleton(name="Hero 2", position=(1, 0), faction="heroes")
+enemy1 = create_skeleton(name="Enemy 1", position=(5, 0), faction="monsters")
+enemy2 = create_skeleton(name="Enemy 2", position=(5, 1), faction="monsters")
+
+Entity.update_all_entities_senses()
+
+# Create encounter with all combatants
+encounter = Encounter(name="Team Battle", source_entity_uuid=uuid4())
+for entity in [hero1, hero2, enemy1, enemy2]:
+    controller = PassController(source_entity_uuid=entity.uuid)
+    encounter.add_combatant(entity, controller)
+
+encounter.roll_initiative()
+encounter.start_encounter()
+# Encounter ends when only one faction has survivors
+```
+
 ## Senses and Vision
 
 The `Senses` block tracks what an entity can see and where it can move:
@@ -851,8 +900,10 @@ Both connect to a FastAPI server that manages game state, sessions, and combat.
 
 | Mode | Command | Description |
 |------|---------|-------------|
-| Human vs AI | `python -m cli play` | Human controls Hero, AI controls Skeleton automatically |
-| Human vs Claude | `python -m cli playpvp` | Human controls Hero, Claude controls Skeleton via agent CLI |
+| Human vs AI | `python -m cli play` | Human controls heroes faction, AI controls monsters faction |
+| Human vs Claude PvP | `python -m cli playpvp` | Human controls heroes, Claude controls monsters via agent CLI |
+
+**Multi-Entity Combat**: Both modes support multi-entity encounters (e.g., 2 heroes vs 3 monsters). Entities are assigned to players by faction.
 
 ### Session-Based Authority System
 

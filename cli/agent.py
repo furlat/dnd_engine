@@ -20,31 +20,40 @@ Usage:
 
 import sys
 import os
-from typing import Optional
+from typing import Optional, List, Tuple
 from cli.api_client import APIClient
 
 # Session persistence file (so we don't create new sessions every command)
 SESSION_FILE = "/tmp/dnd_agent_session.txt"
 
 
-def save_session(session_id: str, entity_uuid: str) -> None:
-    """Save session info to file for persistence between commands."""
+def save_session(session_id: str, entity_uuids: List[str]) -> None:
+    """Save session info to file for persistence between commands.
+
+    File format:
+        Line 1: session_id
+        Lines 2+: entity UUIDs (one per line)
+    """
     with open(SESSION_FILE, "w") as f:
-        f.write(f"{session_id}\n{entity_uuid}")
+        lines = [session_id] + entity_uuids
+        f.write("\n".join(lines))
 
 
-def load_session() -> tuple:
-    """Load session info from file. Returns (session_id, entity_uuid) or (None, None)."""
+def load_session() -> Tuple[Optional[str], List[str]]:
+    """Load session info from file.
+
+    Returns (session_id, entity_uuids) or (None, []).
+    """
     if not os.path.exists(SESSION_FILE):
-        return None, None
+        return None, []
     try:
         with open(SESSION_FILE, "r") as f:
             lines = f.read().strip().split("\n")
             if len(lines) >= 2:
-                return lines[0], lines[1]
+                return lines[0], lines[1:]  # All entity UUIDs after first line
     except Exception:
         pass
-    return None, None
+    return None, []
 
 
 def clear_session() -> None:
@@ -58,14 +67,18 @@ def ensure_session(client: APIClient) -> bool:
     Ensure client has a valid session. Loads from file or returns False.
 
     Returns True if session loaded successfully, False if need to connect.
+
+    KEY: Also switches client._current_entity_uuid to whichever controlled
+    entity's turn it currently is (for multi-entity support).
     """
-    session_id, entity_uuid = load_session()
-    if not session_id:
+    session_id, entity_uuids = load_session()
+    if not session_id or not entity_uuids:
         return False
 
     # Set the session on the client
     client._session_id = session_id
-    client._current_entity_uuid = entity_uuid
+    client._controlled_entity_uuids = entity_uuids  # Track all controlled entities
+    client._current_entity_uuid = entity_uuids[0]   # Default to first
 
     # Verify session is still valid by pinging
     try:
@@ -73,6 +86,12 @@ def ensure_session(client: APIClient) -> bool:
         if result.get("connection_status") == "disconnected":
             clear_session()
             return False
+
+        # KEY FIX: Switch to active entity if it's one of ours
+        active_uuid = result.get("active_entity_uuid")
+        if active_uuid and active_uuid in entity_uuids:
+            client._current_entity_uuid = active_uuid
+
         return True
     except Exception:
         clear_session()
@@ -242,11 +261,10 @@ def cmd_connect(client: APIClient) -> int:
         join_result = client.join_game()
         controlled = join_result.get("controlled_entities", [])
         if controlled:
-            entity_uuid = controlled[0]
             print(f"Joined game, controlling: {len(controlled)} entities")
 
-            # Save session for future commands
-            save_session(session_id, entity_uuid)
+            # Save session with ALL entities for future commands
+            save_session(session_id, controlled)
             print(f"Session saved. Use other commands to play.")
 
             # Check if it's our turn
@@ -306,8 +324,15 @@ def cmd_state(client: APIClient) -> int:
     turn_indicator = ">>> MY TURN <<<" if my_turn else "(waiting)"
 
     print(f"ROUND {round_num} - {active_name}'s turn {turn_indicator}")
+
+    # Show which of our entities is active (for multi-entity support)
     if my_entity:
-        print(f"I control: {my_entity.get('name', '???')}")
+        controlled_uuids = getattr(client, '_controlled_entity_uuids', [])
+        num_controlled = len(controlled_uuids)
+        if num_controlled > 1:
+            print(f"Active entity: {my_entity.get('name', '???')} (controlling {num_controlled} entities)")
+        else:
+            print(f"I control: {my_entity.get('name', '???')}")
     print("")
 
     # Map
@@ -341,9 +366,12 @@ def cmd_entities(client: APIClient) -> int:
             print("No entities controlled by this session.")
             return 0
 
+        # Get the currently active entity
+        active_uuid = client.current_entity_uuid
+
         print("CONTROLLED ENTITIES:")
-        print(f"{'#':<3} {'Name':<15} {'Faction':<12} {'HP':<8} {'Position'}")
-        print("-" * 55)
+        print(f"{'#':<3} {'Name':<15} {'Faction':<12} {'HP':<8} {'Position':<10} {'Status'}")
+        print("-" * 65)
 
         for i, e in enumerate(entities):
             name = e.get("name", "???")
@@ -351,7 +379,9 @@ def cmd_entities(client: APIClient) -> int:
             hp = e.get("hp", 0)
             pos = e.get("position", [0, 0])
             pos_str = f"({pos[0]},{pos[1]})"
-            print(f"{i:<3} {name:<15} {faction:<12} {hp:<8} {pos_str}")
+            e_uuid = e.get("uuid")
+            status = ">>> ACTIVE" if e_uuid == active_uuid else ""
+            print(f"{i:<3} {name:<15} {faction:<12} {hp:<8} {pos_str:<10} {status}")
 
         return 0
     except Exception as e:
@@ -667,9 +697,24 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
 
             # Check if it's my turn
             if is_my_turn(client):
+                # Get which entity is active (ensure_session already set it)
+                my_entity_uuid = client.current_entity_uuid
+                my_entity_name = "???"
+                if state:
+                    for e in state.get("entities", []):
+                        if e.get("uuid") == my_entity_uuid:
+                            my_entity_name = e.get("name", "???")
+                            break
+
+                controlled_uuids = getattr(client, '_controlled_entity_uuids', [])
+                num_controlled = len(controlled_uuids)
+
                 print("")
                 print("=" * 60)
-                print(">>> MY TURN <<<")
+                if num_controlled > 1:
+                    print(f">>> MY TURN: {my_entity_name} ({num_controlled} entities total) <<<")
+                else:
+                    print(f">>> MY TURN: {my_entity_name} <<<")
                 print("=" * 60)
                 print("")
 

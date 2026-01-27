@@ -16,6 +16,27 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | **Spatial** | Complete | GridMap, FOV (shadowcast), pathfinding (Dijkstra) |
 | **Server** | Complete | FastAPI REST API, session-based PvP authority |
 | **CLI** | Complete | Human TUI + Claude agent interface |
+| **Faction System** | Complete | Multi-entity combat with ally/enemy detection |
+
+### Faction System
+
+- `Entity.faction` field for ally/enemy detection
+- `is_ally()`, `is_enemy()` instance methods
+- `get_visible_enemies()`, `get_visible_allies()` with `include_dead` parameter
+- `Entity.get_entities_by_faction()`, `Entity.get_alive_by_faction()` class methods
+- `get_available_actions(target_filter="enemies"|"allies"|"all")` for faction-based targeting
+- Encounter ends when only one faction has survivors
+- Backward compatible: `faction=None` means "enemy to everyone"
+
+### Test Utilities (`dnd/utils/test_utils.py`)
+
+Reusable helpers for testing and debugging:
+- `reset_combat_state()` - Clear all registries for fresh test
+- `setup_combat_arena(attacker, target)` - Create encounter with two entities
+- `force_attack_hit/miss/crit(entity)` - Force deterministic attack outcomes
+- `get_hp()`, `set_hp()`, `deal_damage_to()` - HP manipulation
+- `has_condition()`, `count_conditions()` - Condition checks
+- `print_combat_state()` - Debug output
 
 ### Fighter Features (All Complete)
 

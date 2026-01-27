@@ -500,6 +500,7 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
 
 @app.command()
 def play(
+    character_class: str = typer.Argument("fighter", help="Character class: fighter or barbarian"),
     host: str = typer.Option("localhost", "--host", "-h", help="Server hostname"),
     port: int = typer.Option(8000, "--port", "-p", help="Server port"),
 ):
@@ -507,6 +508,7 @@ def play(
     Start an interactive combat session.
 
     Connects to the D&D Engine server and starts a human-controlled combat.
+    Use 'fighter' for a L5 dual-wield DEX Fighter, or 'barbarian' for a L5 Berserker.
     """
     base_url = f"http://{host}:{port}"
     display.console.print(f"[cyan]Connecting to {base_url}...[/cyan]")
@@ -520,8 +522,8 @@ def play(
         input()
 
         # NOW start the game (this rolls initiative and may run AI turn first)
-        display.console.print("[cyan]Rolling initiative...[/cyan]")
-        result = client.start_human_game()
+        display.console.print(f"[cyan]Creating {character_class.title()} and rolling initiative...[/cyan]")
+        result = client.start_human_game(character_class=character_class)
         hero_uuid = result.get("hero_uuid")
 
         # Create session and join game
@@ -561,14 +563,16 @@ def play(
 
 @app.command()
 def playpvp(
+    character_class: str = typer.Argument("fighter", help="Character class: fighter or barbarian"),
     host: str = typer.Option("localhost", "--host", "-h", help="Server hostname"),
     port: int = typer.Option(8000, "--port", "-p", help="Server port"),
 ):
     """
     Start a PvP combat session (User vs Claude).
 
-    You control the Hero, Claude controls the Skeleton via agent CLI.
+    You control the Hero, Claude controls the Skeletons via agent CLI.
     Both players take turns manually - no auto-AI.
+    Use 'fighter' for a L5 dual-wield DEX Fighter, or 'barbarian' for a L5 Berserker.
     """
     base_url = f"http://{host}:{port}"
     display.console.print(f"[cyan]Connecting to {base_url}...[/cyan]")
@@ -583,8 +587,8 @@ def playpvp(
         input()
 
         # Start PvP game
-        display.console.print("[cyan]Starting PvP match...[/cyan]")
-        result = client.start_pvp_game()
+        display.console.print(f"[cyan]Creating {character_class.title()} and starting PvP match...[/cyan]")
+        result = client.start_pvp_game(character_class=character_class)
 
         hero_uuid = result.get("hero_uuid")
         _ = result.get("skeleton_uuid")

@@ -36,7 +36,7 @@ def create_test_barbarian(
     position: tuple = (0, 0),
     level: int = 3
 ) -> Entity:
-    """Create a simple barbarian for testing."""
+    """Create a simple barbarian for testing with Frenzy feature."""
     source_id = uuid4()
 
     config = EntityConfig(
@@ -70,6 +70,23 @@ def create_test_barbarian(
     # Equip greatsword (two-handed)
     greatsword = create_greatsword(entity.uuid)
     entity.equipment.equip(greatsword, WeaponSlot.MELEE_MAIN)
+
+    # Add RageFeature (provides rage resource and Rage action)
+    rage_feature = RageFeature(
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid,
+        rage_damage=2,
+        rage_uses=3
+    )
+    entity.add_condition(rage_feature)
+
+    # Add FrenzyFeature (Berserker L3 - registers Frenzy action)
+    frenzy_feature = FrenzyFeature(
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid,
+        rage_damage=2
+    )
+    entity.add_condition(frenzy_feature)
 
     return entity
 
@@ -122,24 +139,8 @@ def test_frenzy_activation():
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
 
+    # create_test_barbarian now includes RageFeature and FrenzyFeature
     barbarian = create_test_barbarian("Frenzy Test Barbarian")
-
-    # Apply RageFeature (provides rage resource)
-    rage_feature = RageFeature(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_uses=3,
-        rage_damage=2
-    )
-    barbarian.add_condition(rage_feature)
-
-    # Apply FrenzyFeature
-    frenzy_feature = FrenzyFeature(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_damage=2
-    )
-    barbarian.add_condition(frenzy_feature)
 
     # Check Frenzy action is available
     available = get_available_actions(barbarian)
@@ -172,7 +173,12 @@ def test_frenzy_activation():
 
 
 def test_frenzied_includes_raging():
-    """Test that Frenzied condition includes Raging as a sub-condition."""
+    """Test that using Frenzy action applies both Frenzied and Raging conditions.
+
+    Design note: Raging is now the parent condition and Frenzied is its sub-condition.
+    This inverted relationship enables rage maintenance to properly cascade removal.
+    The Frenzy action applies Raging first, then Frenzied as its child.
+    """
     print("\n=== Test: Frenzied Includes Raging ===")
 
     EventQueue.reset()
@@ -181,13 +187,11 @@ def test_frenzied_includes_raging():
 
     barbarian = create_test_barbarian("Frenzied Barbarian")
 
-    # Apply Frenzied condition directly
-    frenzied = Frenzied(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_damage=2
-    )
-    barbarian.add_condition(frenzied)
+    # Use Frenzy action (the correct way to enter frenzied rage)
+    frenzy_template = barbarian.get_action_template("Frenzy")
+    assert frenzy_template is not None, "Frenzy action should be registered"
+    frenzy_action = frenzy_template.instantiate()
+    frenzy_action.apply()
 
     # Check both conditions exist
     has_frenzied = "Frenzied" in barbarian.active_conditions
@@ -196,7 +200,15 @@ def test_frenzied_includes_raging():
     print(f"  Raging condition: {has_raging}")
 
     assert has_frenzied, "Should have Frenzied condition"
-    assert has_raging, "Should have Raging as sub-condition"
+    assert has_raging, "Should have Raging condition"
+
+    # Check parent-child relationship (Raging is parent, Frenzied is child)
+    raging = barbarian.active_conditions["Raging"]
+    frenzied = barbarian.active_conditions["Frenzied"]
+    print(f"  Raging.sub_conditions contains Frenzied: {frenzied.uuid in raging.sub_conditions}")
+    print(f"  Frenzied.parent_condition is Raging: {frenzied.parent_condition == raging.uuid}")
+    assert frenzied.uuid in raging.sub_conditions, "Frenzied should be in Raging's sub_conditions"
+    assert frenzied.parent_condition == raging.uuid, "Frenzied's parent should be Raging"
 
     # Check rage benefits are active (damage resistance)
     bludg_resist = barbarian.health.damage_reduction.resistance[DamageType.BLUDGEONING]
@@ -209,7 +221,8 @@ def test_frenzied_includes_raging():
     print(f"  STR save advantage: {advantage_status}")
     assert advantage_status == AdvantageStatus.ADVANTAGE, "Should have STR advantage from rage"
 
-    print("  [PASS] Frenzied includes Raging as sub-condition")
+    print("  [PASS] Frenzy action applies both conditions")
+    print("  [PASS] Parent-child relationship is correct (Raging > Frenzied)")
     print("  [PASS] Rage benefits are active")
 
     EventQueue.reset()
@@ -399,7 +412,11 @@ def test_cannot_frenzy_heavy_armor():
 
 
 def test_frenzy_maintenance():
-    """Test that frenzy ends if no attack or damage (like rage)."""
+    """Test that frenzy ends if no attack or damage (like rage).
+
+    Design: Raging is parent, Frenzied is child. When rage maintenance removes
+    Raging (due to no attacks/damage), Frenzied is automatically cascade-removed.
+    """
     print("\n=== Test: Frenzy Maintenance ===")
 
     EventQueue.reset()
@@ -408,16 +425,13 @@ def test_frenzy_maintenance():
 
     barbarian = create_test_barbarian("Frenzy Maintenance Test")
 
-    # Apply Frenzied directly
-    frenzied = Frenzied(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_damage=2
-    )
-    barbarian.add_condition(frenzied)
+    # Use Frenzy action to enter frenzied rage (applies both Raging and Frenzied)
+    frenzy_template = barbarian.get_action_template("Frenzy")
+    frenzy_action = frenzy_template.instantiate()
+    frenzy_action.apply()
 
     assert "Frenzied" in barbarian.active_conditions, "Should be frenzied"
-    assert "Raging" in barbarian.active_conditions, "Should be raging (sub-condition)"
+    assert "Raging" in barbarian.active_conditions, "Should be raging"
     assert "KeepRage" not in barbarian.active_conditions, "Should not have KeepRage"
 
     print(f"  Initial: Frenzied=True, Raging=True, KeepRage=False")
@@ -425,17 +439,16 @@ def test_frenzy_maintenance():
     # Simulate turn end without attack/damage
     barbarian.on_turn_end()
 
-    # Rage should have ended (and Frenzied with it)
+    # Rage should have ended (and Frenzied with it due to cascade)
     still_raging = "Raging" in barbarian.active_conditions
     still_frenzied = "Frenzied" in barbarian.active_conditions
     print(f"  After turn end: Frenzied={still_frenzied}, Raging={still_raging}")
 
-    # Note: Raging ends first, which may or may not cascade to Frenzied
-    # depending on implementation
-    if not still_raging:
-        print("  [PASS] Rage ended correctly (no attack or damage)")
-    else:
-        print("  [FAIL] Rage should have ended")
+    assert not still_raging, "Rage should have ended (no attack or damage)"
+    assert not still_frenzied, "Frenzied should have ended (cascade from Raging removal)"
+
+    print("  [PASS] Rage ended correctly (no attack or damage)")
+    print("  [PASS] Frenzied ended correctly (cascade removal)")
 
     EventQueue.reset()
 
@@ -450,16 +463,13 @@ def test_no_exhaustion():
 
     barbarian = create_test_barbarian("No Exhaustion Barbarian")
 
-    # Apply Frenzied condition
-    frenzied = Frenzied(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_damage=2
-    )
-    barbarian.add_condition(frenzied)
+    # Use Frenzy action to enter frenzied rage
+    frenzy_template = barbarian.get_action_template("Frenzy")
+    frenzy_action = frenzy_template.instantiate()
+    frenzy_action.apply()
 
-    # End frenzy by removing condition
-    barbarian.remove_condition("Frenzied")
+    # End frenzy by removing Raging (which cascades to remove Frenzied)
+    barbarian.remove_condition("Raging")
 
     # Check no Exhausted condition
     has_exhaustion = "Exhausted" in barbarian.active_conditions
@@ -480,26 +490,33 @@ def test_frenzy_removes_frenzied_strike():
     Entity._entity_by_position.clear()
 
     barbarian = create_test_barbarian("Cleanup Test", position=(0, 0))
-    _ = create_test_target("Target", position=(1, 0))  # Need target for senses
+    target = create_test_target("Target", position=(1, 0))  # Need target for senses
 
     Entity.update_all_entities_senses()
 
-    # Apply Frenzied condition
-    frenzied = Frenzied(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_damage=2
-    )
-    barbarian.add_condition(frenzied)
+    # Use Frenzy action to enter frenzied rage (costs bonus action)
+    frenzy_template = barbarian.get_action_template("Frenzy")
+    frenzy_action = frenzy_template.instantiate()
+    frenzy_action.apply()
 
-    # Verify FrenziedStrike is available
+    # Attack target to maintain rage (apply KeepRage marker)
+    from dnd.classes.barbarian import KeepRage
+    barbarian.add_condition(KeepRage(
+        source_entity_uuid=barbarian.uuid,
+        target_entity_uuid=barbarian.uuid
+    ))
+
+    # Simulate new turn (refreshes action economy and resets costs)
+    barbarian.on_turn_start()
+
+    # Verify FrenziedStrike is available now that we have bonus action
     available_before = get_available_actions(barbarian)
     entity_actions_before = [a.template_name for a in available_before.entity_actions]
     has_strike_before = any("Frenzied Strike" in name for name in entity_actions_before)
     print(f"  FrenziedStrike before removal: {has_strike_before}")
 
-    # Remove Frenzied condition
-    barbarian.remove_condition("Frenzied")
+    # Remove Raging condition (cascades to remove Frenzied)
+    barbarian.remove_condition("Raging")
 
     # Verify FrenziedStrike is no longer available
     available_after = get_available_actions(barbarian)

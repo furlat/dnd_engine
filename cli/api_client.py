@@ -15,6 +15,7 @@ class APIClient:
         self.base_url = base_url
         self.client = httpx.Client(base_url=base_url, timeout=timeout)
         self._current_entity_uuid: Optional[str] = None
+        self._controlled_entity_uuids: List[str] = []  # All entities this session controls
         self._session_id: Optional[str] = None
 
     def close(self):
@@ -79,8 +80,9 @@ class APIClient:
         resp.raise_for_status()
         data = resp.json()
 
-        # Store the first controlled entity
+        # Store all controlled entities
         controlled = data.get("controlled_entities", [])
+        self._controlled_entity_uuids = controlled
         if controlled:
             self._current_entity_uuid = controlled[0]
 
@@ -101,9 +103,13 @@ class APIClient:
     # Simulation Control
     # =========================================================================
 
-    def start_human_game(self) -> Dict[str, Any]:
-        """Start a new game with human control (vs AI)."""
-        resp = self.client.post("/simulation/start-human")
+    def start_human_game(self, character_class: str = "fighter") -> Dict[str, Any]:
+        """Start a new game with human control (vs AI).
+
+        Args:
+            character_class: "fighter" or "barbarian" - the hero's class
+        """
+        resp = self.client.post("/simulation/start-human", params={"character_class": character_class})
         resp.raise_for_status()
         data = resp.json()
         # Store hero UUID for joining
@@ -111,9 +117,13 @@ class APIClient:
             self._current_entity_uuid = data["hero_uuid"]
         return data
 
-    def start_pvp_game(self) -> Dict[str, Any]:
-        """Start a new PvP game (human vs claude)."""
-        resp = self.client.post("/simulation/start-pvp")
+    def start_pvp_game(self, character_class: str = "fighter") -> Dict[str, Any]:
+        """Start a new PvP game (human vs claude).
+
+        Args:
+            character_class: "fighter" or "barbarian" - the hero's class
+        """
+        resp = self.client.post("/simulation/start-pvp", params={"character_class": character_class})
         resp.raise_for_status()
         return resp.json()
 
