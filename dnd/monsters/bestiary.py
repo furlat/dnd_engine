@@ -56,7 +56,8 @@ def create_armor_scraps(source_id: UUID) -> BodyArmor:
 def create_goblin(
     source_id: Optional[UUID] = None,
     name: str = "Goblin",
-    position: Tuple[int, int] = (0, 0)
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None
 ) -> Entity:
     """
     Creates a Goblin (CR 1/4).
@@ -74,6 +75,7 @@ def create_goblin(
         source_id: UUID for the entity (generated if not provided)
         name: Name for the goblin
         position: Starting grid position
+        faction: Optional faction identifier
 
     Returns:
         Entity: A configured goblin entity
@@ -120,7 +122,8 @@ def create_goblin(
         equipment=equipment_config,
         action_economy=action_economy_config,
         proficiency_bonus=2,
-        position=position
+        position=position,
+        faction=faction
     )
 
     # Create entity
@@ -149,7 +152,8 @@ def create_goblin(
 def create_skeleton(
     source_id: Optional[UUID] = None,
     name: str = "Skeleton",
-    position: Tuple[int, int] = (0, 0)
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None
 ) -> Entity:
     """
     Creates a Skeleton (CR 1/4).
@@ -168,6 +172,7 @@ def create_skeleton(
         source_id: UUID for the entity (generated if not provided)
         name: Name for the skeleton
         position: Starting grid position
+        faction: Optional faction identifier
 
     Returns:
         Entity: A configured skeleton entity
@@ -211,7 +216,8 @@ def create_skeleton(
         equipment=equipment_config,
         action_economy=action_economy_config,
         proficiency_bonus=2,
-        position=position
+        position=position,
+        faction=faction
     )
 
     # Create entity
@@ -238,7 +244,8 @@ def create_skeleton(
 def create_goblin_archer(
     source_id: Optional[UUID] = None,
     name: str = "Goblin Archer",
-    position: Tuple[int, int] = (0, 0)
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None
 ) -> Entity:
     """
     Creates a Goblin Archer (CR 1/4) - Dual Wielder variant.
@@ -258,6 +265,7 @@ def create_goblin_archer(
         source_id: UUID for the entity (generated if not provided)
         name: Name for the goblin archer
         position: Starting grid position
+        faction: Optional faction identifier
 
     Returns:
         Entity: A configured goblin archer entity
@@ -304,7 +312,8 @@ def create_goblin_archer(
         equipment=equipment_config,
         action_economy=action_economy_config,
         proficiency_bonus=2,
-        position=position
+        position=position,
+        faction=faction
     )
 
     # Create entity

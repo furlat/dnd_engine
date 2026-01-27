@@ -285,7 +285,10 @@ def render_map_content(
     entity_at = {}
     for e in entities:
         pos = tuple(e["position"])
-        entity_at[pos] = e
+        # Prioritize alive entities over dead ones at the same position
+        existing = entity_at.get(pos)
+        if existing is None or (existing.get("is_dead") and not e.get("is_dead")):
+            entity_at[pos] = e
 
     valid_set = set(tuple(p) for p in valid_positions) if valid_positions else set()
     path_set = set(tuple(p) for p in movement_path) if movement_path else set()
@@ -299,6 +302,17 @@ def render_map_content(
                 hero_visible = cells
             else:
                 enemy_visible.update(cells)
+
+    # Build icon mapping for ALL non-player entities (dynamic count)
+    # First pass: count entities per starting letter
+    letter_counts: Dict[str, int] = {}
+    entity_icons: Dict[str, Tuple[str, int]] = {}  # uuid -> (letter, number)
+
+    for e in entities:
+        if e["uuid"] != current_entity_uuid and not e.get("is_dead"):
+            letter = e["name"][0].upper()
+            letter_counts[letter] = letter_counts.get(letter, 0) + 1
+            entity_icons[e["uuid"]] = (letter, letter_counts[letter])
 
     result = Text()
 
@@ -324,7 +338,14 @@ def render_map_content(
                 elif entity.get("is_dead"):
                     char, style = "%", "dim"
                 else:
-                    char, style = entity["name"][0].upper(), "bold red"
+                    # Dynamic icon: number if multiple share letter, else letter
+                    letter, num = entity_icons.get(entity["uuid"], (entity["name"][0].upper(), 1))
+                    total_with_letter = letter_counts.get(letter, 1)
+                    if total_with_letter > 1:
+                        char = str(num)
+                    else:
+                        char = letter
+                    style = "bold red"
             elif pos in path_set:
                 char, style = "+", "bold magenta"
             elif pos in valid_set:
@@ -352,11 +373,26 @@ def render_map_content(
 
     result.append("  +" + "-" * ((max_x - min_x + 1) * 2 + 1) + "+\n")
 
-    # Legend
+    # Dynamic legend: player first
     result.append("@ ", style="bold green")
     result.append("You  ")
-    result.append("X ", style="bold red")
-    result.append("Enemy  ")
+
+    # Build legend entries from entity_icons (grouped by display icon)
+    icon_to_names: Dict[str, List[str]] = {}
+    for e in entities:
+        if e["uuid"] != current_entity_uuid and not e.get("is_dead"):
+            letter, num = entity_icons.get(e["uuid"], (e["name"][0].upper(), 1))
+            total_with_letter = letter_counts.get(letter, 1)
+            icon = str(num) if total_with_letter > 1 else letter
+            if icon not in icon_to_names:
+                icon_to_names[icon] = []
+            icon_to_names[icon].append(e["name"])
+
+    # Show each icon -> name mapping
+    for icon, names in sorted(icon_to_names.items()):
+        result.append(f"{icon} ", style="bold red")
+        result.append(f"{names[0]}  ")  # Show first name (they share icon)
+
     result.append("# ", style="white")
     result.append("Wall  ")
     result.append("+ ", style="bold magenta")
@@ -678,8 +714,12 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
         content.append(f" uses ", style="dim")
         content.append(f"{action_name.title()}", style="bold magenta")
 
+    elif entry_type == "turn_start":
+        entity = entry.get("entity_name", entry.get("entity", "Someone"))
+        content.append(f"─── {entity}'s turn ───", style="bold yellow")
+
     elif entry_type == "turn_end":
-        entity = entry.get("entity", "Someone")
+        entity = entry.get("entity_name", entry.get("entity", "Someone"))
         content.append(f"─ {entity}'s turn ends ─", style="dim")
 
     else:
@@ -1073,22 +1113,27 @@ def _build_attack_log_entry(data: Dict[str, Any], attacker_default: str = "Someo
     }
 
 
-def show_opponent_action(entry: Dict[str, Any]):
-    """Process a combat log entry from the server and add to our rich combat log.
+def display_combat_log_entry(entry: Dict[str, Any]):
+    """Display any CombatLogEntry from server.
 
-    Uses CombatLogEntry structure: entry_type, data dict, summary.
+    This is the unified display function that handles all entry types:
+    attack, movement, death, action, turn_start, turn_end, opportunity_attack, etc.
+
+    Args:
+        entry: A CombatLogEntry.to_dict() from the server
     """
-    entry_type = entry.get("entry_type", "")
-    entry_type = entry_type.lower() if entry_type else ""
+    entry_type = entry.get("entry_type", "").lower()
     data = entry.get("data", {})
 
-    # Convert server entry to our rich format
     if entry_type in ("attack", "opportunity_attack"):
-        add_to_combat_log(_build_attack_log_entry(data, "Opponent", "Unknown"))
+        log_entry = _build_attack_log_entry(data, "Someone", "Unknown")
+        if entry_type == "opportunity_attack":
+            log_entry["is_opportunity_attack"] = True
+        add_to_combat_log(log_entry)
     elif entry_type == "movement":
         add_to_combat_log({
             "type": "move",
-            "entity_name": data.get("entity_name", "Opponent"),
+            "entity_name": data.get("entity_name", "Someone"),
             "start_position": data.get("start_position", [0, 0]),
             "end_position": data.get("end_position", [0, 0]),
         })
@@ -1103,71 +1148,48 @@ def show_opponent_action(entry: Dict[str, Any]):
             "entity_name": data.get("entity_name", "Someone"),
             "action_name": data.get("action_name", "action"),
         })
+    elif entry_type == "turn_start":
+        add_to_combat_log({
+            "type": "turn_start",
+            "entity_name": data.get("entity_name", "Someone"),
+        })
     elif entry_type == "turn_end":
         add_to_combat_log({
             "type": "turn_end",
-            "entity": data.get("entity_name", "Someone"),
+            "entity_name": data.get("entity_name", "Someone"),
         })
+    else:
+        # Fallback for unknown types - use summary if available
+        summary = entry.get("summary", "")
+        if summary:
+            add_to_combat_log({"type": "message", "message": summary})
+
+
+def show_opponent_action(entry: Dict[str, Any]):
+    """Process a combat log entry from the server and add to our rich combat log.
+
+    Uses CombatLogEntry structure: entry_type, data dict, summary.
+    Delegates to unified display_combat_log_entry().
+    """
+    display_combat_log_entry(entry)
 
 
 def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
     """Process a player action result and add to rich combat log.
 
+    Uses combat_log_entries as the ONLY source of truth.
+
     Args:
-        result: The action result from the server
-        player_entity_name: The name of the player's entity (e.g., "Hero")
+        result: The action result from the server (must contain combat_log_entries)
+        player_entity_name: Unused, kept for API compatibility
     """
-    event_type = result.get("event_type", "")
-    message = result.get("message", "")
+    # Suppress unused parameter warning
+    _ = player_entity_name
 
-    # Add to rich combat log based on event type
-    # Note: event_type is template name like "attack_melee_main" or "extra attack_ranged_main"
-    if event_type.startswith("attack") or "extra attack" in event_type.lower():
-        data = result.get("event_data") or {}  # Handle None explicitly
-        add_to_combat_log(_build_attack_log_entry(data, player_entity_name, "Unknown"))
-    elif event_type in ("move", "movement"):
-        data = result.get("event_data") or {}  # Handle None explicitly
-        # Use new field names from MovementLogData
-        add_to_combat_log({
-            "type": "move",
-            "entity_name": data.get("entity_name", player_entity_name),
-            "start_position": data.get("start_position", [0, 0]),
-            "end_position": data.get("end_position", [0, 0]),
-        })
-    elif not event_type.startswith("attack") and event_type not in ("move", "movement"):
-        # Self-action (Dash, Dodge, Disengage, Second Wind, Action Surge, Extra Attack, etc.)
-        # Note: use `or {}` because event_data may be explicitly None (not missing)
-        data = result.get("event_data") or {}
-        # Prefer display_name, then action_name, then fall back to event_type
-        action_name = data.get("display_name") or data.get("action_name") or event_type
-        # Clean up ugly template names like "Extra Attack_Ranged_Main"
-        if "_" in action_name and " " not in action_name:
-            # This looks like a template name, extract the base action name
-            action_name = action_name.split("_")[0]
-            # Handle "Extra Attack" case
-            if action_name.lower() == "extra":
-                action_name = "Extra Attack"
-        add_to_combat_log({
-            "type": "action",
-            "entity_name": player_entity_name,
-            "action_name": action_name,
-        })
-    elif message:
-        add_to_combat_log({"type": "message", "message": message})
-
-    # Show any triggered reactions (opportunity attacks against the player)
-    triggered = result.get("triggered_reactions", [])
-    for reaction in triggered:
-        if reaction.get("type") == "opportunity_attack":
-            reaction_data = dict(reaction)
-            reaction_data["is_opportunity_attack"] = True
-            reaction_data["target_name"] = player_entity_name
-            add_to_combat_log(_build_attack_log_entry(reaction_data, "Enemy", player_entity_name))
-
-    # Show deaths
-    deaths = result.get("deaths", [])
-    for name in deaths:
-        add_to_combat_log({"type": "death", "entity": name})
+    # combat_log_entries is the ONLY source of truth
+    entries = result.get("combat_log_entries", [])
+    for entry in entries:
+        display_combat_log_entry(entry)
 
 
 def show_error(message: str):
@@ -1204,24 +1226,13 @@ def show_opportunity_attack(reaction: Dict[str, Any]):
 def show_ai_actions(actions: List[Dict[str, Any]]):
     """Display AI actions that occurred during AI turn.
 
-    Uses CombatLogEntry structure: entry_type, data dict.
+    Uses CombatLogEntry structure. Delegates to unified display_combat_log_entry().
     """
     if not actions:
         return
 
     for action in actions:
-        entry_type = action.get("entry_type", "")
-        data = action.get("data", {})
-
-        if entry_type == "attack":
-            add_to_combat_log(_build_attack_log_entry(data, "AI", "you"))
-        elif entry_type == "movement":
-            add_to_combat_log({
-                "type": "move",
-                "entity_name": data.get("entity_name", "AI"),
-                "start_position": data.get("start_position", [0, 0]),
-                "end_position": data.get("end_position", [0, 0]),
-            })
+        display_combat_log_entry(action)
 
 
 def prompt_command() -> str:

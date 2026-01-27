@@ -32,6 +32,7 @@ from dnd.core.events import (
     DeathEvent, UnconsciousEvent
 )
 from dnd.core.combat_log import CombatLogEntry
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.controller import Controller, TurnContext
 
@@ -468,6 +469,9 @@ class Encounter(BaseObject):
             turn_index=self.current_turn_index
         )
 
+        # Add turn start to combat log
+        self.add_event_to_combat_log(event)
+
         # Update senses (use larger range to cover typical combat arenas)
         entity.update_entity_senses(max_distance=20)
 
@@ -507,6 +511,9 @@ class Encounter(BaseObject):
             round_number=self.round_number,
             turn_index=self.current_turn_index
         )
+
+        # Add turn end to combat log
+        self.add_event_to_combat_log(event)
 
         # Notify controller
         if controller:
@@ -606,8 +613,8 @@ class Encounter(BaseObject):
             bonus_actions_remaining=ae.bonus_actions.normalized_score,
             reactions_remaining=ae.reactions.normalized_score,
             movement_remaining=ae.movement.normalized_score,
-            visible_enemies=dict(entity.senses.entities),
-            visible_allies={},
+            visible_enemies=entity.get_visible_enemies(),
+            visible_allies=entity.get_visible_allies(),
         )
 
     # =========================================================================
@@ -718,21 +725,48 @@ class Encounter(BaseObject):
 
         # Check if encounter should end (only one side remaining)
         if death_events:
+            # Refresh senses for all entities so they can see newly-available movement
+            # (dead entities are now non-blocking, paths need to be recomputed)
+            Entity.update_all_entities_senses(max_distance=20)
             self._check_encounter_end()
 
         return death_events
 
     def _handle_death(self, combatant: CombatantState) -> Optional[DeathEvent]:
         """
-        Handle the death of a combatant.
+        Handle the death of a combatant using the Dead condition.
 
-        Marks them as dead and fires a DeathEvent.
+        Uses condition-based approach for clean resurrection support:
+        1. Marks combatant as dead (encounter-level flag)
+        2. Marks entity as non-blocking in GridMap (stays registered for resurrection/looting)
+        3. Applies Dead condition (includes Incapacitated, disables all action economy)
+
+        Event handlers are PRESERVED - Incapacitated sets reactions=0 so OA won't fire.
+        Resurrection can simply: remove Dead condition, set blocking, set HP, mark alive.
         """
         entity = combatant.entity
         if entity is None:
             return None
 
         combatant.is_dead = True
+
+        # === CLEAN APPROACH: Use Dead condition ===
+        # 1. Mark as non-blocking in GridMap (stays registered for resurrection/looting)
+        get_map().set_entity_blocking(entity.uuid, blocking=False)
+
+        # 2. Apply Dead condition (includes Incapacitated, disables all action economy)
+        #    Event handlers are PRESERVED - Incapacitated sets reactions=0 so OA won't fire
+        from dnd.conditions import Dead
+        dead_condition = Dead(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid
+        )
+        entity.add_condition(dead_condition, check_save_throw=False)
+        # === END CLEAN APPROACH ===
+
+        # Note: Dead entities are filtered from attack targets via
+        # get_visible_enemies(include_dead=False) which checks HP.
+        # They remain visible for looting, resurrection, corpse-explosion, etc.
 
         # Fire death event
         event = DeathEvent(
@@ -745,21 +779,39 @@ class Encounter(BaseObject):
             phase=EventPhase.COMPLETION
         )
 
+        # Manually generate combat_log since we're created directly at COMPLETION
+        event.combat_log = event.generate_combat_log()
+
         return event
 
     def _check_encounter_end(self) -> bool:
         """
-        Check if the encounter should end (all combatants on one side dead).
+        Check if the encounter should end (only one faction has survivors).
 
-        For now, simple check: if only 1 combatant alive, end encounter.
-        Future: track teams/factions for proper side detection.
+        Uses faction-based detection: entities with same faction are allies.
+        Entities with faction=None are treated as their own faction (enemy to all).
 
         Returns:
             True if encounter ended
         """
-        alive_count = sum(1 for c in self.combatants.values() if c.is_alive)
+        # Collect alive count per faction
+        # Entities with faction=None are treated as their own "faction" (uuid-based)
+        factions_alive: Dict[str, int] = {}
+        for combatant in self.combatants.values():
+            entity = combatant.entity
+            if entity is None:
+                continue
+            # Use faction if set, else use entity uuid (each factionless entity is own faction)
+            faction_key = entity.faction if entity.faction else str(entity.uuid)
+            if faction_key not in factions_alive:
+                factions_alive[faction_key] = 0
+            if combatant.is_alive:
+                factions_alive[faction_key] += 1
 
-        if alive_count <= 1:
+        # End if only one faction (or none) has survivors
+        factions_with_alive = [f for f, c in factions_alive.items() if c > 0]
+
+        if len(factions_with_alive) <= 1:
             self.end_encounter()
             return True
 
@@ -906,7 +958,17 @@ class Encounter(BaseObject):
         log_start = len(self.combat_log)
 
         while self.state == EncounterState.ACTIVE:
+            entity = self.get_current_entity()
+            combatant = self.get_current_combatant()
             controller = self.get_current_controller()
+
+            # Skip dead combatants - advance turn index without calling run_turn()
+            if combatant and (combatant.is_dead or not combatant.is_alive):
+                combatant.has_acted_this_round = True
+                self.current_turn_index += 1
+                if self.current_turn_index >= len(self.initiative_order):
+                    self._advance_round()
+                continue
 
             if controller is None:
                 return AdvanceResult(

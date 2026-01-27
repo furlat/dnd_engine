@@ -16,7 +16,8 @@
       "Bash(__NEW_LINE_4fb0a2ef61967796__ echo \"\")",
       "Bash(npm install)",
       "Bash(npm install:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(PYTHONPATH=. python:*)"
     ]
   }
 }

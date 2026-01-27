@@ -16,7 +16,7 @@ from dnd.classes.barbarian_factory import (
 )
 
 # Test utilities
-from examples.test_utils import (
+from dnd.utils import (
     reset_combat_state,
     setup_combat_arena,
     get_hp,
