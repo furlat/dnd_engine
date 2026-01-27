@@ -26,7 +26,7 @@ from dnd.core.base_actions import (
 )
 from dnd.core.events import (
     Event, EventPhase, EventType,
-    Trigger, EventHandler, EventQueue,
+    Trigger, EventHandler,
     WeaponSlot,
     TakeDamageEvent, SkillCheckEvent
 )
@@ -50,45 +50,12 @@ from uuid import UUID
 
 
 # =============================================================================
-# RAGE SYSTEM: Marker Condition
-# =============================================================================
-
-class KeepRage(BaseCondition):
-    """
-    Marker condition: attacked or took damage this turn while raging.
-
-    Applied by ATTACK and TAKE_DAMAGE handlers when the barbarian is raging.
-    Checked by rage maintenance handler at TURN_END.
-
-    Duration: 1 round (expires at next TURN_START, after TURN_END check).
-
-    This condition has no modifiers - it's purely a marker for rage maintenance.
-    """
-    name: str = "KeepRage"
-    description: str = "Rage will continue (attacked or took damage this turn)"
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        Optional[Event]           # completion event
-    ]:
-        # Set 1 round duration - expires at start of next turn
-        self.duration.duration_type = DurationType.ROUNDS
-        self.duration.duration = 1
-
-        # No modifiers - pure marker condition
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message="Rage maintenance marker applied"
-        )
-
-        return [], [], [], effect_event
-
-
-# =============================================================================
 # RAGE SYSTEM: Contextual Modifier Functions
 # =============================================================================
+# Note: Rage maintenance now uses generic HasAttacked and HasTakenDamage
+# conditions from dnd/conditions.py instead of the Barbarian-specific KeepRage.
+# This aligns with the SRD rule: "if you haven't attacked a hostile creature
+# since your last turn or taken damage since then"
 
 def rage_damage_check(
     source_entity_uuid: UUID,
@@ -134,84 +101,26 @@ def rage_damage_check(
 # RAGE SYSTEM: Event Handler Processors
 # =============================================================================
 
-def rage_attack_tracker(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """
-    Apply KeepRage marker when attacking while raging.
-
-    Triggers on ATTACK at EXECUTION phase (own attacks only).
-    Uses same pattern as has_attacked_processor for reliability.
-    """
-    # Only trigger for the attacker's own attacks
-    if event.source_entity_uuid != source_entity_uuid:
-        return None
-
-    # Only on non-canceled events
-    if event.canceled:
-        return None
-
-    entity = Entity.get(source_entity_uuid)
-    if not entity:
-        return None
-
-    # Only process FIRST event at EXECUTION phase for this attack
-    if not EventQueue.is_first_at_phase(event):
-        return None
-
-    # Must be raging
-    if "Raging" not in entity.active_conditions:
-        return None
-
-    # Apply KeepRage if not already present
-    if "KeepRage" not in entity.active_conditions:
-        keep_rage = KeepRage(
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=source_entity_uuid
-        )
-        entity.add_condition(keep_rage)
-
-    return None  # Don't modify attack event
-
-
-def rage_damage_tracker(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """
-    Apply KeepRage marker when taking damage while raging.
-
-    Triggers on TAKE_DAMAGE at EFFECT phase (when we are the target).
-    """
-    # Only when WE take damage (we are the target)
-    if event.target_entity_uuid != source_entity_uuid:
-        return None
-
-    entity = Entity.get(source_entity_uuid)
-    if not entity:
-        return None
-
-    # Must be raging
-    if "Raging" not in entity.active_conditions:
-        return None
-
-    # Apply KeepRage if not already present
-    if "KeepRage" not in entity.active_conditions:
-        keep_rage = KeepRage(
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=source_entity_uuid
-        )
-        entity.add_condition(keep_rage)
-
-    return None  # Don't modify damage event
-
-
 def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """
-    Check if rage should end at turn end.
+    Check if rage should end due to inactivity.
 
-    Triggers on TURN_END at EXECUTION phase.
+    Triggers on TURN_START at EXECUTION phase (BEFORE conditions expire).
+
+    This timing is critical: HasAttacked/HasTakenDamage have 1-round duration
+    and expire at TURN_START after EXECUTION. By checking at TURN_START EXECUTION,
+    we can see if the barbarian attacked or took damage since their last turn
+    before those markers are removed.
 
     Rage ends if:
-    - No KeepRage marker present (didn't attack or take damage)
+    - No HasAttacked AND no HasTakenDamage condition present
     - Entity does NOT have PersistentRage (L15+)
+
+    Per SRD: "Your rage lasts for 1 minute... It ends early if... your turn ends
+    and you haven't attacked a hostile creature since your last turn or taken
+    damage since then."
     """
-    # Only on OUR turn end
+    # Only on OUR turn start
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
@@ -227,8 +136,11 @@ def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Option
     if "PersistentRage" in entity.active_conditions:
         return None
 
-    # Check for KeepRage marker
-    if "KeepRage" not in entity.active_conditions:
+    # Check for attack OR damage this turn (using global combat state conditions)
+    has_attacked = "HasAttacked" in entity.active_conditions
+    has_taken_damage = "HasTakenDamage" in entity.active_conditions
+
+    if not has_attacked and not has_taken_damage:
         # No attack or damage this turn - rage ends
         entity.remove_condition("Raging")
         return event.model_copy(update={
@@ -275,46 +187,19 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
 # =============================================================================
 # RAGE SYSTEM: Handler Factory Functions
 # =============================================================================
-
-def create_rage_attack_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create handler that tracks attacks while raging."""
-    return EventHandler(
-        name="Rage Attack Tracker",
-        source_entity_uuid=source_entity_uuid,
-        trigger_conditions=[
-            Trigger(
-                event_type=EventType.ATTACK,
-                event_phase=EventPhase.EXECUTION
-            )
-        ],
-        event_processor=rage_attack_tracker
-    )
-
-
-def create_rage_damage_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create handler that tracks damage taken while raging."""
-    return EventHandler(
-        name="Rage Damage Tracker",
-        source_entity_uuid=source_entity_uuid,
-        trigger_conditions=[
-            Trigger(
-                event_type=EventType.TAKE_DAMAGE,
-                event_phase=EventPhase.EFFECT
-            )
-        ],
-        event_processor=rage_damage_tracker
-    )
-
+# Note: Attack and damage tracking is now handled by global HasAttacked and
+# HasTakenDamage handlers registered in setup_standard_actions(). We only
+# need the maintenance handler (and armor/unconscious handlers) here.
 
 def create_rage_maintenance_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create handler that checks rage maintenance at turn end."""
+    """Create handler that checks rage maintenance at turn start (before conditions expire)."""
     return EventHandler(
         name="Rage Maintenance",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
-                event_type=EventType.TURN_END,
-                event_phase=EventPhase.EXECUTION
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EXECUTION  # Fires BEFORE conditions expire in on_turn_start()
             )
         ],
         event_processor=rage_maintenance_processor
@@ -397,8 +282,7 @@ class Raging(BaseCondition):
     - Resistance to bludgeoning/piercing/slashing damage (if not in heavy armor)
 
     The condition also registers handlers to track:
-    - Attacks (to apply KeepRage marker)
-    - Damage taken (to apply KeepRage marker)
+    - Turn end (to check if rage should end based on HasAttacked/HasTakenDamage)
     - Turn end (to check if rage should end)
 
     Rage ends if:
@@ -481,19 +365,11 @@ class Raging(BaseCondition):
             mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
             outs.append((target.health.damage_reduction.uuid, mod_uuid))
 
-        # 5. Register handlers for rage tracking and maintenance
+        # 5. Register handlers for rage maintenance
+        # Note: Attack and damage tracking is now handled globally by
+        # HasAttacked and HasTakenDamage conditions (registered in setup_standard_actions)
 
-        # Handler A: Track attacks while raging
-        attack_handler = create_rage_attack_handler(target.uuid)
-        target.add_event_handler(attack_handler)
-        handler_uuids.append(attack_handler.uuid)
-
-        # Handler B: Track damage while raging
-        damage_handler = create_rage_damage_handler(target.uuid)
-        target.add_event_handler(damage_handler)
-        handler_uuids.append(damage_handler.uuid)
-
-        # Handler C: Check rage maintenance at turn end
+        # Handler A: Check rage maintenance at turn end
         maintenance_handler = create_rage_maintenance_handler(target.uuid)
         target.add_event_handler(maintenance_handler)
         handler_uuids.append(maintenance_handler.uuid)

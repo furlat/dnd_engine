@@ -92,22 +92,24 @@ def test_persistent_rage_prevents_inactivity_end():
     # Verify conditions
     has_persistent = "PersistentRage" in barbarian.active_conditions
     has_raging = "Raging" in barbarian.active_conditions
-    has_keep_rage = "KeepRage" in barbarian.active_conditions
+    has_attacked = "HasAttacked" in barbarian.active_conditions
+    has_taken_damage = "HasTakenDamage" in barbarian.active_conditions
     print(f"  PersistentRage: {has_persistent}")
     print(f"  Raging: {has_raging}")
-    print(f"  KeepRage: {has_keep_rage}")
+    print(f"  HasAttacked: {has_attacked}, HasTakenDamage: {has_taken_damage}")
 
     assert has_persistent, "Should have PersistentRage"
     assert has_raging, "Should be raging"
-    assert not has_keep_rage, "Should NOT have KeepRage (no attack/damage)"
+    assert not has_attacked, "Should NOT have HasAttacked (no attack/damage)"
+    assert not has_taken_damage, "Should NOT have HasTakenDamage (no attack/damage)"
 
-    # Simulate turn end WITHOUT attacking or taking damage
-    print("  Ending turn (no attack, no damage taken)...")
-    barbarian.on_turn_end()
+    # Simulate next turn start (rage check happens at TURN_START before conditions expire)
+    print("  Starting next turn (no attack, no damage taken since last turn)...")
+    barbarian.on_turn_start()
 
     # Rage should STILL be active due to PersistentRage
     still_raging = "Raging" in barbarian.active_conditions
-    print(f"  Still raging after turn end: {still_raging}")
+    print(f"  Still raging after turn start: {still_raging}")
 
     if still_raging:
         print("  [PASS] PersistentRage prevents rage from ending due to inactivity")
@@ -144,13 +146,13 @@ def test_without_persistent_rage_ends_on_inactivity():
     assert not has_persistent, "Should NOT have PersistentRage"
     assert has_raging, "Should be raging"
 
-    # Simulate turn end WITHOUT attacking or taking damage
-    print("  Ending turn (no attack, no damage taken)...")
-    barbarian.on_turn_end()
+    # Simulate next turn start (rage check happens at TURN_START before conditions expire)
+    print("  Starting next turn (no attack, no damage taken since last turn)...")
+    barbarian.on_turn_start()
 
     # Rage should end
     still_raging = "Raging" in barbarian.active_conditions
-    print(f"  Still raging after turn end: {still_raging}")
+    print(f"  Still raging after turn start: {still_raging}")
 
     if not still_raging:
         print("  [PASS] Without PersistentRage, rage ends from inactivity")
@@ -267,8 +269,9 @@ def test_rage_ends_when_persistent_rage_removed():
     )
     barbarian.add_condition(raging)
 
-    # First turn - rage should persist
+    # First turn end + next turn start - rage should persist (has PersistentRage)
     barbarian.on_turn_end()
+    barbarian.on_turn_start()  # Rage maintenance check happens here
     still_raging_turn1 = "Raging" in barbarian.active_conditions
     print(f"  After turn 1 (with PersistentRage): Raging = {still_raging_turn1}")
     assert still_raging_turn1, "Rage should persist with PersistentRage"
@@ -278,8 +281,9 @@ def test_rage_ends_when_persistent_rage_removed():
     has_persistent = "PersistentRage" in barbarian.active_conditions
     print(f"  PersistentRage removed: {not has_persistent}")
 
-    # Second turn - rage should now end
+    # Second turn end + next turn start - rage should now end
     barbarian.on_turn_end()
+    barbarian.on_turn_start()  # Rage maintenance check happens here
     still_raging_turn2 = "Raging" in barbarian.active_conditions
     print(f"  After turn 2 (without PersistentRage): Raging = {still_raging_turn2}")
 

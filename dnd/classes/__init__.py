@@ -48,11 +48,14 @@ from dnd.classes.fighter import (
     # ==========================================================================
     # Level 5: Extra Attack
     # ==========================================================================
-    HasAttacked,
-    has_attacked_processor,
-    create_has_attacked_handler,
+    # NOTE: HasAttacked and HasTakenDamage are now generic conditions in dnd/conditions.py
+    # They are registered globally by setup_standard_actions() for ALL entities.
+    # ExtraAttack feature only registers the Fighter-specific resource handler.
+    extra_attack_resource_processor,
+    create_extra_attack_resource_handler,
     ExtraAttack,
     ExtraAttackFeature,
+    ExtraAttacksGranted,  # Marker for Action Surge compatibility
 
     # ==========================================================================
     # Level 9: Indomitable
@@ -148,12 +151,12 @@ __all__ = [
     "ActionSurgeFeature",
     # Level 3: Champion - Improved Critical
     "ImprovedCritical",
-    # Level 5: Extra Attack
-    "HasAttacked",
-    "has_attacked_processor",
-    "create_has_attacked_handler",
+    # Level 5: Extra Attack (HasAttacked/HasTakenDamage now in dnd/conditions.py)
+    "extra_attack_resource_processor",
+    "create_extra_attack_resource_handler",
     "ExtraAttack",
     "ExtraAttackFeature",
+    "ExtraAttacksGranted",
     # Level 9: Indomitable
     "Indomitable",
     "create_indomitable_handler",
