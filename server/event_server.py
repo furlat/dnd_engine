@@ -233,17 +233,15 @@ def setup_combat() -> Encounter:
 
 def setup_arena_combat(
     player_position: tuple = (2, 7),
-    opponent_position: tuple = (12, 7),
     pvp_mode: bool = False
 ) -> Encounter:
     """
-    Initialize arena combat with Hero vs Skeleton.
+    Initialize arena combat with Hero (heroes faction) vs 3 Skeletons (monsters faction).
 
     Args:
         player_position: Starting position for Hero
-        opponent_position: Starting position for Skeleton
-        pvp_mode: If True, Skeleton uses ClaudeController (PvP).
-                  If False, Skeleton uses MeleeAIController (vs AI).
+        pvp_mode: If True, Skeletons use ClaudeController (PvP).
+                  If False, Skeletons use MeleeAIController (vs AI).
     """
     # Reset all state
     reset_map()
@@ -263,13 +261,24 @@ def setup_arena_combat(
         if y != 7:  # Leave a gap in the middle
             grid.set_tile(7, y, walkable=False, visible=False)
 
-    # Create combatants - Hero is a Level 5 DEX Fighter
-    player = create_dex_fighter(name="Hero", position=player_position)
-    opponent = create_skeleton(name="Skeleton", position=opponent_position)
+    # Create Hero - Level 5 DEX Fighter (heroes faction)
+    player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
+
+    # Create 3 Skeletons (monsters faction) at different positions
+    skeleton_positions = [(12, 5), (12, 7), (12, 9)]
+    skeletons = []
+    for i, pos in enumerate(skeleton_positions):
+        skeleton = create_skeleton(
+            name=f"Skeleton {i+1}",
+            position=pos,
+            faction="monsters"
+        )
+        skeletons.append(skeleton)
 
     # Register opportunity attack handlers
     add_opportunity_attack_handler(player)
-    add_opportunity_attack_handler(opponent)
+    for skeleton in skeletons:
+        add_opportunity_attack_handler(skeleton)
 
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -278,15 +287,16 @@ def setup_arena_combat(
     encounter = Encounter(name=encounter_name, source_entity_uuid=uuid4())
     encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
 
-    if pvp_mode:
-        encounter.add_combatant(opponent, ClaudeController(source_entity_uuid=opponent.uuid))
-    else:
-        encounter.add_combatant(opponent, MeleeAIController(source_entity_uuid=opponent.uuid))
+    for skeleton in skeletons:
+        if pvp_mode:
+            encounter.add_combatant(skeleton, ClaudeController(source_entity_uuid=skeleton.uuid))
+        else:
+            encounter.add_combatant(skeleton, MeleeAIController(source_entity_uuid=skeleton.uuid))
 
     return encounter
 
 
-def create_dex_fighter(name: str = "Hero", position: tuple = (0, 0)) -> Entity:
+def create_dex_fighter(name: str = "Hero", position: tuple = (0, 0), faction: Optional[str] = None) -> Entity:
     """
     Create a Level 5 DEX-based Fighter with dual wielding and archery.
 
@@ -298,6 +308,7 @@ def create_dex_fighter(name: str = "Hero", position: tuple = (0, 0)) -> Entity:
         level=5,
         name=name,
         position=position,
+        faction=faction,
         # DEX-based: High DEX, high CON, decent STR
         base_strength=12,      # Decent STR
         base_dexterity=15,     # High DEX (will be 17 with +2 bonus)
@@ -804,8 +815,10 @@ async def join_game(request: JoinGameRequest):
     """
     Join the active game with a session.
 
-    If entity_uuids is provided, assigns those entities to the session.
-    Otherwise, auto-assigns based on player type (human gets Hero, claude gets Skeleton).
+    Priority:
+    1. If entity_uuids is provided, assigns those specific entities
+    2. If faction is provided, assigns all entities with that faction
+    3. Otherwise, auto-assigns based on player type (human gets Hero, claude gets Skeleton)
     """
     try:
         sid = UUID(request.session_id)
@@ -829,7 +842,7 @@ async def join_game(request: JoinGameRequest):
     # Assign entities
     assigned = []
     if request.entity_uuids:
-        # Assign specific entities
+        # Priority 1: Assign specific entities by UUID
         for uuid_str in request.entity_uuids:
             try:
                 entity_uuid = UUID(uuid_str)
@@ -837,8 +850,14 @@ async def join_game(request: JoinGameRequest):
                     assigned.append(str(entity_uuid))
             except ValueError:
                 pass  # Skip invalid UUIDs
+    elif request.faction:
+        # Priority 2: Assign all entities with the given faction
+        for entity in Entity.get_all_entities():
+            if entity.faction == request.faction:
+                if game.assign_entity(entity.uuid, session.session_id):
+                    assigned.append(str(entity.uuid))
     else:
-        # Auto-assign based on player type and entity name
+        # Priority 3: Auto-assign based on player type and entity name
         for entity in Entity.get_all_entities():
             # Human players get "Hero", Claude players get other entities
             if session.player_type == PlayerType.HUMAN and entity.name == "Hero":
@@ -887,6 +906,42 @@ async def get_game_status():
         "encounter_active": game.encounter is not None and game.encounter.state.value == "active",
         "active_entity_uuid": str(game.active_entity_uuid) if game.active_entity_uuid else None,
         "sessions": sessions_info
+    }
+
+
+@app.get("/session/{session_id}/entities")
+async def get_session_entities(session_id: str):
+    """
+    Get list of entities controlled by a session.
+
+    Returns entity details including uuid, name, faction, hp, and position.
+    """
+    try:
+        sid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    mgr = sim.get_session_manager()
+    session = mgr.get_session(sid)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    entities_info = []
+    for entity_uuid in session.controlled_entities:
+        entity = Entity.get(entity_uuid)
+        if entity:
+            entities_info.append({
+                "uuid": str(entity.uuid),
+                "name": entity.name,
+                "faction": entity.faction,
+                "hp": entity.get_hp(),
+                "position": entity.position
+            })
+
+    return {
+        "session_id": str(session.session_id),
+        "controlled_entities": entities_info
     }
 
 
@@ -1096,9 +1151,13 @@ async def execute_self_action(request: SelfActionRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Collect combat log entries
+    action_log_entries: list = []
+
     # Add to combat log using event.combat_log
     if event and event.combat_log:
         add_event_to_combat_log(sim, event)
+        action_log_entries.append(event.combat_log.to_dict())
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1106,7 +1165,8 @@ async def execute_self_action(request: SelfActionRequest):
         event_type=request.action_name.lower(),
         entity_hp=entity.get_hp(),
         turn_continues=True,
-        encounter_ended=False
+        encounter_ended=False,
+        combat_log_entries=action_log_entries
     )
 
 
@@ -1153,10 +1213,14 @@ async def execute_entity_action(request: EntityActionRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
+    # Collect combat log entries
+    action_log_entries: list = []
+
     # Build event data for attacks using event.combat_log
     event_data = None
     if event and hasattr(event, 'attack_outcome') and event.combat_log:
         add_event_to_combat_log(sim, event)
+        action_log_entries.append(event.combat_log.to_dict())
         # Pass through the full combat log data - CLI now supports new structure
         event_data = dict(event.combat_log.data)
         # Add target_hp for ActionResult
@@ -1166,6 +1230,7 @@ async def execute_entity_action(request: EntityActionRequest):
     for death_event in deaths:
         if sim.encounter and death_event.combat_log:
             sim.encounter.add_event_to_combat_log(death_event)
+            action_log_entries.append(death_event.combat_log.to_dict())
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1176,7 +1241,8 @@ async def execute_entity_action(request: EntityActionRequest):
         target_hp=target.get_hp(),
         deaths=death_names,
         turn_continues=not encounter_ended,
-        encounter_ended=encounter_ended
+        encounter_ended=encounter_ended,
+        combat_log_entries=action_log_entries
     )
 
 
@@ -1233,6 +1299,9 @@ async def execute_position_action(request: PositionActionRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
+    # Collect combat log entries
+    action_log_entries: list = []
+
     # Extract event data
     event_data = None
     triggered_reactions: list = []
@@ -1241,6 +1310,7 @@ async def execute_position_action(request: PositionActionRequest):
         # Log move using event.combat_log
         if event.combat_log:
             add_event_to_combat_log(sim, event)
+            action_log_entries.append(event.combat_log.to_dict())
             # Pass through the full combat log data
             event_data = dict(event.combat_log.data)
         else:
@@ -1256,11 +1326,21 @@ async def execute_position_action(request: PositionActionRequest):
         for oa_event in captured_oa_events:
             if oa_event.combat_log:
                 add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
+                # Add to combat_log_entries with type override
+                entry_dict = oa_event.combat_log.to_dict()
+                entry_dict["entry_type"] = "opportunity_attack"
+                action_log_entries.append(entry_dict)
                 # Pass through full combat log data - CLI now supports new structure
                 oa_data = dict(oa_event.combat_log.data)
                 oa_data["type"] = "opportunity_attack"
                 oa_data["is_opportunity_attack"] = True
                 triggered_reactions.append(oa_data)
+
+    # Log death events
+    for death_event in deaths:
+        if sim.encounter and death_event.combat_log:
+            sim.encounter.add_event_to_combat_log(death_event)
+            action_log_entries.append(death_event.combat_log.to_dict())
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1271,7 +1351,8 @@ async def execute_position_action(request: PositionActionRequest):
         deaths=death_names,
         triggered_reactions=triggered_reactions,
         turn_continues=not encounter_ended,
-        encounter_ended=encounter_ended
+        encounter_ended=encounter_ended,
+        combat_log_entries=action_log_entries
     )
 
 
@@ -1319,6 +1400,9 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
+    # Collect combat log entries
+    action_log_entries: list = []
+
     # Build response based on action type
     event_data = None
     target_hp = None
@@ -1331,6 +1415,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         target_hp = target.get_hp() if target else None
 
         add_event_to_combat_log(sim, event)
+        action_log_entries.append(event.combat_log.to_dict())
         event_data = dict(event.combat_log.data)
         event_data["target_hp"] = target_hp
 
@@ -1338,6 +1423,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         # Move - pass through full combat log data
         if event.combat_log:
             add_event_to_combat_log(sim, event)
+            action_log_entries.append(event.combat_log.to_dict())
             event_data = dict(event.combat_log.data)
         else:
             # Fallback if no combat_log
@@ -1352,6 +1438,10 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         for oa_event in captured_oa_events:
             if oa_event.combat_log:
                 add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
+                # Add to combat_log_entries with type override
+                entry_dict = oa_event.combat_log.to_dict()
+                entry_dict["entry_type"] = "opportunity_attack"
+                action_log_entries.append(entry_dict)
                 # Pass through full combat log data - CLI now supports new structure
                 oa_data = dict(oa_event.combat_log.data)
                 oa_data["type"] = "opportunity_attack"
@@ -1362,6 +1452,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         # Self action - use event.combat_log
         if event and event.combat_log:
             add_event_to_combat_log(sim, event)
+            action_log_entries.append(event.combat_log.to_dict())
             event_data = dict(event.combat_log.data)
         elif event:
             # Fallback if no combat_log
@@ -1374,6 +1465,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     for death_event in deaths:
         if sim.encounter and death_event.combat_log:
             sim.encounter.add_event_to_combat_log(death_event)
+            action_log_entries.append(death_event.combat_log.to_dict())
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1385,7 +1477,8 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         deaths=death_names,
         triggered_reactions=triggered_reactions,
         turn_continues=not encounter_ended,
-        encounter_ended=encounter_ended
+        encounter_ended=encounter_ended,
+        combat_log_entries=action_log_entries
     )
 
 
@@ -1395,8 +1488,8 @@ async def start_human_simulation():
     Start a new combat with human control (player vs AI).
 
     This creates a game session and auto-assigns entities:
-    - Hero goes to the first human session that joins
-    - Skeleton is controlled by AI
+    - Hero (heroes faction) goes to the first human session that joins
+    - All monsters faction entities are controlled by AI
     """
     # Cancel existing task
     if sim.combat_task and not sim.combat_task.done():
@@ -1413,16 +1506,15 @@ async def start_human_simulation():
     # Create game session
     game = sim.create_game_session(sim.encounter)
 
-    # Create AI session for the Skeleton
+    # Create AI session for all monsters
     mgr = sim.get_session_manager()
-    ai_session = mgr.create_session(PlayerType.AI, "AI Skeleton")
+    ai_session = mgr.create_session(PlayerType.AI, "AI Monsters")
     game.add_player(ai_session)
 
-    # Assign Skeleton to AI
+    # Assign all monsters faction entities to AI
     for entity in Entity.get_all_entities():
-        if entity.name == "Skeleton":
+        if entity.faction == "monsters":
             game.assign_entity(entity.uuid, ai_session.session_id)
-            break
 
     # Advance to first turn (may be human or AI)
     result = await advance_encounter()
@@ -1430,7 +1522,7 @@ async def start_human_simulation():
     # Return info about which entity needs a human session
     hero_uuid = None
     for entity in Entity.get_all_entities():
-        if entity.name == "Hero":
+        if entity.faction == "heroes":
             hero_uuid = str(entity.uuid)
             break
 
@@ -1528,7 +1620,7 @@ async def agent_ping():
 @app.get("/pvp/status")
 async def get_pvp_status():
     """
-    Get PvP game status including session connections.
+    Get PvP game status including session connections and faction info.
 
     Used by CLIs to check game state and who's connected.
     """
@@ -1541,12 +1633,21 @@ async def get_pvp_status():
     hero_uuid = None
     skeleton_uuid = None
 
-    # Get entity UUIDs
+    # Get entity UUIDs and collect faction info
+    factions: dict = {}  # faction -> {total: int, alive: int}
     for entity in Entity.get_all_entities():
         if entity.name == "Hero":
             hero_uuid = entity.uuid
         elif entity.name == "Skeleton":
             skeleton_uuid = entity.uuid
+
+        # Track faction stats
+        faction_key = entity.faction if entity.faction else "(no faction)"
+        if faction_key not in factions:
+            factions[faction_key] = {"total": 0, "alive": 0}
+        factions[faction_key]["total"] += 1
+        if entity.get_hp() > 0:
+            factions[faction_key]["alive"] += 1
 
     if sim.encounter:
         current_entity = sim.encounter.get_current_entity()
@@ -1580,7 +1681,8 @@ async def get_pvp_status():
         "is_hero_turn": is_hero_turn,
         "is_skeleton_turn": is_skeleton_turn,
         "hero_uuid": str(hero_uuid) if hero_uuid else None,
-        "skeleton_uuid": str(skeleton_uuid) if skeleton_uuid else None
+        "skeleton_uuid": str(skeleton_uuid) if skeleton_uuid else None,
+        "factions": factions
     }
 
 

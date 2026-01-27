@@ -480,6 +480,8 @@ def create_goblin(
 | **Items** | |
 | Weapon factories (WEAPONS dict) | `dnd/items/weapons.py` |
 | Armor factories (ARMORS, SHIELDS dicts) | `dnd/items/armors.py` |
+| **Utilities** | |
+| Test/debug utilities | `dnd/utils/test_utils.py` |
 | **Monsters & Examples** | |
 | Simple creatures (Goblin, Skeleton) | `dnd/monsters/bestiary.py` |
 | Complex creature example | `dnd/monsters/circus_fighter.py` |
@@ -497,6 +499,7 @@ def create_goblin(
 | Barbarian rage tests | `examples/test_barbarian_rage.py` |
 | Barbarian frenzy tests | `examples/test_barbarian_frenzy.py` |
 | Barbarian features tests | `examples/test_barbarian_srd_features.py` |
+| Faction system tests | `examples/test_faction_system.py` |
 | Barbarian vs Fighter combat | `examples/test_barbarian_fighter_combat.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
@@ -579,6 +582,33 @@ All conditions in `dnd/conditions.py`:
 - `BaseObject._registry: Dict[UUID, BaseObject]` - All objects by UUID
 - `Entity._entity_registry: Dict[UUID, Entity]` - All entities
 - `Entity._entity_by_position: DefaultDict[Tuple[int,int], List[Entity]]` - Entities by grid position
+
+## Faction System
+
+Entities can have an optional `faction` field that determines ally/enemy relationships:
+
+```python
+# Create entities with factions
+hero = create_skeleton(name="Hero", position=(0,0), faction="heroes")
+ally = create_skeleton(name="Ally", position=(1,0), faction="heroes")
+enemy = create_skeleton(name="Enemy", position=(5,0), faction="monsters")
+
+# Faction methods
+hero.is_ally(ally)      # True - same faction
+hero.is_enemy(enemy)    # True - different faction
+hero.get_visible_enemies()  # Dict[UUID, position] of visible enemies
+hero.get_visible_allies()   # Dict[UUID, position] of visible allies
+
+# Class methods
+Entity.get_entities_by_faction("heroes")  # All entities in faction
+Entity.get_alive_by_faction("heroes")     # Alive entities in faction
+```
+
+**Backward Compatibility**: `faction=None` (default) means "no faction = enemy to everyone". This preserves old behavior where factionless entities fight each other.
+
+**Target Filtering**: `get_available_actions(target_filter="enemies"|"allies"|"all")` filters valid targets.
+
+**Encounter End**: Combat ends when only one faction has survivors (factionless entities each count as their own faction).
 
 ## Senses and Vision
 
@@ -672,6 +702,58 @@ For dice manipulation patterns (Great Weapon Fighting, etc.), see `claude_docs/I
 - **EventHandler registration**: Only call `entity.add_event_handler(handler)` - it auto-registers with EventQueue. Do NOT also call `EventQueue.add_event_handler()` or handler fires twice!
 
 **For writing examples and tests**, see `claude_docs/EXAMPLE_PATTERNS.md` for complete patterns.
+
+## Test Utilities (USE THESE - DON'T REINVENT)
+
+**IMPORTANT**: The `dnd/utils/test_utils.py` module provides reusable functions for testing and debugging. **USE THESE** instead of writing your own versions.
+
+```python
+from dnd.utils import (
+    # State management
+    reset_combat_state,      # Clear all registries for fresh test
+    setup_combat_arena,      # Create encounter with two entities
+
+    # HP manipulation
+    get_hp,                  # Get current HP
+    get_max_hp,              # Get max HP
+    set_hp,                  # Set HP to specific value
+    heal_entity,             # Heal by amount
+    deal_damage_to,          # Deal typed damage (fires events)
+
+    # Attack forcing (for deterministic tests)
+    force_attack_hit,        # +100 attack bonus
+    force_attack_miss,       # -100 attack penalty
+    force_attack_crit,       # AUTOCRIT modifier
+    remove_attack_modifier,  # Remove forced modifier
+
+    # Position/movement
+    get_position,            # Get entity position
+    move_entity,             # Teleport entity (bypasses movement)
+
+    # Conditions
+    has_condition,           # Check if entity has condition by name
+    count_conditions,        # Count conditions with name
+
+    # Debug output
+    print_combat_state,      # Print HP and conditions for two entities
+)
+```
+
+**Example usage:**
+```python
+from dnd.utils import reset_combat_state, setup_combat_arena, force_attack_hit, get_hp
+from dnd.monsters.bestiary import create_skeleton
+
+reset_combat_state()
+attacker = create_skeleton(name="Attacker", position=(0,0))
+target = create_skeleton(name="Target", position=(1,0))
+encounter = setup_combat_arena(attacker, target)
+
+# Force hit for deterministic test
+mod_uuid = force_attack_hit(attacker)
+# ... execute attack ...
+print(f"Target HP: {get_hp(target)}")
+```
 
 **Before running any new script:**
 1. `python -m py_compile script.py` - Check syntax

@@ -1202,6 +1202,22 @@ class TurnStartEvent(TurnEvent):
     movement_available: int = Field(default=30, description="Movement available in feet")
     reaction_available: int = Field(default=1, description="Reaction available")
 
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for turn start."""
+        entity_name = self.source_entity_name or "Unknown"
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.TURN_START,
+            source_name=entity_name,
+            source_uuid=str(self.entity_uuid),
+            summary=f"{entity_name}'s turn begins",
+            data={
+                "entity_name": entity_name,
+                "entity_uuid": str(self.entity_uuid),
+                "round_number": self.round_number,
+                "turn_index": self.turn_index,
+            }
+        )
+
 
 class TurnEndEvent(TurnEvent):
     """Fired at the end of an entity's turn."""
@@ -1210,6 +1226,22 @@ class TurnEndEvent(TurnEvent):
     actions_used: int = Field(default=0, description="Actions used this turn")
     bonus_actions_used: int = Field(default=0, description="Bonus actions used")
     movement_used: int = Field(default=0, description="Movement used in feet")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for turn end."""
+        entity_name = self.source_entity_name or "Unknown"
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.TURN_END,
+            source_name=entity_name,
+            source_uuid=str(self.entity_uuid),
+            summary=f"{entity_name}'s turn ends",
+            data={
+                "entity_name": entity_name,
+                "entity_uuid": str(self.entity_uuid),
+                "round_number": self.round_number,
+                "turn_index": self.turn_index,
+            }
+        )
 
 
 class DeathEvent(Event):
@@ -1222,6 +1254,18 @@ class DeathEvent(Event):
     killer_name: str = Field(default="", description="Name of killer if known")
     final_hp: int = Field(default=0, description="Final HP value (typically negative)")
     encounter_uuid: Optional[UUID] = Field(default=None, description="UUID of encounter if in combat")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate combat log entry for death."""
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.DEATH,
+            source_name=self.entity_name,
+            source_uuid=str(self.entity_uuid),
+            summary=f"{self.entity_name} has been defeated!",
+            detail_lines=[f"{self.entity_name} dropped to {self.final_hp} HP and died."],
+            data={"entity_name": self.entity_name, "final_hp": self.final_hp},
+            success=True
+        )
 
 
 class UnconsciousEvent(Event):

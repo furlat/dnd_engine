@@ -169,9 +169,15 @@ class GameSession:
         return self.active_entity_uuid == entity_uuid
 
     def is_player_turn(self, session_id: UUID) -> bool:
-        """Check if it's the given player's turn."""
-        active = self.active_player
-        return active is not None and active.session_id == session_id
+        """Check if it's the given player's turn.
+
+        Returns True if the active entity is any of the session's controlled entities.
+        """
+        session = self.players.get(session_id)
+        if not session:
+            return False
+        active_uuid = self.active_entity_uuid
+        return active_uuid in session.controlled_entities if active_uuid else False
 
     def get_players_by_type(self, player_type: PlayerType) -> List[PlayerSession]:
         """Get all players of a given type."""
