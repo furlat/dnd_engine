@@ -8,7 +8,7 @@ Usage:
 """
 
 import typer
-from typing import Optional
+from typing import Dict, List, Optional
 import time
 
 from cli.api_client import APIClient
@@ -433,12 +433,24 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
         # Save final snapshot for history
         display.save_turn_snapshot(state.turn, state.entities, state.grid)
 
-        # Determine winner message
+        # Determine winner message using faction system
         alive = [e for e in state.entities if not e.get("is_dead", False)]
-        if len(alive) == 1:
-            winner = alive[0]
-            winner_msg = f"[bold green]*** {winner['name']} WINS! ***[/bold green]"
-        elif len(alive) == 0:
+        factions_alive: Dict[str, List[str]] = {}
+        for e in alive:
+            faction = e.get("faction", "unknown")
+            if faction not in factions_alive:
+                factions_alive[faction] = []
+            factions_alive[faction].append(e["name"])
+
+        if len(factions_alive) == 1:
+            # One faction wins
+            faction_name = list(factions_alive.keys())[0]
+            winners = factions_alive[faction_name]
+            if len(winners) == 1:
+                winner_msg = f"[bold green]*** {winners[0]} WINS! ***[/bold green]"
+            else:
+                winner_msg = f"[bold green]*** {faction_name.upper()} FACTION WINS! ({', '.join(winners)}) ***[/bold green]"
+        elif len(factions_alive) == 0:
             winner_msg = "[bold red]*** EVERYONE IS DEAD ***[/bold red]"
         else:
             winner_msg = "[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]"

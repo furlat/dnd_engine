@@ -152,6 +152,7 @@ class FighterConfig(BaseModel):
     level: int = Field(ge=1, le=20, default=1)
     name: str = "Fighter"
     position: Tuple[int, int] = (0, 0)
+    faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
 
     # ==========================================================================
     # ABILITY SCORES (BG3 Style)
@@ -476,7 +477,8 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         equipment=equipment_config,
         action_economy=action_economy_config,
         proficiency_bonus=prof_bonus,
-        position=config.position
+        position=config.position,
+        faction=config.faction
     )
 
     # 6. Create entity

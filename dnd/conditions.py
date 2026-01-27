@@ -659,21 +659,72 @@ class Unconscious(BaseCondition):
             return outs,[],sub_conditions_uuids,effect_event
         else:
             return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
-            
-            
-            
-            
-            
-            
-            
-            
-            
+
+
+class Dead(BaseCondition):
+    """
+    The entity is dead.
+
+    Includes Incapacitated as sub-condition, which sets all action economy
+    to max 0. This automatically prevents:
+    - Taking actions (actions = 0)
+    - Bonus actions (bonus_actions = 0)
+    - Reactions like OA (reactions = 0)
+    - Movement (movement = 0)
+
+    The entity remains in registries for resurrection/looting.
+    GridMap marks entity as non-blocking separately (in Encounter._handle_death).
+    """
+    name: str = "Dead"
+    description: str = "The entity has died and cannot act."
+    # Default duration is PERMANENT (via Duration defaults)
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity:
+            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+        elif isinstance(target_entity, Entity):
+            outs: List[Tuple[UUID,UUID]] = []
+            sub_conditions_uuids: List[UUID] = []
+
+            # Apply Incapacitated sub-condition (handles all action economy disabling)
+            execution_event = declaration_event.phase_to(
+                EventPhase.EXECUTION,
+                update={"condition": self},
+                status_message=f"Applying Incapacitated sub-condition to {target_entity.name}"
+            )
+            incapacitated_condition = Incapacitated(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                parent_condition=self.uuid
+                # Default duration is PERMANENT
+            )
+            sub_conditions_application_event = target_entity.add_condition(
+                incapacitated_condition,
+                parent_event=execution_event,
+                check_save_throw=False
+            )
+            if sub_conditions_application_event is not None and sub_conditions_application_event.phase == EventPhase.COMPLETION:
+                sub_conditions_uuids.append(incapacitated_condition.uuid)
+
+            effect_event = execution_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Dead condition to {target_entity.name}"
+            )
+            return outs, [], sub_conditions_uuids, effect_event
+        else:
+            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+
 
 class ConditionType(str, Enum):
     # NOTE: Fighter-specific conditions (HasAttacked, ActionSurging) moved to dnd/classes/fighter.py
     BLINDED = "BLINDED"
     CHARMED = "CHARMED"
     DASHING = "DASHING"
+    DEAD = "DEAD"
     DEAFENED = "DEAFENED"
     DISENGAGING = "DISENGAGING"
     DODGING = "DODGING"
@@ -693,6 +744,7 @@ CONDITION_MAP: Dict[ConditionType, Type[BaseCondition]] = {
     ConditionType.BLINDED: Blinded,
     ConditionType.CHARMED: Charmed,
     ConditionType.DASHING: Dashing,
+    ConditionType.DEAD: Dead,
     ConditionType.DEAFENED: Deafened,
     ConditionType.DISENGAGING: Disengaging,
     ConditionType.DODGING: Dodging,

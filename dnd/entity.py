@@ -103,6 +103,7 @@ class EntityConfig(BaseModel):
     initiative_modifiers: List[Tuple[str, int]] = Field(default_factory=list,description="Any additional static modifiers applied to initiative (e.g., Alert feat +5)")
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
     sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
+    faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
 
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
@@ -120,6 +121,7 @@ class Entity(BaseBlock):
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
     allow_events_conditions: bool = Field(default=True, description="If True, events and conditions will be allowed to be added to the block")
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the entity")
+    faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
 
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
@@ -218,7 +220,8 @@ class Entity(BaseBlock):
                 proficiency_bonus=proficiency_bonus,
                 initiative=initiative,
                 position=config.position,
-                sprite_name=config.sprite_name
+                sprite_name=config.sprite_name,
+                faction=config.faction
             )
 
     def _set_position(self,new_position: Tuple[int,int]):
@@ -324,6 +327,7 @@ class Entity(BaseBlock):
         # Create event at DECLARATION phase
         event = TurnStartEvent(
             source_entity_uuid=self.uuid,
+            source_entity_name=self.name,
             target_entity_uuid=self.uuid,
             entity_uuid=self.uuid,
             encounter_uuid=encounter_uuid or self.uuid,  # Use entity UUID if no encounter
@@ -395,6 +399,7 @@ class Entity(BaseBlock):
         # Create event at DECLARATION
         event = TurnEndEvent(
             source_entity_uuid=self.uuid,
+            source_entity_name=self.name,
             target_entity_uuid=self.uuid,
             entity_uuid=self.uuid,
             encounter_uuid=encounter_uuid or self.uuid,  # Use entity UUID if no encounter
@@ -712,21 +717,127 @@ class Entity(BaseBlock):
 
     def is_threatened(self) -> bool:
         """
-        Check if any visible entity threatens this entity's position.
+        Check if any enemy threatens this entity's position.
 
         An entity is threatened if it's within the threatened positions
-        (adjacent cells) of any other visible entity. Used for ranged attack
+        (adjacent cells) of any visible enemy. Used for ranged attack
         disadvantage - making a ranged attack while threatened imposes disadvantage.
 
         Returns:
-            bool: True if any visible entity threatens this entity's position
+            bool: True if any visible enemy threatens this entity's position
         """
         my_position = self.senses.position
         for entity_uuid in self.senses.entities.keys():
             other_entity = Entity.get(entity_uuid)
-            if other_entity and my_position in other_entity.senses.get_threathened_positions():
-                return True
+            if other_entity and self.is_enemy(other_entity):  # Only enemies threaten
+                if my_position in other_entity.senses.get_threathened_positions():
+                    return True
         return False
+
+    # =========================================================================
+    # Faction System
+    # =========================================================================
+
+    def is_ally(self, other: 'Entity') -> bool:
+        """Check if another entity is an ally (same faction).
+
+        Same faction = ally. None faction = no allies (backward compatible).
+        An entity is not its own ally.
+
+        Args:
+            other: The entity to check
+
+        Returns:
+            True if same faction and neither has None faction
+        """
+        if other.uuid == self.uuid:
+            return False
+        if self.faction is None or other.faction is None:
+            return False  # No faction = no allies
+        return self.faction == other.faction
+
+    def is_enemy(self, other: 'Entity') -> bool:
+        """Check if another entity is an enemy (different faction).
+
+        Different faction = enemy. None faction = enemy to all (backward compatible).
+        An entity is not its own enemy.
+
+        Args:
+            other: The entity to check
+
+        Returns:
+            True if different faction or either has None faction
+        """
+        if other.uuid == self.uuid:
+            return False  # Not enemy to self
+        if self.faction is None or other.faction is None:
+            return True  # No faction = enemy to everyone
+        return self.faction != other.faction
+
+    def get_visible_enemies(self, include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]:
+        """Get visible entities that are enemies.
+
+        Args:
+            include_dead: If True, include dead enemies (HP <= 0). Default False.
+                         Useful for resurrection or corpse-targeting spells.
+
+        Returns:
+            Dict mapping enemy UUID to their position
+        """
+        enemies: Dict[UUID, Tuple[int, int]] = {}
+        for entity_uuid, pos in self.senses.entities.items():
+            other = Entity.get(entity_uuid)
+            if other and self.is_enemy(other):
+                # Filter dead entities unless include_dead is True
+                if not include_dead and other.get_hp() <= 0:
+                    continue
+                enemies[entity_uuid] = pos
+        return enemies
+
+    def get_visible_allies(self, include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]:
+        """Get visible entities that are allies (same faction, not self).
+
+        Args:
+            include_dead: If True, include dead allies (HP <= 0). Default False.
+                         Useful for resurrection spells.
+
+        Returns:
+            Dict mapping ally UUID to their position
+        """
+        allies: Dict[UUID, Tuple[int, int]] = {}
+        for entity_uuid, pos in self.senses.entities.items():
+            other = Entity.get(entity_uuid)
+            if other and self.is_ally(other):
+                # Filter dead entities unless include_dead is True
+                if not include_dead and other.get_hp() <= 0:
+                    continue
+                allies[entity_uuid] = pos
+        return allies
+
+    @classmethod
+    def get_entities_by_faction(cls, faction: str) -> List['Entity']:
+        """Get all entities with the given faction.
+
+        Args:
+            faction: The faction identifier
+
+        Returns:
+            List of entities with that faction
+        """
+        return [e for e in cls._entity_registry.values() if e.faction == faction]
+
+    @classmethod
+    def get_alive_by_faction(cls, faction: str) -> List['Entity']:
+        """Get all alive entities with the given faction.
+
+        Args:
+            faction: The faction identifier
+
+        Returns:
+            List of alive entities with that faction
+        """
+        return [e for e in cls._entity_registry.values()
+                if e.faction == faction and e.get_hp() > 0]
 
     def roll_d20(self, bonus: ModifiableValue,roll_type: RollType = RollType.ATTACK) -> DiceRoll:
         """
@@ -1029,7 +1140,11 @@ class Entity(BaseBlock):
         """Actions that target self (Dash, Dodge, etc.)."""
         return [a for a in self.registered_actions if a.target_type == TargetType.SELF]
 
-    def get_available_actions(self) -> AvailableActionsResult:
+    def get_available_actions(
+        self,
+        target_filter: str = "enemies",
+        include_dead: bool = False
+    ) -> AvailableActionsResult:
         """Get all available actions for this entity.
 
         Returns an AvailableActionsResult with all actions the entity can currently
@@ -1038,6 +1153,14 @@ class Entity(BaseBlock):
 
         This method is agnostic of specific action subclasses - it simply iterates
         over registered actions by target type and calls pre_validate() on each.
+
+        Args:
+            target_filter: Which entities to show as targets for entity actions.
+                - "enemies": Only enemies (different faction) - default
+                - "allies": Only allies (same faction)
+                - "all": All visible entities
+            include_dead: If True, include dead entities as valid targets.
+                Default False. Set to True for resurrection or corpse-targeting spells.
         """
         result = AvailableActionsResult(
             entity_uuid=self.uuid,
@@ -1065,13 +1188,27 @@ class Entity(BaseBlock):
                     cost_amount=template.costs[0].cost if template.costs else 0
                 ))
 
-        # ENTITY actions - validate for each visible entity
+        # ENTITY actions - filter targets based on target_filter
+        if target_filter == "enemies":
+            potential_targets = self.get_visible_enemies(include_dead=include_dead)
+        elif target_filter == "allies":
+            potential_targets = self.get_visible_allies(include_dead=include_dead)
+        else:  # "all"
+            # For "all" filter, still apply dead filtering unless include_dead is True
+            potential_targets = {}
+            for k, v in self.senses.entities.items():
+                if k == self.uuid:
+                    continue
+                if not include_dead:
+                    other = Entity.get(k)
+                    if other and other.get_hp() <= 0:
+                        continue
+                potential_targets[k] = v
+
         for template in self.entity_actions:
             valid_targets: List[AvailableTarget] = []
             idx = 0
-            for target_uuid, target_pos in self.senses.entities.items():
-                if target_uuid == self.uuid:
-                    continue
+            for target_uuid, target_pos in potential_targets.items():
                 template.set_target_entity(target_uuid)
                 if template.pre_validate():
                     target_entity = Entity.get(target_uuid)
@@ -1104,7 +1241,7 @@ class Entity(BaseBlock):
                     template_name=template_name,
                     target_type=TargetType.ENTITY,
                     valid_targets=valid_targets,
-                    can_afford=True,
+                    can_afford=template.check_costs(),
                     display_name=display_name,
                     description=template.description,
                     cost_type=template.costs[0].cost_type if template.costs else "actions",

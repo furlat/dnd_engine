@@ -81,17 +81,21 @@ def ensure_session(client: APIClient) -> bool:
 
 def get_my_entity(client: APIClient) -> Optional[dict]:
     """
-    Get the entity that the agent controls (Skeleton).
+    Get the entity that the agent controls.
+    Uses the session's controlled entity UUID instead of hardcoded name lookup.
     Returns entity dict with uuid, name, position, etc.
     """
+    entity_uuid = client.current_entity_uuid
+    if not entity_uuid:
+        return None
+
     state = client.get_state()
     if not state:
         return None
 
     entities = state.get("entities", [])
     for e in entities:
-        # Agent controls the Skeleton (not Hero)
-        if e.get("name") == "Skeleton":
+        if e.get("uuid") == entity_uuid:
             return e
     return None
 
@@ -290,10 +294,11 @@ def cmd_state(client: APIClient) -> int:
     entities = state.get("entities", [])
     active_name = "???"
     my_entity = None
+    my_entity_uuid = client.current_entity_uuid
     for e in entities:
         if e.get("uuid") == active_uuid:
             active_name = e.get("name", "???")
-        if e.get("name") == "Skeleton":
+        if my_entity_uuid and e.get("uuid") == my_entity_uuid:
             my_entity = e
 
     # Check if it's my turn using session
@@ -318,6 +323,40 @@ def cmd_state(client: APIClient) -> int:
         print(">>> IT'S MY TURN - Use 'actions' to see options <<<")
 
     return 0
+
+
+def cmd_entities(client: APIClient) -> int:
+    """List all entities controlled by the session."""
+    if not ensure_session(client):
+        print("ERROR: Not connected. Run 'connect' first.")
+        return 1
+
+    try:
+        resp = client.client.get(f"/session/{client.session_id}/entities")
+        resp.raise_for_status()
+        result = resp.json()
+        entities = result.get("controlled_entities", [])
+
+        if not entities:
+            print("No entities controlled by this session.")
+            return 0
+
+        print("CONTROLLED ENTITIES:")
+        print(f"{'#':<3} {'Name':<15} {'Faction':<12} {'HP':<8} {'Position'}")
+        print("-" * 55)
+
+        for i, e in enumerate(entities):
+            name = e.get("name", "???")
+            faction = e.get("faction") or "(none)"
+            hp = e.get("hp", 0)
+            pos = e.get("position", [0, 0])
+            pos_str = f"({pos[0]},{pos[1]})"
+            print(f"{i:<3} {name:<15} {faction:<12} {hp:<8} {pos_str}")
+
+        return 0
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return 1
 
 
 def cmd_actions(client: APIClient) -> int:
@@ -740,6 +779,7 @@ def main():
         print("Game State:")
         print("  state              Show game state (map, entities, whose turn)")
         print("  actions            Show available actions for my entity")
+        print("  entities           List all entities controlled by this session")
         print("")
         print("Actions:")
         print("  move X Y           Move to position (X, Y)")
@@ -765,6 +805,9 @@ def main():
 
         elif command == "actions":
             return cmd_actions(client)
+
+        elif command == "entities":
+            return cmd_entities(client)
 
         elif command == "move":
             if len(sys.argv) < 4:

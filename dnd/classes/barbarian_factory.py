@@ -179,6 +179,7 @@ class BarbarianConfig(BaseModel):
     level: int = Field(ge=1, le=20, default=1)
     name: str = "Barbarian"
     position: Tuple[int, int] = (0, 0)
+    faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
 
     # ==========================================================================
     # ABILITY SCORES (BG3 Style)
@@ -525,7 +526,8 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         equipment=equipment_config,
         action_economy=action_economy_config,
         proficiency_bonus=prof_bonus,
-        position=config.position
+        position=config.position,
+        faction=config.faction
     )
 
     # 6. Create entity
