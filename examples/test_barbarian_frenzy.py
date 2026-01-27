@@ -432,17 +432,18 @@ def test_frenzy_maintenance():
 
     assert "Frenzied" in barbarian.active_conditions, "Should be frenzied"
     assert "Raging" in barbarian.active_conditions, "Should be raging"
-    assert "KeepRage" not in barbarian.active_conditions, "Should not have KeepRage"
+    assert "HasAttacked" not in barbarian.active_conditions, "Should not have HasAttacked yet"
+    assert "HasTakenDamage" not in barbarian.active_conditions, "Should not have HasTakenDamage yet"
 
-    print(f"  Initial: Frenzied=True, Raging=True, KeepRage=False")
+    print(f"  Initial: Frenzied=True, Raging=True, HasAttacked=False, HasTakenDamage=False")
 
-    # Simulate turn end without attack/damage
-    barbarian.on_turn_end()
+    # Simulate next turn start (rage check happens at TURN_START before conditions expire)
+    barbarian.on_turn_start()
 
     # Rage should have ended (and Frenzied with it due to cascade)
     still_raging = "Raging" in barbarian.active_conditions
     still_frenzied = "Frenzied" in barbarian.active_conditions
-    print(f"  After turn end: Frenzied={still_frenzied}, Raging={still_raging}")
+    print(f"  After turn start: Frenzied={still_frenzied}, Raging={still_raging}")
 
     assert not still_raging, "Rage should have ended (no attack or damage)"
     assert not still_frenzied, "Frenzied should have ended (cascade from Raging removal)"
@@ -499,12 +500,16 @@ def test_frenzy_removes_frenzied_strike():
     frenzy_action = frenzy_template.instantiate()
     frenzy_action.apply()
 
-    # Attack target to maintain rage (apply KeepRage marker)
-    from dnd.classes.barbarian import KeepRage
-    barbarian.add_condition(KeepRage(
+    # Simulate attacking target to maintain rage (apply HasAttacked marker)
+    from dnd.conditions import HasAttacked
+    from dnd.core.base_conditions import DurationType
+    has_attacked = HasAttacked(
         source_entity_uuid=barbarian.uuid,
         target_entity_uuid=barbarian.uuid
-    ))
+    )
+    has_attacked.duration.duration_type = DurationType.ROUNDS
+    has_attacked.duration.duration = 1
+    barbarian.add_condition(has_attacked)
 
     # Simulate new turn (refreshes action economy and resets costs)
     barbarian.on_turn_start()

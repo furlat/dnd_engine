@@ -1111,55 +1111,53 @@ class ImprovedCritical(BaseCondition):
 # LEVEL 5 FEATURES: Extra Attack
 # =============================================================================
 
-class HasAttacked(BaseCondition):
+# =============================================================================
+# NOTE: HasAttacked is now a GENERIC condition in dnd/conditions.py
+# It is applied by global handlers registered in setup_standard_actions().
+# The processor below is FIGHTER-SPECIFIC: manages extra_attacks resource.
+# =============================================================================
+
+
+class ExtraAttacksGranted(BaseCondition):
     """
-    Marker condition indicating entity has attacked this turn using an Action.
+    Marker condition: Extra attacks have been granted this turn.
 
-    This condition has no modifiers - it's a prerequisite gate for Extra Attack.
-    Applied automatically when an attack that costs an action completes.
-    Removed at the start of the entity's next turn (duration=1 round).
-
-    Note: Only action-cost attacks trigger this (not opportunity attacks or
-    bonus action attacks from Two-Weapon Fighting).
+    Used by extra_attack_resource_processor to track whether extra attacks
+    have already been granted this turn (for Action Surge compatibility).
+    Expires at TURN_START.
     """
-    name: str = "HasAttacked"
-    description: str = "Has made an attack this turn using an action"
+    name: str = "ExtraAttacksGranted"
+    description: str = "Extra attacks have been granted this turn"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
-        # No modifiers - just a marker condition
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
+    ]:
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            update={"condition": self},
-            status_message=f"Marked as HasAttacked"
+            status_message="Marked as ExtraAttacksGranted"
         )
         return [], [], [], effect_event
 
 
-def has_attacked_processor(
+def extra_attack_resource_processor(
     event: Event,
     source_entity_uuid: UUID
 ) -> Optional[Event]:
     """
-    Tracks when entity has attacked using an action-costing attack.
-    Also manages extra_attacks resource for Action Surge compatibility.
+    Fighter-specific processor: manages extra_attacks resource for Extra Attack.
 
-    Only triggers for action-cost attacks (not OA or bonus action attacks).
-    This enables Extra Attack to be used after the initial Attack action.
-
-    Triggers on EXECUTION phase because:
-    - EFFECT phase only happens on HIT (miss skips to COMPLETION)
-    - COMPLETION phase is closed to handlers
-    - EXECUTION happens for all attacks regardless of outcome
-
-    Action Surge Compatibility:
+    This processor handles Action Surge compatibility:
     - First Attack action this turn: Set extra_attacks = num_extra_attacks
     - Subsequent Attack actions (via Action Surge): ADD num_extra_attacks
 
     This ensures that each Attack action grants the full number of extra attacks,
     even when Action Surge grants additional actions mid-turn.
 
-    Uses EventQueue.is_first_at_phase() to ensure we only process each attack
-    once, even if post() triggers this handler multiple times at the same phase.
+    Triggers on ATTACK at EXECUTION phase (for action-cost attacks only).
+    Uses ExtraAttacksGranted marker (not HasAttacked) to track first vs subsequent.
     """
     # Only trigger for the attacker's own attacks
     if event.source_entity_uuid != source_entity_uuid:
@@ -1174,17 +1172,14 @@ def has_attacked_processor(
         return None
 
     # Only process FIRST event at EXECUTION phase for this attack
-    # (post() can trigger this handler multiple times for the same attack)
     if not EventQueue.is_first_at_phase(event):
         return None
 
     # Check if this attack cost an action (not OA reaction, not bonus action)
-    # The costs attribute is on ActionEvent/AttackEvent
     costs = getattr(event, 'costs', [])
     if not costs:
         return None
 
-    # Only apply for attacks that cost an action (not reactions/bonus actions)
     action_cost_attack = any(
         c.cost_type == "actions" and c.cost > 0
         for c in costs
@@ -1196,44 +1191,44 @@ def has_attacked_processor(
     extra_attack_feature = entity.active_conditions.get("Extra Attack")
     extra_attack_resource = entity.action_economy.resources.get("extra_attacks")
 
-    if "HasAttacked" not in entity.active_conditions:
-        # FIRST Attack action this turn
-        # Create and apply HasAttacked condition with 1 round duration
-        has_attacked = HasAttacked(
+    if not extra_attack_resource or not extra_attack_feature:
+        return None  # No Extra Attack feature
+
+    num_extra = getattr(extra_attack_feature, 'extra_attacks', 1)
+
+    # Check ExtraAttacksGranted to determine first vs subsequent Attack action
+    # This marker is applied BY THIS PROCESSOR after granting extras
+    if "ExtraAttacksGranted" not in entity.active_conditions:
+        # FIRST Attack action this turn - SET extra_attacks
+        extra_attack_resource.current = num_extra
+
+        # Apply marker so subsequent Attack actions ADD instead of SET
+        marker = ExtraAttacksGranted(
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=source_entity_uuid
         )
-        has_attacked.duration.duration_type = DurationType.ROUNDS
-        has_attacked.duration.duration = 1
-        entity.add_condition(has_attacked)
-
-        # Set extra_attacks to num_extra_attacks (first attack of turn)
-        if extra_attack_resource and extra_attack_feature:
-            # Get the number of extra attacks from the feature
-            num_extra = getattr(extra_attack_feature, 'extra_attacks', 1)
-            extra_attack_resource.current = num_extra
+        marker.duration.duration_type = DurationType.ROUNDS
+        marker.duration.duration = 1
+        entity.add_condition(marker)
     else:
-        # SUBSEQUENT Attack action (via Action Surge)
-        # ADD more extra attacks
-        if extra_attack_resource and extra_attack_feature:
-            num_extra = getattr(extra_attack_feature, 'extra_attacks', 1)
-            extra_attack_resource.current += num_extra
+        # SUBSEQUENT Attack action (via Action Surge) - ADD extra_attacks
+        extra_attack_resource.current += num_extra
 
     return None  # Don't modify the attack event
 
 
-def create_has_attacked_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create an EventHandler that applies HasAttacked on attack execution."""
+def create_extra_attack_resource_handler(source_entity_uuid: UUID) -> EventHandler:
+    """Create an EventHandler that manages extra_attacks resource for Fighter."""
     return EventHandler(
-        name="HasAttacked Tracker",
+        name="Extra Attack Resource",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
                 event_type=EventType.ATTACK,
-                event_phase=EventPhase.EXECUTION  # EXECUTION - happens for all attacks (hit or miss)
+                event_phase=EventPhase.EXECUTION
             )
         ],
-        event_processor=has_attacked_processor
+        event_processor=extra_attack_resource_processor
     )
 
 
@@ -1418,8 +1413,9 @@ class ExtraAttackFeature(BaseCondition):
                 )
                 target.register_action(extra_attack)
 
-        # 3. Register the HasAttacked event handler (add_event_handler internally calls EventQueue)
-        handler = create_has_attacked_handler(target.uuid)
+        # 3. Register the Extra Attack Resource handler (Fighter-specific)
+        # Note: HasAttacked tracking is now handled globally by setup_standard_actions()
+        handler = create_extra_attack_resource_handler(target.uuid)
         target.add_event_handler(handler)
         handler_uuids.append(handler.uuid)
 

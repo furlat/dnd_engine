@@ -1104,7 +1104,7 @@ class TakeDamageEvent(Event):
     Event fired when an entity is about to take damage.
 
     This event enables:
-    - Tracking damage taken (e.g., rage maintenance - KeepRage marker)
+    - Tracking damage taken (e.g., rage maintenance - HasTakenDamage marker)
     - Modifying damage (e.g., resistance, vulnerability, reduction)
     - Canceling damage (e.g., immunity, absorption)
     - Reacting to lethal damage (e.g., Relentless Rage)
