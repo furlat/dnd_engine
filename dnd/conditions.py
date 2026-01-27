@@ -11,8 +11,177 @@ from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiri
 from dnd.blocks.sensory import SensesType
 from uuid import UUID
 from functools import partial
-from dnd.core.events import Event, EventPhase
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue
 from enum import Enum
+
+
+# =============================================================================
+# GENERIC COMBAT STATE CONDITIONS
+# =============================================================================
+# These conditions track combat state for ALL entities (not class-specific).
+# They are applied by global handlers registered in setup_standard_actions().
+
+class HasAttacked(BaseCondition):
+    """
+    Generic marker: entity attacked this turn using an action.
+
+    This is a global combat state condition tracked for ALL entities.
+    Applied automatically when any action-costing attack executes.
+    Expires at the start of the entity's next turn (duration=1 round).
+
+    Used by:
+    - Extra Attack (Fighter) - prerequisite for using extra attacks
+    - Rage Maintenance (Barbarian) - checks HasAttacked OR HasTakenDamage
+
+    Note: Only action-cost attacks trigger this (not opportunity attacks or
+    bonus action attacks from Two-Weapon Fighting).
+    """
+    name: str = "HasAttacked"
+    description: str = "Has made an attack this turn using an action"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        # No modifiers - just a marker condition
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Marked as HasAttacked"
+        )
+        return [], [], [], effect_event
+
+
+class HasTakenDamage(BaseCondition):
+    """
+    Generic marker: entity took damage this turn.
+
+    This is a global combat state condition tracked for ALL entities.
+    Applied automatically when the entity takes damage.
+    Expires at the start of the entity's next turn (duration=1 round).
+
+    Used by:
+    - Rage Maintenance (Barbarian) - checks HasAttacked OR HasTakenDamage
+    """
+    name: str = "HasTakenDamage"
+    description: str = "Took damage this turn"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        # No modifiers - just a marker condition
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Marked as HasTakenDamage"
+        )
+        return [], [], [], effect_event
+
+
+# =============================================================================
+# GENERIC COMBAT STATE HANDLERS
+# =============================================================================
+
+def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """
+    Generic processor: applies HasAttacked condition on own action-cost attacks.
+
+    Triggers on ATTACK at EXECUTION phase.
+    Only applies for attacks that cost an action (not OA or bonus action attacks).
+    Uses EventQueue.is_first_at_phase() to ensure single application.
+    """
+    # Only trigger for the attacker's own attacks
+    if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    # Only on non-canceled events
+    if event.canceled:
+        return None
+
+    entity = Entity.get(source_entity_uuid)
+    if not entity:
+        return None
+
+    # Only process FIRST event at EXECUTION phase for this attack
+    if not EventQueue.is_first_at_phase(event):
+        return None
+
+    # Check if this attack cost an action (not OA reaction, not bonus action)
+    costs = getattr(event, 'costs', [])
+    if not costs:
+        return None
+
+    # Only apply for attacks that cost an action
+    action_cost_attack = any(
+        c.cost_type == "actions" and c.cost > 0
+        for c in costs
+    )
+    if not action_cost_attack:
+        return None  # Skip OA (reaction) and bonus action attacks
+
+    # Apply HasAttacked if not already present
+    if "HasAttacked" not in entity.active_conditions:
+        has_attacked = HasAttacked(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=source_entity_uuid
+        )
+        has_attacked.duration.duration_type = DurationType.ROUNDS
+        has_attacked.duration.duration = 1
+        entity.add_condition(has_attacked)
+
+    return None  # Don't modify the attack event
+
+
+def has_taken_damage_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """
+    Generic processor: applies HasTakenDamage when entity takes damage.
+
+    Triggers on TAKE_DAMAGE at EFFECT phase (when we are the target).
+    """
+    # We are the TARGET of damage
+    if event.target_entity_uuid != source_entity_uuid:
+        return None
+
+    entity = Entity.get(source_entity_uuid)
+    if not entity:
+        return None
+
+    # Apply HasTakenDamage if not already present
+    if "HasTakenDamage" not in entity.active_conditions:
+        has_taken_damage = HasTakenDamage(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=source_entity_uuid
+        )
+        has_taken_damage.duration.duration_type = DurationType.ROUNDS
+        has_taken_damage.duration.duration = 1
+        entity.add_condition(has_taken_damage)
+
+    return None  # Don't modify the damage event
+
+
+def create_has_attacked_handler(source_entity_uuid: UUID) -> EventHandler:
+    """Create an EventHandler that applies HasAttacked on action-cost attack execution."""
+    return EventHandler(
+        name="HasAttacked Tracker",
+        source_entity_uuid=source_entity_uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.ATTACK,
+                event_phase=EventPhase.EXECUTION
+            )
+        ],
+        event_processor=has_attacked_processor
+    )
+
+
+def create_has_taken_damage_handler(source_entity_uuid: UUID) -> EventHandler:
+    """Create an EventHandler that applies HasTakenDamage when taking damage."""
+    return EventHandler(
+        name="HasTakenDamage Tracker",
+        source_entity_uuid=source_entity_uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.TAKE_DAMAGE,
+                event_phase=EventPhase.EFFECT
+            )
+        ],
+        event_processor=has_taken_damage_processor
+    )
 
 
 

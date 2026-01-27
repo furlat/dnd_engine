@@ -85,15 +85,15 @@ def test_frenzy_maintenance():
     result = execute_action(barbarian, attack_info.template_name, attack_info.valid_targets[0])
     print(f"  Attack result: {result.status_message if result else 'Failed/Missed'}")
 
-    # Check for KeepRage marker
+    # Check for HasAttacked marker (global combat state condition)
     print(f"  After attack conditions: {list(barbarian.active_conditions.keys())}")
-    has_keep_rage = "KeepRage" in barbarian.active_conditions
     has_has_attacked = "HasAttacked" in barbarian.active_conditions
-    print(f"  KeepRage: {has_keep_rage}, HasAttacked: {has_has_attacked}")
+    has_taken_damage = "HasTakenDamage" in barbarian.active_conditions
+    print(f"  HasAttacked: {has_has_attacked}, HasTakenDamage: {has_taken_damage}")
 
-    if not has_keep_rage:
-        print("  BUG FOUND: KeepRage marker NOT applied after attacking!")
-        print("  This is why rage ends - the rage_attack_tracker handler isn't working")
+    if not has_has_attacked:
+        print("  BUG FOUND: HasAttacked marker NOT applied after attacking!")
+        print("  This is why rage ends - the has_attacked_processor handler isn't working")
 
     # Step 3: End turn
     print("\n  --- Ending turn ---")

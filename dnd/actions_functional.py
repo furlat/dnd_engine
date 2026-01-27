@@ -29,6 +29,7 @@ from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase,
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
 from dnd.actions import Move, Dash, Dodge, Disengage, StandUp, Attack
+from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler
 
 
 def setup_standard_actions(entity: 'Entity') -> None:
@@ -61,6 +62,11 @@ def setup_standard_actions(entity: 'Entity') -> None:
 
     # Register event handlers for weapon equip/unequip to auto-update templates
     _setup_weapon_event_handlers(entity)
+
+    # Register global combat state handlers (HasAttacked, HasTakenDamage)
+    # These track combat state for features like Extra Attack and Rage Maintenance
+    entity.add_event_handler(create_has_attacked_handler(entity.uuid))
+    entity.add_event_handler(create_has_taken_damage_handler(entity.uuid))
 
 
 def _setup_weapon_event_handlers(entity: 'Entity') -> None:

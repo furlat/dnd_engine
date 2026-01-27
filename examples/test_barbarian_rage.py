@@ -4,8 +4,8 @@ Test Barbarian Rage Mechanics
 Tests:
 1. Rage activation (bonus action, applies Raging condition)
 2. Rage benefits (STR advantage, rage damage bonus)
-3. Rage maintenance (KeepRage marker from attacks and damage)
-4. Rage ending (no attack/damage → rage ends at turn end)
+3. Rage maintenance (HasAttacked/HasTakenDamage markers for rage maintenance)
+4. Rage ending (no attack/damage → rage ends at next turn start)
 5. Cannot rage in heavy armor
 6. Reckless Attack
 7. Unarmored Defense
@@ -231,7 +231,7 @@ def test_rage_benefits():
 
 
 def test_rage_maintenance_attack():
-    """Test that attacking while raging applies KeepRage marker."""
+    """Test that attacking while raging applies HasAttacked marker."""
     print("\n=== Test: Rage Maintenance (Attack) ===")
 
     EventQueue.reset()
@@ -251,8 +251,8 @@ def test_rage_maintenance_attack():
     )
     barbarian.add_condition(raging)
 
-    # No KeepRage yet
-    assert "KeepRage" not in barbarian.active_conditions, "KeepRage should not exist yet"
+    # No HasAttacked yet
+    assert "HasAttacked" not in barbarian.active_conditions, "HasAttacked should not exist yet"
 
     # Get attack action and execute
     available = get_available_actions(barbarian)
@@ -265,23 +265,23 @@ def test_rage_maintenance_attack():
     result = execute_action(barbarian, attack_info.template_name, attack_info.valid_targets[0])
     print(f"  Attack result: {result.status_message if result else 'Failed/Missed'}")
 
-    # Check KeepRage is now present
-    has_keep_rage = "KeepRage" in barbarian.active_conditions
-    print(f"  KeepRage after attack: {has_keep_rage}")
+    # Check HasAttacked is now present (generic combat state condition)
+    has_attacked = "HasAttacked" in barbarian.active_conditions
+    print(f"  HasAttacked after attack: {has_attacked}")
 
-    if has_keep_rage:
-        print("  ✓ KeepRage marker applied after attacking")
+    if has_attacked:
+        print("  ✓ HasAttacked marker applied after attacking")
     else:
-        print("  ✗ KeepRage marker NOT applied (handler may not have fired)")
+        print("  ✗ HasAttacked marker NOT applied (handler may not have fired)")
 
     EventQueue.reset()
 
 
 def test_rage_maintenance_damage():
-    """Test that taking damage while raging applies KeepRage marker.
+    """Test that taking damage while raging applies HasTakenDamage marker.
 
     This test directly fires a TakeDamageEvent to deterministically test
-    the rage maintenance handler, avoiding RNG from attack rolls.
+    the has_taken_damage handler, avoiding RNG from attack rolls.
     """
     print("\n=== Test: Rage Maintenance (Damage Taken) ===")
 
@@ -304,9 +304,9 @@ def test_rage_maintenance_damage():
     )
     barbarian.add_condition(raging)
 
-    # No KeepRage yet
-    assert "KeepRage" not in barbarian.active_conditions, "KeepRage should not exist yet"
-    print(f"  Raging: True, KeepRage: False (initial state)")
+    # No HasTakenDamage yet
+    assert "HasTakenDamage" not in barbarian.active_conditions, "HasTakenDamage should not exist yet"
+    print(f"  Raging: True, HasTakenDamage: False (initial state)")
 
     # Directly fire a TakeDamageEvent targeting the barbarian
     # This simulates damage being dealt without relying on attack RNG
@@ -321,27 +321,27 @@ def test_rage_maintenance_damage():
     )
     print(f"  Firing TakeDamageEvent (5 damage) targeting barbarian...")
 
-    # Progress through phases - the rage_damage_tracker handler should fire at EFFECT
+    # Progress through phases - the has_taken_damage_processor fires at EFFECT
     take_damage_event = take_damage_event.phase_to(EventPhase.EXECUTION)
     take_damage_event = take_damage_event.phase_to(EventPhase.EFFECT)
     take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
 
-    # Check KeepRage is now present
-    has_keep_rage = "KeepRage" in barbarian.active_conditions
-    print(f"  KeepRage after TAKE_DAMAGE event: {has_keep_rage}")
+    # Check HasTakenDamage is now present (generic combat state condition)
+    has_taken_damage = "HasTakenDamage" in barbarian.active_conditions
+    print(f"  HasTakenDamage after TAKE_DAMAGE event: {has_taken_damage}")
 
-    if has_keep_rage:
-        print("  ✓ KeepRage marker applied after taking damage")
+    if has_taken_damage:
+        print("  ✓ HasTakenDamage marker applied after taking damage")
     else:
-        print("  ✗ KeepRage marker NOT applied (TAKE_DAMAGE handler may not be firing)")
+        print("  ✗ HasTakenDamage marker NOT applied (handler may not be firing)")
 
-    # Verify rage persists after turn end
-    if has_keep_rage:
-        barbarian.on_turn_end()
+    # Verify rage persists after next turn start (rage check happens at TURN_START before conditions expire)
+    if has_taken_damage:
+        barbarian.on_turn_start()
         still_raging = "Raging" in barbarian.active_conditions
-        print(f"  Raging after turn end: {still_raging}")
+        print(f"  Raging after turn start: {still_raging}")
         if still_raging:
-            print("  ✓ Rage maintained correctly (took damage this turn)")
+            print("  ✓ Rage maintained correctly (took damage since last turn)")
         else:
             print("  ✗ Rage should have been maintained")
 
@@ -349,7 +349,7 @@ def test_rage_maintenance_damage():
 
 
 def test_rage_ends_no_activity():
-    """Test that rage ends at turn end if no attack/damage."""
+    """Test that rage ends at next turn start if no attack/damage since last turn."""
     print("\n=== Test: Rage Ends Without Activity ===")
 
     EventQueue.reset()
@@ -367,10 +367,11 @@ def test_rage_ends_no_activity():
     barbarian.add_condition(raging)
 
     assert "Raging" in barbarian.active_conditions, "Should be raging"
-    assert "KeepRage" not in barbarian.active_conditions, "Should not have KeepRage"
+    assert "HasAttacked" not in barbarian.active_conditions, "Should not have HasAttacked"
+    assert "HasTakenDamage" not in barbarian.active_conditions, "Should not have HasTakenDamage"
 
-    # Simulate turn end (no attack, no damage taken)
-    _event = barbarian.on_turn_end()
+    # Simulate next turn start (rage check happens at TURN_START before conditions expire)
+    _event = barbarian.on_turn_start()
 
     # Rage should have ended
     still_raging = "Raging" in barbarian.active_conditions

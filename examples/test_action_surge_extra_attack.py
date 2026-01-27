@@ -13,7 +13,6 @@ from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton, create_goblin
 from dnd.actions import Attack
-from dnd.actions_functional import setup_standard_actions
 from dnd.classes.fighter import ExtraAttackFeature, ExtraAttack
 from dnd.core.events import WeaponSlot, EventQueue
 from dnd.core.modifiers import NumericalModifier
@@ -47,6 +46,7 @@ def setup_test():
 
 def create_fighter_with_extra_attack(name: str, position: tuple, extra_attacks: int = 1) -> Entity:
     """Create a skeleton with Extra Attack feature."""
+    # Note: create_skeleton already calls setup_standard_actions internally
     fighter = create_skeleton(name=name, position=position)
 
     # Apply Extra Attack feature
@@ -57,9 +57,7 @@ def create_fighter_with_extra_attack(name: str, position: tuple, extra_attacks: 
     )
     fighter.add_condition(extra_attack_feature)
 
-    # Setup standard actions (including regular Attack)
-    setup_standard_actions(fighter)
-
+    # Don't call setup_standard_actions again - create_skeleton already did it
     return fighter
 
 
