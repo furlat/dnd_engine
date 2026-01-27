@@ -32,6 +32,7 @@ from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.classes.fighter_factory import create_fighter, FighterConfig
+from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
 from dnd.items import create_shortsword, create_dagger, create_longbow
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
@@ -233,7 +234,8 @@ def setup_combat() -> Encounter:
 
 def setup_arena_combat(
     player_position: tuple = (2, 7),
-    pvp_mode: bool = False
+    pvp_mode: bool = False,
+    character_class: str = "fighter"
 ) -> Encounter:
     """
     Initialize arena combat with Hero (heroes faction) vs 3 Skeletons (monsters faction).
@@ -242,6 +244,7 @@ def setup_arena_combat(
         player_position: Starting position for Hero
         pvp_mode: If True, Skeletons use ClaudeController (PvP).
                   If False, Skeletons use MeleeAIController (vs AI).
+        character_class: "fighter" or "barbarian" - the hero's class
     """
     # Reset all state
     reset_map()
@@ -261,8 +264,12 @@ def setup_arena_combat(
         if y != 7:  # Leave a gap in the middle
             grid.set_tile(7, y, walkable=False, visible=False)
 
-    # Create Hero - Level 5 DEX Fighter (heroes faction)
-    player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
+    # Create Hero based on character class
+    if character_class == "barbarian":
+        player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
+    else:
+        # Default to fighter
+        player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
 
     # Create 3 Skeletons (monsters faction) at different positions
     skeleton_positions = [(12, 5), (12, 7), (12, 9)]
@@ -344,6 +351,35 @@ def create_dex_fighter(name: str = "Hero", position: tuple = (0, 0), faction: Op
     fighter.equipment.equip(longbow, WeaponSlot.RANGED_MAIN)
 
     return fighter
+
+
+def create_barbarian_hero(name: str = "Hero", position: tuple = (0, 0), faction: Optional[str] = None) -> Entity:
+    """
+    Create a Level 5 Berserker Barbarian with greataxe.
+
+    Stats: STR 19, CON 15, DEX 13 (after bonuses and L4 ASI)
+    Features: Rage (3 uses), Unarmored Defense, Reckless Attack,
+              Danger Sense, Frenzy, Extra Attack, Fast Movement
+    Equipment: Greataxe (1d12 slashing, two-handed)
+    """
+    config = BarbarianConfig(
+        level=5,
+        name=name,
+        position=position,
+        faction=faction,
+        base_strength=15,
+        base_dexterity=13,
+        base_constitution=14,
+        base_intelligence=8,
+        base_wisdom=12,
+        base_charisma=10,
+        bonus_plus_2="strength",      # STR = 17
+        bonus_plus_1="constitution",  # CON = 15
+        primal_path=PrimalPathChoice.BERSERKER,
+        asi_4=[("strength", 2)],      # STR = 19
+        equipment_preset="greataxe",
+    )
+    return create_barbarian(config)
 
 
 async def advance_encounter() -> dict:
@@ -1483,13 +1519,16 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
 
 
 @app.post("/simulation/start-human")
-async def start_human_simulation():
+async def start_human_simulation(character_class: str = "fighter"):
     """
     Start a new combat with human control (player vs AI).
 
     This creates a game session and auto-assigns entities:
     - Hero (heroes faction) goes to the first human session that joins
     - All monsters faction entities are controlled by AI
+
+    Args:
+        character_class: "fighter" or "barbarian" - the hero's class
     """
     # Cancel existing task
     if sim.combat_task and not sim.combat_task.done():
@@ -1499,7 +1538,7 @@ async def start_human_simulation():
         except asyncio.CancelledError:
             pass
 
-    sim.encounter = setup_arena_combat(pvp_mode=False)
+    sim.encounter = setup_arena_combat(pvp_mode=False, character_class=character_class)
     sim.paused = False
     sim.encounter.clear_combat_log()  # Clear combat log for new game
 
@@ -1536,7 +1575,7 @@ async def start_human_simulation():
 
 
 @app.post("/simulation/start-pvp")
-async def start_pvp_simulation():
+async def start_pvp_simulation(character_class: str = "fighter"):
     """
     Start PvP combat where both entities are human-controlled.
 
@@ -1544,6 +1583,9 @@ async def start_pvp_simulation():
     Player 2 (Skeleton) = controlled by Claude via agent CLI (PlayerType.CLAUDE)
 
     Both players create sessions and join to control their entities.
+
+    Args:
+        character_class: "fighter" or "barbarian" - the hero's class
     """
     # Cancel existing task
     if sim.combat_task and not sim.combat_task.done():
@@ -1553,7 +1595,7 @@ async def start_pvp_simulation():
         except asyncio.CancelledError:
             pass
 
-    sim.encounter = setup_arena_combat(pvp_mode=True)
+    sim.encounter = setup_arena_combat(pvp_mode=True, character_class=character_class)
     sim.paused = False
     sim.encounter.clear_combat_log()  # Clear combat log for new game
 
