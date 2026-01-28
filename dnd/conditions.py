@@ -1009,21 +1009,22 @@ class Concentrating(BaseCondition):
     - Only one concentration spell can be active at a time
     - Taking damage requires a CON save (DC = max(10, damage/2))
     - Failing the save or casting another concentration spell ends this effect
-    - When concentration ends, the spell effect (tracked by spell_effect_uuid) is also removed
+    - When concentration ends, the spell effect is also removed via external_conditions
 
     This condition is applied when a concentration spell is cast, not directly.
-    The spell's _apply() should create this condition and link the spell effect.
+    The spell's _apply() should:
+    1. Create this condition on the caster
+    2. Apply the spell effect condition to the target
+    3. Call concentration.add_external_condition(target.uuid, effect.uuid)
+
+    The external_conditions mechanism (inherited from BaseCondition) handles
+    cross-entity cleanup automatically when concentration breaks.
     """
     name: str = "Concentrating"
     description: str = "Concentrating on a spell"
 
     # What spell is being concentrated on
     spell_name: str = ""
-
-    # UUID of the condition that represents the spell effect being maintained
-    # When concentration breaks, this condition will be removed from the target
-    spell_effect_uuid: Optional[UUID] = None
-    spell_effect_target_uuid: Optional[UUID] = None  # Entity that has the spell effect
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1120,26 +1121,17 @@ class Concentrating(BaseCondition):
         return [], handler_uuids, [], effect_event
 
     def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        """When concentration ends, also remove the spell effect.
+        """When concentration ends, spell effects are cleaned up via external_conditions.
 
         IMPORTANT: Must call super()._remove() to trigger EXECUTION and EFFECT phases
         so cleanup handlers can respond to the condition removal event.
+
+        Note: Cross-entity spell effect cleanup is now handled automatically by
+        BaseCondition.remove_external_conditions() - no manual cleanup needed here.
         """
         # Call parent to trigger event phase transitions (EXECUTION -> EFFECT)
         # This allows cleanup handlers subscribed to CONDITION_REMOVAL at EFFECT to fire
-        result_event = super()._remove(removal_event)
-
-        # If we have a linked spell effect, remove it
-        if self.spell_effect_uuid and self.spell_effect_target_uuid:
-            effect_target = Entity.get(self.spell_effect_target_uuid)
-            if effect_target:
-                # Find the condition by UUID and remove it
-                for cond_name, cond in list(effect_target.active_conditions.items()):
-                    if cond.uuid == self.spell_effect_uuid:
-                        effect_target.remove_condition(cond_name)
-                        break
-
-        return result_event
+        return super()._remove(removal_event)
 
 
 class ConditionType(str, Enum):

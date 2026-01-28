@@ -62,7 +62,20 @@ def create_target(name: str, position: tuple) -> Entity:
 
 
 def test_1_hold_person_applies_paralyzed():
-    """Test that Hold Person applies Paralyzed on failed save."""
+    """Test that Hold Person applies Paralyzed on failed save.
+
+    Structure when Hold Person lands:
+    - Caster: Concentrating(spell_name="Hold Person")
+                  │
+                  └── external_conditions ──► Target: HoldPersonEffect ("Hold Person")
+                                                          │
+                                                          └── sub_conditions ──► Paralyzed
+
+    This allows:
+    - Spell-specific immunity (immune to "Hold Person" but not all paralysis)
+    - Dispel Magic can target the "Hold Person" condition
+    - Automatic cleanup when concentration breaks
+    """
     print("\n=== Test 1: Hold Person Applies Paralyzed ===")
 
     # Multiple attempts since save is random
@@ -88,13 +101,26 @@ def test_1_hold_person_applies_paralyzed():
             break
 
     if spell_worked:
+        # Check caster has Concentrating
         assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
         conc = caster.active_conditions.get("Concentrating")
         assert conc is not None and isinstance(conc, Concentrating)
         assert conc.spell_name == "Hold Person"
-        print(f"  {target.name} is Paralyzed")
+
+        # Check target has BOTH "Hold Person" effect AND "Paralyzed" sub-condition
+        assert has_condition(target, "Hold Person"), "Target should have Hold Person effect"
+        assert has_condition(target, "Paralyzed"), "Target should have Paralyzed sub-condition"
+
+        # Verify the Paralyzed is a sub-condition of Hold Person
+        hold_effect = target.active_conditions.get("Hold Person")
+        paralyzed = target.active_conditions.get("Paralyzed")
+        assert paralyzed is not None
+        assert paralyzed.parent_condition == hold_effect.uuid, "Paralyzed should be child of Hold Person"
+
+        print(f"  {target.name} has 'Hold Person' effect condition")
+        print(f"  {target.name} has 'Paralyzed' sub-condition")
         print(f"  {caster.name} is concentrating on Hold Person")
-        print("  PASSED: Hold Person applies Paralyzed")
+        print("  PASSED: Hold Person applies Paralyzed via spell-specific effect")
     else:
         print("  Target saved all 10 attempts - test inconclusive (bad luck)")
         print("  PASSED: Spell mechanics work (target just saved)")
@@ -249,7 +275,8 @@ def test_4_hold_person_then_call_lightning():
     assert isinstance(conc, Concentrating)
     assert conc.spell_name == "Call Lightning", f"Should be concentrating on Call Lightning, not {conc.spell_name}"
 
-    # Check: Paralyzed should be removed
+    # Check: Both "Hold Person" effect AND "Paralyzed" sub-condition should be removed
+    assert not has_condition(target, "Hold Person"), "Hold Person effect should be removed"
     assert not has_condition(target, "Paralyzed"), "Paralyzed should be removed when concentration breaks"
 
     # Check: Call Lightning Strike should be available
@@ -359,6 +386,110 @@ def test_6_concentration_broken_by_damage():
         print("  PASSED: (caster got lucky)")
 
 
+def test_7_immunity_to_hold_person_effect():
+    """Test that immunity to 'Hold Person' blocks the spell entirely.
+
+    If a target is immune to the spell-specific effect condition, the spell
+    should fail but concentration is still spent (caster started concentrating
+    before the save).
+    """
+    print("\n=== Test 7: Immunity to Hold Person Effect ===")
+    reset_combat_state()
+
+    caster = create_caster("Mage", (0, 0))
+    target = create_target("Target", (1, 0))
+    Entity.update_all_entities_senses()
+
+    # Give target immunity to "Hold Person" specifically
+    target.add_condition_immunity("Hold Person")
+    print(f"  {target.name} is immune to 'Hold Person' effect")
+
+    # Cast Hold Person multiple times - should never apply
+    for _ in range(5):
+        caster.action_economy.reset_all_costs()
+        hold_person = HoldPerson(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            cast_at_level=2,
+            template=False,
+            costs=HoldPerson(source_entity_uuid=caster.uuid)._get_costs_for_level(2)
+        )
+        hold_person.apply()
+
+    # Target should NOT have either condition
+    has_hold_person = has_condition(target, "Hold Person")
+    has_paralyzed = has_condition(target, "Paralyzed")
+
+    print(f"  Target has 'Hold Person': {has_hold_person}")
+    print(f"  Target has 'Paralyzed': {has_paralyzed}")
+
+    # Caster is still concentrating (spell was cast, just resisted)
+    assert has_condition(caster, "Concentrating"), "Caster should still be concentrating"
+    print(f"  {caster.name} is concentrating (spell cast but resisted)")
+
+    assert not has_hold_person, "Target should NOT have Hold Person effect (immune)"
+    assert not has_paralyzed, "Target should NOT have Paralyzed (parent blocked)"
+
+    print("  PASSED: Immunity to Hold Person blocks the spell")
+
+
+def test_8_immunity_to_paralyzed_subcondition():
+    """Test what happens when target is immune to Paralyzed but not Hold Person.
+
+    This tests the sub-condition immunity case. When the sub-condition (Paralyzed)
+    is blocked by immunity, does the parent (Hold Person) still apply?
+
+    Expected behavior: The spell effect (Hold Person) should still apply,
+    but its sub-condition (Paralyzed) should be blocked.
+    """
+    print("\n=== Test 8: Immunity to Paralyzed Sub-condition ===")
+
+    spell_attempted = False
+    for _ in range(10):
+        reset_combat_state()
+        caster = create_caster("Mage", (0, 0))
+        target = create_target("Target", (1, 0))
+        Entity.update_all_entities_senses()
+
+        # Give target immunity to "Paralyzed" specifically (not Hold Person)
+        target.add_condition_immunity("Paralyzed")
+        print(f"  {target.name} is immune to 'Paralyzed' condition")
+
+        # Cast Hold Person
+        hold_person = HoldPerson(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            cast_at_level=2,
+            template=False,
+            costs=HoldPerson(source_entity_uuid=caster.uuid)._get_costs_for_level(2)
+        )
+        hold_person.apply()
+
+        # If target failed the save, Hold Person would try to apply
+        if has_condition(target, "Hold Person"):
+            spell_attempted = True
+            break
+
+    if spell_attempted:
+        # Hold Person effect applied, but what about Paralyzed?
+        has_hold_person = has_condition(target, "Hold Person")
+        has_paralyzed = has_condition(target, "Paralyzed")
+
+        print(f"  Target has 'Hold Person': {has_hold_person}")
+        print(f"  Target has 'Paralyzed': {has_paralyzed}")
+
+        # The Hold Person effect should be on target
+        assert has_hold_person, "Hold Person effect should apply (no immunity to it)"
+
+        # Paralyzed should be blocked by immunity
+        assert not has_paralyzed, "Paralyzed should NOT apply (immune)"
+
+        print("  PASSED: Hold Person applies but Paralyzed blocked by immunity")
+    else:
+        print("  Target saved all 10 attempts - test inconclusive")
+        print("  PASSED: (skipped due to saves)")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("CONCENTRATION SPELLS TEST SUITE")
@@ -371,6 +502,8 @@ if __name__ == "__main__":
     test_4_hold_person_then_call_lightning()
     test_5_call_lightning_then_hold_person()
     test_6_concentration_broken_by_damage()
+    test_7_immunity_to_hold_person_effect()
+    test_8_immunity_to_paralyzed_subcondition()
 
     print("\n" + "=" * 60)
     print("ALL CONCENTRATION SPELL TESTS COMPLETED")
