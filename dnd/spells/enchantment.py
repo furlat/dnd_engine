@@ -1,16 +1,153 @@
 """Enchantment spells - affecting minds and behavior.
 
-Contains: HoldPerson
+Contains: HoldPerson, HoldPersonEffect
 """
-from typing import Optional
+from typing import Optional, List, Tuple
 from uuid import UUID
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
-from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.events import Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger
 
 from dnd.actions import SpellAction, SpellEvent
+
+
+class HoldPersonEffect(BaseCondition):
+    """
+    The spell effect condition applied to the target of Hold Person.
+
+    This condition:
+    - Has Paralyzed as a sub-condition (same entity, auto-cleanup)
+    - Can be targeted by Dispel Magic
+    - Allows spell-specific immunity (immune to "Hold Person" but not all paralysis)
+    - Is linked to caster's Concentrating via external_conditions
+
+    When this condition is removed (by breaking concentration, dispel, or repeat save),
+    the Paralyzed sub-condition is automatically removed.
+    """
+    name: str = "Hold Person"
+    description: str = "Magically held in place"
+
+    # Track the caster for repeat saves
+    caster_uuid: Optional[UUID] = None
+    spell_dc: int = 10
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        from dnd.entity import Entity
+        from dnd.conditions import Paralyzed
+
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+
+        if not isinstance(target, Entity):
+            return [], [], [], declaration_event.cancel(status_message=f"Target is not an Entity")
+
+        sub_condition_uuids: List[UUID] = []
+        handler_uuids: List[UUID] = []
+
+        execution_event = declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            update={"condition": self},
+            status_message=f"Applying Paralyzed sub-condition to {target.name}"
+        )
+
+        # Apply Paralyzed as a sub-condition (same entity = existing mechanism)
+        paralyzed = Paralyzed(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            parent_condition=self.uuid  # Links child to parent
+        )
+        sub_condition_event = target.add_condition(paralyzed)
+
+        if sub_condition_event is not None and sub_condition_event.phase == EventPhase.COMPLETION:
+            sub_condition_uuids.append(paralyzed.uuid)
+
+        # Register handler for repeat saves at end of target's turn
+        if self.caster_uuid:
+            handler = self._create_repeat_save_handler()
+            target.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+        effect_event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied Hold Person effect to {target.name}"
+        )
+
+        return [], handler_uuids, sub_condition_uuids, effect_event
+
+    def _create_repeat_save_handler(self) -> EventHandler:
+        """Create handler for repeat WIS saves at end of target's turn."""
+        from dnd.entity import Entity
+
+        # Capture values for closure - these are validated before handler creation
+        assert self.target_entity_uuid is not None
+        assert self.caster_uuid is not None
+
+        target_uuid: UUID = self.target_entity_uuid
+        caster_uuid: UUID = self.caster_uuid
+        effect_uuid: UUID = self.uuid
+        dc: int = self.spell_dc
+
+        def repeat_save_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+            """At end of target's turn, allow repeat WIS save."""
+            _ = source_entity_uuid  # Unused but required by signature
+
+            # Only trigger for target's turn end
+            if event.source_entity_uuid != target_uuid:
+                return None
+
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+
+            # Check if still affected by this Hold Person
+            hold_person = target.active_conditions.get("Hold Person")
+            if not hold_person or hold_person.uuid != effect_uuid:
+                return None
+
+            # Make repeat WIS save
+            caster = Entity.get(caster_uuid)
+            if not caster:
+                # Caster gone, end the spell by removing the effect
+                target.remove_condition("Hold Person")
+                return None
+
+            save_request = caster.create_saving_throw_request(
+                target_entity_uuid=target.uuid,
+                ability_name="wisdom",
+                dc=dc
+            )
+            _, _, success = target.saving_throw(save_request)
+
+            if success:
+                # Remove concentration from caster - this will automatically
+                # remove HoldPersonEffect via external_conditions, which removes Paralyzed via sub_conditions
+                if "Concentrating" in caster.active_conditions:
+                    from dnd.conditions import Concentrating
+                    conc = caster.active_conditions.get("Concentrating")
+                    if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Person":
+                        caster.remove_condition("Concentrating")
+
+            return None
+
+        return EventHandler(
+            name=f"Hold Person Repeat Save ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_END,
+                    event_phase=EventPhase.EFFECT
+                )
+            ],
+            event_processor=repeat_save_processor
+        )
 
 
 class HoldPerson(SpellAction):
@@ -68,9 +205,16 @@ class HoldPerson(SpellAction):
         IMPORTANT: Concentration begins when the spell is cast, BEFORE the save.
         This ensures casting a concentration spell always breaks existing concentration,
         even if the target succeeds on their save.
+
+        Structure:
+        - Caster: Concentrating(spell_name="Hold Person")
+                      │
+                      └── external_conditions ──► Target: HoldPersonEffect
+                                                              │
+                                                              └── sub_conditions ──► Paralyzed
         """
         from dnd.entity import Entity
-        from dnd.conditions import Paralyzed, Concentrating
+        from dnd.conditions import Concentrating
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -87,7 +231,6 @@ class HoldPerson(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             spell_name="Hold Person"
-            # spell_effect_uuid will be set later if target fails save
         )
         caster.add_condition(concentration)
 
@@ -118,136 +261,20 @@ class HoldPerson(SpellAction):
                 status_message=f"{self.name} - target saved (still concentrating)"
             )
 
-        # 5. On failed save: apply Paralyzed condition
-        paralyzed = Paralyzed(
+        # 5. On failed save: apply HoldPersonEffect (which applies Paralyzed as sub-condition)
+        hold_effect = HoldPersonEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid
+            target_entity_uuid=target.uuid,
+            caster_uuid=caster.uuid,
+            spell_dc=dc
         )
-        target.add_condition(paralyzed)
+        target.add_condition(hold_effect)
 
-        # 6. Update concentration with linked spell effect
-        concentration.spell_effect_uuid = paralyzed.uuid
-        concentration.spell_effect_target_uuid = target.uuid
-
-        # 7. Register handler for repeat saves at end of target's turn
-        handler = self._create_repeat_save_handler(caster.uuid, target.uuid, paralyzed.uuid, dc)
-        target.add_event_handler(handler)
-
-        # Store handler UUID on the concentration so it can be cleaned up
-        # We'll add the handler to be removed when concentration breaks
-        self._register_handler_cleanup(caster, handler.uuid, paralyzed.uuid)
+        # 6. Link Concentrating → HoldPersonEffect via external_conditions
+        # When concentration breaks, HoldPersonEffect is removed, which removes Paralyzed
+        concentration.add_external_condition(target.uuid, hold_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            status_message=f"{self.name} - {target.name} is Paralyzed (concentration)"
+            status_message=f"{self.name} - {target.name} is held (concentration)"
         )
-
-    def _create_repeat_save_handler(
-        self, caster_uuid: UUID, target_uuid: UUID, paralyzed_uuid: UUID, dc: int
-    ) -> EventHandler:
-        """Create handler for repeat WIS saves at end of target's turn."""
-        from dnd.entity import Entity
-
-        def repeat_save_processor(event, source_entity_uuid: UUID) -> Optional[SpellEvent]:
-            """At end of target's turn, allow repeat WIS save."""
-            # Only trigger for target's turn end
-            if event.source_entity_uuid != target_uuid:
-                return None
-
-            target = Entity.get(target_uuid)
-            if not target:
-                return None
-
-            # Check if still paralyzed by this spell
-            paralyzed = target.active_conditions.get("Paralyzed")
-            if not paralyzed or paralyzed.uuid != paralyzed_uuid:
-                return None
-
-            # Make repeat WIS save
-            caster = Entity.get(caster_uuid)
-            if not caster:
-                # Caster gone, end the spell
-                target.remove_condition("Paralyzed")
-                return None
-
-            save_request = caster.create_saving_throw_request(
-                target_entity_uuid=target.uuid,
-                ability_name="wisdom",
-                dc=dc
-            )
-            _, save_roll, success = target.saving_throw(save_request)
-
-            if success:
-                # Remove paralyzed - this will also break caster's concentration
-                # via the linked spell effect
-                target.remove_condition("Paralyzed")
-
-                # Also remove concentration from caster
-                if "Concentrating" in caster.active_conditions:
-                    from dnd.conditions import Concentrating as ConcentratingCond
-                    conc = caster.active_conditions.get("Concentrating")
-                    if conc and isinstance(conc, ConcentratingCond) and conc.spell_effect_uuid == paralyzed_uuid:
-                        caster.remove_condition("Concentrating")
-
-            return None
-
-        return EventHandler(
-            name=f"Hold Person Repeat Save ({target_uuid})",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.TURN_END,
-                    event_phase=EventPhase.EFFECT
-                )
-            ],
-            event_processor=repeat_save_processor
-        )
-
-    def _register_handler_cleanup(self, caster, handler_uuid: UUID, _paralyzed_uuid: UUID) -> None:
-        """Register cleanup to remove repeat save handler when concentration breaks."""
-        from dnd.core.events import EventQueue
-
-        caster_uuid = caster.uuid
-
-        def cleanup_processor(event, _source_entity_uuid: UUID):
-            """When Concentrating is removed, clean up the repeat save handler."""
-            from dnd.conditions import Concentrating
-
-            # Only trigger for caster's condition removal
-            if event.target_entity_uuid != caster_uuid:
-                return None
-
-            # Check if this is the Concentrating condition for Hold Person
-            if not hasattr(event, 'condition'):
-                return None
-
-            condition = getattr(event, 'condition', None)
-            if not condition:
-                return None
-
-            if not isinstance(condition, Concentrating):
-                return None
-
-            if condition.spell_name != "Hold Person":
-                return None
-
-            # Remove the repeat save handler from the target
-            if condition.spell_effect_target_uuid:
-                # Use EventQueue to remove by UUID
-                EventQueue.remove_event_handlers_by_uuid(handler_uuid)
-
-            return None
-
-        cleanup_handler = EventHandler(
-            name=f"Hold Person Cleanup ({caster_uuid})",
-            source_entity_uuid=caster_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.CONDITION_REMOVAL,
-                    event_phase=EventPhase.EFFECT
-                )
-            ],
-            event_processor=cleanup_processor
-        )
-
-        caster.add_event_handler(cleanup_handler)

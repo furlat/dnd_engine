@@ -533,6 +533,9 @@ class BaseBlock(BaseModel):
         condition_name = condition.name
         assert condition.source_entity_uuid is not None and condition_name is not None
         self.active_conditions_by_source[condition.source_entity_uuid].remove(condition_name)
+        # Also remove from by_uuid dict (was missing - memory leak fix)
+        if condition.uuid in self.active_conditions_by_uuid:
+            del self.active_conditions_by_uuid[condition.uuid]
 
     def remove_condition(self, condition_name: str) -> None:
         if not self.allow_events_conditions:

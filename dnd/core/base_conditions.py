@@ -104,6 +104,10 @@ class BaseCondition(BaseObject):
     parent_condition: Optional[UUID] = Field(default=None,description="the UUID of the parent condition, if it exists")
     sub_conditions: List[UUID] = Field(default_factory=list,description="list of condition UUIDs that are sub conditions of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the sub conditions will triget sub events ")
     event_handlers_uuids: List[UUID] = Field(default_factory=list,description="list of event handler UUIDs that are event handlers of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the event handlers will trigger event handlers ")
+    external_conditions: List[Tuple[UUID, UUID]] = Field(
+        default_factory=list,
+        description="List of (target_entity_uuid, condition_uuid) for conditions this condition caused on OTHER entities. These 'nephews' are removed when this condition is removed."
+    )
     
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
@@ -233,6 +237,50 @@ class BaseCondition(BaseObject):
             elif isinstance(sub_condition,BaseCondition):
                 sub_condition.remove(skip_parent_removal=True,parent_event=parent_event)
         return True
+
+    def add_external_condition(self, target_entity_uuid: UUID, condition_uuid: UUID) -> None:
+        """Track a condition we caused on another entity (a 'nephew').
+
+        When this condition is removed, the external condition will also be removed
+        from the target entity. This enables cross-entity cleanup for concentration
+        spells and similar effects.
+
+        Args:
+            target_entity_uuid: The UUID of the entity that has the condition
+            condition_uuid: The UUID of the condition on that entity
+        """
+        self.external_conditions.append((target_entity_uuid, condition_uuid))
+
+    def remove_external_conditions(self, parent_event: Optional[Event] = None) -> bool:
+        """Remove all conditions this condition caused on other entities ('nephews').
+
+        This is called during condition removal to clean up cross-entity effects.
+        For example, when Concentrating is removed, this removes the spell effect
+        (like Paralyzed) from the target entity.
+
+        Args:
+            parent_event: Optional parent event for event chain tracking
+
+        Returns:
+            True if removal was successful
+        """
+        # Late import to avoid circular dependency
+        from dnd.entity import Entity
+        _ = parent_event  # Reserved for future event chain integration
+
+        for target_entity_uuid, condition_uuid in self.external_conditions:
+            target = Entity.get(target_entity_uuid)
+            if not target:
+                continue  # Target entity no longer exists
+
+            # Find the condition by UUID and remove it via entity's remove_condition
+            # This respects the target's immunities, handlers, etc.
+            for cond_name, cond in list(target.active_conditions.items()):
+                if cond.uuid == condition_uuid:
+                    target.remove_condition(cond_name)
+                    break
+
+        return True
     
     def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
         
@@ -281,6 +329,7 @@ class BaseCondition(BaseObject):
         # Proceed with actual removal operations
         self.remove_condition_modifiers()
         self.remove_sub_conditions(parent_event=event)
+        self.remove_external_conditions(parent_event=event)  # Cross-entity cleanup
         if not skip_parent_removal:
             self.remove_condition_from_parent()
         self.remove_event_handlers()
