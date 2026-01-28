@@ -5,6 +5,8 @@ Provides spell classes organized by school, plus registration utilities.
 from dnd.spells.base import SpellAction, SpellEvent
 from dnd.spells.evocation import FireBolt, SacredFlame, MagicMissile
 from dnd.spells.abjuration import MageArmor
+from dnd.spells.enchantment import HoldPerson
+from dnd.spells.conjuration import CallLightning, CallLightningStrike
 
 # Lookup dictionaries (like dnd/items/__init__.py)
 CANTRIPS = {
@@ -17,19 +19,35 @@ LEVEL_1_SPELLS = {
     "Mage Armor": MageArmor,
 }
 
-ALL_SPELLS = {**CANTRIPS, **LEVEL_1_SPELLS}
+LEVEL_2_SPELLS = {
+    "Hold Person": HoldPerson,
+}
+
+LEVEL_3_SPELLS = {
+    "Call Lightning": CallLightning,
+}
+
+ALL_SPELLS = {**CANTRIPS, **LEVEL_1_SPELLS, **LEVEL_2_SPELLS, **LEVEL_3_SPELLS}
 
 __all__ = [
     # Base classes
     "SpellAction",
     "SpellEvent",
-    # Spells
+    # Cantrips
     "FireBolt",
     "SacredFlame",
+    # Level 1
     "MagicMissile",
     "MageArmor",
+    # Level 2
+    "HoldPerson",
+    # Level 3
+    "CallLightning",
+    "CallLightningStrike",
     # Lookup dicts
     "CANTRIPS",
     "LEVEL_1_SPELLS",
+    "LEVEL_2_SPELLS",
+    "LEVEL_3_SPELLS",
     "ALL_SPELLS",
 ]

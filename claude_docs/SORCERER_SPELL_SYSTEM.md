@@ -110,28 +110,72 @@ SpellcastingBlock:
 
 ---
 
-## Executive Summary
+## Implementation Status (January 2026)
 
-The Sorcerer is a Charisma-based spellcaster with unique resource mechanics (sorcery points, metamagic). Unlike Fighter/Barbarian which primarily use conditions with modifiers and event handlers, the Sorcerer requires a **new foundational spell system** that can later support Wizard, Cleric, and other casters.
+### COMPLETED ✅
 
-### New Systems Required
+| System | Status | Location |
+|--------|--------|----------|
+| **SpellcastingBlock** | ✅ Done | `dnd/blocks/spellcasting.py` |
+| **ActionEconomy spell slots** | ✅ Done | `dnd/blocks/action_economy.py` |
+| **SpellAction Base** | ✅ Done | `dnd/actions.py` (SpellAction, SpellEvent) |
+| **Variant generation** | ✅ Done | `SpellAction.generate_variants()` |
+| **Entity spell methods** | ✅ Done | `spell_attack_bonus()`, `spell_save_dc()`, etc. |
+| **Spell organization** | ✅ Done | `dnd/spells/` module |
+
+### Implemented Spells
+
+| Spell | Level | Type | Location |
+|-------|-------|------|----------|
+| Fire Bolt | 0 | Attack | `dnd/spells/evocation.py` |
+| Sacred Flame | 0 | DEX Save | `dnd/spells/evocation.py` |
+| Magic Missile | 1 | Auto-hit | `dnd/spells/evocation.py` |
+| Mage Armor | 1 | Buff | `dnd/spells/abjuration.py` |
+
+### RECENTLY COMPLETED ✅
 
 | System | Complexity | Description |
 |--------|------------|-------------|
-| **SpellcastingBlock** | Medium | Spell attack, spell DC, spell-specific modifiers |
-| **ActionEconomy spell slots** | Low | ModifiableValue fields for slots 1-9 |
-| **SpellAction Base** | Medium | Base class for all spells with variant generation |
+| **Concentration** | Medium | `Concentrating` condition, CON save on damage, one-spell limit |
+
+### NEXT PRIORITY 🎯
+
+| System | Complexity | Description |
+|--------|------------|-------------|
+| **Spell durations** | Low | Timed expiration, short/long rest expiration |
+| **Concentration Spells** | Medium | Hold Person, Haste, etc. that use the Concentrating condition |
+
+### FUTURE (Not Started)
+
+| System | Complexity | Description |
+|--------|------------|-------------|
+| **Area of Effect** | High | Cone, sphere, line, cube targeting |
+| **Metamagic** | Medium | Spell modifiers using sorcery points |
+| **Sorcerer Class** | High | Full class with Draconic Bloodline |
+
+---
+
+## Original Executive Summary
+
+The Sorcerer is a Charisma-based spellcaster with unique resource mechanics (sorcery points, metamagic). Unlike Fighter/Barbarian which primarily use conditions with modifiers and event handlers, the Sorcerer requires a **new foundational spell system** that can later support Wizard, Cleric, and other casters.
+
+### Remaining Systems
+
+| System | Complexity | Description |
+|--------|------------|-------------|
 | **Concentration** | Medium | Track + break on damage |
 | **Area of Effect** | High | Cone, sphere, line, cube targeting |
 | **Metamagic** | Medium | Spell modifiers using sorcery points |
 
-### Timeline Estimate
+### Updated Timeline
 
-- **Phase 1** (Foundation): ActionEconomy slots + SpellcastingBlock + SpellAction base
-- **Phase 2** (Core Combat): Fire Bolt, Sacred Flame, Magic Missile, Mage Armor
-- **Phase 3** (AoE): Fireball, Lightning Bolt, Burning Hands
-- **Phase 4** (Sorcerer Features): Sorcery points, metamagic, Draconic Bloodline
-- **Phase 5** (Polish): Factory, remaining spells, testing
+- **Phase 1** (Foundation): ✅ COMPLETE - ActionEconomy slots + SpellcastingBlock + SpellAction base
+- **Phase 2** (Core Spells): ✅ COMPLETE - Fire Bolt, Sacred Flame, Magic Missile, Mage Armor
+- **Phase 3** (Spell Organization): ✅ COMPLETE - `dnd/spells/` module structure
+- **Phase 4** (Concentration): ✅ COMPLETE - Concentrating condition, CON save handler
+- **Phase 5** (AoE): 🎯 NEXT - Fireball, Lightning Bolt, Burning Hands
+- **Phase 6** (Sorcerer Features): Sorcery points, metamagic, Draconic Bloodline
+- **Phase 7** (Polish): Factory, remaining spells, testing
 
 ### Spell Slot Table (Sorcerer)
 

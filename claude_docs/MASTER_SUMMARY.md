@@ -13,6 +13,7 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | **Conditions** | 13/15 SRD | All except Exhaustion, Petrified |
 | **Fighter Class** | Complete | All features L1-L18 including Champion archetype |
 | **Barbarian Class** | Complete | All features L1-L20 + Berserker path (BG3-style) |
+| **Spell System** | Foundation | Attack/save/buff spells, slots, upcasting, concentration |
 | **Spatial** | Complete | GridMap, FOV (shadowcast), pathfinding (Dijkstra) |
 | **Server** | Complete | FastAPI REST API, session-based PvP authority |
 | **CLI** | Complete | Human TUI + Claude agent interface |
@@ -70,17 +71,42 @@ Reusable helpers for testing and debugging:
 
 ---
 
+## Spell System
+
+### Implemented
+- `SpellAction` base class with variant generation for upcasting
+- `SpellEvent` for spell-specific event data
+- Spell slot consumption and long rest restoration
+- Entity spell helpers: `spell_attack_bonus()`, `spell_save_dc()`, etc.
+- `SpellcastingBlock` for spell-specific modifiers
+- **Concentration system** - `Concentrating` condition, CON save on damage, one-spell limit
+
+### Implemented Spells
+| Spell | Level | Type | Effect |
+|-------|-------|------|--------|
+| Fire Bolt | Cantrip | Attack | 1d10 fire, scales with level |
+| Sacred Flame | Cantrip | DEX Save | 1d8 radiant, scales with level |
+| Magic Missile | 1 | Auto-hit | 3 darts (1d4+1), +1/upcast |
+| Mage Armor | 1 | Buff | AC = 13 + DEX |
+
+### Missing (Next Priority)
+- Spell durations (timed, short rest, long rest expiration)
+- Area of effect spells
+- Concentration spells (e.g., Hold Person, Haste)
+
+---
+
 ## Potential Next Features
 
 | Feature | Priority | Complexity |
 |---------|----------|------------|
+| **Area of Effect Spells** | HIGH | Medium |
 | Scenario Testing Framework | HIGH | Medium |
 | Perception/Stealth/Hidden | HIGH | Medium |
 | Interactable Objects (traps, destructibles) | HIGH | Medium |
 | Cover System (+2/+5 AC) | MEDIUM | Medium |
 | Difficult Terrain | MEDIUM | Easy |
 | Ranged Long Range Disadvantage | MEDIUM | Easy |
-| Spellcasting | LOW | High |
 
 ---
 
@@ -134,14 +160,17 @@ pyright
 ```
 dnd/
 ├── core/           # Base classes, events, dice, gridmap, values
-├── blocks/         # Entity components (abilities, health, equipment, etc.)
+├── blocks/         # Entity components (abilities, health, equipment, spellcasting)
 ├── classes/        # Character classes
 │   ├── fighter.py, fighter_factory.py      # Fighter + Champion archetype
 │   └── barbarian.py, barbarian_factory.py  # Barbarian + Berserker path
 ├── items/          # Weapon/armor factories (WEAPONS, ARMORS, SHIELDS dicts)
+├── spells/         # Spell implementations by school
+│   ├── evocation.py   # FireBolt, SacredFlame, MagicMissile
+│   └── abjuration.py  # MageArmor
 ├── monsters/       # Creature factories (bestiary.py)
-├── actions.py      # Attack, Move, Dash, Dodge, Disengage
-├── conditions.py   # All D&D conditions
+├── actions.py      # Attack, Move, Dash, Dodge, Disengage, SpellAction base
+├── conditions.py   # All D&D conditions + MageArmorCondition, Concentrating
 ├── entity.py       # Main Entity class
 └── encounter.py    # Turn-based combat management
 
