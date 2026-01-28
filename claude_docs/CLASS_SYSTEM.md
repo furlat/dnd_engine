@@ -465,7 +465,7 @@ All Barbarian features are in `dnd/classes/barbarian.py`. Uses BG3-style adaptat
 
 | Level | Feature | Implementation Type | Class |
 |-------|---------|---------------------|-------|
-| 1 | Rage | Feature Condition + Action | `RageFeature`, `Rage`, `Raging`, `EndRage`, `KeepRage` |
+| 1 | Rage | Feature Condition + Action | `RageFeature`, `Rage`, `Raging`, `EndRage` |
 | 1 | Unarmored Defense | Condition (contextual) | `UnarmoredDefense` |
 | 2 | Reckless Attack | Feature Condition + Action | `RecklessAttackFeature`, `RecklessAttack`, `RecklessAttacking` |
 | 2 | Danger Sense | Condition (contextual) | `DangerSense` |
@@ -482,6 +482,18 @@ All Barbarian features are in `dnd/classes/barbarian.py`. Uses BG3-style adaptat
 | 18 | Indomitable Might | Condition + EventHandler | `IndomitableMight` |
 | 20 | Primal Champion | Condition | `PrimalChampion` |
 
+### Berserker: Frenzy vs Rage
+
+Berserkers with `FrenzyFeature` use the **Frenzy action** instead of Rage:
+- `Rage.pre_validate()` returns `False` when `FrenzyFeature` is present (hides Rage from available actions)
+- Frenzy is strictly better (same benefits + bonus action melee attacks via `FrenziedStrike`)
+- Uses BG3-style adaptation: no exhaustion penalty
+
+**Condition relationships:**
+- `Frenzied` is a sub-condition of `Raging` (set via `parent_condition`)
+- Removing `Raging` cascades to remove `Frenzied`
+- `EndRage` action removes `Raging` directly (cascade handles `Frenzied`)
+
 ### Rage System
 
 Rage is the core Barbarian mechanic with maintenance tracking:
@@ -490,18 +502,24 @@ Rage is the core Barbarian mechanic with maintenance tracking:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          RAGE SYSTEM                                         │
 │                                                                              │
-│  RageFeature       → adds rage Resource + registers Rage Action              │
+│  RageFeature       → adds rage Resource + registers Rage/EndRage Actions     │
 │  Rage (Action)     → applies Raging condition when activated                 │
 │  Raging            → the active rage state with all benefits                 │
-│  KeepRage          → marker for rage maintenance (attacked/took damage)      │
+│  EndRage (Action)  → removes Raging (cascades to remove Frenzied)            │
+│                                                                              │
+│  Rage Maintenance (uses generic conditions from dnd/conditions.py):          │
+│    • HasAttacked      → tracks ANY attack (action, bonus action, reaction)   │
+│    • HasTakenDamage   → tracks damage taken                                  │
 │                                                                              │
 │  Event Handlers (registered by Raging):                                      │
-│    • rage_attack_tracker    → applies KeepRage on ATTACK                     │
-│    • rage_damage_tracker    → applies KeepRage on TAKE_DAMAGE                │
-│    • rage_maintenance       → ends rage at TURN_END if no KeepRage           │
-│    • rage_armor_equip       → ends rage if heavy armor equipped              │
+│    • Rage Maintenance     → ends rage at TURN_START if no HasAttacked/       │
+│                             HasTakenDamage from previous turn                │
+│    • Rage Armor Watch     → ends rage if heavy armor equipped                │
+│    • Rage Unconscious End → ends rage if entity falls unconscious            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Important**: `HasAttacked` tracks ALL attacks for rage maintenance (per SRD: "attacked a hostile creature since your last turn"). This is separate from `ExtraAttacksGranted` which only tracks action-cost attacks for the Extra Attack feature.
 
 ### Brutal Critical (ModifiableValue Pattern)
 
