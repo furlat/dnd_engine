@@ -25,7 +25,7 @@ from dnd.actions_functional import setup_standard_actions, get_available_actions
 from dnd.items.weapons import create_greatsword, create_shortsword
 from dnd.items.armors import create_chain_mail
 
-from dnd.classes.barbarian import (
+from dnd.classes.rage import (
     RageFeature,
     FrenzyFeature, Frenzied, FrenziedStrike
 )

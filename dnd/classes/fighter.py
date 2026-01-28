@@ -1305,8 +1305,10 @@ class ExtraAttack(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # PREREQUISITE: Must have attacked this turn (HasAttacked condition)
-        if "HasAttacked" not in entity.active_conditions:
+        # PREREQUISITE: Must have used action to attack (ExtraAttacksGranted condition)
+        # Note: We check ExtraAttacksGranted (not HasAttacked) because Extra Attack
+        # requires an action-cost attack, while HasAttacked tracks ALL attacks for rage.
+        if "ExtraAttacksGranted" not in entity.active_conditions:
             return declaration_event.cancel(
                 status_message="Must attack first before using Extra Attack"
             )

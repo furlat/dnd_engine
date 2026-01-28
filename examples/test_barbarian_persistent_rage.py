@@ -18,9 +18,8 @@ from dnd.core.events import EventQueue, WeaponSlot
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greatsword
 
-from dnd.classes.barbarian import (
-    Raging, PersistentRage
-)
+from dnd.classes.rage import Raging
+from dnd.classes.barbarian import PersistentRage
 
 
 def create_test_barbarian(

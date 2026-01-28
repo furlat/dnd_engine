@@ -79,10 +79,10 @@ class HasTakenDamage(BaseCondition):
 
 def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """
-    Generic processor: applies HasAttacked condition on own action-cost attacks.
+    Generic processor: applies HasAttacked condition on ANY attack.
 
     Triggers on ATTACK at EXECUTION phase.
-    Only applies for attacks that cost an action (not OA or bonus action attacks).
+    Tracks ALL attacks (action, bonus action, reaction) for rage maintenance.
     Uses EventQueue.is_first_at_phase() to ensure single application.
     """
     # Only trigger for the attacker's own attacks
@@ -101,20 +101,7 @@ def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[E
     if not EventQueue.is_first_at_phase(event):
         return None
 
-    # Check if this attack cost an action (not OA reaction, not bonus action)
-    costs = getattr(event, 'costs', [])
-    if not costs:
-        return None
-
-    # Only apply for attacks that cost an action
-    action_cost_attack = any(
-        c.cost_type == "actions" and c.cost > 0
-        for c in costs
-    )
-    if not action_cost_attack:
-        return None  # Skip OA (reaction) and bonus action attacks
-
-    # Apply HasAttacked if not already present
+    # Apply HasAttacked if not already present (tracks ANY attack for rage maintenance)
     if "HasAttacked" not in entity.active_conditions:
         has_attacked = HasAttacked(
             source_entity_uuid=source_entity_uuid,

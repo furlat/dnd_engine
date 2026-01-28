@@ -25,8 +25,8 @@ from dnd.actions_functional import setup_standard_actions, get_available_actions
 from dnd.items.weapons import create_greatsword
 from dnd.items.armors import create_chain_mail
 
+from dnd.classes.rage import RageFeature, Raging
 from dnd.classes.barbarian import (
-    RageFeature, Raging,
     UnarmoredDefense, RecklessAttackFeature, DangerSense
 )
 
