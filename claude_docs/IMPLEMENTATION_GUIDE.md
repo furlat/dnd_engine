@@ -160,7 +160,7 @@ mod = ContextualNumericalModifier(
 mod_uuid = target.equipment.ac_bonus.self_contextual.add_value_modifier(mod)
 ```
 
-### Sub-conditions Pattern
+### Sub-conditions Pattern (Same Entity)
 
 ```python
 # In Paralyzed._apply():
@@ -176,6 +176,51 @@ sub_conditions_uuids.append(incapacitated.uuid)
 return outs, [], sub_conditions_uuids, effect_event
 # When Paralyzed is removed, Incapacitated is automatically removed too
 ```
+
+### External Conditions Pattern (Cross-Entity)
+
+Use `external_conditions` when Entity A causes a condition on Entity B, and removing A's condition should clean up B's.
+
+**Use cases:**
+- Concentration spells (caster's Concentrating → target's spell effect)
+- Grappling (grappler's GrapplingCondition → target's Grappled)
+- Auras (paladin's AuraCondition → allies' AuraBonus)
+- Any causal relationship between entities
+
+```python
+# BaseCondition has:
+external_conditions: List[Tuple[UUID, UUID]] = []  # (target_entity_uuid, condition_uuid)
+
+# Methods:
+condition.add_external_condition(target_entity_uuid, effect_condition_uuid)
+condition.remove_external_conditions()  # Called automatically on removal
+```
+
+**Example - Concentration Spell:**
+```python
+# Structure:
+# Caster: Concentrating → external_conditions → Target: SpellEffect → sub_conditions → Paralyzed
+
+# In spell's _apply():
+# 1. Apply spell-specific effect to target (Paralyzed is its sub-condition)
+spell_effect = HoldPersonEffect(source=caster.uuid, target=target.uuid)
+target.add_condition(spell_effect)
+
+# 2. Apply Concentrating to caster
+concentration = Concentrating(source=caster.uuid, target=caster.uuid, spell_name="Hold Person")
+caster.add_condition(concentration)
+
+# 3. Link via external_conditions
+concentration.add_external_condition(target.uuid, spell_effect.uuid)
+
+# Cleanup chain when concentration breaks:
+# Concentrating.remove() → remove_external_conditions() → HoldPersonEffect.remove() → remove_sub_conditions() → Paralyzed.remove()
+```
+
+**Benefits of spell-specific effect conditions:**
+- **Spell-specific immunity**: Target can be immune to "Hold Person" but not all paralysis
+- **Dispel Magic**: Can target the spell condition directly
+- **Identification**: Know "this paralysis is from Hold Person" vs other sources
 
 ---
 

@@ -420,15 +420,36 @@ class SpellDamageEvent(SpellEvent):
 
 ## Part 4: Concentration System
 
-### Concentrating Condition
+### UPDATED: External Conditions Pattern
+
+Concentration spells now use the `external_conditions` pattern for cross-entity cleanup:
+
+```
+Caster: Concentrating(spell_name="Hold Person")
+            │
+            └── external_conditions ──► Target: HoldPersonEffect ("Hold Person")
+                                                    │
+                                                    └── sub_conditions ──► Paralyzed
+```
+
+**Key benefits:**
+- Spell-specific immunity (immune to "Hold Person" but not all paralysis)
+- Dispel Magic can target the spell condition directly
+- Automatic cleanup when concentration breaks
+
+### Concentrating Condition (Simplified)
 
 ```python
 class Concentrating(BaseCondition):
-    """Tracks concentration on a spell. Breaking concentration ends the spell effect."""
+    """Tracks concentration on a spell.
+
+    Uses external_conditions (inherited from BaseCondition) for cross-entity cleanup.
+    When concentration breaks, external_conditions are automatically removed.
+    """
 
     name: str = "Concentrating"
-    spell_name: str
-    spell_effect_uuid: Optional[UUID] = None  # The condition being maintained
+    spell_name: str = ""
+    # external_conditions: List[Tuple[UUID, UUID]] = []  # Inherited from BaseCondition
 
     def _apply(self, declaration_event):
         target = Entity.get(self.target_entity_uuid)
@@ -445,15 +466,45 @@ class Concentrating(BaseCondition):
 
         return [], handler_uuids, [], effect_event
 
-    def _remove(self, event=None):
-        # When concentration ends, also remove the spell effect
-        if self.spell_effect_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            for cond_name, cond in list(target.active_conditions.items()):
-                if cond.uuid == self.spell_effect_uuid:
-                    target.remove_condition(cond_name)
-                    break
-        return super()._remove(event)
+    # _remove() uses parent's remove_external_conditions() - no manual cleanup needed!
+```
+
+### Spell Effect Condition Pattern
+
+Each concentration spell creates a spell-specific effect condition:
+
+```python
+class HoldPersonEffect(BaseCondition):
+    """Spell effect applied to target - allows spell-specific immunity."""
+    name: str = "Hold Person"
+    caster_uuid: Optional[UUID] = None
+    spell_dc: int = 10
+
+    def _apply(self, event):
+        # Apply Paralyzed as sub-condition (same entity)
+        paralyzed = Paralyzed(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            parent_condition=self.uuid
+        )
+        target.add_condition(paralyzed)
+        return [], [], [paralyzed.uuid], effect_event
+```
+
+### Usage in Spell
+
+```python
+# In HoldPerson._apply():
+# 1. Apply spell effect to target
+effect = HoldPersonEffect(source=caster.uuid, target=target.uuid)
+target.add_condition(effect)
+
+# 2. Apply Concentrating to caster
+concentration = Concentrating(source=caster.uuid, target=caster.uuid, spell_name="Hold Person")
+caster.add_condition(concentration)
+
+# 3. Link via external_conditions
+concentration.add_external_condition(target.uuid, effect.uuid)
 ```
 
 ### Concentration Break Handler
