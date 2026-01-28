@@ -312,9 +312,9 @@ class MyCondition(BaseCondition):
         return outs, [], [], effect_event
 ```
 
-### Sub-conditions Pattern
+### Sub-conditions Pattern (Same Entity)
 
-Conditions like Paralyzed include Incapacitated as a sub-condition:
+Conditions like Paralyzed include Incapacitated as a sub-condition on the **same entity**:
 
 ```python
 # In Paralyzed._apply():
@@ -330,6 +330,55 @@ sub_conditions_uuids.append(incapacitated.uuid)
 return outs, [], sub_conditions_uuids, effect_event
 # When Paralyzed is removed, Incapacitated is automatically removed too
 ```
+
+### External Conditions Pattern (Cross-Entity "Nephews")
+
+For conditions that cause effects on **other entities** (e.g., concentration spells), use `external_conditions`:
+
+```python
+# BaseCondition field
+external_conditions: List[Tuple[UUID, UUID]] = []  # (target_entity_uuid, condition_uuid)
+
+# Methods
+condition.add_external_condition(target_entity_uuid, effect_condition_uuid)
+condition.remove_external_conditions()  # Called automatically on removal
+```
+
+**Use case**: When Entity A causes a condition on Entity B, and removing A's condition should clean up B's condition.
+
+**Example - Concentration Spell (Hold Person)**:
+```
+Caster: Concentrating(spell_name="Hold Person")
+            │
+            └── external_conditions ──► Target: HoldPersonEffect ("Hold Person")
+                                                    │
+                                                    └── sub_conditions ──► Paralyzed
+```
+
+```python
+# In HoldPerson._apply():
+# 1. Apply spell effect to target (has Paralyzed as sub-condition)
+hold_effect = HoldPersonEffect(source=caster.uuid, target=target.uuid)
+target.add_condition(hold_effect)
+
+# 2. Apply Concentrating to caster
+concentration = Concentrating(source=caster.uuid, target=caster.uuid, spell_name="Hold Person")
+caster.add_condition(concentration)
+
+# 3. Link via external_conditions
+concentration.add_external_condition(target.uuid, hold_effect.uuid)
+
+# When concentration breaks:
+# - Concentrating.remove() calls remove_external_conditions()
+# - HoldPersonEffect is removed from target
+# - Paralyzed is removed (sub_condition of HoldPersonEffect)
+```
+
+**Benefits**:
+- **Spell-specific immunity**: Target can be immune to "Hold Person" but not all paralysis
+- **Dispel Magic**: Can target the spell condition directly
+- **Automatic cleanup**: Breaking concentration removes everything via the chain
+- **Clear ownership**: Condition owns what it caused on other entities
 
 ### Modifier Placement Guide
 
@@ -485,6 +534,8 @@ def create_goblin(
 | SpellAction, SpellEvent base (in actions.py) | `dnd/actions.py` |
 | Evocation spells (FireBolt, SacredFlame, MagicMissile) | `dnd/spells/evocation.py` |
 | Abjuration spells (MageArmor) | `dnd/spells/abjuration.py` |
+| Enchantment spells (HoldPerson, HoldPersonEffect) | `dnd/spells/enchantment.py` |
+| Conjuration spells (CallLightning, CallLightningStrike) | `dnd/spells/conjuration.py` |
 | Spellcasting block | `dnd/blocks/spellcasting.py` |
 | Spell system tests | `examples/test_spell_system.py` |
 | **Utilities** | |
@@ -508,6 +559,8 @@ def create_goblin(
 | Barbarian features tests | `examples/test_barbarian_srd_features.py` |
 | Faction system tests | `examples/test_faction_system.py` |
 | Barbarian vs Fighter combat | `examples/test_barbarian_fighter_combat.py` |
+| Concentration system tests | `examples/test_concentration.py` |
+| Concentration spells tests | `examples/test_concentration_spells.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
 | Session management | `server/session.py` |
@@ -543,12 +596,13 @@ All conditions in `dnd/conditions.py`:
 | **Stunned** | Auto-fail STR/DEX saves | Advantage | Incapacitated |
 | **Unconscious** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft, prone-like | Incapacitated |
 
-### Spell Conditions (in `dnd/conditions.py`)
+### Spell Conditions (in `dnd/conditions.py` and `dnd/spells/`)
 
 | Condition | Effect | Notes |
 |-----------|--------|-------|
-| **Concentrating** | Tracks spell being concentrated on | CON save on damage (DC = max(10, dmg/2)), one-spell limit |
+| **Concentrating** | Tracks spell being concentrated on | CON save on damage (DC = max(10, dmg/2)), one-spell limit, uses `external_conditions` for cleanup |
 | **MageArmor** | AC = 13 + DEX when unarmored | Ends if armor equipped |
+| **HoldPersonEffect** | Spell effect for Hold Person | Has Paralyzed as sub-condition, allows spell-specific immunity (in `dnd/spells/enchantment.py`) |
 
 ### Fighter Conditions (in `dnd/classes/fighter.py`)
 
@@ -1081,7 +1135,9 @@ dnd/spells/
 ├── __init__.py      # Exports + CANTRIPS, LEVEL_1_SPELLS, ALL_SPELLS dicts
 ├── base.py          # Re-exports SpellAction, SpellEvent from actions.py
 ├── evocation.py     # FireBolt, SacredFlame, MagicMissile
-└── abjuration.py    # MageArmor
+├── abjuration.py    # MageArmor
+├── enchantment.py   # HoldPerson, HoldPersonEffect (concentration spell example)
+└── conjuration.py   # CallLightning, CallLightningStrike (concentration + granted action)
 ```
 
 **Base classes in `dnd/actions.py`:**
@@ -1129,6 +1185,8 @@ register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
 | Sacred Flame | Cantrip | Evocation | DEX Save | 1d8 radiant, scales with level |
 | Magic Missile | 1 | Evocation | Auto-hit | 3 darts (1d4+1 each), +1 dart/upcast |
 | Mage Armor | 1 | Abjuration | Buff | AC = 13 + DEX (ends on armor equip) |
+| Hold Person | 2 | Enchantment | WIS Save + Concentration | Paralyzed on fail, repeat save each turn |
+| Call Lightning | 3 | Conjuration | DEX Save + Concentration | 3d10 lightning, grants strike action each turn |
 
 ### SpellcastingBlock
 
@@ -1140,9 +1198,18 @@ register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
 - `spell_crit_extra_dice` - Custom features
 - `spellcasting_ability` - "intelligence", "wisdom", or "charisma"
 
+### Concentration System
+
+Concentration spells are fully implemented:
+- **One spell limit**: Casting a new concentration spell ends the old one
+- **CON saves on damage**: DC = max(10, damage/2)
+- **Automatic cleanup**: Uses `external_conditions` to clean up spell effects on targets when concentration breaks
+- **Spell-specific effects**: Each concentration spell creates a spell-specific condition (e.g., `HoldPersonEffect`) with the actual effect (e.g., `Paralyzed`) as a sub-condition
+
+See `examples/test_concentration.py` and `examples/test_concentration_spells.py` for tests.
+
 ### Not Yet Implemented
 
-- **Concentration** - Tracking, CON saves on damage, one spell limit
 - **Spell duration/expiration** - Long rest, short rest, timed durations
 - **Area of Effect spells** - Fireball, etc.
 - **More spell schools** - Necromancy, Illusion, etc.

@@ -8,7 +8,7 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 
 | System | Status | Notes |
 |--------|--------|-------|
-| **Core Engine** | Complete | Entity/component model, ModifiableValue 6-channel system, event lifecycle |
+| **Core Engine** | Complete | Entity/component model, ModifiableValue 6-channel system, event lifecycle, cross-entity conditions |
 | **Combat** | Complete | Action economy, attacks, movement, opportunity attacks, initiative |
 | **Conditions** | 13/15 SRD | All except Exhaustion, Petrified |
 | **Fighter Class** | Complete | All features L1-L18 including Champion archetype |
@@ -79,7 +79,8 @@ Reusable helpers for testing and debugging:
 - Spell slot consumption and long rest restoration
 - Entity spell helpers: `spell_attack_bonus()`, `spell_save_dc()`, etc.
 - `SpellcastingBlock` for spell-specific modifiers
-- **Concentration system** - `Concentrating` condition, CON save on damage, one-spell limit
+- **Concentration system** - `Concentrating` condition, CON save on damage, one-spell limit, automatic cleanup via `external_conditions`
+- **Spell-specific effect conditions** - Allow spell-specific immunity (e.g., immune to "Hold Person" but not paralysis)
 
 ### Implemented Spells
 | Spell | Level | Type | Effect |
@@ -88,11 +89,13 @@ Reusable helpers for testing and debugging:
 | Sacred Flame | Cantrip | DEX Save | 1d8 radiant, scales with level |
 | Magic Missile | 1 | Auto-hit | 3 darts (1d4+1), +1/upcast |
 | Mage Armor | 1 | Buff | AC = 13 + DEX |
+| Hold Person | 2 | WIS Save + Concentration | Paralyzed on fail, repeat save each turn |
+| Call Lightning | 3 | DEX Save + Concentration | 3d10 lightning, grants strike action each turn |
 
 ### Missing (Next Priority)
 - Spell durations (timed, short rest, long rest expiration)
 - Area of effect spells
-- Concentration spells (e.g., Hold Person, Haste)
+- More concentration spells (e.g., Haste, Bless)
 
 ---
 
@@ -166,8 +169,10 @@ dnd/
 │   └── barbarian.py, barbarian_factory.py  # Barbarian + Berserker path
 ├── items/          # Weapon/armor factories (WEAPONS, ARMORS, SHIELDS dicts)
 ├── spells/         # Spell implementations by school
-│   ├── evocation.py   # FireBolt, SacredFlame, MagicMissile
-│   └── abjuration.py  # MageArmor
+│   ├── evocation.py    # FireBolt, SacredFlame, MagicMissile
+│   ├── abjuration.py   # MageArmor
+│   ├── enchantment.py  # HoldPerson, HoldPersonEffect
+│   └── conjuration.py  # CallLightning, CallLightningStrike
 ├── monsters/       # Creature factories (bestiary.py)
 ├── actions.py      # Attack, Move, Dash, Dodge, Disengage, SpellAction base
 ├── conditions.py   # All D&D conditions + MageArmorCondition, Concentrating
@@ -197,3 +202,4 @@ examples/           # Test scripts for features
 3. **Template-based actions** - Actions registered on entities, validated per-target
 4. **6-channel modifiers** - Self/to-target × static/contextual + propagation channels
 5. **Session-based authority** - PvP uses session validation for entity control
+6. **Cross-entity condition cleanup** - `external_conditions` tracks causal relationships between entities (e.g., concentration → spell effect on target)
