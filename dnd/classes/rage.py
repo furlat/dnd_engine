@@ -585,11 +585,8 @@ class EndRage(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Remove Frenzied first (if present) - this cascades to remove Raging
-        # Otherwise, remove Raging directly
-        if "Frenzied" in entity.active_conditions:
-            entity.remove_condition("Frenzied")
-        elif "Raging" in entity.active_conditions:
+        # Remove Raging - this cascades to remove Frenzied (sub-condition)
+        if "Raging" in entity.active_conditions:
             entity.remove_condition("Raging")
 
         return execution_event.phase_to(
