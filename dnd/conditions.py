@@ -997,6 +997,151 @@ class MageArmorCondition(BaseCondition):
             target_entity.equipment.unarmored_ac_type = UnarmoredAc.NONE
 
 
+# =============================================================================
+# CONCENTRATION SYSTEM
+# =============================================================================
+
+class Concentrating(BaseCondition):
+    """
+    Tracks concentration on a spell.
+
+    When a caster concentrates on a spell:
+    - Only one concentration spell can be active at a time
+    - Taking damage requires a CON save (DC = max(10, damage/2))
+    - Failing the save or casting another concentration spell ends this effect
+    - When concentration ends, the spell effect (tracked by spell_effect_uuid) is also removed
+
+    This condition is applied when a concentration spell is cast, not directly.
+    The spell's _apply() should create this condition and link the spell effect.
+    """
+    name: str = "Concentrating"
+    description: str = "Concentrating on a spell"
+
+    # What spell is being concentrated on
+    spell_name: str = ""
+
+    # UUID of the condition that represents the spell effect being maintained
+    # When concentration breaks, this condition will be removed from the target
+    spell_effect_uuid: Optional[UUID] = None
+    spell_effect_target_uuid: Optional[UUID] = None  # Entity that has the spell effect
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        handler_uuids: List[UUID] = []
+
+        # End any existing concentration first
+        if "Concentrating" in target.active_conditions:
+            target.remove_condition("Concentrating")
+
+        # Register the concentration break handler
+        def concentration_break_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+            """On damage, make CON save or lose concentration."""
+            from dnd.core.events import TakeDamageEvent
+
+            # Only trigger for the concentrating entity taking damage
+            if event.target_entity_uuid != source_entity_uuid:
+                return None
+
+            if not isinstance(event, TakeDamageEvent):
+                return None
+
+            # Get the entity
+            entity = Entity.get(source_entity_uuid)
+            if not entity:
+                return None
+
+            # Check if still concentrating
+            if "Concentrating" not in entity.active_conditions:
+                return None
+
+            # Calculate DC: 10 or half damage, whichever is higher
+            damage = event.final_damage if event.final_damage is not None else event.total_damage
+            if damage <= 0:
+                return None  # No damage, no check needed
+
+            dc = max(10, damage // 2)
+
+            # Make Constitution saving throw
+            # Note: The caster is both source and target of this save
+            from dnd.core.events import SavingThrowEvent
+            save_request = SavingThrowEvent(
+                source_entity_uuid=source_entity_uuid,
+                target_entity_uuid=source_entity_uuid,
+                ability_name="constitution",
+                dc=dc,
+                source_entity_name=entity.name,
+                use_register=False  # Don't register in global registry
+            )
+
+            _, _, success = entity.saving_throw(save_request)
+
+            if not success:
+                # Get spell name before removing
+                conc = entity.active_conditions.get("Concentrating")
+                spell_name = "spell"
+                if conc is not None and isinstance(conc, Concentrating):
+                    spell_name = conc.spell_name
+
+                entity.remove_condition("Concentrating")
+                return event.model_copy(update={
+                    "concentration_broken": True,
+                    "status_message": f"{entity.name} lost concentration on {spell_name} (failed DC {dc} CON save)"
+                })
+
+            return None
+
+        handler = EventHandler(
+            name=f"Concentration Check ({self.spell_name})",
+            source_entity_uuid=self.target_entity_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TAKE_DAMAGE,
+                    event_phase=EventPhase.COMPLETION  # After damage is finalized
+                )
+            ],
+            event_processor=concentration_break_processor
+        )
+
+        target.add_event_handler(handler)
+        handler_uuids.append(handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"{target.name} is concentrating on {self.spell_name}"
+        )
+
+        return [], handler_uuids, [], effect_event
+
+    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
+        """When concentration ends, also remove the spell effect.
+
+        IMPORTANT: Must call super()._remove() to trigger EXECUTION and EFFECT phases
+        so cleanup handlers can respond to the condition removal event.
+        """
+        # Call parent to trigger event phase transitions (EXECUTION -> EFFECT)
+        # This allows cleanup handlers subscribed to CONDITION_REMOVAL at EFFECT to fire
+        result_event = super()._remove(removal_event)
+
+        # If we have a linked spell effect, remove it
+        if self.spell_effect_uuid and self.spell_effect_target_uuid:
+            effect_target = Entity.get(self.spell_effect_target_uuid)
+            if effect_target:
+                # Find the condition by UUID and remove it
+                for cond_name, cond in list(effect_target.active_conditions.items()):
+                    if cond.uuid == self.spell_effect_uuid:
+                        effect_target.remove_condition(cond_name)
+                        break
+
+        return result_event
+
+
 class ConditionType(str, Enum):
     # NOTE: Fighter-specific conditions (HasAttacked, ActionSurging) moved to dnd/classes/fighter.py
     BLINDED = "BLINDED"

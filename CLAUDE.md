@@ -480,6 +480,13 @@ def create_goblin(
 | **Items** | |
 | Weapon factories (WEAPONS dict) | `dnd/items/weapons.py` |
 | Armor factories (ARMORS, SHIELDS dicts) | `dnd/items/armors.py` |
+| **Spells** | |
+| Spell module exports + dicts | `dnd/spells/__init__.py` |
+| SpellAction, SpellEvent base (in actions.py) | `dnd/actions.py` |
+| Evocation spells (FireBolt, SacredFlame, MagicMissile) | `dnd/spells/evocation.py` |
+| Abjuration spells (MageArmor) | `dnd/spells/abjuration.py` |
+| Spellcasting block | `dnd/blocks/spellcasting.py` |
+| Spell system tests | `examples/test_spell_system.py` |
 | **Utilities** | |
 | Test/debug utilities | `dnd/utils/test_utils.py` |
 | **Monsters & Examples** | |
@@ -535,6 +542,13 @@ All conditions in `dnd/conditions.py`:
 | **Restrained** | Speed=0, disadvantage attacks, fail DEX | Advantage | - |
 | **Stunned** | Auto-fail STR/DEX saves | Advantage | Incapacitated |
 | **Unconscious** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft, prone-like | Incapacitated |
+
+### Spell Conditions (in `dnd/conditions.py`)
+
+| Condition | Effect | Notes |
+|-----------|--------|-------|
+| **Concentrating** | Tracks spell being concentrated on | CON save on damage (DC = max(10, dmg/2)), one-spell limit |
+| **MageArmor** | AC = 13 + DEX when unarmored | Ends if armor equipped |
 
 ### Fighter Conditions (in `dnd/classes/fighter.py`)
 
@@ -1055,6 +1069,83 @@ Two character classes are fully implemented:
 - **Barbarian** (L1-L20) + Berserker path: `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`
 
 See `claude_docs/CLASS_SYSTEM.md` for feature details and `claude_docs/IMPLEMENTATION_GUIDE.md` for implementation patterns.
+
+## Spell System
+
+Generic spell infrastructure supporting attack spells, save spells, and buff spells.
+
+### Architecture
+
+```
+dnd/spells/
+├── __init__.py      # Exports + CANTRIPS, LEVEL_1_SPELLS, ALL_SPELLS dicts
+├── base.py          # Re-exports SpellAction, SpellEvent from actions.py
+├── evocation.py     # FireBolt, SacredFlame, MagicMissile
+└── abjuration.py    # MageArmor
+```
+
+**Base classes in `dnd/actions.py`:**
+- `SpellEvent(ActionEvent)` - Event for spell casting with spell-specific fields
+- `SpellAction(BaseAction)` - Base class with variant generation for upcasting
+
+### Entity Spell Methods
+
+Entity provides helper methods for spell calculations:
+
+```python
+# Attack/DC calculation
+entity.spell_attack_bonus(target_uuid) -> ModifiableValue  # prof + ability + bonuses
+entity.spell_save_dc() -> int                               # 8 + prof + ability + bonuses
+
+# Crit handling (stacks with equipment)
+entity.get_spell_crit_threshold() -> int      # Default 20
+entity.get_spell_crit_extra_dice() -> int     # Extra dice on crit
+
+# Damage and slots
+entity.get_spell_damage_bonus() -> ModifiableValue
+entity.has_spell_slot(level) -> bool
+entity.get_lowest_spell_slot(min_level) -> int | None
+entity.is_spellcaster -> bool  # Property
+```
+
+### Spell Registration
+
+```python
+from dnd.actions_functional import register_spell, register_spells_by_name
+from dnd.spells import FireBolt, ALL_SPELLS
+
+# Register individual spell
+register_spell(entity, FireBolt, caster_level=5)
+
+# Register multiple by name
+register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
+```
+
+### Implemented Spells
+
+| Spell | Level | School | Type | Effect |
+|-------|-------|--------|------|--------|
+| Fire Bolt | Cantrip | Evocation | Attack | 1d10 fire, scales with level |
+| Sacred Flame | Cantrip | Evocation | DEX Save | 1d8 radiant, scales with level |
+| Magic Missile | 1 | Evocation | Auto-hit | 3 darts (1d4+1 each), +1 dart/upcast |
+| Mage Armor | 1 | Abjuration | Buff | AC = 13 + DEX (ends on armor equip) |
+
+### SpellcastingBlock
+
+`dnd/blocks/spellcasting.py` provides spell-specific modifiers:
+- `spell_attack_bonus` - Wand of War Mage, etc.
+- `spell_damage_bonus` - Elemental Affinity, etc.
+- `spell_dc_bonus` - Robe of Archmagi, etc.
+- `spell_crit_threshold` - Spell Sniper, etc.
+- `spell_crit_extra_dice` - Custom features
+- `spellcasting_ability` - "intelligence", "wisdom", or "charisma"
+
+### Not Yet Implemented
+
+- **Concentration** - Tracking, CON saves on damage, one spell limit
+- **Spell duration/expiration** - Long rest, short rest, timed durations
+- **Area of Effect spells** - Fireball, etc.
+- **More spell schools** - Necromancy, Illusion, etc.
 
 ## Project Status
 

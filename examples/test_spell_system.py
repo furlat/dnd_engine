@@ -11,7 +11,7 @@ Tests:
 from uuid import uuid4
 
 # Reset state first
-from dnd.utils import reset_combat_state
+from dnd.utils import reset_combat_state, get_hp, set_hp
 reset_combat_state()
 
 from dnd.entity import Entity, EntityConfig
@@ -558,6 +558,279 @@ def test_mage_armor_ends_on_armor_equip():
     print("✓ Mage Armor correctly ends when armor is equipped")
 
 
+def test_fire_bolt_combat():
+    """Test Fire Bolt in actual combat - spell attack vs AC."""
+    print("\n=== Test 13: Fire Bolt Combat (Spell Attack vs AC) ===")
+
+    from dnd.spells import FireBolt
+
+    reset_combat_state()
+
+    # Create caster with high INT for reliable hits
+    caster_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(
+            intelligence=AbilityConfig(ability_score=18),  # +4
+        ),
+        action_economy=ActionEconomyConfig(),
+        proficiency_bonus=3,
+        spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
+        position=(0, 0),
+    )
+    caster = Entity.create(source_entity_uuid=uuid4(), name="Wizard", config=caster_config)
+
+    # Create target with moderate AC (adjacent for LOS)
+    target_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(dexterity=AbilityConfig(ability_score=10)),
+        proficiency_bonus=2,
+        position=(1, 0),
+    )
+    target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)
+
+    Entity.update_all_entities_senses()
+
+    # Verify spell attack bonus: prof(3) + INT(4) = +7
+    spell_attack = caster.spell_attack_bonus().normalized_score
+    assert spell_attack == 7, f"Spell attack should be +7, got +{spell_attack}"
+
+    # Cast Fire Bolt at caster level 5 (2d10)
+    set_hp(target, 100)
+    fire_bolt = FireBolt(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        caster_level=5,
+        template=False
+    )
+    result = fire_bolt.apply()
+
+    assert result is not None, "Fire Bolt should return an event"
+    assert not result.canceled, f"Fire Bolt should not be canceled: {result.status_message}"
+
+    # Check that attack outcome is recorded
+    from dnd.core.dice import AttackOutcome
+    assert result.attack_outcome is not None, "Attack outcome should be recorded"
+    print(f"  Attack outcome: {result.attack_outcome.value}")
+
+    # If hit, damage should be dealt
+    if result.attack_outcome in [AttackOutcome.HIT, AttackOutcome.CRIT]:
+        assert result.damage_rolls is not None, "Damage rolls should be recorded"
+        total_damage = sum(r.total for r in result.damage_rolls)
+        print(f"  Damage dealt: {total_damage} fire")
+    else:
+        print("  Attack missed (RNG)")
+
+    print("✓ Fire Bolt combat mechanics work")
+
+
+def test_sacred_flame_combat():
+    """Test Sacred Flame in actual combat - spell DC vs DEX save."""
+    print("\n=== Test 14: Sacred Flame Combat (Spell DC vs Save) ===")
+
+    from dnd.spells import SacredFlame
+
+    reset_combat_state()
+
+    # Create caster with high WIS
+    caster_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(
+            wisdom=AbilityConfig(ability_score=18),  # +4
+        ),
+        action_economy=ActionEconomyConfig(),
+        proficiency_bonus=3,
+        spellcasting=SpellcastingConfig(spellcasting_ability="wisdom"),
+        position=(0, 0),
+    )
+    caster = Entity.create(source_entity_uuid=uuid4(), name="Cleric", config=caster_config)
+
+    # Create target with low DEX for reliable failures (adjacent for LOS)
+    target_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(dexterity=AbilityConfig(ability_score=6)),  # -2
+        proficiency_bonus=2,
+        position=(1, 0),
+    )
+    target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)
+
+    Entity.update_all_entities_senses()
+
+    # Verify spell DC: 8 + prof(3) + WIS(4) = 15
+    dc = caster.spell_save_dc()
+    assert dc == 15, f"Spell DC should be 15, got {dc}"
+    print(f"  Spell DC: {dc}")
+    dex_save_bonus = target.saving_throw_bonus(None, "dexterity").normalized_score
+    print(f"  Target DEX save: {dex_save_bonus}")
+
+    # Cast Sacred Flame at caster level 5 (2d8)
+    set_hp(target, 100)
+    sacred_flame = SacredFlame(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        caster_level=5,
+        template=False
+    )
+    result = sacred_flame.apply()
+
+    assert result is not None, "Sacred Flame should return an event"
+    assert not result.canceled, f"Sacred Flame should not be canceled: {result.status_message}"
+
+    # Check save result is recorded
+    assert result.save_dc == dc, "Save DC should be recorded in event"
+    assert result.save_success is not None, "Save success should be recorded"
+
+    if result.save_success:
+        assert result.damage_rolls is None, "Successful save means no damage rolls"
+        print("  Target saved (no damage)")
+    else:
+        assert result.damage_rolls is not None, "Damage rolls should be recorded"
+        total_damage = sum(r.total for r in result.damage_rolls)
+        assert total_damage > 0, "Failed save should deal damage"
+        print(f"  Target failed save, took {total_damage} radiant damage")
+
+    print("✓ Sacred Flame save mechanics work")
+
+
+def test_magic_missile_combat():
+    """Test Magic Missile - auto-hit and upcast scaling."""
+    print("\n=== Test 15: Magic Missile Combat (Auto-hit + Upcast) ===")
+
+    from dnd.spells import MagicMissile
+
+    reset_combat_state()
+
+    caster_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=16)),
+        action_economy=ActionEconomyConfig(spell_slots={1: 4, 2: 3, 3: 2}),
+        proficiency_bonus=3,
+        spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
+        position=(0, 0),
+    )
+    caster = Entity.create(source_entity_uuid=uuid4(), name="Wizard", config=caster_config)
+
+    target_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(),
+        proficiency_bonus=2,
+        position=(1, 0),
+    )
+    target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)
+
+    Entity.update_all_entities_senses()
+
+    # Cast at L1 (3 darts, 3d4+3 = 6-15 damage)
+    mm_l1 = MagicMissile(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        spell_level=1,
+        cast_at_level=1,
+        template=False,
+        costs=MagicMissile(source_entity_uuid=caster.uuid)._get_costs_for_level(1)
+    )
+    result_l1 = mm_l1.apply()
+
+    assert not result_l1.canceled, "Magic Missile should not be canceled"
+    assert len(result_l1.damage_rolls) == 3, "Should have 3 damage rolls (3 darts)"
+    damage_l1 = sum(r.total for r in result_l1.damage_rolls)
+    assert damage_l1 >= 6, f"L1 MM (3 darts) should deal at least 6 damage, got {damage_l1}"
+    assert damage_l1 <= 15, f"L1 MM (3 darts) should deal at most 15 damage, got {damage_l1}"
+    print(f"  L1 (3 darts): {damage_l1} force damage")
+
+    # Reset action economy for second cast
+    caster.action_economy.reset_all_costs()
+
+    # Cast at L3 (5 darts, 5d4+5 = 10-25 damage)
+    mm_l3 = MagicMissile(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        spell_level=1,
+        cast_at_level=3,
+        template=False,
+        costs=MagicMissile(source_entity_uuid=caster.uuid)._get_costs_for_level(3)
+    )
+    result_l3 = mm_l3.apply()
+
+    assert not result_l3.canceled, "Magic Missile should not be canceled"
+    assert len(result_l3.damage_rolls) == 5, "Should have 5 damage rolls (5 darts)"
+    damage_l3 = sum(r.total for r in result_l3.damage_rolls)
+    assert damage_l3 >= 10, f"L3 MM (5 darts) should deal at least 10 damage, got {damage_l3}"
+    assert damage_l3 <= 25, f"L3 MM (5 darts) should deal at most 25 damage, got {damage_l3}"
+    print(f"  L3 (5 darts): {damage_l3} force damage")
+
+    print("✓ Magic Missile auto-hit and upcast work")
+
+
+def test_spell_slot_consumption():
+    """Test that casting leveled spells consumes spell slots."""
+    print("\n=== Test 16: Spell Slot Consumption ===")
+
+    from dnd.spells import MagicMissile
+
+    reset_combat_state()
+
+    caster_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=16)),
+        action_economy=ActionEconomyConfig(spell_slots={1: 4, 2: 3}),
+        proficiency_bonus=3,
+        spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
+        position=(0, 0),
+    )
+    caster = Entity.create(source_entity_uuid=uuid4(), name="Wizard", config=caster_config)
+
+    target_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(),
+        position=(1, 0),
+    )
+    target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)
+
+    Entity.update_all_entities_senses()
+
+    # Check initial slots
+    initial_l1 = caster.action_economy.spell_slot_1.normalized_score
+    initial_l2 = caster.action_economy.spell_slot_2.normalized_score
+    assert initial_l1 == 4, f"Should start with 4 L1 slots, got {initial_l1}"
+    assert initial_l2 == 3, f"Should start with 3 L2 slots, got {initial_l2}"
+    print(f"  Initial slots: L1={initial_l1}, L2={initial_l2}")
+
+    # Cast Magic Missile at L1
+    mm_l1 = MagicMissile(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        spell_level=1,
+        cast_at_level=1,
+        template=False,
+        costs=MagicMissile(source_entity_uuid=caster.uuid)._get_costs_for_level(1)
+    )
+    mm_l1.apply()
+
+    after_l1_cast = caster.action_economy.spell_slot_1.normalized_score
+    assert after_l1_cast == 3, f"Should have 3 L1 slots after casting, got {after_l1_cast}"
+    print(f"  After L1 cast: L1={after_l1_cast}")
+
+    # Reset actions (but NOT spell slots) for second cast
+    caster.action_economy.reset_all_costs()
+
+    # Cast Magic Missile at L2 (upcast)
+    mm_l2 = MagicMissile(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        spell_level=1,
+        cast_at_level=2,
+        template=False,
+        costs=MagicMissile(source_entity_uuid=caster.uuid)._get_costs_for_level(2)
+    )
+    mm_l2.apply()
+
+    after_l2_cast = caster.action_economy.spell_slot_2.normalized_score
+    assert after_l2_cast == 2, f"Should have 2 L2 slots after casting, got {after_l2_cast}"
+    print(f"  After L2 cast: L2={after_l2_cast}")
+
+    # Long rest restores slots
+    caster.action_economy.reset_spell_slot_costs()
+    restored_l1 = caster.action_economy.spell_slot_1.normalized_score
+    restored_l2 = caster.action_economy.spell_slot_2.normalized_score
+    assert restored_l1 == 4, f"L1 slots should be restored to 4, got {restored_l1}"
+    assert restored_l2 == 3, f"L2 slots should be restored to 3, got {restored_l2}"
+    print(f"  After long rest: L1={restored_l1}, L2={restored_l2}")
+
+    print("✓ Spell slot consumption and restoration work")
+
+
 def run_all_tests():
     """Run all tests."""
     print("=" * 60)
@@ -571,7 +844,7 @@ def run_all_tests():
     test_modifier_stacking()
     test_non_caster_defaults()
 
-    # Phase 3 tests
+    # Phase 3 tests - unit tests
     test_fire_bolt_cantrip_scaling()
     test_magic_missile_dart_count()
     test_cantrip_variant_generation()
@@ -579,6 +852,12 @@ def run_all_tests():
     test_include_self_targeting()
     test_mage_armor_self_cast()
     test_mage_armor_ends_on_armor_equip()
+
+    # Phase 3 tests - combat integration
+    test_fire_bolt_combat()
+    test_sacred_flame_combat()
+    test_magic_missile_combat()
+    test_spell_slot_consumption()
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED!")
