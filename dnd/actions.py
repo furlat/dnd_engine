@@ -1,7 +1,7 @@
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost, BaseCost, ActionEvent, TargetType
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, DamageType
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent
@@ -1302,6 +1302,176 @@ class DropProne(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message="No costs for Drop Prone"
         )
+
+
+# =============================================================================
+# Spell System: SpellAction Base Class
+# =============================================================================
+
+class SpellEvent(ActionEvent):
+    """An event that represents a spell being cast."""
+    name: str = Field(default="Spell Cast", description="A spell cast event")
+    event_type: EventType = Field(default=EventType.CAST_SPELL, description="The type of event")
+    spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
+    cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
+    spell_school: str = Field(default="evocation", description="School of magic")
+
+    # Attack spell fields (optional)
+    attack_bonus: Optional[ModifiableValue] = Field(default=None, description="The spell attack bonus")
+    ac: Optional[ModifiableValue] = Field(default=None, description="The target's AC")
+    dice_roll: Optional[DiceRoll] = Field(default=None, description="The attack roll result")
+    attack_outcome: Optional[AttackOutcome] = Field(default=None, description="The attack outcome")
+
+    # Save spell fields (optional)
+    save_ability: Optional[str] = Field(default=None, description="Ability for saving throw")
+    save_dc: Optional[int] = Field(default=None, description="Save DC")
+    save_success: Optional[bool] = Field(default=None, description="Whether the save succeeded")
+
+    # Damage fields
+    damages: Optional[List[Damage]] = Field(default=None, description="The damages dealt")
+    damage_rolls: Optional[List[DiceRoll]] = Field(default=None, description="The damage roll results")
+
+
+class SpellAction(BaseAction):
+    """Base class for all spells. Handles metadata and variant generation.
+
+    Each spell subclass must implement _apply() with its own logic.
+    This base class provides:
+    - Spell metadata (level, school, concentration)
+    - Variant generation for upcasting
+    - Cost generation (action + spell slot)
+
+    Note: Unlike weapon attacks, spells handle their own _apply() logic entirely.
+    Attack spells should borrow the pattern from Attack._apply() for set_from_target().
+    """
+
+    # Spell metadata
+    spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
+    spell_school: str = Field(default="evocation", description="School of magic")
+    concentration: bool = Field(default=False, description="Whether spell requires concentration")
+
+    # Spell range (similar to weapon range)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range of the spell"
+    )
+
+    # Variant tracking (set by variant generation)
+    cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
+    is_variant: bool = Field(default=False, description="Whether this is an upcast variant")
+
+    # Caster level (for cantrip scaling)
+    caster_level: int = Field(default=1, description="Level of the caster (for cantrip scaling)")
+
+    # Default cost is 1 action (no spell slot for cantrips)
+    costs: List[Cost] = Field(
+        default_factory=lambda: [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
+        description="Action cost for casting"
+    )
+
+    def get_upcast_bonus(self) -> int:
+        """Get levels above base spell level (for upcast scaling)."""
+        return max(0, self.cast_at_level - self.spell_level)
+
+    def generate_variants(self, entity: 'Entity') -> List['SpellAction']:
+        """Generate spell variants for available spell slots.
+
+        For cantrips: returns a single variant with cast_at_level=0
+        For leveled spells: returns a variant for each available slot >= spell_level
+
+        Args:
+            entity: The entity that would cast the spell
+
+        Returns:
+            List of SpellAction variants with appropriate costs
+        """
+        variants: List['SpellAction'] = []
+
+        if self.spell_level == 0:
+            # Cantrip - single variant, no slot cost
+            variants.append(self._create_variant(cast_at_level=0))
+        else:
+            # Leveled spell - variant per available slot
+            for slot_level in range(self.spell_level, 10):
+                if entity.has_spell_slot(slot_level):
+                    variants.append(self._create_variant(cast_at_level=slot_level))
+
+        return variants
+
+    def _create_variant(self, cast_at_level: int, **overrides) -> 'SpellAction':
+        """Clone self with modified cast level and appropriate costs.
+
+        Args:
+            cast_at_level: The spell slot level to use (0 for cantrips)
+            **overrides: Additional field overrides
+
+        Returns:
+            A new SpellAction instance configured for this cast level
+        """
+        # Start with current fields
+        kwargs = self.model_dump(exclude={"uuid", "costs"})
+        kwargs["cast_at_level"] = cast_at_level
+        kwargs["is_variant"] = True
+        kwargs["template"] = False
+        kwargs["costs"] = self._get_costs_for_level(cast_at_level)
+        kwargs.update(overrides)
+
+        return type(self)(**kwargs)
+
+    def _get_costs_for_level(self, level: int) -> List[Cost]:
+        """Get costs for casting at a specific level.
+
+        Args:
+            level: The spell slot level (0 for cantrips)
+
+        Returns:
+            List of Cost objects (action + spell slot if level > 0)
+        """
+        costs = [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
+        if level > 0:
+            cost_type = cast(CostType, f"spell_slot_{level}")
+            costs.append(Cost(name=f"Spell Slot L{level}", cost_type=cost_type, cost=1, evaluator=entity_action_economy_cost_evaluator))
+        return costs
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        """Create the declaration event for this spell."""
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        source_name = source_entity.name if source_entity else None
+        target_name = target_entity.name if target_entity else None
+
+        return SpellEvent(
+            name=f"{self.name}",
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register,
+            source_entity_name=source_name,
+            target_entity_name=target_name,
+            spell_level=self.spell_level,
+            cast_at_level=self.cast_at_level,
+            spell_school=self.spell_school
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+        """Apply the costs of the spell."""
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+    def _get_cantrip_dice_count(self, caster_level: int) -> int:
+        """Get number of damage dice for cantrips based on caster level.
+
+        Cantrips scale at levels 5, 11, and 17.
+        """
+        if caster_level >= 17:
+            return 4
+        if caster_level >= 11:
+            return 3
+        if caster_level >= 5:
+            return 2
+        return 1
 
 
 #factories, these are redundant examples to create the same actions using the structured action approach

@@ -59,6 +59,11 @@ class ActionEconomyConfig(BaseModel):
     reactions_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the reactions")
     movement: int = Field(default=30, description="Amount of movement available")
     movement_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the movement")
+    # Spell slots (default 0 for non-casters)
+    spell_slots: Dict[int, int] = Field(
+        default_factory=dict,
+        description="Spell slot counts by level (1-9). E.g., {1: 4, 2: 3} for 4 L1 slots and 3 L2 slots"
+    )
     
 
 class ActionEconomy(BaseBlock):
@@ -74,6 +79,7 @@ class ActionEconomy(BaseBlock):
         bonus_actions (ModifiableValue): Number of bonus actions available, typically 1.
         reactions (ModifiableValue): Number of reactions available, typically 1.
         movement (ModifiableValue): Amount of movement available, typically 30 feet.
+        spell_slot_1-9 (ModifiableValue): Spell slots by level (base=0 for non-casters).
     """
     name: str = Field(default="ActionEconomy")
     actions: ModifiableValue = Field(
@@ -103,6 +109,34 @@ class ActionEconomy(BaseBlock):
             base_value=30,
             value_name="Movement"
         )
+    )
+    # Spell slots (base=0 for non-casters, modified by class features)
+    spell_slot_1: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 1")
+    )
+    spell_slot_2: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 2")
+    )
+    spell_slot_3: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 3")
+    )
+    spell_slot_4: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 4")
+    )
+    spell_slot_5: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 5")
+    )
+    spell_slot_6: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 6")
+    )
+    spell_slot_7: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 7")
+    )
+    spell_slot_8: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 8")
+    )
+    spell_slot_9: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 9")
     )
     resources: Dict[str, Resource] = Field(default_factory=dict)
 
@@ -168,110 +202,128 @@ class ActionEconomy(BaseBlock):
     # Turn-Based Action Economy Methods
     # =========================================================================
 
-    def get_base_value(self, cost_type: CostType) -> int:
-        """Get the base value for a given action type."""
+    def _get_spell_slot_value(self, level: int) -> ModifiableValue:
+        """Get the ModifiableValue for a spell slot level."""
+        slot_map = {
+            1: self.spell_slot_1, 2: self.spell_slot_2, 3: self.spell_slot_3,
+            4: self.spell_slot_4, 5: self.spell_slot_5, 6: self.spell_slot_6,
+            7: self.spell_slot_7, 8: self.spell_slot_8, 9: self.spell_slot_9,
+        }
+        if level not in slot_map:
+            raise ValueError(f"Invalid spell slot level: {level}")
+        return slot_map[level]
+
+    def _get_value_for_cost_type(self, cost_type: CostType) -> ModifiableValue:
+        """Get the ModifiableValue for a cost type."""
         if cost_type == "actions":
-            base_mod = self.actions.get_base_modifier()
+            return self.actions
         elif cost_type == "bonus_actions":
-            base_mod = self.bonus_actions.get_base_modifier()
+            return self.bonus_actions
         elif cost_type == "reactions":
-            base_mod = self.reactions.get_base_modifier()
+            return self.reactions
         elif cost_type == "movement":
-            base_mod = self.movement.get_base_modifier()
+            return self.movement
+        elif cost_type.startswith("spell_slot_"):
+            level = int(cost_type.split("_")[-1])
+            return self._get_spell_slot_value(level)
         else:
             raise ValueError(f"Unknown cost type: {cost_type}")
-        
+
+    def get_base_value(self, cost_type: CostType) -> int:
+        """Get the base value for a given action type."""
+        value = self._get_value_for_cost_type(cost_type)
+        base_mod = value.get_base_modifier()
         return base_mod.normalized_value if base_mod else 0
 
     def get_cost_modifiers(self, cost_type: CostType) -> List[NumericalModifier]:
         """Get all cost modifiers (negative values) for a given action type."""
-        if cost_type == "actions":
-            value = self.actions
-        elif cost_type == "bonus_actions":
-            value = self.bonus_actions
-        elif cost_type == "reactions":
-            value = self.reactions
-        elif cost_type == "movement":
-            value = self.movement
-        else:
-            raise ValueError(f"Unknown cost type: {cost_type}")
-        return [mod for mod in value.self_static.value_modifiers.values() 
+        value = self._get_value_for_cost_type(cost_type)
+        return [mod for mod in value.self_static.value_modifiers.values()
                 if mod.name is not None and "cost" in mod.name]
-    
+
     def can_afford(self, cost_type: CostType, amount: int) -> bool:
         """Check if the entity can afford a given action type and amount."""
-        if cost_type == "actions":
-            return self.actions.self_static.normalized_score - amount >= 0
-        elif cost_type == "bonus_actions":
-            return self.bonus_actions.self_static.normalized_score - amount >= 0
-        elif cost_type == "reactions":
-            return self.reactions.self_static.normalized_score - amount >= 0
-        elif cost_type == "movement":
-            return self.movement.self_static.normalized_score - amount >= 0
+        value = self._get_value_for_cost_type(cost_type)
+        return value.self_static.normalized_score - amount >= 0
 
-    def reset_all_costs(self):
-        """Reset the cost for a given action type."""
-        all_cost_modifiers = self.get_cost_modifiers("actions") + self.get_cost_modifiers("bonus_actions") + self.get_cost_modifiers("reactions") + self.get_cost_modifiers("movement")
-        for modifier in all_cost_modifiers:
-            self.actions.self_static.remove_value_modifier(modifier.uuid)
+    def reset_all_costs(self) -> None:
+        """Reset turn-based costs (actions, bonus_actions, reactions, movement).
 
-            self.bonus_actions.self_static.remove_value_modifier(modifier.uuid)
-    
-            self.reactions.self_static.remove_value_modifier(modifier.uuid)
-            self.movement.self_static.remove_value_modifier(modifier.uuid)
-        
+        Called at the start of each turn. Does NOT reset spell slot costs -
+        use reset_spell_slot_costs() for long rest.
+        """
+        turn_based_types: List[CostType] = ["actions", "bonus_actions", "reactions", "movement"]
+        for cost_type in turn_based_types:
+            value = self._get_value_for_cost_type(cost_type)
+            for modifier in self.get_cost_modifiers(cost_type):
+                value.self_static.remove_value_modifier(modifier.uuid)
 
-    def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None):
+    def reset_spell_slot_costs(self) -> None:
+        """Reset spell slot costs (restore all spell slots).
+
+        Called on long rest.
+        """
+        for level in range(1, 10):
+            cost_type: CostType = f"spell_slot_{level}"  # type: ignore
+            value = self._get_spell_slot_value(level)
+            for modifier in self.get_cost_modifiers(cost_type):
+                value.self_static.remove_value_modifier(modifier.uuid)
+
+    def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None) -> None:
         """Consume an action resource."""
+        value = self._get_value_for_cost_type(cost_type)
+        if value.self_static.normalized_score - amount < 0:
+            raise ValueError(f"Not enough {cost_type} to consume {amount} {cost_name if cost_name is not None else 'cost'}")
+
         modifier_name = f"{cost_name}_cost" if cost_name is not None else "cost"
         cost_modifier = NumericalModifier.create(
-            source_entity_uuid=self.source_entity_uuid, 
-            name=modifier_name, 
+            source_entity_uuid=self.source_entity_uuid,
+            name=modifier_name,
             value=-amount
         )
-        
-        if cost_type == "actions":
-            if self.actions.self_static.normalized_score - amount < 0:
-                raise ValueError(f"Not enough actions to consume {amount} {cost_name if cost_name is not None else 'cost'}")
-            self.actions.self_static.add_value_modifier(cost_modifier)
-        elif cost_type == "bonus_actions":
-            if self.bonus_actions.self_static.normalized_score - amount < 0:
-                raise ValueError(f"Not enough bonus actions to consume {amount} {cost_name if cost_name is not None else 'cost'}")
-            self.bonus_actions.self_static.add_value_modifier(cost_modifier)
-        elif cost_type == "reactions":
-            if self.reactions.self_static.normalized_score - amount < 0:
-                raise ValueError(f"Not enough reactions to consume {amount} {cost_name if cost_name is not None else 'cost'}")
-            self.reactions.self_static.add_value_modifier(cost_modifier)
-        elif cost_type == "movement":
-            if self.movement.self_static.normalized_score - amount < 0:
-                raise ValueError(f"Not enough movement to consume {amount} {cost_name if cost_name is not None else 'cost'}")
-            self.movement.self_static.add_value_modifier(cost_modifier)
+        value.self_static.add_value_modifier(cost_modifier)
 
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: str = "ActionEconomy", source_entity_name: Optional[str] = None, 
-                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-                config: Optional[ActionEconomyConfig] = None) -> 'ActionEconomy':
+    def create(cls, source_entity_uuid: UUID, name: str = "ActionEconomy", source_entity_name: Optional[str] = None,
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
+               config: Optional[ActionEconomyConfig] = None) -> 'ActionEconomy':
         """Create a new ActionEconomy instance."""
         if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
             actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.actions, value_name="Actions")
             for modifier in config.actions_modifiers:
                 actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            
+
             bonus_actions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus_actions, value_name="Bonus Actions")
             for modifier in config.bonus_actions_modifiers:
                 bonus_actions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            
+
             reactions = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.reactions, value_name="Reactions")
             for modifier in config.reactions_modifiers:
                 reactions.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            
+
             movement = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.movement, value_name="Movement")
             for modifier in config.movement_modifiers:
                 movement.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
-                       actions=actions, bonus_actions=bonus_actions, reactions=reactions, movement=movement)
+
+            # Create spell slot ModifiableValues
+            spell_slot_1 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(1, 0), value_name="Spell Slot 1")
+            spell_slot_2 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(2, 0), value_name="Spell Slot 2")
+            spell_slot_3 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(3, 0), value_name="Spell Slot 3")
+            spell_slot_4 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(4, 0), value_name="Spell Slot 4")
+            spell_slot_5 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(5, 0), value_name="Spell Slot 5")
+            spell_slot_6 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(6, 0), value_name="Spell Slot 6")
+            spell_slot_7 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(7, 0), value_name="Spell Slot 7")
+            spell_slot_8 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(8, 0), value_name="Spell Slot 8")
+            spell_slot_9 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(9, 0), value_name="Spell Slot 9")
+
+            return cls(
+                source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
+                target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
+                actions=actions, bonus_actions=bonus_actions, reactions=reactions, movement=movement,
+                spell_slot_1=spell_slot_1, spell_slot_2=spell_slot_2, spell_slot_3=spell_slot_3,
+                spell_slot_4=spell_slot_4, spell_slot_5=spell_slot_5, spell_slot_6=spell_slot_6,
+                spell_slot_7=spell_slot_7, spell_slot_8=spell_slot_8, spell_slot_9=spell_slot_9,
+            )
