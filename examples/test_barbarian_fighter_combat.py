@@ -556,6 +556,10 @@ def test_frenzy_bonus_action_attack():
     assert has_condition(barbarian, "Raging"), "Should also have Raging (sub-condition)"
 
     # Note: Frenzy costs a bonus action, so Frenzied Strike isn't usable same turn
+    # Must attack to maintain rage before ending turn
+    attack_info = next(a for a in get_available_actions(barbarian).entity_actions if "Attack" in a.template_name)
+    execute_action(barbarian, attack_info.template_name, attack_info.valid_targets[0])
+
     # End this turn and start the next to test Frenzied Strike
     barbarian.on_turn_end()
     barbarian.on_turn_start()
