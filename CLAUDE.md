@@ -525,7 +525,8 @@ All conditions in `dnd/conditions.py`:
 | **Dodging** | Advantage DEX saves | Disadvantage | - |
 | **Frightened** | Disadvantage attacks/checks (contextual), speed=0 | - | - |
 | **Grappled** | Speed max = 0 | - | - |
-| **HasAttacked** | Marker for Extra Attack (no modifiers) | - | - |
+| **HasAttacked** | Marker for rage maintenance (tracks ANY attack) | - | - |
+| **HasTakenDamage** | Marker for rage maintenance (tracks damage taken) | - | - |
 | **Incapacitated** | All action economy = 0 | - | - |
 | **Invisible** | Advantage attacks (contextual) | Disadvantage (contextual) | - |
 | **Paralyzed** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft | Incapacitated |
@@ -548,6 +549,7 @@ All conditions in `dnd/conditions.py`:
 | **SecondWindFeature** | Grants Second Wind action + resource | Level-based healing |
 | **ActionSurgeFeature** | Grants Action Surge action + resource | Once per turn enforcement |
 | **ExtraAttackFeature** | Grants Extra Attack actions + resource | 1/2/3 at L5/L11/L20 |
+| **ExtraAttacksGranted** | Marker for Extra Attack (action-cost attacks only) | Applied by extra_attack_resource_processor |
 | **ImprovedCritical** | Crit on 19-20 | Critical modifier |
 | **SuperiorCritical** | Crit on 18-20 | Critical modifier |
 | **Indomitable** | Reroll failed saves | EventHandler on SAVING_THROW |
@@ -558,8 +560,7 @@ All conditions in `dnd/conditions.py`:
 | Condition | Effect | Notes |
 |-----------|--------|-------|
 | **RageFeature** | Grants Rage + End Rage actions, rage resource | Level-scaled uses and damage |
-| **Raging** | STR adv, rage damage, B/P/S resistance | Maintained by attacking/taking damage |
-| **KeepRage** | Marker for rage maintenance | 1-round duration |
+| **Raging** | STR adv, rage damage, B/P/S resistance | Maintained by HasAttacked/HasTakenDamage |
 | **UnarmoredDefense** | AC = 10 + DEX + CON when unarmored | Contextual modifier |
 | **RecklessAttackFeature** | Grants Reckless Attack action | Free action |
 | **RecklessAttacking** | Adv on melee attacks, attackers have adv | 1-round duration |
