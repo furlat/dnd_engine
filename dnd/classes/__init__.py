@@ -115,6 +115,27 @@ from dnd.classes.barbarian_factory import (
     # Note: get_proficiency_bonus and get_extra_attacks already imported from fighter
 )
 
+# Rage/Frenzy system (Barbarian L1 and L3 Berserker)
+from dnd.classes.rage import (
+    # Rage system
+    rage_damage_check,
+    rage_maintenance_processor,
+    rage_armor_equip_handler,
+    create_rage_maintenance_handler,
+    create_rage_armor_handler,
+    rage_unconscious_processor,
+    create_rage_unconscious_handler,
+    Raging,
+    Rage,
+    EndRage,
+    RageFeature,
+    # Frenzy system
+    Frenzied,
+    FrenziedStrike,
+    Frenzy,
+    FrenzyFeature,
+)
+
 __all__ = [
     # Dice manipulation - core utility
     "create_modified_dice_roll",
@@ -185,4 +206,20 @@ __all__ = [
     "get_rage_uses",
     "get_rage_damage",
     "get_brutal_critical_dice",
+    # Rage/Frenzy system (Barbarian L1 and L3 Berserker)
+    "rage_damage_check",
+    "rage_maintenance_processor",
+    "rage_armor_equip_handler",
+    "create_rage_maintenance_handler",
+    "create_rage_armor_handler",
+    "rage_unconscious_processor",
+    "create_rage_unconscious_handler",
+    "Raging",
+    "Rage",
+    "EndRage",
+    "RageFeature",
+    "Frenzied",
+    "FrenziedStrike",
+    "Frenzy",
+    "FrenzyFeature",
 ]

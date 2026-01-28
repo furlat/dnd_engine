@@ -27,16 +27,19 @@ from dnd.items import (
     create_shield,
 )
 
-# Import barbarian features
+# Import rage/frenzy features (from rage.py)
+from dnd.classes.rage import (
+    RageFeature,
+    FrenzyFeature,
+)
+
+# Import other barbarian features
 from dnd.classes.barbarian import (
     # Level 1
-    RageFeature,
     UnarmoredDefense,
     # Level 2
     RecklessAttackFeature,
     DangerSense,
-    # Level 3 (Berserker)
-    FrenzyFeature,
     # Level 5
     FastMovement,
     # Level 6 (Berserker)
