@@ -25,7 +25,7 @@ from dnd.utils import (
 )
 
 # Direct imports for verification
-from dnd.classes.barbarian import Raging
+from dnd.classes.rage import Raging
 from dnd.conditions import Blinded, Charmed
 
 
@@ -58,11 +58,11 @@ def test_rage_activation_and_benefits():
     # Start barbarian's turn
     barbarian.on_turn_start()
 
-    # Verify Rage action is available
+    # Verify Frenzy action is available (Berserkers use Frenzy instead of Rage)
     available = get_available_actions(barbarian)
-    rage_info = next((a for a in available.self_actions if a.template_name == "Rage"), None)
-    assert rage_info is not None, "Rage action should be available"
-    assert rage_info.valid_targets, "Rage should have valid target (self)"
+    frenzy_info = next((a for a in available.self_actions if a.template_name == "Frenzy"), None)
+    assert frenzy_info is not None, "Frenzy action should be available"
+    assert frenzy_info.valid_targets, "Frenzy should have valid target (self)"
 
     # Check rage resource before
     rage_resource = barbarian.action_economy.resources.get("rage")
@@ -70,8 +70,8 @@ def test_rage_activation_and_benefits():
     uses_before = rage_resource.current
     print(f"  Rage uses before: {uses_before}")
 
-    # Activate Rage
-    result = execute_action(barbarian, "Rage", rage_info.valid_targets[0])
+    # Activate Frenzy (enters rage with frenzy benefits)
+    result = execute_action(barbarian, "Frenzy", frenzy_info.valid_targets[0])
     assert result and not result.canceled, f"Rage should succeed: {result.status_message if result else 'None'}"
     print(f"  Rage activated: {result.status_message}")
 
@@ -214,25 +214,35 @@ def test_end_rage_action():
         primal_path=PrimalPathChoice.BERSERKER,
         asi_4=[("strength", 2)]
     ))
+    # Need an opponent for proper combat setup
+    fighter = create_fighter(FighterConfig(
+        level=5,
+        name="Dummy Target",
+        position=(1, 0),
+        asi_4=[("strength", 2)]
+    ))
 
-    Entity.update_all_entities_senses()
+    setup_combat_arena(barbarian, fighter)
 
-    # Apply Raging
-    raging = Raging(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_damage=2
-    )
-    barbarian.add_condition(raging)
+    # Start turn and use Frenzy to enter rage properly
+    barbarian.on_turn_start()
+    available = get_available_actions(barbarian)
+    frenzy_info = next(a for a in available.self_actions if a.template_name == "Frenzy")
+    execute_action(barbarian, "Frenzy", frenzy_info.valid_targets[0])
     assert has_condition(barbarian, "Raging"), "Should be raging"
+    assert has_condition(barbarian, "Frenzied"), "Should be frenzied"
 
-    # Start turn
+    # Attack to maintain rage, then end turn and start new one for fresh bonus action
+    attack_info = next(a for a in get_available_actions(barbarian).entity_actions if "Attack" in a.template_name)
+    execute_action(barbarian, attack_info.template_name, attack_info.valid_targets[0])
+    barbarian.on_turn_end()
     barbarian.on_turn_start()
 
-    # Find End Rage action
+    # Find End Rage action (now have bonus action available)
     available = get_available_actions(barbarian)
     end_rage_info = next((a for a in available.self_actions if a.template_name == "End Rage"), None)
     assert end_rage_info is not None, "End Rage action should be available"
+    assert end_rage_info.valid_targets, "End Rage should have valid targets"
 
     # Execute End Rage
     result = execute_action(barbarian, "End Rage", end_rage_info.valid_targets[0])
