@@ -7,7 +7,11 @@ from typing import Optional, Callable, OrderedDict, List, Literal, Tuple
 from uuid import UUID
 from enum import Enum
 
-CostType = Literal["actions", "bonus_actions", "reactions", "movement"]
+CostType = Literal[
+    "actions", "bonus_actions", "reactions", "movement",
+    "spell_slot_1", "spell_slot_2", "spell_slot_3", "spell_slot_4",
+    "spell_slot_5", "spell_slot_6", "spell_slot_7", "spell_slot_8", "spell_slot_9"
+]
 
 
 class TargetType(str, Enum):
@@ -115,6 +119,7 @@ class BaseAction(BaseObject):
     # Template system fields
     target_type: TargetType = Field(default=TargetType.SELF, description="What kind of target this action requires")
     template: bool = Field(default=False, description="If True, this is a template that cannot be applied directly - use instantiate()")
+    include_self: bool = Field(default=False, description="If True and target_type=ENTITY, self is a valid target (for buff spells like Mage Armor)")
 
     # For POSITION actions (like Move), stored separately from target_entity_uuid
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target position for POSITION type actions")

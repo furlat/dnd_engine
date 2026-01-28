@@ -19,6 +19,7 @@ from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponP
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses
+from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.base_actions import (
@@ -104,6 +105,7 @@ class EntityConfig(BaseModel):
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0),description="Position of the entity")
     sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
+    spellcasting: Optional[SpellcastingConfig] = Field(default=None, description="Spellcasting configuration (None = non-caster)")
 
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
@@ -119,6 +121,10 @@ class Entity(BaseBlock):
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="proficiency_bonus", base_value=2))
     initiative: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="initiative", base_value=0))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
+    spellcasting: SpellcastingBlock = Field(
+        default_factory=lambda: SpellcastingBlock.create(source_entity_uuid=uuid4()),
+        description="Spellcasting block (always present, defaults are harmless for non-casters)"
+    )
     allow_events_conditions: bool = Field(default=True, description="If True, events and conditions will be allowed to be added to the block")
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the entity")
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
@@ -205,6 +211,12 @@ class Entity(BaseBlock):
             for modifier in config.initiative_modifiers:
                 initiative.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid,name=modifier[0],value=modifier[1]))
 
+            # Spellcasting (always created - defaults are harmless for non-casters)
+            spellcasting = SpellcastingBlock.create(
+                source_entity_uuid=source_entity_uuid,
+                config=config.spellcasting  # None → uses defaults
+            )
+
             return cls(
                 uuid=source_entity_uuid,
                 source_entity_uuid=source_entity_uuid,
@@ -219,6 +231,7 @@ class Entity(BaseBlock):
                 action_economy=action_economy,
                 proficiency_bonus=proficiency_bonus,
                 initiative=initiative,
+                spellcasting=spellcasting,
                 position=config.position,
                 sprite_name=config.sprite_name,
                 faction=config.faction
@@ -735,25 +748,180 @@ class Entity(BaseBlock):
         return False
 
     # =========================================================================
+    # Spellcasting System
+    # =========================================================================
+
+    def spell_attack_bonus(self, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
+        """Build combined spell attack bonus.
+
+        Combines (stacks):
+        1. Proficiency bonus
+        2. Spellcasting ability modifier (CHA/INT/WIS)
+        3. Equipment.attack_bonus (Blinded, Poisoned, etc.) ← CONDITIONS APPLY
+        4. SpellcastingBlock.spell_attack_bonus (Wand of War Mage) ← SPELL-SPECIFIC
+
+        Uses combine_values() to merge all 6 channels properly.
+
+        Args:
+            target_entity_uuid: Optional target for cross-propagation
+
+        Returns:
+            Combined ModifiableValue for spell attacks
+        """
+        should_clear_target = False
+        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
+            self.set_target_entity(target_entity_uuid)
+            should_clear_target = True
+
+        # Get ability (uses normalizer to calculate modifier from score)
+        ability = self.ability_scores.get_ability(self.spellcasting.spellcasting_ability)
+        # Need both ability_score (with normalizer) AND modifier_bonus (for additional bonuses)
+        ability_score = ability.ability_score
+        ability_modifier_bonus = ability.modifier_bonus
+
+        combined = self.proficiency_bonus.combine_values([
+            ability_score,                         # ← Base ability (normalized to modifier)
+            ability_modifier_bonus,                # ← Additional modifier bonuses
+            self.equipment.attack_bonus,           # ← Generic (conditions here)
+            self.spellcasting.spell_attack_bonus,  # ← Spell-specific
+        ])
+
+        if should_clear_target:
+            self.clear_target_entity()
+
+        return combined
+
+    def spell_save_dc(self) -> int:
+        """Calculate spell save DC.
+
+        DC = 8 + proficiency + ability_modifier + spell_dc_bonus
+
+        Returns:
+            The spell save DC as an integer
+        """
+        ability_mod = self.ability_scores.get_ability(
+            self.spellcasting.spellcasting_ability
+        ).modifier
+        return (8 +
+                self.proficiency_bonus.normalized_score +
+                ability_mod +
+                self.spellcasting.spell_dc_bonus.normalized_score)
+
+    def get_spell_crit_threshold(self) -> int:
+        """Get critical hit threshold for spell attacks.
+
+        Combines (stacks):
+        - Equipment.crit_threshold (Improved Critical adds here → affects spells!)
+        - SpellcastingBlock.spell_crit_threshold (spell-only features)
+
+        Returns:
+            Number to roll >= for a crit (default 20)
+        """
+        general = self.equipment.crit_threshold.normalized_score
+        spell_specific = self.spellcasting.spell_crit_threshold.normalized_score
+        return 20 - (general + spell_specific)
+
+    def get_spell_crit_extra_dice(self) -> int:
+        """Get extra dice to add on spell critical hits.
+
+        Combines (stacks):
+        - Equipment.crit_extra_dice (general features)
+        - SpellcastingBlock.spell_crit_extra_dice (spell-only features)
+
+        Returns:
+            Number of extra dice to roll on spell crits
+        """
+        general = self.equipment.crit_extra_dice.normalized_score
+        spell_specific = self.spellcasting.spell_crit_extra_dice.normalized_score
+        return general + spell_specific
+
+    def get_spell_damage_bonus(self) -> ModifiableValue:
+        """Get combined spell damage bonus.
+
+        Combines:
+        - Equipment.damage_bonus (general damage modifiers)
+        - SpellcastingBlock.spell_damage_bonus (Elemental Affinity, etc.)
+
+        Returns:
+            Combined ModifiableValue for spell damage
+        """
+        return self.equipment.damage_bonus.combine_values([
+            self.spellcasting.spell_damage_bonus,
+        ])
+
+    def has_spell_slot(self, level: int) -> bool:
+        """Check if entity has an available spell slot of given level.
+
+        Args:
+            level: The spell slot level (1-9)
+
+        Returns:
+            True if at least one slot of that level is available
+        """
+        if level < 1 or level > 9:
+            return False
+        # Use getattr to check the specific spell slot ModifiableValue
+        slot_attr = getattr(self.action_economy, f"spell_slot_{level}", None)
+        if slot_attr is None:
+            return False
+        return slot_attr.normalized_score >= 1
+
+    def get_lowest_spell_slot(self, min_level: int) -> Optional[int]:
+        """Find lowest available slot at or above min_level.
+
+        Args:
+            min_level: Minimum slot level to consider
+
+        Returns:
+            The lowest available slot level, or None if none available
+        """
+        for level in range(min_level, 10):
+            if self.has_spell_slot(level):
+                return level
+        return None
+
+    @property
+    def is_spellcaster(self) -> bool:
+        """True if entity has any spell slots or known spells.
+
+        An entity is considered a spellcaster if:
+        1. It has any spell slots (non-zero base value), OR
+        2. It has any SpellAction registered
+
+        Returns:
+            True if this entity can cast spells
+        """
+        # Check for spell slots
+        for level in range(1, 10):
+            slot_attr = getattr(self.action_economy, f"spell_slot_{level}", None)
+            if slot_attr is not None:
+                base_mod = slot_attr.get_base_modifier()
+                if base_mod and base_mod.value > 0:
+                    return True
+        # Note: SpellAction check would go here once SpellAction is implemented
+        # For now, just check spell slots
+        return False
+
+    # =========================================================================
     # Faction System
     # =========================================================================
 
     def is_ally(self, other: 'Entity') -> bool:
         """Check if another entity is an ally (same faction).
 
-        Same faction = ally. None faction = no allies (backward compatible).
-        An entity is not its own ally.
+        Same faction = ally. None faction = no allies (except self).
+        An entity is always its own ally.
 
         Args:
             other: The entity to check
 
         Returns:
-            True if same faction and neither has None faction
+            True if same entity, or same faction and neither has None faction
         """
         if other.uuid == self.uuid:
-            return False
+            return True  # Always ally of self
         if self.faction is None or other.faction is None:
-            return False  # No faction = no allies
+            return False  # No faction = no allies (except self)
         return self.faction == other.faction
 
     def is_enemy(self, other: 'Entity') -> bool:
@@ -1208,7 +1376,13 @@ class Entity(BaseBlock):
         for template in self.entity_actions:
             valid_targets: List[AvailableTarget] = []
             idx = 0
-            for target_uuid, target_pos in potential_targets.items():
+
+            # Build targets for THIS template (may include self if include_self=True)
+            template_targets = dict(potential_targets)
+            if getattr(template, 'include_self', False):
+                template_targets[self.uuid] = self.position
+
+            for target_uuid, target_pos in template_targets.items():
                 template.set_target_entity(target_uuid)
                 if template.pre_validate():
                     target_entity = Entity.get(target_uuid)

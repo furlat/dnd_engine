@@ -4,6 +4,38 @@ Working notes for implementing the Sorcerer class and spell system.
 
 ---
 
+## KEY DESIGN DECISIONS (Updated)
+
+**These decisions supersede conflicting information later in this document.**
+
+1. **SpellcastingBlock is ALWAYS present** (non-optional on Entity)
+   - Items can grant spell uses to non-casters
+   - Avoids None-checks everywhere
+
+2. **Spell slots are ModifiableValue in ActionEconomy** (NOT Dict[int,int] in SpellcastingBlock)
+   - `ActionEconomy.spell_slot_1` through `spell_slot_9`
+   - Follows existing pattern (actions, bonus_actions use ModifiableValue)
+
+3. **Spells ARE actions** (SpellAction subclasses, NOT a registry)
+   - Registered as templates via `entity.register_action()`
+   - Known spells live in `Entity.registered_actions`
+
+4. **Variant-generation for upcasting** (NOT cost interception)
+   - `generate_variants()` creates variants with correct costs
+   - `MagicMissile@L2` has `costs=[action:1, spell_slot_2:1]`
+
+5. **Full modifier stacking with Equipment**
+   - `spell_attack = prof + ability_mod + Equipment.attack_bonus + spell_attack_bonus`
+   - `spell_crit_threshold = 20 - (Equipment.crit_threshold + spell_crit_threshold)`
+   - So Improved Critical affects spells!
+
+6. **SpellcastingBlock has spell-specific modifier fields**
+   - `spell_attack_bonus`, `spell_damage_bonus`, `spell_dc_bonus`
+   - `spell_crit_threshold`, `spell_crit_extra_dice`
+   - `extra_spell_damage_*` (parallel to Equipment.extra_attack_damage_*)
+
+---
+
 ## SPELL SYSTEM DECOMPOSITION
 
 ### Existing Infrastructure vs New Requirements
@@ -43,18 +75,28 @@ Equipment
 
 **Key insight**: Equipment holds martial combat modifiers. Spellcasting needs a parallel structure.
 
-**For Spells, We Need**:
+**SpellcastingBlock (CURRENT DESIGN)**:
 ```
-SpellcastingBlock (new)
-├── spell_attack_bonus: ModifiableValue     # prof + CHA (or INT for Wizard)
-├── spell_save_dc: ModifiableValue          # 8 + prof + CHA
-├── spell_damage_bonus: ModifiableValue     # General spell damage (Elemental Affinity)
-├── spell_slots: Dict[int, int]             # level -> current
-├── max_spell_slots: Dict[int, int]         # level -> maximum
-├── cantrips_known: List[str]               # Cantrip names
-├── spells_known: List[str]                 # Spell names
-└── concentration_spell: Optional[UUID]     # Active concentration condition
+SpellcastingBlock (always present, non-optional)
+├── spellcasting_ability: AbilityName       # CHA/INT/WIS
+├── spell_attack_bonus: ModifiableValue     # Spell-specific (Wand of War Mage)
+├── spell_damage_bonus: ModifiableValue     # Spell-specific (Elemental Affinity)
+├── spell_dc_bonus: ModifiableValue         # DC beyond 8+prof+ability
+├── spell_crit_threshold: ModifiableValue   # Spell-specific crit range (stacks with Equipment)
+├── spell_crit_extra_dice: ModifiableValue  # Extra dice on spell crits
+│
+├── # Extra spell damage (parallel to Equipment.extra_attack_damage_*)
+├── extra_spell_damage_dices: List[Literal[4,6,8,10,12,20]]
+├── extra_spell_damage_dices_numbers: List[int]
+├── extra_spell_damage_bonus: List[ModifiableValue]
+└── extra_spell_damage_type: List[DamageType]
 ```
+
+**NOT in SpellcastingBlock** (avoiding redundancy):
+- Spell slots → `ActionEconomy.spell_slot_X`
+- Known spells → `Entity.registered_actions`
+- Proficiency → `Entity.proficiency_bonus`
+- Generic attack modifiers → `Equipment.attack_bonus` (Blinded, Poisoned apply here!)
 
 ---
 
@@ -78,21 +120,31 @@ def attack_bonus(self, weapon_slot: WeaponSlot, target_entity_uuid: Optional[UUI
     return source_attack_bonus
 ```
 
-**For Spell Attack, We Need**:
+**Entity.spell_attack_bonus() (CURRENT DESIGN)**:
 ```python
-def spell_attack_bonus(self, target_entity_uuid: Optional[UUID]) -> ModifiableValue:
-    self.set_target_entity(target_entity_uuid)
+def spell_attack_bonus(self, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
+    """Build combined spell attack bonus.
 
-    # Components: prof + CHA modifier + any spell attack bonuses
-    proficiency = self.proficiency_bonus
-    cha_modifier = self.ability_scores.charisma.modifier_bonus
-    spell_bonus = self.spellcasting.spell_attack_bonus  # From SpellcastingBlock
+    Combines (stacks):
+    1. Proficiency bonus
+    2. Spellcasting ability modifier (CHA/INT/WIS)
+    3. Equipment.attack_bonus (Blinded, Poisoned apply here!)
+    4. SpellcastingBlock.spell_attack_bonus (Wand of War Mage)
 
-    combined = proficiency.combine_values([cha_modifier, spell_bonus])
+    Uses combine_values() to merge all 6 channels properly.
+    """
+    ability_mod = self.ability_scores.get_ability(
+        self.spellcasting.spellcasting_ability
+    ).modifier_bonus
 
-    self.clear_target_entity()
-    return combined
+    return self.proficiency_bonus.combine_values([
+        ability_mod,
+        self.equipment.attack_bonus,           # ← Generic (conditions here)
+        self.spellcasting.spell_attack_bonus,  # ← Spell-specific
+    ])
 ```
+
+**Key**: `Equipment.attack_bonus` is included so Blinded/Poisoned disadvantage applies to spell attacks!
 
 ---
 
@@ -256,41 +308,33 @@ class ActionEconomy(BaseBlock):
         return False
 ```
 
-**For Spell Slots - Option A** (Use existing resource system):
+**DECISION: Spell Slots as ModifiableValue in ActionEconomy**
+
 ```python
-# Add 9 resources
-for level in range(1, 10):
-    entity.action_economy.add_resource(
-        name=f"spell_slot_{level}",
-        maximum=SPELL_SLOTS[sorcerer_level][level],
-        recharge_type=RechargeType.LONG_REST
-    )
+# ActionEconomy has 9 ModifiableValue fields (base=0 for non-casters):
+class ActionEconomy(BaseBlock):
+    spell_slot_1: ModifiableValue  # base=0
+    spell_slot_2: ModifiableValue  # base=0
+    # ... through spell_slot_9
+
+# CostType extended to include spell slots:
+CostType = Literal["actions", "bonus_actions", "reactions", "movement",
+                   "spell_slot_1", "spell_slot_2", ..., "spell_slot_9"]
+
+# Usage:
+entity.action_economy.consume("spell_slot_2", 1)  # Same pattern as actions
+entity.action_economy.can_afford("spell_slot_2", 1)  # Check availability
+entity.action_economy.reset_spell_slot_costs()  # Long rest restoration
+
+# Class features add permanent modifiers to increase max slots:
+# SorcererSpellcastingFeature adds +2 to spell_slot_1.base for L1 Sorcerer
 ```
 
-**For Spell Slots - Option B** (Dedicated SpellcastingBlock):
-```python
-class SpellcastingBlock(BaseBlock):
-    spell_slots: Dict[int, int] = {}  # level -> current
-    max_spell_slots: Dict[int, int] = {}
-
-    def has_slot(self, level: int) -> bool:
-        return self.spell_slots.get(level, 0) > 0
-
-    def consume_slot(self, level: int) -> bool:
-        if self.has_slot(level):
-            self.spell_slots[level] -= 1
-            return True
-        return False
-
-    def get_lowest_available_slot(self, min_level: int) -> Optional[int]:
-        """For upcasting - find cheapest slot that can cast the spell."""
-        for level in range(min_level, 10):
-            if self.has_slot(level):
-                return level
-        return None
-```
-
-**Recommendation**: Option B is cleaner for spell-specific logic (upcasting, Flexible Casting).
+**Why this approach**:
+- Follows existing pattern (actions, bonus_actions use ModifiableValue)
+- `consume()` adds negative "cost" modifier (same as existing)
+- `can_afford()` checks `normalized_score - amount >= 0`
+- Class conditions add permanent modifiers to increase max slots
 
 ---
 

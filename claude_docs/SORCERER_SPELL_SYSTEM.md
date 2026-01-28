@@ -4,6 +4,112 @@ Comprehensive plan for implementing the Sorcerer class and foundational spell sy
 
 ---
 
+## KEY DESIGN DECISIONS (Updated)
+
+These decisions supersede older sections in this document.
+
+### 1. SpellcastingBlock is ALWAYS Present (Non-Optional)
+
+```python
+# Entity.spellcasting is NOT Optional
+spellcasting: SpellcastingBlock = Field(...)  # Always present, defaults harmless for non-casters
+```
+
+**Why**:
+- Items can grant spell uses to non-casters (e.g., wand that casts Fireball)
+- Conditions that affect attacks (Blinded, Poisoned) should affect item-granted spells
+- Avoids None-checks everywhere
+- Default values (spellcasting_ability="charisma", all bonuses=0) are harmless for non-casters
+
+### 2. Spell Slots are ModifiableValue in ActionEconomy (Not SpellcastingBlock)
+
+```python
+# In ActionEconomy:
+spell_slot_1: ModifiableValue  # base=0 for non-casters
+spell_slot_2: ModifiableValue
+# ... through spell_slot_9
+
+# CostType extended:
+CostType = Literal["actions", "bonus_actions", "reactions", "movement",
+                   "spell_slot_1", "spell_slot_2", ..., "spell_slot_9"]
+```
+
+**Why**:
+- Follows existing pattern (actions, bonus_actions use ModifiableValue)
+- Class conditions add permanent modifiers to increase max slots
+- `consume()` adds negative "cost" modifier (same as existing actions)
+- `reset_spell_slot_costs()` for long rest restoration
+
+### 3. Spells ARE Actions (SpellAction Base Class)
+
+Spells are `SpellAction` subclasses registered as **templates**, NOT a separate registry.
+
+```python
+class FireBolt(SpellAction):
+    name: str = "Fire Bolt"
+    spell_level: int = 0
+    # ... _apply() implements the spell effect
+
+# Registration:
+entity.register_action(FireBolt(source_entity_uuid=entity.uuid, template=True))
+
+# Known spells live in Entity.registered_actions, NOT SpellcastingBlock
+```
+
+### 4. Variant-Generation for Upcasting (NOT Cost Interception)
+
+```python
+# Base spell defines level, effects, upcast scaling
+# get_available_actions() generates variants:
+
+# MagicMissile (L1 base) with slots {1:4, 2:3, 3:2}:
+# - MagicMissile@L1 - costs [action:1, spell_slot_1:1], 3 darts
+# - MagicMissile@L2 - costs [action:1, spell_slot_2:1], 4 darts
+# - MagicMissile@L3 - costs [action:1, spell_slot_3:1], 5 darts
+
+# User picks variant explicitly → costs consumed → no ambiguity
+```
+
+### 5. Full Modifier Stacking with Equipment
+
+Spell attacks combine:
+1. `Entity.proficiency_bonus`
+2. `ability_scores.get_ability(spellcasting_ability).modifier_bonus`
+3. `Equipment.attack_bonus` ← Blinded, Poisoned disadvantage lives HERE
+4. `SpellcastingBlock.spell_attack_bonus` ← Wand of War Mage lives HERE
+
+```python
+# Crit threshold stacking:
+spell_crit = 20 - (Equipment.crit_threshold + SpellcastingBlock.spell_crit_threshold)
+# So Improved Critical (Equipment.crit_threshold +1) affects spells!
+```
+
+### 6. SpellcastingBlock Fields (Current)
+
+```
+SpellcastingBlock:
+├── spellcasting_ability: AbilityName    # CHA/INT/WIS
+├── spell_attack_bonus: ModifiableValue  # Wand of War Mage (+1/2/3)
+├── spell_damage_bonus: ModifiableValue  # Elemental Affinity (add CHA to fire)
+├── spell_dc_bonus: ModifiableValue      # DC modifier beyond 8+prof+ability
+├── spell_crit_threshold: ModifiableValue # Spell-specific crit range
+├── spell_crit_extra_dice: ModifiableValue # Extra dice on spell crits
+│
+├── # Extra spell damage (parallel to Equipment.extra_attack_damage_*)
+├── extra_spell_damage_dices: List[Literal[4,6,8,10,12,20]]
+├── extra_spell_damage_dices_numbers: List[int]
+├── extra_spell_damage_bonus: List[ModifiableValue]
+└── extra_spell_damage_type: List[DamageType]
+```
+
+**NOT in SpellcastingBlock** (avoiding redundancy):
+- Spell slots → `ActionEconomy.spell_slot_X`
+- Known spells → `Entity.registered_actions`
+- Proficiency bonus → `Entity.proficiency_bonus`
+- Generic attack modifiers → `Equipment.attack_bonus`
+
+---
+
 ## Executive Summary
 
 The Sorcerer is a Charisma-based spellcaster with unique resource mechanics (sorcery points, metamagic). Unlike Fighter/Barbarian which primarily use conditions with modifiers and event handlers, the Sorcerer requires a **new foundational spell system** that can later support Wizard, Cleric, and other casters.
@@ -12,64 +118,20 @@ The Sorcerer is a Charisma-based spellcaster with unique resource mechanics (sor
 
 | System | Complexity | Description |
 |--------|------------|-------------|
-| **SpellcastingBlock** | Medium | Spell slots, spell attack, spell DC |
-| **Spell Registry** | Medium | Structured spell definitions |
-| **SpellAction Base** | Medium | Base class for all spells |
+| **SpellcastingBlock** | Medium | Spell attack, spell DC, spell-specific modifiers |
+| **ActionEconomy spell slots** | Low | ModifiableValue fields for slots 1-9 |
+| **SpellAction Base** | Medium | Base class for all spells with variant generation |
 | **Concentration** | Medium | Track + break on damage |
 | **Area of Effect** | High | Cone, sphere, line, cube targeting |
 | **Metamagic** | Medium | Spell modifiers using sorcery points |
 
 ### Timeline Estimate
 
-- **Phase 1** (Foundation): SpellcastingBlock, basic spells, Fire Bolt
-- **Phase 2** (Core Combat): AoE system, Fireball, Lightning Bolt, Hold Person
-- **Phase 3** (Sorcerer Features): Sorcery points, metamagic, Draconic Bloodline
-- **Phase 4** (Polish): Factory, remaining spells, testing
-
----
-
-## Part 1: SpellcastingBlock Component
-
-### Purpose
-Central component for spell slot management, spell attack rolls, and spell save DC calculation.
-
-### Entity Integration
-```python
-Entity
-├── ability_scores
-├── health
-├── equipment
-├── action_economy
-├── senses
-├── spellcasting: Optional[SpellcastingBlock]  # NEW
-└── ...
-```
-
-### SpellcastingBlock Design
-
-```python
-class SpellcastingBlock(BaseBlock):
-    """Manages spell slots, spell attack, and spell save DC."""
-
-    # Configuration
-    spellcasting_ability: AbilityName = "charisma"
-    spell_slots: Dict[int, int] = {}       # level -> current slots
-    max_spell_slots: Dict[int, int] = {}   # level -> max slots
-    cantrips_known: List[str] = []         # Cantrip names
-    spells_known: List[str] = []           # Spell names
-
-    # Derived stats (ModifiableValue for future modifiers like Wand of the War Mage)
-    spell_attack_bonus: ModifiableValue
-    spell_save_dc: ModifiableValue
-
-    # Methods
-    def has_slot(self, level: int) -> bool
-    def consume_slot(self, level: int) -> bool
-    def restore_all_slots(self)  # Long rest
-    def get_lowest_available_slot(self, min_level: int) -> Optional[int]
-    def knows_spell(self, spell_name: str) -> bool
-    def knows_cantrip(self, cantrip_name: str) -> bool
-```
+- **Phase 1** (Foundation): ActionEconomy slots + SpellcastingBlock + SpellAction base
+- **Phase 2** (Core Combat): Fire Bolt, Sacred Flame, Magic Missile, Mage Armor
+- **Phase 3** (AoE): Fireball, Lightning Bolt, Burning Hands
+- **Phase 4** (Sorcerer Features): Sorcery points, metamagic, Draconic Bloodline
+- **Phase 5** (Polish): Factory, remaining spells, testing
 
 ### Spell Slot Table (Sorcerer)
 
@@ -100,9 +162,96 @@ SORCERER_SPELL_SLOTS = {
 
 ---
 
-## Part 2: Spell Definition System
+## Part 2: SpellAction Base Class (Spells ARE Actions)
 
-### SpellDefinition Model
+**NOTE: We do NOT use a SpellDefinition registry. Spells are SpellAction subclasses.**
+
+### SpellAction Base Class
+
+```python
+class SpellAction(BaseAction):
+    """Base class for all spell actions."""
+
+    # Spell metadata (class-level defaults, instance can override)
+    spell_level: int = 0  # Base level (0 for cantrips)
+    spell_school: str = "evocation"
+    concentration: bool = False
+
+    # Variant tracking (instance-level)
+    cast_at_level: int = 0  # Actual slot level (0 = cantrip, no slot)
+    is_variant: bool = False  # True if this is a generated variant
+
+    # Targeting (reuse existing Range/TargetType)
+    spell_range: Range
+    target_type: TargetType
+
+    # Costs built dynamically per variant
+    # (NOT static - variants have different spell slot costs)
+
+    def generate_variants(self, entity: 'Entity') -> List['SpellAction']:
+        """Generate all castable variants of this spell."""
+        # Cantrip: single variant, no slot cost
+        # Leveled: one variant per available slot level
+
+    def _create_variant(self, cast_at_level: int, **overrides) -> 'SpellAction':
+        """Create variant with modified costs/effects."""
+
+    def get_upcast_bonus(self) -> int:
+        """Levels above base: cast_at_level - spell_level."""
+```
+
+### Example Spell Implementation
+
+```python
+class FireBolt(SpellAction):
+    """Spell attack cantrip."""
+    name: str = "Fire Bolt"
+    spell_level: int = 0
+    spell_range: Range = Range(type=RangeType.RANGE, normal=120)
+    target_type: TargetType = TargetType.ENTITY
+
+    def _apply(self, event):
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid)
+
+        # Spell attack roll (uses same set_from_target pattern as Attack)
+        spell_attack = caster.spell_attack_bonus(target.uuid)
+        target_ac = target.ac_bonus(caster.uuid)
+        spell_attack.set_from_target(target_ac)
+
+        dice_roll = caster.roll_d20(spell_attack, RollType.ATTACK)
+        crit_threshold = caster.get_spell_crit_threshold()
+        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
+
+        if outcome in [AttackOutcome.HIT, AttackOutcome.CRIT]:
+            num_dice = self._get_damage_dice(caster.level)
+            # Roll damage, apply to target...
+
+        spell_attack.reset_from_target()
+
+    def _get_damage_dice(self, caster_level: int) -> int:
+        """Cantrip scaling: 1d10 at L1, 2d10 at L5, etc."""
+        if caster_level >= 17: return 4
+        if caster_level >= 11: return 3
+        if caster_level >= 5: return 2
+        return 1
+
+
+class MagicMissile(SpellAction):
+    """Auto-hit spell with upcast scaling."""
+    name: str = "Magic Missile"
+    spell_level: int = 1  # Base level
+    spell_range: Range = Range(type=RangeType.RANGE, normal=120)
+    target_type: TargetType = TargetType.ENTITY
+
+    def _apply(self, event):
+        num_darts = 3 + self.get_upcast_bonus()  # +1 dart per upcast level
+        for _ in range(num_darts):
+            # 1d4+1 force damage per dart, auto-hit
+            ...
+```
+
+### Spell Schools (for reference)
 
 ```python
 class SpellSchool(Enum):
@@ -114,42 +263,6 @@ class SpellSchool(Enum):
     ILLUSION = "illusion"
     NECROMANCY = "necromancy"
     TRANSMUTATION = "transmutation"
-
-class CastingTime(Enum):
-    ACTION = "action"
-    BONUS_ACTION = "bonus_action"
-    REACTION = "reaction"
-    MINUTE = "minute"
-    HOUR = "hour"
-
-class SpellRangeType(Enum):
-    SELF = "self"
-    TOUCH = "touch"
-    RANGED = "ranged"
-
-class SpellDefinition(BaseModel):
-    name: str
-    level: int  # 0 = cantrip
-    school: SpellSchool
-    casting_time: CastingTime
-    casting_time_value: int = 1  # For minute/hour casting times
-    range_type: SpellRangeType
-    range_feet: Optional[int] = None
-    aoe_shape: Optional[AoEShape] = None  # CONE, SPHERE, LINE, CUBE
-    aoe_size: Optional[int] = None  # In feet
-    components_verbal: bool = True
-    components_somatic: bool = True
-    components_material: Optional[str] = None
-    duration_rounds: Optional[int] = None  # None = instantaneous
-    concentration: bool = False
-    save_ability: Optional[AbilityName] = None
-    save_effect: Optional[str] = None  # "half", "none", "condition"
-    attack_type: Optional[str] = None  # "ranged", "melee"
-    damage_dice: Optional[int] = None
-    damage_die_size: Optional[int] = None
-    damage_type: Optional[DamageType] = None
-    upcast_dice_per_level: Optional[int] = None
-    description: str
     classes: List[str]  # ["sorcerer", "wizard", ...]
 ```
 

@@ -236,3 +236,42 @@ def execute_by_index(entity: 'Entity', template_name: str, target_index: int) ->
         raise ValueError(f"Target index {target_index} not valid for {template_name}")
 
     return execute_action(entity, template_name, target)
+
+
+# =============================================================================
+# Spell Registration Utilities
+# =============================================================================
+
+def register_spell(entity: 'Entity', spell_class: type, caster_level: int = 1) -> None:
+    """Register a spell template on an entity.
+
+    Args:
+        entity: The entity to register the spell on
+        spell_class: The spell class (e.g., FireBolt, MagicMissile)
+        caster_level: The caster's level (for cantrip scaling)
+    """
+    spell = spell_class(
+        source_entity_uuid=entity.uuid,
+        caster_level=caster_level,
+        template=True
+    )
+    entity.register_action(spell)
+
+
+def register_spells_by_name(entity: 'Entity', spell_names: list, caster_level: int = 1) -> None:
+    """Register multiple spells by name from ALL_SPELLS dict.
+
+    Args:
+        entity: The entity to register spells on
+        spell_names: List of spell names (e.g., ["Fire Bolt", "Magic Missile"])
+        caster_level: The caster's level (for cantrip scaling)
+
+    Raises:
+        ValueError: If a spell name is not found in ALL_SPELLS
+    """
+    from dnd.spells import ALL_SPELLS
+
+    for name in spell_names:
+        if name not in ALL_SPELLS:
+            raise ValueError(f"Unknown spell: {name}")
+        register_spell(entity, ALL_SPELLS[name], caster_level)
