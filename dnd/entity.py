@@ -1300,8 +1300,12 @@ class Entity(BaseBlock):
 
     @property
     def position_actions(self) -> List[BaseAction]:
-        """Actions that target positions (Move)."""
-        return [a for a in self.registered_actions if a.target_type == TargetType.POSITION]
+        """Actions that target positions (Move, Jump).
+
+        Includes POSITION_PATH (uses senses.paths) and POSITION_LOS (uses senses.visible).
+        """
+        return [a for a in self.registered_actions
+                if a.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS)]
 
     @property
     def self_actions(self) -> List[BaseAction]:
@@ -1424,8 +1428,10 @@ class Entity(BaseBlock):
                     weapon_name=weapon_name
                 ))
 
-        # POSITION actions - validate for each reachable position
+        # POSITION_PATH actions (Move) - validate for each reachable position via path
         for template in self.position_actions:
+            if template.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
+                continue
             valid_positions: List[AvailableTarget] = []
             idx = 0
             for pos, path in self.senses.paths.items():
@@ -1446,13 +1452,48 @@ class Entity(BaseBlock):
                 template_name = template.name or "Unknown"
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
-                    target_type=TargetType.POSITION,
+                    target_type=template.target_type,
                     valid_targets=valid_positions,
                     can_afford=True,
                     display_name=template_name,
                     description=f"{result.remaining_movement}ft remaining",
                     cost_type="movement",
                     cost_amount=0
+                ))
+
+        # POSITION_LOS actions (Jump, Teleport) - use action's get_valid_positions()
+        for template in self.position_actions:
+            if template.target_type != TargetType.POSITION_LOS:
+                continue
+
+            # Let the action compute its own valid positions
+            valid_pos_list = template.get_valid_positions()
+            valid_positions = []
+            idx = 0
+            for pos in valid_pos_list:
+                template.set_target_position(pos)
+                if template.pre_validate():
+                    valid_positions.append(AvailableTarget(
+                        index=idx,
+                        position=pos,
+                        distance=self.senses.get_feet_distance(pos),
+                        path_cost=None  # LOS actions don't use path cost
+                    ))
+                    idx += 1
+
+            if valid_positions:
+                template_name = template.name or "Unknown"
+                cost_type = template.costs[0].cost_type if template.costs else "bonus_actions"
+                cost_amount = template.costs[0].cost if template.costs else 1
+                result.position_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_LOS,
+                    valid_targets=valid_positions,
+                    can_afford=template.check_costs(),
+                    display_name=template_name,
+                    description=template.description,
+                    cost_type=cost_type,
+                    cost_amount=cost_amount
                 ))
 
         return result

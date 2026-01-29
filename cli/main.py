@@ -58,6 +58,79 @@ def try_execute_dynamic_self_action(cmd_str: str, client: APIClient, state: Game
     return None  # Not a self-action, fall through
 
 
+def try_execute_dynamic_position_action(cmd_str: str, args: List[str], client: APIClient, state: GameState) -> Optional[str]:
+    """
+    Try to execute a dynamic position-action using the shortcut registry.
+    Handles Move, Jump, and any future position-based actions.
+
+    Returns:
+        "refresh" if action was executed or showing positions
+        "encounter_ended" if encounter ended
+        None if command wasn't a position-action
+    """
+    if not state.actions:
+        return None
+
+    registry = get_shortcut_registry()
+    cmd = cmd_str.strip().lower().split()[0] if cmd_str.strip() else ""
+    action = state.actions.get_position_action_by_command(cmd, registry)
+
+    if not action:
+        return None
+
+    # No coordinates - show valid positions
+    if len(args) < 2:
+        positions = [t.position for t in action.valid_targets if t.position]
+        state.valid_move_positions = positions
+        shortcut = registry.get_or_create_shortcut(action.template_name)
+        display.set_output([
+            f"Valid {action.display_name.lower()} positions shown on map (*)",
+            f"{len(positions)} positions available",
+            f"Enter '{shortcut} X Y' to {action.display_name.lower()} to position (X, Y)"
+        ])
+        return "refresh"
+
+    # Parse coordinates
+    try:
+        x, y = int(args[0]), int(args[1])
+    except ValueError:
+        shortcut = registry.get_or_create_shortcut(action.template_name)
+        display.set_output([f"Invalid position. Usage: {shortcut} X Y"])
+        return "refresh"
+
+    # Execute
+    position = (x, y)
+    for target in action.valid_targets:
+        if target.position == position:
+            result = client.execute_action(action.template_name, target.index)
+            display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+            state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} {action.display_name.lower()}s to ({x}, {y}).")
+
+            event_data = result.get("event_data", {})
+            path = event_data.get("path", [])
+            state.last_movement_path = [tuple(p) for p in path] if path else None
+
+            # Handle opportunity attacks
+            triggered = result.get("triggered_reactions", [])
+            for reaction in triggered:
+                if reaction.get("type") == "opportunity_attack":
+                    attacker = reaction.get("attacker", "Unknown")
+                    outcome = (reaction.get("outcome") or "miss").lower()
+                    total_damage = reaction.get("total_damage", 0)
+                    if outcome in ("hit", "crit"):
+                        state.add_to_log(f"(OA) {attacker} hit for {total_damage} damage!")
+                    else:
+                        state.add_to_log(f"(OA) {attacker} missed.")
+
+            if result.get("encounter_ended"):
+                return "encounter_ended"
+            return "refresh"
+
+    shortcut = registry.get_or_create_shortcut(action.template_name)
+    display.set_output([f"Position ({x}, {y}) is not valid. Type '{shortcut}' to see valid positions."])
+    return "refresh"
+
+
 def prompt_with_connection_poll(client: APIClient, pvp_mode: bool = False, poll_interval: float = 2.0) -> str:
     """
     Prompt for input while polling connection status in PvP mode.
@@ -402,10 +475,14 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
                 need_redraw = False
                 continue
 
-            # Try dynamic self-action first (before legacy execute_command)
-            result = try_execute_dynamic_self_action(cmd_str, client, state)
+            # Position actions (Move, Jump) - ONLY path, no fallback
+            result = try_execute_dynamic_position_action(cmd_str, cmd.args, client, state)
 
-            # Fall through to legacy command handling if not a self-action
+            # Self actions (Dash, Dodge, etc.) - ONLY path, no fallback
+            if result is None:
+                result = try_execute_dynamic_self_action(cmd_str, client, state)
+
+            # Attack and End only (NOT a fallback - these are different command types)
             if result is None:
                 result = execute_command(cmd, client, state)
 

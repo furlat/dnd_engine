@@ -779,12 +779,42 @@ def render_available_actions_panel(
     movement_remaining = actions.get("remaining_movement", 0)
     reactions_remaining = turn.get("reactions_remaining", 0)
 
-    # Movement
-    has_movement = actions.get("position_actions")
-    if has_movement and movement_remaining > 0:
-        content.append("MOVE", style="bold cyan")
-        content.append(f" ({movement_remaining}ft)  ")
-        content.append("[m X Y] or [m] to show positions\n", style="dim")
+    # Position-based actions (Move, Jump, etc.) - iterate ALL position_actions
+    position_actions = actions.get("position_actions", [])
+
+    for action in position_actions:
+        template_name = action.get("template_name", "Unknown")
+        display_name = action.get("display_name", template_name)
+        can_afford = action.get("can_afford", False)
+        valid_targets = action.get("valid_targets", [])
+        cost_type = action.get("cost_type", "movement")
+
+        if not valid_targets or not can_afford:
+            continue  # Skip unavailable actions
+
+        # Get shortcut from registry (session-stable)
+        if registry:
+            cmd = registry.get_or_create_shortcut(template_name)
+        else:
+            cmd = template_name[0].lower()
+
+        # Cost label based on cost_type
+        if cost_type == "movement":
+            cost_info = f"{movement_remaining}ft"
+            style = "bold cyan"
+        elif cost_type == "bonus_actions":
+            cost_info = "bonus"
+            style = "bold magenta"
+        elif cost_type == "actions":
+            cost_info = "action"
+            style = "bold yellow"
+        else:
+            cost_info = cost_type
+            style = "bold white"
+
+        content.append(display_name.upper(), style=style)
+        content.append(f" ({cost_info}, {len(valid_targets)} pos)  ")
+        content.append(f"[{cmd} X Y] or [{cmd}] to show\n", style="dim")
 
     # Attacks - show all available attack options with target numbers
     attacks = actions.get("entity_actions", [])
@@ -897,16 +927,33 @@ def render_all_actions(
         content.append("  No actions registered yet.", style="dim")
     else:
         for template_name, shortcut in sorted(all_actions.items(), key=lambda x: x[1]):
-            # Check if currently available
+            # Check if currently available (self_actions or position actions)
             action = None
+            action_type = ""
             if current_actions:
+                # Check self_actions first
                 action = current_actions.get_self_action(template_name)
+                if action:
+                    action_type = "self"
+                else:
+                    # Check position actions (movement)
+                    for pos_action in current_actions.movement:
+                        if pos_action.template_name == template_name:
+                            action = pos_action
+                            action_type = "position"
+                            break
+
             available = action is not None and action.can_afford
 
             if available:
-                content.append(f"  [{shortcut}] ", style="bold green")
+                # Color based on action type
+                style = "bold cyan" if action_type == "position" else "bold green"
+                content.append(f"  [{shortcut}] ", style=style)
                 content.append(f"{template_name}", style="bold")
-                content.append(" - AVAILABLE\n", style="green")
+                if action_type == "position":
+                    content.append(" - AVAILABLE (position)\n", style="cyan")
+                else:
+                    content.append(" - AVAILABLE\n", style="green")
             else:
                 content.append(f"  [{shortcut}] ", style="dim")
                 content.append(f"{template_name}", style="dim")
@@ -1257,9 +1304,10 @@ def show_help():
     help_text = """
 [bold underline]Commands:[/bold underline]
 
-[bold cyan]Movement:[/bold cyan]
+[bold cyan]Position Actions:[/bold cyan]
   m X Y / move X Y    Move to position (X, Y)
-  m / move            Show valid move positions on map
+  j X Y / jump X Y    Jump to position (X, Y)
+  <cmd>               Show valid positions on map (e.g., 'm' or 'j')
 
 [bold cyan]Combat:[/bold cyan]
   a N / attack N      Attack target number N

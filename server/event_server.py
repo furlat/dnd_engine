@@ -37,7 +37,7 @@ from dnd.items import create_shortsword, create_dagger, create_longbow
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
-from dnd.actions import MovementEvent
+from dnd.actions import MovementEvent, JumpEvent
 from dnd.core.base_actions import TargetType, AvailableTarget
 from dnd.reactions import add_opportunity_attack_handler
 
@@ -263,6 +263,17 @@ def setup_arena_combat(
     for y in range(3, 12):
         if y != 7:  # Leave a gap in the middle
             grid.set_tile(7, y, walkable=False, visible=False)
+
+    # ADD: Jump test island in top-left corner
+    # Create water barrier around island (visible=True, walkable=False)
+    # Water at column 2 from y=0 to y=3 (vertical barrier)
+    for y in range(4):
+        grid.set_tile(2, y, walkable=False, visible=True, name="Water")
+    # Water at row 3 from x=0 to x=1 (horizontal barrier, completing the box)
+    for x in range(2):
+        grid.set_tile(x, 3, walkable=False, visible=True, name="Water")
+    # The island is at (0,0), (0,1), (0,2), (1,0), (1,1), (1,2) - floor tiles
+    # Now isolated by water - reachable only by Jump (LOS passes through water)
 
     # Create Hero based on character class
     if character_class == "barbarian":
@@ -1295,10 +1306,11 @@ async def execute_position_action(request: PositionActionRequest):
     if template is None:
         raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
 
-    if template.target_type != TargetType.POSITION:
+    # Accept both POSITION_PATH (path-based like Move) and POSITION_LOS (LOS-based like Jump)
+    if template.target_type not in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         raise HTTPException(
             status_code=400,
-            detail=f"Action {request.action_name} is not a POSITION action (is {template.target_type.value})"
+            detail=f"Action {request.action_name} is not a position action (is {template.target_type.value})"
         )
 
     # Track opportunity attacks triggered by movement
@@ -1342,8 +1354,8 @@ async def execute_position_action(request: PositionActionRequest):
     event_data = None
     triggered_reactions: list = []
 
-    if isinstance(event, MovementEvent):
-        # Log move using event.combat_log
+    if isinstance(event, (MovementEvent, JumpEvent)):
+        # Log move/jump using event.combat_log
         if event.combat_log:
             add_event_to_combat_log(sim, event)
             action_log_entries.append(event.combat_log.to_dict())
@@ -1415,18 +1427,18 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         if event_type == "attack" and event.target_entity_uuid == entity.uuid:
             captured_oa_events.append(event)  # Store event for combat_log
 
-    # Register callback if this might trigger OAs
-    if template.target_type == TargetType.POSITION:
+    # Register callback if this might trigger OAs (position-based movement actions)
+    if template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         EventQueue.add_on_event_callback(capture_opportunity_attack)
 
     try:
         event = execute_by_index(entity, request.template_name, request.target_index)
     except ValueError as e:
-        if template.target_type == TargetType.POSITION:
+        if template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
             EventQueue.remove_on_event_callback(capture_opportunity_attack)
         raise HTTPException(status_code=400, detail=str(e))
     finally:
-        if template.target_type == TargetType.POSITION:
+        if template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
             EventQueue.remove_on_event_callback(capture_opportunity_attack)
 
     # Check for deaths
@@ -1455,34 +1467,35 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         event_data = dict(event.combat_log.data)
         event_data["target_hp"] = target_hp
 
-    elif template.target_type == TargetType.POSITION and isinstance(event, MovementEvent):
-        # Move - pass through full combat log data
-        if event.combat_log:
-            add_event_to_combat_log(sim, event)
-            action_log_entries.append(event.combat_log.to_dict())
-            event_data = dict(event.combat_log.data)
-        else:
-            # Fallback if no combat_log
-            event_data = {
-                "entity_name": entity.name,
-                "start_position": list(event.start_position),
-                "end_position": list(event.end_position),
-                "path": [list(p) for p in event.path] if event.path else []
-            }
+    elif template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
+        # Movement actions (Move, Jump) - both have start_position, end_position, path
+        if event and isinstance(event, (MovementEvent, JumpEvent)):
+            if event.combat_log:
+                add_event_to_combat_log(sim, event)
+                action_log_entries.append(event.combat_log.to_dict())
+                event_data = dict(event.combat_log.data)
+            else:
+                # Fallback if no combat_log
+                event_data = {
+                    "entity_name": entity.name,
+                    "start_position": list(event.start_position),
+                    "end_position": list(event.end_position),
+                    "path": [list(p) for p in event.path] if event.path else []
+                }
 
-        # Log opportunity attacks using event.combat_log
-        for oa_event in captured_oa_events:
-            if oa_event.combat_log:
-                add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
-                # Add to combat_log_entries with type override
-                entry_dict = oa_event.combat_log.to_dict()
-                entry_dict["entry_type"] = "opportunity_attack"
-                action_log_entries.append(entry_dict)
-                # Pass through full combat log data - CLI now supports new structure
-                oa_data = dict(oa_event.combat_log.data)
-                oa_data["type"] = "opportunity_attack"
-                oa_data["is_opportunity_attack"] = True
-                triggered_reactions.append(oa_data)
+            # Log opportunity attacks using event.combat_log
+            for oa_event in captured_oa_events:
+                if oa_event.combat_log:
+                    add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
+                    # Add to combat_log_entries with type override
+                    entry_dict = oa_event.combat_log.to_dict()
+                    entry_dict["entry_type"] = "opportunity_attack"
+                    action_log_entries.append(entry_dict)
+                    # Pass through full combat log data - CLI now supports new structure
+                    oa_data = dict(oa_event.combat_log.data)
+                    oa_data["type"] = "opportunity_attack"
+                    oa_data["is_opportunity_attack"] = True
+                    triggered_reactions.append(oa_data)
 
     elif template.target_type == TargetType.SELF:
         # Self action - use event.combat_log

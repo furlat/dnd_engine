@@ -17,6 +17,33 @@ class ShortcutRegistry:
     This ensures consistent shortcuts even as actions become available/unavailable.
     """
 
+    # Reserved shortcuts - these have fixed meanings and cannot be auto-assigned
+    # to other actions. They can only be used by their designated actions.
+    RESERVED = {
+        # Position actions (hardcoded for consistency)
+        "m",    # Move
+        "j",    # Jump
+        # Entity actions
+        "a",    # Attack (number-indexed)
+        # Turn management
+        "e",    # End turn
+        # Meta commands
+        "s", "h", "q", "?",
+        "la", "list",
+        # History
+        "pt", "nt", "ct", "ft",
+    }
+
+    # Preferred shortcuts for known actions - these actions will claim
+    # these shortcuts if available (even if reserved for them)
+    PREFERRED: Dict[str, str] = {
+        "Move": "m",
+        "Jump": "j",
+        "Dash": "d",
+        "Dodge": "o",
+        "Disengage": "di",
+    }
+
     def __init__(self):
         self._action_to_shortcut: Dict[str, str] = {}  # template_name -> shortcut
         self._shortcut_to_action: Dict[str, str] = {}  # shortcut -> template_name
@@ -26,11 +53,19 @@ class ShortcutRegistry:
 
         Multi-word names use full initials (Second Wind -> sw).
         Single-word names start with first letter and expand as needed.
+        Reserved shortcuts can only be used by their designated actions.
         """
         if template_name in self._action_to_shortcut:
             return self._action_to_shortcut[template_name]
 
-        # Generate new shortcut
+        # Check for preferred shortcut first
+        preferred = self.PREFERRED.get(template_name)
+        if preferred and preferred not in self._shortcut_to_action:
+            # Preferred shortcut is available - use it
+            self._register(template_name, preferred)
+            return preferred
+
+        # Generate new shortcut, avoiding reserved and used shortcuts
         words = template_name.split()
         if len(words) > 1:
             # Multi-word: use full initials (e.g., "Second Wind" -> "sw")
@@ -41,10 +76,10 @@ class ShortcutRegistry:
             base = words[0].lower() if words else "x"
             shortcut = base[0]
 
-        # Find non-colliding shortcut
+        # Find non-colliding shortcut (skip reserved AND used shortcuts)
         i = 2
         original_shortcut = shortcut
-        while shortcut in self._shortcut_to_action:
+        while shortcut in self._shortcut_to_action or self._is_reserved_for_other(shortcut, template_name):
             if len(words) > 1:
                 # Multi-word collision: append number
                 shortcut = original_shortcut + str(i - 1)
@@ -57,9 +92,26 @@ class ShortcutRegistry:
             i += 1
 
         # Register
+        self._register(template_name, shortcut)
+        return shortcut
+
+    def _is_reserved_for_other(self, shortcut: str, template_name: str) -> bool:
+        """Check if a shortcut is reserved for a different action.
+
+        A reserved shortcut can only be used by its designated action
+        (via PREFERRED mapping).
+        """
+        if shortcut not in self.RESERVED:
+            return False
+
+        # Check if this action is the designated owner of this reserved shortcut
+        preferred_shortcut = self.PREFERRED.get(template_name)
+        return preferred_shortcut != shortcut
+
+    def _register(self, template_name: str, shortcut: str) -> None:
+        """Register a shortcut mapping."""
         self._action_to_shortcut[template_name] = shortcut
         self._shortcut_to_action[shortcut] = template_name
-        return shortcut
 
     def get_action_by_shortcut(self, shortcut: str) -> Optional[str]:
         """Get template_name for a shortcut."""
@@ -204,12 +256,18 @@ class AvailableActionsState:
         return None
 
     def register_actions(self, registry: ShortcutRegistry) -> None:
-        """Register all current self_actions with the session registry.
+        """Register all actions with the session registry.
 
         This should be called after fetching actions to ensure all available
-        actions have stable shortcuts assigned.
+        actions have stable shortcuts assigned. Registers both self_actions
+        (Dash, Dodge, etc.) and position actions (Move, Jump, etc.).
         """
+        # Register self_actions
         for action in self.self_actions:
+            registry.get_or_create_shortcut(action.template_name)
+
+        # Register position actions (movement)
+        for action in self.movement:
             registry.get_or_create_shortcut(action.template_name)
 
     def get_self_action_by_command(
@@ -238,6 +296,34 @@ class AvailableActionsState:
         for action in self.self_actions:
             normalized_name = action.template_name.lower().replace(" ", "").replace("_", "")
             if action.can_afford and normalized_name == cmd:
+                return action
+
+        return None
+
+    def get_position_action_by_command(
+        self, command: str, registry: ShortcutRegistry
+    ) -> Optional[AvailableAction]:
+        """Find position action by shortcut OR template_name.
+
+        Args:
+            command: User input (could be shortcut like "m" or full name like "move")
+            registry: Session shortcut registry
+
+        Returns:
+            Matching available action if found and affordable, None otherwise
+        """
+        cmd = command.lower().replace(" ", "").replace("_", "")
+
+        # Path 1: Check shortcut registry (e.g., "j" → "Jump")
+        template = registry.get_action_by_shortcut(cmd)
+        if template:
+            for action in self.movement:
+                if action.template_name == template and action.can_afford:
+                    return action
+
+        # Path 2: Check template_name directly (e.g., "jump" → "Jump")
+        for action in self.movement:
+            if action.template_name.lower() == cmd and action.can_afford:
                 return action
 
         return None
