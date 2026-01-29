@@ -12,7 +12,8 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger
 
 from dnd.actions import SpellAction, SpellEvent
-
+from dnd.entity import Entity
+from dnd.conditions import Paralyzed
 
 class HoldPersonEffect(BaseCondition):
     """
@@ -35,8 +36,7 @@ class HoldPersonEffect(BaseCondition):
     spell_dc: int = 10
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.entity import Entity
-        from dnd.conditions import Paralyzed
+        
 
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
