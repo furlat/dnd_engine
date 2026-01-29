@@ -986,7 +986,8 @@ class Dash(BaseAction):
         source_name = source_entity.name if source_entity else None
 
         return ActionEvent(
-            name=self.name,
+            name=self.name or "Dash",
+            description=self.description,
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
@@ -1054,7 +1055,8 @@ class Dodge(BaseAction):
         source_name = source_entity.name if source_entity else None
 
         return ActionEvent(
-            name=self.name,
+            name=self.name or "Dodge",
+            description=self.description,
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
@@ -1118,7 +1120,8 @@ class Disengage(BaseAction):
         source_name = source_entity.name if source_entity else None
 
         return ActionEvent(
-            name=self.name,
+            name=self.name or "Disengage",
+            description=self.description,
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
@@ -1204,7 +1207,8 @@ class StandUp(BaseAction):
         source_name = source_entity.name if source_entity else None
 
         return ActionEvent(
-            name=self.name,
+            name=self.name or "Stand Up",
+            description=self.description,
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
@@ -1262,7 +1266,8 @@ class DropProne(BaseAction):
         source_name = source_entity.name if source_entity else None
 
         return ActionEvent(
-            name=self.name,
+            name=self.name or "Drop Prone",
+            description=self.description,
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
