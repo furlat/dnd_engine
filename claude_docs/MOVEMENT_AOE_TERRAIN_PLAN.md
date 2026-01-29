@@ -5,7 +5,7 @@
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1: Jump | ✓ COMPLETE | BG3-style jump action working in CLI |
-| Phase 2: Shove | TODO | Contested push with forced movement |
+| Phase 2: Shove | ✓ COMPLETE | BG3-style shove with Athletics contest, forced movement |
 | Phase 3: AoE Targeting | TODO | Cone, sphere, line, cube shapes |
 
 ## Overview
@@ -380,197 +380,531 @@ class ForcedMovementEvent(Event):
 
 ## Phase 3: AoE Targeting System
 
+### Design Principles
+
+**Key insight**: AoE effects need FOV computed from the SPELL'S ORIGIN, not from the caster's position.
+
+Example: Fireball centered at (5,5) should spread based on what's visible FROM (5,5), not from caster at (0,0).
+
+**Two computation modes**:
+| Mode | Data Source | Use Case |
+|------|-------------|----------|
+| **Subjective** | Senses (caster's perception) | Targeting, pre_validate, UI preview |
+| **Objective** | GridMap (actual spatial reality) | Spell application, actual effect |
+
+### Import Hierarchy (No Circularity)
+
+```
+GridMap (lowest - positions, tiles, UUIDs only)
+    ↑
+Senses (data container - visible positions, entity UUIDs)
+    ↑
+Shape (imports GridMap + Senses, NOT Entity)
+    ↑
+Entity (imports Shape, converts UUIDs to Entity objects)
+    ↑
+Action (imports Entity, Shape - orchestrates spell execution)
+```
+
+Shape is the **transaction layer** between actions and spatial systems. It only knows positions, UUIDs, and senses data - never Entity objects.
+
+### Origin and Target Model
+
+Every AoE has two positions:
+- **target**: Where the spell is aimed (always provided by player)
+- **origin**: Where the effect emanates from (for FOV/LOS calculation)
+
+Origin can be:
+- **Implicit** (default): Calculated from caster position or target
+- **Explicit**: Player provides both positions (e.g., Wall of Fire endpoints)
+
+| Shape | Default Origin | Examples |
+|-------|----------------|----------|
+| Sphere | origin = target (center) | Fireball, Shatter |
+| Cone | origin = caster (apex) | Burning Hands, Cone of Cold |
+| Line | origin = caster (start) | Lightning Bolt, Sunbeam |
+| Cube (centered) | origin = target | Hypnotic Pattern |
+| Cube (from face) | origin = caster | Thunderwave |
+| Wall/Line (explicit) | origin = first endpoint | Wall of Fire |
+
 ### AoE Shapes
 
 | Shape | Parameters | Example Spells |
 |-------|------------|----------------|
-| **Cone** | origin, direction, length, angle | Burning Hands (15ft), Cone of Cold (60ft) |
 | **Sphere** | center, radius | Fireball (20ft), Shatter (10ft) |
-| **Cube** | corner or center, size | Thunderwave (15ft), Hypnotic Pattern (30ft) |
-| **Line** | origin, direction, length, width | Lightning Bolt (100ft×5ft), Sunbeam (60ft×5ft) |
+| **Cone** | apex, direction, length, angle | Burning Hands (15ft), Cone of Cold (60ft) |
+| **Line** | start, end, length, width | Lightning Bolt (100ft×5ft), Sunbeam (60ft×5ft) |
+| **Cube** | origin, size, centered flag | Thunderwave (15ft), Hypnotic Pattern (30ft) |
 | **Cylinder** | center, radius, height | Ice Storm (20ft×40ft), Sleet Storm (40ft×20ft) |
 
 ### Core AoE Classes
 
 ```python
-from abc import ABC, abstractmethod
-from typing import Set, Tuple
+# dnd/core/aoe.py
+from pydantic import Field
+from typing import Set, Tuple, List, Optional
+from uuid import UUID
 
-class AoEShape(ABC):
-    """Base class for area of effect shapes."""
-
-    @abstractmethod
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Return all grid positions affected by this AoE."""
-        pass
-
-    @abstractmethod
-    def contains(self, position: Tuple[int, int]) -> bool:
-        """Check if a position is within the AoE."""
-        pass
+from dnd.core.base_object import BaseObject
+from dnd.blocks.sensory import Senses
+from dnd.core.gridmap import get_map
 
 
-class Cone(AoEShape):
-    """Cone emanating from a point in a direction."""
+class AoEShape(BaseObject):
+    """
+    Base class for AoE shapes. Extends BaseObject for registry/UUID support.
 
-    def __init__(
-        self,
-        origin: Tuple[int, int],
-        direction: Tuple[int, int],  # Unit vector or target point
-        length_feet: int,
-        angle_degrees: int = 90  # Standard D&D cone
-    ):
-        self.origin = origin
-        self.direction = direction
-        self.length_tiles = length_feet // 5
-        self.angle = angle_degrees
+    Shape is the transaction layer between actions and spatial systems.
+    It knows about GridMap and Senses, but NOT Entity.
+    Returns positions and UUIDs - caller converts to Entity objects.
 
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        # Algorithm: For each tile in range, check if angle from
-        # origin->tile is within cone angle from origin->direction
-        positions = set()
-        # ... implementation using vector math ...
-        return positions
+    Two computation modes:
+    - compute_subjective(): Uses Senses (caster's perception) - for targeting/UI
+    - compute_objective(): Uses GridMap (reality) - for spell application
+    """
+
+    # Target position (where spell is aimed - always required)
+    target: Tuple[int, int] = Field(description="Target position (where aimed)")
+
+    # Explicit origin override (if None, uses _default_origin)
+    origin: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Explicit origin override. If None, computed from _default_origin()"
+    )
+
+    # Computed results (populated by compute methods)
+    computed_origin: Optional[Tuple[int, int]] = Field(default=None)
+    affected_positions: Set[Tuple[int, int]] = Field(default_factory=set)
+    affected_entity_uuids: List[UUID] = Field(default_factory=list)
+
+    def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
+        """
+        Default origin calculation. Override in subclasses.
+        Base implementation: origin at caster position.
+        """
+        return caster_pos
+
+    def get_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
+        """Get origin - explicit if set, else default."""
+        if self.origin is not None:
+            return self.origin
+        return self._default_origin(caster_pos)
+
+    def _get_max_radius_tiles(self) -> int:
+        """Max radius for FOV computation. Override in subclasses."""
+        raise NotImplementedError("Subclasses must implement _get_max_radius_tiles()")
+
+    def _get_geometric_positions(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        """
+        Get positions within shape geometry (ignoring walls).
+        Override in subclasses.
+        """
+        raise NotImplementedError("Subclasses must implement _get_geometric_positions()")
+
+    def compute_subjective(self, caster_pos: Tuple[int, int], senses: Senses) -> "AoEShape":
+        """
+        Compute from Senses - what caster perceives.
+
+        Use for: targeting validation, pre_validate, UI preview
+
+        Args:
+            caster_pos: Caster's current position
+            senses: Caster's current senses (their perception)
+
+        Returns: self (for chaining)
+        """
+        self.computed_origin = self.get_origin(caster_pos)
+
+        # FOV = what caster can see (their perception)
+        fov = set(pos for pos, visible in senses.visible.items() if visible)
+
+        # Geometry intersected with caster's perception
+        geometric = self._get_geometric_positions(self.computed_origin)
+        self.affected_positions = geometric & fov
+
+        # Entities caster can see in affected area
+        self.affected_entity_uuids = [
+            uuid for uuid, pos in senses.entities.items()
+            if pos in self.affected_positions
+        ]
+
+        return self
+
+    def compute_objective(self, caster_pos: Tuple[int, int]) -> "AoEShape":
+        """
+        Compute from GridMap - actual spatial reality.
+
+        Use for: spell application, actual effect execution
+
+        Computes FOV from the SHAPE'S ORIGIN (not caster), so walls
+        block spread correctly even for point-origin spells like Fireball.
+
+        Args:
+            caster_pos: Caster's position (for origin calculation)
+
+        Returns: self (for chaining)
+        """
+        grid = get_map()
+        self.computed_origin = self.get_origin(caster_pos)
+        radius = self._get_max_radius_tiles()
+
+        # FOV computed from ORIGIN point (objective reality)
+        fov_from_origin = grid.compute_fov(self.computed_origin, radius)
+
+        # Geometry intersected with actual FOV from origin
+        geometric = self._get_geometric_positions(self.computed_origin)
+        self.affected_positions = geometric & fov_from_origin
+
+        # All entities actually at affected positions
+        self.affected_entity_uuids = []
+        for pos in self.affected_positions:
+            for uuid in grid.get_entities_at(pos[0], pos[1]):
+                if uuid not in self.affected_entity_uuids:
+                    self.affected_entity_uuids.append(uuid)
+
+        return self
 
 
 class Sphere(AoEShape):
-    """Sphere centered on a point."""
+    """
+    Sphere/circle centered on target.
+    Origin defaults to TARGET (center of explosion), not caster.
+    """
+    radius_feet: int = Field(default=20)
 
-    def __init__(self, center: Tuple[int, int], radius_feet: int):
-        self.center = center
-        self.radius_tiles = radius_feet // 5
+    def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
+        return self.target  # Sphere centers on target
 
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+    def _get_max_radius_tiles(self) -> int:
+        return self.radius_feet // 5
+
+    def _get_geometric_positions(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        r = self.radius_feet // 5
         positions = set()
-        for dx in range(-self.radius_tiles, self.radius_tiles + 1):
-            for dy in range(-self.radius_tiles, self.radius_tiles + 1):
-                # Use Euclidean distance for sphere
-                if dx*dx + dy*dy <= self.radius_tiles * self.radius_tiles:
-                    positions.add((self.center[0] + dx, self.center[1] + dy))
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                if dx*dx + dy*dy <= r*r:  # Euclidean distance
+                    positions.add((origin[0] + dx, origin[1] + dy))
+        return positions
+
+
+class Cone(AoEShape):
+    """
+    Cone emanating from caster toward target.
+    Origin defaults to CASTER (apex of cone).
+    """
+    length_feet: int = Field(default=15)
+    angle_degrees: int = Field(default=90)  # Standard D&D cone
+
+    # Uses base _default_origin (caster position)
+
+    def _get_max_radius_tiles(self) -> int:
+        return self.length_feet // 5
+
+    def _get_geometric_positions(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        import math
+
+        positions = set()
+        length_tiles = self.length_feet // 5
+        half_angle = math.radians(self.angle_degrees / 2)
+
+        # Direction from origin to target
+        dx = self.target[0] - origin[0]
+        dy = self.target[1] - origin[1]
+        if dx == 0 and dy == 0:
+            return positions  # No direction
+
+        base_angle = math.atan2(dy, dx)
+
+        # Check each tile in range
+        for tx in range(-length_tiles, length_tiles + 1):
+            for ty in range(-length_tiles, length_tiles + 1):
+                if tx == 0 and ty == 0:
+                    continue
+
+                dist = math.sqrt(tx*tx + ty*ty)
+                if dist > length_tiles:
+                    continue
+
+                # Angle from origin to this tile
+                tile_angle = math.atan2(ty, tx)
+                angle_diff = abs(tile_angle - base_angle)
+                # Normalize angle difference
+                if angle_diff > math.pi:
+                    angle_diff = 2 * math.pi - angle_diff
+
+                if angle_diff <= half_angle:
+                    positions.add((origin[0] + tx, origin[1] + ty))
+
         return positions
 
 
 class Line(AoEShape):
-    """Line from origin in a direction."""
+    """
+    Line from caster toward target.
+    Origin defaults to CASTER (start of line).
+    """
+    length_feet: int = Field(default=100)
+    width_feet: int = Field(default=5)
 
-    def __init__(
-        self,
-        origin: Tuple[int, int],
-        direction: Tuple[int, int],
-        length_feet: int,
-        width_feet: int = 5
-    ):
-        self.origin = origin
-        self.direction = direction
-        self.length_tiles = length_feet // 5
-        self.width_tiles = width_feet // 5
+    # Uses base _default_origin (caster position)
 
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        # Bresenham's line algorithm + width
+    def _get_max_radius_tiles(self) -> int:
+        return self.length_feet // 5
+
+    def _get_geometric_positions(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        import math
+
         positions = set()
-        # ... implementation ...
+        length_tiles = self.length_feet // 5
+        width_tiles = max(1, self.width_feet // 5)
+
+        # Direction from origin to target
+        dx = self.target[0] - origin[0]
+        dy = self.target[1] - origin[1]
+        dist = math.sqrt(dx*dx + dy*dy)
+        if dist == 0:
+            return positions
+
+        # Normalize direction
+        ndx, ndy = dx / dist, dy / dist
+
+        # Perpendicular for width
+        px, py = -ndy, ndx
+
+        # Walk along line
+        for i in range(length_tiles + 1):
+            cx = origin[0] + ndx * i
+            cy = origin[1] + ndy * i
+
+            # Add width
+            for w in range(-(width_tiles // 2), (width_tiles // 2) + 1):
+                px_pos = int(round(cx + px * w))
+                py_pos = int(round(cy + py * w))
+                positions.add((px_pos, py_pos))
+
         return positions
 
 
 class Cube(AoEShape):
-    """Cube area."""
+    """
+    Cube area. Can be centered on target or originating from caster face.
+    """
+    size_feet: int = Field(default=15)
+    centered: bool = Field(default=False)  # If True, origin = target (centered)
 
-    def __init__(
-        self,
-        origin: Tuple[int, int],
-        size_feet: int,
-        origin_is_corner: bool = True
-    ):
-        self.origin = origin
-        self.size_tiles = size_feet // 5
-        self.origin_is_corner = origin_is_corner
+    def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
+        if self.centered:
+            return self.target  # Centered cube
+        return caster_pos  # Face at caster
 
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+    def _get_max_radius_tiles(self) -> int:
+        return self.size_feet // 5
+
+    def _get_geometric_positions(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         positions = set()
-        if self.origin_is_corner:
-            for dx in range(self.size_tiles):
-                for dy in range(self.size_tiles):
-                    positions.add((self.origin[0] + dx, self.origin[1] + dy))
-        else:
+        size_tiles = self.size_feet // 5
+
+        if self.centered:
             # Origin is center
-            half = self.size_tiles // 2
+            half = size_tiles // 2
             for dx in range(-half, half + 1):
                 for dy in range(-half, half + 1):
-                    positions.add((self.origin[0] + dx, self.origin[1] + dy))
+                    positions.add((origin[0] + dx, origin[1] + dy))
+        else:
+            # Origin is on face, cube extends toward target
+            dx = self.target[0] - origin[0]
+            dy = self.target[1] - origin[1]
+
+            # Determine primary direction
+            if abs(dx) >= abs(dy):
+                dir_x = 1 if dx >= 0 else -1
+                for i in range(size_tiles):
+                    for j in range(-(size_tiles // 2), (size_tiles // 2) + 1):
+                        positions.add((origin[0] + dir_x * i, origin[1] + j))
+            else:
+                dir_y = 1 if dy >= 0 else -1
+                for i in range(size_tiles):
+                    for j in range(-(size_tiles // 2), (size_tiles // 2) + 1):
+                        positions.add((origin[0] + j, origin[1] + dir_y * i))
+
         return positions
 ```
 
-### AoE Spell Resolution
+### Entity Helper Method
+
+Entity provides a helper to convert shape UUIDs to Entity objects:
 
 ```python
-def resolve_aoe_spell(
-    caster: Entity,
-    shape: AoEShape,
-    save_ability: str,  # "dexterity", "constitution", etc.
-    damage_dice: str,
-    damage_type: DamageType,
+# In dnd/entity.py
+
+def get_aoe_affected_entities(
+    self,
+    shape: "AoEShape",
+    exclude_self: bool = True,
+    alive_only: bool = True
+) -> Tuple[Set[Tuple[int, int]], List["Entity"]]:
+    """
+    Compute AoE using objective mode and return affected entities.
+
+    Entity handles: computing the shape, converting UUIDs to Entity objects.
+    Shape handles: spatial computation (positions, UUIDs).
+
+    Args:
+        shape: The AoE shape to compute
+        exclude_self: If True, exclude caster from results
+        alive_only: If True, only return living entities
+
+    Returns:
+        (affected_positions, affected_entities)
+    """
+    # Compute objective (actual spatial reality)
+    shape.compute_objective(self.position)
+
+    # Convert UUIDs to Entity objects
+    entities = []
+    for uuid in shape.affected_entity_uuids:
+        if exclude_self and uuid == self.uuid:
+            continue
+        entity = Entity.get(uuid)
+        if entity and (not alive_only or entity.is_alive):
+            entities.append(entity)
+
+    return shape.affected_positions, entities
+```
+
+### AoE Spell Action Base
+
+```python
+# In dnd/actions.py
+
+class AoESpellAction(SpellAction):
+    """Base class for AoE spells."""
+
+    target_type: TargetType = Field(default=TargetType.POSITION_LOS)
+
+    # Shape configuration (override in subclasses)
+    aoe_shape_class: type = Field(default=None, exclude=True)  # Sphere, Cone, etc.
+
+    # Save configuration
+    save_ability: str = Field(default="dexterity")
+    half_on_save: bool = Field(default=True)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        # Create shape with spell parameters
+        shape = self._create_shape(execution_event.target_position)
+
+        # Get affected entities (Entity handles the heavy lifting)
+        affected_positions, affected_entities = caster.get_aoe_affected_entities(shape)
+
+        # Apply effect to each entity
+        dc = caster.spell_save_dc()
+        results = []
+
+        for target in affected_entities:
+            result = self._apply_to_single_target(caster, target, dc)
+            results.append(result)
+
+        return execution_event.phase_to(
+            EventPhase.COMPLETION,
+            affected_positions=list(affected_positions),
+            aoe_results=results,
+            status_message=f"{self.name} affected {len(affected_entities)} creatures"
+        )
+
+    def _create_shape(self, target_pos: Tuple[int, int]) -> "AoEShape":
+        """Create shape instance. Override in subclasses."""
+        raise NotImplementedError
+
+    def _apply_to_single_target(self, caster, target, dc) -> dict:
+        """Apply effect to one target. Override in subclasses."""
+        raise NotImplementedError
+```
+
+### Example: Fireball Implementation
+
+```python
+# In dnd/spells/evocation.py
+
+class Fireball(AoESpellAction):
+    """Fireball - 3rd level evocation
+
+    A bright streak flashes from your pointing finger to a point you choose
+    within range and then blossoms with a low roar into an explosion of flame.
+    Each creature in a 20-foot-radius sphere centered on that point must make
+    a DEX save. Takes 8d6 fire damage on failed save, half on success.
+    """
+    name: str = Field(default="Fireball")
+    spell_level: int = Field(default=3)
+    spell_school: str = Field(default="evocation")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+
+    save_ability: str = "dexterity"
     half_on_save: bool = True
-) -> List[SpellEffectResult]:
-    """
-    Resolve an AoE spell against all creatures in the area.
-    """
-    results = []
-    dc = caster.spell_save_dc()
-    affected_positions = shape.get_affected_positions()
 
-    # Find all entities in affected area
-    for pos in affected_positions:
-        entities_at = GridMap.get_map().get_entities_at(pos)
-        for entity_uuid in entities_at:
-            target = Entity.get(entity_uuid)
-            if target.uuid == caster.uuid:
-                continue  # Usually don't affect self
+    # Damage scales with upcasting
+    base_damage_dice: int = Field(default=8)  # 8d6
 
-            # Make saving throw
-            save_result = target.saving_throw(SavingThrowRequest(
-                ability=save_ability,
-                dc=dc,
-                source_entity_uuid=caster.uuid
-            ))
+    def _create_shape(self, target_pos: Tuple[int, int]) -> Sphere:
+        from dnd.core.aoe import Sphere
+        return Sphere(
+            source_entity_uuid=self.source_entity_uuid,
+            target=target_pos,
+            radius_feet=20
+        )
 
-            # Calculate damage
-            damage = roll_dice(damage_dice)
-            if save_result.success and half_on_save:
-                damage = damage // 2
-            elif save_result.success and not half_on_save:
-                damage = 0
+    def _apply_to_single_target(self, caster, target, dc) -> dict:
+        # Roll save
+        save_result = target.saving_throw(SavingThrowRequest(
+            ability=self.save_ability,
+            dc=dc,
+            source_entity_uuid=caster.uuid
+        ))
 
-            # Apply damage
-            if damage > 0:
-                target.take_damage(damage, damage_type, caster.uuid)
+        # Roll damage (8d6 base, +1d6 per level above 3rd)
+        num_dice = self.base_damage_dice + max(0, self.cast_at_level - 3)
+        damage_roll = Dice(sides=6, count=num_dice).roll()
+        damage = damage_roll.total
 
-            results.append(SpellEffectResult(
-                target_uuid=target.uuid,
-                save_success=save_result.success,
-                damage_dealt=damage
-            ))
+        if save_result.success:
+            damage = damage // 2
 
-    return results
+        # Apply damage
+        if damage > 0:
+            target.health.take_damage(damage, DamageType.FIRE, caster.uuid)
+
+        return {
+            "target_uuid": str(target.uuid),
+            "target_name": target.name,
+            "save_success": save_result.success,
+            "damage_dealt": damage
+        }
 ```
 
-### Available Actions Extension
+### Targeting in get_available_actions
+
+AoE spells use `POSITION_LOS` target type - they fit into existing `position_actions`:
 
 ```python
-class AvailableActionsResult:
-    entity_actions: List[EntityAction]      # Attacks with targets
-    position_actions: List[PositionAction]  # Movement
-    self_actions: List[SelfAction]          # Dash, Dodge
+# In Entity.get_available_actions() - no changes needed!
+# AoE spells with target_type=POSITION_LOS are already handled:
 
-    # NEW:
-    aoe_actions: List[AoEAction]            # Spells with shape targeting
-    jump_actions: List[JumpAction]          # Jump to position (no path)
+# POSITION_LOS actions (Jump, Teleport, AoE spells)
+for template in self.position_actions:
+    if template.target_type != TargetType.POSITION_LOS:
+        continue
 
-class AoEAction:
-    action: BaseAction
-    shape_type: str  # "cone", "sphere", "line", "cube"
-    shape_params: Dict  # Parameters for the shape
-    valid_origins: Set[Tuple[int, int]]  # Where caster can place the AoE
+    valid_pos_list = template.get_valid_positions()  # Inherited from BaseAction
+    # ... rest of existing code ...
 ```
+
+No new action category needed. AoE spells just use position targeting.
 
 ---
 
@@ -581,10 +915,11 @@ class AoEAction:
 - Expeditious Retreat (partial) - Enables movement combos
 - Misty Step (foundation) - Same targeting model (position without path)
 
-### Phase 2: Shove
-- Thunderwave - Forced movement component
+### Phase 2: Shove ✓ COMPLETE
+- Thunderwave - Forced movement component (ForcedMovementEvent ready)
 - Gust of Wind - Forced movement
 - All spells with "push" effects
+- Repelling Blast (Eldritch Blast invocation)
 
 ### Phase 3: AoE Targeting
 - Burning Hands, Thunderwave (Cone)
@@ -607,28 +942,52 @@ class AoEAction:
 5. ✓ Test with CLI (human CLI: `jump X Y` / `j X Y`, agent CLI: `jump X Y`)
 6. ✓ Combat log integration with JumpEvent
 
-### Step 2: Shove Action
-1. Add `weight` field to Entity
-2. Implement contested roll helper
-3. Implement Shove action class
-4. Add FORCED_MOVEMENT event type
-5. Add to `get_available_actions()`
-6. Test with CLI
+### Step 2: Shove Action ✓ COMPLETE
+1. ✓ Add `weight` field to Entity (default 150 lbs)
+2. ✓ Implement `passive_skill()` method for contested checks
+3. ✓ Implement Shove action class with ShoveEvent
+4. ✓ Add FORCED_MOVEMENT event type + ForcedMovementEvent
+5. ✓ Add to `get_available_actions()` with weight/adjacency filtering
+6. ✓ Test with CLI and examples/test_shove.py
 
-### Step 3: AoE Shapes
-1. Implement AoEShape base class
-2. Implement Sphere (simplest)
-3. Implement Cone
-4. Implement Line
-5. Implement Cube
-6. Unit tests for each shape
+### Step 3: AoE Shape System
+1. Create `dnd/core/aoe.py` with AoEShape base class (extends BaseObject)
+2. Implement `compute_subjective(caster_pos, senses)` - uses Senses data
+3. Implement `compute_objective(caster_pos)` - uses GridMap directly
+4. Implement Sphere shape (simplest, tests origin=target pattern)
+5. Unit tests for Sphere with both compute modes
+6. Implement Cone shape (tests origin=caster, direction math)
+7. Implement Line shape (tests Bresenham + width)
+8. Implement Cube shape (tests centered vs face-origin modes)
+9. Unit tests for all shapes
 
-### Step 4: AoE Spell Integration
-1. Create `AoESpellAction` base class
-2. Implement Fireball as first test
-3. Add `aoe_actions` to AvailableActionsResult
-4. Update CLI to handle AoE targeting
-5. Implement more AoE spells
+### Step 4: Entity Integration
+1. Add `Entity.get_aoe_affected_entities(shape)` helper method
+2. Helper computes shape objective mode and converts UUIDs to Entity objects
+3. Test helper with Sphere shape
+
+### Step 5: AoE Spell Action Base
+1. Create `AoESpellAction` base class in `dnd/actions.py`
+2. Base class: creates shape, calls entity helper, iterates targets
+3. Subclasses override: `_create_shape()`, `_apply_to_single_target()`
+
+### Step 6: First AoE Spell - Fireball
+1. Implement Fireball in `dnd/spells/evocation.py`
+2. Test targeting (uses existing POSITION_LOS flow)
+3. Test damage application to multiple targets
+4. Test wall blocking (FOV from spell center)
+5. Create `examples/test_fireball.py`
+
+### Step 7: More AoE Spells
+1. Burning Hands (Cone) - tests cone geometry
+2. Lightning Bolt (Line) - tests line geometry
+3. Thunderwave (Cube from caster) - tests cube + forced movement integration
+4. Shatter (Sphere) - another sphere spell for validation
+
+### Step 8: CLI Preview (Deferred)
+- Show affected area before confirming AoE spell
+- Highlight affected tiles on map
+- This can be done after core mechanics work
 
 ---
 
@@ -660,13 +1019,22 @@ All require 3D spatial consideration; implement once together:
 
 | File | Changes | Status |
 |------|---------|--------|
-| `dnd/actions.py` | Add Jump, Shove actions | ✓ Jump done |
-| `dnd/core/events.py` | Add FORCED_MOVEMENT event type, JumpEvent, ShoveEvent | ✓ JumpEvent done |
-| `dnd/core/aoe.py` | NEW: AoE shape classes | TODO |
+| `dnd/actions.py` | Add Jump, Shove actions | ✓ Done |
+| `dnd/core/events.py` | Add FORCED_MOVEMENT event type, JumpEvent, ShoveEvent, ForcedMovementEvent | ✓ Done |
 | `dnd/blocks/sensory.py` | Add `get_jumpable_positions()` | ✓ Done |
 | `dnd/blocks/action_economy.py` | Add `jump_range` ModifiableValue | ✓ Done |
-| `dnd/entity.py` | Add `weight` field, `jump_range` accessor | TODO (weight) |
-| `dnd/actions_functional.py` | Update `get_available_actions()` for jump/shove/aoe | ✓ Jump done |
-| `dnd/spells/evocation.py` | Add Fireball, Lightning Bolt, etc. | TODO |
+| `dnd/entity.py` | Add `weight` field, `passive_skill()` method | ✓ Done |
+| `dnd/actions_functional.py` | Update `get_available_actions()` for jump/shove/aoe | ✓ Jump/Shove done |
 | `cli/main.py` | Position action routing via ShortcutRegistry | ✓ Done |
 | `cli/agent.py` | Jump command support | ✓ Done |
+
+### Phase 3 Files (TODO)
+
+| File | Changes | Status |
+|------|---------|--------|
+| `dnd/core/aoe.py` | NEW: AoEShape base + Sphere, Cone, Line, Cube | TODO |
+| `dnd/entity.py` | Add `get_aoe_affected_entities(shape)` helper | TODO |
+| `dnd/actions.py` | Add `AoESpellAction` base class | TODO |
+| `dnd/spells/evocation.py` | Add Fireball, Lightning Bolt, Burning Hands, Shatter | TODO |
+| `examples/test_aoe_shapes.py` | NEW: Unit tests for shape geometry | TODO |
+| `examples/test_fireball.py` | NEW: Integration test for Fireball | TODO |
