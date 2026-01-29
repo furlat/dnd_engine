@@ -7,11 +7,11 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType, BaseAction, BaseCost, Cost
+from dnd.core.base_actions import TargetType, BaseAction, Cost
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event
 from dnd.core.modifiers import DamageType
-
+from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 
 
@@ -270,8 +270,6 @@ class CallLightning(SpellAction):
 
     def _register_action_cleanup(self, caster, action_name: str) -> None:
         """Register cleanup to remove Call Lightning Strike when concentration breaks."""
-        from dnd.entity import Entity
-        from dnd.core.events import EventQueue
 
         caster_uuid = caster.uuid
 
