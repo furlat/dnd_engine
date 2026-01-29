@@ -1387,7 +1387,8 @@ class Entity(BaseBlock):
                     display_name=template_name,
                     description=template.description,
                     cost_type=template.costs[0].cost_type if template.costs else "actions",
-                    cost_amount=template.costs[0].cost if template.costs else 0
+                    cost_amount=template.costs[0].cost if template.costs else 0,
+                    is_attack=template.is_attack
                 ))
 
         # ENTITY actions - filter targets based on target_filter
@@ -1455,7 +1456,8 @@ class Entity(BaseBlock):
                     cost_type=template.costs[0].cost_type if template.costs else "actions",
                     cost_amount=template.costs[0].cost if template.costs else 0,
                     weapon_slot=weapon_slot_str,
-                    weapon_name=weapon_name
+                    weapon_name=weapon_name,
+                    is_attack=template.is_attack
                 ))
 
         # POSITION_PATH actions (Move) - validate for each reachable position via path
@@ -1488,7 +1490,8 @@ class Entity(BaseBlock):
                     display_name=template_name,
                     description=f"{result.remaining_movement}ft remaining",
                     cost_type="movement",
-                    cost_amount=0
+                    cost_amount=0,
+                    is_attack=template.is_attack
                 ))
 
         # POSITION_LOS actions (Jump, Teleport) - use action's get_valid_positions()
@@ -1523,7 +1526,8 @@ class Entity(BaseBlock):
                     display_name=template_name,
                     description=template.description,
                     cost_type=cost_type,
-                    cost_amount=cost_amount
+                    cost_amount=cost_amount,
+                    is_attack=template.is_attack
                 ))
 
         return result
