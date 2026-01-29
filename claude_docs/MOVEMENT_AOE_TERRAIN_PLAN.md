@@ -6,7 +6,8 @@
 |-------|--------|-------|
 | Phase 1: Jump | ✓ COMPLETE | BG3-style jump action working in CLI |
 | Phase 2: Shove | ✓ COMPLETE | BG3-style shove with Athletics contest, forced movement |
-| Phase 3: AoE Targeting | TODO | Cone, sphere, line, cube shapes |
+| Phase 3: AoE Targeting | IN PROGRESS | Infrastructure ✓ (geometry.py, aoe.py, shapes, tests), AoESpellAction TODO, Spells TODO |
+| Phase 4: Multi-Entity Targeting | ✓ COMPLETE | Magic Missile, multi-target spells, ally/enemy filtering |
 
 ## Overview
 
@@ -17,6 +18,7 @@ This document plans systems that will unlock a large portion of sorcerer spells 
 1. **Jump Action** - Bonus action movement without path requirement (foundational for AoE targeting)
 2. **Shove Action** - Contested push with forced movement
 3. **AoE Targeting System** - Cone, sphere, line, cube targeting for spells
+4. **Multi-Entity Targeting** - Target multiple specific entities (Magic Missile, Bless, Scorching Ray)
 
 ### Out of Scope (Future Spatial Systems)
 
@@ -31,17 +33,21 @@ The following are deferred to a unified "3D Spatial System" implementation:
 ## Current Targeting Model
 
 ```
-Movement: source_position → target_position + path (contiguous walkable tiles)
-Attack:   source_entity → target_entity (with range/LOS check)
-Spell:    source_entity → target_entity OR self (single target)
+Movement:     source_position → target_position + path (contiguous walkable tiles)
+Attack:       source_entity → target_entity (with range/LOS check)
+Spell:        source_entity → target_entity OR self (single target)
+Multi-target: source_entity → [target_entities] → per-target results (Magic Missile, Bless)
+Jump:         source_position → target_position (visible + walkable, NO path required)
+Shove:        source_entity → target_entity → forced_position (Athletics contest)
 ```
 
 ### Proposed Targeting Model Evolution
 
 ```
-1. Jump:     source_position → target_position (visible + walkable, NO path required)
-2. Shove:    source_entity → target_entity → forced_position (push direction + distance)
-3. AoE:      source_position → target_position + shape → affected_positions[]
+1. Jump:        source_position → target_position (visible + walkable, NO path required)
+2. Shove:       source_entity → target_entity → forced_position (push direction + distance)
+3. AoE:         source_position → target_position + shape → affected_positions[]
+4. Multi-Entity: source_entity → [target_entities] → per-target results (convolution)
 ```
 
 ---
@@ -54,138 +60,50 @@ Spell:    source_entity → target_entity OR self (single target)
 |----------|-------|
 | **Cost** | Bonus Action + Movement (distance jumped) |
 | **Base Range** | 15 ft (3 tiles) |
-| **Scaling** | +5 ft per 2 STR above 10 |
+| **Scaling** | +5 ft per STR modifier above 0 |
 | **Requirements** | Target must be visible + walkable + unoccupied |
 | **Does NOT require** | Path to destination |
 
-### Range Calculation
+### Implementation
 
-```python
-def get_jump_range(entity: Entity) -> int:
-    """Return jump range in feet."""
-    base_range = 15
-    str_score = entity.ability_scores.strength.score
-    str_bonus = max(0, (str_score - 10) // 2) * 5  # +5ft per 2 STR above 10
+The Jump action is implemented in `dnd/actions.py` with these key components:
 
-    # Apply modifiers from conditions (Enhance Leap, Athlete, etc.)
-    jump_range = entity.jump_range  # ModifiableValue
-    jump_range.base_value = base_range + str_bonus
-
-    return jump_range.normalized_score
-```
-
-### Example Ranges by Strength
-
-| STR | Base | Bonus | Total Range |
-|-----|------|-------|-------------|
-| 8   | 15ft | 0     | 15 ft |
-| 10  | 15ft | 0     | 15 ft |
-| 12  | 15ft | 5ft   | 20 ft |
-| 14  | 15ft | 10ft  | 25 ft |
-| 16  | 15ft | 15ft  | 30 ft |
-| 18  | 15ft | 20ft  | 35 ft |
-| 20  | 15ft | 25ft  | 40 ft |
-
-### Implementation Components
-
-#### 1. New Targeting Type: PositionInRange
-
-```python
-class PositionTargeting(Enum):
-    PATH_REQUIRED = "path_required"      # Current movement
-    LOS_ONLY = "los_only"                # Jump, teleport
-    ANY_IN_RANGE = "any_in_range"        # Some AoE origins
-```
-
-#### 2. Senses Extension
-
-```python
-# In Senses block, add:
-def get_jumpable_positions(self, max_range: int) -> Dict[Tuple[int, int], bool]:
-    """
-    Return positions that can be jumped to.
-    Requirements: visible + walkable + unoccupied + within range.
-    Does NOT require path.
-    """
-    jumpable = {}
-    for pos in self.visible:
-        if not self.visible[pos]:
-            continue
-        distance = self.get_feet_distance(pos)
-        if distance > max_range:
-            continue
-        if not GridMap.get_map().is_walkable_for(self.owner.uuid, pos):
-            continue
-        if GridMap.get_map().get_entities_at(pos):
-            continue  # Occupied
-        jumpable[pos] = True
-    return jumpable
-```
-
-#### 3. Jump Action
-
-```python
-class Jump(BaseAction):
-    name: str = "Jump"
-    description: str = "Jump to a visible location within range"
-    costs: List[BaseCost] = [BonusActionCost()]
-
-    def _validate(self, event: ActionEvent) -> EventPhase:
-        entity = Entity.get(self.source_entity_uuid)
-        target_pos = event.target_position
-
-        jump_range = get_jump_range(entity)
-        distance = entity.senses.get_feet_distance(target_pos)
-
-        # Check movement cost
-        if distance > entity.action_economy.movement.normalized_score:
-            return EventPhase.CANCEL  # Not enough movement
-
-        # Check jumpable
-        jumpable = entity.senses.get_jumpable_positions(jump_range)
-        if target_pos not in jumpable:
-            return EventPhase.CANCEL
-
-        return EventPhase.EXECUTION
-
-    def _apply(self, event: ActionEvent) -> Event:
-        entity = Entity.get(self.source_entity_uuid)
-        distance = entity.senses.get_feet_distance(event.target_position)
-
-        # Deduct movement
-        entity.action_economy.movement.base_value -= distance
-
-        # Move entity (no path, direct placement)
-        GridMap.get_map().move_entity(entity.uuid, event.target_position)
-        entity.senses.position = event.target_position
-
-        # Fire spatial events
-        # SPATIAL_ENTITY_LEFT for old position
-        # SPATIAL_ENTITY_ENTERED for new position
-
-        return event.phase_to(EventPhase.COMPLETION)
-```
-
-#### 4. JumpEvent
-
+**JumpEvent** (`dnd/actions.py:1324`): Event class with combat log support
 ```python
 class JumpEvent(ActionEvent):
     name: str = "Jump"
-    target_position: Tuple[int, int]
-    distance_feet: int
-    # No path field - that's the key difference from MovementEvent
+    target_position: Optional[Tuple[int, int]] = None
+    distance_feet: int = 0
+    start_position: Optional[Tuple[int, int]] = None
 ```
 
-### Modifiers for Jump Range
+**Jump Action** (`dnd/actions.py:1375`): Uses `Jump.get_valid_positions()` for targeting
 
-Conditions that can modify jump range (via `entity.jump_range` ModifiableValue):
+**Range Calculation** (in `Jump.get_range()`):
+```python
+def get_range(self) -> int:
+    """Calculate jump range based on STR modifier."""
+    entity = Entity.get(self.source_entity_uuid)
+    str_mod = entity.ability_scores.strength.modifier
+    return 15 + (str_mod * 5)  # 15ft base + 5ft per STR mod
+```
 
-| Condition | Effect | Implementation |
-|-----------|--------|----------------|
-| EnhanceLeap | +200% range | Multiplier modifier |
-| Athlete | +50% range | Multiplier modifier |
-| Encumbered | -50% range | Multiplier modifier |
-| Jump (spell) | x3 range | Multiplier modifier |
+**Valid Positions** (in `Jump.get_valid_positions()`):
+- Checks visible + walkable + unoccupied + within range
+- Does NOT require path (key difference from Move)
+- Movement cost is dynamically added via `_setup_movement_cost()`
+
+### Example Ranges by Strength
+
+| STR | Modifier | Base | Bonus | Total Range |
+|-----|----------|------|-------|-------------|
+| 8   | -1       | 15ft | -5ft  | 10 ft |
+| 10  | 0        | 15ft | 0     | 15 ft |
+| 12  | +1       | 15ft | +5ft  | 20 ft |
+| 14  | +2       | 15ft | +10ft | 25 ft |
+| 16  | +3       | 15ft | +15ft | 30 ft |
+| 18  | +4       | 15ft | +20ft | 35 ft |
+| 20  | +5       | 15ft | +25ft | 40 ft |
 
 ### Why Jump is Foundational for AoE
 
@@ -197,7 +115,7 @@ Jump introduces **"target a position without a path"** which is the same targeti
 
 ---
 
-## Phase 2: Shove Action (BG3-Style)
+## Phase 2: Shove Action (BG3-Style) - IMPLEMENTED ✓
 
 ### Mechanics
 
@@ -205,54 +123,52 @@ Jump introduces **"target a position without a path"** which is the same targeti
 |----------|-------|
 | **Cost** | Bonus Action |
 | **Range** | 5 ft (adjacent only) |
-| **Check** | Athletics (attacker) vs Athletics/Acrobatics (defender) |
+| **Check** | Athletics (attacker) vs passive Athletics/Acrobatics (defender) |
 | **Effect** | Push target up to X feet away |
 | **Max Weight** | STR × 12 lbs |
+
+### Implementation
+
+The Shove action is implemented in `dnd/actions.py` with these key components:
+
+**ShoveEvent** (`dnd/actions.py:1654`): Event class with combat log support
+**Shove Action** (`dnd/actions.py:1747`): Full implementation with contests
+
+**Key Methods:**
+- `Entity.passive_skill(skill_name)` (`dnd/entity.py:570`) - Returns `10 + skill bonus + advantage modifier`
+- `Shove.get_max_shove_weight()` - Returns `STR × 12` lbs
+- `Shove.get_push_distance()` - Calculates push distance based on STR and target weight
 
 ### Distance Calculation
 
 ```python
-def get_shove_distance(shover: Entity, target: Entity) -> int:
-    """
-    Calculate shove distance based on STR and target weight.
-    Min: 5 ft, Max: 20 ft
-    """
+def get_push_distance(self) -> int:
+    """Actual implementation in Shove class."""
+    shover = Entity.get(self.source_entity_uuid)
+    target = Entity.get(self.target_entity_uuid)
+
     str_score = shover.ability_scores.strength.score
-    target_weight = target.weight  # Need to add weight to entities
+    target_weight = target.weight
 
-    # Base formula: higher STR and lower weight = more distance
-    base_distance = 10  # 2 tiles
-    str_bonus = (str_score - 10) // 2 * 5  # +5ft per 2 STR above 10
-    weight_penalty = (target_weight // 50) * 5  # -5ft per 50 lbs
+    base_distance = 10
+    str_bonus = (str_score - 10) // 2 * 5
+    weight_penalty = (target_weight // 50) * 5
 
-    distance = base_distance + str_bonus - weight_penalty
-    return max(5, min(20, distance))  # Clamp to 5-20 ft
+    return max(5, min(20, base_distance + str_bonus - weight_penalty))
 ```
 
-### Contested Check
+### Contested Check (Actual Implementation)
+
+The actual implementation uses `Entity.passive_skill()` for cleaner code:
 
 ```python
-def resolve_shove(shover: Entity, target: Entity) -> Tuple[bool, int]:
-    """
-    Resolve shove attempt.
-    Returns (success, distance_feet).
-    """
-    # Shover rolls Athletics
-    shover_roll = shover.skill_check(SkillCheckRequest(
-        skill="athletics",
-        source_entity_uuid=shover.uuid,
-        target_entity_uuid=target.uuid
-    ))
+# In Shove._apply():
+# Shover rolls Athletics
+shover_roll = shover.skill_check(SkillCheckRequest(...))
 
-    # Target uses higher of Athletics or Acrobatics (passive)
-    target_athletics = 10 + target.skill_set.athletics.modifier
-    target_acrobatics = 10 + target.skill_set.acrobatics.modifier
-    dc = max(target_athletics, target_acrobatics)
-
-    if shover_roll.total >= dc:
-        distance = get_shove_distance(shover, target)
-        return True, distance
-    return False, 0
+# Target uses passive skill (10 + skill bonus + advantage modifier)
+# passive_skill() handles the higher-of-athletics-or-acrobatics logic
+dc = target.passive_skill("athletics")  # or acrobatics, whichever is higher
 ```
 
 ### Shove Direction and Forced Movement
@@ -378,7 +294,241 @@ class ForcedMovementEvent(Event):
 
 ---
 
-## Phase 3: AoE Targeting System
+## Phase 4: Multi-Entity Targeting (MULTI_ENTITY) - IMPLEMENTED ✓
+
+Multi-Entity targeting enables spells/abilities that target multiple specific entities (not positions). Unlike AoE which affects all entities in a shape, MULTI_ENTITY lets the caster choose specific targets.
+
+### Use Cases
+
+| Spell/Ability | Targets | Behavior |
+|---------------|---------|----------|
+| **Magic Missile** | Up to 3+ enemies | Each dart can hit same or different target |
+| **Bless** | Up to 3 allies | Buff multiple party members |
+| **Scorching Ray** | Up to 3 enemies | Each ray targets separately |
+| **Eldritch Blast** | Multiple enemies | Each beam can target different |
+| **Healing Word (Mass)** | Multiple allies | Heal party members |
+
+### Design Principles
+
+1. **Convolution Pattern**: `apply()` loops over targets, calling `_apply()` for each
+2. **Per-target Events**: Each target gets its own result event with combat log
+3. **Aggregate Tracking**: Final event has `total_targets` and `total_damage`
+4. **Validation Filters**: Actions can restrict valid targets (enemies, allies, etc.)
+5. **Same-target Control**: Some spells allow targeting same entity multiple times
+
+### Implementation
+
+#### TargetType.MULTI_ENTITY
+
+Added to `dnd/core/base_actions.py`:
+
+```python
+class TargetType(str, Enum):
+    # ... existing types ...
+    MULTI_ENTITY = "multi_entity"  # Multi-target spells - targets list of entities
+```
+
+#### BaseAction Fields
+
+```python
+class BaseAction(BaseObject):
+    # ... existing fields ...
+
+    # Multi-target fields (for MULTI_ENTITY actions)
+    extra_target_entity_uuids: List[UUID] = Field(
+        default_factory=list,
+        description="Additional targets beyond primary target_entity_uuid"
+    )
+    allow_same_target: bool = Field(
+        default=True,
+        description="If False, same entity cannot appear multiple times"
+    )
+    valid_target_filter: str = Field(
+        default="enemies",
+        description="Which entities are valid: 'enemies', 'allies', 'self_or_allies', 'all'"
+    )
+```
+
+#### ActionEvent Aggregate Fields
+
+```python
+class ActionEvent(Event):
+    # ... existing fields ...
+
+    # Multi-target result fields
+    target_results: Optional[List[Event]] = Field(
+        default=None,
+        description="Results from each per-target _apply() call"
+    )
+    total_targets: int = Field(default=0, description="Number of targets affected")
+    total_damage: int = Field(default=0, description="Total damage dealt across all targets")
+    description: str = Field(default="", description="Action description for combat log")
+```
+
+#### Convolution in apply()
+
+The `BaseAction.apply()` method handles MULTI_ENTITY automatically:
+
+```python
+def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
+    # ... validation ...
+
+    if self.target_type == TargetType.MULTI_ENTITY:
+        all_target_uuids = self.get_all_targets()
+        original_target = self.target_entity_uuid
+
+        # CONVOLUTION: Call _apply() for each target IN ORDER
+        all_results: List[ActionEvent] = []
+        total_damage = 0
+
+        for target_uuid in all_target_uuids:
+            self.target_entity_uuid = target_uuid
+            result_event = self._apply(execution_event)
+            if result_event:
+                all_results.append(result_event)
+                # CONTRACT: _apply() must set total_damage if it deals damage
+                damage = getattr(result_event, 'total_damage', 0) or 0
+                total_damage += damage
+
+        self.target_entity_uuid = original_target
+
+        # Aggregate into final completion event
+        completion_event = execution_event.phase_to(
+            EventPhase.COMPLETION,
+            target_results=all_results,
+            total_targets=len(all_results),
+            total_damage=total_damage,
+            status_message=f"{self.name} affected {len(all_results)} targets for {total_damage} total damage"
+        )
+    else:
+        # Single-target flow
+        completion_event = self._apply(execution_event)
+```
+
+#### get_all_targets() Override Pattern
+
+Actions can customize target resolution:
+
+```python
+class MagicMissile(SpellAction):
+    """Magic Missile fills remaining darts with primary target."""
+
+    def get_all_targets(self) -> List[UUID]:
+        # Start with explicitly selected targets
+        targets = super().get_all_targets()
+
+        # Fill remaining darts with primary target
+        total_darts = 3 + max(0, self.cast_at_level - 1)
+        while len(targets) < total_darts and self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+
+        return targets
+```
+
+#### Target Filter Validation
+
+`_validate_target_filter()` enforces ally/enemy restrictions:
+
+| Filter | Description | Valid Targets |
+|--------|-------------|---------------|
+| `"enemies"` | Different faction | Only enemies |
+| `"allies"` | Same faction, not self | Only allies (excluding self) |
+| `"self_or_allies"` | Same faction or self | Self + allies |
+| `"all"` | Any visible entity | All entities |
+
+Validation runs in `_validate()` for MULTI_ENTITY actions.
+
+### Combat Log Integration
+
+Each per-target `_apply()` generates its own combat log entry. The `ActionEvent.generate_combat_log()` was fixed to:
+
+1. Use correct `CombatLogEntry` API (`compact`, `verbose`, `detailed` fields)
+2. Use `self.description` from the action instead of hardcoded strings
+3. Remove damage extraction fallback - `_apply()` must set `total_damage`
+
+### Example: Magic Missile Multi-Target
+
+```python
+# Create Magic Missile targeting 3 different enemies
+missile = MagicMissile(
+    source_entity_uuid=caster.uuid,
+    target_entity_uuid=goblin1.uuid,
+    extra_target_entity_uuids=[goblin2.uuid, goblin3.uuid],
+    cast_at_level=1  # 3 darts
+)
+
+result = missile.apply()
+
+# Result contains aggregate info
+print(f"Total targets: {result.total_targets}")  # 3
+print(f"Total damage: {result.total_damage}")    # Sum of all darts
+
+# Individual results available
+for per_target_event in result.target_results:
+    print(f"  {per_target_event.target_entity_name}: {per_target_event.total_damage} damage")
+```
+
+### Example: Bless Multi-Target (Allies)
+
+```python
+class TestBless(SpellAction):
+    """Test spell that targets self + allies."""
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    valid_target_filter: str = "self_or_allies"  # Can target self and allies
+    allow_same_target: bool = False  # Can't bless same entity twice
+    max_targets: int = 3
+
+    def get_all_targets(self) -> List[UUID]:
+        targets = super().get_all_targets()
+        # Enforce max targets
+        return targets[:self.max_targets]
+```
+
+### Test Files
+
+| File | Tests |
+|------|-------|
+| `examples/test_magic_missile_multi.py` | Single target, split targets, upcast darts, enemy-only validation |
+| `examples/test_multi_target_allies.py` | Self+allies filter, enemy rejection, duplicate prevention, max targets |
+
+### Design Decisions
+
+1. **No damage fallback**: Removed code that extracted damage from `damage_rolls`. Contract: `_apply()` MUST set `total_damage` if damage is dealt.
+
+2. **Description on ActionEvent**: Added `description` field to `ActionEvent` so combat log can use action descriptions without hardcoding.
+
+3. **Per-target logging**: Each target gets its own combat log entry. No aggregate summary log is generated (UI can aggregate if needed from `target_results`).
+
+4. **Filter at validation**: Target filtering happens in `_validate()`, not `apply()`. Invalid targets cause the entire action to cancel with a clear message.
+
+5. **Order preservation**: Targets are processed in order: `[target_entity_uuid] + extra_target_entity_uuids`.
+
+---
+
+## Phase 3: AoE Targeting System - PARTIALLY IMPLEMENTED
+
+**Status:** Infrastructure ✓ COMPLETE | AoE Spell Base TODO | Spells TODO
+
+### What's Implemented ✓
+
+| Component | File | Status |
+|-----------|------|--------|
+| Pure geometry functions | `dnd/core/geometry.py` | ✓ Done |
+| AoEShape base + Sphere/Cone/Line/Cube | `dnd/core/aoe.py` | ✓ Done |
+| `TargetType.POSITION_AOE` | `dnd/core/base_actions.py:25` | ✓ Done |
+| `aoe_shape` field on BaseAction | `dnd/core/base_actions.py:123` | ✓ Done |
+| `Entity.get_aoe_affected_entities()` | `dnd/entity.py:1041` | ✓ Done |
+| Geometry unit tests | `examples/test_geometry.py` | ✓ 14 tests |
+| Shape + wall blocking tests | `examples/test_aoe_shapes.py` | ✓ 9 tests |
+| Entity integration tests | `examples/test_aoe_integration.py` | ✓ 2 tests |
+
+### What's NOT Implemented (TODO)
+
+| Component | Status |
+|-----------|--------|
+| `AoESpellAction` base class | TODO - Design below |
+| Fireball spell | TODO - Design below |
+| Other AoE spells (Burning Hands, Lightning Bolt, etc.) | TODO |
 
 ### Design Principles
 
@@ -594,7 +744,7 @@ class Cone(AoEShape):
     Origin defaults to CASTER (apex of cone).
     """
     length_feet: int = Field(default=15)
-    angle_degrees: int = Field(default=90)  # Standard D&D cone
+    angle_degrees: int = Field(default=53)  # D&D 5e standard (~53° for equilateral spread)
 
     # Uses base _default_origin (caster position)
 
@@ -773,10 +923,12 @@ def get_aoe_affected_entities(
     return shape.affected_positions, entities
 ```
 
-### AoE Spell Action Base
+### AoE Spell Action Base - TODO (Design Only)
+
+> **⚠️ NOT YET IMPLEMENTED** - The following is the planned design for the AoESpellAction base class.
 
 ```python
-# In dnd/actions.py
+# PLANNED for dnd/actions.py - NOT YET IMPLEMENTED
 
 class AoESpellAction(SpellAction):
     """Base class for AoE spells."""
@@ -827,10 +979,12 @@ class AoESpellAction(SpellAction):
         raise NotImplementedError
 ```
 
-### Example: Fireball Implementation
+### Example: Fireball Implementation - TODO (Design Only)
+
+> **⚠️ NOT YET IMPLEMENTED** - The following is the planned design for the Fireball spell.
 
 ```python
-# In dnd/spells/evocation.py
+# PLANNED for dnd/spells/evocation.py - NOT YET IMPLEMENTED
 
 class Fireball(AoESpellAction):
     """Fireball - 3rd level evocation
@@ -921,26 +1075,33 @@ No new action category needed. AoE spells just use position targeting.
 - All spells with "push" effects
 - Repelling Blast (Eldritch Blast invocation)
 
-### Phase 3: AoE Targeting
+### Phase 3: AoE Targeting (IN PROGRESS)
 - Burning Hands, Thunderwave (Cone)
 - Fireball, Shatter, Circle of Death (Sphere)
 - Lightning Bolt, Sunbeam (Line)
 - Hypnotic Pattern, Slow (Cube)
 - Ice Storm, Cone of Cold, Sleet Storm (Cylinder/Cone)
-- Chain Lightning (Multi-target)
 - **~30 spells unlocked**
+
+### Phase 4: Multi-Entity Targeting ✓ COMPLETE
+- **Magic Missile** - Auto-hit darts, split across targets
+- **Scorching Ray** - Multiple attack rolls against different targets
+- **Eldritch Blast** - Each beam targets separately (at higher levels)
+- **Bless/Bane** - Buff/debuff multiple allies/enemies
+- **Healing Word (Mass)** - Heal multiple party members
+- **Cure Wounds (Mass)** - Touch-based multi-heal
+- **Chain Lightning** - Primary + bounce targets (needs MULTI_ENTITY + chaining logic)
+- **~15 spells unlocked**
 
 ---
 
 ## Implementation Order
 
 ### Step 1: Jump Action ✓ COMPLETE
-1. ✓ Add `jump_range` ModifiableValue to Entity/ActionEconomy
-2. ✓ Add `get_jumpable_positions()` to Senses
-3. ✓ Implement Jump action class in `dnd/actions.py`
-4. ✓ Add to `get_available_actions()` as position action
-5. ✓ Test with CLI (human CLI: `jump X Y` / `j X Y`, agent CLI: `jump X Y`)
-6. ✓ Combat log integration with JumpEvent
+1. ✓ Implement Jump action class in `dnd/actions.py` (with `get_range()` and `get_valid_positions()`)
+2. ✓ Add to `get_available_actions()` as position action
+3. ✓ Test with CLI (human CLI: `jump X Y` / `j X Y`, agent CLI: `jump X Y`)
+4. ✓ Combat log integration with JumpEvent
 
 ### Step 2: Shove Action ✓ COMPLETE
 1. ✓ Add `weight` field to Entity (default 150 lbs)
@@ -950,21 +1111,54 @@ No new action category needed. AoE spells just use position targeting.
 5. ✓ Add to `get_available_actions()` with weight/adjacency filtering
 6. ✓ Test with CLI and examples/test_shove.py
 
-### Step 3: AoE Shape System
-1. Create `dnd/core/aoe.py` with AoEShape base class (extends BaseObject)
-2. Implement `compute_subjective(caster_pos, senses)` - uses Senses data
-3. Implement `compute_objective(caster_pos)` - uses GridMap directly
-4. Implement Sphere shape (simplest, tests origin=target pattern)
-5. Unit tests for Sphere with both compute modes
-6. Implement Cone shape (tests origin=caster, direction math)
-7. Implement Line shape (tests Bresenham + width)
-8. Implement Cube shape (tests centered vs face-origin modes)
-9. Unit tests for all shapes
+### Step 3: AoE Shape System ✓ COMPLETE
+1. ✓ Create `dnd/core/geometry.py` - Pure geometry functions (not in original plan, better separation)
+2. ✓ Create `dnd/core/aoe.py` with AoEShape base class (extends BaseObject, use_register=False)
+3. ✓ Implement `compute_subjective(caster_pos, senses)` - uses Senses data
+4. ✓ Implement `compute_objective(caster_pos)` - uses GridMap directly
+5. ✓ Implement Sphere shape (origin=target pattern)
+6. ✓ Implement Cone shape (origin=caster, direction math, angle=53° for D&D 5e)
+7. ✓ Implement Line shape (Bresenham + width via geometry.py)
+8. ✓ Implement Cube shape (centered vs face-origin modes)
+9. ✓ Unit tests: `examples/test_geometry.py`, `examples/test_aoe_shapes.py`
 
-### Step 4: Entity Integration
-1. Add `Entity.get_aoe_affected_entities(shape)` helper method
-2. Helper computes shape objective mode and converts UUIDs to Entity objects
-3. Test helper with Sphere shape
+**Design decisions made during implementation:**
+- Extracted geometry to `geometry.py` for purity and testability
+- Used `origin_override` field + `_default_origin()` method pattern
+- Changed `affected_entity_uuids` from `List[UUID]` to `Set[UUID]` (no duplicates)
+- Cone uses 53° angle (D&D 5e standard) not 90°
+
+### Step 4: Entity Integration ✓ COMPLETE
+1. ✓ Add `Entity.get_aoe_affected_entities(shape)` helper method
+2. ✓ Helper has `use_objective` param to choose computation mode
+3. ✓ Helper converts UUIDs to Entity objects, filters dead/self
+4. ✓ Test: `examples/test_aoe_integration.py`
+
+### Step 4.5: POSITION_AOE Target Type ✓ COMPLETE (not in original plan)
+1. ✓ Added `TargetType.POSITION_AOE` to `base_actions.py`
+2. ✓ Added `aoe_shape: Optional[AoEShape]` field to `BaseAction`
+3. ✓ Extended `AvailableTarget` with `affected_entity_uuids/names/count`
+4. ✓ Added POSITION_AOE handling in `Entity.get_available_actions()`
+5. ✓ Type safety fix: replaced `Any` with proper `AoEShape` imports
+
+### Step 4.6: Multi-Entity Targeting System ✓ COMPLETE
+1. ✓ Added `TargetType.MULTI_ENTITY` to `base_actions.py`
+2. ✓ Added `extra_target_entity_uuids`, `allow_same_target`, `valid_target_filter` fields to `BaseAction`
+3. ✓ Added `target_results`, `total_targets`, `total_damage`, `description` fields to `ActionEvent`
+4. ✓ Implemented convolution loop in `BaseAction.apply()` for MULTI_ENTITY actions
+5. ✓ Implemented `get_all_targets()` method with override pattern
+6. ✓ Implemented `_validate_target_filter()` for ally/enemy validation
+7. ✓ Fixed `ActionEvent.generate_combat_log()` to use correct CombatLogEntry API
+8. ✓ Fixed `ActionEconomy.can_afford()` to use `value.normalized_score` (not just self_static)
+9. ✓ Created Magic Missile spell with multi-target support
+10. ✓ Test: `examples/test_magic_missile_multi.py`, `examples/test_multi_target_allies.py`
+
+**Design decisions made during implementation:**
+- Removed damage extraction fallback - `_apply()` must set `total_damage` explicitly
+- Added `description` field to ActionEvent for combat log generation
+- Per-target logging (each _apply generates own log), no aggregate summary
+- Target filter validation happens in `_validate()`, not `apply()`
+- Fixed `can_afford()` bug that ignored max constraints from Incapacitated
 
 ### Step 5: AoE Spell Action Base
 1. Create `AoESpellAction` base class in `dnd/actions.py`
@@ -1019,22 +1213,36 @@ All require 3D spatial consideration; implement once together:
 
 | File | Changes | Status |
 |------|---------|--------|
-| `dnd/actions.py` | Add Jump, Shove actions | ✓ Done |
-| `dnd/core/events.py` | Add FORCED_MOVEMENT event type, JumpEvent, ShoveEvent, ForcedMovementEvent | ✓ Done |
-| `dnd/blocks/sensory.py` | Add `get_jumpable_positions()` | ✓ Done |
-| `dnd/blocks/action_economy.py` | Add `jump_range` ModifiableValue | ✓ Done |
+| `dnd/actions.py` | Add Jump, Shove actions (with JumpEvent, ShoveEvent) | ✓ Done |
+| `dnd/core/events.py` | Add FORCED_MOVEMENT event type | ✓ Done |
 | `dnd/entity.py` | Add `weight` field, `passive_skill()` method | ✓ Done |
 | `dnd/actions_functional.py` | Update `get_available_actions()` for jump/shove/aoe | ✓ Jump/Shove done |
 | `cli/main.py` | Position action routing via ShortcutRegistry | ✓ Done |
 | `cli/agent.py` | Jump command support | ✓ Done |
 
-### Phase 3 Files (TODO)
+### Phase 3 Files (AoE Shapes)
 
 | File | Changes | Status |
 |------|---------|--------|
-| `dnd/core/aoe.py` | NEW: AoEShape base + Sphere, Cone, Line, Cube | TODO |
-| `dnd/entity.py` | Add `get_aoe_affected_entities(shape)` helper | TODO |
+| `dnd/core/geometry.py` | NEW: Pure geometry functions (circle, line, cone, rectangle) | ✓ Done |
+| `dnd/core/aoe.py` | NEW: AoEShape base + Sphere, Cone, Line, Cube | ✓ Done |
+| `dnd/core/base_actions.py` | POSITION_AOE target type, aoe_shape field, AvailableTarget extensions | ✓ Done |
+| `dnd/entity.py` | `get_aoe_affected_entities()` helper, POSITION_AOE in get_available_actions() | ✓ Done |
+| `examples/test_geometry.py` | NEW: Pure geometry unit tests | ✓ Done |
+| `examples/test_aoe_shapes.py` | NEW: Shape + wall blocking tests | ✓ Done |
+| `examples/test_aoe_integration.py` | NEW: POSITION_AOE + Entity helper tests | ✓ Done |
 | `dnd/actions.py` | Add `AoESpellAction` base class | TODO |
 | `dnd/spells/evocation.py` | Add Fireball, Lightning Bolt, Burning Hands, Shatter | TODO |
-| `examples/test_aoe_shapes.py` | NEW: Unit tests for shape geometry | TODO |
 | `examples/test_fireball.py` | NEW: Integration test for Fireball | TODO |
+
+### Phase 4 Files (Multi-Entity Targeting)
+
+| File | Changes | Status |
+|------|---------|--------|
+| `dnd/core/base_actions.py` | MULTI_ENTITY target type, extra_target_entity_uuids, allow_same_target, valid_target_filter fields, convolution in apply(), get_all_targets(), _validate_target_filter(), ActionEvent.description field, fixed generate_combat_log() | ✓ Done |
+| `dnd/blocks/action_economy.py` | Fixed can_afford() to use value.normalized_score (not self_static) | ✓ Done |
+| `dnd/actions.py` | Updated Dash/Dodge/Disengage/StandUp/DropProne to populate description in events | ✓ Done |
+| `dnd/spells/evocation.py` | Magic Missile with multi-target support, get_all_targets() override | ✓ Done |
+| `examples/test_magic_missile_multi.py` | NEW: Multi-target Magic Missile tests | ✓ Done |
+| `examples/test_multi_target_allies.py` | NEW: Ally filter and TestBless tests | ✓ Done |
+| `examples/test_available_actions.py` | Fixed test to check affordable_self_actions instead of all self_actions | ✓ Done |

@@ -692,8 +692,11 @@ def test_magic_missile_combat():
     print("\n=== Test 15: Magic Missile Combat (Auto-hit + Upcast) ===")
 
     from dnd.spells import MagicMissile
+    from dnd.core.gridmap import get_map
 
     reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(-5, -5, 15, 15)  # Create floor tiles for LOS
 
     caster_config = EntityConfig(
         ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=16)),
@@ -701,6 +704,7 @@ def test_magic_missile_combat():
         proficiency_bonus=3,
         spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
         position=(0, 0),
+        faction="heroes",  # Set faction for target filtering
     )
     caster = Entity.create(source_entity_uuid=uuid4(), name="Wizard", config=caster_config)
 
@@ -708,6 +712,7 @@ def test_magic_missile_combat():
         ability_scores=AbilityScoresConfig(),
         proficiency_bonus=2,
         position=(1, 0),
+        faction="enemies",  # Target must be enemy
     )
     target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)
 
@@ -724,9 +729,11 @@ def test_magic_missile_combat():
     )
     result_l1 = mm_l1.apply()
 
+    assert result_l1 is not None, "Should get result event"
     assert not result_l1.canceled, "Magic Missile should not be canceled"
-    assert len(result_l1.damage_rolls) == 3, "Should have 3 damage rolls (3 darts)"
-    damage_l1 = sum(r.total for r in result_l1.damage_rolls)
+    # MULTI_ENTITY returns target_results list and total_damage
+    assert result_l1.total_targets == 3, f"Should have 3 dart results, got {result_l1.total_targets}"
+    damage_l1 = result_l1.total_damage
     assert damage_l1 >= 6, f"L1 MM (3 darts) should deal at least 6 damage, got {damage_l1}"
     assert damage_l1 <= 15, f"L1 MM (3 darts) should deal at most 15 damage, got {damage_l1}"
     print(f"  L1 (3 darts): {damage_l1} force damage")
@@ -745,9 +752,10 @@ def test_magic_missile_combat():
     )
     result_l3 = mm_l3.apply()
 
+    assert result_l3 is not None, "Should get result event"
     assert not result_l3.canceled, "Magic Missile should not be canceled"
-    assert len(result_l3.damage_rolls) == 5, "Should have 5 damage rolls (5 darts)"
-    damage_l3 = sum(r.total for r in result_l3.damage_rolls)
+    assert result_l3.total_targets == 5, f"Should have 5 dart results, got {result_l3.total_targets}"
+    damage_l3 = result_l3.total_damage
     assert damage_l3 >= 10, f"L3 MM (5 darts) should deal at least 10 damage, got {damage_l3}"
     assert damage_l3 <= 25, f"L3 MM (5 darts) should deal at most 25 damage, got {damage_l3}"
     print(f"  L3 (5 darts): {damage_l3} force damage")

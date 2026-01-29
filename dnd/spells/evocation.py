@@ -9,7 +9,8 @@ from pydantic import Field
 
 from dnd.core.base_actions import TargetType
 from dnd.core.values import ModifiableValue
-from dnd.core.dice import DiceRoll, AttackOutcome, RollType
+from dnd.core.dice import AttackOutcome, RollType
+from typing import cast as type_cast
 from dnd.core.events import EventPhase, RangeType, Range, Damage
 from dnd.core.modifiers import DamageType
 
@@ -276,43 +277,87 @@ class MagicMissile(SpellAction):
     You create three glowing darts of magical force. Each dart hits automatically
     and deals 1d4+1 force damage. When cast at higher levels, create one additional
     dart per slot level above 1st.
+
+    Darts can be split among multiple targets or all sent to a single target.
+    Uses MULTI_ENTITY target type with allow_same_target=True.
     """
     name: str = Field(default="Magic Missile")
     description: str = Field(default="Three darts of force that automatically hit")
     spell_level: int = Field(default=1)
     spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)  # Multi-target!
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
 
+    # Multi-entity configuration
+    allow_same_target: bool = Field(default=True)  # Can send multiple darts to same target
+    valid_target_filter: str = Field(default="enemies")  # Only enemies
+
+    def get_num_projectiles(self) -> int:
+        """3 darts base + 1 per upcast level."""
+        return 3 + self.get_upcast_bonus()
+
+    def get_all_targets(self) -> List[UUID]:
+        """Override: Return targets for each dart (can have repeats).
+
+        If fewer targets specified than darts, fill remaining with primary target.
+        """
+        targets: List[UUID] = []
+        if self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+        targets.extend(self.extra_target_entity_uuids)
+
+        # If fewer targets than darts, fill with primary
+        num_darts = self.get_num_projectiles()
+        while len(targets) < num_darts and self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+
+        return targets[:num_darts]
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and line of sight."""
+        """Validate range and line of sight for all targets."""
         from dnd.entity import Entity
 
-        # Validate line of sight
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        # Validate range
         source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not source_entity:
+            return declaration_event.cancel(status_message="Source entity not found")
 
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
+        # Validate all targets are in range and LOS
+        all_targets = self.get_all_targets()
+        validated_targets = set()  # Only validate each unique target once
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+        for target_uuid in all_targets:
+            if target_uuid in validated_targets:
+                continue
+            validated_targets.add(target_uuid)
 
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+            target_entity = Entity.get(target_uuid)
+            if not target_entity:
+                return declaration_event.cancel(status_message=f"Target entity not found")
+
+            # Check LOS
+            if target_uuid not in source_entity.senses.entities.keys():
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} not in line of sight"
+                )
+
+            # Check range
+            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            if distance > self.spell_range.normal:
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                )
+
+        # Call parent validation for MULTI_ENTITY checks (same-target, target filter)
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Magic Missile - auto-hit darts."""
+        """Apply single dart to current target (self.target_entity_uuid).
+
+        Called once per dart by the convolution loop in BaseAction.apply().
+        """
         from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
@@ -321,51 +366,31 @@ class MagicMissile(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Calculate number of darts: 3 base + 1 per upcast level
-        num_darts = 3 + self.get_upcast_bonus()
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"Launching {num_darts} magic missiles"
+        # Each dart deals 1d4+1 force damage
+        dart_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=4,
+            dice_numbers=1,
+            damage_bonus=ModifiableValue.create(
+                source_entity_uuid=caster.uuid,
+                base_value=1,  # +1 per dart is intrinsic
+                value_name="Magic Missile Dart"
+            ),
+            damage_type=DamageType.FORCE
         )
 
-        # Each dart deals 1d4+1 force damage
-        # Magic Missile is unique: all darts rolled together for simplicity
-        # (RAW allows splitting between targets, but we simplify to single target)
+        # Roll damage (auto-hit, so use HIT outcome)
+        damage_dice = dart_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+        damage_roll = damage_dice.roll
 
-        damages: List[Damage] = []
-        damage_rolls: List[DiceRoll] = []
-        total_damage = 0
+        # Apply damage
+        target.health.take_damage(damage_roll.total, DamageType.FORCE, source_entity_uuid=caster.uuid)
 
-        for i in range(num_darts):
-            # Each dart is 1d4+1
-            dart_damage = Damage(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=target.uuid,
-                damage_dice=4,
-                dice_numbers=1,
-                damage_bonus=ModifiableValue.create(
-                    source_entity_uuid=caster.uuid,
-                    base_value=1,  # +1 per dart is intrinsic
-                    value_name=f"Magic Missile Dart {i+1}"
-                ),
-                damage_type=DamageType.FORCE
-            )
-
-            # Roll damage (auto-hit, so use HIT outcome)
-            damage_dice = dart_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-            damage_roll = damage_dice.roll
-
-            damages.append(dart_damage)
-            damage_rolls.append(damage_roll)
-            total_damage += damage_roll.total
-
-        # Apply total damage as force
-        target.health.take_damage(total_damage, DamageType.FORCE, source_entity_uuid=caster.uuid)
-
-        return effect_event.phase_to(
+        return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            damages=damages,
-            damage_rolls=damage_rolls,
-            status_message=f"{self.name} dealt {total_damage} force damage ({num_darts} darts)"
+            damages=[dart_damage],
+            damage_rolls=[damage_roll],
+            total_damage=damage_roll.total,
+            status_message=f"Dart hits {target.name} for {damage_roll.total} force damage"
         )

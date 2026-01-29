@@ -445,10 +445,12 @@ def test_blocking_conditions():
 
     actions_result = get_available_actions(goblin)
     # Incapacitated sets actions, bonus_actions, reactions, movement to 0
-    # So all actions should fail pre_validate() due to can't afford costs
+    # So all actions should have can_afford=False
+    # Actions are still listed (for UI graying out) but none are affordable
+    affordable_self_actions = [a for a in actions_result.self_actions if a.can_afford]
     result.check(
-        len(actions_result.self_actions) == 0,
-        f"Incapacitated: no self actions (got {len(actions_result.self_actions)})"
+        len(affordable_self_actions) == 0,
+        f"Incapacitated: no affordable self actions (got {len(affordable_self_actions)})"
     )
     result.check(
         len(actions_result.position_actions) == 0,

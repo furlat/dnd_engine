@@ -1,8 +1,8 @@
 """Enchantment spells - affecting minds and behavior.
 
-Contains: HoldPerson, HoldPersonEffect
+Contains: HoldPerson, HoldPersonEffect, TestBless
 """
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -277,4 +277,91 @@ class HoldPerson(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{self.name} - {target.name} is held (concentration)"
+        )
+
+
+class TestBless(SpellAction):
+    """TestBless - Test spell for MULTI_ENTITY with different targets required + allies filter.
+
+    Targets up to 3 creatures (self or allies). Each gets a simple buff marker.
+    This is a test spell to verify MULTI_ENTITY functionality with:
+    - allow_same_target=False (must target different creatures)
+    - valid_target_filter="self_or_allies" (can only target self and allies)
+    """
+    name: str = Field(default="Test Bless")
+    description: str = Field(default="Bless up to 3 allies (each target only once)")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="enchantment")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)  # Multi-target!
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    )
+
+    # Multi-entity configuration
+    allow_same_target: bool = Field(default=False)  # Must target different creatures
+    valid_target_filter: str = Field(default="self_or_allies")  # Self or allies only
+    max_targets: int = Field(default=3)
+
+    def get_all_targets(self) -> List[UUID]:
+        """Override: Return primary + extra targets (no repeats allowed)."""
+        targets: List[UUID] = []
+        if self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+        for extra in self.extra_target_entity_uuids:
+            if extra not in targets:  # Enforce uniqueness
+                targets.append(extra)
+        return targets[:self.max_targets]
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate range and line of sight for all targets."""
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not source_entity:
+            return declaration_event.cancel(status_message="Source entity not found")
+
+        # Validate all unique targets are in range and LOS (except self)
+        all_targets = self.get_all_targets()
+
+        for target_uuid in all_targets:
+            # Skip LOS check for self
+            if target_uuid == self.source_entity_uuid:
+                continue
+
+            target_entity = Entity.get(target_uuid)
+            if not target_entity:
+                return declaration_event.cancel(status_message=f"Target entity not found")
+
+            # Check LOS
+            if target_uuid not in source_entity.senses.entities.keys():
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} not in line of sight"
+                )
+
+            # Check range
+            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            if distance > self.spell_range.normal:
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                )
+
+        # Call parent validation for MULTI_ENTITY checks (same-target, target filter)
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply buff to current target (self.target_entity_uuid).
+
+        Called once per target by the convolution loop in BaseAction.apply().
+        In a real implementation, this would apply an actual Bless condition.
+        """
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not target:
+            return execution_event.cancel(status_message="Target not found")
+
+        # In a real implementation, we'd add a BlessCondition here.
+        # For testing purposes, we just log the blessing.
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} is blessed"
         )

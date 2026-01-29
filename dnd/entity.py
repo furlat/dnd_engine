@@ -22,6 +22,7 @@ from dnd.blocks.sensory import Senses
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.aoe import AoEShape
 from dnd.core.base_actions import (
     BaseAction, TargetType,
     AvailableTarget, AvailableActionInfo, AvailableActionsResult
@@ -1037,6 +1038,48 @@ class Entity(BaseBlock):
         return [e for e in cls._entity_registry.values()
                 if e.faction == faction and e.get_hp() > 0]
 
+    def get_aoe_affected_entities(
+        self,
+        shape: AoEShape,
+        exclude_self: bool = True,
+        alive_only: bool = True,
+        use_objective: bool = True
+    ) -> Tuple[Set[Tuple[int, int]], List["Entity"]]:
+        """Compute AoE shape and return affected positions and entities.
+
+        This helper method computes the shape based on the caster's position
+        and returns both the affected grid positions and the entities within.
+
+        Args:
+            shape: The AoE shape to compute (Sphere, Cone, Line, Cube)
+            exclude_self: If True (default), exclude caster from affected entities
+            alive_only: If True (default), only include entities with HP > 0
+            use_objective: If True (default), use objective computation (fresh FOV
+                from origin). If False, use subjective computation (caster's senses).
+
+        Returns:
+            Tuple of:
+                - Set of affected positions (x, y)
+                - List of affected Entity objects
+        """
+        if use_objective:
+            shape.compute_objective(self.position)
+        else:
+            shape.compute_subjective(self.position, self.senses)
+
+        entities: List["Entity"] = []
+        for uuid in shape.affected_entity_uuids:
+            if exclude_self and uuid == self.uuid:
+                continue
+            entity = Entity.get(uuid)
+            if entity is None:
+                continue
+            if alive_only and entity.get_hp() <= 0:
+                continue
+            entities.append(entity)
+
+        return shape.affected_positions.copy(), entities
+
     def roll_d20(self, bonus: ModifiableValue,roll_type: RollType = RollType.ATTACK) -> DiceRoll:
         """
         Roll attack dice based on attack bonus.
@@ -1330,12 +1373,13 @@ class Entity(BaseBlock):
 
     @property
     def position_actions(self) -> List[BaseAction]:
-        """Actions that target positions (Move, Jump).
+        """Actions that target positions (Move, Jump, AoE spells).
 
-        Includes POSITION_PATH (uses senses.paths) and POSITION_LOS (uses senses.visible).
+        Includes POSITION_PATH (uses senses.paths), POSITION_LOS (uses senses.visible),
+        and POSITION_AOE (AoE spells with shape preview).
         """
         return [a for a in self.registered_actions
-                if a.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS)]
+                if a.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)]
 
     @property
     def self_actions(self) -> List[BaseAction]:
@@ -1527,6 +1571,60 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=cost_type,
                     cost_amount=cost_amount,
+                    is_attack=template.is_attack
+                ))
+
+        # POSITION_AOE actions - compute affected entities for each valid position
+        for template in self.position_actions:
+            if template.target_type != TargetType.POSITION_AOE:
+                continue
+
+            shape_template = template.aoe_shape
+            if shape_template is None:
+                continue
+
+            valid_pos_list = template.get_valid_positions()
+            valid_positions = []
+            idx = 0
+
+            for pos in valid_pos_list:
+                template.set_target_position(pos)
+                if not template.pre_validate():
+                    continue
+
+                # Compute shape for this position
+                shape = shape_template.model_copy(update={'target': pos})
+                shape.compute_subjective(self.position, self.senses)
+
+                affected_uuids = list(shape.affected_entity_uuids)
+                affected_names = []
+                for uuid in affected_uuids:
+                    ent = Entity.get(uuid)
+                    if ent:
+                        affected_names.append(ent.name or "Unknown")
+
+                valid_positions.append(AvailableTarget(
+                    index=idx,
+                    position=pos,
+                    distance=self.senses.get_feet_distance(pos),
+                    affected_entity_uuids=affected_uuids,
+                    affected_entity_names=affected_names,
+                    affected_count=len(affected_uuids)
+                ))
+                idx += 1
+
+            if valid_positions:
+                template_name = template.name or "Unknown"
+                cost_type = template.costs[0].cost_type if template.costs else "actions"
+                result.position_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_AOE,
+                    valid_targets=valid_positions,
+                    can_afford=template.check_costs(),
+                    display_name=template_name,
+                    description=template.description,
+                    cost_type=cost_type,
+                    cost_amount=template.costs[0].cost if template.costs else 1,
                     is_attack=template.is_attack
                 ))
 

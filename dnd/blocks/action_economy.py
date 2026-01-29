@@ -242,9 +242,13 @@ class ActionEconomy(BaseBlock):
                 if mod.name is not None and "cost" in mod.name]
 
     def can_afford(self, cost_type: CostType, amount: int) -> bool:
-        """Check if the entity can afford a given action type and amount."""
+        """Check if the entity can afford a given action type and amount.
+
+        Uses value.normalized_score which accounts for all modifiers including
+        max constraints from conditions like Incapacitated.
+        """
         value = self._get_value_for_cost_type(cost_type)
-        return value.self_static.normalized_score - amount >= 0
+        return value.normalized_score - amount >= 0
 
     def reset_all_costs(self) -> None:
         """Reset turn-based costs (actions, bonus_actions, reactions, movement).

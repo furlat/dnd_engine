@@ -3,6 +3,7 @@ from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData
+from dnd.core.aoe import AoEShape
 from typing import Optional, Callable, OrderedDict, List, Literal, Tuple
 from uuid import UUID
 from enum import Enum
@@ -21,6 +22,8 @@ class TargetType(str, Enum):
     POSITION = "position"            # DEPRECATED: Use POSITION_PATH instead
     POSITION_PATH = "position_path"  # Move - requires contiguous path (uses senses.paths)
     POSITION_LOS = "position_los"    # Jump, Teleport - visible + range only (uses senses.visible)
+    POSITION_AOE = "position_aoe"    # AoE spells - position + affected entities preview
+    MULTI_ENTITY = "multi_entity"    # Multi-target spells/abilities - targets list of entities
 
 CostEvaluator = Callable[[UUID,CostType,int],bool]
 
@@ -40,6 +43,12 @@ class Cost(BaseCost):
 class ActionEvent(Event):
     costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
     event_type: EventType = Field(default=EventType.BASE_ACTION,description="The type of event")
+    description: str = Field(default="", description="Action description for combat log generation")
+
+    # Multi-target result fields (for MULTI_ENTITY actions)
+    target_results: Optional[List[Event]] = Field(default=None, description="Results from each per-target _apply() call")
+    total_targets: int = Field(default=0, description="Number of targets affected")
+    total_damage: int = Field(default=0, description="Total damage dealt across all targets")
 
     def add_cost(self, cost: Cost):
         base_cost = BaseCost.model_validate(cost)
@@ -51,54 +60,37 @@ class ActionEvent(Event):
         return cls(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, costs=base_costs, parent_event=parent_event.uuid if parent_event else None, use_register=use_register)
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
-        """Generate a combat log entry for generic actions (Dash, Dodge, Disengage, etc.).
+        """Generate a combat log entry for generic actions.
 
-        This is the default implementation for ActionEvent. Subclasses like AttackEvent
-        and MovementEvent override this with more detailed implementations.
-
-        Uses self.* fields only - no external lookups. Entity name must be
-        populated when the event is created.
+        Uses self.name and self.description. Subclasses (AttackEvent,
+        MovementEvent, SpellEvent) override with specific implementations.
 
         Returns:
             CombatLogEntry for self-targeting actions, or None for base events.
         """
-        # Use entity name from self - no external lookups
         source_name = self.source_entity_name or "Unknown"
         action_name = self.name or "Action"
+        effect_desc = self.description or ""
 
-        # Build summary
-        summary = f"{source_name} uses {action_name}"
+        # Build three verbosity levels
+        compact = f"{{cyan:{source_name}}} uses {{bold:{action_name}}}"
+        verbose = compact + (f"\n  {effect_desc}" if effect_desc else "")
+        detailed = verbose  # Same for generic actions
 
-        # Determine effect description based on action name
-        effect_description = ""
-        action_lower = action_name.lower()
-        if "dash" in action_lower:
-            effect_description = "Movement speed doubled for this turn"
-        elif "dodge" in action_lower:
-            effect_description = "Attacks against have disadvantage, advantage on DEX saves"
-        elif "disengage" in action_lower:
-            effect_description = "Movement doesn't provoke opportunity attacks"
-        elif "second wind" in action_lower:
-            effect_description = "Heals for 1d10 + fighter level"
-        elif "action surge" in action_lower:
-            effect_description = "Gains an additional action this turn"
-        else:
-            effect_description = f"{action_name} effect applied"
-
-        # Build structured data
         data = SelfActionLogData(
             entity_name=source_name,
             entity_uuid=str(self.source_entity_uuid),
             action_name=action_name,
-            effect_description=effect_description
+            effect_description=effect_desc
         )
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.ACTION,
             source_name=source_name,
             source_uuid=str(self.source_entity_uuid),
-            summary=summary,
-            detail_lines=[effect_description] if effect_description else [],
+            compact=compact,
+            verbose=verbose,
+            detailed=detailed,
             data=data.model_dump(),
             success=True
         )
@@ -127,14 +119,32 @@ class BaseAction(BaseObject):
     # For POSITION actions (like Move, Jump), stored separately from target_entity_uuid
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target position for POSITION type actions")
 
+    # For AoE actions, the shape template to use (AoEShape: Sphere, Cone, Line, Cube)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="AoE shape template (Sphere, Cone, Line, Cube)")
+
+    # Multi-target fields (for MULTI_ENTITY actions)
+    extra_target_entity_uuids: List[UUID] = Field(
+        default_factory=list,
+        description="Additional targets beyond primary target_entity_uuid (for MULTI_ENTITY)"
+    )
+    allow_same_target: bool = Field(
+        default=True,
+        description="If False, same entity cannot appear multiple times in target list"
+    )
+    valid_target_filter: str = Field(
+        default="enemies",
+        description="Which entities are valid targets: 'enemies', 'allies', 'self_or_allies', 'all'"
+    )
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def set_target_entity(self, target_uuid: UUID) -> None:
-        """Set target entity for ENTITY type actions.
+        """Set target entity for ENTITY or MULTI_ENTITY type actions.
 
         Used with templates to set the target before pre_validate() or instantiate().
+        For MULTI_ENTITY, this sets the primary target.
         """
-        if self.target_type != TargetType.ENTITY:
+        if self.target_type not in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
             raise ValueError(f"Action {self.name} doesn't target entities (target_type={self.target_type})")
         self.target_entity_uuid = target_uuid
 
@@ -142,9 +152,9 @@ class BaseAction(BaseObject):
         """Set target position for POSITION type actions.
 
         Used with templates to set the target before pre_validate() or instantiate().
-        Supports POSITION, POSITION_PATH, and POSITION_LOS target types.
+        Supports POSITION, POSITION_PATH, POSITION_LOS, and POSITION_AOE target types.
         """
-        if self.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
+        if self.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
             raise ValueError(f"Action {self.name} doesn't target positions (target_type={self.target_type})")
         self.end_position = position
 
@@ -159,7 +169,7 @@ class BaseAction(BaseObject):
         return None
 
     def get_valid_positions(self) -> List[Tuple[int, int]]:
-        """Get valid target positions for POSITION_LOS actions.
+        """Get valid target positions for POSITION_LOS and POSITION_AOE actions.
 
         Override in subclasses to provide custom position filtering.
         Default implementation uses senses.visible + get_range().
@@ -167,7 +177,7 @@ class BaseAction(BaseObject):
         Returns:
             List of valid positions this action can target.
         """
-        if self.target_type != TargetType.POSITION_LOS:
+        if self.target_type not in (TargetType.POSITION_LOS, TargetType.POSITION_AOE):
             return []
 
         # Get the entity
@@ -202,6 +212,64 @@ class BaseAction(BaseObject):
                     continue
             valid.append(pos)
         return valid
+
+    def get_all_targets(self) -> List[UUID]:
+        """Get all target UUIDs for multi-target actions.
+
+        Override in subclasses to provide custom target resolution (e.g., Magic Missile
+        filling remaining darts with primary target).
+
+        Default implementation returns primary target + extra targets.
+
+        Returns:
+            List of target UUIDs in order they should be processed.
+        """
+        targets: List[UUID] = []
+        if self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+        targets.extend(self.extra_target_entity_uuids)
+        return targets
+
+    def _validate_target_filter(self, all_targets: List[UUID]) -> Optional[str]:
+        """Validate that all targets match the valid_target_filter.
+
+        Args:
+            all_targets: List of target UUIDs to validate
+
+        Returns:
+            Error message string if validation fails, None if all valid.
+        """
+        # Import Entity locally to avoid circular import
+        entity = BaseBlock.get(self.source_entity_uuid)
+        if entity is None:
+            return "Source entity not found"
+
+        # Need is_ally, is_enemy methods
+        is_ally = getattr(entity, 'is_ally', None)
+        is_enemy = getattr(entity, 'is_enemy', None)
+
+        if is_ally is None or is_enemy is None:
+            return None  # Can't validate without faction methods, skip check
+
+        for target_uuid in all_targets:
+            target = BaseBlock.get(target_uuid)
+            if target is None:
+                return f"Target {target_uuid} not found"
+
+            target_name = getattr(target, 'name', str(target_uuid))
+
+            if self.valid_target_filter == "enemies":
+                if not is_enemy(target):
+                    return f"{target_name} is not an enemy"
+            elif self.valid_target_filter == "allies":
+                if target_uuid == self.source_entity_uuid or not is_ally(target):
+                    return f"{target_name} is not an ally"
+            elif self.valid_target_filter == "self_or_allies":
+                if target_uuid != self.source_entity_uuid and not is_ally(target):
+                    return f"{target_name} is not self or an ally"
+            # "all" allows any target
+
+        return None  # Validation passed
 
     def instantiate(self, **overrides) -> "BaseAction":
         """Create an executable instance from this template.
@@ -250,14 +318,46 @@ class BaseAction(BaseObject):
 
     def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
         """Create the declaration event for this action. Override in subclasses if needed."""
-        
-        return ActionEvent.from_costs(self.costs,self.source_entity_uuid,self.target_entity_uuid,parent_event,use_register=use_register)
+        event = ActionEvent.from_costs(self.costs,self.source_entity_uuid,self.target_entity_uuid,parent_event,use_register=use_register)
+        # Populate event with action info for combat log generation
+        event.name = self.name or "Action"
+        event.description = self.description
+        # Populate source entity name if available
+        entity = BaseBlock.get(self.source_entity_uuid)
+        if entity is not None:
+            event.source_entity_name = getattr(entity, 'name', None)
+        return event
 
     
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Validate if the action can be performed. Override this in subclasses to implement
-        custom validation logic. Similar to BaseCondition._apply pattern."""
-        
+        custom validation logic. Similar to BaseCondition._apply pattern.
+
+        For MULTI_ENTITY actions, this also validates:
+        - That there are targets
+        - allow_same_target constraint
+        - valid_target_filter constraint
+        """
+        # Multi-entity validation
+        if self.target_type == TargetType.MULTI_ENTITY:
+            all_targets = self.get_all_targets()
+
+            # Check: Do we have targets?
+            if not all_targets:
+                return declaration_event.cancel(status_message="No targets specified")
+
+            # Check: Same-target constraint
+            if not self.allow_same_target:
+                if len(set(all_targets)) != len(all_targets):
+                    return declaration_event.cancel(
+                        status_message="This action cannot target the same entity multiple times"
+                    )
+
+            # Check: Target filter (enemies/allies/etc)
+            filter_error = self._validate_target_filter(all_targets)
+            if filter_error:
+                return declaration_event.cancel(status_message=filter_error)
+
         return declaration_event.phase_to(
             EventPhase.EXECUTION,
             status_message=f"Succesfully validated action{self.name} for {declaration_event.source_entity_uuid}"
@@ -301,6 +401,9 @@ class BaseAction(BaseObject):
         """Main entry point for applying an action. This method orchestrates the flow
         through declaration, validation, and application phases.
 
+        For MULTI_ENTITY actions, this runs convolution: calls _apply() for each target
+        in get_all_targets(), collecting results into a final completion event.
+
         Raises:
             ValueError: If this is a template (use instantiate() first)
         """
@@ -315,7 +418,7 @@ class BaseAction(BaseObject):
         elif declaration_event.canceled:
             return declaration_event
 
-        # Validate
+        # Validate (includes MULTI_ENTITY-specific checks)
         if declaration_event.phase != EventPhase.DECLARATION:
             raise ValueError(f"Action {self.name} can only be validated in the declaration phase")
         execution_event = self._validate(declaration_event)
@@ -323,8 +426,45 @@ class BaseAction(BaseObject):
             return execution_event
         if execution_event.phase not in [EventPhase.EXECUTION]:
             raise ValueError(f"Action {self.name} can only be applied in the execution phase")
-        # Apply
-        completion_event = self._apply(execution_event)
+
+        # === MULTI_ENTITY convolution ===
+        if self.target_type == TargetType.MULTI_ENTITY:
+            all_target_uuids = self.get_all_targets()
+
+            # Store original target for restoration after loop
+            original_target = self.target_entity_uuid
+
+            # CONVOLUTION: Call _apply() for each target IN ORDER
+            all_results: List[ActionEvent] = []
+            total_damage = 0
+
+            for target_uuid in all_target_uuids:
+                # Set current target
+                self.target_entity_uuid = target_uuid
+
+                # Call normal _apply() - no new method needed!
+                result_event = self._apply(execution_event)
+                if result_event:
+                    all_results.append(result_event)
+                    # CONTRACT: _apply() must set total_damage if it deals damage
+                    damage = getattr(result_event, 'total_damage', 0) or 0
+                    total_damage += damage
+
+            # Restore original target
+            self.target_entity_uuid = original_target
+
+            # Aggregate into final completion event
+            completion_event = execution_event.phase_to(
+                EventPhase.COMPLETION,
+                target_results=all_results,
+                total_targets=len(all_results),
+                total_damage=total_damage,
+                status_message=f"{self.name} affected {len(all_results)} targets for {total_damage} total damage"
+            )
+        else:
+            # Existing single-target flow
+            completion_event = self._apply(execution_event)
+
         if completion_event is None or completion_event.canceled:
             return completion_event
         if completion_event.phase not in [EventPhase.COMPLETION]:
@@ -441,6 +581,10 @@ class AvailableTarget(BaseModel):
     target_name: Optional[str] = Field(default=None, description="Entity name if ENTITY action")
     distance: Optional[int] = Field(default=None, description="Distance in feet")
     path_cost: Optional[int] = Field(default=None, description="Movement cost if POSITION action")
+    # AoE-specific fields (for POSITION_AOE actions)
+    affected_entity_uuids: Optional[List[UUID]] = Field(default=None, description="UUIDs of entities affected by AoE")
+    affected_entity_names: Optional[List[str]] = Field(default=None, description="Names of entities affected by AoE")
+    affected_count: Optional[int] = Field(default=None, description="Number of entities affected by AoE")
 
 
 class AvailableActionInfo(BaseModel):
