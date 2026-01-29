@@ -10,9 +10,12 @@ from rich.text import Text
 from rich import box
 import sys
 import shutil
+import re
 
 if TYPE_CHECKING:
     from cli.action_model import ShortcutRegistry, AvailableActionsState
+
+from dnd.core.combat_log import CombatLogVerbosity
 
 
 # Color mapping based on cost_type (derived from API data)
@@ -23,6 +26,35 @@ COST_TYPE_COLORS = {
     "movement": "bold green",
 }
 DEFAULT_ACTION_COLOR = "bold white"
+
+# Combat log verbosity setting
+COMBAT_LOG_VERBOSITY = CombatLogVerbosity.VERBOSE
+
+
+def set_combat_log_verbosity(verbosity: CombatLogVerbosity):
+    """Set the combat log verbosity level."""
+    global COMBAT_LOG_VERBOSITY
+    COMBAT_LOG_VERBOSITY = verbosity
+
+
+def markdown_to_rich(text: str) -> str:
+    """Convert markdown-like format to Rich markup.
+
+    Supported formats:
+    - {color:text} -> [color]text[/color]
+    - **text** -> [bold]text[/bold]
+    - *text* -> [italic]text[/italic]
+    - ~~text~~ -> [strike]text[/strike]
+    """
+    # Color syntax: {color:text} -> [color]text[/color]
+    text = re.sub(r'\{([^}:]+):([^}]+)\}', r'[\1]\2[/\1]', text)
+    # Bold: **text** -> [bold]text[/bold]
+    text = re.sub(r'\*\*([^*]+)\*\*', r'[bold]\1[/bold]', text)
+    # Italic: *text* -> [italic]text[/italic]
+    text = re.sub(r'\*([^*]+)\*', r'[italic]\1[/italic]', text)
+    # Strikethrough: ~~text~~ -> [strike]text[/strike]
+    text = re.sub(r'~~([^~]+)~~', r'[strike]\1[/strike]', text)
+    return text
 
 
 console = Console()
@@ -597,7 +629,27 @@ def _format_breakdown(breakdown: List[Dict[str, Any]]) -> str:
 
 
 def _render_log_entry(entry: Dict[str, Any], content: Text):
-    """Render a single combat log entry with rich formatting."""
+    """Render a single combat log entry with rich formatting.
+
+    Uses the new verbosity-based markdown format from CombatLogEntry.
+    Falls back to legacy type-based rendering for backward compatibility.
+    """
+    # Check for new verbosity-based format (has compact/verbose/detailed fields)
+    if "compact" in entry:
+        # New format: use verbosity setting to pick text level
+        if COMBAT_LOG_VERBOSITY == CombatLogVerbosity.COMPACT:
+            text = entry.get("compact", "")
+        elif COMBAT_LOG_VERBOSITY == CombatLogVerbosity.VERBOSE:
+            text = entry.get("verbose", entry.get("compact", ""))
+        else:  # DETAILED
+            text = entry.get("detailed", entry.get("verbose", entry.get("compact", "")))
+
+        # Convert markdown to Rich markup and append
+        rich_text = markdown_to_rich(text)
+        content.append(Text.from_markup(rich_text))
+        return
+
+    # Legacy format: use type-based rendering
     entry_type = entry.get("type", "message")
 
     if entry_type == "attack":
@@ -732,6 +784,26 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
         content.append(f" uses ", style="dim")
         content.append(f"{action_name.title()}", style="bold magenta")
 
+    elif entry_type == "entity_action":
+        # Entity-targeting action (Shove, Grapple, etc.) - full details
+        summary = entry.get("summary", "Action")
+        detail_lines = entry.get("detail_lines", [])
+        success = entry.get("success")
+
+        # Header line - use summary which contains the outcome
+        content.append(f"{summary}", style="bold yellow")
+
+        # Success/failure indicator
+        if success is True:
+            content.append(" ✓", style="green")
+        elif success is False:
+            content.append(" ✗", style="red")
+
+        # Detail lines (contest roll, etc.)
+        for line in detail_lines:
+            content.append("\n")
+            content.append(f"  {line}", style="dim")
+
     elif entry_type == "turn_start":
         entity = entry.get("entity_name", entry.get("entity", "Someone"))
         content.append(f"─── {entity}'s turn ───", style="bold yellow")
@@ -823,10 +895,62 @@ def render_available_actions_panel(
         content.append(f" ({cost_info}, {len(valid_targets)} pos)  ")
         content.append(f"[{cmd} X Y] or [{cmd}] to show\n", style="dim")
 
-    # Attacks - show all available attack options with target numbers
-    attacks = actions.get("entity_actions", [])
-    valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
+    # Split entity_actions into attacks (Attack_* or Extra Attack_*) and other entity actions (Shove, etc.)
+    all_entity_actions = actions.get("entity_actions", [])
 
+    def is_attack_action(action: Dict[str, Any]) -> bool:
+        """Check if action is an attack (Attack_* or Extra Attack_*).
+
+        Attack actions target entities and deal damage.
+        NOT included: "Reckless Attack" (self-buff that enables advantage).
+        """
+        template = action.get("template_name", "")
+        # Match "Attack_MELEE_MAIN" or "Extra Attack_MELEE_MAIN" patterns
+        return template.startswith("Attack_") or template.startswith("Extra Attack")
+
+    attacks = [a for a in all_entity_actions if is_attack_action(a)]
+    other_entity_actions = [a for a in all_entity_actions if not is_attack_action(a)]
+
+    valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
+    valid_other_entity = [a for a in other_entity_actions if a.get("valid_targets") and a.get("can_afford")]
+
+    # Other entity-targeting actions (Shove, etc.) - show before attacks
+    if valid_other_entity:
+        content.append("ACTIONS:", style="bold yellow")
+        content.append("\n", style="dim")
+        for act in valid_other_entity:
+            template_name = act.get("template_name", "Unknown")
+            display_name = act.get("display_name", template_name)
+            targets = act.get("valid_targets", [])
+            cost_type = act.get("cost_type", "actions")
+
+            # Get shortcut from registry
+            if registry:
+                cmd = registry.get_or_create_shortcut(template_name)
+            else:
+                cmd = template_name[0].lower()
+
+            # Cost label with color
+            if cost_type == "bonus_actions":
+                cost_label = ("BONUS", "magenta")
+            else:
+                cost_label = ("ACTION", "cyan")
+
+            # Show each target with index
+            target_num = 1
+            for target in targets:
+                target_uuid = target.get("target_uuid")
+                target_name = target.get("target_name") or entity_lookup.get(target_uuid, {}).get("name", "?")
+
+                content.append(f"  [", style="dim")
+                content.append(f"{cmd} {target_num}", style="bold yellow")
+                content.append(f"] ", style="dim")
+                content.append(f"{cost_label[0]} ", style=cost_label[1])
+                content.append(f"{display_name}", style="bold")
+                content.append(f" -> {target_name}\n", style="dim")
+                target_num += 1
+
+    # Attacks - show all available attack options with target numbers
     if valid_attacks:
         content.append("ATTACKS:", style="bold red")
         content.append("  [a N] to attack\n", style="dim")
@@ -901,6 +1025,8 @@ def render_available_actions_panel(
     content.append(" [e]  ", style="dim")
     content.append("LIST", style="bold white")
     content.append(" [la]  ", style="dim")
+    content.append("LOG", style="bold white")
+    content.append(" [log]  ", style="dim")
     content.append("HELP", style="bold white")
     content.append(" [?]  ", style="dim")
     content.append("QUIT", style="bold white")
@@ -1181,12 +1307,20 @@ def _build_attack_log_entry(data: Dict[str, Any], attacker_default: str = "Someo
 def display_combat_log_entry(entry: Dict[str, Any]):
     """Display any CombatLogEntry from server.
 
-    This is the unified display function that handles all entry types:
-    attack, movement, death, action, turn_start, turn_end, opportunity_attack, etc.
+    New format entries have compact/verbose/detailed fields and are passed through
+    directly for rendering. Legacy entries without these fields are handled via
+    type-specific conversion.
 
     Args:
         entry: A CombatLogEntry.to_dict() from the server
     """
+    # Check for new verbosity-based format (has compact/verbose/detailed fields)
+    if "compact" in entry and entry.get("compact"):
+        # New format: pass through directly for _render_log_entry
+        add_to_combat_log(entry)
+        return
+
+    # Legacy format: convert based on entry_type
     entry_type = entry.get("entry_type", "").lower()
     data = entry.get("data", {})
 
@@ -1196,10 +1330,10 @@ def display_combat_log_entry(entry: Dict[str, Any]):
             log_entry["is_opportunity_attack"] = True
         add_to_combat_log(log_entry)
     elif entry_type == "movement":
-        # Extract action verb from summary (e.g., "Hero jumps 15ft..." -> "jumped")
-        summary = entry.get("summary", "")
+        # Extract action verb from compact (e.g., "Hero jumps 15ft..." -> "jumped")
+        compact = entry.get("compact", "")
         action_verb = "moved"  # Default
-        if " jumps " in summary:
+        if " jumps " in compact.lower() or "{yellow:jumps}" in compact.lower():
             action_verb = "jumped"
         add_to_combat_log({
             "type": "move",
@@ -1214,11 +1348,25 @@ def display_combat_log_entry(entry: Dict[str, Any]):
             "entity": data.get("entity_name", "Someone"),
         })
     elif entry_type == "action":
-        add_to_combat_log({
-            "type": "action",
-            "entity_name": data.get("entity_name", "Someone"),
-            "action_name": data.get("action_name", "action"),
-        })
+        # Check if self-action (has action_name) or entity-targeting (has target)
+        if data.get("action_name"):
+            # Self-action (Dash, Dodge, etc.)
+            add_to_combat_log({
+                "type": "action",
+                "entity_name": data.get("entity_name", "Someone"),
+                "action_name": data.get("action_name", "action"),
+            })
+        else:
+            # Entity-targeting action (Shove, etc.) - pass through full entry
+            add_to_combat_log({
+                "type": "entity_action",
+                "source_name": entry.get("source_name", "Someone"),
+                "target_name": entry.get("target_name", "Unknown"),
+                "summary": entry.get("compact", entry.get("summary", "")),
+                "detail_lines": [],
+                "data": data,
+                "success": entry.get("success"),
+            })
     elif entry_type == "turn_start":
         add_to_combat_log({
             "type": "turn_start",
@@ -1230,10 +1378,18 @@ def display_combat_log_entry(entry: Dict[str, Any]):
             "entity_name": data.get("entity_name", "Someone"),
         })
     else:
-        # Fallback for unknown types - use summary if available
-        summary = entry.get("summary", "")
-        if summary:
-            add_to_combat_log({"type": "message", "message": summary})
+        # Unknown entry type - pass through full entry data
+        compact = entry.get("compact", "")
+        if compact:
+            add_to_combat_log({
+                "type": "entity_action",
+                "source_name": entry.get("source_name", "Someone"),
+                "target_name": entry.get("target_name"),
+                "summary": compact,
+                "detail_lines": [],
+                "data": data,
+                "success": entry.get("success"),
+            })
 
 
 def show_opponent_action(entry: Dict[str, Any]):
@@ -1341,6 +1497,12 @@ def show_help():
   nt / next           Next turn
   ft / first          First turn
   ct / current        Return to current turn
+
+[bold cyan]Display:[/bold cyan]
+  log / v             Show/set log verbosity
+  log c               Compact (one-line)
+  log v               Verbose (default)
+  log d               Detailed (full breakdowns)
 
 [bold cyan]Game:[/bold cyan]
   q / quit            Exit the game

@@ -1457,15 +1457,17 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
 
     triggered_reactions: list = []
 
-    if template.target_type == TargetType.ENTITY and event and hasattr(event, 'attack_outcome') and event.combat_log:
-        # Attack - pass through full combat log data (CLI now supports new structure)
-        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
-        target_hp = target.get_hp() if target else None
-
+    if template.target_type == TargetType.ENTITY and event and event.combat_log:
+        # Entity-targeting actions (attacks, shove, grapple, etc.)
         add_event_to_combat_log(sim, event)
         action_log_entries.append(event.combat_log.to_dict())
         event_data = dict(event.combat_log.data)
-        event_data["target_hp"] = target_hp
+
+        # Add target HP for attacks
+        if hasattr(event, 'attack_outcome'):
+            target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+            target_hp = target.get_hp() if target else None
+            event_data["target_hp"] = target_hp
 
     elif template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         # Movement actions (Move, Jump) - both have start_position, end_position, path
