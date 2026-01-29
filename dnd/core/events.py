@@ -12,7 +12,7 @@ __all__ = [
     # D20 events
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
     # Spatial events
-    "SpatialChangeEvent",
+    "SpatialChangeEvent", "ForcedMovementEvent",
     # Combat events
     "DamageRolledEvent", "TakeDamageEvent",
     # Combat data
@@ -99,6 +99,7 @@ class EventType(str, Enum):
     BASE_ACTION = "base_action"
     ATTACK = "attack"
     MOVEMENT = "movement"
+    FORCED_MOVEMENT = "forced_movement"  # Push, pull, teleport by others - does NOT trigger OA
     ABILITY_CHECK = "ability_check"
     SAVING_THROW = "saving_throw"
     SKILL_CHECK = "skill_check"
@@ -1005,6 +1006,70 @@ class SpatialChangeEvent(Event):
             tile_walkable=walkable,
             tile_visible=visible,
             phase=EventPhase.COMPLETION
+        )
+
+
+class ForcedMovementEvent(Event):
+    """Forced movement (push/pull) - does NOT trigger opportunity attacks.
+
+    This event type intentionally uses FORCED_MOVEMENT instead of MOVEMENT to ensure
+    OA handlers never fire. GridMap spatial events still fire normally when the
+    target's position is updated.
+
+    Used by: Shove, Thunderwave, repelling effects, etc.
+
+    Note: target_entity_uuid is inherited from Event and should always be set
+    for forced movement events (it's the entity being pushed).
+    """
+    name: str = Field(default="Forced Movement")
+    event_type: EventType = Field(default=EventType.FORCED_MOVEMENT)
+
+    # Movement details (target_entity_uuid is inherited from Event - it's who's being pushed)
+    start_position: Tuple[int, int] = Field(description="Position before push")
+    end_position: Tuple[int, int] = Field(description="Position after push")
+    direction: Tuple[int, int] = Field(description="Push direction as (dx, dy)")
+    intended_distance: int = Field(description="How far we tried to push (feet)")
+    actual_distance: int = Field(default=0, description="How far they actually moved")
+    blocked_by_obstacle: bool = Field(default=False, description="Stopped by wall/entity")
+    cause: str = Field(default="shove", description="What caused this: shove, thunderwave, etc.")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate combat log for forced movement."""
+        source_name = self.source_entity_name or "Unknown"
+        target_name = self.target_entity_name or "Unknown"
+
+        if self.actual_distance == 0:
+            summary = f"{target_name} resists being pushed"
+        elif self.blocked_by_obstacle:
+            summary = f"{target_name} pushed {self.actual_distance}ft (blocked)"
+        else:
+            summary = f"{target_name} pushed {self.actual_distance}ft"
+
+        detail_lines = [
+            f"Pushed by: {source_name}",
+            f"Direction: {self.direction}",
+            f"Distance: {self.actual_distance}ft" + (" (blocked)" if self.blocked_by_obstacle else "")
+        ]
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.MOVEMENT,  # Reuse existing type for display
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid),
+            summary=summary,
+            detail_lines=detail_lines,
+            data={
+                "type": "forced_movement",
+                "cause": self.cause,
+                "direction": list(self.direction),
+                "intended_distance": self.intended_distance,
+                "actual_distance": self.actual_distance,
+                "blocked": self.blocked_by_obstacle,
+                "start_position": list(self.start_position),
+                "end_position": list(self.end_position)
+            },
+            success=self.actual_distance > 0
         )
 
 

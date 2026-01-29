@@ -57,7 +57,8 @@ def create_goblin(
     source_id: Optional[UUID] = None,
     name: str = "Goblin",
     position: Tuple[int, int] = (0, 0),
-    faction: Optional[str] = None
+    faction: Optional[str] = None,
+    weight: int = 40
 ) -> Entity:
     """
     Creates a Goblin (CR 1/4).
@@ -123,7 +124,8 @@ def create_goblin(
         action_economy=action_economy_config,
         proficiency_bonus=2,
         position=position,
-        faction=faction
+        faction=faction,
+        weight=weight
     )
 
     # Create entity
@@ -153,7 +155,8 @@ def create_skeleton(
     source_id: Optional[UUID] = None,
     name: str = "Skeleton",
     position: Tuple[int, int] = (0, 0),
-    faction: Optional[str] = None
+    faction: Optional[str] = None,
+    weight: int = 120
 ) -> Entity:
     """
     Creates a Skeleton (CR 1/4).
@@ -217,7 +220,8 @@ def create_skeleton(
         action_economy=action_economy_config,
         proficiency_bonus=2,
         position=position,
-        faction=faction
+        faction=faction,
+        weight=weight
     )
 
     # Create entity
@@ -245,7 +249,8 @@ def create_goblin_archer(
     source_id: Optional[UUID] = None,
     name: str = "Goblin Archer",
     position: Tuple[int, int] = (0, 0),
-    faction: Optional[str] = None
+    faction: Optional[str] = None,
+    weight: int = 40
 ) -> Entity:
     """
     Creates a Goblin Archer (CR 1/4) - Dual Wielder variant.
@@ -313,7 +318,8 @@ def create_goblin_archer(
         action_economy=action_economy_config,
         proficiency_bonus=2,
         position=position,
-        faction=faction
+        faction=faction,
+        weight=weight
     )
 
     # Create entity
