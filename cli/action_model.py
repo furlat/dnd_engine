@@ -40,8 +40,9 @@ class ShortcutRegistry:
         "Move": "m",
         "Jump": "j",
         "Dash": "d",
-        "Dodge": "o",
+        "Dodge": "do",
         "Disengage": "di",
+        "Shove": "sh",
     }
 
     def __init__(self):
@@ -208,6 +209,7 @@ class AvailableActionsState:
     """
     entity_uuid: str
     attacks: List[AvailableAction] = field(default_factory=list)
+    other_entity: List[AvailableAction] = field(default_factory=list)  # Shove, etc.
     movement: List[AvailableAction] = field(default_factory=list)
     self_actions: List[AvailableAction] = field(default_factory=list)
     remaining_movement: int = 0
@@ -215,12 +217,17 @@ class AvailableActionsState:
     @property
     def all_actions(self) -> List[AvailableAction]:
         """Get all available actions as a flat list."""
-        return self.attacks + self.movement + self.self_actions
+        return self.attacks + self.other_entity + self.movement + self.self_actions
 
     @property
     def affordable_attacks(self) -> List[AvailableAction]:
         """Get attacks that can be afforded and have targets."""
         return [a for a in self.attacks if a.can_afford and a.valid_targets]
+
+    @property
+    def affordable_other_entity(self) -> List[AvailableAction]:
+        """Get other entity-targeting actions (Shove, etc.) that can be afforded and have targets."""
+        return [a for a in self.other_entity if a.can_afford and a.valid_targets]
 
     @property
     def can_attack(self) -> bool:
@@ -259,8 +266,8 @@ class AvailableActionsState:
         """Register all actions with the session registry.
 
         This should be called after fetching actions to ensure all available
-        actions have stable shortcuts assigned. Registers both self_actions
-        (Dash, Dodge, etc.) and position actions (Move, Jump, etc.).
+        actions have stable shortcuts assigned. Registers self_actions,
+        position actions (Move, Jump, etc.), and other_entity actions (Shove, etc.).
         """
         # Register self_actions
         for action in self.self_actions:
@@ -268,6 +275,10 @@ class AvailableActionsState:
 
         # Register position actions (movement)
         for action in self.movement:
+            registry.get_or_create_shortcut(action.template_name)
+
+        # Register other entity-targeting actions (Shove, etc.)
+        for action in self.other_entity:
             registry.get_or_create_shortcut(action.template_name)
 
     def get_self_action_by_command(
@@ -328,6 +339,55 @@ class AvailableActionsState:
 
         return None
 
+    def get_other_entity_action_by_command(
+        self, command: str, registry: ShortcutRegistry
+    ) -> Optional[AvailableAction]:
+        """Find other_entity action (Shove, etc.) by shortcut OR template_name.
+
+        Args:
+            command: User input (could be shortcut like "s" or full name like "shove")
+            registry: Session shortcut registry
+
+        Returns:
+            Matching available action if found and affordable, None otherwise
+        """
+        cmd = command.lower().replace(" ", "").replace("_", "")
+
+        # Check shortcut registry first
+        template = registry.get_action_by_shortcut(cmd)
+        if template:
+            return next(
+                (a for a in self.other_entity if a.template_name == template and a.can_afford),
+                None
+            )
+
+        # Check full template_name (no spaces/underscores)
+        for action in self.other_entity:
+            normalized_name = action.template_name.lower().replace(" ", "").replace("_", "")
+            if action.can_afford and normalized_name == cmd:
+                return action
+
+        return None
+
+    def get_other_entity_target(self, action_name: str, index: int) -> Optional[Tuple[AvailableAction, ActionTarget]]:
+        """Get other_entity action and target by action name and target index.
+
+        Args:
+            action_name: The template_name of the action (e.g., "Shove")
+            index: 1-based index (as shown to user)
+
+        Returns:
+            Tuple of (action, target) or None if invalid
+        """
+        for action in self.affordable_other_entity:
+            if action.template_name == action_name:
+                current_idx = 1
+                for target in action.valid_targets:
+                    if current_idx == index:
+                        return (action, target)
+                    current_idx += 1
+        return None
+
     def get_attack_target(self, index: int) -> Optional[Tuple[AvailableAction, ActionTarget]]:
         """Get attack action and target by combined index.
 
@@ -370,13 +430,18 @@ class AvailableActionsState:
     @classmethod
     def from_server(cls, data: Dict[str, Any]) -> 'AvailableActionsState':
         """Parse from server AvailableActionsResult JSON."""
-        attacks = [AvailableAction.from_server(a) for a in data.get("entity_actions", [])]
+        # Split entity_actions: Attack_* -> attacks, everything else -> other_entity
+        all_entity_actions = [AvailableAction.from_server(a) for a in data.get("entity_actions", [])]
+        attacks = [a for a in all_entity_actions if a.template_name.startswith("Attack")]
+        other_entity = [a for a in all_entity_actions if not a.template_name.startswith("Attack")]
+
         movement = [AvailableAction.from_server(a) for a in data.get("position_actions", [])]
         self_actions = [AvailableAction.from_server(a) for a in data.get("self_actions", [])]
 
         return cls(
             entity_uuid=data.get("entity_uuid", ""),
             attacks=attacks,
+            other_entity=other_entity,
             movement=movement,
             self_actions=self_actions,
             remaining_movement=data.get("remaining_movement", 0)

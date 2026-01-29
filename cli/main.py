@@ -58,6 +58,63 @@ def try_execute_dynamic_self_action(cmd_str: str, client: APIClient, state: Game
     return None  # Not a self-action, fall through
 
 
+def try_execute_dynamic_other_entity_action(cmd_str: str, args: List[str], client: APIClient, state: GameState) -> Optional[str]:
+    """
+    Try to execute a dynamic other_entity action (Shove, etc.) using the shortcut registry.
+
+    Returns:
+        "refresh" if action was executed or showing targets
+        "encounter_ended" if encounter ended
+        None if command wasn't an other_entity action
+    """
+    if not state.actions:
+        return None
+
+    registry = get_shortcut_registry()
+    cmd = cmd_str.strip().lower().split()[0] if cmd_str.strip() else ""
+    action = state.actions.get_other_entity_action_by_command(cmd, registry)
+
+    if not action:
+        return None
+
+    # No target index - show valid targets
+    if len(args) < 1:
+        targets = action.valid_targets
+        shortcut = registry.get_or_create_shortcut(action.template_name)
+        display.set_output([
+            f"Valid {action.display_name} targets:",
+            *[f"  [{i+1}] {t.target_name or 'Unknown'}" for i, t in enumerate(targets)],
+            f"Enter '{shortcut} N' to {action.display_name.lower()} target N"
+        ])
+        return "refresh"
+
+    # Parse target index
+    try:
+        target_num = int(args[0])
+    except ValueError:
+        shortcut = registry.get_or_create_shortcut(action.template_name)
+        display.set_output([f"Invalid target. Usage: {shortcut} N"])
+        return "refresh"
+
+    # Find target
+    result = state.actions.get_other_entity_target(action.template_name, target_num)
+    if not result:
+        total = len(action.valid_targets)
+        display.set_output([f"Invalid target. Choose 1-{total}."])
+        return "refresh"
+
+    action_obj, target = result
+
+    # Execute
+    api_result = client.execute_action(action_obj.template_name, target.index)
+    display.show_action_result(api_result, state.turn.get("current_entity_name", "You"))
+    state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name} on {target.target_name}.")
+
+    if api_result.get("encounter_ended"):
+        return "encounter_ended"
+    return "refresh"
+
+
 def try_execute_dynamic_position_action(cmd_str: str, args: List[str], client: APIClient, state: GameState) -> Optional[str]:
     """
     Try to execute a dynamic position-action using the shortcut registry.
@@ -477,6 +534,10 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
 
             # Position actions (Move, Jump) - ONLY path, no fallback
             result = try_execute_dynamic_position_action(cmd_str, cmd.args, client, state)
+
+            # Other entity-targeting actions (Shove, etc.) - ONLY path, no fallback
+            if result is None:
+                result = try_execute_dynamic_other_entity_action(cmd_str, cmd.args, client, state)
 
             # Self actions (Dash, Dodge, etc.) - ONLY path, no fallback
             if result is None:
