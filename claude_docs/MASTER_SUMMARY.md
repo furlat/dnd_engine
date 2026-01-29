@@ -10,6 +10,7 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 |--------|--------|-------|
 | **Core Engine** | Complete | Entity/component model, ModifiableValue 6-channel system, event lifecycle, cross-entity conditions |
 | **Combat** | Complete | Action economy, attacks, movement, opportunity attacks, initiative |
+| **Special Actions** | Complete | Jump (BG3-style), Shove (BG3-style with Athletics contest) |
 | **Conditions** | 13/15 SRD | All except Exhaustion, Petrified |
 | **Fighter Class** | Complete | All features L1-L18 including Champion archetype |
 | **Barbarian Class** | Complete | All features L1-L20 + Berserker path (BG3-style) |
@@ -17,6 +18,7 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 | **Spatial** | Complete | GridMap, FOV (shadowcast), pathfinding (Dijkstra) |
 | **Server** | Complete | FastAPI REST API, session-based PvP authority |
 | **CLI** | Complete | Human TUI + Claude agent interface |
+| **Combat Log** | Complete | Auto-generated from events, 3 verbosity levels, markdown formatting |
 | **Faction System** | Complete | Multi-entity combat with ally/enemy detection |
 
 ### Faction System
@@ -29,6 +31,25 @@ The engine has a **complete foundation** for tactical combat with a working PvP 
 - Encounter ends when only one faction has survivors
 - Backward compatible: `faction=None` means "enemy to everyone"
 
+### Special Actions (BG3-Style)
+
+**Jump Action**
+- Cost: Bonus Action + Movement (distance jumped)
+- Range: 15ft base + 5ft per 2 STR above 10 (max based on STR)
+- Requirements: Target must be visible + walkable + unoccupied
+- Does NOT require path (can jump over gaps/enemies)
+
+**Shove Action**
+- Cost: Bonus Action
+- Range: 5ft (adjacent only)
+- Contest: Shover's Athletics CHECK vs target's passive skill DC
+- Target DC: `10 + max(Athletics, Acrobatics) + advantage modifier`
+- Weight limit: Can't shove targets heavier than `STR × 12` lbs
+- Push distance: `5ft base + 5ft per positive STR modifier` (max 20ft)
+- Allies auto-succeed (no check required)
+- Option to knock prone instead of push (`knock_prone=True`)
+- Forced movement does NOT trigger opportunity attacks (uses `ForcedMovementEvent`)
+
 ### Test Utilities (`dnd/utils/test_utils.py`)
 
 Reusable helpers for testing and debugging:
@@ -38,6 +59,22 @@ Reusable helpers for testing and debugging:
 - `get_hp()`, `set_hp()`, `deal_damage_to()` - HP manipulation
 - `has_condition()`, `count_conditions()` - Condition checks
 - `print_combat_state()` - Debug output
+
+### Combat Log System (`dnd/core/combat_log.py`)
+
+Events auto-generate structured combat log entries at COMPLETION phase:
+
+- **CombatLogEntry**: Three verbosity levels (compact, verbose, detailed) with markdown formatting
+- **Structured data models**: `AttackLogData`, `MovementLogData`, `SavingThrowLogData`, `SkillCheckLogData`, etc.
+- **Dice display**: `DiceRollDisplay`, `DamageRollDisplay` with advantage/disadvantage handling
+- **Markdown helpers**: `md_color()`, `md_d20_roll()`, `md_breakdown()` for Rich rendering
+- **Auto-capture**: `Encounter.add_event_to_combat_log(event)` pulls from `event.combat_log`
+
+Events that generate combat logs:
+- `AttackEvent`, `MovementEvent`, `JumpEvent`, `ShoveEvent`
+- `SavingThrowEvent`, `SkillCheckEvent`
+- `TurnStartEvent`, `TurnEndEvent`, `DeathEvent`
+- `ForcedMovementEvent` (for shove/push effects)
 
 ### Fighter Features (All Complete)
 
@@ -163,6 +200,8 @@ pyright
 ```
 dnd/
 ├── core/           # Base classes, events, dice, gridmap, values
+│   ├── combat_log.py   # CombatLogEntry, structured data models, markdown helpers
+│   └── events.py       # Event types including ForcedMovementEvent
 ├── blocks/         # Entity components (abilities, health, equipment, spellcasting)
 ├── classes/        # Character classes
 │   ├── fighter.py, fighter_factory.py      # Fighter + Champion archetype
@@ -174,9 +213,9 @@ dnd/
 │   ├── enchantment.py  # HoldPerson, HoldPersonEffect
 │   └── conjuration.py  # CallLightning, CallLightningStrike
 ├── monsters/       # Creature factories (bestiary.py)
-├── actions.py      # Attack, Move, Dash, Dodge, Disengage, SpellAction base
+├── actions.py      # Attack, Move, Jump, Shove, Dash, Dodge, Disengage, SpellAction
 ├── conditions.py   # All D&D conditions + MageArmorCondition, Concentrating
-├── entity.py       # Main Entity class
+├── entity.py       # Main Entity class (includes weight, passive_skill)
 └── encounter.py    # Turn-based combat management
 
 server/

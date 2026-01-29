@@ -269,8 +269,8 @@ class SecondWind(BaseAction):
 | Type | Used For |
 |------|----------|
 | `SELF` | Dash, Dodge, Disengage, Second Wind |
-| `ENTITY` | Attack, Extra Attack |
-| `POSITION` | Move |
+| `ENTITY` | Attack, Extra Attack, Shove |
+| `POSITION` | Move, Jump |
 
 ### Resource System
 
@@ -472,3 +472,115 @@ All Fighter + Champion features are implemented in `dnd/classes/fighter.py`:
 | 18 | Survivor | Handler | Heal 5+CON at turn start when HP ≤ 50% |
 
 Use these as reference patterns for implementing similar features.
+
+---
+
+## How to Add Combat Log Generation to an Event
+
+Events auto-generate combat log entries at COMPLETION phase via `generate_combat_log()`. The base `Event` class returns `None` by default - subclasses override to provide their own formatting.
+
+### Basic Pattern
+
+```python
+class MyActionEvent(ActionEvent):
+    """Event for my custom action."""
+    name: str = Field(default="My Action")
+    event_type: EventType = Field(default=EventType.BASE_ACTION)
+
+    # Add action-specific fields
+    my_result: int = Field(default=0)
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate combat log for this event.
+
+        IMPORTANT: Use self.* fields only - no external Entity.get() lookups.
+        Entity names must be populated when the event is created.
+        """
+        source_name = self.source_entity_name or "Unknown"
+        target_name = self.target_entity_name or "Unknown"
+
+        # Build three verbosity levels with markdown
+        compact_text = f"{md_color(source_name, 'cyan')} does something to {md_color(target_name, 'yellow')}"
+        verbose_text = compact_text + f"\n  Result: {self.my_result}"
+        detailed_text = verbose_text + f"\n  More details..."
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ACTION,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
+            data={"my_result": self.my_result},  # Structured data for programmatic access
+            success=self.my_result > 0
+        )
+```
+
+### Key Points
+
+1. **Entity names must be set at event creation**, not looked up in `generate_combat_log()`:
+   ```python
+   # In action's _create_declaration_event():
+   return MyActionEvent(
+       source_entity_name=source.name,  # Set here
+       target_entity_name=target.name,  # Set here
+       ...
+   )
+   ```
+
+2. **Use markdown helpers** from `dnd/core/combat_log.py`:
+   - `md_color(text, color)` - `{color:text}` for Rich rendering
+   - `md_d20_roll(roll)` - Format d20 with advantage/disadvantage
+   - `md_breakdown(modifiers)` - Format `[Prof +2, DEX +2]`
+   - `md_outcome(outcome)` - Color HIT/MISS/CRIT appropriately
+
+3. **Three verbosity levels**:
+   - `compact`: One-line summary (for quick log view)
+   - `verbose`: Summary + key details (default display)
+   - `detailed`: Full modifier breakdowns (for debugging)
+
+4. **Structured data** in the `data` field for programmatic access - use typed models when possible:
+   - `AttackLogData`, `MovementLogData`, `SavingThrowLogData`, `SkillCheckLogData`
+
+### Example: Shove Event Combat Log
+
+```python
+def generate_combat_log(self) -> CombatLogEntry:
+    source_name = self.source_entity_name or "Unknown"
+    target_name = self.target_entity_name or "Unknown"
+
+    # COMPACT: Just the outcome
+    if self.contest_success is False:
+        compact_text = f"{md_color(source_name, 'cyan')} fails to shove {md_color(target_name, 'yellow')}"
+    elif self.push_distance > 0:
+        compact_text = f"{md_color(source_name, 'cyan')} shoves {md_color(target_name, 'yellow')} {md_color(f'{self.push_distance}ft', 'green')}"
+
+    # VERBOSE: Add roll info
+    verbose_text = compact_text
+    if self.dice_roll:
+        success_str = md_color("success", "green") if self.contest_success else md_color("fail", "red")
+        verbose_text += f"\n  Athletics: d20({self.dice_roll.total}) vs DC {self.target_passive} → {success_str}"
+
+    # DETAILED: Add more context
+    detailed_text = verbose_text
+    detailed_text += f"\n  Direction: {self.push_direction}"
+
+    return CombatLogEntry(
+        entry_type=CombatLogEntryType.ACTION,
+        source_name=source_name,
+        source_uuid=str(self.source_entity_uuid),
+        target_name=target_name,
+        target_uuid=str(self.target_entity_uuid),
+        compact=compact_text,
+        verbose=verbose_text,
+        detailed=detailed_text,
+        data={
+            "action_type": "shove",
+            "contest_success": self.contest_success,
+            "push_distance": self.push_distance,
+        },
+        success=self.contest_success or False
+    )
+```
