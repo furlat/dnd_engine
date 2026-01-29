@@ -106,6 +106,7 @@ class EntityConfig(BaseModel):
     sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
     spellcasting: Optional[SpellcastingConfig] = Field(default=None, description="Spellcasting configuration (None = non-caster)")
+    weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
 
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
@@ -128,6 +129,7 @@ class Entity(BaseBlock):
     allow_events_conditions: bool = Field(default=True, description="If True, events and conditions will be allowed to be added to the block")
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the entity")
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
+    weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
 
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
@@ -234,7 +236,8 @@ class Entity(BaseBlock):
                 spellcasting=spellcasting,
                 position=config.position,
                 sprite_name=config.sprite_name,
-                faction=config.faction
+                faction=config.faction,
+                weight=config.weight
             )
 
     def _set_position(self,new_position: Tuple[int,int]):
@@ -562,6 +565,33 @@ class Entity(BaseBlock):
                 mod_target.reset_from_target()
 
         return total_bonus_source
+
+    def passive_skill(self, skill_name: SkillName) -> int:
+        """Calculate passive skill for contested checks (BG3-style).
+
+        Formula: 10 + skill bonus + advantage modifier
+        - Advantage on the skill: +5
+        - Disadvantage on the skill: -5
+
+        Used for Shove target DC and other contested checks where
+        the defender uses passive resistance.
+
+        Args:
+            skill_name: The skill to calculate passive for
+
+        Returns:
+            int: The passive skill value (10 + bonus + adv/disadv modifier)
+        """
+        skill_bonus = self.skill_bonus(target_entity_uuid=None, skill_name=skill_name)
+        base = 10 + skill_bonus.normalized_score
+
+        # BG3 passive skill includes advantage/disadvantage
+        if skill_bonus.advantage == AdvantageStatus.ADVANTAGE:
+            base += 5
+        elif skill_bonus.advantage == AdvantageStatus.DISADVANTAGE:
+            base -= 5
+
+        return base
 
     def skill_bonus_cross(self, target_entity_uuid: UUID, skill_name: SkillName) -> Tuple[ModifiableValue, ModifiableValue]:
         should_clear_target = False
