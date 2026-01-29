@@ -1,7 +1,7 @@
 from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost, BaseCost, ActionEvent, TargetType
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, DamageType
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent
