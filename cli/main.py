@@ -10,6 +10,7 @@ Usage:
 import typer
 from typing import Dict, List, Optional
 import time
+import httpx
 
 from cli.api_client import APIClient
 from cli.commands import parse_command, execute_command, GameState, MetaCommand
@@ -34,6 +35,23 @@ def reset_shortcut_registry():
     _shortcut_registry = ShortcutRegistry()
 
 
+def safe_execute_action(client: APIClient, template_name: str, target_index: int) -> Optional[dict]:
+    """Execute action with error handling. Returns result or None on error."""
+    try:
+        return client.execute_action(template_name, target_index)
+    except httpx.HTTPStatusError as e:
+        # Extract error detail from response if available
+        try:
+            detail = e.response.json().get("detail", str(e))
+        except Exception:
+            detail = str(e)
+        display.set_output([f"Action failed: {detail}"])
+        return None
+    except Exception as e:
+        display.set_output([f"Action failed: {e}"])
+        return None
+
+
 def try_execute_dynamic_self_action(cmd_str: str, client: APIClient, state: GameState) -> Optional[str]:
     """
     Try to execute a dynamic self-action using the shortcut registry.
@@ -50,7 +68,9 @@ def try_execute_dynamic_self_action(cmd_str: str, client: APIClient, state: Game
 
     if action:
         # Execute the self-action
-        result = client.execute_action(action.template_name, 0)
+        result = safe_execute_action(client, action.template_name, 0)
+        if result is None:
+            return "refresh"  # Error already shown by safe_execute_action
         display.show_action_result(result, state.turn.get("current_entity_name", "You"))
         state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name}.")
         return "refresh"
@@ -106,7 +126,9 @@ def try_execute_dynamic_other_entity_action(cmd_str: str, args: List[str], clien
     action_obj, target = result
 
     # Execute
-    api_result = client.execute_action(action_obj.template_name, target.index)
+    api_result = safe_execute_action(client, action_obj.template_name, target.index)
+    if api_result is None:
+        return "refresh"  # Error already shown by safe_execute_action
     display.show_action_result(api_result, state.turn.get("current_entity_name", "You"))
     state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name} on {target.target_name}.")
 
@@ -159,7 +181,9 @@ def try_execute_dynamic_position_action(cmd_str: str, args: List[str], client: A
     position = (x, y)
     for target in action.valid_targets:
         if target.position == position:
-            result = client.execute_action(action.template_name, target.index)
+            result = safe_execute_action(client, action.template_name, target.index)
+            if result is None:
+                return "refresh"  # Error already shown by safe_execute_action
             display.show_action_result(result, state.turn.get("current_entity_name", "You"))
             state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} {action.display_name.lower()}s to ({x}, {y}).")
 
@@ -336,8 +360,6 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
     Polls the server-side combat log for new entries and updates display.
     Returns True if game should continue, False if encounter ended.
     """
-    import httpx
-
     poll_interval = 0.5
     last_connected = False
     shown_waiting = False
