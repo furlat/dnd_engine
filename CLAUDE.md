@@ -412,12 +412,12 @@ Actions are registered as templates on entities with `template=True`:
 ```
 Entity.action_templates → get_available_actions() → AvailableActionsResult
     ├── entity_actions (attacks with valid_targets)
-    ├── position_actions (movement)
+    ├── position_actions (Move, Jump - position-based actions)
     └── self_actions (dash, dodge, disengage)
 ```
 
 **Functional API** (`dnd/actions_functional.py`):
-- `setup_standard_actions(entity)` - Registers Move, Dash, Dodge, Disengage + weapon attacks
+- `setup_standard_actions(entity)` - Registers Move, Jump, Dash, Dodge, Disengage + weapon attacks
 - `execute_by_index(entity, name, idx)` - Execute by target index
 
 ### Attack Action
@@ -506,7 +506,7 @@ def create_goblin(
 | Encounter/turn management | `dnd/encounter.py` |
 | **Actions & Registry** | |
 | Base action class + data models | `dnd/core/base_actions.py` |
-| Attack, Move, Dash, Dodge, etc. | `dnd/actions.py` |
+| Attack, Move, Jump, Dash, Dodge, etc. | `dnd/actions.py` |
 | Functional API (setup, execute) | `dnd/actions_functional.py` |
 | **Conditions** | |
 | Base condition class | `dnd/core/base_conditions.py` |
@@ -760,6 +760,11 @@ GridMap (get_map())
 **Spatial events**: `SPATIAL_ENTITY_ENTERED`, `SPATIAL_ENTITY_LEFT`, `SPATIAL_TILE_CHANGED` - fired automatically by GridMap.
 
 **Tiles** are `BaseBlock` objects that can have conditions (fire, traps, difficult terrain).
+
+**Tile Types**: Tiles have a `name` field serialized via API:
+- `"Floor"` - walkable, rendered as `.`
+- `"Wall"` - blocks movement and vision, rendered as `#`
+- `"Water"` - blocks movement, allows vision, rendered as `~` (blue)
 
 ## The Event System
 
@@ -1066,8 +1071,8 @@ This enables a smooth flow: `connect` → `watch` → take actions → `end` →
 
 | File | Purpose |
 |------|---------|
-| `cli/main.py` | Human player CLI with `play` and `playpvp` commands |
-| `cli/agent.py` | Claude agent CLI (connect, watch, state, actions, move, attack, end) |
+| `cli/main.py` | Human player CLI with `play` and `playpvp` commands, position action routing |
+| `cli/agent.py` | Claude agent CLI (connect, watch, state, actions, move, attack, jump, end) |
 | `cli/api_client.py` | HTTP client wrapper with session management |
 | `cli/display.py` | Rich terminal rendering (map, entities, combat log, action results) |
 | `cli/commands.py` | Command parsing and execution for human CLI |
