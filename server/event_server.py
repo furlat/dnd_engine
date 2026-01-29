@@ -1133,7 +1133,8 @@ async def get_entity_available_actions(entity_uuid: str):
             "cost_type": a.cost_type,
             "cost_amount": a.cost_amount,
             "weapon_slot": a.weapon_slot,
-            "weapon_name": a.weapon_name
+            "weapon_name": a.weapon_name,
+            "is_attack": a.is_attack
         }
 
     return {

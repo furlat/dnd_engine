@@ -899,14 +899,13 @@ def render_available_actions_panel(
     all_entity_actions = actions.get("entity_actions", [])
 
     def is_attack_action(action: Dict[str, Any]) -> bool:
-        """Check if action is an attack (Attack_* or Extra Attack_*).
+        """Check if action is an attack using explicit is_attack field.
 
         Attack actions target entities and deal damage.
+        Examples: Attack, Extra Attack, Frenzied Strike.
         NOT included: "Reckless Attack" (self-buff that enables advantage).
         """
-        template = action.get("template_name", "")
-        # Match "Attack_MELEE_MAIN" or "Extra Attack_MELEE_MAIN" patterns
-        return template.startswith("Attack_") or template.startswith("Extra Attack")
+        return action.get("is_attack", False)
 
     attacks = [a for a in all_entity_actions if is_attack_action(a)]
     other_entity_actions = [a for a in all_entity_actions if not is_attack_action(a)]
