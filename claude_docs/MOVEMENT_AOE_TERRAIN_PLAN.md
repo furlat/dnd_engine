@@ -1,5 +1,13 @@
 # Movement and AoE Targeting Plan
 
+## Current Status
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Jump | ✓ COMPLETE | BG3-style jump action working in CLI |
+| Phase 2: Shove | TODO | Contested push with forced movement |
+| Phase 3: AoE Targeting | TODO | Cone, sphere, line, cube shapes |
+
 ## Overview
 
 This document plans systems that will unlock a large portion of sorcerer spells and improve combat mechanics significantly.
@@ -38,7 +46,7 @@ Spell:    source_entity → target_entity OR self (single target)
 
 ---
 
-## Phase 1: Jump Action (BG3-Style)
+## Phase 1: Jump Action (BG3-Style) - IMPLEMENTED ✓
 
 ### Mechanics
 
@@ -568,10 +576,10 @@ class AoEAction:
 
 ## Spells Unlocked by Each Phase
 
-### Phase 1: Jump
-- Jump (spell) - Enhance jump range
+### Phase 1: Jump ✓ COMPLETE
+- Jump (spell) - Enhance jump range (ready to implement)
 - Expeditious Retreat (partial) - Enables movement combos
-- Misty Step (foundation) - Same targeting model
+- Misty Step (foundation) - Same targeting model (position without path)
 
 ### Phase 2: Shove
 - Thunderwave - Forced movement component
@@ -591,12 +599,13 @@ class AoEAction:
 
 ## Implementation Order
 
-### Step 1: Jump Action
-1. Add `jump_range` ModifiableValue to Entity/ActionEconomy
-2. Add `get_jumpable_positions()` to Senses
-3. Implement Jump action class
-4. Add to `get_available_actions()`
-5. Test with CLI
+### Step 1: Jump Action ✓ COMPLETE
+1. ✓ Add `jump_range` ModifiableValue to Entity/ActionEconomy
+2. ✓ Add `get_jumpable_positions()` to Senses
+3. ✓ Implement Jump action class in `dnd/actions.py`
+4. ✓ Add to `get_available_actions()` as position action
+5. ✓ Test with CLI (human CLI: `jump X Y` / `j X Y`, agent CLI: `jump X Y`)
+6. ✓ Combat log integration with JumpEvent
 
 ### Step 2: Shove Action
 1. Add `weight` field to Entity
@@ -649,13 +658,15 @@ All require 3D spatial consideration; implement once together:
 
 ## Files to Create/Modify
 
-| File | Changes |
-|------|---------|
-| `dnd/actions.py` | Add Jump, Shove actions |
-| `dnd/core/events.py` | Add FORCED_MOVEMENT event type, JumpEvent, ShoveEvent |
-| `dnd/core/aoe.py` | NEW: AoE shape classes |
-| `dnd/blocks/sensory.py` | Add `get_jumpable_positions()` |
-| `dnd/blocks/action_economy.py` | Add `jump_range` if needed |
-| `dnd/entity.py` | Add `weight` field, `jump_range` accessor |
-| `dnd/actions_functional.py` | Update `get_available_actions()` for jump/shove/aoe |
-| `dnd/spells/evocation.py` | Add Fireball, Lightning Bolt, etc. |
+| File | Changes | Status |
+|------|---------|--------|
+| `dnd/actions.py` | Add Jump, Shove actions | ✓ Jump done |
+| `dnd/core/events.py` | Add FORCED_MOVEMENT event type, JumpEvent, ShoveEvent | ✓ JumpEvent done |
+| `dnd/core/aoe.py` | NEW: AoE shape classes | TODO |
+| `dnd/blocks/sensory.py` | Add `get_jumpable_positions()` | ✓ Done |
+| `dnd/blocks/action_economy.py` | Add `jump_range` ModifiableValue | ✓ Done |
+| `dnd/entity.py` | Add `weight` field, `jump_range` accessor | TODO (weight) |
+| `dnd/actions_functional.py` | Update `get_available_actions()` for jump/shove/aoe | ✓ Jump done |
+| `dnd/spells/evocation.py` | Add Fireball, Lightning Bolt, etc. | TODO |
+| `cli/main.py` | Position action routing via ShortcutRegistry | ✓ Done |
+| `cli/agent.py` | Jump command support | ✓ Done |
