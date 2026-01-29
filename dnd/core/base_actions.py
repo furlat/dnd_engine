@@ -122,6 +122,7 @@ class BaseAction(BaseObject):
     target_type: TargetType = Field(default=TargetType.SELF, description="What kind of target this action requires")
     template: bool = Field(default=False, description="If True, this is a template that cannot be applied directly - use instantiate()")
     include_self: bool = Field(default=False, description="If True and target_type=ENTITY, self is a valid target (for buff spells like Mage Armor)")
+    is_attack: bool = Field(default=False, description="If True, action is a damage-dealing attack (Attack, Extra Attack, FrenziedStrike)")
 
     # For POSITION actions (like Move, Jump), stored separately from target_entity_uuid
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target position for POSITION type actions")
@@ -462,6 +463,9 @@ class AvailableActionInfo(BaseModel):
     # For attacks - optional weapon info
     weapon_slot: Optional[str] = Field(default=None, description="Weapon slot for attacks")
     weapon_name: Optional[str] = Field(default=None, description="Weapon name for display (e.g., 'Scimitar')")
+
+    # Attack classification
+    is_attack: bool = Field(default=False, description="True if action is a damage-dealing attack")
 
 
 class AvailableActionsResult(BaseModel):

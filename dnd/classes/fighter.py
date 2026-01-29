@@ -1250,6 +1250,7 @@ class ExtraAttack(BaseAction):
     description: str = "Make an additional weapon attack"
     target_type: TargetType = TargetType.ENTITY
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
+    is_attack: bool = True
 
     # Cost: only resource, no action cost
     costs: List[Cost] = []

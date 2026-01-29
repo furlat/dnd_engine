@@ -160,6 +160,7 @@ class AvailableAction:
     description: str = ""
     weapon_slot: Optional[str] = None
     weapon_name: Optional[str] = None
+    _is_attack: bool = False        # True for Attack, Extra Attack, Frenzied Strike
 
     @property
     def command_name(self) -> str:
@@ -175,8 +176,8 @@ class AvailableAction:
 
     @property
     def is_attack(self) -> bool:
-        """Check if this is an attack action."""
-        return self.target_type == "entity" and self.template_name.startswith("Attack")
+        """Check if this is an attack action (uses server-provided is_attack field)."""
+        return self._is_attack
 
     @property
     def is_bonus_action(self) -> bool:
@@ -197,7 +198,8 @@ class AvailableAction:
             cost_amount=data.get("cost_amount", 1),
             description=data.get("description", ""),
             weapon_slot=data.get("weapon_slot"),
-            weapon_name=data.get("weapon_name")
+            weapon_name=data.get("weapon_name"),
+            _is_attack=data.get("is_attack", False)
         )
 
 
@@ -430,10 +432,10 @@ class AvailableActionsState:
     @classmethod
     def from_server(cls, data: Dict[str, Any]) -> 'AvailableActionsState':
         """Parse from server AvailableActionsResult JSON."""
-        # Split entity_actions: Attack_* -> attacks, everything else -> other_entity
+        # Split entity_actions: is_attack=True -> attacks, everything else -> other_entity
         all_entity_actions = [AvailableAction.from_server(a) for a in data.get("entity_actions", [])]
-        attacks = [a for a in all_entity_actions if a.template_name.startswith("Attack")]
-        other_entity = [a for a in all_entity_actions if not a.template_name.startswith("Attack")]
+        attacks = [a for a in all_entity_actions if a.is_attack]
+        other_entity = [a for a in all_entity_actions if not a.is_attack]
 
         movement = [AvailableAction.from_server(a) for a in data.get("position_actions", [])]
         self_actions = [AvailableAction.from_server(a) for a in data.get("self_actions", [])]

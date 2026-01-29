@@ -585,6 +585,7 @@ class Attack(BaseAction):
     description: str = Field(default="Attack a target", description="A description of the attack action")
     target_type: TargetType = Field(default=TargetType.ENTITY, description="Attack targets an entity")
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
+    is_attack: bool = Field(default=True, description="Attack is a damage-dealing attack action")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="A list of costs for the action")
 
     @model_validator(mode="after")

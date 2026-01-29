@@ -776,6 +776,7 @@ class FrenziedStrike(BaseAction):
     description: str = "Make a bonus action melee attack while frenzied"
     target_type: TargetType = TargetType.ENTITY
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
+    is_attack: bool = True
 
     costs: List[Cost] = []
 
