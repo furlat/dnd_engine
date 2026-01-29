@@ -34,7 +34,8 @@ from dnd.core.values import ModifiableValue
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
-    SavingThrowLogData, SkillCheckLogData, format_d20_roll_line
+    SavingThrowLogData, SkillCheckLogData,
+    md_color, md_d20_roll, md_breakdown
 )
 from dnd.core.modifiers import DamageType
 from uuid import UUID, uuid4
@@ -797,14 +798,25 @@ class SavingThrowEvent(D20Event):
         # Build ability name display
         ability_display = self.ability_name.upper()[:3]  # STR, DEX, etc.
 
-        # Build summary
-        result_str = "succeeds" if success else "fails"
-        summary = f"{target_name} {result_str} {ability_display} save (DC {dc})"
+        # Build markdown-formatted verbosity levels
+        success_str = md_color("succeeds", "green") if success else md_color("fails", "red")
 
-        # Build detail line
-        detail_lines = []
-        detail_line = format_d20_roll_line(roll, bonus_breakdown, dc, success or False, "Save")
-        detail_lines.append(detail_line)
+        # COMPACT: "{cyan:Hero} {green:succeeds} {yellow:DEX} save (DC 14)"
+        compact_text = f"{md_color(target_name, 'cyan')} {success_str} {md_color(ability_display, 'yellow')} save (DC {dc})"
+
+        # VERBOSE: Add the roll details
+        d20_str = md_d20_roll(roll)
+        bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
+        verbose_text = f"{md_color(target_name, 'cyan')} {md_color(ability_display, 'yellow')} save vs DC {dc}"
+        verbose_text += f"\n  Save: {d20_str} {bonus_str} = {roll.total} → {success_str}"
+
+        # DETAILED: Add breakdown
+        detailed_text = f"{md_color(target_name, 'cyan')} {md_color(ability_display, 'yellow')} save vs DC {dc}"
+        breakdown_str = md_breakdown(bonus_breakdown)
+        detailed_text += f"\n  Save: {d20_str} {bonus_str}"
+        if breakdown_str:
+            detailed_text += f" {breakdown_str}"
+        detailed_text += f" = {roll.total} → {success_str}"
 
         # Build structured data
         data = SavingThrowLogData(
@@ -824,8 +836,9 @@ class SavingThrowEvent(D20Event):
             source_uuid=str(self.source_entity_uuid),
             target_name=target_name,
             target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
-            summary=summary,
-            detail_lines=detail_lines,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data=data.model_dump(),
             success=success
         )
@@ -897,29 +910,36 @@ class SkillCheckEvent(D20Event):
         # Build skill name display (capitalize first letter)
         skill_display = self.skill_name.replace('_', ' ').title()
 
-        # Build summary
-        if dc is not None:
-            result_str = "succeeds" if success else "fails"
-            summary = f"{source_name} {result_str} {skill_display} check (DC {dc})"
-        else:
-            summary = f"{source_name} rolls {skill_display} check: {roll.total}"
+        # Build markdown-formatted verbosity levels
+        d20_str = md_d20_roll(roll)
+        bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
+        breakdown_str = md_breakdown(bonus_breakdown)
 
-        # Build detail line
-        detail_lines = []
         if dc is not None:
-            detail_line = format_d20_roll_line(roll, bonus_breakdown, dc, success or False, skill_display)
+            success_str = md_color("succeeds", "green") if success else md_color("fails", "red")
+
+            # COMPACT: "{cyan:Hero} {green:succeeds} {yellow:Athletics} check (DC 14)"
+            compact_text = f"{md_color(source_name, 'cyan')} {success_str} {md_color(skill_display, 'yellow')} check (DC {dc})"
+
+            # VERBOSE: Add the roll details
+            verbose_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check vs DC {dc}"
+            verbose_text += f"\n  {skill_display}: {d20_str} {bonus_str} = {roll.total} → {success_str}"
+
+            # DETAILED: Add breakdown
+            detailed_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check vs DC {dc}"
+            detailed_text += f"\n  {skill_display}: {d20_str} {bonus_str}"
+            if breakdown_str:
+                detailed_text += f" {breakdown_str}"
+            detailed_text += f" = {roll.total} → {success_str}"
         else:
             # No DC - just show the roll
-            bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
-            if bonus_breakdown:
-                breakdown_str = " [" + ", ".join(
-                    f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in bonus_breakdown
-                ) + "]"
-            else:
-                breakdown_str = ""
-            d20_val = roll.d20_used if roll.d20_used is not None else (roll.results[0] if roll.results else "?")
-            detail_line = f"{skill_display}: d20({d20_val}) {bonus_str}{breakdown_str} = {roll.total}"
-        detail_lines.append(detail_line)
+            compact_text = f"{md_color(source_name, 'cyan')} rolls {md_color(skill_display, 'yellow')}: {md_color(str(roll.total), 'cyan')}"
+            verbose_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check"
+            verbose_text += f"\n  {skill_display}: {d20_str} {bonus_str} = {roll.total}"
+            detailed_text = verbose_text
+            if breakdown_str:
+                detailed_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check"
+                detailed_text += f"\n  {skill_display}: {d20_str} {bonus_str} {breakdown_str} = {roll.total}"
 
         # Build structured data
         data = SkillCheckLogData(
@@ -936,8 +956,9 @@ class SkillCheckEvent(D20Event):
             entry_type=CombatLogEntryType.SKILL_CHECK,
             source_name=source_name,
             source_uuid=str(self.source_entity_uuid),
-            summary=summary,
-            detail_lines=detail_lines,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data=data.model_dump(),
             success=success
         )
@@ -1038,18 +1059,29 @@ class ForcedMovementEvent(Event):
         source_name = self.source_entity_name or "Unknown"
         target_name = self.target_entity_name or "Unknown"
 
+        # Build markdown-formatted verbosity levels
         if self.actual_distance == 0:
-            summary = f"{target_name} resists being pushed"
+            compact_text = f"{md_color(target_name, 'yellow')} resists being pushed"
         elif self.blocked_by_obstacle:
-            summary = f"{target_name} pushed {self.actual_distance}ft (blocked)"
+            compact_text = f"{md_color(target_name, 'yellow')} pushed {md_color(f'{self.actual_distance}ft', 'green')} (blocked)"
         else:
-            summary = f"{target_name} pushed {self.actual_distance}ft"
+            compact_text = f"{md_color(target_name, 'yellow')} pushed {md_color(f'{self.actual_distance}ft', 'green')}"
 
-        detail_lines = [
-            f"Pushed by: {source_name}",
-            f"Direction: {self.direction}",
-            f"Distance: {self.actual_distance}ft" + (" (blocked)" if self.blocked_by_obstacle else "")
-        ]
+        # VERBOSE: Add pusher
+        verbose_text = f"{md_color(source_name, 'cyan')} pushes {md_color(target_name, 'yellow')}"
+        if self.actual_distance > 0:
+            verbose_text += f" {md_color(f'{self.actual_distance}ft', 'green')}"
+            if self.blocked_by_obstacle:
+                verbose_text += " (blocked)"
+        else:
+            verbose_text += f" - {md_color('resisted', 'red')}"
+
+        # DETAILED: Add direction and positions
+        detailed_text = verbose_text
+        detailed_text += f"\n  Direction: {self.direction}"
+        detailed_text += f"\n  {self.start_position} → {self.end_position}"
+        if self.actual_distance != self.intended_distance:
+            detailed_text += f"\n  Intended: {self.intended_distance}ft, Actual: {self.actual_distance}ft"
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.MOVEMENT,  # Reuse existing type for display
@@ -1057,8 +1089,9 @@ class ForcedMovementEvent(Event):
             source_uuid=str(self.source_entity_uuid),
             target_name=target_name,
             target_uuid=str(self.target_entity_uuid),
-            summary=summary,
-            detail_lines=detail_lines,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data={
                 "type": "forced_movement",
                 "cause": self.cause,
@@ -1267,11 +1300,17 @@ class TurnStartEvent(TurnEvent):
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for turn start."""
         entity_name = self.source_entity_name or "Unknown"
+
+        # Turn start/end use the same format at all verbosity levels
+        text = f"─── {md_color(entity_name, 'bold yellow')}'s turn ───"
+
         return CombatLogEntry(
             entry_type=CombatLogEntryType.TURN_START,
             source_name=entity_name,
             source_uuid=str(self.entity_uuid),
-            summary=f"{entity_name}'s turn begins",
+            compact=text,
+            verbose=text,
+            detailed=text,
             data={
                 "entity_name": entity_name,
                 "entity_uuid": str(self.entity_uuid),
@@ -1292,11 +1331,17 @@ class TurnEndEvent(TurnEvent):
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for turn end."""
         entity_name = self.source_entity_name or "Unknown"
+
+        # Turn end uses dimmer formatting
+        text = f"─ {md_color(entity_name, 'dim')}'s turn ends ─"
+
         return CombatLogEntry(
             entry_type=CombatLogEntryType.TURN_END,
             source_name=entity_name,
             source_uuid=str(self.entity_uuid),
-            summary=f"{entity_name}'s turn ends",
+            compact=text,
+            verbose=text,
+            detailed=text,
             data={
                 "entity_name": entity_name,
                 "entity_uuid": str(self.entity_uuid),
@@ -1319,12 +1364,21 @@ class DeathEvent(Event):
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log entry for death."""
+        # Death uses dramatic formatting
+        compact_text = f"☠ {md_color(self.entity_name, 'bold red')} has been defeated!"
+        verbose_text = compact_text
+        detailed_text = f"☠ {md_color(self.entity_name, 'bold red')} has been defeated!"
+        detailed_text += f"\n  Dropped to {self.final_hp} HP"
+        if self.killer_name:
+            detailed_text += f"\n  Killed by: {md_color(self.killer_name, 'cyan')}"
+
         return CombatLogEntry(
             entry_type=CombatLogEntryType.DEATH,
             source_name=self.entity_name,
             source_uuid=str(self.entity_uuid),
-            summary=f"{self.entity_name} has been defeated!",
-            detail_lines=[f"{self.entity_name} dropped to {self.final_hp} HP and died."],
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data={"entity_name": self.entity_name, "final_hp": self.final_hp},
             success=True
         )

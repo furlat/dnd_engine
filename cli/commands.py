@@ -13,6 +13,7 @@ from enum import Enum
 from cli.api_client import APIClient
 from cli.action_model import AvailableActionsState
 from cli import display
+from dnd.core.combat_log import CombatLogVerbosity
 
 
 # =============================================================================
@@ -32,6 +33,8 @@ class MetaCommand(Enum):
     NEXT_TURN = "nt"
     CURRENT_TURN = "ct"
     FIRST_TURN = "ft"
+    # Verbosity control
+    LOG_VERBOSITY = "log"
 
 
 # Command aliases
@@ -60,6 +63,10 @@ ALIASES: Dict[str, str] = {
     "next": "nt",
     "current": "ct",
     "first": "ft",
+    # Verbosity control
+    "log": "log",
+    "verbosity": "log",
+    "v": "log",
 }
 
 
@@ -218,6 +225,9 @@ def execute_meta_command(
 
         elif cmd.command == MetaCommand.FIRST_TURN.value:
             return handle_history_first(state)
+
+        elif cmd.command == MetaCommand.LOG_VERBOSITY.value:
+            return handle_log_verbosity(cmd)
 
         else:
             display.set_output([
@@ -420,6 +430,52 @@ def handle_history_first(state: GameState) -> Optional[str]:
     else:
         display.show_info("No history available.")
         return None
+
+
+# =============================================================================
+# Log Verbosity Control
+# =============================================================================
+
+def handle_log_verbosity(cmd: ParsedCommand) -> Optional[str]:
+    """Handle log verbosity command.
+
+    Usage:
+        log           - Show current verbosity
+        log compact   - Set to compact (one-line)
+        log verbose   - Set to verbose (default)
+        log detailed  - Set to detailed (full breakdowns)
+        log c/v/d     - Shortcuts
+    """
+    if not cmd.args:
+        # Show current verbosity with examples
+        current = display.COMBAT_LOG_VERBOSITY
+        display.set_output([
+            f"Log verbosity: {current.value.upper()}",
+            "",
+            "  log c (compact)  - One line:    Hero hits Skeleton for 7 damage",
+            "  log v (verbose)  - With rolls:  + Attack d20(15)+4=19 vs AC 13",
+            "  log d (detailed) - Breakdowns:  + [Prof +2, DEX +2]",
+        ])
+        return "refresh"
+
+    level = cmd.args[0].lower()
+
+    if level in ("compact", "c"):
+        display.set_combat_log_verbosity(CombatLogVerbosity.COMPACT)
+        display.set_output(["Log verbosity: compact (one-line summaries)"])
+    elif level in ("verbose", "v"):
+        display.set_combat_log_verbosity(CombatLogVerbosity.VERBOSE)
+        display.set_output(["Log verbosity: verbose (with roll details)"])
+    elif level in ("detailed", "d"):
+        display.set_combat_log_verbosity(CombatLogVerbosity.DETAILED)
+        display.set_output(["Log verbosity: detailed (full modifier breakdowns)"])
+    else:
+        display.set_output([
+            f"Unknown verbosity level: {level}",
+            "Options: compact (c), verbose (v), detailed (d)"
+        ])
+
+    return "refresh"
 
 
 # =============================================================================

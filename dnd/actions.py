@@ -4,11 +4,12 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent, ForcedMovementEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData,
-    format_attack_roll_line, format_damage_line
+    format_attack_compact, format_attack_verbose, format_attack_detailed,
+    md_color
 )
 from pydantic import Field, model_validator
 from typing import Optional, List, TypeVar, Tuple, Self, cast
@@ -102,15 +103,22 @@ class MovementEvent(ActionEvent):
         # Build path string for detail line
         path_str = " -> ".join(f"({p[0]}, {p[1]})" for p in path) if path else ""
 
-        # Build summary
-        summary = f"{source_name} moves {distance_feet}ft to ({self.end_position[0]}, {self.end_position[1]})"
+        # Build markdown-formatted verbosity levels
+        end_pos = f"({self.end_position[0]},{self.end_position[1]})"
+        start_pos = f"({self.start_position[0]},{self.start_position[1]})"
 
-        # Build detail lines
-        detail_lines = []
-        if path_str:
-            detail_lines.append(f"Path: {path_str}")
+        # Compact: "{cyan:Hero} moves {green:15ft} to {yellow:(5,3)}"
+        compact_text = f"{md_color(source_name, 'cyan')} moves {md_color(f'{distance_feet}ft', 'green')} to {md_color(end_pos, 'yellow')}"
+
+        # Verbose: same as compact + position change
+        verbose_text = f"{md_color(source_name, 'cyan')} moves {start_pos} → {md_color(end_pos, 'green')}"
         if movement_cost > 0:
-            detail_lines.append(f"Cost: {movement_cost}ft movement")
+            verbose_text += f" ({movement_cost}ft)"
+
+        # Detailed: includes path
+        detailed_text = verbose_text
+        if path_str:
+            detailed_text += f"\n  Path: {path_str}"
 
         # Build structured data
         data = MovementLogData(
@@ -127,8 +135,9 @@ class MovementEvent(ActionEvent):
             entry_type=CombatLogEntryType.MOVEMENT,
             source_name=source_name,
             source_uuid=str(self.source_entity_uuid),
-            summary=summary,
-            detail_lines=detail_lines,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data=data.model_dump(),
             success=True
         )
@@ -504,28 +513,25 @@ class AttackEvent(ActionEvent):
         # Check for opportunity attack marker in name
         is_opportunity_attack = "opportunity" in (self.name or "").lower()
 
-        # Build summary
-        if is_crit:
-            summary = f"{source_name} CRITS {target_name} for {total_damage} damage!"
-        elif is_hit:
-            summary = f"{source_name} hits {target_name} for {total_damage} damage"
-        else:
-            summary = f"{source_name} misses {target_name}"
-
-        # Build detail lines
-        detail_lines = []
-
-        # Attack roll line
-        attack_line = format_attack_roll_line(
-            attack_roll, attack_breakdown, target_ac, ac_breakdown, outcome
+        # Build markdown-formatted verbosity levels
+        compact_text = format_attack_compact(
+            source_name, target_name, outcome, total_damage
         )
-        detail_lines.append(attack_line)
 
-        # Damage line (only on hit)
-        if is_hit and damage_roll_displays:
-            damage_line = format_damage_line(damage_roll_displays)
-            if damage_line:
-                detail_lines.append(damage_line)
+        verbose_text = format_attack_verbose(
+            source_name, target_name, weapon_name,
+            attack_roll, target_ac, outcome,
+            damage_roll_displays, total_damage,
+            is_opportunity_attack
+        )
+
+        detailed_text = format_attack_detailed(
+            source_name, target_name, weapon_name,
+            attack_roll, attack_breakdown,
+            target_ac, ac_breakdown, outcome,
+            damage_roll_displays, total_damage,
+            is_opportunity_attack
+        )
 
         # Build structured data
         data = AttackLogData(
@@ -556,8 +562,9 @@ class AttackEvent(ActionEvent):
             source_uuid=str(self.source_entity_uuid),
             target_name=target_name,
             target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
-            summary=summary,
-            detail_lines=detail_lines,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data=data.model_dump(),
             success=is_hit
         )
@@ -1322,9 +1329,20 @@ class JumpEvent(ActionEvent):
         """Generate a combat log entry for this jump event."""
         source_name = self.source_entity_name or "Unknown"
 
-        summary = f"{source_name} jumps {self.jump_distance}ft to ({self.end_position[0]}, {self.end_position[1]})"
+        end_pos = f"({self.end_position[0]},{self.end_position[1]})"
+        start_pos = f"({self.start_position[0]},{self.start_position[1]})"
 
-        detail_lines = [f"Jump distance: {self.jump_distance}ft"]
+        # Compact: "{cyan:Hero} {yellow:jumps} {green:15ft} to {yellow:(5,3)}"
+        compact_text = f"{md_color(source_name, 'cyan')} {md_color('jumps', 'yellow')} {md_color(f'{self.jump_distance}ft', 'green')} to {md_color(end_pos, 'yellow')}"
+
+        # Verbose: includes start position
+        verbose_text = f"{md_color(source_name, 'cyan')} {md_color('jumps', 'yellow')} {start_pos} → {md_color(end_pos, 'green')} ({self.jump_distance}ft)"
+
+        # Detailed: includes path if available
+        detailed_text = verbose_text
+        if self.path and len(self.path) > 2:
+            path_str = " -> ".join(f"({p[0]},{p[1]})" for p in self.path)
+            detailed_text += f"\n  Air path: {path_str}"
 
         data = MovementLogData(
             entity_name=source_name,
@@ -1340,8 +1358,9 @@ class JumpEvent(ActionEvent):
             entry_type=CombatLogEntryType.MOVEMENT,
             source_name=source_name,
             source_uuid=str(self.source_entity_uuid),
-            summary=summary,
-            detail_lines=detail_lines,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data=data.model_dump(),
             success=True
         )
@@ -1655,6 +1674,7 @@ class ShoveEvent(ActionEvent):
     # Push result
     push_distance: int = Field(default=0, description="How far target was pushed (feet)")
     push_direction: Tuple[int, int] = Field(default=(0, 0), description="Direction of push (dx, dy)")
+    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target's final position after push")
     knocked_prone: bool = Field(default=False, description="Whether target was knocked prone instead")
     is_ally: bool = Field(default=False, description="Whether target is an ally (auto-succeed)")
 
@@ -1663,29 +1683,36 @@ class ShoveEvent(ActionEvent):
         source_name = self.source_entity_name or "Unknown"
         target_name = self.target_entity_name or "Unknown"
 
-        # Build summary based on outcome
+        # Build markdown-formatted verbosity levels
+
+        # COMPACT: Just the outcome with arrival position
         if self.contest_success is False:
-            summary = f"{source_name} fails to shove {target_name}"
+            compact_text = f"{md_color(source_name, 'cyan')} fails to shove {md_color(target_name, 'yellow')}"
         elif self.knocked_prone:
-            summary = f"{source_name} knocks {target_name} prone!"
+            compact_text = f"{md_color(source_name, 'cyan')} knocks {md_color(target_name, 'yellow')} {md_color('prone', 'red')}!"
         elif self.push_distance > 0:
-            summary = f"{source_name} shoves {target_name} {self.push_distance}ft"
+            pos_str = f"→ {self.end_position}" if self.end_position else ""
+            compact_text = f"{md_color(source_name, 'cyan')} shoves {md_color(target_name, 'yellow')} {md_color(f'{self.push_distance}ft', 'green')} {pos_str}"
         else:
-            summary = f"{source_name} shoves {target_name} (blocked)"
+            compact_text = f"{md_color(source_name, 'cyan')} shoves {md_color(target_name, 'yellow')} (blocked)"
 
-        # Build detail lines
-        detail_lines = []
-        if self.is_ally:
-            detail_lines.append("Ally (auto-success)")
-        elif self.dice_roll is not None:
+        # VERBOSE: Add the roll info
+        verbose_text = compact_text
+        if not self.is_ally and self.dice_roll is not None:
             roll_total = self.dice_roll.total
-            detail_lines.append(f"Athletics check: {roll_total} vs DC {self.target_passive} ({self.target_resistance_skill})")
+            success_str = md_color("success", "green") if self.contest_success else md_color("fail", "red")
+            verbose_text += f"\n  Athletics: d20({md_color(str(roll_total), 'cyan')}) vs DC {self.target_passive} → {success_str}"
+        elif self.is_ally:
+            verbose_text += f" ({md_color('ally', 'green')})"
 
+        # DETAILED: Add more context
+        detailed_text = verbose_text
         if self.contest_success:
             if self.knocked_prone:
-                detail_lines.append("Target knocked prone")
+                detailed_text += f"\n  Effect: Target knocked {md_color('prone', 'red')}"
             else:
-                detail_lines.append(f"Push direction: {self.push_direction}, distance: {self.push_distance}ft")
+                detailed_text += f"\n  Direction: {self.push_direction}"
+                detailed_text += f"\n  Weight: {self.target_weight}lbs (max: {self.max_shove_weight}lbs)"
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.ACTION,
@@ -1693,8 +1720,9 @@ class ShoveEvent(ActionEvent):
             source_uuid=str(self.source_entity_uuid),
             target_name=target_name,
             target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
-            summary=summary,
-            detail_lines=detail_lines,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
             data={
                 "action_type": "shove",
                 "target_weight": self.target_weight,
@@ -1702,6 +1730,7 @@ class ShoveEvent(ActionEvent):
                 "contest_success": self.contest_success,
                 "push_distance": self.push_distance,
                 "push_direction": list(self.push_direction),
+                "end_position": list(self.end_position) if self.end_position else None,
                 "knocked_prone": self.knocked_prone,
                 "is_ally": self.is_ally
             },
@@ -1997,6 +2026,7 @@ class Shove(BaseAction):
             new_phase=EventPhase.COMPLETION,
             push_distance=push_distance,
             push_direction=push_direction,
+            end_position=final_pos,
             status_message=f"Shoved {target.name} {push_distance}ft" + (" (blocked)" if blocked else "")
         )
 
