@@ -186,9 +186,16 @@ Entity
 ├── action_economy: ActionEconomy     # actions, bonus_actions, reactions, movement
 ├── senses: Senses                    # position, visible cells, paths, visible entities
 ├── proficiency_bonus: ModifiableValue
+├── weight: int                       # Weight in pounds (default 150, used for Shove weight limit)
+├── faction: Optional[str]            # Faction name for ally/enemy detection (None = enemy to all)
 ├── active_conditions: Dict[str, BaseCondition]
 └── active_conditions_by_uuid / by_source (lookup dicts)
 ```
+
+**Key Entity Methods:**
+- `passive_skill(skill_name)` - Returns `10 + skill bonus + advantage modifier` (for contested checks like Shove)
+- `is_ally(other)` / `is_enemy(other)` - Faction-based relationship checks
+- `get_visible_enemies()` / `get_visible_allies()` - Filtered visibility by faction
 
 ## The ModifiableValue System
 
@@ -495,7 +502,7 @@ def create_goblin(
 | Modifiers (Advantage, Critical, etc.) | `dnd/core/modifiers.py` |
 | Base classes | `dnd/core/base_object.py`, `base_block.py` |
 | Event system | `dnd/core/events.py` |
-| Combat log models | `dnd/core/combat_log.py` |
+| Combat log (CombatLogEntry, verbosity, markdown) | `dnd/core/combat_log.py` |
 | Dice rolling | `dnd/core/dice.py` |
 | **Spatial System** | |
 | GridMap (central spatial manager) | `dnd/core/gridmap.py` |
@@ -506,8 +513,9 @@ def create_goblin(
 | Encounter/turn management | `dnd/encounter.py` |
 | **Actions & Registry** | |
 | Base action class + data models | `dnd/core/base_actions.py` |
-| Attack, Move, Jump, Dash, Dodge, etc. | `dnd/actions.py` |
+| Attack, Move, Jump, Shove, Dash, Dodge, etc. | `dnd/actions.py` |
 | Functional API (setup, execute) | `dnd/actions_functional.py` |
+| Opportunity attack handler | `dnd/reactions.py` |
 | **Conditions** | |
 | Base condition class | `dnd/core/base_conditions.py` |
 | All D&D conditions | `dnd/conditions.py` |
@@ -561,6 +569,9 @@ def create_goblin(
 | Barbarian vs Fighter combat | `examples/test_barbarian_fighter_combat.py` |
 | Concentration system tests | `examples/test_concentration.py` |
 | Concentration spells tests | `examples/test_concentration_spells.py` |
+| Jump action tests | `examples/test_jump.py` |
+| Jump API tests | `examples/test_jump_api.py` |
+| Shove action tests | `examples/test_shove.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
 | Session management | `server/session.py` |
@@ -783,10 +794,12 @@ Each `phase_to()` creates new event with same `lineage_uuid`. EventQueue notifie
 | Type | Purpose |
 |------|---------|
 | `ATTACK` | Attack action |
-| `MOVEMENT` | Move action |
+| `MOVEMENT` | Move action (triggers OA when leaving threat) |
+| `FORCED_MOVEMENT` | Push/pull movement (does NOT trigger OA) - used by Shove, Thunderwave |
 | `DAMAGE_ROLLED` | After dice rolled, before applied (for dice manipulation) |
 | `TAKE_DAMAGE` | Damage application |
 | `SAVING_THROW` | Save requested/resolved |
+| `SKILL_CHECK` | Skill check (e.g., Athletics contest for Shove) |
 | `CONDITION_APPLICATION` | Condition added |
 | `SPATIAL_ENTITY_ENTERED` | Entity moved into cell |
 
@@ -1006,14 +1019,25 @@ class CombatLogEntry(BaseModel):
     source_uuid: str
     target_name: Optional[str]
     target_uuid: Optional[str]
-    summary: str                    # One-line summary for display
-    detail_lines: List[str]         # Verbose breakdown lines
+    compact: str                    # One-line summary with markdown
+    verbose: str                    # Summary + key details with markdown
+    detailed: str                   # Full breakdown with all modifiers
     data: Dict[str, Any]            # Typed data (AttackLogData, MovementLogData, etc.)
     success: Optional[bool]
 ```
 
+**Three Verbosity Levels** - Each with markdown formatting for Rich:
+- `compact`: One-liner like `"{cyan:Hero} {green:hits} {yellow:Skeleton} for {red:7} damage"`
+- `verbose`: Adds roll details like `"Attack: d20(15) +4 = 19 vs AC 13 → HIT"`
+- `detailed`: Full modifier breakdowns like `"[Prof +2, DEX +2]"`
+
+**Markdown Formatting** (in `dnd/core/combat_log.py`):
+- `{color:text}` → Colored text (e.g., `{cyan:Hero}`, `{red:MISS}`)
+- `**text**` → Bold
+- Helpers: `md_color()`, `md_d20_roll()`, `md_breakdown()`, `md_outcome()`
+
 **Entry Types** (`CombatLogEntryType`):
-- `ATTACK`, `MOVEMENT`, `ACTION` (Dash/Dodge/Disengage)
+- `ATTACK`, `MOVEMENT`, `ACTION` (Dash/Dodge/Disengage/Shove)
 - `SAVING_THROW`, `SKILL_CHECK`
 - `CONDITION_APPLIED`, `CONDITION_REMOVED`
 - `DAMAGE_TAKEN`, `HEAL`, `DEATH`
@@ -1024,10 +1048,11 @@ class CombatLogEntry(BaseModel):
 - `MovementLogData`: entity_name, start_position, end_position, path, distance_feet
 - `SavingThrowLogData`: entity_name, ability, dc, roll, bonus_breakdown, success
 - `SkillCheckLogData`: entity_name, skill, dc, roll, bonus_breakdown, success
+- Shove data: action_type, target_weight, contest_success, push_distance, push_direction, end_position
 
 **API Endpoints:**
 - `GET /combat-log?since=N` - Returns `CombatLogEntry.to_dict()` (raw `model_dump()`)
-- CLI uses proper field names: `entry_type`, `summary`, `data["entity_name"]`, etc.
+- CLI uses proper field names: `entry_type`, `compact`/`verbose`/`detailed`, `data["entity_name"]`, etc.
 
 **Modifier Breakdown System** (`dnd/core/values.py`):
 - `ModifiableValue.get_breakdown()` - Extracts numerical modifiers with cleaned names
