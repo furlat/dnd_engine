@@ -398,7 +398,7 @@ def render_map_content(
         name, is_dead = name_dead_list[0]
         if is_dead:
             result.append("% ", style="dim")
-            result.append(f"[dim strikethrough]{name}[/dim strikethrough]  ")
+            result.append(f"{name}  ", style="dim strike")
         else:
             result.append(f"{icon} ", style="bold red")
             result.append(f"{name}  ")
@@ -473,7 +473,7 @@ def render_combatants_panel(
         is_me = e["uuid"] == current_entity_uuid
         name = e['name']
         if e.get("is_dead"):
-            name = f"[dim strikethrough]{name}[/dim strikethrough]"
+            name = f"[dim strike]{name}[/dim strike]"
         elif is_active and is_my_turn:
             name = f"[bold green]► {name}[/bold green]"
         elif is_active:
@@ -551,7 +551,7 @@ def render_turn_info_panel(
         is_current = e["uuid"] == current_uuid
         name = e['name']
         if e.get("is_dead"):
-            name = f"[dim strikethrough]{name}[/dim strikethrough]"
+            name = f"[dim strike]{name}[/dim strike]"
         elif is_current and is_my_turn:
             name = f"[bold green]{name}[/bold green]"
         elif is_current:

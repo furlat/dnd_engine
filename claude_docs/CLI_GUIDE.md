@@ -28,6 +28,8 @@ The human CLI (`python -m cli play` or `playpvp`) uses a Rich terminal interface
 |---------|-------|-------------|
 | `move X Y` | `m X Y` | Move to position (X, Y) |
 | `m` | - | Show valid move positions on map |
+| `jump X Y` | `j X Y` | Jump to visible position (costs bonus action + movement) |
+| `j` | - | Show valid jump positions on map |
 | `attack N` | `a N` | Attack target by number |
 | `a` | - | Show attack targets |
 | `dash` | `d` | Dash (double movement this turn) |
@@ -37,7 +39,7 @@ The human CLI (`python -m cli play` or `playpvp`) uses a Rich terminal interface
 
 ### Display Panels
 
-- **Battlefield**: ASCII map with entities (`@` = player, first letter = enemies)
+- **Battlefield**: ASCII map with entities (`@` = player, letters = enemies, `#` = wall, `~` = water)
 - **Combatants**: Entity table (HP, AC, position, conditions)
 - **Combat Log**: Formatted action history with roll breakdowns
 - **Available Actions**: What you can do (with action economy in title)
@@ -68,6 +70,7 @@ python -m cli.agent actions     # Show available actions
 
 ```bash
 python -m cli.agent move X Y    # Move to position (X, Y)
+python -m cli.agent jump X Y    # Jump to visible position
 python -m cli.agent attack N    # Attack target by index
 python -m cli.agent dash        # Take Dash action
 python -m cli.agent dodge       # Take Dodge action
@@ -137,7 +140,10 @@ To restart: User restarts `playpvp`, Claude runs `disconnect` -> `connect` -> `w
 ```json
 {
   "entity_actions": [{"template_name": "Attack_MELEE_MAIN", "valid_targets": [...]}],
-  "position_actions": [{"template_name": "Move", "valid_targets": [...]}],
+  "position_actions": [
+    {"template_name": "Move", "valid_targets": [...]},
+    {"template_name": "Jump", "valid_targets": [...]}
+  ],
   "self_actions": [{"template_name": "Dash", "can_afford": true}],
   "remaining_movement": 30
 }
