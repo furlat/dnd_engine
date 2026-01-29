@@ -95,6 +95,7 @@ class APITile(BaseModel):
     y: int
     walkable: bool
     visible: bool
+    name: str = "Floor"  # Tile name: "Floor", "Wall", "Water", etc.
 
 
 class APIGrid(BaseModel):
@@ -109,7 +110,7 @@ class APIGrid(BaseModel):
     def create(cls, grid: 'GridMap') -> 'APIGrid':
         bounds = grid.bounds  # Returns (min_x, min_y, max_x, max_y)
         tiles = [
-            APITile(x=x, y=y, walkable=td.walkable, visible=td.visible)
+            APITile(x=x, y=y, walkable=td.walkable, visible=td.visible, name=td.name)
             for (x, y), td in grid._tiles.items()
         ]
         return cls(

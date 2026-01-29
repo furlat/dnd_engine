@@ -489,7 +489,12 @@ def _log_ai_action(action: Dict[str, Any], state: GameState):
         from_pos = data.get("start_position", [0, 0])
         to_pos = data.get("end_position", [0, 0])
         path = data.get("path", [])
-        state.add_to_log(f"{entity} moves {tuple(from_pos)} → {tuple(to_pos)}")
+        # Extract action verb from summary (e.g., "Hero jumps 15ft..." -> "jumps")
+        summary = action.get("summary", "")
+        action_verb = "moves"  # Default
+        if " jumps " in summary:
+            action_verb = "jumps"
+        state.add_to_log(f"{entity} {action_verb} {tuple(from_pos)} → {tuple(to_pos)}")
         if path:
             state.last_movement_path = [tuple(p) for p in path]
 

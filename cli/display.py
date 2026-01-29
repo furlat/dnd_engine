@@ -353,7 +353,12 @@ def render_map_content(
             elif tile is None:
                 char, style = " ", ""
             elif not tile.get("walkable", True):
-                char, style = "#", "white"
+                # Distinguish water from walls
+                tile_name = tile.get("name", "Wall")
+                if tile_name == "Water":
+                    char, style = "~", "bold blue"
+                else:
+                    char, style = "#", "white"
             else:
                 char = "."
                 in_hero = pos in hero_visible
@@ -709,8 +714,10 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
         mover = entry.get("entity_name", "Someone")
         from_pos = entry.get("start_position", [0, 0])
         to_pos = entry.get("end_position", [0, 0])
+        # Use action_verb if provided (e.g., "jumped", "moved")
+        action_verb = entry.get("action_verb", "moved")
         content.append(f"{mover}", style="bold cyan")
-        content.append(" moved ")
+        content.append(f" {action_verb} ")
         content.append(f"({from_pos[0]},{from_pos[1]})→({to_pos[0]},{to_pos[1]})", style="green")
 
     elif entry_type == "death":
@@ -1189,11 +1196,17 @@ def display_combat_log_entry(entry: Dict[str, Any]):
             log_entry["is_opportunity_attack"] = True
         add_to_combat_log(log_entry)
     elif entry_type == "movement":
+        # Extract action verb from summary (e.g., "Hero jumps 15ft..." -> "jumped")
+        summary = entry.get("summary", "")
+        action_verb = "moved"  # Default
+        if " jumps " in summary:
+            action_verb = "jumped"
         add_to_combat_log({
             "type": "move",
             "entity_name": data.get("entity_name", "Someone"),
             "start_position": data.get("start_position", [0, 0]),
             "end_position": data.get("end_position", [0, 0]),
+            "action_verb": action_verb,
         })
     elif entry_type == "death":
         add_to_combat_log({
