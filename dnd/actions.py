@@ -145,7 +145,7 @@ class Move(BaseAction):
     """
     name: str = Field(default="Move", description="A movement action")
     description: str = Field(default="Move to a position", description="A description of the movement action")
-    target_type: TargetType = Field(default=TargetType.POSITION, description="Move targets a position")
+    target_type: TargetType = Field(default=TargetType.POSITION_PATH, description="Move targets a position via path")
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="The end position of the movement")
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="The path of the movement")
     use_movement_cost: bool = Field(default=True, description="Whether to use the movement cost")
@@ -1302,6 +1302,324 @@ class DropProne(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message="No costs for Drop Prone"
         )
+
+
+# =============================================================================
+# Jump Action: LOS-Based Position Targeting
+# =============================================================================
+
+class JumpEvent(ActionEvent):
+    """An event that represents a jump movement."""
+    name: str = Field(default="Jump", description="A jump event")
+    event_type: EventType = Field(default=EventType.MOVEMENT, description="Movement type event")
+    costs: List[BaseCost] = Field(default_factory=list, description="Movement cost for the jump")
+    start_position: Tuple[int, int] = Field(description="Starting position")
+    end_position: Tuple[int, int] = Field(description="Landing position")
+    jump_distance: int = Field(default=0, description="Distance jumped in feet")
+    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Straight-line path through air")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for this jump event."""
+        source_name = self.source_entity_name or "Unknown"
+
+        summary = f"{source_name} jumps {self.jump_distance}ft to ({self.end_position[0]}, {self.end_position[1]})"
+
+        detail_lines = [f"Jump distance: {self.jump_distance}ft"]
+
+        data = MovementLogData(
+            entity_name=source_name,
+            entity_uuid=str(self.source_entity_uuid),
+            start_position=self.start_position,
+            end_position=self.end_position,
+            path=self.path or [self.start_position, self.end_position],
+            distance_feet=self.jump_distance,
+            movement_cost=self.jump_distance
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.MOVEMENT,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            summary=summary,
+            detail_lines=detail_lines,
+            data=data.model_dump(),
+            success=True
+        )
+
+
+class Jump(BaseAction):
+    """
+    Jump to a visible position within range - uses bonus action, costs movement.
+
+    Jump range = 15ft base + STR bonus (5ft per point of STR modifier above 10).
+    This is a simplified implementation combining long jump and high jump concepts.
+
+    Key differences from Move:
+    - Uses POSITION_LOS targeting (visible positions, not path-reachable)
+    - Can bypass obstacles, difficult terrain, and gaps
+    - Still costs movement equal to distance jumped
+    - Landing position must be walkable and unoccupied
+
+    When used as a template (template=True), end_position should be set via set_target_position()
+    before pre_validate() or instantiate().
+    """
+    name: str = Field(default="Jump", description="A jump action")
+    description: str = Field(default="Jump to a visible position", description="Description")
+    target_type: TargetType = Field(default=TargetType.POSITION_LOS, description="Jump uses LOS targeting")
+    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Landing position")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def get_range(self) -> Optional[Range]:
+        """Calculate jump range based on STR.
+
+        Base range: 15ft
+        STR bonus: +5ft per point of STR modifier above 0
+
+        Examples:
+        - STR 10 (mod +0): 15ft
+        - STR 14 (mod +2): 25ft
+        - STR 18 (mod +4): 35ft
+        - STR 20 (mod +5): 40ft
+        """
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return Range(type=RangeType.REACH, normal=15)
+
+        base_range = 15
+        str_mod = entity.ability_scores.strength.modifier
+        str_bonus = max(0, str_mod) * 5  # +5ft per positive STR mod point
+
+        total_range = base_range + str_bonus
+        return Range(type=RangeType.REACH, normal=total_range)
+
+    def get_valid_positions(self) -> List[Tuple[int, int]]:
+        """Get valid landing positions for jump.
+
+        Valid if:
+        1. Visible (LOS)
+        2. Within jump range
+        3. Within available movement
+        4. Walkable tile
+        5. Unoccupied by other entities
+        """
+        from dnd.core.gridmap import get_map
+
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return []
+
+        action_range = self.get_range()
+        max_range = action_range.normal if action_range else 15
+        movement_available = entity.action_economy.movement.normalized_score
+        grid = get_map()
+        valid: List[Tuple[int, int]] = []
+
+        for pos, is_visible in entity.senses.visible.items():
+            if not is_visible:
+                continue
+            if pos == entity.senses.position:
+                continue
+
+            # Check distance against jump range
+            distance = entity.senses.get_feet_distance(pos)
+            if distance > max_range:
+                continue
+
+            # Check movement budget (jump costs movement)
+            if distance > movement_available:
+                continue
+
+            # Check walkability (for landing)
+            if not grid.is_walkable_for(pos[0], pos[1], entity.uuid):
+                continue
+
+            # Check occupancy (can't land on another entity)
+            occupants = grid.get_entities_at(pos)
+            if occupants and occupants != {entity.uuid}:
+                continue
+
+            valid.append(pos)
+
+        return valid
+
+    def set_target_position(self, position: Tuple[int, int]) -> None:
+        """Set target position for jump."""
+        super().set_target_position(position)
+        # Recalculate movement cost
+        self._setup_movement_cost()
+
+    def _setup_movement_cost(self) -> None:
+        """Set up movement cost based on jump distance."""
+        if self.end_position is None:
+            return
+
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return
+
+        # Calculate distance and add movement cost
+        distance = entity.senses.get_feet_distance(self.end_position)
+
+        # Remove existing movement costs
+        self.costs = [c for c in self.costs if c.cost_type != "movement"]
+
+        # Add movement cost for the jump distance
+        self.costs.append(Cost(
+            name="Jump Movement Cost",
+            cost_type="movement",
+            cost=int(distance),
+            evaluator=entity_action_economy_cost_evaluator
+        ))
+
+    def instantiate(self, **overrides) -> "Jump":
+        """Create an executable Jump instance from this template."""
+        if not self.template:
+            raise ValueError("Can only instantiate from a template")
+
+        # Copy fields except uuid and costs (costs are recalculated)
+        kwargs = self.model_dump(exclude={"uuid", "costs"})
+        kwargs["template"] = False
+        # Reset costs to just the bonus action
+        kwargs["costs"] = [Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
+        kwargs.update(overrides)
+
+        instance = Jump(**kwargs)
+        # Recalculate movement cost for the new position
+        instance._setup_movement_cost()
+        return instance
+
+    @staticmethod
+    def _get_line_path(start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[int, int]]:
+        """Get all cells in a straight line from start to end (Bresenham's algorithm)."""
+        x0, y0 = start
+        x1, y1 = end
+        path: List[Tuple[int, int]] = []
+
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+
+        while True:
+            path.append((x0, y0))
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x0 += sx
+            if e2 < dx:
+                err += dx
+                y0 += sy
+
+        return path
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[JumpEvent]:
+        """Create the declaration event for the jump action."""
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not source_entity:
+            return None
+
+        if self.end_position is None:
+            return None
+
+        end_position: Tuple[int, int] = self.end_position
+        distance = source_entity.senses.get_feet_distance(end_position)
+
+        # Ensure movement cost is set
+        self._setup_movement_cost()
+
+        # Calculate straight-line path for opportunity attacks
+        line_path = self._get_line_path(source_entity.position, end_position)
+
+        return JumpEvent(
+            name=self.name,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            start_position=source_entity.position,
+            end_position=end_position,
+            jump_distance=int(distance),
+            path=line_path,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register,
+            source_entity_name=source_entity.name
+        )
+
+    def _validate(self, declaration_event: JumpEvent) -> JumpEvent:
+        """Validate the jump action."""
+        from dnd.core.gridmap import get_map
+
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not source_entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        end_pos = declaration_event.end_position
+        grid = get_map()
+
+        # Check visibility (LOS)
+        if end_pos not in source_entity.senses.visible or not source_entity.senses.visible[end_pos]:
+            return declaration_event.cancel(status_message=f"Position {end_pos} not visible")
+
+        # Check range
+        action_range = self.get_range()
+        max_range = action_range.normal if action_range else 15
+        distance = source_entity.senses.get_feet_distance(end_pos)
+        if distance > max_range:
+            return declaration_event.cancel(status_message=f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)")
+
+        # Check movement available
+        movement_available = source_entity.action_economy.movement.normalized_score
+        if distance > movement_available:
+            return declaration_event.cancel(status_message=f"Not enough movement ({distance}ft > {movement_available}ft)")
+
+        # Check walkability
+        if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
+            return declaration_event.cancel(status_message=f"Position {end_pos} not walkable")
+
+        # Check occupancy
+        occupants = grid.get_entities_at(end_pos)
+        if occupants and occupants != {source_entity.uuid}:
+            return declaration_event.cancel(status_message=f"Position {end_pos} occupied")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated jump to {end_pos}"
+        )
+
+    def _apply(self, execution_event: JumpEvent) -> JumpEvent:
+        """Apply the jump - teleport entity to target position."""
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not source_entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Move to effect phase
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"Jumping to {execution_event.end_position}"
+        )
+        if effect_event.canceled:
+            return effect_event
+
+        # Teleport entity (bypasses path - that's the point of jumping!)
+        Entity.update_entity_position(source_entity, execution_event.end_position)
+        Entity.update_all_entities_senses(max_distance=20)
+
+        # Verify landing
+        if source_entity.position != execution_event.end_position:
+            return effect_event.cancel(status_message=f"Failed to land at {execution_event.end_position}")
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Jumped to {execution_event.end_position}"
+        )
+
+    def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
+        """Apply the costs of the jump (bonus action + movement)."""
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
 # =============================================================================
