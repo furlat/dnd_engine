@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent, ForcedMovementEvent
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData,
@@ -1619,6 +1619,389 @@ class Jump(BaseAction):
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
         """Apply the costs of the jump (bonus action + movement)."""
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+# =============================================================================
+# Shove Action: BG3-Style Push or Knock Prone
+# =============================================================================
+
+class ShoveEvent(ActionEvent):
+    """An event that represents a shove action.
+
+    Shove is a BG3-style bonus action that pushes adjacent enemies.
+    Key mechanics:
+    - Cost: Bonus Action
+    - Range: 5ft (adjacent only)
+    - Contest: Shover's Athletics CHECK vs target's passive skill DC
+    - Allies: Auto-succeed (no check required)
+    - Weight limit: STR score × 12
+    """
+    name: str = Field(default="Shove", description="A shove event")
+    event_type: EventType = Field(default=EventType.BASE_ACTION, description="Event type")
+    costs: List[BaseCost] = Field(default_factory=list, description="Costs for the action")
+
+    # Target info
+    target_weight: int = Field(default=0, description="Target's weight in pounds")
+    max_shove_weight: int = Field(default=0, description="Max weight shover can push (STR × 12)")
+
+    # Contest info
+    shover_athletics: Optional[ModifiableValue] = Field(default=None, description="Shover's Athletics bonus")
+    target_passive: int = Field(default=10, description="Target's passive Athletics or Acrobatics")
+    target_resistance_skill: str = Field(default="athletics", description="Which skill target used")
+    dice_roll: Optional[DiceRoll] = Field(default=None, description="Shover's Athletics check roll")
+    contest_success: Optional[bool] = Field(default=None, description="Whether the contest was won")
+
+    # Push result
+    push_distance: int = Field(default=0, description="How far target was pushed (feet)")
+    push_direction: Tuple[int, int] = Field(default=(0, 0), description="Direction of push (dx, dy)")
+    knocked_prone: bool = Field(default=False, description="Whether target was knocked prone instead")
+    is_ally: bool = Field(default=False, description="Whether target is an ally (auto-succeed)")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate combat log for shove."""
+        source_name = self.source_entity_name or "Unknown"
+        target_name = self.target_entity_name or "Unknown"
+
+        # Build summary based on outcome
+        if self.contest_success is False:
+            summary = f"{source_name} fails to shove {target_name}"
+        elif self.knocked_prone:
+            summary = f"{source_name} knocks {target_name} prone!"
+        elif self.push_distance > 0:
+            summary = f"{source_name} shoves {target_name} {self.push_distance}ft"
+        else:
+            summary = f"{source_name} shoves {target_name} (blocked)"
+
+        # Build detail lines
+        detail_lines = []
+        if self.is_ally:
+            detail_lines.append("Ally (auto-success)")
+        elif self.dice_roll is not None:
+            roll_total = self.dice_roll.total
+            detail_lines.append(f"Athletics check: {roll_total} vs DC {self.target_passive} ({self.target_resistance_skill})")
+
+        if self.contest_success:
+            if self.knocked_prone:
+                detail_lines.append("Target knocked prone")
+            else:
+                detail_lines.append(f"Push direction: {self.push_direction}, distance: {self.push_distance}ft")
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ACTION,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            summary=summary,
+            detail_lines=detail_lines,
+            data={
+                "action_type": "shove",
+                "target_weight": self.target_weight,
+                "max_shove_weight": self.max_shove_weight,
+                "contest_success": self.contest_success,
+                "push_distance": self.push_distance,
+                "push_direction": list(self.push_direction),
+                "knocked_prone": self.knocked_prone,
+                "is_ally": self.is_ally
+            },
+            success=self.contest_success or False
+        )
+
+
+class Shove(BaseAction):
+    """BG3-style Shove action - push adjacent enemies.
+
+    Costs a bonus action. Pushes target 5-20ft based on STR, or knocks prone.
+
+    Mechanics (BG3-style):
+    - Range: 5ft (adjacent only)
+    - Contest: Shover's Athletics CHECK vs target's passive DC
+    - Target DC: 10 + max(Athletics, Acrobatics) bonus + advantage modifier
+    - Allies: Auto-succeed (no check required)
+    - Weight limit: Can't shove targets heavier than STR × 12 lbs
+    - Distance: 5ft base + 5ft per positive STR modifier (max 20ft)
+
+    Forced movement does NOT trigger opportunity attacks.
+    """
+    name: str = Field(default="Shove", description="Shove action")
+    description: str = Field(default="Push an adjacent enemy", description="Description")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Shove targets an entity")
+    knock_prone: bool = Field(default=False, description="If True, knock prone instead of push")
+    include_allies: bool = Field(default=True, description="Whether to include allies as valid targets")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Shove Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    @staticmethod
+    def get_max_shove_weight(entity: 'Entity') -> int:
+        """Calculate max weight entity can shove (STR × 12)."""
+        return entity.ability_scores.strength.ability_score.score * 12
+
+    @staticmethod
+    def get_push_distance(entity: 'Entity') -> int:
+        """Calculate push distance based on STR.
+
+        Base: 5ft
+        Bonus: +5ft per positive STR modifier point
+        Max: 20ft
+        """
+        str_mod = entity.ability_scores.strength.modifier
+        bonus = max(0, str_mod) * 5
+        return min(20, max(5, 5 + bonus))
+
+    @staticmethod
+    def get_push_direction(source_pos: Tuple[int, int], target_pos: Tuple[int, int]) -> Tuple[int, int]:
+        """Calculate push direction as unit vector from source to target."""
+        dx = target_pos[0] - source_pos[0]
+        dy = target_pos[1] - source_pos[1]
+
+        # Normalize to unit direction
+        if dx != 0:
+            dx = 1 if dx > 0 else -1
+        if dy != 0:
+            dy = 1 if dy > 0 else -1
+
+        return (dx, dy)
+
+    @staticmethod
+    def calculate_final_position(
+        start: Tuple[int, int],
+        direction: Tuple[int, int],
+        distance_feet: int,
+        target_uuid: 'UUID'
+    ) -> Tuple[Tuple[int, int], int, bool]:
+        """Calculate where target lands after being pushed.
+
+        Walks cells in push direction until:
+        - Reached desired distance, OR
+        - Hit unwalkable tile, OR
+        - Hit cell occupied by another entity
+
+        Target MUST land on a walkable tile.
+
+        Args:
+            start: Target's current position
+            direction: Push direction as (dx, dy)
+            distance_feet: How far to push in feet
+            target_uuid: UUID of entity being pushed (excluded from occupancy check)
+
+        Returns:
+            (final_position, actual_distance_feet, was_blocked)
+        """
+        from dnd.core.gridmap import get_map
+
+        grid = get_map()
+        current = start
+        cells_to_move = distance_feet // 5  # 5ft per cell
+        actual_cells = 0
+        blocked = False
+
+        for _ in range(cells_to_move):
+            next_pos = (current[0] + direction[0], current[1] + direction[1])
+
+            # Check if next cell is walkable for the target
+            if not grid.is_walkable_for(next_pos[0], next_pos[1], target_uuid):
+                blocked = True
+                break
+
+            current = next_pos
+            actual_cells += 1
+
+        return current, actual_cells * 5, blocked
+
+    def pre_validate(self) -> bool:
+        """Quick validation for template filtering."""
+        if not super().pre_validate():
+            return False
+
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source or not target:
+            return False
+
+        # Check adjacency (5ft)
+        distance = source.senses.get_feet_distance(target.position)
+        if distance > 5:
+            return False
+
+        # Check weight limit
+        max_weight = self.get_max_shove_weight(source)
+        if target.weight > max_weight:
+            return False
+
+        # Check visibility (LOS)
+        if target.uuid not in source.senses.entities:
+            return False
+
+        return True
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ShoveEvent]:
+        """Create declaration event for shove."""
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source or not target:
+            return None
+
+        return ShoveEvent(
+            name=self.name,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register,
+            source_entity_name=source.name,
+            target_entity_name=target.name,
+            target_weight=target.weight,
+            max_shove_weight=self.get_max_shove_weight(source),
+            is_ally=source.is_ally(target)
+        )
+
+    def _validate(self, declaration_event: ShoveEvent) -> ShoveEvent:
+        """Validate the shove action."""
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(declaration_event.target_entity_uuid) if declaration_event.target_entity_uuid else None
+
+        if not source or not target:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        # Check adjacency
+        distance = source.senses.get_feet_distance(target.position)
+        if distance > 5:
+            return declaration_event.cancel(status_message=f"Target not adjacent ({distance}ft)")
+
+        # Check weight
+        if target.weight > declaration_event.max_shove_weight:
+            return declaration_event.cancel(
+                status_message=f"Target too heavy ({target.weight}lbs > {declaration_event.max_shove_weight}lbs)"
+            )
+
+        # Check LOS
+        if target.uuid not in source.senses.entities:
+            return declaration_event.cancel(status_message="Target not visible")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message="Shove validated"
+        )
+
+    def _apply(self, execution_event: ShoveEvent) -> ShoveEvent:
+        """Apply the shove - contest and push/prone."""
+        from dnd.core.events import ForcedMovementEvent
+
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
+
+        if not source or not target:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # ALLIES AUTO-SUCCEED (BG3 Patch 6 behavior)
+        if source.is_ally(target):
+            contest_success = True
+            dice_roll = None
+            target_passive = 0
+            target_skill = "none"
+        else:
+            # CONTESTED CHECK: Active Athletics roll vs Passive DC
+            athletics_bonus = source.skill_bonus(target.uuid, "athletics")
+
+            # Target uses best of Athletics or Acrobatics passive
+            passive_athletics = target.passive_skill("athletics")
+            passive_acrobatics = target.passive_skill("acrobatics")
+
+            if passive_athletics >= passive_acrobatics:
+                target_passive = passive_athletics
+                target_skill = "athletics"
+            else:
+                target_passive = passive_acrobatics
+                target_skill = "acrobatics"
+
+            # Roll Athletics check
+            dice_roll = source.roll_d20(athletics_bonus, RollType.CHECK)
+            contest_success = dice_roll.total >= target_passive
+
+        # Update event with contest results
+        execution_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            shover_athletics=athletics_bonus if not source.is_ally(target) else None,
+            dice_roll=dice_roll,
+            target_passive=target_passive,
+            target_resistance_skill=target_skill,
+            contest_success=contest_success,
+            status_message=f"Contest {'succeeded' if contest_success else 'failed'}"
+        )
+
+        if execution_event.canceled:
+            return execution_event
+
+        # CONTEST FAILED
+        if not contest_success:
+            return execution_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message="Shove failed - target resisted"
+            )
+
+        # CONTEST SUCCEEDED - PUSH OR PRONE
+        if self.knock_prone:
+            # Knock prone instead of push
+            prone_condition = Prone(
+                source_entity_uuid=source.uuid,
+                target_entity_uuid=target.uuid
+            )
+            target.add_condition(prone_condition)
+
+            return execution_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                knocked_prone=True,
+                status_message=f"{target.name} knocked prone"
+            )
+
+        # PUSH
+        direction = self.get_push_direction(source.position, target.position)
+        distance = self.get_push_distance(source)
+        final_pos, actual_dist, blocked = self.calculate_final_position(
+            target.position, direction, distance, target.uuid
+        )
+
+        push_direction = direction
+        push_distance = actual_dist
+
+        if actual_dist > 0:
+            # Create ForcedMovementEvent (does NOT trigger OA)
+            forced_event = ForcedMovementEvent(
+                source_entity_uuid=source.uuid,
+                target_entity_uuid=target.uuid,
+                source_entity_name=source.name,
+                target_entity_name=target.name,
+                start_position=target.position,
+                end_position=final_pos,
+                direction=direction,
+                intended_distance=distance,
+                actual_distance=actual_dist,
+                blocked_by_obstacle=blocked,
+                cause="shove",
+                phase=EventPhase.DECLARATION
+            )
+
+            # Move to completion (triggers GridMap spatial events via Entity.update_entity_position)
+            forced_event = forced_event.phase_to(EventPhase.COMPLETION)
+
+            # Actually move the target
+            Entity.update_entity_position(target, final_pos)
+            Entity.update_all_entities_senses()
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            push_distance=push_distance,
+            push_direction=push_direction,
+            status_message=f"Shoved {target.name} {push_distance}ft" + (" (blocked)" if blocked else "")
+        )
+
+    def _apply_costs(self, completion_event: ShoveEvent) -> ShoveEvent:
+        """Apply shove costs (bonus action)."""
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
