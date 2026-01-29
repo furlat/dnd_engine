@@ -28,7 +28,7 @@ from dnd.core.base_actions import (
 from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
-from dnd.actions import Move, Dash, Dodge, Disengage, StandUp, Attack
+from dnd.actions import Move, Dash, Dodge, Disengage, StandUp, Attack, Jump
 from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler
 
 
@@ -51,6 +51,7 @@ def setup_standard_actions(entity: 'Entity') -> None:
 
     # Register movement and self-targeting actions
     entity.register_action(Move(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(Jump(source_entity_uuid=entity.uuid, template=True))  # LOS-based movement
     entity.register_action(Dash(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Dodge(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))
@@ -186,7 +187,7 @@ def execute_action(entity: 'Entity', template_name: str, target: AvailableTarget
             raise ValueError("ENTITY action requires target_uuid")
         instance = template.instantiate(target_entity_uuid=target.target_uuid)
 
-    elif template.target_type == TargetType.POSITION:
+    elif template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         if target.position is None:
             raise ValueError("POSITION action requires position")
         instance = template.instantiate(end_position=target.position)

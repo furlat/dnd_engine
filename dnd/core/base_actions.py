@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from dnd.core.events import Event, EventType, EventPhase, EventProcessor
+from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData
@@ -16,9 +16,11 @@ CostType = Literal[
 
 class TargetType(str, Enum):
     """What kind of target an action requires."""
-    SELF = "self"          # Dash, Dodge, Disengage - no target needed
-    ENTITY = "entity"      # Attack - targets another entity
-    POSITION = "position"  # Move - targets a grid position
+    SELF = "self"                    # Dash, Dodge, Disengage - no target needed
+    ENTITY = "entity"                # Attack - targets another entity
+    POSITION = "position"            # DEPRECATED: Use POSITION_PATH instead
+    POSITION_PATH = "position_path"  # Move - requires contiguous path (uses senses.paths)
+    POSITION_LOS = "position_los"    # Jump, Teleport - visible + range only (uses senses.visible)
 
 CostEvaluator = Callable[[UUID,CostType,int],bool]
 
@@ -121,7 +123,7 @@ class BaseAction(BaseObject):
     template: bool = Field(default=False, description="If True, this is a template that cannot be applied directly - use instantiate()")
     include_self: bool = Field(default=False, description="If True and target_type=ENTITY, self is a valid target (for buff spells like Mage Armor)")
 
-    # For POSITION actions (like Move), stored separately from target_entity_uuid
+    # For POSITION actions (like Move, Jump), stored separately from target_entity_uuid
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target position for POSITION type actions")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -139,10 +141,66 @@ class BaseAction(BaseObject):
         """Set target position for POSITION type actions.
 
         Used with templates to set the target before pre_validate() or instantiate().
+        Supports POSITION, POSITION_PATH, and POSITION_LOS target types.
         """
-        if self.target_type != TargetType.POSITION:
+        if self.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
             raise ValueError(f"Action {self.name} doesn't target positions (target_type={self.target_type})")
         self.end_position = position
+
+    def get_range(self) -> Optional[Range]:
+        """Get the range of this action.
+
+        Override in subclasses to provide dynamic range calculation.
+        Returns Range object with type/normal/long, or None if unlimited.
+
+        For actions with dynamic range (like Jump), override this method.
+        """
+        return None
+
+    def get_valid_positions(self) -> List[Tuple[int, int]]:
+        """Get valid target positions for POSITION_LOS actions.
+
+        Override in subclasses to provide custom position filtering.
+        Default implementation uses senses.visible + get_range().
+
+        Returns:
+            List of valid positions this action can target.
+        """
+        if self.target_type != TargetType.POSITION_LOS:
+            return []
+
+        # Get the entity
+        entity = BaseBlock.get(self.source_entity_uuid)
+        if entity is None:
+            return []
+
+        # Need senses attribute
+        senses = getattr(entity, 'senses', None)
+        if senses is None:
+            return []
+
+        action_range = self.get_range()
+        max_range = action_range.normal if action_range else 0
+
+        valid: List[Tuple[int, int]] = []
+        visible = getattr(senses, 'visible', {})
+        position = getattr(senses, 'position', None)
+        get_feet_distance = getattr(senses, 'get_feet_distance', None)
+
+        if not visible or position is None or get_feet_distance is None:
+            return []
+
+        for pos, is_visible in visible.items():
+            if not is_visible:
+                continue
+            if pos == position:
+                continue
+            if max_range > 0:
+                distance = get_feet_distance(pos)
+                if distance > max_range:
+                    continue
+            valid.append(pos)
+        return valid
 
     def instantiate(self, **overrides) -> "BaseAction":
         """Create an executable instance from this template.

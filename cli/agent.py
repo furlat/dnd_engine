@@ -200,18 +200,38 @@ def format_actions(actions: dict, entity_name: str) -> str:
     lines = [f"AVAILABLE ACTIONS FOR {entity_name}:"]
     lines.append("")
 
-    # Movement - uses position_actions with valid_targets containing position objects
-    movement = actions.get("remaining_movement", 0)
+    # Position-based actions (Move, Jump, etc.) - iterate ALL position_actions
+    movement_remaining = actions.get("remaining_movement", 0)
     position_actions = actions.get("position_actions", [])
-    valid_targets = position_actions[0].get("valid_targets", []) if position_actions else []
-    lines.append(f"MOVEMENT: {movement} ft remaining, {len(valid_targets)} reachable positions")
-    if valid_targets:
-        # Show a few sample positions - targets are objects with 'position' field
-        sample = valid_targets[:10]
-        pos_strs = [f"({t.get('position', [0,0])[0]},{t.get('position', [0,0])[1]})" for t in sample]
-        lines.append(f"  Sample positions: {', '.join(pos_strs)}")
-        if len(valid_targets) > 10:
-            lines.append(f"  ... and {len(valid_targets) - 10} more")
+
+    lines.append(f"POSITION ACTIONS: ({movement_remaining}ft movement remaining)")
+
+    for action in position_actions:
+        template_name = action.get("template_name", "Unknown")
+        display_name = action.get("display_name", template_name)
+        valid_targets = action.get("valid_targets", [])
+        can_afford = action.get("can_afford", False)
+        cost_type = action.get("cost_type", "movement")
+
+        # Status
+        if not can_afford:
+            status = "NO RESOURCE"
+        elif not valid_targets:
+            status = "NO TARGETS"
+        else:
+            status = "READY"
+
+        # Cost info
+        cost_label = {"movement": "movement", "bonus_actions": "bonus", "actions": "action"}.get(cost_type, cost_type)
+
+        lines.append(f"  {display_name}: {len(valid_targets)} positions ({cost_label}) - {status}")
+
+        if valid_targets and can_afford:
+            sample = valid_targets[:5]
+            pos_strs = [f"({t.get('position', [0,0])[0]},{t.get('position', [0,0])[1]})" for t in sample]
+            lines.append(f"    Sample: {', '.join(pos_strs)}")
+            if len(valid_targets) > 5:
+                lines.append(f"    ... and {len(valid_targets) - 5} more")
 
     lines.append("")
 
@@ -461,6 +481,82 @@ def cmd_move(client: APIClient, x: int, y: int) -> int:
         return 1
 
     return 0
+
+
+def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> int:
+    """Execute any position-based action by name (Move, Jump, etc.)."""
+    if not validate_my_turn(client):
+        return 1
+
+    entity_uuid = client.current_entity_uuid
+    if not entity_uuid:
+        print("ERROR: No controlled entity")
+        return 1
+
+    actions = client.get_available_actions(entity_uuid)
+    if not actions:
+        print("ERROR: Could not get available actions")
+        return 1
+
+    position_actions = actions.get("position_actions", [])
+
+    # Find action by name (case-insensitive)
+    action = None
+    for a in position_actions:
+        if a.get("template_name", "").lower() == action_name.lower():
+            action = a
+            break
+
+    if not action:
+        print(f"ERROR: No {action_name} action available")
+        return 1
+
+    if not action.get("can_afford", False):
+        print(f"ERROR: Cannot afford {action_name}")
+        return 1
+
+    valid_targets = action.get("valid_targets", [])
+    if not valid_targets:
+        print(f"ERROR: No valid targets for {action_name}")
+        return 1
+
+    # Find matching position in valid targets
+    position = (x, y)
+    for target in valid_targets:
+        target_pos = target.get("position")
+        if target_pos and tuple(target_pos) == position:
+            try:
+                result = client.execute_action(
+                    action.get("template_name"),
+                    target.get("index"),
+                    entity_uuid
+                )
+            except Exception as e:
+                print(f"ERROR: {e}")
+                return 1
+
+            success = result.get("success", False)
+            if success:
+                event_data = result.get("event_data", {})
+                end_pos = event_data.get("end_position", event_data.get("end", [x, y]))
+                print(f"OK: {action_name} to ({end_pos[0]},{end_pos[1]})")
+
+                # Check for triggered reactions (opportunity attacks)
+                reactions = result.get("triggered_reactions", [])
+                for r in reactions:
+                    attacker = r.get("attacker_name", r.get("attacker", "???"))
+                    outcome = r.get("outcome", "???")
+                    damage = r.get("total_damage", 0)
+                    print(f"  REACTION: {attacker} opportunity attack - {outcome}, {damage} damage")
+            else:
+                message = result.get("message", "Unknown error")
+                print(f"ERROR: {message}")
+                return 1
+
+            return 0
+
+    print(f"ERROR: Position ({x}, {y}) not valid for {action_name}")
+    return 1
 
 
 def cmd_attack(client: APIClient, target_index: int) -> int:
@@ -726,7 +822,7 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
                 cmd_actions(client)
                 print("")
 
-                print("Ready to act. Use: move X Y | attack N | dash | dodge | disengage | end")
+                print("Ready to act. Use: move X Y | jump X Y | attack N | dash | dodge | disengage | end")
                 return 0
 
             # Poll combat log for opponent actions
@@ -812,6 +908,9 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
 
 
 def main():
+    # Position-based commands that route to cmd_position_action
+    POSITION_COMMANDS = ["move", "jump"]
+
     if len(sys.argv) < 2:
         print("Usage: python -m cli.agent <command> [args]")
         print("")
@@ -826,8 +925,11 @@ def main():
         print("  actions            Show available actions for my entity")
         print("  entities           List all entities controlled by this session")
         print("")
-        print("Actions:")
+        print("Position Actions:")
         print("  move X Y           Move to position (X, Y)")
+        print("  jump X Y           Jump to position (X, Y)")
+        print("")
+        print("Other Actions:")
         print("  attack N           Attack target by index")
         print("  dash               Take Dash action (double movement)")
         print("  dodge              Take Dodge action (attackers have disadvantage)")
@@ -854,13 +956,16 @@ def main():
         elif command == "entities":
             return cmd_entities(client)
 
-        elif command == "move":
+        # Generic position action routing
+        elif command in POSITION_COMMANDS:
             if len(sys.argv) < 4:
-                print("Usage: python -m cli.agent move X Y")
+                print(f"Usage: python -m cli.agent {command} X Y")
                 return 1
             x = int(sys.argv[2])
             y = int(sys.argv[3])
-            return cmd_move(client, x, y)
+            # Map command to action name (e.g., "move" -> "Move", "jump" -> "Jump")
+            action_name = command.capitalize()
+            return cmd_position_action(client, action_name, x, y)
 
         elif command == "attack":
             if len(sys.argv) < 3:

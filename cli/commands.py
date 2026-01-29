@@ -37,9 +37,10 @@ class MetaCommand(Enum):
 # Command aliases
 # NOTE: Self-action shortcuts (d, o, i, sw, as, etc.) are dynamically managed
 # by ShortcutRegistry - do NOT add them here as hardcoded aliases.
+# Position action shortcuts (m, j) are ALSO managed by ShortcutRegistry.
+# DO NOT add position shortcuts here - they must go through the registry.
 ALIASES: Dict[str, str] = {
-    # Structural commands only
-    "m": "move",
+    # Entity actions
     "a": "attack",
     "e": "end",
     # Meta aliases
@@ -257,16 +258,16 @@ def execute_command(
     if cmd.is_meta:
         return execute_meta_command(cmd, client, state)
 
-    # Action commands - for legacy compatibility, handle basic ones here
+    # Action commands - attack and end only
+    # Position actions (Move, Jump) and self-actions (Dash, Dodge) are
+    # handled by try_execute_dynamic_position_action and try_execute_dynamic_self_action
     try:
-        if cmd.command == "move":
-            return handle_move(cmd, client, state)
-        elif cmd.command == "attack":
+        if cmd.command == "attack":
             return handle_attack(cmd, client, state)
         elif cmd.command == "end":
             return handle_end_turn(client, state)
         else:
-            # Self-actions should be handled by GameLoop with ShortcutRegistry
+            # Unknown command - NO FALLBACK for position/self actions
             display.set_output([
                 f"Unknown command: {cmd.raw}",
                 "Type '?' for help or 'la' to list actions"
@@ -279,73 +280,8 @@ def execute_command(
 
 
 # =============================================================================
-# Action Handlers (legacy, will be replaced by ActionExecutor)
+# Action Handlers
 # =============================================================================
-
-def handle_move(cmd: ParsedCommand, client: APIClient, state: GameState) -> Optional[str]:
-    """Handle move command."""
-    if len(cmd.args) < 2:
-        # Show valid positions
-        movement = state.actions_raw.get("position_actions", [])
-        if movement:
-            valid_pos = []
-            for m in movement:
-                for t in m.get("valid_targets", []):
-                    pos = t.get("position")
-                    if pos:
-                        valid_pos.append(tuple(pos))
-            state.valid_move_positions = valid_pos
-            remaining = state.actions_raw.get('remaining_movement', 0)
-            display.set_output([
-                f"Valid move positions shown on map (*)",
-                f"Movement remaining: {remaining}ft",
-                f"Enter 'm X Y' to move to position (X, Y)"
-            ])
-        else:
-            display.set_output(["No movement available."])
-        return "refresh"
-
-    try:
-        x = int(cmd.args[0])
-        y = int(cmd.args[1])
-    except ValueError:
-        display.set_output(["Invalid position. Usage: m X Y"])
-        return "refresh"
-
-    # Find position in valid targets and execute
-    position = (x, y)
-    if state.actions:
-        for move_action in state.actions.movement:
-            for target in move_action.valid_targets:
-                if target.position == position:
-                    result = client.execute_action(move_action.template_name, target.index)
-                    display.show_action_result(result, state.player_entity_name)
-                    state.add_to_log(f"{state.player_entity_name} moves to ({x}, {y}).")
-
-                    # Store path for display
-                    event_data = result.get("event_data", {})
-                    path = event_data.get("path", [])
-                    if path:
-                        state.last_movement_path = [tuple(p) for p in path]
-                    else:
-                        state.last_movement_path = None
-
-                    # Handle opportunity attacks
-                    triggered = result.get("triggered_reactions", [])
-                    for reaction in triggered:
-                        if reaction.get("type") == "opportunity_attack":
-                            _log_opportunity_attack(reaction, state)
-
-                    if result.get("encounter_ended"):
-                        return "encounter_ended"
-                    return "refresh"
-
-    display.set_output([
-        f"Position ({x}, {y}) is not reachable.",
-        "Type 'm' to see valid positions."
-    ])
-    return "refresh"
-
 
 def handle_attack(cmd: ParsedCommand, client: APIClient, state: GameState) -> Optional[str]:
     """Handle attack command."""
@@ -489,29 +425,6 @@ def handle_history_first(state: GameState) -> Optional[str]:
 # =============================================================================
 # Logging Helpers
 # =============================================================================
-
-def _log_opportunity_attack(reaction: Dict[str, Any], state: GameState):
-    """Log an opportunity attack to combat log."""
-    attacker = reaction.get("attacker", "Unknown")
-    weapon = reaction.get("weapon", "weapon")
-    outcome = (reaction.get("outcome") or "miss").lower()
-    total_damage = reaction.get("total_damage", 0)
-    d20 = reaction.get("d20", "?")
-    all_d20_rolls = reaction.get("all_d20_rolls", [])
-    advantage_status = reaction.get("advantage_status", "none")
-    attack_bonus = reaction.get("attack_bonus", 0)
-    attack_total = reaction.get("attack_total", "?")
-    target_ac = reaction.get("target_ac", "?")
-
-    roll_str = _format_roll_string(d20, all_d20_rolls, advantage_status, attack_bonus, attack_total)
-
-    if outcome == "crit":
-        state.add_to_log(f"(OA) {attacker} CRIT with {weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you!")
-    elif outcome == "hit":
-        state.add_to_log(f"(OA) {attacker} hit with {weapon}! {roll_str} vs AC {target_ac} → {total_damage} to you")
-    else:
-        state.add_to_log(f"(OA) {attacker} missed with {weapon} {roll_str} vs AC {target_ac}")
-
 
 def _log_attack(result: Dict[str, Any], weapon_name: str, target_name: str, state: GameState):
     """Log a player attack to combat log."""
