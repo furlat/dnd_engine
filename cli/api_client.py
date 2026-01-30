@@ -233,29 +233,35 @@ class APIClient:
         return self._session_id
 
     def execute_action(self, template_name: str, target_index: int = 0,
-                        entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+                        entity_uuid: Optional[str] = None,
+                        extra_target_uuids: Optional[List[str]] = None) -> Dict[str, Any]:
         """Execute any action by template name and target index.
 
         This is the unified action execution method that works with all action types:
         - Move: template_name="Move", target_index=position index from valid_targets
         - Attack: template_name="Attack_MELEE_MAIN", target_index=target index
         - Self actions: template_name="Dash"/"Dodge"/"Disengage", target_index=0
+        - Multi-target spells: template_name="Magic Missile", extra_target_uuids for additional targets
 
         Args:
             template_name: Action template name (from available_actions)
             target_index: Index in valid_targets list (default 0 for self actions)
             entity_uuid: Entity performing action (defaults to current entity)
+            extra_target_uuids: Additional target UUIDs for multi-target spells (e.g., Magic Missile darts)
         """
         session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
         if not uuid:
             raise ValueError("No entity UUID")
-        resp = self.client.post("/action/execute", json={
+        payload: Dict[str, Any] = {
             "session_id": session_id,
             "entity_uuid": uuid,
             "template_name": template_name,
             "target_index": target_index
-        })
+        }
+        if extra_target_uuids:
+            payload["extra_target_uuids"] = extra_target_uuids
+        resp = self.client.post("/action/execute", json=payload)
         resp.raise_for_status()
         return resp.json()
 

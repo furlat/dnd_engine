@@ -365,8 +365,11 @@ def render_map_content(
             entity = entity_at.get(pos)
 
             if entity:
+                in_aoe = pos in valid_set
                 if entity["uuid"] == current_entity_uuid:
-                    char, style = "@", "bold green"
+                    char = "@"
+                    # Yellow background if player is in AoE
+                    style = "bold green on yellow" if in_aoe else "bold green"
                 elif entity.get("is_dead"):
                     char, style = "%", "dim"
                 else:
@@ -377,7 +380,8 @@ def render_map_content(
                         char = str(num)
                     else:
                         char = letter
-                    style = "bold red"
+                    # Yellow background if enemy is in AoE
+                    style = "bold red on yellow" if in_aoe else "bold red"
             elif pos in path_set:
                 char, style = "+", "bold magenta"
             elif pos in valid_set:
@@ -540,11 +544,8 @@ def render_output_panel() -> Optional[Panel]:
     if not _output_buffer:
         return None
 
-    content = Text()
-    for i, line in enumerate(_output_buffer):
-        if i > 0:
-            content.append("\n")
-        content.append(line)
+    # Join lines and parse as markup
+    content = Text.from_markup("\n".join(_output_buffer))
 
     return Panel(content, title="Output", box=box.ROUNDED, border_style="magenta")
 
@@ -859,9 +860,11 @@ def render_available_actions_panel(
     reactions_remaining = turn.get("reactions_remaining", 0)
 
     # Position-based actions (Move, Jump, etc.) - iterate ALL position_actions
+    # Filter out spells (is_spell=True) - those go in SPELLS section
     position_actions = actions.get("position_actions", [])
+    movement_actions = [a for a in position_actions if not a.get("is_spell", False)]
 
-    for action in position_actions:
+    for action in movement_actions:
         template_name = action.get("template_name", "Unknown")
         display_name = action.get("display_name", template_name)
         can_afford = action.get("can_afford", False)
@@ -895,8 +898,16 @@ def render_available_actions_panel(
         content.append(f" ({cost_info}, {len(valid_targets)} pos)  ")
         content.append(f"[{cmd} X Y] or [{cmd}] to show\n", style="dim")
 
-    # Split entity_actions into attacks (Attack_* or Extra Attack_*) and other entity actions (Shove, etc.)
+    # Collect all spells from all sources (entity_actions, position_actions, self_actions)
     all_entity_actions = actions.get("entity_actions", [])
+    all_self_actions = actions.get("self_actions", [])
+
+    # Filter spells from all sources
+    spell_actions_from_entity = [a for a in all_entity_actions if a.get("is_spell", False)]
+    spell_actions_from_position = [a for a in position_actions if a.get("is_spell", False)]
+    spell_actions_from_self = [a for a in all_self_actions if a.get("is_spell", False)]
+    all_spell_actions = spell_actions_from_entity + spell_actions_from_position + spell_actions_from_self
+    valid_spells = [a for a in all_spell_actions if a.get("valid_targets") and a.get("can_afford")]
 
     def is_attack_action(action: Dict[str, Any]) -> bool:
         """Check if action is an attack using explicit is_attack field.
@@ -907,8 +918,10 @@ def render_available_actions_panel(
         """
         return action.get("is_attack", False)
 
-    attacks = [a for a in all_entity_actions if is_attack_action(a)]
-    other_entity_actions = [a for a in all_entity_actions if not is_attack_action(a)]
+    # Non-spell entity actions
+    non_spell_entity_actions = [a for a in all_entity_actions if not a.get("is_spell", False)]
+    attacks = [a for a in non_spell_entity_actions if is_attack_action(a)]
+    other_entity_actions = [a for a in non_spell_entity_actions if not is_attack_action(a)]
 
     valid_attacks = [a for a in attacks if a.get("valid_targets") and a.get("can_afford")]
     valid_other_entity = [a for a in other_entity_actions if a.get("valid_targets") and a.get("can_afford")]
@@ -985,8 +998,62 @@ def render_available_actions_panel(
         content.append("ATTACK", style="dim")
         content.append(" - no targets in range\n", style="dim")
 
-    # Self-actions - fully dynamic using registry
-    other = actions.get("self_actions", [])
+    # SPELLS section - show all spells grouped by target type
+    if valid_spells:
+        content.append("SPELLS:", style="bold blue")
+        content.append("\n", style="dim")
+
+        for spell in valid_spells:
+            template_name = spell.get("template_name", "Unknown")
+            display_name = spell.get("display_name", template_name)
+            target_type = spell.get("target_type", "self")
+            targets = spell.get("valid_targets", [])
+            cost_type = spell.get("cost_type", "actions")
+
+            # Get shortcut from registry
+            if registry:
+                cmd = registry.get_or_create_shortcut(template_name)
+            else:
+                cmd = template_name[:2].lower()
+
+            # Cost label with color
+            if cost_type == "bonus_actions":
+                cost_label = ("BONUS", "magenta")
+            else:
+                cost_label = ("ACTION", "cyan")
+
+            # Position-based spells (AoE, LOS)
+            if target_type in ("position_aoe", "position_los"):
+                # Show as position action with preview option
+                content.append(f"  [", style="dim")
+                content.append(f"{cmd}", style="bold blue")
+                content.append(f"] ", style="dim")
+                content.append(f"{cost_label[0]} ", style=cost_label[1])
+                content.append(f"{display_name}", style="bold")
+                content.append(f" ({len(targets)} pos) [{cmd} X Y] or [{cmd} ? X Y] preview\n", style="dim")
+
+            # Entity-targeting spells (single or multi)
+            elif target_type in ("entity", "multi_entity"):
+                for i, target in enumerate(targets):
+                    target_name = target.get("target_name") or entity_lookup.get(target.get("target_uuid"), {}).get("name", "?")
+                    content.append(f"  [", style="dim")
+                    content.append(f"{cmd} {i+1}", style="bold blue")
+                    content.append(f"] ", style="dim")
+                    content.append(f"{cost_label[0]} ", style=cost_label[1])
+                    content.append(f"{display_name}", style="bold")
+                    content.append(f" -> {target_name}\n", style="dim")
+
+            # Self-targeting spells
+            else:
+                content.append(f"  [", style="dim")
+                content.append(f"{cmd}", style="bold blue")
+                content.append(f"] ", style="dim")
+                content.append(f"{cost_label[0]} ", style=cost_label[1])
+                content.append(f"{display_name}", style="bold")
+                content.append(f" (self)\n", style="dim")
+
+    # Self-actions - fully dynamic using registry (filter out spells)
+    other = [a for a in all_self_actions if not a.get("is_spell", False)]
     other_items = []
 
     for act in other:
@@ -1203,10 +1270,10 @@ def render_full_screen(
     console.print(map_panel)
     console.print(combatants_panel)
     console.print(log_panel)
-    if output_panel:
-        console.print(output_panel)
     if actions_panel:
         console.print(actions_panel)
+    if output_panel:
+        console.print(output_panel)
 
 
 # ============================================================================
@@ -1479,6 +1546,14 @@ def show_help():
 
 [bold cyan]Combat:[/bold cyan]
   a N / attack N      Attack target number N
+
+[bold cyan]Spells:[/bold cyan]
+  fb X Y              Cast Fireball at position (X, Y)
+  fb ? X Y            Preview Fireball targets at (X, Y)
+  fb                  Show valid Fireball positions on map
+  fib N               Cast Fire Bolt at target N
+  mm N                Cast Magic Missile at target N
+  ma                  Cast Mage Armor (self)
 
 [bold cyan]Actions:[/bold cyan]
   Use shortcuts shown in brackets, e.g. [d] for Dash

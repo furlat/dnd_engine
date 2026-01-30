@@ -153,6 +153,8 @@ class GameState:
         self.visibility: Dict[str, Any] = {}
         self.last_movement_path: Optional[List[Tuple[int, int]]] = None
         self.valid_move_positions: Optional[List[Tuple[int, int]]] = None
+        # Last preview info for "!" command to execute
+        self.last_preview: Optional[Dict[str, Any]] = None  # {template_name, target_index, display_name, position}
 
     def update_from_state(self, state: Dict[str, Any]):
         """Update from /state response."""

@@ -37,12 +37,27 @@ class ShortcutRegistry:
     # Preferred shortcuts for known actions - these actions will claim
     # these shortcuts if available (even if reserved for them)
     PREFERRED: Dict[str, str] = {
+        # Movement
         "Move": "m",
         "Jump": "j",
+        # Self actions
         "Dash": "d",
         "Dodge": "do",
         "Disengage": "di",
+        # Entity actions
         "Shove": "sh",
+        # Spells - AoE
+        "Fireball": "fb",
+        "Lightning Bolt": "lb",
+        "Burning Hands": "bh",
+        "Thunderwave": "tw",
+        "Shatter": "sha",
+        # Spells - Single target
+        "Fire Bolt": "fib",
+        "Magic Missile": "mm",
+        "Sacred Flame": "sf",
+        # Spells - Self/Buff
+        "Mage Armor": "ma",
     }
 
     def __init__(self):
@@ -132,6 +147,11 @@ class ActionTarget:
     target_name: Optional[str] = None
     distance: Optional[int] = None
     path_cost: Optional[int] = None
+    # AoE-specific fields (for POSITION_AOE actions)
+    affected_entity_uuids: Optional[List[str]] = None
+    affected_entity_names: Optional[List[str]] = None
+    affected_count: Optional[int] = None
+    affected_positions: Optional[List[Tuple[int, int]]] = None
 
     @classmethod
     def from_server(cls, data: Dict[str, Any]) -> 'ActionTarget':
@@ -143,7 +163,12 @@ class ActionTarget:
             position=tuple(pos) if pos else None,
             target_name=data.get("target_name"),
             distance=data.get("distance"),
-            path_cost=data.get("path_cost")
+            path_cost=data.get("path_cost"),
+            # AoE fields
+            affected_entity_uuids=data.get("affected_entity_uuids"),
+            affected_entity_names=data.get("affected_entity_names"),
+            affected_count=data.get("affected_count"),
+            affected_positions=[tuple(p) for p in data.get("affected_positions", [])] if data.get("affected_positions") else None
         )
 
 
@@ -152,7 +177,7 @@ class AvailableAction:
     """Information about an available action and its targets."""
     template_name: str      # "Attack_MELEE_MAIN", "Dash", "Move"
     display_name: str       # "Scimitar", "Dash", "Move"
-    target_type: str        # "self", "entity", "position"
+    target_type: str        # Full type: "self", "entity", "multi_entity", "position_path", "position_los", "position_aoe"
     valid_targets: List[ActionTarget] = field(default_factory=list)
     can_afford: bool = True
     cost_type: str = "actions"      # "actions", "bonus_actions", "movement"
@@ -161,6 +186,7 @@ class AvailableAction:
     weapon_slot: Optional[str] = None
     weapon_name: Optional[str] = None
     _is_attack: bool = False        # True for Attack, Extra Attack, Frenzied Strike
+    _is_spell: bool = False         # True for SpellAction (Fire Bolt, Fireball, etc.)
 
     @property
     def command_name(self) -> str:
@@ -180,6 +206,11 @@ class AvailableAction:
         return self._is_attack
 
     @property
+    def is_spell(self) -> bool:
+        """Check if this is a spell action (uses server-provided is_spell field)."""
+        return self._is_spell
+
+    @property
     def is_bonus_action(self) -> bool:
         """Check if this costs a bonus action."""
         return self.cost_type == "bonus_actions"
@@ -191,7 +222,7 @@ class AvailableAction:
         return cls(
             template_name=data.get("template_name", "Unknown"),
             display_name=data.get("display_name", data.get("template_name", "Unknown")),
-            target_type=data.get("target_type", "self"),
+            target_type=data.get("target_type", "self"),  # Full target type preserved
             valid_targets=targets,
             can_afford=data.get("can_afford", True),
             cost_type=data.get("cost_type", "actions"),
@@ -199,7 +230,8 @@ class AvailableAction:
             description=data.get("description", ""),
             weapon_slot=data.get("weapon_slot"),
             weapon_name=data.get("weapon_name"),
-            _is_attack=data.get("is_attack", False)
+            _is_attack=data.get("is_attack", False),
+            _is_spell=data.get("is_spell", False)
         )
 
 
@@ -208,18 +240,20 @@ class AvailableActionsState:
     """Complete available actions for an entity.
 
     Groups actions by type for easy access and provides convenience methods.
+    Spells are categorized separately based on is_spell, regardless of target_type.
     """
     entity_uuid: str
     attacks: List[AvailableAction] = field(default_factory=list)
     other_entity: List[AvailableAction] = field(default_factory=list)  # Shove, etc.
     movement: List[AvailableAction] = field(default_factory=list)
+    spell_actions: List[AvailableAction] = field(default_factory=list)  # All spells (any target type)
     self_actions: List[AvailableAction] = field(default_factory=list)
     remaining_movement: int = 0
 
     @property
     def all_actions(self) -> List[AvailableAction]:
         """Get all available actions as a flat list."""
-        return self.attacks + self.other_entity + self.movement + self.self_actions
+        return self.attacks + self.other_entity + self.movement + self.spell_actions + self.self_actions
 
     @property
     def affordable_attacks(self) -> List[AvailableAction]:
@@ -269,7 +303,8 @@ class AvailableActionsState:
 
         This should be called after fetching actions to ensure all available
         actions have stable shortcuts assigned. Registers self_actions,
-        position actions (Move, Jump, etc.), and other_entity actions (Shove, etc.).
+        position actions (Move, Jump, etc.), other_entity actions (Shove, etc.),
+        and spell_actions.
         """
         # Register self_actions
         for action in self.self_actions:
@@ -281,6 +316,10 @@ class AvailableActionsState:
 
         # Register other entity-targeting actions (Shove, etc.)
         for action in self.other_entity:
+            registry.get_or_create_shortcut(action.template_name)
+
+        # Register spell actions
+        for action in self.spell_actions:
             registry.get_or_create_shortcut(action.template_name)
 
     def get_self_action_by_command(
@@ -390,6 +429,94 @@ class AvailableActionsState:
                     current_idx += 1
         return None
 
+    @property
+    def affordable_spells(self) -> List[AvailableAction]:
+        """Get spell actions that can be afforded and have targets."""
+        return [a for a in self.spell_actions if a.can_afford and a.valid_targets]
+
+    def get_spell_action_by_command(
+        self, command: str, registry: ShortcutRegistry
+    ) -> Optional[AvailableAction]:
+        """Find spell action by shortcut OR template_name.
+
+        Args:
+            command: User input (could be shortcut like "fb" or full name like "fireball")
+            registry: Session shortcut registry
+
+        Returns:
+            Matching available action if found and affordable, None otherwise
+        """
+        cmd = command.lower().replace(" ", "").replace("_", "")
+
+        # Check shortcut registry first
+        template = registry.get_action_by_shortcut(cmd)
+        if template:
+            return next(
+                (a for a in self.spell_actions if a.template_name == template and a.can_afford),
+                None
+            )
+
+        # Check full template_name (no spaces/underscores)
+        for action in self.spell_actions:
+            normalized_name = action.template_name.lower().replace(" ", "").replace("_", "")
+            if action.can_afford and normalized_name == cmd:
+                return action
+
+        return None
+
+    def get_spell_target(self, action_name: str, index: int) -> Optional[Tuple[AvailableAction, ActionTarget]]:
+        """Get spell action and target by action name and target index.
+
+        Args:
+            action_name: The template_name of the spell (e.g., "Fire Bolt")
+            index: 1-based index (as shown to user)
+
+        Returns:
+            Tuple of (action, target) or None if invalid
+        """
+        for action in self.affordable_spells:
+            if action.template_name == action_name:
+                current_idx = 1
+                for target in action.valid_targets:
+                    if current_idx == index:
+                        return (action, target)
+                    current_idx += 1
+        return None
+
+    def get_spell_targets(
+        self, action_name: str, indices: List[int]
+    ) -> Optional[Tuple[AvailableAction, List[ActionTarget]]]:
+        """Get spell action and multiple targets by action name and target indices.
+
+        Used for multi-target spells like Magic Missile where multiple targets
+        can be specified (e.g., "mm 1 2 3" distributes darts across 3 targets).
+
+        Args:
+            action_name: The template_name of the spell (e.g., "Magic Missile")
+            indices: List of 1-based indices (as shown to user)
+
+        Returns:
+            Tuple of (action, [targets]) or None if invalid
+        """
+        for action in self.affordable_spells:
+            if action.template_name == action_name:
+                targets: List[ActionTarget] = []
+                for idx in indices:
+                    current = 1
+                    found = False
+                    for target in action.valid_targets:
+                        if current == idx:
+                            targets.append(target)
+                            found = True
+                            break
+                        current += 1
+                    if not found:
+                        # Invalid index - but continue to collect what we can
+                        pass
+                if targets:
+                    return (action, targets)
+        return None
+
     def get_attack_target(self, index: int) -> Optional[Tuple[AvailableAction, ActionTarget]]:
         """Get attack action and target by combined index.
 
@@ -431,20 +558,40 @@ class AvailableActionsState:
 
     @classmethod
     def from_server(cls, data: Dict[str, Any]) -> 'AvailableActionsState':
-        """Parse from server AvailableActionsResult JSON."""
-        # Split entity_actions: is_attack=True -> attacks, everything else -> other_entity
-        all_entity_actions = [AvailableAction.from_server(a) for a in data.get("entity_actions", [])]
-        attacks = [a for a in all_entity_actions if a.is_attack]
-        other_entity = [a for a in all_entity_actions if not a.is_attack]
+        """Parse from server AvailableActionsResult JSON.
 
-        movement = [AvailableAction.from_server(a) for a in data.get("position_actions", [])]
-        self_actions = [AvailableAction.from_server(a) for a in data.get("self_actions", [])]
+        Categorizes actions by is_spell FIRST, then by is_attack for non-spells.
+        Spells go to spell_actions regardless of target_type.
+        Non-spell entity actions split into attacks (is_attack=True) and other_entity.
+        Non-spell position actions go to movement.
+        """
+        # Parse all actions
+        all_entity_actions = [AvailableAction.from_server(a) for a in data.get("entity_actions", [])]
+        all_position_actions = [AvailableAction.from_server(a) for a in data.get("position_actions", [])]
+        all_self_actions = [AvailableAction.from_server(a) for a in data.get("self_actions", [])]
+
+        # Spells go to spell_actions regardless of target_type
+        spell_actions: List[AvailableAction] = []
+        for a in all_entity_actions + all_position_actions + all_self_actions:
+            if a.is_spell:
+                spell_actions.append(a)
+
+        # Non-spell entity actions
+        attacks = [a for a in all_entity_actions if a.is_attack and not a.is_spell]
+        other_entity = [a for a in all_entity_actions if not a.is_attack and not a.is_spell]
+
+        # Non-spell position actions = movement
+        movement = [a for a in all_position_actions if not a.is_spell]
+
+        # Non-spell self actions
+        self_actions = [a for a in all_self_actions if not a.is_spell]
 
         return cls(
             entity_uuid=data.get("entity_uuid", ""),
             attacks=attacks,
             other_entity=other_entity,
             movement=movement,
+            spell_actions=spell_actions,
             self_actions=self_actions,
             remaining_movement=data.get("remaining_movement", 0)
         )
