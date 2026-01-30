@@ -347,6 +347,102 @@ def create_goblin_archer(
     return entity
 
 
+def create_sorcerer(
+    source_id: Optional[UUID] = None,
+    name: str = "Sorcerer",
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    level: int = 5
+) -> Entity:
+    """
+    Create a Sorcerer with AoE spells (Fireball, Magic Missile, etc.).
+
+    Level 5 Sorcerer with:
+    - CHA 18 (primary casting stat)
+    - DEX 14, CON 14 (survivability)
+    - Spell slots: 4/3/2 for levels 1/2/3
+    - Spells: Fireball, Magic Missile, BurningHands, LightningBolt, Shatter, Thunderwave
+
+    Args:
+        source_id: UUID for the entity (generated if not provided)
+        name: Name for the sorcerer
+        position: Starting grid position
+        faction: Optional faction identifier
+        level: Sorcerer level (default 5)
+
+    Returns:
+        Entity: A configured sorcerer entity
+    """
+    if source_id is None:
+        source_id = uuid4()
+
+    from dnd.blocks.spellcasting import SpellcastingConfig
+    from dnd.spells.evocation import (
+        Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
+    )
+    from dnd.actions_functional import register_spell
+
+    # Ability scores - CHA primary
+    ability_scores_config = AbilityScoresConfig(
+        strength=AbilityConfig(ability_score=8),
+        dexterity=AbilityConfig(ability_score=14),
+        constitution=AbilityConfig(ability_score=14),
+        intelligence=AbilityConfig(ability_score=10),
+        wisdom=AbilityConfig(ability_score=10),
+        charisma=AbilityConfig(ability_score=18),  # Sorcerer casting stat
+    )
+
+    # Health: level d6 hit dice
+    health_config = HealthConfig(
+        hit_dices=[HitDiceConfig(
+            hit_dice_value=6,
+            hit_dice_count=level,
+            mode="maximums"  # Better HP for testing
+        )]
+    )
+
+    # Action economy with spell slots for level 5
+    action_economy_config = ActionEconomyConfig(
+        spell_slots={1: 4, 2: 3, 3: 2}  # Level 5 sorcerer spell slots
+    )
+
+    # Equipment config (base values)
+    equipment_config = EquipmentConfig()
+
+    # Entity config
+    entity_config = EntityConfig(
+        ability_scores=ability_scores_config,
+        health=health_config,
+        equipment=equipment_config,
+        action_economy=action_economy_config,
+        spellcasting=SpellcastingConfig(spellcasting_ability="charisma"),
+        proficiency_bonus=3,  # Level 5+
+        position=position,
+        faction=faction
+    )
+
+    # Create entity
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        description="A spellcaster with innate magical abilities.",
+        config=entity_config
+    )
+
+    # Set up action templates (Move, Dash, Dodge, etc.)
+    setup_standard_actions(entity)
+
+    # Register spells - both multi-entity and AoE
+    register_spell(entity, MagicMissile, caster_level=level)  # Multi-entity
+    register_spell(entity, Fireball, caster_level=level)      # AoE sphere
+    register_spell(entity, BurningHands, caster_level=level)  # AoE cone
+    register_spell(entity, LightningBolt, caster_level=level) # AoE line
+    register_spell(entity, Shatter, caster_level=level)       # AoE sphere
+    register_spell(entity, Thunderwave, caster_level=level)   # AoE cube + push
+
+    return entity
+
+
 if __name__ == "__main__":
     # Quick test of creature creation
     goblin = create_goblin(name="Test Goblin", position=(0, 0))
