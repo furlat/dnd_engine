@@ -30,7 +30,7 @@ from dnd.core.events import Event, EventQueue, EventType, EventPhase
 from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary import create_goblin, create_skeleton, create_sorcerer
 from dnd.classes.fighter_factory import create_fighter, FighterConfig
 from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
 from dnd.items import create_shortsword, create_dagger, create_longbow
@@ -278,6 +278,8 @@ def setup_arena_combat(
     # Create Hero based on character class
     if character_class == "barbarian":
         player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
+    elif character_class == "sorcerer":
+        player = create_sorcerer(name="Hero", position=player_position, faction="heroes")
     else:
         # Default to fighter
         player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
@@ -310,6 +312,70 @@ def setup_arena_combat(
             encounter.add_combatant(skeleton, ClaudeController(source_entity_uuid=skeleton.uuid))
         else:
             encounter.add_combatant(skeleton, MeleeAIController(source_entity_uuid=skeleton.uuid))
+
+    return encounter
+
+
+def setup_aoe_test_arena(
+    player_position: tuple = (2, 7),
+    character_class: str = "sorcerer"
+) -> Encounter:
+    """
+    Initialize arena for AoE spell testing.
+
+    Layout:
+    - 15x15 open grid (no walls blocking LOS)
+    - Sorcerer at (2, 7)
+    - 3 Goblins clustered at (12, 4), (12, 5), (12, 6) - within Fireball radius
+    """
+    # Reset all state
+    reset_map()
+    Entity._entity_registry.clear()
+    Entity._entity_by_position.clear()
+    Encounter.clear_registry()
+    Controller._controller_registry.clear()
+    SessionManager.reset()
+    EventQueue.reset()
+
+    # Create open grid (no walls for clean AoE testing)
+    grid = get_map()
+    grid.create_rectangle(0, 0, 15, 15)
+    # No walls - open arena for clear LOS
+
+    # Create player based on character class
+    if character_class == "sorcerer":
+        player = create_sorcerer(name="Hero", position=player_position, faction="heroes")
+    elif character_class == "barbarian":
+        player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
+    else:
+        # Default to fighter
+        player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
+
+    # Create 3 Goblins CLUSTERED for AoE testing
+    # Vertical stack at x=12, y=4,5,6 - all within 20ft radius
+    goblin_positions = [(12, 4), (12, 5), (12, 6)]
+    goblins = []
+    for i, pos in enumerate(goblin_positions):
+        goblin = create_goblin(
+            name=f"Goblin {i+1}",
+            position=pos,
+            faction="monsters"
+        )
+        goblins.append(goblin)
+
+    # Register opportunity attack handlers
+    add_opportunity_attack_handler(player)
+    for goblin in goblins:
+        add_opportunity_attack_handler(goblin)
+
+    Entity.update_all_entities_senses(max_distance=20)
+
+    # Create encounter with AI controllers for goblins
+    encounter = Encounter(name="AoE Test Arena", source_entity_uuid=uuid4())
+    encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
+
+    for goblin in goblins:
+        encounter.add_combatant(goblin, MeleeAIController(source_entity_uuid=goblin.uuid))
 
     return encounter
 
@@ -1120,6 +1186,13 @@ async def get_entity_available_actions(entity_uuid: str):
             result["distance"] = t.distance
         if t.path_cost is not None:
             result["path_cost"] = t.path_cost
+        # AoE-specific fields
+        if t.affected_entity_uuids:
+            result["affected_entity_uuids"] = [str(uuid) for uuid in t.affected_entity_uuids]
+        if t.affected_entity_names:
+            result["affected_entity_names"] = t.affected_entity_names
+        if t.affected_count is not None:
+            result["affected_count"] = t.affected_count
         return result
 
     def serialize_action(a):
@@ -1307,8 +1380,8 @@ async def execute_position_action(request: PositionActionRequest):
     if template is None:
         raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
 
-    # Accept both POSITION_PATH (path-based like Move) and POSITION_LOS (LOS-based like Jump)
-    if template.target_type not in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
+    # Accept POSITION_PATH (path-based like Move), POSITION_LOS (LOS-based like Jump), and POSITION_AOE (AoE spells)
+    if template.target_type not in (TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
         raise HTTPException(
             status_code=400,
             detail=f"Action {request.action_name} is not a position action (is {template.target_type.value})"
@@ -1384,6 +1457,22 @@ async def execute_position_action(request: PositionActionRequest):
                 oa_data["type"] = "opportunity_attack"
                 oa_data["is_opportunity_attack"] = True
                 triggered_reactions.append(oa_data)
+
+    elif template.target_type == TargetType.POSITION_AOE and event:
+        # AoE spell - log aggregate combat log
+        if event.combat_log:
+            add_event_to_combat_log(sim, event)
+            action_log_entries.append(event.combat_log.to_dict())
+            event_data = dict(event.combat_log.data)
+
+        # Also add per-target logs for detailed display
+        target_results = getattr(event, 'target_results', None)
+        if target_results:
+            for tr in target_results:
+                combat_log = getattr(tr, 'combat_log', None)
+                if combat_log:
+                    add_event_to_combat_log(sim, tr)
+                    action_log_entries.append(combat_log.to_dict())
 
     # Log death events
     for death_event in deaths:
@@ -1586,6 +1675,61 @@ async def start_human_simulation(character_class: str = "fighter"):
         "encounter_uuid": str(sim.encounter.uuid),
         "hero_uuid": hero_uuid,  # Client should create session and join with this entity
         "message": "Create a session and join with hero_uuid to control the Hero",
+        **result
+    }
+
+
+@app.post("/simulation/start-aoe-test")
+async def start_aoe_test():
+    """
+    Start arena configured for AoE spell testing.
+
+    Layout:
+    - Open 15x15 grid (no walls)
+    - Sorcerer (hero) at (2, 7) with Fireball, Magic Missile, etc.
+    - 3 Goblins clustered at (12, 4), (12, 5), (12, 6) - within Fireball radius
+    """
+    # Cancel existing task
+    if sim.combat_task and not sim.combat_task.done():
+        sim.combat_task.cancel()
+        try:
+            await sim.combat_task
+        except asyncio.CancelledError:
+            pass
+
+    sim.encounter = setup_aoe_test_arena(character_class="sorcerer")
+    sim.paused = False
+    sim.encounter.clear_combat_log()
+
+    # Create game session
+    game = sim.create_game_session(sim.encounter)
+
+    # Create AI session for all monsters
+    mgr = sim.get_session_manager()
+    ai_session = mgr.create_session(PlayerType.AI, "AI Monsters")
+    game.add_player(ai_session)
+
+    # Assign all monsters faction entities to AI
+    for entity in Entity.get_all_entities():
+        if entity.faction == "monsters":
+            game.assign_entity(entity.uuid, ai_session.session_id)
+
+    # Advance to first turn
+    result = await advance_encounter()
+
+    # Return hero UUID for client to join
+    hero_uuid = None
+    for entity in Entity.get_all_entities():
+        if entity.faction == "heroes":
+            hero_uuid = str(entity.uuid)
+            break
+
+    return {
+        "status": "started",
+        "test_type": "aoe",
+        "encounter_uuid": str(sim.encounter.uuid),
+        "hero_uuid": hero_uuid,
+        "message": "AoE test arena: Sorcerer vs 3 clustered Goblins",
         **result
     }
 
