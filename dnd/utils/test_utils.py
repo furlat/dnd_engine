@@ -12,6 +12,7 @@ from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
 from dnd.core.events import EventQueue
+from dnd.core.gridmap import GridMap
 from dnd.core.modifiers import (
     NumericalModifier, CriticalModifier, CriticalStatus, DamageType
 )
@@ -22,6 +23,7 @@ def reset_combat_state():
     EventQueue.reset()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
+    GridMap.reset()  # Reset spatial data
 
 
 def setup_combat_arena(

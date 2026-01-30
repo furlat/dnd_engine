@@ -5,7 +5,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData
 from dnd.core.aoe import AoEShape
 from typing import Optional, Callable, OrderedDict, List, Literal, Tuple
-from uuid import UUID
+from uuid import UUID, uuid4
 from enum import Enum
 
 CostType = Literal[
@@ -216,22 +216,92 @@ class BaseAction(BaseObject):
     def get_all_targets(self) -> List[UUID]:
         """Get all target UUIDs for multi-target actions.
 
+        For POSITION_AOE: Computes targets from shape + position.
+        For MULTI_ENTITY: Returns primary target + extra targets.
+
         Override in subclasses to provide custom target resolution (e.g., Magic Missile
         filling remaining darts with primary target).
-
-        Default implementation returns primary target + extra targets.
 
         Returns:
             List of target UUIDs in order they should be processed.
         """
+        # POSITION_AOE: compute targets from shape
+        if self.target_type == TargetType.POSITION_AOE:
+            if self.aoe_shape and self.end_position:
+                entity = BaseBlock.get(self.source_entity_uuid)
+                if entity:
+                    position = getattr(entity, 'position', None)
+                    if position:
+                        shape = self.aoe_shape.model_copy(update={'target': self.end_position})
+                        shape.compute_objective(position)
+                        # Return as list, using include_self to control caster inclusion
+                        targets = list(shape.affected_entity_uuids)
+                        if not self.include_self:  # Default False = exclude caster
+                            targets = [uid for uid in targets if uid != self.source_entity_uuid]
+                        # Apply valid_target_filter for AoE (filter, not validate)
+                        # AoE targets a position - filter determines which entities are affected
+                        targets = self._filter_targets_by_faction(entity, targets)
+                        return targets
+            return []
+
+        # MULTI_ENTITY: explicit targets (primary + extras)
         targets: List[UUID] = []
         if self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
         targets.extend(self.extra_target_entity_uuids)
         return targets
 
+    def _filter_targets_by_faction(self, source_entity: "BaseBlock", targets: List[UUID]) -> List[UUID]:
+        """Filter targets based on valid_target_filter for AoE spells.
+
+        For POSITION_AOE actions, this filters which entities in the area are affected.
+        Unlike _validate_target_filter (which fails on non-matching targets),
+        this removes non-matching targets from the list.
+
+        Args:
+            source_entity: The caster/source of the action
+            targets: List of potential target UUIDs
+
+        Returns:
+            Filtered list of target UUIDs that match the filter criteria.
+        """
+        # "all" means no filtering
+        if self.valid_target_filter == "all":
+            return targets
+
+        # Get faction methods
+        is_ally = getattr(source_entity, 'is_ally', None)
+        is_enemy = getattr(source_entity, 'is_enemy', None)
+
+        if is_ally is None or is_enemy is None:
+            return targets  # Can't filter without faction methods
+
+        filtered: List[UUID] = []
+        for target_uuid in targets:
+            target = BaseBlock.get(target_uuid)
+            if target is None:
+                continue
+
+            if self.valid_target_filter == "enemies":
+                if is_enemy(target):
+                    filtered.append(target_uuid)
+            elif self.valid_target_filter == "allies":
+                if target_uuid != self.source_entity_uuid and is_ally(target):
+                    filtered.append(target_uuid)
+            elif self.valid_target_filter == "self_or_allies":
+                if target_uuid == self.source_entity_uuid or is_ally(target):
+                    filtered.append(target_uuid)
+            else:
+                # Unknown filter, include target
+                filtered.append(target_uuid)
+
+        return filtered
+
     def _validate_target_filter(self, all_targets: List[UUID]) -> Optional[str]:
         """Validate that all targets match the valid_target_filter.
+
+        For POSITION_AOE: Skip validation since targets are already filtered in get_all_targets().
+        For MULTI_ENTITY: Validate that explicitly chosen targets match the filter.
 
         Args:
             all_targets: List of target UUIDs to validate
@@ -239,6 +309,10 @@ class BaseAction(BaseObject):
         Returns:
             Error message string if validation fails, None if all valid.
         """
+        # POSITION_AOE already filtered targets in get_all_targets(), skip validation
+        if self.target_type == TargetType.POSITION_AOE:
+            return None
+
         # Import Entity locally to avoid circular import
         entity = BaseBlock.get(self.source_entity_uuid)
         if entity is None:
@@ -274,11 +348,11 @@ class BaseAction(BaseObject):
     def instantiate(self, **overrides) -> "BaseAction":
         """Create an executable instance from this template.
 
-        The instance will have the same configuration as the template but with
-        template=False, allowing it to be applied.
+        Uses model_copy() to preserve object types (e.g., AoE shape subclasses).
+        Instances are not registered (ephemeral, used once for apply()).
 
         Args:
-            **overrides: Additional fields to override (e.g., target_entity_uuid, end_position)
+            **overrides: Fields to override (target_entity_uuid, end_position, aoe_shape, etc.)
 
         Returns:
             BaseAction: A new instance that can be applied
@@ -289,12 +363,16 @@ class BaseAction(BaseObject):
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
-        # Copy all fields except uuid (which will be regenerated)
-        kwargs = self.model_dump(exclude={"uuid"})
-        kwargs["template"] = False
-        kwargs.update(overrides)
+        # Instance config: new UUID, not a template, not registered (ephemeral)
+        update_dict: dict = {
+            "uuid": uuid4(),
+            "template": False,
+            "use_register": False,  # Instances are ephemeral, don't need registry
+        }
+        update_dict.update(overrides)
 
-        return type(self)(**kwargs)
+        # model_copy preserves object types (aoe_shape subclasses, etc.)
+        return self.model_copy(deep=True, update=update_dict)
 
     def check_costs(self) -> bool:
         """Check if entity can afford all costs (turn-based and resource-based)."""
@@ -333,27 +411,27 @@ class BaseAction(BaseObject):
         """Validate if the action can be performed. Override this in subclasses to implement
         custom validation logic. Similar to BaseCondition._apply pattern.
 
-        For MULTI_ENTITY actions, this also validates:
+        For MULTI_ENTITY and POSITION_AOE actions, this also validates:
         - That there are targets
-        - allow_same_target constraint
+        - allow_same_target constraint (MULTI_ENTITY only - AoE uses set, no duplicates)
         - valid_target_filter constraint
         """
-        # Multi-entity validation
-        if self.target_type == TargetType.MULTI_ENTITY:
+        # Multi-target validation (both MULTI_ENTITY and POSITION_AOE)
+        if self.target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             all_targets = self.get_all_targets()
 
             # Check: Do we have targets?
             if not all_targets:
                 return declaration_event.cancel(status_message="No targets specified")
 
-            # Check: Same-target constraint
-            if not self.allow_same_target:
+            # Check: Same-target constraint (only for MULTI_ENTITY - AoE uses set, no duplicates)
+            if self.target_type == TargetType.MULTI_ENTITY and not self.allow_same_target:
                 if len(set(all_targets)) != len(all_targets):
                     return declaration_event.cancel(
                         status_message="This action cannot target the same entity multiple times"
                     )
 
-            # Check: Target filter (enemies/allies/etc)
+            # Check: Target filter (enemies/allies/etc) - applies to both
             filter_error = self._validate_target_filter(all_targets)
             if filter_error:
                 return declaration_event.cancel(status_message=filter_error)
@@ -427,8 +505,8 @@ class BaseAction(BaseObject):
         if execution_event.phase not in [EventPhase.EXECUTION]:
             raise ValueError(f"Action {self.name} can only be applied in the execution phase")
 
-        # === MULTI_ENTITY convolution ===
-        if self.target_type == TargetType.MULTI_ENTITY:
+        # === MULTI_ENTITY / POSITION_AOE convolution ===
+        if self.target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             all_target_uuids = self.get_all_targets()
 
             # Store original target for restoration after loop
@@ -581,6 +659,8 @@ class AvailableTarget(BaseModel):
     target_name: Optional[str] = Field(default=None, description="Entity name if ENTITY action")
     distance: Optional[int] = Field(default=None, description="Distance in feet")
     path_cost: Optional[int] = Field(default=None, description="Movement cost if POSITION action")
+    # MULTI_ENTITY: additional targets beyond primary (for spells like Magic Missile)
+    extra_target_uuids: Optional[List[UUID]] = Field(default=None, description="Additional targets for MULTI_ENTITY actions")
     # AoE-specific fields (for POSITION_AOE actions)
     affected_entity_uuids: Optional[List[UUID]] = Field(default=None, description="UUIDs of entities affected by AoE")
     affected_entity_names: Optional[List[str]] = Field(default=None, description="Names of entities affected by AoE")

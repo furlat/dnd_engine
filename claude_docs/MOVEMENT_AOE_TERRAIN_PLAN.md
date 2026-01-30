@@ -6,7 +6,7 @@
 |-------|--------|-------|
 | Phase 1: Jump | ✓ COMPLETE | BG3-style jump action working in CLI |
 | Phase 2: Shove | ✓ COMPLETE | BG3-style shove with Athletics contest, forced movement |
-| Phase 3: AoE Targeting | IN PROGRESS | Infrastructure ✓ (geometry.py, aoe.py, shapes, tests), AoESpellAction TODO, Spells TODO |
+| Phase 3: AoE Targeting | IN PROGRESS | Infrastructure ✓, Convolution ✓, Fireball ✓, Other Spells TODO |
 | Phase 4: Multi-Entity Targeting | ✓ COMPLETE | Magic Missile, multi-target spells, ally/enemy filtering |
 
 ## Overview
@@ -526,9 +526,12 @@ class TestBless(SpellAction):
 
 | Component | Status |
 |-----------|--------|
-| `AoESpellAction` base class | TODO - Design below |
-| Fireball spell | TODO - Design below |
+| Unified convolution in `BaseAction.apply()` | ✓ COMPLETE |
+| `model_copy()` instantiation fix | ✓ COMPLETE |
+| Fireball spell | ✓ COMPLETE |
 | Other AoE spells (Burning Hands, Lightning Bolt, etc.) | TODO |
+| Server API for POSITION_AOE | TODO |
+| CLI AoE preview | TODO |
 
 ### Design Principles
 
@@ -923,100 +926,51 @@ def get_aoe_affected_entities(
     return shape.affected_positions, entities
 ```
 
-### AoE Spell Action Base - TODO (Design Only)
+### AoE Spell Pattern ✓
 
-> **⚠️ NOT YET IMPLEMENTED** - The following is the planned design for the AoESpellAction base class.
+AoE spells use `SpellAction` with `target_type=TargetType.POSITION_AOE`. The unified convolution loop in `BaseAction.apply()` handles them identically to `MULTI_ENTITY`.
 
-```python
-# PLANNED for dnd/actions.py - NOT YET IMPLEMENTED
+**Key Points:**
+- Set `aoe_shape` field in `__init__`
+- Use normal `_apply()` - convolution loop calls it once per target automatically
+- `get_all_targets()` computes targets from shape automatically
 
-class AoESpellAction(SpellAction):
-    """Base class for AoE spells."""
-
-    target_type: TargetType = Field(default=TargetType.POSITION_LOS)
-
-    # Shape configuration (override in subclasses)
-    aoe_shape_class: type = Field(default=None, exclude=True)  # Sphere, Cone, etc.
-
-    # Save configuration
-    save_ability: str = Field(default="dexterity")
-    half_on_save: bool = Field(default=True)
-
-    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        from dnd.entity import Entity
-
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return execution_event.cancel(status_message="Caster not found")
-
-        # Create shape with spell parameters
-        shape = self._create_shape(execution_event.target_position)
-
-        # Get affected entities (Entity handles the heavy lifting)
-        affected_positions, affected_entities = caster.get_aoe_affected_entities(shape)
-
-        # Apply effect to each entity
-        dc = caster.spell_save_dc()
-        results = []
-
-        for target in affected_entities:
-            result = self._apply_to_single_target(caster, target, dc)
-            results.append(result)
-
-        return execution_event.phase_to(
-            EventPhase.COMPLETION,
-            affected_positions=list(affected_positions),
-            aoe_results=results,
-            status_message=f"{self.name} affected {len(affected_entities)} creatures"
-        )
-
-    def _create_shape(self, target_pos: Tuple[int, int]) -> "AoEShape":
-        """Create shape instance. Override in subclasses."""
-        raise NotImplementedError
-
-    def _apply_to_single_target(self, caster, target, dc) -> dict:
-        """Apply effect to one target. Override in subclasses."""
-        raise NotImplementedError
-```
-
-### Example: Fireball Implementation - TODO (Design Only)
-
-> **⚠️ NOT YET IMPLEMENTED** - The following is the planned design for the Fireball spell.
+#### How to Implement an AoE Spell
 
 ```python
-# PLANNED for dnd/spells/evocation.py - NOT YET IMPLEMENTED
-
-class Fireball(AoESpellAction):
+class Fireball(SpellAction):
     """Fireball - 3rd level evocation
 
-    A bright streak flashes from your pointing finger to a point you choose
-    within range and then blossoms with a low roar into an explosion of flame.
-    Each creature in a 20-foot-radius sphere centered on that point must make
-    a DEX save. Takes 8d6 fire damage on failed save, half on success.
+    Each creature in a 20-foot-radius sphere must make a DEX save.
+    Takes 8d6 fire damage on failed save, half on success.
     """
-    name: str = Field(default="Fireball")
-    spell_level: int = Field(default=3)
-    spell_school: str = Field(default="evocation")
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
-
-    save_ability: str = "dexterity"
-    half_on_save: bool = True
+    name: str = "Fireball"
+    spell_level: int = 3
+    target_type: TargetType = TargetType.POSITION_AOE  # Key - enables convolution!
+    spell_range: Range = Range(type=RangeType.RANGE, normal=150)
 
     # Damage scales with upcasting
     base_damage_dice: int = Field(default=8)  # 8d6
 
-    def _create_shape(self, target_pos: Tuple[int, int]) -> Sphere:
-        from dnd.core.aoe import Sphere
-        return Sphere(
-            source_entity_uuid=self.source_entity_uuid,
-            target=target_pos,
-            radius_feet=20
-        )
+    def __init__(self, **kwargs):
+        # Set up shape BEFORE super().__init__
+        if 'aoe_shape' not in kwargs:
+            kwargs['aoe_shape'] = Sphere(
+                source_entity_uuid=kwargs.get('source_entity_uuid'),
+                target=kwargs.get('target_position', (0, 0)),
+                radius_feet=20
+            )
+        super().__init__(**kwargs)
 
-    def _apply_to_single_target(self, caster, target, dc) -> dict:
-        # Roll save
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Called once per target by convolution loop."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid)  # Set by convolution
+
+        # DEX save, half damage on success
+        dc = caster.spell_save_dc()
         save_result = target.saving_throw(SavingThrowRequest(
-            ability=self.save_ability,
+            ability="dexterity",
             dc=dc,
             source_entity_uuid=caster.uuid
         ))
@@ -1033,32 +987,82 @@ class Fireball(AoESpellAction):
         if damage > 0:
             target.health.take_damage(damage, DamageType.FIRE, caster.uuid)
 
-        return {
-            "target_uuid": str(target.uuid),
-            "target_name": target.name,
-            "save_success": save_result.success,
-            "damage_dealt": damage
-        }
+        # IMPORTANT: Set total_damage for convolution aggregation
+        return execution_event.phase_to(
+            EventPhase.COMPLETION,
+            total_damage=damage
+        )
 ```
+
+#### How Convolution Handles POSITION_AOE
+
+In `BaseAction.apply()`, both `MULTI_ENTITY` and `POSITION_AOE` use the same convolution pattern:
+
+```python
+# In BaseAction.apply() - simplified
+if self.target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
+    all_target_uuids = self.get_all_targets()  # From shape for POSITION_AOE
+
+    for target_uuid in all_target_uuids:
+        self.target_entity_uuid = target_uuid  # Set target for this iteration
+        result = self._apply(execution_event)  # Your _apply() runs per target
+        # ... aggregate results ...
+```
+
+For `POSITION_AOE`, `get_all_targets()` automatically computes affected entities from the `aoe_shape`:
+
+```python
+def get_all_targets(self) -> List[UUID]:
+    if self.target_type == TargetType.POSITION_AOE and self.aoe_shape:
+        # Shape already computed in get_available_actions()
+        return list(self.aoe_shape.affected_entity_uuids)
+    # ... MULTI_ENTITY handling ...
+```
+
+#### Benefits of Simplified Pattern
+
+1. **No new base class** - Less code, less complexity
+2. **Consistent with MULTI_ENTITY** - Same convolution, same aggregation
+3. **Per-target `_apply()`** - Easy to reason about, easy to test
+4. **Automatic combat log** - Each target gets proper log entry
+5. **Reuse SpellAction features** - Upcasting, spell slots, spell attack/DC all work
+
+### Fireball Implementation Details ✓ COMPLETE
+
+**Location:** `dnd/spells/evocation.py`
+**Tests:** `examples/test_fireball.py` (10 tests)
+
+**Class Definition:**
+```python
+class Fireball(SpellAction):
+    name: str = Field(default="Fireball")
+    description: str = Field(default="20ft radius explosion dealing 8d6 fire damage (DEX save half)")
+    spell_level: int = Field(default=3)
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+
+    # AoE configuration
+    aoe_shape: Optional[AoEShape] = Field(default=None)  # Sphere(radius_feet=20)
+
+    # Target filtering (DEFAULT: hits everyone)
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="all")
+
+    # Damage
+    base_damage_dice: int = Field(default=8)  # 8d6 at level 3
+```
+
+**Key Implementation Points:**
+1. Uses `end_position` parameter (not `target_position`)
+2. Shape created in `__init__` if not provided
+3. `_validate()` checks LOS to target position, range, then calls parent
+4. `_apply()` runs once per target (convolution handles iteration)
+5. MUST set `total_damage` in completion event for aggregation
+6. Uses proper `Damage` object and `target.saving_throw()` patterns
 
 ### Targeting in get_available_actions
 
-AoE spells use `POSITION_LOS` target type - they fit into existing `position_actions`:
-
-```python
-# In Entity.get_available_actions() - no changes needed!
-# AoE spells with target_type=POSITION_LOS are already handled:
-
-# POSITION_LOS actions (Jump, Teleport, AoE spells)
-for template in self.position_actions:
-    if template.target_type != TargetType.POSITION_LOS:
-        continue
-
-    valid_pos_list = template.get_valid_positions()  # Inherited from BaseAction
-    # ... rest of existing code ...
-```
-
-No new action category needed. AoE spells just use position targeting.
+AoE spells use `POSITION_AOE` target type. `Entity.get_available_actions()` handles them alongside other position actions, computing `affected_entity_uuids` for each valid target position via the shape.
 
 ---
 
@@ -1160,28 +1164,162 @@ No new action category needed. AoE spells just use position targeting.
 - Target filter validation happens in `_validate()`, not `apply()`
 - Fixed `can_afford()` bug that ignored max constraints from Incapacitated
 
-### Step 5: AoE Spell Action Base
-1. Create `AoESpellAction` base class in `dnd/actions.py`
-2. Base class: creates shape, calls entity helper, iterates targets
-3. Subclasses override: `_create_shape()`, `_apply_to_single_target()`
+### Step 4.7: Unified Convolution with model_copy() ✓ COMPLETE
 
-### Step 6: First AoE Spell - Fireball
-1. Implement Fireball in `dnd/spells/evocation.py`
-2. Test targeting (uses existing POSITION_LOS flow)
-3. Test damage application to multiple targets
-4. Test wall blocking (FOV from spell center)
-5. Create `examples/test_fireball.py`
+**Problem:** `instantiate()` used `model_dump()` which loses polymorphic types. A `Sphere` shape would become a generic `AoEShape` and break.
 
-### Step 7: More AoE Spells
+**Solution:** Use `model_copy(deep=True)` to preserve object types:
+
+```python
+def instantiate(self, **overrides) -> "BaseAction":
+    update_dict = {
+        "uuid": uuid4(),
+        "template": False,
+        "use_register": False,  # Ephemeral instances
+    }
+    update_dict.update(overrides)
+    return self.model_copy(deep=True, update=update_dict)
+```
+
+**Files modified:**
+- `dnd/core/base_actions.py` - `BaseAction.instantiate()`
+- `dnd/actions.py` - `Move.instantiate()`, `Jump.instantiate()`, `SpellAction._create_variant()`
+
+**Test:** `examples/test_aoe_convolution.py`
+
+### Step 5: First AoE Spell - Fireball ✓ COMPLETE
+1. ✓ Implemented Fireball in `dnd/spells/evocation.py` using SpellAction + POSITION_AOE
+2. ✓ Targeting via `get_available_actions()` position flow works
+3. ✓ Damage application to multiple targets via convolution works
+4. ✓ Wall blocking (FOV from spell center) works
+5. ✓ Created `examples/test_fireball.py` with 10 comprehensive tests
+
+**Tests implemented:**
+- `test_fireball_basic_damage()` - Basic damage application
+- `test_fireball_dex_save_half_damage()` - DEX save half damage mechanics
+- `test_fireball_upcast_damage()` - +1d6 per level above 3rd (8d6 → 14d6 at 9th)
+- `test_fireball_los_requirement()` - LOS validation to target position
+- `test_fireball_self_damage()` - Caster takes damage if in AoE (include_self=True)
+- `test_fireball_ally_damage()` - Allies take friendly fire
+- `test_fireball_enemies_only_variant()` - Variant with valid_target_filter="enemies"
+- `test_fireball_multiple_targets()` - Convolution aggregation (total_damage, target_results)
+- `test_fireball_range_validation()` - 150ft range enforcement
+- `test_fireball_aoe_behind_walls()` - FOV computed from explosion center
+
+**Implementation features:**
+- `include_self: bool` - Control if caster can be hit (default True)
+- `valid_target_filter: str` - "all" (default), "enemies", "allies" filtering
+- Proper `total_damage` setting for convolution aggregation
+- Uses `end_position` parameter for target position
+
+### Step 6: More AoE Spells
 1. Burning Hands (Cone) - tests cone geometry
 2. Lightning Bolt (Line) - tests line geometry
 3. Thunderwave (Cube from caster) - tests cube + forced movement integration
 4. Shatter (Sphere) - another sphere spell for validation
 
-### Step 8: CLI Preview (Deferred)
+### Step 7: CLI Preview (Deferred)
 - Show affected area before confirming AoE spell
 - Highlight affected tiles on map
 - This can be done after core mechanics work
+
+### Step 8: Server API for POSITION_AOE
+
+**Changes needed in `server/event_server.py`:**
+
+1. Add POSITION_AOE to `/action/position` validation (alongside POSITION_PATH, POSITION_LOS)
+2. Add POSITION_AOE handling in `/action/execute`
+3. Include `affected_entity_uuids` in AoE action responses
+
+| File | Change | Status |
+|------|--------|--------|
+| `server/event_server.py` | Add POSITION_AOE to `/action/position` validation | TODO |
+| `server/event_server.py` | Add POSITION_AOE to `/action/execute` handling | TODO |
+| `server/event_server.py` | Include affected_entity_uuids in AoE responses | TODO |
+
+### Step 9: CLI Command Unification
+
+**Entity ID System (0 = self, 1+ = initiative order):**
+
+Problem: Current system uses indices into `valid_targets` list which changes based on visibility/range.
+
+Solution: Initiative order with 0 = self
+- **0** = Always refers to self (current entity)
+- **1, 2, 3...** = Assigned at initiative roll, in initiative order
+- IDs stay constant throughout encounter (even if entity dies)
+
+**Display:**
+```
+Targets:
+  [0] You (Hero, HP: 25)
+  [1] Skeleton (HP: 13, 5ft) ← highest initiative
+  [2] Goblin (HP: 7, 10ft)
+  [3] Orc (HP: 15, 15ft) ← lowest initiative
+```
+
+**Command Pattern:**
+```
+# Self-actions (no target)
+d, dash               # Dash
+do, dodge             # Dodge
+rage                  # Rage
+
+# Position-actions (X Y coordinates)
+mv 5 7, m 5 7         # Move to (5,7)
+jump 3 2, j 3 2       # Jump to (3,2)
+fireball 5 7          # Fireball at position
+
+# Entity-actions (target ID, 0=self)
+a 1, attack 1         # Attack entity #1
+sh 1, shove 1         # Shove entity #1
+cast mage_armor       # Self-cast (target = 0 = self)
+
+# Multi-target (comma-separated)
+mm 1,1,2              # Magic Missile: 2 darts on #1, 1 on #2
+cast magic_missile 1,1,2  # Same with explicit "cast" prefix
+```
+
+| File | Change | Status |
+|------|--------|--------|
+| `dnd/encounter.py` | Assign `combat_id` (1-N) at initiative roll | TODO |
+| `dnd/entity.py` | Add `combat_id: Optional[int]` field | TODO |
+| `server/api_models.py` | Include `combat_id` in entity responses | TODO |
+| `cli/display.py` | Display `[0] You  [1] Skeleton  [2] Goblin` format | TODO |
+| `cli/commands.py` | Parse comma-separated target IDs (e.g., "1,1,2") | TODO |
+| `server/api_models.py` | Extend ExecuteByIndexRequest with `target_ids: List[int]` | TODO |
+
+**AoE Preview (similar to Move/Jump):**
+
+| File | Change | Status |
+|------|--------|--------|
+| `cli/action_model.py` | Add `affected_positions`, `affected_entity_names` to ActionTarget | TODO |
+| `cli/commands.py` | Add `aoe_preview_positions: Set[Tuple]` to GameState | TODO |
+| `cli/display.py` | Render `○` for AoE area, highlight affected entities | TODO |
+| `cli/display.py` | Show affected entity names in output panel | TODO |
+
+### Step 10: Combat Log for Multi-Entity Actions
+
+**Problem:** Each per-target `_apply()` generates its own combat log entry. Magic Missile (3 darts) creates 3 separate entries with no aggregate summary.
+
+**Solution:** Aggregate entry with per-target breakdown:
+
+```
+COMPACT:
+  Hero casts Magic Missile → 2 targets, 15 force damage
+
+VERBOSE:
+  Hero casts Magic Missile affecting 2 targets
+  - Skeleton: 9 damage (2 darts)
+  - Goblin: 6 damage (1 dart)
+  Total: 15 force damage
+```
+
+| File | Change | Status |
+|------|--------|--------|
+| `dnd/core/combat_log.py` | Add MultiEntityLogData model | TODO |
+| `dnd/core/combat_log.py` | Add MULTI_ENTITY_ACTION entry type | TODO |
+| `dnd/core/base_actions.py` | Generate aggregate entry after convolution | TODO |
+| `dnd/actions.py` | SpellEvent.generate_combat_log() with spell details | TODO |
 
 ---
 
@@ -1226,14 +1364,34 @@ All require 3D spatial consideration; implement once together:
 |------|---------|--------|
 | `dnd/core/geometry.py` | NEW: Pure geometry functions (circle, line, cone, rectangle) | ✓ Done |
 | `dnd/core/aoe.py` | NEW: AoEShape base + Sphere, Cone, Line, Cube | ✓ Done |
-| `dnd/core/base_actions.py` | POSITION_AOE target type, aoe_shape field, AvailableTarget extensions | ✓ Done |
+| `dnd/core/base_actions.py` | POSITION_AOE target type, aoe_shape field, AvailableTarget extensions, unified convolution, model_copy() instantiation | ✓ Done |
 | `dnd/entity.py` | `get_aoe_affected_entities()` helper, POSITION_AOE in get_available_actions() | ✓ Done |
+| `dnd/actions.py` | Move/Jump/SpellAction instantiate() using model_copy() | ✓ Done |
 | `examples/test_geometry.py` | NEW: Pure geometry unit tests | ✓ Done |
 | `examples/test_aoe_shapes.py` | NEW: Shape + wall blocking tests | ✓ Done |
 | `examples/test_aoe_integration.py` | NEW: POSITION_AOE + Entity helper tests | ✓ Done |
-| `dnd/actions.py` | Add `AoESpellAction` base class | TODO |
-| `dnd/spells/evocation.py` | Add Fireball, Lightning Bolt, Burning Hands, Shatter | TODO |
-| `examples/test_fireball.py` | NEW: Integration test for Fireball | TODO |
+| `examples/test_aoe_convolution.py` | NEW: Convolution loop tests with shapes | ✓ Done |
+| `dnd/spells/evocation.py` | Fireball ✓, Lightning Bolt TODO, Burning Hands TODO, Shatter TODO | Fireball ✓ |
+| `examples/test_fireball.py` | Integration test for Fireball (10 tests) | ✓ Done |
+
+### Phase 3.5 Files (Server API + CLI for AoE)
+
+| File | Changes | Status |
+|------|---------|--------|
+| `server/event_server.py` | Add POSITION_AOE to position action validation and execution | TODO |
+| `server/api_models.py` | Include `combat_id` in entity responses, `target_ids` in execute request | TODO |
+| `dnd/encounter.py` | Assign `combat_id` at initiative roll | TODO |
+| `dnd/entity.py` | Add `combat_id: Optional[int]` field | TODO |
+| `cli/display.py` | Entity ID display format, AoE preview rendering | TODO |
+| `cli/commands.py` | Multi-target parsing (comma-separated IDs), AoE preview state | TODO |
+| `cli/action_model.py` | Add `affected_positions`, `affected_entity_names` to ActionTarget | TODO |
+
+### Phase 3.6 Files (Combat Log Improvements)
+
+| File | Changes | Status |
+|------|---------|--------|
+| `dnd/core/combat_log.py` | MultiEntityLogData model, MULTI_ENTITY_ACTION entry type | TODO |
+| `dnd/core/base_actions.py` | Generate aggregate entry after convolution loop | TODO |
 
 ### Phase 4 Files (Multi-Entity Targeting)
 
