@@ -1109,13 +1109,16 @@ class ForcedMovementEvent(Event):
 class RangeType(str, Enum):
     REACH = "Reach"
     RANGE = "Range"
+    SELF = "Self"  # For spells that originate from caster (cone, line, cube from self)
+
 
 class Range(BaseModel):
     type: RangeType = Field(
-        description="The type of range (Reach or Range)"
+        description="The type of range (Reach, Range, or Self)"
     )
     normal: int = Field(
-        description="Normal range in feet"
+        default=0,
+        description="Normal range in feet (0 for Self range)"
     )
     long: Optional[int] = Field(
         default=None,
@@ -1123,7 +1126,9 @@ class Range(BaseModel):
     )
 
     def __str__(self):
-        if self.type == RangeType.REACH:
+        if self.type == RangeType.SELF:
+            return "Self"
+        elif self.type == RangeType.REACH:
             return f"{self.normal} ft."
         elif self.type == RangeType.RANGE:
             return f"{self.normal}/{self.long} ft." if self.long else f"{self.normal} ft."
