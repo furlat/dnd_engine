@@ -13,7 +13,7 @@ from dnd.core.combat_log import (
 )
 from pydantic import Field, model_validator
 from typing import Optional, List, TypeVar, Tuple, Self, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone
 from collections import OrderedDict
@@ -202,21 +202,25 @@ class Move(BaseAction):
     def instantiate(self, **overrides) -> "Move":
         """Create an executable Move instance from this template.
 
-        Overrides base to ensure path/costs are recomputed for new end_position,
-        not carried over from template's previous state.
+        Uses model_copy() to preserve object types. Path/costs are reset
+        for recomputation based on new end_position.
         """
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
-        # Copy all fields except uuid and path-related fields
-        # Path and costs must be recomputed for the new end_position
-        kwargs = self.model_dump(exclude={"uuid", "path", "costs"})
-        kwargs["template"] = False
-        kwargs["path"] = None  # Force recompute
-        kwargs["costs"] = []   # Force recompute
-        kwargs.update(overrides)
+        # Instance config: new UUID, not a template, not registered (ephemeral)
+        # Reset path and costs for recomputation
+        update_dict: dict = {
+            "uuid": uuid4(),
+            "template": False,
+            "use_register": False,  # Instances are ephemeral, don't need registry
+            "path": None,  # Force recompute
+            "costs": [],   # Force recompute
+        }
+        update_dict.update(overrides)
 
-        return Move(**kwargs)
+        # model_copy preserves object types
+        return self.model_copy(deep=True, update=update_dict)
 
     @staticmethod
     def validate_path(declaration_event: MovementEvent,source_entity_uuid: UUID) -> MovementEvent:
@@ -1499,18 +1503,26 @@ class Jump(BaseAction):
         ))
 
     def instantiate(self, **overrides) -> "Jump":
-        """Create an executable Jump instance from this template."""
+        """Create an executable Jump instance from this template.
+
+        Uses model_copy() to preserve object types. Costs are reset and
+        movement cost is recalculated based on new end_position.
+        """
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
-        # Copy fields except uuid and costs (costs are recalculated)
-        kwargs = self.model_dump(exclude={"uuid", "costs"})
-        kwargs["template"] = False
-        # Reset costs to just the bonus action
-        kwargs["costs"] = [Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
-        kwargs.update(overrides)
+        # Instance config: new UUID, not a template, not registered (ephemeral)
+        # Reset costs to just the bonus action - movement cost added after copy
+        update_dict: dict = {
+            "uuid": uuid4(),
+            "template": False,
+            "use_register": False,  # Instances are ephemeral, don't need registry
+            "costs": [Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
+        }
+        update_dict.update(overrides)
 
-        instance = Jump(**kwargs)
+        # model_copy preserves object types
+        instance = self.model_copy(deep=True, update=update_dict)
         # Recalculate movement cost for the new position
         instance._setup_movement_cost()
         return instance
@@ -2138,6 +2150,8 @@ class SpellAction(BaseAction):
     def _create_variant(self, cast_at_level: int, **overrides) -> 'SpellAction':
         """Clone self with modified cast level and appropriate costs.
 
+        Uses model_copy() to preserve object types (e.g., AoE shape subclasses).
+
         Args:
             cast_at_level: The spell slot level to use (0 for cantrips)
             **overrides: Additional field overrides
@@ -2145,15 +2159,19 @@ class SpellAction(BaseAction):
         Returns:
             A new SpellAction instance configured for this cast level
         """
-        # Start with current fields
-        kwargs = self.model_dump(exclude={"uuid", "costs"})
-        kwargs["cast_at_level"] = cast_at_level
-        kwargs["is_variant"] = True
-        kwargs["template"] = False
-        kwargs["costs"] = self._get_costs_for_level(cast_at_level)
-        kwargs.update(overrides)
+        # Variant config: new UUID, not a template, not registered (ephemeral)
+        update_dict: dict = {
+            "uuid": uuid4(),
+            "cast_at_level": cast_at_level,
+            "is_variant": True,
+            "template": False,
+            "use_register": False,  # Variants are ephemeral, don't need registry
+            "costs": self._get_costs_for_level(cast_at_level),
+        }
+        update_dict.update(overrides)
 
-        return type(self)(**kwargs)
+        # model_copy preserves object types (aoe_shape subclasses, etc.)
+        return self.model_copy(deep=True, update=update_dict)
 
     def _get_costs_for_level(self, level: int) -> List[Cost]:
         """Get costs for casting at a specific level.

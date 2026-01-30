@@ -3,7 +3,7 @@
 Provides spell classes organized by school, plus registration utilities.
 """
 from dnd.spells.base import SpellAction, SpellEvent
-from dnd.spells.evocation import FireBolt, SacredFlame, MagicMissile
+from dnd.spells.evocation import FireBolt, SacredFlame, MagicMissile, Fireball
 from dnd.spells.abjuration import MageArmor
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.conjuration import CallLightning, CallLightningStrike
@@ -25,6 +25,7 @@ LEVEL_2_SPELLS = {
 
 LEVEL_3_SPELLS = {
     "Call Lightning": CallLightning,
+    "Fireball": Fireball,
 }
 
 ALL_SPELLS = {**CANTRIPS, **LEVEL_1_SPELLS, **LEVEL_2_SPELLS, **LEVEL_3_SPELLS}
@@ -44,6 +45,7 @@ __all__ = [
     # Level 3
     "CallLightning",
     "CallLightningStrike",
+    "Fireball",
     # Lookup dicts
     "CANTRIPS",
     "LEVEL_1_SPELLS",

@@ -1217,6 +1217,7 @@ register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
 | Mage Armor | 1 | Abjuration | Buff | AC = 13 + DEX (ends on armor equip) |
 | Hold Person | 2 | Enchantment | WIS Save + Concentration | Paralyzed on fail, repeat save each turn |
 | Call Lightning | 3 | Conjuration | DEX Save + Concentration | 3d10 lightning, grants strike action each turn |
+| Fireball | 3 | Evocation | DEX Save + AoE | 8d6 fire in 20ft sphere, half on save, +1d6/upcast |
 
 ### SpellcastingBlock
 
@@ -1241,7 +1242,7 @@ See `examples/test_concentration.py` and `examples/test_concentration_spells.py`
 ### Not Yet Implemented
 
 - **Spell duration/expiration** - Long rest, short rest, timed durations
-- **Area of Effect spells** - Fireball, etc.
+- **More AoE spells** - Cone of Cold (cone), Lightning Bolt (line), etc. to test different shapes
 - **More spell schools** - Necromancy, Illusion, etc.
 
 ## Project Status
