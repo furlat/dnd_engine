@@ -17,7 +17,8 @@
       "Bash(npm install)",
       "Bash(npm install:*)",
       "Bash(pkill:*)",
-      "Bash(PYTHONPATH=. python:*)"
+      "Bash(PYTHONPATH=. python:*)",
+      "Bash(pytest:*)"
     ]
   }
 }

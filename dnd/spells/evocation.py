@@ -1,6 +1,6 @@
 """Evocation spells - dealing damage and channeling energy.
 
-Contains: FireBolt, SacredFlame, MagicMissile
+Contains: FireBolt, SacredFlame, MagicMissile, Fireball
 """
 from typing import Optional, List
 from uuid import UUID
@@ -13,6 +13,7 @@ from dnd.core.dice import AttackOutcome, RollType
 from typing import cast as type_cast
 from dnd.core.events import EventPhase, RangeType, Range, Damage
 from dnd.core.modifiers import DamageType
+from dnd.core.aoe import AoEShape
 
 from dnd.actions import SpellAction, SpellEvent
 
@@ -393,4 +394,147 @@ class MagicMissile(SpellAction):
             damage_rolls=[damage_roll],
             total_damage=damage_roll.total,
             status_message=f"Dart hits {target.name} for {damage_roll.total} force damage"
+        )
+
+
+class Fireball(SpellAction):
+    """Fireball - 3rd level Evocation
+
+    A bright streak flashes from your pointing finger to a point you choose
+    within range and then blossoms with a low roar into an explosion of flame.
+
+    Each creature in a 20-foot-radius sphere centered on that point must make
+    a DEX saving throw. A target takes 8d6 fire damage on a failed save,
+    or half as much on a successful one.
+
+    At Higher Levels: +1d6 damage per slot level above 3rd.
+    """
+    name: str = Field(default="Fireball")
+    description: str = Field(default="20ft radius explosion dealing 8d6 fire damage (DEX save half)")
+    spell_level: int = Field(default=3)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+
+    # AoE configuration - set via __init__ or field default
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+
+    # Target filtering - DEFAULT: hits everyone including caster and allies
+    include_self: bool = Field(default=True)  # Caster can be hit
+    valid_target_filter: str = Field(default="all")  # Hits everyone in area
+
+    # Damage configuration
+    base_damage_dice: int = Field(default=8)  # 8d6 at level 3
+
+    def __init__(self, **kwargs):
+        from dnd.core.aoe import Sphere
+        from uuid import uuid4
+
+        # Set up shape before super().__init__ if not provided
+        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
+            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
+            kwargs['aoe_shape'] = Sphere(
+                source_entity_uuid=source_uuid,
+                target=kwargs.get('end_position', (0, 0)),
+                radius_feet=20
+            )
+        super().__init__(**kwargs)
+
+    def get_range(self) -> Range:
+        """Return spell range for POSITION_AOE target resolution."""
+        return self.spell_range
+
+    def get_damage_dice_count(self) -> int:
+        """8d6 base + 1d6 per level above 3rd."""
+        upcast_bonus = max(0, self.cast_at_level - self.spell_level)
+        return self.base_damage_dice + upcast_bonus
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate target position is in LOS and range."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position specified")
+
+        # Check LOS to target position (caster must see the center point)
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(
+                status_message=f"Target position {target_pos} not in line of sight"
+            )
+
+        # Check range
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        # Let parent handle POSITION_AOE multi-target validation
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply fireball damage to current target (called once per target by convolution)."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate spell DC
+        dc = caster.spell_save_dc()
+
+        # 2. Request DEX save
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="dexterity",
+            dc=dc
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="dexterity",
+            save_dc=dc,
+            save_success=success,
+            status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+        )
+
+        # 3. Roll damage
+        num_dice = self.get_damage_dice_count()
+        damage_bonus = caster.get_spell_damage_bonus()
+
+        fire_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=6,
+            dice_numbers=num_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.FIRE
+        )
+
+        damage_dice = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+        damage_roll = damage_dice.roll
+
+        # 4. Half damage on successful save
+        final_damage = damage_roll.total // 2 if success else damage_roll.total
+
+        # 5. Apply damage
+        if final_damage > 0:
+            target.health.take_damage(final_damage, DamageType.FIRE, source_entity_uuid=caster.uuid)
+
+        save_text = " (saved for half)" if success else ""
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[fire_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,  # Required for convolution aggregation
+            status_message=f"Fireball deals {final_damage} fire damage to {target.name}{save_text}"
         )

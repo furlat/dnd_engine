@@ -128,10 +128,21 @@ Events that generate combat logs:
 | Mage Armor | 1 | Buff | AC = 13 + DEX |
 | Hold Person | 2 | WIS Save + Concentration | Paralyzed on fail, repeat save each turn |
 | Call Lightning | 3 | DEX Save + Concentration | 3d10 lightning, grants strike action each turn |
+| Fireball | 3 | DEX Save + AoE | 8d6 fire in 20ft sphere, half on save, +1d6/upcast |
+
+### AoE System (Complete)
+
+The AoE (Area of Effect) system provides multi-target spell/action support:
+
+- **AoE Shapes** (`dnd/core/aoe.py`): `Sphere`, `Cone`, `Line`, `Cube` with FOV blocking
+- **Target Filtering**: `valid_target_filter` ("all", "enemies", "allies") filters who gets affected
+- **Self-Inclusion**: `include_self` controls whether caster can be hit by their own AoE
+- **Convolution**: Base action system calls `_apply()` once per target, aggregates results
+- **Self-Targeting Saves**: Fixed - caster making saves against own spell works correctly
 
 ### Missing (Next Priority)
 - Spell durations (timed, short rest, long rest expiration)
-- Area of effect spells
+- More AoE spells to test different shapes (Cone of Cold, Lightning Bolt, etc.)
 - More concentration spells (e.g., Haste, Bless)
 
 ---
@@ -140,7 +151,7 @@ Events that generate combat logs:
 
 | Feature | Priority | Complexity |
 |---------|----------|------------|
-| **Area of Effect Spells** | HIGH | Medium |
+| **More AoE Spells** (Cone of Cold, Lightning Bolt, etc.) | HIGH | Easy |
 | Scenario Testing Framework | HIGH | Medium |
 | Perception/Stealth/Hidden | HIGH | Medium |
 | Interactable Objects (traps, destructibles) | HIGH | Medium |
@@ -208,7 +219,7 @@ dnd/
 │   └── barbarian.py, barbarian_factory.py  # Barbarian + Berserker path
 ├── items/          # Weapon/armor factories (WEAPONS, ARMORS, SHIELDS dicts)
 ├── spells/         # Spell implementations by school
-│   ├── evocation.py    # FireBolt, SacredFlame, MagicMissile
+│   ├── evocation.py    # FireBolt, SacredFlame, MagicMissile, Fireball
 │   ├── abjuration.py   # MageArmor
 │   ├── enchantment.py  # HoldPerson, HoldPersonEffect
 │   └── conjuration.py  # CallLightning, CallLightningStrike

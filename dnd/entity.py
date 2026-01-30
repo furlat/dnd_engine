@@ -526,7 +526,11 @@ class Entity(BaseBlock):
             saving_throw_bonuses_target = target_entity._get_bonuses_for_saving_throw(ability_name)
 
         saving_throw_bonuses_source =self._get_bonuses_for_saving_throw(ability_name)
-        if target_entity is not None:
+        # Only cross-propagate when target is a DIFFERENT entity
+        # Self-targeting (e.g., caster in own Fireball AoE) doesn't need cross-propagation:
+        # - The caster's own conditions are already in self_static
+        # - There's no "other entity imposing effects" relationship
+        if target_entity is not None and self.target_entity_uuid != self.uuid:
             for mod_source,mod_target in zip(saving_throw_bonuses_source,saving_throw_bonuses_target):
                 mod_source.set_from_target(mod_target)    
         total_bonus_source = saving_throw_bonuses_source[0].combine_values(list(saving_throw_bonuses_source)[1:]).model_copy(deep=True)
@@ -551,7 +555,8 @@ class Entity(BaseBlock):
             skill_bonuses_target = target_entity._get_bonuses_for_skill(skill_name)
 
         skill_bonuses_source = self._get_bonuses_for_skill(skill_name)
-        if target_entity is not None:
+        # Only cross-propagate when target is a DIFFERENT entity
+        if target_entity is not None and self.target_entity_uuid != self.uuid:
             for mod_source, mod_target in zip(skill_bonuses_source, skill_bonuses_target):
                 mod_source.set_from_target(mod_target)
         
@@ -1368,8 +1373,9 @@ class Entity(BaseBlock):
 
     @property
     def entity_actions(self) -> List[BaseAction]:
-        """Actions that target other entities (Attack)."""
-        return [a for a in self.registered_actions if a.target_type == TargetType.ENTITY]
+        """Actions that target other entities (Attack, multi-target spells)."""
+        return [a for a in self.registered_actions
+                if a.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY)]
 
     @property
     def position_actions(self) -> List[BaseAction]:
@@ -1492,7 +1498,7 @@ class Entity(BaseBlock):
 
                 result.entity_actions.append(AvailableActionInfo(
                     template_name=template_name,
-                    target_type=TargetType.ENTITY,
+                    target_type=template.target_type,  # Use actual target type (ENTITY or MULTI_ENTITY)
                     valid_targets=valid_targets,
                     can_afford=template.check_costs(),
                     display_name=display_name,
@@ -1597,6 +1603,27 @@ class Entity(BaseBlock):
                 shape.compute_subjective(self.position, self.senses)
 
                 affected_uuids = list(shape.affected_entity_uuids)
+
+                # Apply include_self filter (match get_all_targets behavior)
+                if not getattr(template, 'include_self', False):
+                    affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
+
+                # Apply valid_target_filter (match _validate behavior)
+                target_filter = getattr(template, 'valid_target_filter', 'enemies')
+                if target_filter != "all":
+                    filtered = []
+                    for uid in affected_uuids:
+                        ent = Entity.get(uid)
+                        if ent:
+                            if target_filter == "enemies" and self.is_enemy(ent):
+                                filtered.append(uid)
+                            elif target_filter == "allies" and self.is_ally(ent):
+                                filtered.append(uid)
+                            elif target_filter == "self_or_allies":
+                                if uid == self.uuid or self.is_ally(ent):
+                                    filtered.append(uid)
+                    affected_uuids = filtered
+
                 affected_names = []
                 for uuid in affected_uuids:
                     ent = Entity.get(uuid)

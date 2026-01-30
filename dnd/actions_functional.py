@@ -188,6 +188,22 @@ def execute_action(entity: 'Entity', template_name: str, target: AvailableTarget
             raise ValueError("ENTITY action requires target_uuid")
         instance = template.instantiate(target_entity_uuid=target.target_uuid)
 
+    elif template.target_type == TargetType.MULTI_ENTITY:
+        if target.target_uuid is None:
+            raise ValueError("MULTI_ENTITY action requires target_uuid")
+        # Extra targets come from target.extra_target_uuids if provided
+        extra = getattr(target, 'extra_target_uuids', None) or []
+        instance = template.instantiate(
+            target_entity_uuid=target.target_uuid,
+            extra_target_entity_uuids=extra
+        )
+
+    elif template.target_type == TargetType.POSITION_AOE:
+        if target.position is None:
+            raise ValueError("POSITION_AOE action requires position")
+        # Position is used, shape computes entities internally via get_all_targets()
+        instance = template.instantiate(end_position=target.position)
+
     elif template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         if target.position is None:
             raise ValueError("POSITION action requires position")

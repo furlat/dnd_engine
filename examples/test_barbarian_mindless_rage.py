@@ -20,9 +20,10 @@ from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greatsword
 from dnd.conditions import Charmed, Frightened
 
-from dnd.classes.barbarian import (
-    Raging, Frenzied, MindlessRage
+from dnd.classes.rage import (
+    RageFeature, FrenzyFeature, Raging, Frenzy
 )
+from dnd.classes.barbarian import MindlessRage
 
 
 def create_test_barbarian(
@@ -62,6 +63,23 @@ def create_test_barbarian(
 
     greatsword = create_greatsword(entity.uuid)
     entity.equipment.equip(greatsword, WeaponSlot.MELEE_MAIN)
+
+    # Add RageFeature (provides rage resource and Rage action)
+    rage_feature = RageFeature(
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid,
+        rage_damage=2,
+        rage_uses=3
+    )
+    entity.add_condition(rage_feature)
+
+    # Add FrenzyFeature (registers Frenzy action)
+    frenzy_feature = FrenzyFeature(
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid,
+        rage_damage=2
+    )
+    entity.add_condition(frenzy_feature)
 
     return entity
 
@@ -223,17 +241,18 @@ def test_mindless_rage_works_with_frenzied():
     )
     barbarian.add_condition(mindless)
 
-    # Apply Frenzied condition (includes Raging as sub-condition)
-    frenzied = Frenzied(
+    # Use Frenzy ACTION to properly enter frenzy (creates Raging + Frenzied)
+    # Raging is the parent, Frenzied is a sub-condition of Raging
+    frenzy_action = Frenzy(
         source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_damage=2
+        template=False
     )
-    barbarian.add_condition(frenzied)
+    result = frenzy_action.apply()
+    assert result is not None and not result.canceled, f"Frenzy should succeed: {result.status_message if result else 'None'}"
 
     assert "Frenzied" in barbarian.active_conditions, "Should be frenzied"
-    assert "Raging" in barbarian.active_conditions, "Should be raging (sub-condition)"
-    print("  Barbarian is frenzied (Raging is sub-condition)")
+    assert "Raging" in barbarian.active_conditions, "Should be raging (parent condition)"
+    print("  Barbarian is frenzied (Raging is parent condition)")
 
     # Try to apply Charmed
     charmed = Charmed(
