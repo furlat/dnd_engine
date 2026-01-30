@@ -217,14 +217,6 @@ class SacredFlame(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # Update event
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            save_ability="dexterity",
-            save_dc=dc,
-            status_message=f"Requesting DEX save DC {dc}"
-        )
-
         # 2. Request DEX save
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -233,8 +225,17 @@ class SacredFlame(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        effect_event = effect_event.post(
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="dexterity",
+            save_dc=dc,
             save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
@@ -242,6 +243,7 @@ class SacredFlame(SpellAction):
         if success:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
+                total_damage=0,
                 status_message=f"{self.name} - target saved"
             )
 
@@ -269,6 +271,7 @@ class SacredFlame(SpellAction):
             new_phase=EventPhase.COMPLETION,
             damages=[radiant_damage],
             damage_rolls=[damage_roll],
+            total_damage=damage_roll.total,
             status_message=f"{self.name} dealt {damage_roll.total} radiant damage"
         )
 
@@ -391,6 +394,7 @@ class MagicMissile(SpellAction):
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
+            target_entity_name=target.name,
             damages=[dart_damage],
             damage_rolls=[damage_roll],
             total_damage=damage_roll.total,
@@ -500,11 +504,17 @@ class Fireball(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="dexterity",
             save_dc=dc,
             save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
@@ -628,11 +638,17 @@ class BurningHands(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="dexterity",
             save_dc=dc,
             save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
@@ -756,11 +772,17 @@ class LightningBolt(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="dexterity",
             save_dc=dc,
             save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
@@ -946,11 +968,17 @@ class Thunderwave(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="constitution",
             save_dc=dc,
             save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
@@ -1123,11 +1151,17 @@ class Shatter(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="constitution",
             save_dc=dc,
             save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 

@@ -19,7 +19,7 @@ Usage:
     event = execute_action(entity, "Attack_MELEE_MAIN", target)
 """
 
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from dnd.core.base_actions import (
@@ -215,7 +215,12 @@ def execute_action(entity: 'Entity', template_name: str, target: AvailableTarget
     return instance.apply()
 
 
-def execute_by_index(entity: 'Entity', template_name: str, target_index: int) -> Optional[Event]:
+def execute_by_index(
+    entity: 'Entity',
+    template_name: str,
+    target_index: int,
+    extra_target_uuids: Optional[List[str]] = None
+) -> Optional[Event]:
     """Execute action by template name and target index.
 
     This enables "attack 0", "move 3" style commands.
@@ -224,6 +229,7 @@ def execute_by_index(entity: 'Entity', template_name: str, target_index: int) ->
         entity: The entity executing the action
         template_name: Name of the action template to execute
         target_index: Index of the target in the valid_targets list
+        extra_target_uuids: Additional target UUIDs for multi-target spells (Magic Missile)
 
     Returns:
         The resulting event, or None if the action failed
@@ -252,6 +258,11 @@ def execute_by_index(entity: 'Entity', template_name: str, target_index: int) ->
 
     if target is None:
         raise ValueError(f"Target index {target_index} not valid for {template_name}")
+
+    # For multi-entity actions, attach extra targets to the target object
+    if extra_target_uuids:
+        # Convert string UUIDs to UUID objects
+        target.extra_target_uuids = [UUID(uid) for uid in extra_target_uuids]
 
     return execute_action(entity, template_name, target)
 

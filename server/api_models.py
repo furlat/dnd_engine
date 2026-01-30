@@ -308,11 +308,13 @@ class ExecuteByIndexRequest(BaseModel):
     """Request to execute action by template name + target index.
 
     Enables 'attack 0', 'move 3' style commands.
+    For multi-target spells (Magic Missile), extra_target_uuids can specify additional targets.
     """
     session_id: str
     entity_uuid: str
     template_name: str  # Action template name
     target_index: int   # Index from valid_targets list
+    extra_target_uuids: Optional[List[str]] = None  # Additional target UUIDs for MULTI_ENTITY actions
 
 
 # Response models

@@ -6,7 +6,7 @@
 |-------|--------|-------|
 | Phase 1: Jump | ✓ COMPLETE | BG3-style jump action working in CLI |
 | Phase 2: Shove | ✓ COMPLETE | BG3-style shove with Athletics contest, forced movement |
-| Phase 3: AoE Targeting | IN PROGRESS | Infrastructure ✓, Convolution ✓, Fireball ✓, Other Spells TODO |
+| Phase 3: AoE Targeting | ✓ COMPLETE | Infrastructure ✓, Convolution ✓, All Spells ✓, Server API ✓, Combat Logs ✓ |
 | Phase 4: Multi-Entity Targeting | ✓ COMPLETE | Magic Missile, multi-target spells, ally/enemy filtering |
 
 ## Overview
@@ -505,9 +505,9 @@ class TestBless(SpellAction):
 
 ---
 
-## Phase 3: AoE Targeting System - PARTIALLY IMPLEMENTED
+## Phase 3: AoE Targeting System - ✓ COMPLETE
 
-**Status:** Infrastructure ✓ COMPLETE | AoE Spell Base TODO | Spells TODO
+**Status:** Infrastructure ✓ | Convolution ✓ | All Spells ✓ | Server API ✓ | Combat Logs ✓
 
 ### What's Implemented ✓
 
@@ -522,16 +522,22 @@ class TestBless(SpellAction):
 | Shape + wall blocking tests | `examples/test_aoe_shapes.py` | ✓ 9 tests |
 | Entity integration tests | `examples/test_aoe_integration.py` | ✓ 2 tests |
 
-### What's NOT Implemented (TODO)
+### Implementation Status
 
 | Component | Status |
 |-----------|--------|
 | Unified convolution in `BaseAction.apply()` | ✓ COMPLETE |
 | `model_copy()` instantiation fix | ✓ COMPLETE |
-| Fireball spell | ✓ COMPLETE |
-| Other AoE spells (Burning Hands, Lightning Bolt, etc.) | TODO |
-| Server API for POSITION_AOE | TODO |
-| CLI AoE preview | TODO |
+| Fireball spell (Sphere 20ft) | ✓ COMPLETE |
+| Burning Hands (Cone 15ft) | ✓ COMPLETE |
+| Lightning Bolt (Line 100ft×5ft) | ✓ COMPLETE |
+| Thunderwave (Cube 15ft + push) | ✓ COMPLETE |
+| Shatter (Sphere 10ft) | ✓ COMPLETE |
+| SacredFlame (single target cantrip) | ✓ COMPLETE |
+| Server API for POSITION_AOE | ✓ COMPLETE |
+| SpellSaveLogData + SPELL_SAVE log type | ✓ COMPLETE |
+| MultiEntityLogData aggregate log | ✓ COMPLETE |
+| CLI AoE preview | TODO (deferred) |
 
 ### Design Principles
 
@@ -1079,10 +1085,18 @@ AoE spells use `POSITION_AOE` target type. `Entity.get_available_actions()` hand
 - All spells with "push" effects
 - Repelling Blast (Eldritch Blast invocation)
 
-### Phase 3: AoE Targeting (IN PROGRESS)
-- Burning Hands, Thunderwave (Cone)
-- Fireball, Shatter, Circle of Death (Sphere)
-- Lightning Bolt, Sunbeam (Line)
+### Phase 3: AoE Targeting ✓ COMPLETE
+**Implemented:**
+- ✓ Burning Hands (Cone 15ft)
+- ✓ Thunderwave (Cube 15ft + push)
+- ✓ Fireball (Sphere 20ft)
+- ✓ Shatter (Sphere 10ft)
+- ✓ Lightning Bolt (Line 100ft)
+- ✓ SacredFlame (single target cantrip)
+
+**Unlocked but not yet implemented:**
+- Circle of Death (Sphere)
+- Sunbeam (Line)
 - Hypnotic Pattern, Slow (Cube)
 - Ice Storm, Cone of Cold, Sleet Storm (Cylinder/Cone)
 - **~30 spells unlocked**
@@ -1212,30 +1226,44 @@ def instantiate(self, **overrides) -> "BaseAction":
 - Proper `total_damage` setting for convolution aggregation
 - Uses `end_position` parameter for target position
 
-### Step 6: More AoE Spells
-1. Burning Hands (Cone) - tests cone geometry
-2. Lightning Bolt (Line) - tests line geometry
-3. Thunderwave (Cube from caster) - tests cube + forced movement integration
-4. Shatter (Sphere) - another sphere spell for validation
+### Step 6: More AoE Spells ✓ COMPLETE
+
+All AoE spells implemented in `dnd/spells/evocation.py`:
+
+| Spell | Shape | Parameters | Mechanics |
+|-------|-------|------------|-----------|
+| Burning Hands | Cone | 15ft, 53° angle | DEX save, 3d6 fire (+1d6/upcast) |
+| Lightning Bolt | Line | 100ft × 5ft | DEX save, 8d6 lightning (+1d6/upcast) |
+| Thunderwave | Cube | 15ft from caster face | CON save, 2d8 thunder (+1d8/upcast), 10ft push on fail |
+| Shatter | Sphere | 10ft radius | CON save, 3d8 thunder (+1d8/upcast) |
+| SacredFlame | Single target | Cantrip | DEX save, 1d8 radiant (scales with level) |
+
+**Test Files:**
+- `examples/test_burning_hands.py` - Cone shape, DEX save, upcast tests
+- `examples/test_lightning_bolt.py` - Line shape, 100ft range tests
+- `examples/test_thunderwave.py` - Cube shape, push mechanics tests
+- `examples/test_shatter.py` - Smaller sphere (10ft), CON save tests
 
 ### Step 7: CLI Preview (Deferred)
 - Show affected area before confirming AoE spell
 - Highlight affected tiles on map
 - This can be done after core mechanics work
 
-### Step 8: Server API for POSITION_AOE
+### Step 8: Server API for POSITION_AOE ✓ COMPLETE
 
-**Changes needed in `server/event_server.py`:**
+**Implemented in `server/event_server.py`:**
 
-1. Add POSITION_AOE to `/action/position` validation (alongside POSITION_PATH, POSITION_LOS)
-2. Add POSITION_AOE handling in `/action/execute`
-3. Include `affected_entity_uuids` in AoE action responses
+1. ✓ POSITION_AOE added to `/action/position` validation (lines 1383-1384)
+2. ✓ POSITION_AOE handling in `/action/execute` (line 1461)
+3. ✓ `affected_entity_uuids` included in AoE action responses
 
 | File | Change | Status |
 |------|--------|--------|
-| `server/event_server.py` | Add POSITION_AOE to `/action/position` validation | TODO |
-| `server/event_server.py` | Add POSITION_AOE to `/action/execute` handling | TODO |
-| `server/event_server.py` | Include affected_entity_uuids in AoE responses | TODO |
+| `server/event_server.py` | Add POSITION_AOE to `/action/position` validation | ✓ DONE |
+| `server/event_server.py` | Add POSITION_AOE to `/action/execute` handling | ✓ DONE |
+| `server/event_server.py` | Include affected_entity_uuids in AoE responses | ✓ DONE |
+
+**Test file:** `examples/test_aoe_api.py`
 
 ### Step 9: CLI Command Unification
 
@@ -1297,29 +1325,21 @@ cast magic_missile 1,1,2  # Same with explicit "cast" prefix
 | `cli/display.py` | Render `○` for AoE area, highlight affected entities | TODO |
 | `cli/display.py` | Show affected entity names in output panel | TODO |
 
-### Step 10: Combat Log for Multi-Entity Actions
+### Step 10: Combat Log for Multi-Entity Actions ✓ COMPLETE
 
 **Problem:** Each per-target `_apply()` generates its own combat log entry. Magic Missile (3 darts) creates 3 separate entries with no aggregate summary.
 
-**Solution:** Aggregate entry with per-target breakdown:
-
-```
-COMPACT:
-  Hero casts Magic Missile → 2 targets, 15 force damage
-
-VERBOSE:
-  Hero casts Magic Missile affecting 2 targets
-  - Skeleton: 9 damage (2 darts)
-  - Goblin: 6 damage (1 dart)
-  Total: 15 force damage
-```
+**Solution:** Implemented aggregate entry with per-target breakdown and spell-specific logging.
 
 | File | Change | Status |
 |------|--------|--------|
-| `dnd/core/combat_log.py` | Add MultiEntityLogData model | TODO |
-| `dnd/core/combat_log.py` | Add MULTI_ENTITY_ACTION entry type | TODO |
-| `dnd/core/base_actions.py` | Generate aggregate entry after convolution | TODO |
-| `dnd/actions.py` | SpellEvent.generate_combat_log() with spell details | TODO |
+| `dnd/core/combat_log.py` | `MultiEntityLogData` model (line 192) | ✓ DONE |
+| `dnd/core/combat_log.py` | `MULTI_ENTITY_ACTION` entry type | ✓ DONE |
+| `dnd/core/combat_log.py` | `SpellSaveLogData` model (line 139) | ✓ DONE |
+| `dnd/core/combat_log.py` | `SPELL_SAVE` entry type (line 29) | ✓ DONE |
+| `dnd/core/base_actions.py` | Generate aggregate entry after convolution | ✓ DONE |
+| `dnd/actions.py` | `SpellEvent.generate_combat_log()` with spell details | ✓ DONE |
+| `dnd/actions.py` | `save_roll`, `save_bonus` fields on SpellEvent | ✓ DONE |
 
 ---
 
@@ -1371,27 +1391,36 @@ All require 3D spatial consideration; implement once together:
 | `examples/test_aoe_shapes.py` | NEW: Shape + wall blocking tests | ✓ Done |
 | `examples/test_aoe_integration.py` | NEW: POSITION_AOE + Entity helper tests | ✓ Done |
 | `examples/test_aoe_convolution.py` | NEW: Convolution loop tests with shapes | ✓ Done |
-| `dnd/spells/evocation.py` | Fireball ✓, Lightning Bolt TODO, Burning Hands TODO, Shatter TODO | Fireball ✓ |
+| `dnd/spells/evocation.py` | Fireball ✓, Burning Hands ✓, Lightning Bolt ✓, Thunderwave ✓, Shatter ✓, SacredFlame ✓ | ✓ All Done |
+| `server/event_server.py` | POSITION_AOE handling (lines 1383-1461) | ✓ Done |
+| `dnd/actions.py` | SpellEvent.generate_combat_log(), save_roll/save_bonus fields | ✓ Done |
+| `dnd/core/combat_log.py` | SpellSaveLogData, SPELL_SAVE type | ✓ Done |
 | `examples/test_fireball.py` | Integration test for Fireball (10 tests) | ✓ Done |
+| `examples/test_burning_hands.py` | NEW: Cone shape, DEX save tests | ✓ Done |
+| `examples/test_lightning_bolt.py` | NEW: Line shape, 100ft range tests | ✓ Done |
+| `examples/test_thunderwave.py` | NEW: Cube shape, push mechanics tests | ✓ Done |
+| `examples/test_shatter.py` | NEW: Smaller sphere (10ft), CON save tests | ✓ Done |
+| `examples/test_aoe_api.py` | NEW: Server API for AoE spells | ✓ Done |
 
 ### Phase 3.5 Files (Server API + CLI for AoE)
 
 | File | Changes | Status |
 |------|---------|--------|
-| `server/event_server.py` | Add POSITION_AOE to position action validation and execution | TODO |
-| `server/api_models.py` | Include `combat_id` in entity responses, `target_ids` in execute request | TODO |
-| `dnd/encounter.py` | Assign `combat_id` at initiative roll | TODO |
-| `dnd/entity.py` | Add `combat_id: Optional[int]` field | TODO |
-| `cli/display.py` | Entity ID display format, AoE preview rendering | TODO |
-| `cli/commands.py` | Multi-target parsing (comma-separated IDs), AoE preview state | TODO |
-| `cli/action_model.py` | Add `affected_positions`, `affected_entity_names` to ActionTarget | TODO |
+| `server/event_server.py` | Add POSITION_AOE to position action validation and execution | ✓ Done |
+| `server/api_models.py` | Include `combat_id` in entity responses, `target_ids` in execute request | TODO (deferred) |
+| `dnd/encounter.py` | Assign `combat_id` at initiative roll | TODO (deferred) |
+| `dnd/entity.py` | Add `combat_id: Optional[int]` field | TODO (deferred) |
+| `cli/display.py` | Entity ID display format, AoE preview rendering | TODO (deferred) |
+| `cli/commands.py` | Multi-target parsing (comma-separated IDs), AoE preview state | TODO (deferred) |
+| `cli/action_model.py` | Add `affected_positions`, `affected_entity_names` to ActionTarget | TODO (deferred) |
 
 ### Phase 3.6 Files (Combat Log Improvements)
 
 | File | Changes | Status |
 |------|---------|--------|
-| `dnd/core/combat_log.py` | MultiEntityLogData model, MULTI_ENTITY_ACTION entry type | TODO |
-| `dnd/core/base_actions.py` | Generate aggregate entry after convolution loop | TODO |
+| `dnd/core/combat_log.py` | MultiEntityLogData model, MULTI_ENTITY_ACTION entry type, SpellSaveLogData, SPELL_SAVE type | ✓ Done |
+| `dnd/core/base_actions.py` | Generate aggregate entry after convolution loop | ✓ Done |
+| `dnd/actions.py` | SpellEvent.generate_combat_log() with spell details, save_roll/save_bonus fields | ✓ Done |
 
 ### Phase 4 Files (Multi-Entity Targeting)
 
