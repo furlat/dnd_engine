@@ -7,7 +7,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
-    DamageRollDisplay, AttackLogData, MovementLogData,
+    DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
     format_attack_compact, format_attack_verbose, format_attack_detailed,
     md_color
 )
@@ -2075,10 +2075,206 @@ class SpellEvent(ActionEvent):
     save_ability: Optional[str] = Field(default=None, description="Ability for saving throw")
     save_dc: Optional[int] = Field(default=None, description="Save DC")
     save_success: Optional[bool] = Field(default=None, description="Whether the save succeeded")
+    save_roll: Optional[DiceRoll] = Field(default=None, description="The save roll result")
+    save_bonus: Optional[int] = Field(default=None, description="Target's save bonus")
 
     # Damage fields
     damages: Optional[List[Damage]] = Field(default=None, description="The damages dealt")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None, description="The damage roll results")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate combat log for spell effects.
+
+        Handles:
+        - Multi-target spells via parent's _generate_multi_target_log()
+        - Save-based spells (Fireball, etc.) with save rolls and damage
+        - Attack spells (Fire Bolt) - delegate to generic format for now
+        """
+        # Multi-target spells aggregate per-target logs
+        if self.target_results and len(self.target_results) > 0:
+            return self._generate_multi_target_log()
+
+        # Save-based spell (has save_dc and save_success)
+        if self.save_dc is not None and self.save_success is not None:
+            return self._generate_save_spell_log()
+
+        # Auto-hit spell with damage (Magic Missile darts)
+        if self.damage_rolls and self.target_entity_name:
+            return self._generate_autohit_spell_log()
+
+        # Attack spell (has attack_outcome) - use generic action log for now
+        # Could add _generate_attack_spell_log() following AttackEvent pattern
+
+        # Fallback to generic action log
+        parent_log = super().generate_combat_log()
+        if parent_log is not None:
+            return parent_log
+        # If parent returns None, create a minimal log
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ACTION,
+            source_name=self.source_entity_name or "Unknown",
+            source_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
+            compact=f"{self.source_entity_name or 'Unknown'} casts {self.name or 'spell'}",
+            verbose=f"{self.source_entity_name or 'Unknown'} casts {self.name or 'spell'}",
+            detailed=f"{self.source_entity_name or 'Unknown'} casts {self.name or 'spell'}",
+            data={},
+            success=True
+        )
+
+    def _generate_save_spell_log(self) -> CombatLogEntry:
+        """Generate combat log for save-based spell (single target)."""
+        target_name = self.target_entity_name or "Unknown"
+        caster_name = self.source_entity_name or "Unknown"
+        spell_name = self.name or "Spell"
+        ability = (self.save_ability or "dexterity").upper()[:3]  # "DEX", "WIS", etc.
+        dc = self.save_dc or 10
+        success = self.save_success or False
+        total_dmg = self.total_damage or 0
+
+        # Build save roll display
+        save_roll_display = DiceRollDisplay(dice_str="d20", results=[], bonus=0, total=0)
+        if self.save_roll:
+            results = self.save_roll.results
+            if isinstance(results, list):
+                results_list = list(results)
+            else:
+                results_list = [results] if results else []
+            save_roll_display = DiceRollDisplay(
+                dice_str="d20",
+                results=results_list,
+                bonus=self.save_bonus or 0,
+                total=self.save_roll.total,
+                d20_used=results_list[0] if results_list else None
+            )
+
+        # Build damage roll displays
+        damage_displays: List[DamageRollDisplay] = []
+        damage_type = "damage"
+        base_damage = 0
+        if self.damage_rolls:
+            for i, dr in enumerate(self.damage_rolls):
+                dmg_type = self.damages[i].damage_type.value if self.damages and i < len(self.damages) else "damage"
+                damage_type = dmg_type  # Use last damage type
+                dr_results = dr.results
+                if isinstance(dr_results, list):
+                    dice_results = list(dr_results)
+                else:
+                    dice_results = [dr_results] if dr_results else []
+                base_damage = dr.total  # Before halving
+                damage_displays.append(DamageRollDisplay(
+                    dice_str=f"{len(dice_results)}d{self.damages[i].damage_dice if self.damages and i < len(self.damages) else 6}",
+                    dice_results=dice_results,
+                    bonus=0,
+                    total=dr.total,
+                    damage_type=dmg_type
+                ))
+
+        # COMPACT: One-liner outcome
+        outcome_str = md_color("SAVE", "green") if success else md_color("FAIL", "red")
+        half_note = " (half)" if success and total_dmg > 0 else ""
+        compact = f"{md_color(target_name, 'yellow')}: {ability} save {outcome_str}, {md_color(str(total_dmg), 'red')} {damage_type}{half_note}"
+
+        # VERBOSE: Save roll + damage
+        verbose_lines = [compact]
+        if save_roll_display.total > 0:
+            d20_val = save_roll_display.d20_used or (save_roll_display.results[0] if save_roll_display.results else "?")
+            bonus_str = f"+{save_roll_display.bonus}" if save_roll_display.bonus >= 0 else str(save_roll_display.bonus)
+            verbose_lines.append(f"  Save: d20({d20_val}) {bonus_str} = {save_roll_display.total} vs DC {dc}")
+        if damage_displays:
+            dr = damage_displays[0]
+            dice_str = ",".join(str(d) for d in dr.dice_results) if dr.dice_results else "?"
+            verbose_lines.append(f"  Damage: {dr.dice_str}({dice_str}) = {dr.total} {dr.damage_type}")
+        verbose = "\n".join(verbose_lines)
+
+        # DETAILED: Same as verbose for now (could add modifier breakdowns)
+        detailed = verbose
+
+        # Build structured data
+        data = SpellSaveLogData(
+            caster_name=caster_name,
+            caster_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+            spell_name=spell_name,
+            spell_level=self.spell_level,
+            save_ability=self.save_ability or "dexterity",
+            save_dc=dc,
+            save_roll=save_roll_display,
+            save_success=success,
+            damage_rolls=damage_displays,
+            base_damage=base_damage,
+            final_damage=total_dmg,
+            damage_type=damage_type
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SPELL_SAVE,
+            source_name=caster_name,
+            source_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+            compact=compact,
+            verbose=verbose,
+            detailed=detailed,
+            data=data.model_dump(),
+            success=not success  # Spell "succeeds" when target fails save
+        )
+
+    def _generate_autohit_spell_log(self) -> CombatLogEntry:
+        """Generate combat log for auto-hit spell (Magic Missile darts)."""
+        target_name = self.target_entity_name or "Unknown"
+        caster_name = self.source_entity_name or "Unknown"
+        spell_name = self.name or "Spell"
+        total_dmg = self.total_damage or 0
+
+        # Get damage type from first damage
+        damage_type = "force"
+        if self.damages and len(self.damages) > 0:
+            damage_type = self.damages[0].damage_type.value
+
+        # Build damage roll display string
+        dice_str = ""
+        if self.damage_rolls and len(self.damage_rolls) > 0:
+            dr = self.damage_rolls[0]
+            results = dr.results if isinstance(dr.results, list) else [dr.results]
+            # Format: "1d4+1: 3+1"
+            num_dice = len(results)
+            die_size = self.damages[0].damage_dice if self.damages else 4
+            bonus = self.damages[0].damage_bonus.normalized_score if self.damages and self.damages[0].damage_bonus else 1
+            dice_part = f"{num_dice}d{die_size}"
+            if bonus != 0:
+                dice_part += f"+{bonus}"
+            results_str = "+".join(str(r) for r in results)
+            if bonus != 0:
+                results_str += f"+{bonus}"
+            dice_str = f" ({dice_part}: {results_str})"
+
+        # COMPACT: "Magic Missile hits Skeleton for 4 force damage"
+        compact = f"{md_color(spell_name, 'yellow')} {md_color('hits', 'green')} {md_color(target_name, 'cyan')} for {md_color(str(total_dmg), 'red')} {damage_type} damage"
+
+        # VERBOSE: Add dice details
+        verbose = compact + dice_str
+
+        # DETAILED: Same as verbose for auto-hit spells
+        detailed = verbose
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SPELL_DAMAGE,
+            source_name=caster_name,
+            source_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+            compact=compact,
+            verbose=verbose,
+            detailed=detailed,
+            data={
+                "spell_name": spell_name,
+                "target_name": target_name,
+                "damage": total_dmg,
+                "damage_type": damage_type
+            },
+            success=True
+        )
 
 
 class SpellAction(BaseAction):

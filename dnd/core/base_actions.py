@@ -50,6 +50,9 @@ class ActionEvent(Event):
     total_targets: int = Field(default=0, description="Number of targets affected")
     total_damage: int = Field(default=0, description="Total damage dealt across all targets")
 
+    # Position for AoE actions (passed from BaseAction at execution time)
+    aoe_position: Optional[Tuple[int, int]] = Field(default=None, description="Target position for AoE actions (for combat log)")
+
     def add_cost(self, cost: Cost):
         base_cost = BaseCost.model_validate(cost)
         self.costs.append(base_cost)
@@ -103,64 +106,40 @@ class ActionEvent(Event):
         )
 
     def _generate_multi_target_log(self) -> CombatLogEntry:
-        """Generate aggregate log that integrates per-target logs."""
+        """Generate aggregate summary log for multi-target actions.
+
+        This is just a summary line - per-target details come from individual
+        target_results events which have their own combat_logs.
+        """
         source_name = self.source_entity_name or "Unknown"
         n_targets = len(self.target_results) if self.target_results else 0
         total_dmg = self.total_damage or 0
 
-        # Extract per-target data from their combat logs
-        per_target_data = []
-        for tr in (self.target_results or []):
-            target_name = getattr(tr, 'target_entity_name', None) or "Unknown"
-            dmg = getattr(tr, 'total_damage', 0) or 0
-            combat_log = getattr(tr, 'combat_log', None)
-            per_target_data.append({
-                "name": target_name,
-                "damage": dmg,
-                "combat_log": combat_log
-            })
+        # Summary line with position if AoE
+        action_name = self.name or 'Action'
+        if self.aoe_position:
+            location = f" at ({self.aoe_position[0]}, {self.aoe_position[1]})"
+        else:
+            location = ""
+        summary = f"{md_color(source_name, 'cyan')} uses {md_color(action_name, 'yellow')}{location} → {n_targets} targets, {md_color(str(total_dmg), 'red')} total damage"
 
-        # COMPACT: Simple summary line
-        compact = f"{md_color(source_name, 'cyan')} uses {md_color(self.name or 'Action', 'yellow')} → {n_targets} targets, {md_color(str(total_dmg), 'red')} total damage"
-
-        # VERBOSE: Compact + per-target compact summaries
-        verbose_lines = [compact]
-        for pt in per_target_data:
-            if pt["combat_log"]:
-                # Use the per-target's own compact log
-                verbose_lines.append(f"  • {pt['combat_log'].compact}")
-            else:
-                verbose_lines.append(f"  • {pt['name']}: {pt['damage']} damage")
-        verbose = "\n".join(verbose_lines)
-
-        # DETAILED: Compact + per-target DETAILED logs (full dice rolls, saves, etc.)
-        detailed_lines = [compact]
-        for pt in per_target_data:
-            if pt["combat_log"]:
-                # Use the per-target's DETAILED log (includes all dice rolls, modifiers)
-                detailed_lines.append(f"\n  [{pt['name']}]")
-                # Indent the detailed log
-                for line in pt["combat_log"].detailed.split("\n"):
-                    detailed_lines.append(f"    {line}")
-            else:
-                detailed_lines.append(f"\n  [{pt['name']}]: {pt['damage']} damage")
-        detailed = "\n".join(detailed_lines)
-
-        # Data model for structured access
+        # Data model for structured access (per-target logs stored here)
         data = MultiEntityLogData.from_target_results(
             action_name=self.name or "Action",
             caster_name=source_name,
             target_results=self.target_results or [],
-            total_damage=total_dmg
+            total_damage=total_dmg,
+            aoe_center=self.aoe_position
         )
 
+        # All verbosity levels show just the summary - per-target details are separate logs
         return CombatLogEntry(
             entry_type=CombatLogEntryType.MULTI_ENTITY_ACTION,
             source_name=source_name,
             source_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
-            compact=compact,
-            verbose=verbose,
-            detailed=detailed,
+            compact=summary,
+            verbose=summary,
+            detailed=summary,
             data=data.model_dump(),
             success=n_targets > 0
         )
@@ -607,6 +586,7 @@ class BaseAction(BaseObject):
                 target_results=all_results,
                 total_targets=len(all_results),
                 total_damage=total_damage,
+                aoe_position=self.end_position,  # Pass AoE center for combat log
                 status_message=f"{self.name} affected {len(all_results)} targets for {total_damage} total damage"
             )
         else:
@@ -735,6 +715,7 @@ class AvailableTarget(BaseModel):
     affected_entity_uuids: Optional[List[UUID]] = Field(default=None, description="UUIDs of entities affected by AoE")
     affected_entity_names: Optional[List[str]] = Field(default=None, description="Names of entities affected by AoE")
     affected_count: Optional[int] = Field(default=None, description="Number of entities affected by AoE")
+    affected_positions: Optional[List[Tuple[int, int]]] = Field(default=None, description="All positions in AoE shape (for map preview)")
 
 
 class AvailableActionInfo(BaseModel):
@@ -760,6 +741,7 @@ class AvailableActionInfo(BaseModel):
 
     # Attack classification
     is_attack: bool = Field(default=False, description="True if action is a damage-dealing attack")
+    is_spell: bool = Field(default=False, description="True if action is a spell (SpellAction)")
 
 
 class AvailableActionsResult(BaseModel):

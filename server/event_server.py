@@ -1193,6 +1193,8 @@ async def get_entity_available_actions(entity_uuid: str):
             result["affected_entity_names"] = t.affected_entity_names
         if t.affected_count is not None:
             result["affected_count"] = t.affected_count
+        if t.affected_positions:
+            result["affected_positions"] = [list(p) for p in t.affected_positions]
         return result
 
     def serialize_action(a):
@@ -1207,7 +1209,8 @@ async def get_entity_available_actions(entity_uuid: str):
             "cost_amount": a.cost_amount,
             "weapon_slot": a.weapon_slot,
             "weapon_name": a.weapon_name,
-            "is_attack": a.is_attack
+            "is_attack": a.is_attack,
+            "is_spell": a.is_spell
         }
 
     return {
@@ -1522,7 +1525,12 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         EventQueue.add_on_event_callback(capture_opportunity_attack)
 
     try:
-        event = execute_by_index(entity, request.template_name, request.target_index)
+        event = execute_by_index(
+            entity,
+            request.template_name,
+            request.target_index,
+            extra_target_uuids=request.extra_target_uuids
+        )
     except ValueError as e:
         if template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
             EventQueue.remove_on_event_callback(capture_opportunity_attack)
@@ -1588,6 +1596,38 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
                     oa_data["type"] = "opportunity_attack"
                     oa_data["is_opportunity_attack"] = True
                     triggered_reactions.append(oa_data)
+
+    elif template.target_type == TargetType.POSITION_AOE:
+        # AoE spells (Fireball, Lightning Bolt, etc.)
+        # Add aggregate summary log first
+        if event and event.combat_log:
+            add_event_to_combat_log(sim, event)
+            action_log_entries.append(event.combat_log.to_dict())
+            event_data = dict(event.combat_log.data)
+
+        # Add per-target logs with full details (save rolls, damage dice)
+        target_results = getattr(event, 'target_results', None)
+        if target_results:
+            for tr in target_results:
+                combat_log = getattr(tr, 'combat_log', None)
+                if combat_log:
+                    action_log_entries.append(combat_log.to_dict())
+
+    elif template.target_type == TargetType.MULTI_ENTITY:
+        # Multi-target spells (Magic Missile)
+        # Add aggregate summary log first
+        if event and event.combat_log:
+            add_event_to_combat_log(sim, event)
+            action_log_entries.append(event.combat_log.to_dict())
+            event_data = dict(event.combat_log.data)
+
+        # Add per-target logs with full details
+        target_results = getattr(event, 'target_results', None)
+        if target_results:
+            for tr in target_results:
+                combat_log = getattr(tr, 'combat_log', None)
+                if combat_log:
+                    action_log_entries.append(combat_log.to_dict())
 
     elif template.target_type == TargetType.SELF:
         # Self action - use event.combat_log

@@ -35,14 +35,30 @@ def reset_shortcut_registry():
     _shortcut_registry = ShortcutRegistry()
 
 
-def safe_execute_action(client: APIClient, template_name: str, target_index: int) -> Optional[dict]:
-    """Execute action with error handling. Returns result or None on error."""
+def safe_execute_action(
+    client: APIClient,
+    template_name: str,
+    target_index: int,
+    extra_target_uuids: Optional[List[str]] = None
+) -> Optional[dict]:
+    """Execute action with error handling. Returns result or None on error.
+
+    Args:
+        client: API client
+        template_name: Action template name
+        target_index: Primary target index
+        extra_target_uuids: Additional target UUIDs for multi-target spells (Magic Missile)
+    """
     try:
-        return client.execute_action(template_name, target_index)
+        return client.execute_action(template_name, target_index, extra_target_uuids=extra_target_uuids)
     except httpx.HTTPStatusError as e:
         # Extract error detail from response if available
         try:
-            detail = e.response.json().get("detail", str(e))
+            json_response = e.response.json()
+            if isinstance(json_response, dict):
+                detail = json_response.get("detail", str(e))
+            else:
+                detail = str(e)
         except Exception:
             detail = str(e)
         display.set_output([f"Action failed: {detail}"])
@@ -212,7 +228,199 @@ def try_execute_dynamic_position_action(cmd_str: str, args: List[str], client: A
     return "refresh"
 
 
-def prompt_with_connection_poll(client: APIClient, pvp_mode: bool = False, poll_interval: float = 2.0) -> str:
+def try_execute_dynamic_spell_action(cmd_str: str, args: List[str], client: APIClient, state: GameState) -> Optional[str]:
+    """
+    Try to execute a dynamic spell action using the shortcut registry.
+    Handles spells of all target types: position_aoe, entity, multi_entity, self.
+
+    Supports preview syntax: "fb ? X Y" to show affected targets without casting.
+
+    Returns:
+        "refresh" if action was executed or showing info
+        "encounter_ended" if encounter ended
+        None if command wasn't a spell action
+    """
+    if not state.actions:
+        return None
+
+    registry = get_shortcut_registry()
+    cmd = cmd_str.strip().lower().split()[0] if cmd_str.strip() else ""
+    action = state.actions.get_spell_action_by_command(cmd, registry)
+
+    if not action:
+        return None
+
+    shortcut = registry.get_or_create_shortcut(action.template_name)
+    target_type = action.target_type
+
+    # Check for preview mode ("?" in args)
+    preview_mode = "?" in args
+    if preview_mode:
+        args = [a for a in args if a != "?"]
+
+    # === Position AoE spells (Fireball, Lightning Bolt, etc.) ===
+    if target_type == "position_aoe":
+        # No coordinates - show valid positions
+        if len(args) < 2:
+            positions = [t.position for t in action.valid_targets if t.position]
+            state.valid_move_positions = positions
+            display.set_output([
+                f"Valid {action.display_name} positions shown on map (*)",
+                f"{len(positions)} positions available",
+                f"Usage: '{shortcut} X Y' to cast, '{shortcut} ? X Y' to preview"
+            ])
+            return "refresh"
+
+        # Parse coordinates
+        try:
+            x, y = int(args[0]), int(args[1])
+        except ValueError:
+            display.set_output([f"Invalid position. Usage: {shortcut} X Y"])
+            return "refresh"
+
+        # Find the target for this position
+        position = (x, y)
+        for target in action.valid_targets:
+            if target.position == position:
+                if preview_mode:
+                    # Store AoE positions for map highlighting
+                    state.valid_move_positions = target.affected_positions or []
+
+                    # Store preview info for "!" command
+                    state.last_preview = {
+                        "template_name": action.template_name,
+                        "target_index": target.index,
+                        "display_name": action.display_name,
+                        "position": (x, y)
+                    }
+
+                    # Build preview message for output panel
+                    affected = target.affected_entity_names or []
+                    count = target.affected_count or len(affected)
+                    if count > 0:
+                        lines = [f"{action.display_name} at ({x}, {y}) would affect {count} targets:"]
+                        for name in affected:
+                            lines.append(f"  • {name}")
+                        lines.append("[dim]Type '!' to cast[/dim]")
+                    else:
+                        lines = [f"{action.display_name} at ({x}, {y}) would affect no targets"]
+                        lines.append("[dim]Type '!' to cast anyway[/dim]")
+
+                    display.set_output(lines)
+                    # Use "preview" to refresh display but keep output text
+                    return "preview"
+
+                # Execute the spell
+                result = safe_execute_action(client, action.template_name, target.index)
+                if result is None:
+                    return "refresh"
+                display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+                affected_count = target.affected_count or 0
+                state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} casts {action.display_name} at ({x}, {y}), affecting {affected_count} targets.")
+
+                if result.get("encounter_ended"):
+                    return "encounter_ended"
+                return "refresh"
+
+        display.set_output([f"Position ({x}, {y}) is not valid. Type '{shortcut}' to see valid positions."])
+        return "refresh"
+
+    # === Entity-targeting spells (Fire Bolt, Magic Missile, etc.) ===
+    elif target_type in ("entity", "multi_entity"):
+        # No target - show valid targets
+        if len(args) < 1:
+            targets = action.valid_targets
+            if target_type == "multi_entity":
+                # Multi-target spells (Magic Missile) can have multiple targets
+                display.set_output([
+                    f"Valid {action.display_name} targets:",
+                    *[f"  [{i+1}] {t.target_name or 'Unknown'}" for i, t in enumerate(targets)],
+                    f"Enter '{shortcut} N [N2 N3...]' to cast (e.g., '{shortcut} 1 2 3' splits projectiles)"
+                ])
+            else:
+                display.set_output([
+                    f"Valid {action.display_name} targets:",
+                    *[f"  [{i+1}] {t.target_name or 'Unknown'}" for i, t in enumerate(targets)],
+                    f"Enter '{shortcut} N' to cast at target N"
+                ])
+            return "refresh"
+
+        # Parse all target indices
+        target_indices: List[int] = []
+        for arg in args:
+            try:
+                target_indices.append(int(arg))
+            except ValueError:
+                display.set_output([f"Invalid target '{arg}'. Usage: {shortcut} N [N2 N3...]"])
+                return "refresh"
+
+        if not target_indices:
+            display.set_output([f"No targets specified. Usage: {shortcut} N [N2 N3...]"])
+            return "refresh"
+
+        # For multi_entity spells with multiple indices, use get_spell_targets
+        if target_type == "multi_entity" and len(target_indices) > 1:
+            result = state.actions.get_spell_targets(action.template_name, target_indices)
+            if not result:
+                total = len(action.valid_targets)
+                display.set_output([f"Invalid targets. Choose from 1-{total}."])
+                return "refresh"
+
+            spell_action, targets = result
+            primary_target = targets[0]
+            extra_target_uuids = [t.target_uuid for t in targets[1:] if t.target_uuid]
+
+            # Execute with extra targets
+            api_result = safe_execute_action(
+                client,
+                spell_action.template_name,
+                primary_target.index,
+                extra_target_uuids=extra_target_uuids
+            )
+            if api_result is None:
+                return "refresh"
+            display.show_action_result(api_result, state.turn.get("current_entity_name", "You"))
+            target_names = [t.target_name or "Unknown" for t in targets]
+            state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} casts {action.display_name} at {', '.join(target_names)}.")
+
+            if api_result.get("encounter_ended"):
+                return "encounter_ended"
+            return "refresh"
+
+        # Single target (or single index for multi_entity spell - all projectiles at one target)
+        result = state.actions.get_spell_target(action.template_name, target_indices[0])
+        if not result:
+            total = len(action.valid_targets)
+            display.set_output([f"Invalid target. Choose 1-{total}."])
+            return "refresh"
+
+        spell_action, target = result
+
+        # Execute
+        api_result = safe_execute_action(client, spell_action.template_name, target.index)
+        if api_result is None:
+            return "refresh"
+        display.show_action_result(api_result, state.turn.get("current_entity_name", "You"))
+        state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} casts {action.display_name} at {target.target_name}.")
+
+        if api_result.get("encounter_ended"):
+            return "encounter_ended"
+        return "refresh"
+
+    # === Self-targeting spells (Mage Armor, etc.) ===
+    else:  # target_type == "self" or other
+        result = safe_execute_action(client, action.template_name, 0)
+        if result is None:
+            return "refresh"
+        display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+        state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} casts {action.display_name}.")
+
+        if result.get("encounter_ended"):
+            return "encounter_ended"
+        return "refresh"
+
+
+def prompt_with_connection_poll(_client: APIClient, pvp_mode: bool = False, poll_interval: float = 2.0) -> str:
     """
     Prompt for input while polling connection status in PvP mode.
 
@@ -554,8 +762,37 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
                 need_redraw = False
                 continue
 
+            # Handle "!" to execute last preview
+            if cmd_str.strip() == "!":
+                if state.last_preview:
+                    preview = state.last_preview
+                    result = safe_execute_action(client, preview["template_name"], preview["target_index"])
+                    state.last_preview = None  # Clear after use
+                    if result is None:
+                        continue
+                    display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+                    pos = preview["position"]
+                    state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} casts {preview['display_name']} at {pos}.")
+                    if result.get("encounter_ended"):
+                        refresh_state(client, state)
+                        break
+                    if not refresh_state(client, state):
+                        break
+                    display.clear_output()
+                    continue
+                else:
+                    display.set_output(["No preview to execute. Use '?' to preview first (e.g., 'fb ? 5 3')"])
+                    continue
+
+            # Clear preview when doing any other action
+            state.last_preview = None
+
             # Position actions (Move, Jump) - ONLY path, no fallback
             result = try_execute_dynamic_position_action(cmd_str, cmd.args, client, state)
+
+            # Spell actions (Fireball, Fire Bolt, etc.) - all target types
+            if result is None:
+                result = try_execute_dynamic_spell_action(cmd_str, cmd.args, client, state)
 
             # Other entity-targeting actions (Shove, etc.) - ONLY path, no fallback
             if result is None:
@@ -584,6 +821,10 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
                 display.clear_output()
                 # Save snapshot after player action
                 display.save_turn_snapshot(state.turn, state.entities, state.grid)
+            elif result == "preview":
+                # Like refresh but keep output text visible (for spell previews)
+                # Don't refresh state - just redraw with current positions/output
+                pass  # need_redraw stays True, so display will render with positions and output
             elif result is None:
                 # Command handled itself (e.g., showing help, targets, positions)
                 # Don't redraw - let user see the output and enter another command
@@ -660,7 +901,7 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
 
 @app.command()
 def play(
-    character_class: str = typer.Argument("fighter", help="Character class: fighter or barbarian"),
+    character_class: str = typer.Argument("fighter", help="Character class: fighter, barbarian, or sorcerer"),
     host: str = typer.Option("localhost", "--host", "-h", help="Server hostname"),
     port: int = typer.Option(8000, "--port", "-p", help="Server port"),
 ):
@@ -668,7 +909,8 @@ def play(
     Start an interactive combat session.
 
     Connects to the D&D Engine server and starts a human-controlled combat.
-    Use 'fighter' for a L5 dual-wield DEX Fighter, or 'barbarian' for a L5 Berserker.
+    Use 'fighter' for a L5 dual-wield DEX Fighter, 'barbarian' for a L5 Berserker,
+    or 'sorcerer' for a L5 Sorcerer with AoE spells (Fireball, Lightning Bolt, etc.).
     """
     base_url = f"http://{host}:{port}"
     display.console.print(f"[cyan]Connecting to {base_url}...[/cyan]")
@@ -723,7 +965,7 @@ def play(
 
 @app.command()
 def playpvp(
-    character_class: str = typer.Argument("fighter", help="Character class: fighter or barbarian"),
+    character_class: str = typer.Argument("fighter", help="Character class: fighter, barbarian, or sorcerer"),
     host: str = typer.Option("localhost", "--host", "-h", help="Server hostname"),
     port: int = typer.Option(8000, "--port", "-p", help="Server port"),
 ):
@@ -732,7 +974,8 @@ def playpvp(
 
     You control the Hero, Claude controls the Skeletons via agent CLI.
     Both players take turns manually - no auto-AI.
-    Use 'fighter' for a L5 dual-wield DEX Fighter, or 'barbarian' for a L5 Berserker.
+    Use 'fighter' for a L5 dual-wield DEX Fighter, 'barbarian' for a L5 Berserker,
+    or 'sorcerer' for a L5 Sorcerer with AoE spells.
     """
     base_url = f"http://{host}:{port}"
     display.console.print(f"[cyan]Connecting to {base_url}...[/cyan]")

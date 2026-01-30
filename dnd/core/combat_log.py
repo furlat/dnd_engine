@@ -26,6 +26,8 @@ class CombatLogEntryType(str, Enum):
     TURN_START = "turn_start"
     TURN_END = "turn_end"
     MULTI_ENTITY_ACTION = "multi_entity_action"  # Fireball, Magic Missile, etc.
+    SPELL_SAVE = "spell_save"  # Save-based spell effect on single target
+    SPELL_DAMAGE = "spell_damage"  # Auto-hit spell damage (Magic Missile dart)
 
 
 class CombatLogVerbosity(str, Enum):
@@ -135,6 +137,32 @@ class SavingThrowLogData(BaseModel):
     source_name: Optional[str] = None  # What caused the save
 
 
+class SpellSaveLogData(BaseModel):
+    """Structured data for save-based spell effects (single target)."""
+    caster_name: str
+    caster_uuid: str
+    target_name: str
+    target_uuid: str
+    spell_name: str
+    spell_level: int = 0
+
+    # Save info
+    save_ability: str  # "dexterity", "wisdom", etc.
+    save_dc: int
+    save_roll: DiceRollDisplay
+    save_bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
+    save_success: bool
+
+    # Damage info
+    damage_rolls: List[DamageRollDisplay] = Field(default_factory=list)
+    base_damage: int = 0  # Before save halving
+    final_damage: int = 0  # After save halving
+    damage_type: str = ""
+
+    # Target state after
+    target_hp_after: Optional[int] = None
+
+
 class SkillCheckLogData(BaseModel):
     """Structured skill check data."""
     entity_name: str
@@ -192,7 +220,8 @@ class MultiEntityLogData(BaseModel):
         action_name: str,
         caster_name: str,
         target_results: List[Any],  # List of ActionEvent
-        total_damage: int = 0
+        total_damage: int = 0,
+        aoe_center: Optional[Tuple[int, int]] = None
     ) -> "MultiEntityLogData":
         """Build aggregate data from per-target events."""
         target_names: List[str] = []
@@ -220,7 +249,8 @@ class MultiEntityLogData(BaseModel):
             per_target_damage=per_target_damage,
             per_target_logs=per_target_logs,
             saves_succeeded=saves_succeeded,
-            saves_failed=saves_failed
+            saves_failed=saves_failed,
+            aoe_center=aoe_center
         )
 
 

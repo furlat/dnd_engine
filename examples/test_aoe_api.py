@@ -121,6 +121,12 @@ def test_aoe_via_api():
     if targets_with_affected:
         for t in targets_with_affected[:5]:
             print(f"  {t.get('position')}: {t.get('affected_count')} - {t.get('affected_entity_names')}")
+            # Check for affected_positions (AoE shape cells)
+            aoe_positions = t.get("affected_positions")
+            if aoe_positions:
+                print(f"    affected_positions: {len(aoe_positions)} cells (e.g., {aoe_positions[:3]}...)")
+            else:
+                print(f"    affected_positions: MISSING - this is a bug!")
 
     # Find target with max affected entities
     best_target = max(valid_targets, key=lambda t: t.get("affected_count", 0))

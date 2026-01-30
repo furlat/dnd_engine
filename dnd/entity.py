@@ -1429,6 +1429,8 @@ class Entity(BaseBlock):
             # Include action if it's valid OR if it just can't be afforded
             # This allows UI to show grayed-out actions that exist but can't be used
             if is_valid or not can_afford:
+                # SpellAction has spell_level attribute
+                is_spell = hasattr(template, 'spell_level')
                 result.self_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.SELF,
@@ -1438,7 +1440,8 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=template.costs[0].cost_type if template.costs else "actions",
                     cost_amount=template.costs[0].cost if template.costs else 0,
-                    is_attack=template.is_attack
+                    is_attack=template.is_attack,
+                    is_spell=is_spell
                 ))
 
         # ENTITY actions - filter targets based on target_filter
@@ -1496,6 +1499,8 @@ class Entity(BaseBlock):
                         weapon_name = weapon.name
                         display_name = weapon_name  # Use weapon name as display name
 
+                # SpellAction has spell_level attribute
+                is_spell = hasattr(template, 'spell_level')
                 result.entity_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=template.target_type,  # Use actual target type (ENTITY or MULTI_ENTITY)
@@ -1507,7 +1512,8 @@ class Entity(BaseBlock):
                     cost_amount=template.costs[0].cost if template.costs else 0,
                     weapon_slot=weapon_slot_str,
                     weapon_name=weapon_name,
-                    is_attack=template.is_attack
+                    is_attack=template.is_attack,
+                    is_spell=is_spell
                 ))
 
         # POSITION_PATH actions (Move) - validate for each reachable position via path
@@ -1532,6 +1538,8 @@ class Entity(BaseBlock):
 
             if valid_positions:
                 template_name = template.name or "Unknown"
+                # SpellAction has spell_level attribute
+                is_spell = hasattr(template, 'spell_level')
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=template.target_type,
@@ -1541,7 +1549,8 @@ class Entity(BaseBlock):
                     description=f"{result.remaining_movement}ft remaining",
                     cost_type="movement",
                     cost_amount=0,
-                    is_attack=template.is_attack
+                    is_attack=template.is_attack,
+                    is_spell=is_spell
                 ))
 
         # POSITION_LOS actions (Jump, Teleport) - use action's get_valid_positions()
@@ -1568,6 +1577,8 @@ class Entity(BaseBlock):
                 template_name = template.name or "Unknown"
                 cost_type = template.costs[0].cost_type if template.costs else "bonus_actions"
                 cost_amount = template.costs[0].cost if template.costs else 1
+                # SpellAction has spell_level attribute
+                is_spell = hasattr(template, 'spell_level')
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.POSITION_LOS,
@@ -1577,7 +1588,8 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=cost_type,
                     cost_amount=cost_amount,
-                    is_attack=template.is_attack
+                    is_attack=template.is_attack,
+                    is_spell=is_spell
                 ))
 
         # POSITION_AOE actions - compute affected entities for each valid position
@@ -1636,13 +1648,16 @@ class Entity(BaseBlock):
                     distance=self.senses.get_feet_distance(pos),
                     affected_entity_uuids=affected_uuids,
                     affected_entity_names=affected_names,
-                    affected_count=len(affected_uuids)
+                    affected_count=len(affected_uuids),
+                    affected_positions=list(shape.affected_positions)
                 ))
                 idx += 1
 
             if valid_positions:
                 template_name = template.name or "Unknown"
                 cost_type = template.costs[0].cost_type if template.costs else "actions"
+                # SpellAction has spell_level attribute
+                is_spell = hasattr(template, 'spell_level')
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.POSITION_AOE,
@@ -1652,7 +1667,8 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=cost_type,
                     cost_amount=template.costs[0].cost if template.costs else 1,
-                    is_attack=template.is_attack
+                    is_attack=template.is_attack,
+                    is_spell=is_spell
                 ))
 
         return result
