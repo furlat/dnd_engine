@@ -1,7 +1,7 @@
 """Test POSITION_AOE integration with get_available_actions."""
 from uuid import uuid4
 
-from dnd.utils import reset_combat_state
+from dnd.utils import reset_combat_state, set_hp
 from dnd.core.gridmap import get_map
 from dnd.core.aoe import Sphere
 from dnd.core.base_actions import BaseAction, TargetType, Cost
@@ -110,54 +110,84 @@ def test_position_aoe_in_available_actions():
     print("✓ POSITION_AOE integration test passed")
 
 
-def test_entity_helper_method():
-    """Test Entity.get_aoe_affected_entities helper."""
-    print("\n=== Entity.get_aoe_affected_entities ===")
+def test_dead_entity_filtering():
+    """Test that dead entities are excluded from AoE targeting by default."""
+    print("\n=== Dead Entity Filtering in AoE ===")
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_skeleton(name="Caster", position=(0, 0))  # Far from targets
-    _target1 = create_skeleton(name="Target1", position=(7, 5))  # In sphere
-    _target2 = create_skeleton(name="Target2", position=(15, 5))  # Outside sphere
+    # Create caster and targets
+    caster = create_skeleton(name="Caster", position=(0, 0))
+
+    # Two targets at the same position cluster
+    _alive_target = create_skeleton(name="AliveTarget", position=(4, 4))
+    dead_target = create_skeleton(name="DeadTarget", position=(5, 4))
+
+    # Kill the dead target using set_hp utility
+    set_hp(dead_target, 0)
 
     Entity.update_all_entities_senses()
 
-    # Create sphere centered at (7, 5) with radius 10ft (2 tiles)
-    shape = Sphere(
+    # Create fireball action
+    fireball = FireballAction(
         source_entity_uuid=caster.uuid,
-        target=(7, 5),
-        radius_feet=10
+        costs=[Cost(name="Fireball", cost_type="actions", cost=1)]
     )
+    caster.register_action(fireball)
 
-    positions, entities = caster.get_aoe_affected_entities(shape)
+    # Get available actions - should exclude dead target
+    actions = caster.get_available_actions(target_filter="enemies")
 
-    assert len(entities) == 1, f"Expected 1 entity (Target1), got {len(entities)}: {[e.name for e in entities]}"
-    assert entities[0].name == "Target1", f"Expected Target1, got {entities[0].name}"
+    fireball_action = None
+    for action in actions.position_actions:
+        if action.template_name == "Fireball":
+            fireball_action = action
+            break
 
-    print(f"✓ Sphere at (7,5) radius 15ft affects {len(entities)} entity: {[e.name for e in entities]}")
-    print(f"  Affected positions: {len(positions)}")
+    assert fireball_action is not None
 
-    # Caster should be excluded by default
-    caster_found = any(e.uuid == caster.uuid for e in entities)
-    assert not caster_found, "Caster should be excluded by default"
-    print("✓ Caster correctly excluded from affected entities")
+    # Find target at (4, 4) - should only show alive target
+    target_at_pos = None
+    for target in fireball_action.valid_targets:
+        if target.position == (4, 4):
+            target_at_pos = target
+            break
 
-    # Test with caster included - sphere on caster's position
-    _positions2, entities2 = caster.get_aoe_affected_entities(
-        Sphere(source_entity_uuid=caster.uuid, target=(0, 0), radius_feet=10),  # Centered on caster
-        exclude_self=False
-    )
-    caster_found = any(e.uuid == caster.uuid for e in entities2)
-    assert caster_found, "Caster should be included with exclude_self=False"
-    print("✓ Caster correctly included with exclude_self=False")
+    assert target_at_pos is not None
+    # Only alive target should be affected
+    assert target_at_pos.affected_count == 1, f"Expected 1 affected (alive only), got {target_at_pos.affected_count}"
+    assert "AliveTarget" in target_at_pos.affected_entity_names
+    assert "DeadTarget" not in target_at_pos.affected_entity_names
+    print(f"✓ Dead entities correctly excluded from AoE targeting")
+    print(f"  Affected: {target_at_pos.affected_entity_names}")
 
-    print("✓ Entity helper method test passed")
+    # Test with include_dead=True - should include both
+    actions_with_dead = caster.get_available_actions(target_filter="enemies", include_dead=True)
+
+    fireball_with_dead = None
+    for action in actions_with_dead.position_actions:
+        if action.template_name == "Fireball":
+            fireball_with_dead = action
+            break
+
+    target_with_dead = None
+    for target in fireball_with_dead.valid_targets:
+        if target.position == (4, 4):
+            target_with_dead = target
+            break
+
+    assert target_with_dead is not None
+    assert target_with_dead.affected_count == 2, f"Expected 2 affected (with dead), got {target_with_dead.affected_count}"
+    print(f"✓ Dead entities included when include_dead=True")
+    print(f"  Affected: {target_with_dead.affected_entity_names}")
+
+    print("✓ Dead entity filtering test passed")
 
 
 if __name__ == "__main__":
     test_position_aoe_in_available_actions()
-    test_entity_helper_method()
+    test_dead_entity_filtering()
 
     print("\n" + "=" * 50)
     print("All POSITION_AOE integration tests passed!")
