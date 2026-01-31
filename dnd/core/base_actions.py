@@ -184,6 +184,10 @@ class BaseAction(BaseObject):
         default="enemies",
         description="Which entities are valid targets: 'enemies', 'allies', 'self_or_allies', 'all'"
     )
+    include_dead: bool = Field(
+        default=False,
+        description="If True, dead entities are valid targets (for resurrection, corpse explosion)"
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -290,6 +294,12 @@ class BaseAction(BaseObject):
                         # Apply valid_target_filter for AoE (filter, not validate)
                         # AoE targets a position - filter determines which entities are affected
                         targets = self._filter_targets_by_faction(entity, targets)
+                        # Filter dead entities (unless include_dead=True)
+                        if not self.include_dead:
+                            targets = [
+                                uid for uid in targets
+                                if (ent := BaseBlock.get(uid)) and getattr(ent, 'get_hp', lambda: 1)() > 0
+                            ]
                         return targets
             return []
 
