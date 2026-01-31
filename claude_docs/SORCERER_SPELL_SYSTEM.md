@@ -122,36 +122,56 @@ SpellcastingBlock:
 | **Variant generation** | ✅ Done | `SpellAction.generate_variants()` |
 | **Entity spell methods** | ✅ Done | `spell_attack_bonus()`, `spell_save_dc()`, etc. |
 | **Spell organization** | ✅ Done | `dnd/spells/` module |
+| **Concentration** | ✅ Done | `Concentrating` condition, CON save on damage, one-spell limit |
+| **AoE Shapes** | ✅ Done | Sphere, Cone, Line, Cube in `dnd/core/aoe.py` |
+| **AoE Targeting** | ✅ Done | POSITION_AOE target type with convolution |
+| **Multi-Entity Targeting** | ✅ Done | MULTI_ENTITY target type |
+| **Forced Movement** | ✅ Done | Push mechanics (Thunderwave) |
+| **Dead Entity Filter** | ✅ Done | AoE spells skip dead entities |
 
-### Implemented Spells
+### Implemented Spells (12)
 
 | Spell | Level | Type | Location |
 |-------|-------|------|----------|
 | Fire Bolt | 0 | Attack | `dnd/spells/evocation.py` |
 | Sacred Flame | 0 | DEX Save | `dnd/spells/evocation.py` |
-| Magic Missile | 1 | Auto-hit | `dnd/spells/evocation.py` |
+| Magic Missile | 1 | Auto-hit Multi | `dnd/spells/evocation.py` |
 | Mage Armor | 1 | Buff | `dnd/spells/abjuration.py` |
+| Burning Hands | 1 | Cone AoE | `dnd/spells/evocation.py` |
+| Thunderwave | 1 | Cube AoE + Push | `dnd/spells/evocation.py` |
+| Hold Person | 2 | WIS Save + Conc | `dnd/spells/enchantment.py` |
+| Shatter | 2 | Sphere AoE | `dnd/spells/evocation.py` |
+| Call Lightning | 3 | Conc + Granted Action | `dnd/spells/conjuration.py` |
+| Fireball | 3 | Sphere AoE | `dnd/spells/evocation.py` |
+| Lightning Bolt | 3 | Line AoE | `dnd/spells/evocation.py` |
 
-### RECENTLY COMPLETED ✅
-
-| System | Complexity | Description |
-|--------|------------|-------------|
-| **Concentration** | Medium | `Concentrating` condition, CON save on damage, one-spell limit |
+*Note: Call Lightning is a Druid spell, Sacred Flame is Cleric - listed for completeness.*
 
 ### NEXT PRIORITY 🎯
 
 | System | Complexity | Description |
 |--------|------------|-------------|
-| **Spell durations** | Low | Timed expiration, short/long rest expiration |
-| **Concentration Spells** | Medium | Hold Person, Haste, etc. that use the Concentrating condition |
+| **Zone/Terrain Spells** | Medium | Fog Cloud, Web, Wall of Fire using spatial event handlers |
+| **Trivial Spell Clones** | Low | Poison Spray, Cone of Cold, Hold Monster, etc. |
+| **HP-Pool Mechanics** | Medium | Sleep, Color Spray |
 
 ### FUTURE (Not Started)
 
 | System | Complexity | Description |
 |--------|------------|-------------|
-| **Area of Effect** | High | Cone, sphere, line, cube targeting |
+| **Reaction Casting** | High | Shield, Counterspell, Feather Fall |
+| **Teleportation** | Medium | Misty Step, Dimension Door |
 | **Metamagic** | Medium | Spell modifiers using sorcery points |
 | **Sorcerer Class** | High | Full class with Draconic Bloodline |
+
+### OUT OF SCOPE
+
+| System | Reason |
+|--------|--------|
+| **Mind Control** | Requires AI behavior (Dominate, Suggestion) |
+| **Summoning** | Entity creation mid-combat (Animate Objects) |
+| **Polymorph** | Complete stat replacement |
+| **Plane Mechanics** | Etherealness, Plane Shift, Gate |
 
 ---
 
