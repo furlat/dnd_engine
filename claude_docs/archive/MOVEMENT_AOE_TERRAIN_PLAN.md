@@ -1,3 +1,11 @@
+# ARCHIVED - Historical Reference for AoE Implementation (Completed)
+
+> **Note**: This is an archived planning document. All phases are complete.
+> For current AoE implementation guide, see `claude_docs/AOE_TARGETING_REFERENCE.md`.
+> For future terrain/3D work, see `claude_docs/TERRAIN_AND_3D_PLAN.md`.
+
+---
+
 # Movement and AoE Targeting Plan
 
 ## Current Status

@@ -22,7 +22,6 @@ from dnd.blocks.sensory import Senses
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
-from dnd.core.aoe import AoEShape
 from dnd.core.base_actions import (
     BaseAction, TargetType,
     AvailableTarget, AvailableActionInfo, AvailableActionsResult
@@ -1043,48 +1042,6 @@ class Entity(BaseBlock):
         return [e for e in cls._entity_registry.values()
                 if e.faction == faction and e.get_hp() > 0]
 
-    def get_aoe_affected_entities(
-        self,
-        shape: AoEShape,
-        exclude_self: bool = True,
-        alive_only: bool = True,
-        use_objective: bool = True
-    ) -> Tuple[Set[Tuple[int, int]], List["Entity"]]:
-        """Compute AoE shape and return affected positions and entities.
-
-        This helper method computes the shape based on the caster's position
-        and returns both the affected grid positions and the entities within.
-
-        Args:
-            shape: The AoE shape to compute (Sphere, Cone, Line, Cube)
-            exclude_self: If True (default), exclude caster from affected entities
-            alive_only: If True (default), only include entities with HP > 0
-            use_objective: If True (default), use objective computation (fresh FOV
-                from origin). If False, use subjective computation (caster's senses).
-
-        Returns:
-            Tuple of:
-                - Set of affected positions (x, y)
-                - List of affected Entity objects
-        """
-        if use_objective:
-            shape.compute_objective(self.position)
-        else:
-            shape.compute_subjective(self.position, self.senses)
-
-        entities: List["Entity"] = []
-        for uuid in shape.affected_entity_uuids:
-            if exclude_self and uuid == self.uuid:
-                continue
-            entity = Entity.get(uuid)
-            if entity is None:
-                continue
-            if alive_only and entity.get_hp() <= 0:
-                continue
-            entities.append(entity)
-
-        return shape.affected_positions.copy(), entities
-
     def roll_d20(self, bonus: ModifiableValue,roll_type: RollType = RollType.ATTACK) -> DiceRoll:
         """
         Roll attack dice based on attack bonus.
@@ -1635,6 +1592,14 @@ class Entity(BaseBlock):
                                 if uid == self.uuid or self.is_ally(ent):
                                     filtered.append(uid)
                     affected_uuids = filtered
+
+                # Filter dead entities (unless include_dead=True on template)
+                template_include_dead = getattr(template, 'include_dead', False)
+                if not template_include_dead and not include_dead:
+                    affected_uuids = [
+                        uid for uid in affected_uuids
+                        if (ent := Entity.get(uid)) and ent.get_hp() > 0
+                    ]
 
                 affected_names = []
                 for uuid in affected_uuids:

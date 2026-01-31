@@ -1215,9 +1215,13 @@ register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
 | Sacred Flame | Cantrip | Evocation | DEX Save | 1d8 radiant, scales with level |
 | Magic Missile | 1 | Evocation | Auto-hit | 3 darts (1d4+1 each), +1 dart/upcast |
 | Mage Armor | 1 | Abjuration | Buff | AC = 13 + DEX (ends on armor equip) |
+| Burning Hands | 1 | Evocation | DEX Save + AoE | 3d6 fire in 15ft cone, half on save |
+| Thunderwave | 1 | Evocation | CON Save + AoE | 2d8 thunder in 15ft cube, push on fail |
 | Hold Person | 2 | Enchantment | WIS Save + Concentration | Paralyzed on fail, repeat save each turn |
+| Shatter | 2 | Evocation | CON Save + AoE | 3d8 thunder in 10ft sphere |
 | Call Lightning | 3 | Conjuration | DEX Save + Concentration | 3d10 lightning, grants strike action each turn |
 | Fireball | 3 | Evocation | DEX Save + AoE | 8d6 fire in 20ft sphere, half on save, +1d6/upcast |
+| Lightning Bolt | 3 | Evocation | DEX Save + AoE | 8d6 lightning in 100ft×5ft line |
 
 ### SpellcastingBlock
 
@@ -1239,10 +1243,32 @@ Concentration spells are fully implemented:
 
 See `examples/test_concentration.py` and `examples/test_concentration_spells.py` for tests.
 
+### AoE System
+
+AoE spells use `TargetType.POSITION_AOE` with an `aoe_shape` field.
+
+**Implemented Shapes** (`dnd/core/aoe.py`):
+
+| Shape | Origin | Example |
+|-------|--------|---------|
+| Sphere | target position | Fireball (20ft) |
+| Cone | caster position | Burning Hands (15ft) |
+| Line | caster position | Lightning Bolt (100ft×5ft) |
+| Cube | varies | Thunderwave (15ft) |
+
+**Target Filtering:**
+- `include_self`: Caster affected? (default False for most spells)
+- `valid_target_filter`: `"all"`, `"enemies"`, `"allies"`
+- `include_dead`: Target dead entities? (default False)
+
+**Implemented AoE Spells:** Fireball, Burning Hands, Lightning Bolt, Thunderwave, Shatter
+
+See `claude_docs/AOE_TARGETING_REFERENCE.md` for full implementation guide.
+
 ### Not Yet Implemented
 
 - **Spell duration/expiration** - Long rest, short rest, timed durations
-- **More AoE spells** - Cone of Cold (cone), Lightning Bolt (line), etc. to test different shapes
+- **Terrain effects** - Fog Cloud, Web, Wall of Fire (see `claude_docs/TERRAIN_AND_3D_PLAN.md`)
 - **More spell schools** - Necromancy, Illusion, etc.
 
 ## Project Status
