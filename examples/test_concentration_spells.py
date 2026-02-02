@@ -104,7 +104,8 @@ def test_1_hold_person_applies_paralyzed():
         # Check caster has Concentrating
         assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
         conc = caster.active_conditions.get("Concentrating")
-        assert conc is not None and isinstance(conc, Concentrating)
+        assert conc is not None, "Concentrating condition should exist"
+        assert isinstance(conc, Concentrating), "Should be Concentrating type"
         assert conc.spell_name == "Hold Person"
 
         # Check target has BOTH "Hold Person" effect AND "Paralyzed" sub-condition
@@ -113,8 +114,9 @@ def test_1_hold_person_applies_paralyzed():
 
         # Verify the Paralyzed is a sub-condition of Hold Person
         hold_effect = target.active_conditions.get("Hold Person")
+        assert hold_effect is not None, "Hold Person effect should exist"
         paralyzed = target.active_conditions.get("Paralyzed")
-        assert paralyzed is not None
+        assert paralyzed is not None, "Paralyzed should exist"
         assert paralyzed.parent_condition == hold_effect.uuid, "Paralyzed should be child of Hold Person"
 
         print(f"  {target.name} has 'Hold Person' effect condition")
@@ -151,7 +153,8 @@ def test_2_call_lightning_deals_damage():
     # Check concentration
     assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
     conc = caster.active_conditions.get("Concentrating")
-    assert conc is not None and isinstance(conc, Concentrating)
+    assert conc is not None, "Concentrating condition should exist"
+    assert isinstance(conc, Concentrating), "Should be Concentrating type"
     assert conc.spell_name == "Call Lightning"
 
     # Check damage was dealt
@@ -253,7 +256,8 @@ def test_4_hold_person_then_call_lightning():
 
     assert has_condition(caster, "Concentrating")
     conc = caster.active_conditions.get("Concentrating")
-    assert isinstance(conc, Concentrating) and conc.spell_name == "Hold Person"
+    assert conc is not None and isinstance(conc, Concentrating)
+    assert conc.spell_name == "Hold Person"
     print(f"  {target.name} is Paralyzed (Hold Person active)")
 
     # Reset actions for new spell
@@ -272,7 +276,7 @@ def test_4_hold_person_then_call_lightning():
     # Check: concentration switched to Call Lightning
     assert has_condition(caster, "Concentrating"), "Should still be concentrating"
     conc = caster.active_conditions.get("Concentrating")
-    assert isinstance(conc, Concentrating)
+    assert conc is not None and isinstance(conc, Concentrating)
     assert conc.spell_name == "Call Lightning", f"Should be concentrating on Call Lightning, not {conc.spell_name}"
 
     # Check: Both "Hold Person" effect AND "Paralyzed" sub-condition should be removed
@@ -309,7 +313,8 @@ def test_5_call_lightning_then_hold_person():
 
     assert has_condition(caster, "Concentrating")
     conc = caster.active_conditions.get("Concentrating")
-    assert isinstance(conc, Concentrating) and conc.spell_name == "Call Lightning"
+    assert conc is not None and isinstance(conc, Concentrating)
+    assert conc.spell_name == "Call Lightning"
     assert caster.get_action_template("Call Lightning Strike") is not None
     print(f"  {caster.name} concentrating on Call Lightning")
     print(f"  Call Lightning Strike action available")
@@ -329,7 +334,7 @@ def test_5_call_lightning_then_hold_person():
 
     # Check: concentration switched to Hold Person
     conc = caster.active_conditions.get("Concentrating")
-    assert isinstance(conc, Concentrating)
+    assert conc is not None and isinstance(conc, Concentrating)
     assert conc.spell_name == "Hold Person", f"Should be concentrating on Hold Person, not {conc.spell_name}"
 
     # Check: Call Lightning Strike should be removed

@@ -14,7 +14,7 @@ Run: python examples/test_magic_missile_multi.py
 from uuid import uuid4
 
 # Reset state first
-from dnd.utils import reset_combat_state, get_hp, set_hp
+from dnd.utils import reset_combat_state, get_hp
 from dnd.core.gridmap import get_map
 reset_combat_state()
 
@@ -23,6 +23,7 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.spells.evocation import MagicMissile
+from dnd.actions import SpellEvent
 
 
 def create_test_caster(name: str = "Caster", position: tuple = (0, 0)) -> Entity:
@@ -110,6 +111,7 @@ def test_single_target_all_darts():
     assert damage_dealt <= 15, f"Expected at most 15 damage, got {damage_dealt}"
 
     # Check result aggregation
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets == 3, f"Expected 3 target results, got {result.total_targets}"
     assert result.total_damage == damage_dealt, f"Expected total_damage={damage_dealt}, got {result.total_damage}"
 
@@ -173,6 +175,7 @@ def test_split_targets():
     assert dmg1 >= 2 and dmg1 <= 5, f"Dart 1 damage should be 2-5, got {dmg1}"
     assert dmg2 >= 2 and dmg2 <= 5, f"Dart 2 damage should be 2-5, got {dmg2}"
     assert dmg3 >= 2 and dmg3 <= 5, f"Dart 3 damage should be 2-5, got {dmg3}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets == 3
     assert result.total_damage == total
 
@@ -213,6 +216,7 @@ def test_upcast_extra_darts():
     print(f"  5 darts (upcast L3) dealt {damage} damage")
     # 5 darts * (1d4+1) = 5 * (2-5) = 10-25 damage
     assert damage >= 10 and damage <= 25, f"Expected 10-25 damage, got {damage}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets == 5
 
 
@@ -239,6 +243,7 @@ def test_validation_enemies_only():
     result = spell.apply()
     assert result is not None, "Should get result"
     assert result.canceled, "Spell should be canceled when targeting ally"
+    assert result.status_message is not None, "Should have status message"
     assert "not an enemy" in result.status_message.lower() or "enemy" in result.status_message.lower(), \
         f"Expected enemy validation message, got: {result.status_message}"
 
@@ -275,6 +280,7 @@ def test_same_target_allowed():
     result = spell.apply()
     assert result is not None and not result.canceled, \
         f"Should allow same target repeated: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     print(f"  Correctly allowed same target 3 times, dealt {result.total_damage} damage")
 

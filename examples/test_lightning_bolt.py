@@ -16,6 +16,7 @@ from dnd.core.gridmap import get_map
 
 # Spell imports
 from dnd.spells.evocation import LightningBolt
+from dnd.actions import SpellEvent
 
 # Test utilities
 from dnd.utils import get_hp, set_hp
@@ -104,7 +105,7 @@ def test_lightning_bolt_full_damage_on_failed_save():
     # Caster with high spell DC
     caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
     # Target with DEX 1 (-5 mod) - will always fail
-    target = create_target(name="Slow", position=(10, 5), dexterity=1, hp=100)
+    _target = create_target(name="Slow", position=(10, 5), dexterity=1, hp=100)
     Entity.update_all_entities_senses()
 
     dc = caster.spell_save_dc()
@@ -119,14 +120,18 @@ def test_lightning_bolt_full_damage_on_failed_save():
 
     result = lightning_bolt.apply()
     assert result is not None and not result.canceled, f"Lightning Bolt failed: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target = result.target_results[0] if result.target_results else result
+    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
+    per_target = result.target_results[0]
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save failed
     assert per_target.save_success == False, "Target with DEX 1 should fail save"
 
     # Full damage (not halved)
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     assert per_target.total_damage == rolled_damage, \
         f"Should be full damage, got {per_target.total_damage} vs rolled {rolled_damage}"
 
@@ -144,7 +149,7 @@ def test_lightning_bolt_half_damage_on_passed_save():
     # Caster with low spell DC
     caster = create_caster(name="Weak Wizard", position=(5, 5), intelligence=10, proficiency=2)
     # Target with DEX 30 (+10 mod) - will always pass
-    target = create_target(name="Nimble", position=(10, 5), dexterity=30, hp=100)
+    _target = create_target(name="Nimble", position=(10, 5), dexterity=30, hp=100)
     Entity.update_all_entities_senses()
 
     dc = caster.spell_save_dc()
@@ -159,14 +164,18 @@ def test_lightning_bolt_half_damage_on_passed_save():
 
     result = lightning_bolt.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target = result.target_results[0] if result.target_results else result
+    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
+    per_target = result.target_results[0]
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save succeeded
     assert per_target.save_success == True, "Target with DEX 30 should always save"
 
     # Half damage
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     expected_damage = rolled_damage // 2
     assert per_target.total_damage == expected_damage, \
         f"Should be half damage: {rolled_damage}//2={expected_damage}, got {per_target.total_damage}"
@@ -226,6 +235,7 @@ def test_lightning_bolt_hits_line_targets():
 
     result = lightning_bolt.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     # All targets in line should be hit
     assert get_hp(target1) < t1_initial, "Target 1 in line should take damage"
@@ -305,7 +315,7 @@ def test_lightning_bolt_wall_stops_line():
         template=False
     )
 
-    result = lightning_bolt.apply()
+    _result = lightning_bolt.apply()
 
     # Target before wall should be hit
     before_after_hp = get_hp(target_before)
@@ -331,7 +341,7 @@ def test_lightning_bolt_caster_excluded():
     setup_basic_arena(30, 10)
 
     caster = create_caster(name="Wizard", position=(5, 5), hp=100)
-    target = create_target(name="Goblin", position=(10, 5), hp=50)
+    _target = create_target(name="Goblin", position=(10, 5), hp=50)
     Entity.update_all_entities_senses()
 
     caster_initial = get_hp(caster)
@@ -344,8 +354,8 @@ def test_lightning_bolt_caster_excluded():
         include_self=False  # Default
     )
 
-    result = lightning_bolt.apply()
-    assert result is not None and not result.canceled
+    _result = lightning_bolt.apply()
+    assert _result is not None and not _result.canceled
 
     assert get_hp(caster) == caster_initial, "Caster should NOT take damage from own Lightning Bolt"
 
@@ -432,13 +442,13 @@ def test_lightning_bolt_statistical_saves():
     successes = 0
     failures = 0
 
-    for i in range(10):
+    for _ in range(10):
         reset_combat_state()
         setup_basic_arena(30, 10)
 
         # Neutral DC and save bonus for 50/50 chance
         caster = create_caster(name="Wizard", position=(5, 5), intelligence=14, proficiency=2)
-        target = create_target(name="Target", position=(10, 5), dexterity=14, hp=100)
+        _target = create_target(name="Target", position=(10, 5), dexterity=14, hp=100)
         Entity.update_all_entities_senses()
 
         lightning_bolt = LightningBolt(
@@ -449,9 +459,9 @@ def test_lightning_bolt_statistical_saves():
         )
 
         result = lightning_bolt.apply()
-        if result and not result.canceled:
-            per_target = result.target_results[0] if result.target_results else result
-            if per_target.save_success:
+        if result and not result.canceled and isinstance(result, SpellEvent):
+            per_target = result.target_results[0] if result.target_results else None
+            if per_target is not None and isinstance(per_target, SpellEvent) and per_target.save_success:
                 successes += 1
             else:
                 failures += 1

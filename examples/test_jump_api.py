@@ -46,7 +46,7 @@ def stop_server():
     global server_process
     if server_process:
         server_process.terminate()
-        stdout, stderr = server_process.communicate(timeout=5)
+        _stdout, stderr = server_process.communicate(timeout=5)
         if stderr:
             print("\n=== Server stderr ===")
             print(stderr.decode()[-2000:])  # Last 2000 chars

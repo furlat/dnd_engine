@@ -16,6 +16,7 @@ from dnd.core.gridmap import get_map
 
 # Spell imports
 from dnd.spells.evocation import Fireball
+from dnd.actions import SpellEvent
 
 # Test utilities
 from dnd.utils import get_hp, set_hp
@@ -118,6 +119,7 @@ def test_fireball_basic_damage():
 
     assert result is not None, "Fireball should return a result"
     assert not result.canceled, f"Fireball was canceled: {result.status_message}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_damage > 0, "Fireball should deal damage"
     assert get_hp(target) < initial_hp, "Target should have taken damage"
 
@@ -137,7 +139,7 @@ def test_fireball_dex_save_half_damage():
 
     # Target with very high DEX (always saves vs DC 11)
     # DEX 30 = +10 mod, save bonus = +10, always beats DC 11
-    target = create_target(name="Nimble", position=(5, 0), dexterity=30, hp=100)
+    _target = create_target(name="Nimble", position=(5, 0), dexterity=30, hp=100)
     Entity.update_all_entities_senses()
 
     # Verify spell DC
@@ -154,15 +156,19 @@ def test_fireball_dex_save_half_damage():
 
     result = fireball.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     # Get the per-target result (convolution creates target_results)
-    per_target = result.target_results[0] if result.target_results else result
+    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
+    per_target = result.target_results[0]
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Check save succeeded
     assert per_target.save_success == True, "Target with DEX 30 should always save vs DC 11"
 
     # Damage should be halved - verify from the rolled damage vs applied
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     applied_damage = per_target.total_damage
 
     assert applied_damage == rolled_damage // 2, f"Expected half damage: {rolled_damage}//2={rolled_damage//2}, got {applied_damage}"
@@ -224,13 +230,14 @@ def test_fireball_los_requirement():
     result_blocked = fireball_blocked.apply()
 
     assert result_blocked is not None and result_blocked.canceled, "Fireball to position behind wall should be canceled"
+    assert result_blocked.status_message is not None, "Should have status message"
     assert "not in line of sight" in result_blocked.status_message.lower(), \
         f"Expected LOS error, got: {result_blocked.status_message}"
     print(f"    Correctly blocked: {result_blocked.status_message}")
 
     # Test 2: CAN target visible position - put an enemy there
     print("  Test 2: Targeting visible position...")
-    target_visible = create_target(name="Visible Enemy", position=(3, 5), hp=50)
+    _target_visible = create_target(name="Visible Enemy", position=(3, 5), hp=50)
     Entity.update_all_entities_senses()
 
     fireball_visible = Fireball(
@@ -247,11 +254,13 @@ def test_fireball_los_requirement():
     # This might fail if no targets at position - check if it at least validates position
     if result_visible.canceled:
         # If it's canceled due to "No targets", that means LOS check passed
+        assert result_visible.status_message is not None, "Should have status message"
         if "no targets" in result_visible.status_message.lower():
             print("    LOS validated, no targets at position (expected)")
         else:
             assert False, f"Fireball to visible position should work: {result_visible.status_message}"
     else:
+        assert isinstance(result_visible, SpellEvent), "Result should be SpellEvent"
         print(f"    Correctly allowed, dealt {result_visible.total_damage} damage to visible target")
 
     print("PASS: LOS requirement enforced correctly")
@@ -280,6 +289,7 @@ def test_fireball_self_damage():
     result = fireball.apply()
 
     assert result is not None and not result.canceled, f"Fireball should succeed: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets >= 1, "At least caster should be hit"
     assert get_hp(caster) < initial_hp, "Caster should have taken self-damage"
 
@@ -314,6 +324,7 @@ def test_fireball_ally_damage():
     result = fireball.apply()
 
     assert result is not None and not result.canceled, f"Fireball should succeed: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets >= 2, f"Both ally and enemy should be hit, got {result.total_targets}"
     assert get_hp(ally) < ally_initial, "Ally should have taken damage"
     assert get_hp(enemy) < enemy_initial, "Enemy should have taken damage"
@@ -352,6 +363,7 @@ def test_fireball_enemies_only_variant():
     result = fireball.apply()
 
     assert result is not None and not result.canceled, f"Fireball should succeed: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets == 1, f"Only enemy should be hit, got {result.total_targets}"
     assert get_hp(caster) == caster_initial, "Caster should NOT take damage"
     assert get_hp(ally) == ally_initial, "Ally should NOT take damage"
@@ -387,6 +399,7 @@ def test_fireball_multiple_targets():
     result = fireball.apply()
 
     assert result is not None and not result.canceled, f"Fireball should succeed: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets == 3, f"All 3 enemies should be hit, got {result.total_targets}"
     assert result.total_damage > 0, "Total damage should be tracked"
 
@@ -400,13 +413,14 @@ def test_fireball_multiple_targets():
     assert len(result.target_results) == 3, f"Should have 3 results, got {len(result.target_results)}"
 
     # Sum of individual damages should equal total_damage
-    sum_individual = sum(r.total_damage for r in result.target_results)
+    sum_individual = sum(r.total_damage for r in result.target_results if isinstance(r, SpellEvent))
     assert sum_individual == result.total_damage, \
         f"Sum of individual ({sum_individual}) should equal total ({result.total_damage})"
 
     print(f"  Targets hit: {result.total_targets}")
     print(f"  Total damage: {result.total_damage}")
-    print(f"  Individual results: {[r.total_damage for r in result.target_results]}")
+    individual_damages = [r.total_damage for r in result.target_results if isinstance(r, SpellEvent)]
+    print(f"  Individual results: {individual_damages}")
     print("PASS: Multiple targets aggregation works")
 
 
@@ -431,6 +445,7 @@ def test_fireball_range_validation():
 
     assert result is not None and result.canceled, "Fireball beyond 150ft should be canceled"
     # Could fail for range OR LOS (position outside caster's visible range)
+    assert result.status_message is not None, "Should have status message"
     msg = result.status_message.lower()
     assert "out of range" in msg or "line of sight" in msg, \
         f"Expected range or LOS error, got: {result.status_message}"
@@ -472,7 +487,7 @@ def test_fireball_aoe_behind_walls():
         valid_target_filter="enemies"
     )
 
-    result = fireball.apply()
+    _result = fireball.apply()
 
     # Check results
     visible_after = get_hp(visible_target)

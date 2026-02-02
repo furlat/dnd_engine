@@ -1,6 +1,6 @@
 # Sorcerer Spell Analysis for D&D Engine
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 
 ## Overview
 
@@ -22,21 +22,47 @@ This document analyzes all **120 sorcerer spells** from D&D 5e SRD for implement
 | Level 9 | 5 |
 | **Total** | **120** |
 
-### Currently Implemented Spells (12)
+### Currently Implemented Spells (28)
 
 | Spell | Level | School | Type | Notes |
 |-------|-------|--------|------|-------|
+| **Cantrips (5)** |
 | Fire Bolt | 0 | Evocation | Attack | Cantrip scaling ✓ |
 | Sacred Flame | 0 | Evocation | DEX Save | Cantrip scaling ✓ |
-| Magic Missile | 1 | Evocation | MULTI_ENTITY | Upcasting, multi-target ✓ |
-| Mage Armor | 1 | Abjuration | Buff | AC calculation ✓ |
+| Poison Spray | 0 | Conjuration | CON Save | 10ft range, 1d12 poison ✓ |
+| Ray of Frost | 0 | Evocation | Attack | Speed reduction ✓ |
+| Acid Splash | 0 | Conjuration | DEX Save | 2-target cantrip ✓ |
+| **Level 1 (4)** |
+| Magic Missile | 1 | Evocation | Auto-hit | Upcasting, multi-target ✓ |
+| Mage Armor | 1 | Abjuration | Buff | AC = 13 + DEX ✓ |
 | Burning Hands | 1 | Evocation | Cone AoE | 15ft cone, DEX save ✓ |
-| Thunderwave | 1 | Evocation | Cube AoE + Push | 15ft cube, CON save, push ✓ |
-| Hold Person | 2 | Enchantment | WIS Save + Conc | Paralyzed, repeat saves ✓ |
+| Thunderwave | 1 | Evocation | Cube AoE | 15ft cube, CON save, push ✓ |
+| **Level 2 (6)** |
+| Hold Person | 2 | Enchantment | WIS Save | Humanoid only, paralyzed ✓ |
 | Shatter | 2 | Evocation | Sphere AoE | 10ft sphere, CON save ✓ |
-| Call Lightning | 3 | Conjuration | Conc + Repeatable | Grants strike action ✓ |
+| Scorching Ray | 2 | Evocation | Multi-attack | 3× 2d6 fire rays ✓ |
+| Blur | 2 | Illusion | Buff | Disadvantage on attacks vs you ✓ |
+| Misty Step | 2 | Conjuration | Teleport | Bonus action 30ft ✓ |
+| Blindness/Deafness | 2 | Necromancy | CON Save | Apply condition ✓ |
+| **Level 3 (6)** |
+| Call Lightning | 3 | Conjuration | Conc + Action | Grants strike action ✓ |
 | Fireball | 3 | Evocation | Sphere AoE | 20ft sphere, DEX save ✓ |
 | Lightning Bolt | 3 | Evocation | Line AoE | 100ft×5ft line, DEX save ✓ |
+| Protection from Energy | 3 | Abjuration | Buff | Single type resistance ✓ |
+| Fear | 3 | Illusion | Cone AoE | Frightened + forced dash ✓ |
+| Hypnotic Pattern | 3 | Illusion | Cube AoE | Charmed + incapacitated ✓ |
+| **Level 4 (2)** |
+| Blight | 4 | Necromancy | CON Save | 8d8 necrotic ✓ |
+| Stoneskin | 4 | Abjuration | Buff | B/P/S resistance ✓ |
+| **Level 5 (2)** |
+| Hold Monster | 5 | Enchantment | WIS Save | Any creature, paralyzed ✓ |
+| Cone of Cold | 5 | Evocation | Cone AoE | 60ft cone, 8d8 cold ✓ |
+| **Level 6 (1)** |
+| Circle of Death | 6 | Necromancy | Sphere AoE | 60ft sphere, 8d6 necrotic ✓ |
+| **Level 8 (1)** |
+| Sunburst | 8 | Evocation | Sphere AoE | 60ft sphere, blind, undead disadv ✓ |
+| **Level 9 (1)** |
+| Power Word Kill | 9 | Enchantment | HP-check | Kill if ≤100 HP ✓ |
 
 *Note: Sacred Flame is primarily a Cleric spell but is implemented. Call Lightning is Druid.*
 
@@ -209,27 +235,27 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
-| **Acid Splash** | Conjuration | DEX Save | 1d6 acid, 2 targets within 5ft | EASY | Pattern 2 + 2-target variant |
+| **Acid Splash** | Conjuration | DEX Save | 1d6 acid, 2 targets within 5ft | **DONE** | 2-target cantrip ✓ |
 | **Chill Touch** | Necromancy | Attack | 1d8 necrotic, prevents healing | MEDIUM | Pattern 1 + new NoHealing condition |
 | **Dancing Lights** | Evocation | Utility | Creates lights | BLOCKED | No combat effect |
-| **Fire Bolt** | Evocation | Attack | 1d10 fire | **DONE** | Pattern 1 |
+| **Fire Bolt** | Evocation | Attack | 1d10 fire | **DONE** | Pattern 1 ✓ |
 | **Light** | Evocation | Utility | Object sheds light | BLOCKED | No combat effect |
 | **Mage Hand** | Conjuration | Utility | Spectral hand | BLOCKED | No combat effect |
 | **Mending** | Transmutation | Utility | Repair objects | BLOCKED | No combat effect |
 | **Message** | Transmutation | Utility | Whispered communication | BLOCKED | No combat effect |
 | **Minor Illusion** | Illusion | Utility | Create sound/image | BLOCKED | No combat effect |
-| **Poison Spray** | Conjuration | CON Save | 1d12 poison | TRIVIAL | Clone Sacred Flame |
+| **Poison Spray** | Conjuration | CON Save | 1d12 poison, 10ft range | **DONE** | 10ft cantrip ✓ |
 | **Prestidigitation** | Transmutation | Utility | Minor tricks | BLOCKED | No combat effect |
-| **Ray of Frost** | Evocation | Attack | 1d8 cold, -10 speed | EASY | Pattern 1 + speed condition |
+| **Ray of Frost** | Evocation | Attack | 1d8 cold, -10 speed | **DONE** | Speed reduction ✓ |
 | **Shocking Grasp** | Evocation | Melee Attack | 1d8 lightning, no reactions | MEDIUM | Melee spell attack pattern |
 | **True Strike** | Divination | Buff | Advantage on next attack | MEDIUM | Delayed buff condition |
 
 ### Cantrip Summary
-- **DONE**: 1 (Fire Bolt)
-- **TRIVIAL**: 1 (Poison Spray)
-- **EASY**: 2 (Acid Splash, Ray of Frost)
+- **DONE**: 5 (Fire Bolt, Sacred Flame*, Poison Spray, Ray of Frost, Acid Splash)
 - **MEDIUM**: 3 (Chill Touch, Shocking Grasp, True Strike)
 - **BLOCKED**: 7 (utility cantrips)
+
+*Sacred Flame is Cleric but implemented
 
 ---
 
@@ -237,7 +263,7 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
-| **Burning Hands** | Evocation | Cone AoE | 3d6 fire, 15ft cone | **DONE** | Pattern 3 |
+| **Burning Hands** | Evocation | Cone AoE | 3d6 fire, 15ft cone | **DONE** | Pattern 3 ✓ |
 | **Charm Person** | Enchantment | WIS Save | Charmed condition | EASY | Pattern 5, condition exists |
 | **Color Spray** | Illusion | HP-pool | Blinds by HP pool, cone | EASY | HP-pool + AoE (Pattern 9 + 3) |
 | **Comprehend Languages** | Divination | Utility | Understand languages | BLOCKED | No combat effect |
@@ -248,12 +274,12 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Feather Fall** | Transmutation | Reaction | Slow falling | BLOCKED | Requires Z-axis & falling damage |
 | **Fog Cloud** | Conjuration | Zone | 20ft sphere obscured | MEDIUM | Pattern 8 (spatial events) |
 | **Jump** | Transmutation | Buff | Triple jump distance | EASY | Jump action exists |
-| **Mage Armor** | Abjuration | Buff | AC = 13 + DEX | **DONE** | Pattern 5 |
-| **Magic Missile** | Evocation | Auto-hit | 3× 1d4+1 force | **DONE** | Pattern 4 |
+| **Mage Armor** | Abjuration | Buff | AC = 13 + DEX | **DONE** | Pattern 5 ✓ |
+| **Magic Missile** | Evocation | Auto-hit | 3× 1d4+1 force | **DONE** | Pattern 4 ✓ |
 | **Shield** | Abjuration | Reaction | +5 AC | EASY | Pattern 10 (clone Protection) |
 | **Silent Image** | Illusion | Utility | Create illusion | BLOCKED | No combat effect |
 | **Sleep** | Enchantment | HP-pool | Unconscious by HP | EASY | AoE + sorted targets + HP pool (Pattern 9 + 3) |
-| **Thunderwave** | Evocation | Cube AoE | 2d8 thunder, push | **DONE** | Pattern 3 + 7 |
+| **Thunderwave** | Evocation | Cube AoE | 2d8 thunder, push | **DONE** | Pattern 3 + 7 ✓ |
 
 ### Level 1 Summary
 - **DONE**: 4 (Burning Hands, Mage Armor, Magic Missile, Thunderwave)
@@ -268,33 +294,32 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
 | **Alter Self** | Transmutation | Buff | Aquatic/Weapons/Appearance | MEDIUM | Natural Weapons option |
-| **Blindness/Deafness** | Necromancy | CON Save | Blinded or Deafened | TRIVIAL | Conditions exist |
-| **Blur** | Illusion | Buff | Disadvantage on attacks vs you | EASY | to_target modifier |
+| **Blindness/Deafness** | Necromancy | CON Save | Blinded or Deafened | **DONE** | Conditions exist ✓ |
+| **Blur** | Illusion | Buff | Disadvantage on attacks vs you | **DONE** | to_target modifier ✓ |
 | **Darkness** | Evocation | Zone | 15ft magical darkness | MEDIUM | Pattern 8 + light blocking |
 | **Darkvision** | Transmutation | Buff | 60ft darkvision | MEDIUM | Vision system extension |
 | **Detect Thoughts** | Divination | Utility | Read minds | BLOCKED | No combat effect |
 | **Enhance Ability** | Transmutation | Buff | Advantage on ability checks | EASY | Ability check modifier |
 | **Enlarge/Reduce** | Transmutation | Buff | Size change, ±1d4 damage | MEDIUM | Damage modifier |
 | **Gust of Wind** | Evocation | Line | 60ft line, push 15ft | EASY | Pattern 3 + 7 |
-| **Hold Person** | Enchantment | WIS Save | Paralyzed | **DONE** | Pattern 5 |
-| **Invisibility** | Illusion | Buff | Invisible, ends on attack | EASY | Invisible condition exists |
+| **Hold Person** | Enchantment | WIS Save | Paralyzed | **DONE** | Pattern 5, humanoid check ✓ |
+| **Invisibility** | Illusion | Buff | Invisible, ends on attack | HARD | Requires stealth/senses integration |
 | **Knock** | Transmutation | Utility | Unlock objects | BLOCKED | No combat effect |
 | **Levitate** | Transmutation | Control | Lift creature 20ft | MEDIUM | Vertical position, restrained |
 | **Mirror Image** | Illusion | Buff | 3 duplicates absorb attacks | HARD | Attack redirection |
-| **Misty Step** | Conjuration | Teleport | Bonus action 30ft teleport | EASY | Clone Jump pattern, fixed 30ft range |
-| **Scorching Ray** | Evocation | Multi-attack | 3× 2d6 fire | EASY | Pattern 4 (multi Fire Bolt) |
+| **Misty Step** | Conjuration | Teleport | Bonus action 30ft teleport | **DONE** | Bonus action teleport ✓ |
+| **Scorching Ray** | Evocation | Multi-attack | 3× 2d6 fire | **DONE** | Pattern 4 ✓ |
 | **See Invisibility** | Divination | Buff | See invisible/ethereal | MEDIUM | Vision system |
-| **Shatter** | Evocation | Sphere AoE | 3d8 thunder, 10ft sphere | **DONE** | Pattern 3 |
+| **Shatter** | Evocation | Sphere AoE | 3d8 thunder, 10ft sphere | **DONE** | Pattern 3 ✓ |
 | **Spider Climb** | Transmutation | Buff | Climb speed | BLOCKED | Not combat-relevant |
 | **Suggestion** | Enchantment | WIS Save | Compel action | VERY HARD | Mind control/AI |
 | **Web** | Conjuration | Zone | 20ft cube, restrained | MEDIUM | Pattern 8 |
 
 ### Level 2 Summary
-- **DONE**: 2 (Hold Person, Shatter)
-- **TRIVIAL**: 1 (Blindness/Deafness)
-- **EASY**: 6 (Blur, Enhance Ability, Gust of Wind, Invisibility, Misty Step, Scorching Ray)
-- **MEDIUM**: 7 (Alter Self, Darkness, Darkvision, Enlarge/Reduce, Levitate, See Invisibility, Web)
-- **HARD**: 1 (Mirror Image)
+- **DONE**: 6 (Hold Person, Shatter, Scorching Ray, Blur, Misty Step, Blindness/Deafness)
+- **EASY**: 2 (Enhance Ability, Gust of Wind)
+- **MEDIUM**: 6 (Alter Self, Darkness, Darkvision, Enlarge/Reduce, Levitate, See Invisibility, Web)
+- **HARD**: 2 (Mirror Image, Invisibility)
 - **VERY HARD**: 1 (Suggestion)
 - **BLOCKED**: 3 (utility spells)
 
@@ -309,15 +334,15 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Counterspell** | Abjuration | Reaction | Cancel spell | MEDIUM | Pattern 10 on CAST_SPELL event |
 | **Daylight** | Evocation | Light | 60ft bright light | BLOCKED | Light not modeled |
 | **Dispel Magic** | Abjuration | Utility | End spells on target | MEDIUM | Condition removal |
-| **Fear** | Illusion | Cone AoE | Frightened + forced Dash | EASY | Pattern 3 + conditions exist |
-| **Fireball** | Evocation | Sphere AoE | 8d6 fire, 20ft | **DONE** | Pattern 3 |
+| **Fear** | Illusion | Cone AoE | Frightened + forced Dash | **DONE** | Pattern 3 + conditions ✓ |
+| **Fireball** | Evocation | Sphere AoE | 8d6 fire, 20ft | **DONE** | Pattern 3 ✓ |
 | **Fly** | Transmutation | Buff | 60ft fly speed | MEDIUM | Flying movement mode |
 | **Gaseous Form** | Transmutation | Transform | 10ft fly, resist, can't attack | HARD | Major stat transformation |
 | **Haste** | Transmutation | Buff | Double speed, +2 AC, extra action | HARD | Complex multi-buff + lethargy |
-| **Hypnotic Pattern** | Illusion | Cube AoE | Charmed + Incapacitated | EASY | Pattern 3, conditions exist |
-| **Lightning Bolt** | Evocation | Line AoE | 8d6 lightning, 100ft | **DONE** | Pattern 3 |
+| **Hypnotic Pattern** | Illusion | Cube AoE | Charmed + Incapacitated | **DONE** | Pattern 3 + conditions ✓ |
+| **Lightning Bolt** | Evocation | Line AoE | 8d6 lightning, 100ft | **DONE** | Pattern 3 ✓ |
 | **Major Image** | Illusion | Utility | Detailed illusion | BLOCKED | No combat effect |
-| **Protection from Energy** | Abjuration | Buff | Resistance to one type | TRIVIAL | Resistance exists |
+| **Protection from Energy** | Abjuration | Buff | Resistance to one type | **DONE** | Single type resistance ✓ |
 | **Sleet Storm** | Conjuration | Zone | 40ft, obscured, prone, conc. break | MEDIUM | Pattern 8 + multiple effects |
 | **Slow** | Transmutation | Cube AoE | Half speed, -2 AC, limited actions | MEDIUM | Pattern 3 + complex debuff |
 | **Stinking Cloud** | Conjuration | Zone | Waste action on CON fail | MEDIUM | Pattern 8 |
@@ -326,12 +351,12 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Water Walk** | Transmutation | Utility | Walk on liquids | BLOCKED | No combat effect |
 
 ### Level 3 Summary
-- **DONE**: 2 (Fireball, Lightning Bolt)
-- **TRIVIAL**: 1 (Protection from Energy)
-- **EASY**: 2 (Fear, Hypnotic Pattern)
-- **MEDIUM**: 6 (Counterspell, Dispel Magic, Fly, Sleet Storm, Slow, Stinking Cloud)
+- **DONE**: 6 (Fireball, Lightning Bolt, Fear, Hypnotic Pattern, Protection from Energy, Call Lightning*)
+- **MEDIUM**: 5 (Counterspell, Dispel Magic, Fly, Sleet Storm, Slow, Stinking Cloud)
 - **HARD**: 3 (Blink, Gaseous Form, Haste)
 - **BLOCKED**: 6 (utility spells)
+
+*Call Lightning is Druid but implemented
 
 ---
 
@@ -340,21 +365,21 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
 | **Banishment** | Abjuration | CHA Save | Remove from plane | HARD | Entity removal |
-| **Blight** | Necromancy | CON Save | 8d8 necrotic | TRIVIAL | Pattern 2 |
+| **Blight** | Necromancy | CON Save | 8d8 necrotic | **DONE** | Pattern 2 ✓ |
 | **Confusion** | Enchantment | WIS Save AoE | Random behavior | VERY HARD | AI behavior control |
 | **Dimension Door** | Conjuration | Teleport | 500ft teleport + ally | MEDIUM | Hybrid targeting (position + optional ally), collision handling |
 | **Dominate Beast** | Enchantment | WIS Save | Control beast | VERY HARD | Mind control/AI |
-| **Greater Invisibility** | Illusion | Buff | Invisible, doesn't break | TRIVIAL | Invisible condition |
+| **Greater Invisibility** | Illusion | Buff | Invisible, doesn't break | HARD | Requires stealth/senses integration |
 | **Ice Storm** | Evocation | Cylinder AoE | 2d8+4d6, difficult terrain | EASY | Pattern 3 (cylinder = tall sphere) |
 | **Polymorph** | Transmutation | Transform | Transform into beast | VERY HARD | Complete stat replacement |
-| **Stoneskin** | Abjuration | Buff | B/P/S resistance | TRIVIAL | Resistance exists |
+| **Stoneskin** | Abjuration | Buff | B/P/S resistance | **DONE** | Resistance buff ✓ |
 | **Wall of Fire** | Evocation | Zone | 60ft wall, 5d8 fire | MEDIUM | Pattern 8 |
 
 ### Level 4 Summary
-- **TRIVIAL**: 3 (Blight, Greater Invisibility, Stoneskin)
+- **DONE**: 2 (Blight, Stoneskin)
 - **EASY**: 1 (Ice Storm)
 - **MEDIUM**: 2 (Dimension Door, Wall of Fire)
-- **HARD**: 1 (Banishment)
+- **HARD**: 2 (Banishment, Greater Invisibility)
 - **VERY HARD**: 3 (Confusion, Dominate Beast, Polymorph)
 
 ---
@@ -365,10 +390,10 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 |-------|--------|------|----------------|------------|---------------|
 | **Animate Objects** | Transmutation | Summon | Animate up to 10 objects | VERY HARD | Summoning system |
 | **Cloudkill** | Conjuration | Zone | 20ft moving sphere, 5d8 poison | MEDIUM | Pattern 8 + movement |
-| **Cone of Cold** | Evocation | Cone AoE | 8d8 cold, 60ft cone | TRIVIAL | Clone Burning Hands |
+| **Cone of Cold** | Evocation | Cone AoE | 8d8 cold, 60ft cone | **DONE** | 60ft cone ✓ |
 | **Creation** | Illusion | Utility | Create objects | BLOCKED | No combat effect |
 | **Dominate Person** | Enchantment | WIS Save | Control humanoid | VERY HARD | Mind control/AI |
-| **Hold Monster** | Enchantment | WIS Save | Paralyzed, any creature | TRIVIAL | Clone Hold Person |
+| **Hold Monster** | Enchantment | WIS Save | Paralyzed, any creature | **DONE** | Undead immunity ✓ |
 | **Insect Plague** | Conjuration | Zone | 20ft sphere, 4d10 piercing | MEDIUM | Pattern 8 |
 | **Seeming** | Illusion | Utility | Disguise multiple | BLOCKED | No combat effect |
 | **Telekinesis** | Transmutation | Control | Move/restrain | MEDIUM | Contested check |
@@ -376,7 +401,7 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Wall of Stone** | Evocation | Zone | Create stone wall | MEDIUM | Pattern 8 + destructible |
 
 ### Level 5 Summary
-- **TRIVIAL**: 2 (Cone of Cold, Hold Monster)
+- **DONE**: 2 (Cone of Cold, Hold Monster)
 - **MEDIUM**: 4 (Cloudkill, Insect Plague, Telekinesis, Wall of Stone)
 - **VERY HARD**: 2 (Animate Objects, Dominate Person)
 - **BLOCKED**: 3 (utility spells)
@@ -388,7 +413,7 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
 | **Chain Lightning** | Evocation | Multi-target | 10d8, jumps to 3 targets | MEDIUM | Pattern 4 + chaining |
-| **Circle of Death** | Necromancy | Sphere AoE | 8d6 necrotic, 60ft sphere | TRIVIAL | Clone Fireball |
+| **Circle of Death** | Necromancy | Sphere AoE | 8d6 necrotic, 60ft sphere | **DONE** | 60ft sphere ✓ |
 | **Disintegrate** | Transmutation | DEX Save | 10d6+40 force | EASY | Pattern 2 + special death |
 | **Eyebite** | Necromancy | WIS Save | Asleep/Panicked/Sickened | MEDIUM | Multiple condition options |
 | **Globe of Invulnerability** | Abjuration | Buff | Block spells ≤5th | VERY HARD | Spell immunity |
@@ -398,7 +423,7 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **True Seeing** | Divination | Buff | Truesight 120ft | MEDIUM | Vision extension |
 
 ### Level 6 Summary
-- **TRIVIAL**: 1 (Circle of Death)
+- **DONE**: 1 (Circle of Death)
 - **EASY**: 2 (Disintegrate, Sunbeam)
 - **MEDIUM**: 3 (Chain Lightning, Eyebite, True Seeing)
 - **VERY HARD**: 2 (Globe of Invulnerability, Mass Suggestion)
@@ -413,16 +438,15 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Delayed Blast Fireball** | Evocation | Sphere AoE | 12d6+ accumulates | MEDIUM | Pattern 3 + delayed |
 | **Etherealness** | Transmutation | Transform | Enter Ethereal | VERY HARD | Plane mechanics |
 | **Finger of Death** | Necromancy | CON Save | 7d8+30, creates zombie | HARD | Pattern 2 + summon |
-| **Fire Storm** | Evocation | Multi-cube | 7d10 fire, 10 cubes | EASY | Pattern 3 × 10 |
+| **Fire Storm** | Evocation | Multi-cube | 7d10 fire, 10 cubes | HARD | Multiple AoE targeting UI |
 | **Plane Shift** | Conjuration | Teleport | Teleport/banish | VERY HARD | Plane mechanics |
 | **Prismatic Spray** | Evocation | Cone AoE | Random effects | HARD | Pattern 3 + complex random |
 | **Reverse Gravity** | Transmutation | Cylinder | Fall upward | HARD | Positional chaos |
 | **Teleport** | Conjuration | Teleport | Long-range + accuracy | HARD | Teleportation system |
 
 ### Level 7 Summary
-- **EASY**: 1 (Fire Storm)
 - **MEDIUM**: 1 (Delayed Blast Fireball)
-- **HARD**: 4 (Finger of Death, Prismatic Spray, Reverse Gravity, Teleport)
+- **HARD**: 5 (Fire Storm, Finger of Death, Prismatic Spray, Reverse Gravity, Teleport)
 - **VERY HARD**: 2 (Etherealness, Plane Shift)
 
 ---
@@ -435,10 +459,10 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Earthquake** | Evocation | Zone | 100ft, prone, fissures | HARD | Massive AoE + terrain |
 | **Incendiary Cloud** | Conjuration | Zone | 20ft moving, 10d8 fire | MEDIUM | Pattern 8 + movement |
 | **Power Word Stun** | Enchantment | HP-based | Stunned if ≤150 HP | EASY | Pattern 9, Stunned exists |
-| **Sunburst** | Evocation | Sphere AoE | 12d6 radiant + blind | TRIVIAL | Clone Fireball |
+| **Sunburst** | Evocation | Sphere AoE | 12d6 radiant + blind | **DONE** | 60ft sphere, undead disadv ✓ |
 
 ### Level 8 Summary
-- **TRIVIAL**: 1 (Sunburst)
+- **DONE**: 1 (Sunburst)
 - **EASY**: 1 (Power Word Stun)
 - **MEDIUM**: 1 (Incendiary Cloud)
 - **HARD**: 1 (Earthquake)
@@ -451,13 +475,14 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
 | **Gate** | Conjuration | Portal | Interplanar portal + summon | VERY HARD | Plane mechanics |
-| **Meteor Swarm** | Evocation | Multi-sphere | 40d6, 4×40ft spheres | EASY | Pattern 3 × 4 |
-| **Power Word Kill** | Enchantment | HP-based | Death if ≤100 HP | EASY | Pattern 9 |
+| **Meteor Swarm** | Evocation | Multi-sphere | 40d6, 4×40ft spheres | HARD | Multiple AoE targeting UI |
+| **Power Word Kill** | Enchantment | HP-based | Death if ≤100 HP | **DONE** | HP check + instant death ✓ |
 | **Time Stop** | Transmutation | Control | Extra turns | VERY HARD | Turn manipulation |
 | **Wish** | Conjuration | Ultimate | Anything | VERY HARD | GM adjudication |
 
 ### Level 9 Summary
-- **EASY**: 2 (Meteor Swarm, Power Word Kill)
+- **DONE**: 1 (Power Word Kill)
+- **HARD**: 1 (Meteor Swarm)
 - **VERY HARD**: 3 (Gate, Time Stop, Wish)
 
 ---
@@ -466,56 +491,52 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 
 | Difficulty | Count | Percentage |
 |------------|-------|------------|
-| **DONE** | 11 | 9% |
-| **TRIVIAL** | 11 | 9% |
-| **EASY** | 25 | 21% |
-| **MEDIUM** | 26 | 22% |
-| **HARD** | 13 | 11% |
-| **VERY HARD** | 17 | 14% |
+| **DONE** | 28 | 23% |
+| **EASY** | 13 | 11% |
+| **MEDIUM** | 23 | 19% |
+| **HARD** | 14 | 12% |
+| **VERY HARD** | 14 | 12% |
 | **BLOCKED** | 26 | 22% |
 
-**Implementable with existing patterns**: 62 spells (DONE + TRIVIAL + EASY + MEDIUM)
-**Require new subsystems**: 30 spells (HARD + VERY HARD)
+**Implementable with existing patterns**: 64 spells (DONE + EASY + MEDIUM)
+**Require new subsystems**: 28 spells (HARD + VERY HARD)
 **Out of scope for combat engine**: 26 spells (BLOCKED)
 
-*Note: Shield moved HARD→EASY, Counterspell moved VERY HARD→MEDIUM, Feather Fall moved HARD→BLOCKED (requires Z-axis/falling damage), Misty Step moved HARD→EASY (clone Jump), Sleep/Color Spray moved MEDIUM→EASY (AoE + HP-pool override), Dimension Door moved HARD→MEDIUM (hybrid targeting)*
-
-### Progress: 11 of 94 combat-relevant spells implemented (12%)
-### With existing patterns: 62 of 94 combat-relevant spells implementable (66%)
+### Progress: 28 of 94 combat-relevant spells implemented (30%)
+### With existing patterns: 64 of 94 combat-relevant spells implementable (68%)
 
 ---
 
 ## Implementation Priority
 
-### Tier 0: Already Done (11 spells)
-Fire Bolt, Sacred Flame, Magic Missile, Mage Armor, Burning Hands, Thunderwave, Hold Person, Shatter, Fireball, Lightning Bolt, Call Lightning
+### Tier 0: Already Done (28 spells)
 
-### Tier 1: Trivial Clones (11 spells, <30 min each)
+**Cantrips (5):** Fire Bolt, Sacred Flame*, Poison Spray, Ray of Frost, Acid Splash
 
-Direct parameter changes from existing spells:
+**Level 1 (4):** Magic Missile, Mage Armor, Burning Hands, Thunderwave
 
-| Spell | Clone Of | Change |
-|-------|----------|--------|
-| Poison Spray | Sacred Flame | CON save, poison damage, 1d12 |
-| Blindness/Deafness | (condition) | Apply Blinded/Deafened |
-| Protection from Energy | (buff) | Single type resistance |
-| Blight | Sacred Flame | 8d8, CON, necrotic, L4 |
-| Greater Invisibility | (buff) | Invisible without attack break |
-| Stoneskin | (buff) | B/P/S resistance |
-| Cone of Cold | Burning Hands | 60ft cone, 8d8 cold, DEX |
-| Hold Monster | Hold Person | Works on all creatures |
-| Circle of Death | Fireball | 60ft sphere, 8d6 necrotic, CON |
-| Sunburst | Fireball | 60ft sphere, 12d6 radiant, blind |
-| Power Word Kill | (HP check) | Kill if ≤100 HP |
+**Level 2 (6):** Hold Person, Shatter, Scorching Ray, Blur, Misty Step, Blindness/Deafness
 
-### Tier 2: Easy Extensions (23 spells, 30min-2hr each)
+**Level 3 (6):** Fireball, Lightning Bolt, Call Lightning*, Fear, Hypnotic Pattern, Protection from Energy
+
+**Level 4 (2):** Blight, Stoneskin
+
+**Level 5 (2):** Hold Monster, Cone of Cold
+
+**Level 6 (1):** Circle of Death
+
+**Level 8 (1):** Sunburst
+
+**Level 9 (1):** Power Word Kill
+
+*Sacred Flame = Cleric, Call Lightning = Druid (but implemented)
+
+### Tier 1: Easy Extensions (13 spells, 30min-2hr each)
 
 Use established patterns with minor additions:
 
 | Spell | Level | What's Needed |
 |-------|-------|---------------|
-| Acid Splash | 0 | 2-target cantrip variant |
-| Ray of Frost | 0 | Speed reduction condition |
 | Charm Person | 1 | Duration timer on Charmed |
 | Color Spray | 1 | Cone AoE + HP-pool sorted targets (clone Sleep pattern) |
 | Expeditious Retreat | 1 | Granted Dash action |
@@ -523,22 +544,14 @@ Use established patterns with minor additions:
 | Jump | 1 | Jump distance modifier |
 | Shield | 1 | Reaction +5 AC (Pattern 10, clone Protection) |
 | Sleep | 1 | Sphere AoE + HP-pool with sorted targets |
-| Blur | 2 | to_target disadvantage |
 | Enhance Ability | 2 | Ability check advantage |
 | Gust of Wind | 2 | Line + push (Pattern 3+7) |
-| Invisibility | 2 | Invisible with break on attack |
-| Misty Step | 2 | Clone Jump pattern, fixed 30ft range, bonus action |
-| Scorching Ray | 2 | 3× attack rolls |
-| Fear | 3 | Cone + Frightened + forced Dash |
-| Hypnotic Pattern | 3 | Cube + Charmed + Incap |
 | Ice Storm | 4 | Cylinder + difficult terrain |
 | Disintegrate | 6 | Single target + special death |
 | Sunbeam | 6 | Line + blind + repeatable |
-| Fire Storm | 7 | Multiple cubes |
 | Power Word Stun | 8 | HP check + Stunned |
-| Meteor Swarm | 9 | Multiple spheres |
 
-### Tier 3: Medium Effort (26 spells, 2-6hr each)
+### Tier 3: Medium Effort (23 spells, 2-6hr each)
 
 New conditions or moderate new code:
 
@@ -603,26 +616,28 @@ New conditions or moderate new code:
 
 ## Recommended Next Steps
 
-### Immediate: Tier 1 Trivial Clones
-Implement all 11 trivial spells to quickly expand the spell list. Each takes <30 minutes and demonstrates the flexibility of existing patterns.
+### Immediate: Complete Easy Spells
+13 spells remaining, each 30min-2hr:
+1. **Sleep, Color Spray** - HP-pool AoE patterns
+2. **Ice Storm** - Cylinder AoE + difficult terrain
+3. **Shield** - Reaction +5 AC (clone Protection pattern)
+4. **Disintegrate, Power Word Stun** - HP-threshold + effects
+5. **Charm Person** - Duration-based Charmed condition
+6. **Sunbeam** - Line AoE + blind + repeatable action
 
-### Short-term: Tier 2 Easy Spells
-Focus on:
-1. **Scorching Ray** - Multi-attack pattern
-2. **Fear, Hypnotic Pattern** - Showcase AoE + conditions
-3. **Ice Storm, Meteor Swarm, Fire Storm** - Multi-AoE patterns
-4. **Ray of Frost** - Speed reduction cantrip
-
-### Medium-term: Zone Spells (Pattern 8)
+### Short-term: Zone Spells (Pattern 8)
 Build the spatial event handler pattern with:
 1. **Fog Cloud** - Simplest zone (just obscured)
 2. **Web** - Zone + condition on enter
 3. **Wall of Fire** - Zone + damage on enter/turn
 4. **Cloudkill** - Moving zone
 
-### Long-term: New Subsystems
-1. **Teleportation** - Misty Step is now EASY (clone Jump), Teleport still needs accuracy table
-2. **HP-Pool Mechanics** - Sleep/Color Spray are now EASY (AoE + sorted targets + HP pool override)
+### Medium-term: Remaining Medium Spells
+23 spells need moderate work:
+- Melee spell attacks (Shocking Grasp)
+- Vision extension spells (Darkvision, See Invisibility, True Seeing)
+- Complex debuffs (Slow, Enlarge/Reduce)
+- Counterspell (reaction on CAST_SPELL event)
 
 ### Quick Win: Reaction Spells (Pattern 10)
 **Shield** and **Counterspell** use the exact same EventHandler pattern as Protection fighting style and opportunity attacks. No new architecture needed!
@@ -635,19 +650,23 @@ Build the spatial event handler pattern with:
 
 With the AoE system complete and the convolution pattern established, the spell implementation landscape has dramatically improved. Of 120 sorcerer spells:
 
-- **11 spells (9%)** already implemented
-- **36 more spells (30%)** use existing patterns (TRIVIAL + EASY)
-- **26 spells (22%)** need moderate new work (MEDIUM)
-- **13 spells (11%)** need new subsystems (HARD)
-- **17 spells (14%)** need major architecture (VERY HARD)
+- **28 spells (23%)** already implemented
+- **13 more spells (11%)** use existing patterns (EASY)
+- **23 spells (19%)** need moderate new work (MEDIUM)
+- **14 spells (12%)** need new subsystems (HARD)
+- **14 spells (12%)** need major architecture (VERY HARD)
 - **26 spells (22%)** have no combat mechanics (BLOCKED)
 
 **Key insight:** The AoE system unlocked the largest batch of damage spells. The next high-value system is **Zone/Terrain spells via Pattern 8**, which uses existing spatial events infrastructure.
 
 **Reaction spells (Shield, Counterspell)** were previously marked HARD/VERY HARD but actually use the **same EventHandler pattern as Protection fighting style**. No new trigger system needed!
 
-**Teleportation reassessed:** Misty Step is now EASY (clone Jump pattern with fixed 30ft range). Dimension Door is MEDIUM (hybrid targeting + collision handling). Only Teleport remains HARD due to its accuracy/familiarity system.
+**Teleportation reassessed:** Misty Step is now **DONE**. Dimension Door is MEDIUM (hybrid targeting + collision handling). Only Teleport remains HARD due to its accuracy/familiarity system.
 
-**HP-Pool spells reassessed:** Sleep and Color Spray are now EASY. The pattern is simply AoE targeting + sorted-by-HP targets + HP pool exhaustion. No new subsystem needed.
+**Invisibility spells moved to HARD:** Invisibility and Greater Invisibility require stealth/senses integration that isn't implemented yet. Will be done with hide/stealth mechanics.
 
-**Total implementable:** 73 spells (62%) are TRIVIAL/EASY/MEDIUM with current architecture.
+**Multi-AoE spells moved to HARD:** Fire Storm and Meteor Swarm require multiple position targeting UI which isn't straightforward.
+
+**HP-Pool spells reassessed:** Sleep and Color Spray are EASY. The pattern is simply AoE targeting + sorted-by-HP targets + HP pool exhaustion. No new subsystem needed.
+
+**Total implementable:** 64 spells (68% of combat-relevant) are DONE/EASY/MEDIUM with current architecture.

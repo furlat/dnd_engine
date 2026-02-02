@@ -12,14 +12,13 @@ Tests:
 
 from uuid import uuid4
 from dnd.utils import reset_combat_state
-from dnd.monsters.bestiary import create_skeleton, create_goblin
+from dnd.monsters.bestiary import create_skeleton
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.actions_functional import setup_standard_actions, execute_action
-from dnd.core.base_actions import AvailableTarget
 from dnd.core.gridmap import get_map
 from dnd.actions import Shove
 from dnd.reactions import add_opportunity_attack_handler

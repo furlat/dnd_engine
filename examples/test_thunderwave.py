@@ -16,6 +16,7 @@ from dnd.core.gridmap import get_map
 
 # Spell imports
 from dnd.spells.evocation import Thunderwave
+from dnd.actions import SpellEvent
 
 # Test utilities
 from dnd.utils import get_hp, set_hp, get_position
@@ -110,7 +111,7 @@ def test_thunderwave_full_damage_and_push_on_failed_save():
     dc = caster.spell_save_dc()
     print(f"  Spell DC: {dc}")
 
-    initial_hp = get_hp(target)
+    _initial_hp = get_hp(target)
     initial_pos = get_position(target)
     print(f"  Initial position: {initial_pos}")
 
@@ -123,14 +124,17 @@ def test_thunderwave_full_damage_and_push_on_failed_save():
 
     result = thunderwave.apply()
     assert result is not None and not result.canceled, f"Thunderwave failed: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     per_target = result.target_results[0] if result.target_results else result
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save failed
     assert per_target.save_success == False, "Target with CON 1 should fail save"
 
     # Full damage (not halved)
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     assert per_target.total_damage == rolled_damage, \
         f"Should be full damage, got {per_target.total_damage} vs rolled {rolled_damage}"
 
@@ -138,7 +142,7 @@ def test_thunderwave_full_damage_and_push_on_failed_save():
     final_pos = get_position(target)
     assert final_pos != initial_pos, "Target should have been pushed"
     # Push should be away from caster (eastward), 10ft = 2 tiles
-    expected_push_x = initial_pos[0] + 2  # 2 tiles east
+    _expected_push_x = initial_pos[0] + 2  # 2 tiles east
     # Allow for diagonal push or partial movement
     assert final_pos[0] >= initial_pos[0], "Target should move away from caster (east)"
 
@@ -163,7 +167,7 @@ def test_thunderwave_half_damage_no_push_on_passed_save():
     dc = caster.spell_save_dc()
     print(f"  Spell DC: {dc}")
 
-    initial_hp = get_hp(target)
+    _initial_hp = get_hp(target)
     initial_pos = get_position(target)
 
     thunderwave = Thunderwave(
@@ -175,8 +179,10 @@ def test_thunderwave_half_damage_no_push_on_passed_save():
 
     result = thunderwave.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     per_target = result.target_results[0] if result.target_results else result
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save succeeded
     assert per_target.save_success == True, "Target with CON 30 should always save"
@@ -248,7 +254,7 @@ def test_thunderwave_push_direction():
         template=False
     )
 
-    result = thunderwave.apply()
+    _result = thunderwave.apply()
 
     e_final = get_position(target_e)
     ne_final = get_position(target_ne)
@@ -366,7 +372,7 @@ def test_thunderwave_caster_excluded():
     setup_basic_arena(20, 20)
 
     caster = create_caster(name="Wizard", position=(10, 10), hp=100)
-    target = create_target(name="Target", position=(12, 10), hp=50)
+    _target = create_target(name="Target", position=(12, 10), hp=50)
     Entity.update_all_entities_senses()
 
     caster_initial = get_hp(caster)
@@ -424,9 +430,9 @@ def test_thunderwave_multiple_targets_mixed_saves():
     print(f"  Tough (CON 30): {tough_initial_pos} -> {tough_final_pos}")
 
     # Check saves from target_results
-    if result.target_results:
+    if isinstance(result, SpellEvent) and result.target_results:
         for tr in result.target_results:
-            if "Weak" in tr.status_message:
+            if tr.status_message and "Weak" in tr.status_message:
                 # Weak should fail and be pushed
                 if "saved" not in tr.status_message.lower():
                     if weak_final_pos == weak_initial_pos:
@@ -436,7 +442,7 @@ def test_thunderwave_multiple_targets_mixed_saves():
                         print(f"  Weak target pushed correctly")
                 else:
                     print(f"  Weak target unexpectedly saved")
-            if "Tough" in tr.status_message:
+            if tr.status_message and "Tough" in tr.status_message:
                 # Tough should save and NOT be pushed
                 if "saved" in tr.status_message.lower():
                     assert tough_final_pos == tough_initial_pos, "Tough target should NOT move after saving"
@@ -453,7 +459,7 @@ def test_thunderwave_statistical_saves():
     failures = 0
     pushes = 0
 
-    for i in range(10):
+    for _ in range(10):
         reset_combat_state()
         setup_basic_arena(20, 20)
 
@@ -472,9 +478,9 @@ def test_thunderwave_statistical_saves():
         )
 
         result = thunderwave.apply()
-        if result and not result.canceled:
+        if result and not result.canceled and isinstance(result, SpellEvent):
             per_target = result.target_results[0] if result.target_results else result
-            if per_target.save_success:
+            if isinstance(per_target, SpellEvent) and per_target.save_success:
                 successes += 1
             else:
                 failures += 1

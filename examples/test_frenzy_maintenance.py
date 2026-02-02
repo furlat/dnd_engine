@@ -55,7 +55,11 @@ def test_frenzy_maintenance():
         print("  ERROR: Frenzy action not available!")
         return False
 
-    result = execute_action(barbarian, "Frenzy", barbarian.uuid)
+    # Get valid target from action's valid_targets
+    if not frenzy_action.valid_targets:
+        print("  ERROR: No valid targets for Frenzy!")
+        return False
+    result = execute_action(barbarian, "Frenzy", frenzy_action.valid_targets[0])
     print(f"  Frenzy result: {result.status_message if result else 'Failed'}")
 
     # Check conditions after Frenzy
@@ -71,8 +75,9 @@ def test_frenzy_maintenance():
     # Debug: Check registered handlers
     from dnd.core.base_object import BaseObject
     handlers = [BaseObject.get(h) for h in barbarian.event_handlers]
-    print(f"  Registered handlers: {[h.name for h in handlers if h]}")
-    rage_attack_handler = next((h for h in handlers if h and "Rage Attack" in h.name), None)
+    handler_names = [h.name for h in handlers if h and h.name]
+    print(f"  Registered handlers: {handler_names}")
+    rage_attack_handler = next((h for h in handlers if h and h.name and "Rage Attack" in h.name), None)
     print(f"  Rage Attack Tracker handler present: {rage_attack_handler is not None}")
 
     # Step 2: Attack skeleton
