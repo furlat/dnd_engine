@@ -18,7 +18,7 @@ from dnd.blocks.equipment import (
 )
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.modifiers import DamageType
+from dnd.core.modifiers import DamageType, CreatureType
 from dnd.core.values import ModifiableValue
 
 # Import weapons and armor from items module
@@ -221,7 +221,8 @@ def create_skeleton(
         proficiency_bonus=2,
         position=position,
         faction=faction,
-        weight=weight
+        weight=weight,
+        creature_type=CreatureType.UNDEAD
     )
 
     # Create entity

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from collections import defaultdict
 
 from dnd.core.values import ModifiableValue, AdvantageStatus
-from dnd.core.modifiers import NumericalModifier
+from dnd.core.modifiers import NumericalModifier, CreatureType
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
@@ -107,6 +107,7 @@ class EntityConfig(BaseModel):
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
     spellcasting: Optional[SpellcastingConfig] = Field(default=None, description="Spellcasting configuration (None = non-caster)")
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
+    creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
 
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
@@ -130,6 +131,7 @@ class Entity(BaseBlock):
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the entity")
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
+    creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
 
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
@@ -237,7 +239,8 @@ class Entity(BaseBlock):
                 position=config.position,
                 sprite_name=config.sprite_name,
                 faction=config.faction,
-                weight=config.weight
+                weight=config.weight,
+                creature_type=config.creature_type
             )
 
     def _set_position(self,new_position: Tuple[int,int]):
