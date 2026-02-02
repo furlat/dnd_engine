@@ -37,6 +37,24 @@ class Size(str, Enum):
     HUGE = "Huge"
     GARGANTUAN = "Gargantuan"
 
+
+class CreatureType(str, Enum):
+    """D&D 5e creature types."""
+    ABERRATION = "aberration"
+    BEAST = "beast"
+    CELESTIAL = "celestial"
+    CONSTRUCT = "construct"
+    DRAGON = "dragon"
+    ELEMENTAL = "elemental"
+    FEY = "fey"
+    FIEND = "fiend"
+    GIANT = "giant"
+    HUMANOID = "humanoid"
+    MONSTROSITY = "monstrosity"
+    OOZE = "ooze"
+    PLANT = "plant"
+    UNDEAD = "undead"
+
 class DamageType(str, Enum):
     ACID = "Acid"
     BLUDGEONING = "Bludgeoning"
