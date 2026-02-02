@@ -16,13 +16,20 @@ Run with: python examples/test_new_spells.py
 
 from uuid import uuid4
 
-from dnd.utils import reset_combat_state, get_hp, has_condition, get_position, set_hp
+from dnd.utils import reset_combat_state, get_hp, has_condition, get_position
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.actions_functional import setup_standard_actions
 from dnd.monsters.bestiary import create_sorcerer
+from dnd.core.events import EventPhase
+from dnd.core.modifiers import NumericalModifier, AdvantageStatus
+from dnd.blocks.equipment import WeaponSlot
+from dnd.spells.evocation import RayOfFrost, ScorchingRay
+from dnd.spells.conjuration import AcidSplash, MistyStep
+from dnd.spells.necromancy import BlindnessDeafness
+from dnd.spells.illusion import Blur, Fear, HypnoticPattern
 
 
 def create_test_target(name: str, position: tuple, dex: int = 10, con: int = 10, wis: int = 10, faction: str = "monsters"):
@@ -54,7 +61,6 @@ def test_ray_of_frost_hit_damage():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import RayOfFrost
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Low DEX = low AC, easier to hit
@@ -65,12 +71,11 @@ def test_ray_of_frost_hit_damage():
     initial_hp = get_hp(target)
 
     # Force hit via high attack bonus
-    from dnd.core.modifiers import NumericalModifier
     hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
     mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
 
     ray = RayOfFrost(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
-    result = ray.apply()
+    _result = ray.apply()
 
     caster.spellcasting.spell_attack_bonus.self_static.remove_modifier(mod_uuid)
 
@@ -89,7 +94,6 @@ def test_ray_of_frost_speed_reduction():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import RayOfFrost
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), dex=1)
@@ -99,7 +103,6 @@ def test_ray_of_frost_speed_reduction():
     initial_speed = target.action_economy.movement.normalized_score
 
     # Force hit
-    from dnd.core.modifiers import NumericalModifier
     hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
     mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
 
@@ -129,7 +132,6 @@ def test_acid_splash_single_target():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import AcidSplash
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Low DEX = guaranteed fail
@@ -140,7 +142,7 @@ def test_acid_splash_single_target():
     initial_hp = get_hp(target)
 
     acid = AcidSplash(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
-    result = acid.apply()
+    _result = acid.apply()
 
     final_hp = get_hp(target)
     damage = initial_hp - final_hp
@@ -157,7 +159,6 @@ def test_acid_splash_two_targets():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import AcidSplash
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target1 = create_test_target("Target1", (2, 0), dex=1)  # Adjacent
@@ -174,7 +175,7 @@ def test_acid_splash_two_targets():
         extra_target_entity_uuids=[target2.uuid],
         caster_level=1
     )
-    result = acid.apply()
+    _result = acid.apply()
 
     damage1 = initial_hp1 - get_hp(target1)
     damage2 = initial_hp2 - get_hp(target2)
@@ -193,8 +194,6 @@ def test_acid_splash_rejects_distant_targets():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import AcidSplash
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target1 = create_test_target("Target1", (2, 0), dex=1)
@@ -209,6 +208,8 @@ def test_acid_splash_rejects_distant_targets():
         caster_level=1
     )
     result = acid.apply()
+    assert result is not None
+    assert result.status_message is not None
 
     assert result.phase == EventPhase.CANCEL, f"Should be canceled, got {result.phase}"
     assert "5ft" in result.status_message.lower(), f"Message should mention 5ft: {result.status_message}"
@@ -227,8 +228,6 @@ def test_scorching_ray_three_rays():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import ScorchingRay
-    from dnd.core.modifiers import NumericalModifier
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), dex=1)
@@ -247,7 +246,7 @@ def test_scorching_ray_three_rays():
     num_rays = scorching.get_num_projectiles()
     assert num_rays == 3, f"Should have 3 rays at level 2, got {num_rays}"
 
-    result = scorching.apply()
+    _result = scorching.apply()
     caster.spellcasting.spell_attack_bonus.self_static.remove_modifier(mod_uuid)
 
     final_hp = get_hp(target)
@@ -265,7 +264,6 @@ def test_scorching_ray_upcast():
     print("\n=== Test: Scorching Ray Upcast ===")
     reset_combat_state()
 
-    from dnd.spells import ScorchingRay
 
     # Check ray scaling
     for level, expected_rays in [(2, 3), (3, 4), (4, 5), (5, 6)]:
@@ -288,8 +286,6 @@ def test_blur_applies_disadvantage():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import Blur
-    from dnd.core.modifiers import AdvantageStatus
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     attacker = create_test_target("Attacker", (1, 0), faction="monsters")
@@ -304,7 +300,6 @@ def test_blur_applies_disadvantage():
     assert has_condition(caster, "Concentrating"), "Caster should be Concentrating"
 
     # Check that attacker gets disadvantage via to_target propagation
-    from dnd.blocks.equipment import WeaponSlot
     attacker_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, caster.uuid)
     caster_ac = caster.ac_bonus(attacker.uuid)
     attacker_bonus.set_from_target(caster_ac)
@@ -324,7 +319,6 @@ def test_blur_concentration():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import Blur
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
@@ -353,8 +347,6 @@ def test_misty_step_teleport():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import MistyStep
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
@@ -364,6 +356,7 @@ def test_misty_step_teleport():
 
     misty = MistyStep(source_entity_uuid=caster.uuid, end_position=target_pos, caster_level=5)
     result = misty.apply()
+    assert result is not None
 
     end_pos = get_position(caster)
 
@@ -381,8 +374,6 @@ def test_misty_step_range_limit():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import MistyStep
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
@@ -391,6 +382,8 @@ def test_misty_step_range_limit():
 
     misty = MistyStep(source_entity_uuid=caster.uuid, end_position=target_pos, caster_level=5)
     result = misty.apply()
+    assert result is not None
+    assert result.status_message is not None
 
     assert result.phase == EventPhase.CANCEL, f"Should cancel, got {result.phase}"
     assert "range" in result.status_message.lower(), f"Message should mention range: {result.status_message}"
@@ -405,7 +398,6 @@ def test_misty_step_bonus_action():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import MistyStep
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
@@ -438,7 +430,6 @@ def test_blindness_deafness_applies_blinded():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import BlindnessDeafness
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Low CON = guaranteed fail
@@ -466,7 +457,6 @@ def test_blindness_deafness_applies_deafened():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import BlindnessDeafness
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), con=1)
@@ -493,7 +483,6 @@ def test_blindness_deafness_not_concentration():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import BlindnessDeafness
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), con=1)
@@ -524,7 +513,6 @@ def test_fear_applies_frightened():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import Fear
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Low WIS = guaranteed fail
@@ -548,7 +536,6 @@ def test_fear_cone_shape():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import Fear
 
     caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
     # Targets in cone direction (east)
@@ -577,7 +564,6 @@ def test_hypnotic_pattern_applies_conditions():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import HypnoticPattern
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Low WIS = guaranteed fail
@@ -601,7 +587,6 @@ def test_hypnotic_pattern_concentration_cleanup():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.spells import HypnoticPattern
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (5, 0), wis=1)
