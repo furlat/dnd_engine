@@ -1,7 +1,7 @@
 """Evocation spells - dealing damage and channeling energy.
 
 Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
-          LightningBolt, Thunderwave, Shatter
+          LightningBolt, Thunderwave, Shatter, Sunburst, RayOfFrost, ScorchingRay
 """
 from typing import Optional, List, Tuple
 from uuid import UUID
@@ -9,14 +9,16 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
+from dnd.core.base_conditions import BaseCondition
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome, RollType
 from typing import cast as type_cast
-from dnd.core.events import EventPhase, RangeType, Range, Damage, ForcedMovementEvent
-from dnd.core.modifiers import DamageType
+from dnd.core.events import EventPhase, RangeType, Range, Damage, ForcedMovementEvent, EventType, EventHandler, Trigger, Event
+from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType
 from dnd.core.aoe import AoEShape
 
 from dnd.actions import SpellAction, SpellEvent
+from dnd.conditions import Blinded
 
 
 def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
@@ -160,6 +162,175 @@ class FireBolt(SpellAction):
             damages=[fire_damage],
             damage_rolls=[damage_roll],
             status_message=f"{self.name} hit for {damage_roll.total} fire damage"
+        )
+
+
+class RayOfFrostSlowed(BaseCondition):
+    """Speed reduction from Ray of Frost spell.
+
+    Target's speed is reduced by 10 feet until start of caster's next turn.
+    Duration: 1 round (expires at start of caster's next turn).
+    """
+    name: str = "Ray of Frost Slowed"
+    description: str = "Speed reduced by 10 feet"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        from dnd.entity import Entity
+        from dnd.core.modifiers import NumericalModifier
+
+        if not self.target_entity_uuid:
+            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+
+        # Apply -10 speed modifier
+        speed_reduction = NumericalModifier(
+            name="Ray of Frost",
+            value=-10,
+            source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid
+        )
+        mod_uuid = target.action_economy.movement.self_static.add_value_modifier(speed_reduction)
+        outs.append((target.action_economy.movement.uuid, mod_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied Ray of Frost speed reduction to {target.name}"
+        )
+        return outs, [], [], effect_event
+
+
+class RayOfFrost(SpellAction):
+    """Ray of Frost - Evocation cantrip
+
+    A frigid beam of blue-white light streaks toward a creature within range.
+    Make a ranged spell attack. On hit, target takes 1d8 cold damage and its
+    speed is reduced by 10 feet until the start of your next turn.
+
+    Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
+    """
+    name: str = Field(default="Ray of Frost")
+    description: str = Field(default="Ranged spell attack, 1d8 cold, target speed -10ft")
+    spell_level: int = Field(default=0)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+    )
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate range and line of sight."""
+        from dnd.entity import Entity
+
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source_entity or not target_entity:
+            return declaration_event.cancel(status_message="Source or target entity not found")
+
+        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Execute the spell attack."""
+        from dnd.entity import Entity, determine_attack_outcome
+        from dnd.core.base_conditions import Duration, DurationType
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate bonuses
+        attack_bonus = caster.spell_attack_bonus(target.uuid)
+        target_ac = target.ac_bonus(caster.uuid)
+
+        # 2. Cross-propagate modifiers
+        attack_bonus.set_from_target(target_ac)
+        target_ac.set_from_target(attack_bonus)
+
+        # 3. Roll attack
+        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
+        crit_threshold = caster.get_spell_crit_threshold()
+        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
+
+        # 4. Clean up
+        attack_bonus.reset_from_target()
+        target_ac.reset_from_target()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            attack_bonus=attack_bonus,
+            ac=target_ac,
+            dice_roll=dice_roll,
+            attack_outcome=outcome,
+            status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
+        )
+
+        # 5. On miss, complete without damage
+        if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{self.name} missed"
+            )
+
+        # 6. On hit: roll damage
+        num_dice = self._get_cantrip_dice_count(self.caster_level)
+        is_crit = outcome == AttackOutcome.CRIT
+
+        crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
+        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
+
+        damage_bonus = caster.get_spell_damage_bonus()
+        cold_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=8,
+            dice_numbers=total_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.COLD
+        )
+
+        damage_dice = cold_damage.get_dice(attack_outcome=outcome)
+        damage_roll = damage_dice.roll
+
+        # Apply damage
+        target.health.take_damage(damage_roll.total, DamageType.COLD, source_entity_uuid=caster.uuid)
+
+        # 7. Apply speed reduction (1 round duration)
+        speed_condition = RayOfFrostSlowed(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            duration=Duration(
+                duration=1,
+                duration_type=DurationType.ROUNDS,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+        )
+        target.add_condition(speed_condition)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[cold_damage],
+            damage_rolls=[damage_roll],
+            status_message=f"{self.name} hit for {damage_roll.total} cold damage, speed reduced by 10ft"
         )
 
 
@@ -399,6 +570,159 @@ class MagicMissile(SpellAction):
             damage_rolls=[damage_roll],
             total_damage=damage_roll.total,
             status_message=f"Dart hits {target.name} for {damage_roll.total} force damage"
+        )
+
+
+class ScorchingRay(SpellAction):
+    """Scorching Ray - 2nd level Evocation
+
+    You create three rays of fire and hurl them at targets within range.
+    You can hurl them at one target or several. Make a ranged spell attack
+    for each ray. On a hit, the target takes 2d6 fire damage.
+
+    At Higher Levels: Create one additional ray for each slot level above 2nd.
+    """
+    name: str = Field(default="Scorching Ray")
+    description: str = Field(default="3 rays, each 2d6 fire, ranged spell attack per ray")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+    )
+
+    # Multi-entity configuration
+    allow_same_target: bool = Field(default=True)  # Can send multiple rays to same target
+    valid_target_filter: str = Field(default="enemies")
+
+    def get_num_projectiles(self) -> int:
+        """3 rays base + 1 per upcast level."""
+        return 3 + self.get_upcast_bonus()
+
+    def get_all_targets(self) -> List[UUID]:
+        """Return targets for each ray (can have repeats)."""
+        targets: List[UUID] = []
+        if self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+        targets.extend(self.extra_target_entity_uuids)
+
+        # If fewer targets than rays, fill with primary
+        num_rays = self.get_num_projectiles()
+        while len(targets) < num_rays and self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+
+        return targets[:num_rays]
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate range and LOS for all targets."""
+        from dnd.entity import Entity
+
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not source_entity:
+            return declaration_event.cancel(status_message="Source entity not found")
+
+        all_targets = self.get_all_targets()
+        validated_targets = set()
+
+        for target_uuid in all_targets:
+            if target_uuid in validated_targets:
+                continue
+            validated_targets.add(target_uuid)
+
+            target_entity = Entity.get(target_uuid)
+            if not target_entity:
+                return declaration_event.cancel(status_message="Target entity not found")
+
+            # Check LOS
+            if target_uuid not in source_entity.senses.entities.keys():
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} not in line of sight"
+                )
+
+            # Check range
+            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            if distance > self.spell_range.normal:
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                )
+
+        # Call parent validation for MULTI_ENTITY checks
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply single ray to current target (called once per ray by convolution)."""
+        from dnd.entity import Entity, determine_attack_outcome
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate bonuses
+        attack_bonus = caster.spell_attack_bonus(target.uuid)
+        target_ac = target.ac_bonus(caster.uuid)
+
+        # 2. Cross-propagate modifiers
+        attack_bonus.set_from_target(target_ac)
+        target_ac.set_from_target(attack_bonus)
+
+        # 3. Roll attack
+        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
+        crit_threshold = caster.get_spell_crit_threshold()
+        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
+
+        # 4. Clean up
+        attack_bonus.reset_from_target()
+        target_ac.reset_from_target()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            attack_bonus=attack_bonus,
+            ac=target_ac,
+            dice_roll=dice_roll,
+            attack_outcome=outcome,
+            status_message=f"Ray attack: {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
+        )
+
+        # 5. On miss
+        if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                target_entity_name=target.name,
+                total_damage=0,
+                status_message=f"Ray misses {target.name}"
+            )
+
+        # 6. On hit: roll 2d6 fire damage
+        is_crit = outcome == AttackOutcome.CRIT
+        crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
+        total_dice = 2 * (2 if is_crit else 1) + crit_extra
+
+        damage_bonus = caster.get_spell_damage_bonus()
+        fire_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=6,
+            dice_numbers=total_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.FIRE
+        )
+
+        damage_dice = fire_damage.get_dice(attack_outcome=outcome)
+        damage_roll = damage_dice.roll
+
+        # Apply damage
+        target.health.take_damage(damage_roll.total, DamageType.FIRE, source_entity_uuid=caster.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            target_entity_name=target.name,
+            damages=[fire_damage],
+            damage_rolls=[damage_roll],
+            total_damage=damage_roll.total,
+            status_message=f"Ray hits {target.name} for {damage_roll.total} fire damage"
         )
 
 
@@ -1195,4 +1519,541 @@ class Shatter(SpellAction):
             damage_rolls=[damage_roll],
             total_damage=final_damage,
             status_message=f"Shatter deals {final_damage} thunder damage to {target.name}{save_text}"
+        )
+
+
+class CircleOfDeath(SpellAction):
+    """Circle of Death - 6th level Necromancy
+
+    A sphere of negative energy ripples out in a 60-foot-radius sphere from a
+    point within range. Each creature in that area must make a Constitution
+    saving throw. A target takes 8d6 necrotic damage on a failed save, or
+    half as much damage on a successful one.
+
+    At Higher Levels: +2d6 damage per slot level above 6th.
+    """
+    name: str = Field(default="Circle of Death")
+    description: str = Field(default="60ft radius sphere dealing 8d6 necrotic damage (CON save half)")
+    spell_level: int = Field(default=6)
+    spell_school: str = Field(default="necromancy")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+
+    # AoE configuration
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+
+    # Target filtering - caster CAN be hit
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="all")
+
+    # Damage configuration
+    base_damage_dice: int = Field(default=8)  # 8d6 at level 6
+
+    def __init__(self, **kwargs):
+        from dnd.core.aoe import Sphere
+        from uuid import uuid4
+
+        # Set up sphere shape if not provided
+        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
+            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
+            kwargs['aoe_shape'] = Sphere(
+                source_entity_uuid=source_uuid,
+                target=kwargs.get('end_position', (0, 0)),
+                radius_feet=60  # Large radius
+            )
+        super().__init__(**kwargs)
+
+    def get_range(self) -> Range:
+        """Return spell range for POSITION_AOE target resolution."""
+        return self.spell_range
+
+    def get_damage_dice_count(self) -> int:
+        """8d6 base + 2d6 per level above 6th."""
+        upcast_bonus = max(0, self.cast_at_level - self.spell_level)
+        return self.base_damage_dice + (upcast_bonus * 2)  # +2d6 per level
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate target position is in LOS and range."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position specified")
+
+        # Check LOS to target position
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(
+                status_message=f"Target position {target_pos} not in line of sight"
+            )
+
+        # Check range
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        # Let parent handle POSITION_AOE multi-target validation
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply circle of death damage to current target (called once per target by convolution)."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate spell DC
+        dc = caster.spell_save_dc()
+
+        # 2. Request CON save
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="constitution",
+            dc=dc
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="constitution",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
+            status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+        )
+
+        # 3. Roll damage
+        num_dice = self.get_damage_dice_count()
+        damage_bonus = caster.get_spell_damage_bonus()
+
+        necrotic_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=6,
+            dice_numbers=num_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.NECROTIC
+        )
+
+        damage_dice = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+        damage_roll = damage_dice.roll
+
+        # 4. Half damage on successful save
+        final_damage = damage_roll.total // 2 if success else damage_roll.total
+
+        # 5. Apply damage
+        if final_damage > 0:
+            target.health.take_damage(final_damage, DamageType.NECROTIC, source_entity_uuid=caster.uuid)
+
+        save_text = " (saved for half)" if success else ""
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[necrotic_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,
+            status_message=f"Circle of Death deals {final_damage} necrotic damage to {target.name}{save_text}"
+        )
+
+
+class ConeOfCold(SpellAction):
+    """Cone of Cold - 5th level Evocation
+
+    A blast of cold air erupts from your hands. Each creature in a 60-foot cone
+    must make a Constitution saving throw. A creature takes 8d8 cold damage on
+    a failed save, or half as much damage on a successful one.
+
+    At Higher Levels: +1d8 damage per slot level above 5th.
+    """
+    name: str = Field(default="Cone of Cold")
+    description: str = Field(default="60ft cone dealing 8d8 cold damage (CON save half)")
+    spell_level: int = Field(default=5)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    # AoE configuration
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+
+    # Target filtering - caster at apex NOT hit
+    include_self: bool = Field(default=False)
+    valid_target_filter: str = Field(default="all")
+
+    # Damage configuration
+    base_damage_dice: int = Field(default=8)  # 8d8 at level 5
+
+    def __init__(self, **kwargs):
+        from dnd.core.aoe import Cone
+        from uuid import uuid4
+
+        # Set up cone shape if not provided
+        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
+            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
+            kwargs['aoe_shape'] = Cone(
+                source_entity_uuid=source_uuid,
+                target=kwargs.get('end_position', (1, 0)),  # Direction target
+                length_feet=60
+            )
+        super().__init__(**kwargs)
+
+    def get_range(self) -> Range:
+        """Return spell range for POSITION_AOE target resolution."""
+        return self.spell_range
+
+    def get_damage_dice_count(self) -> int:
+        """8d8 base + 1d8 per level above 5th."""
+        upcast_bonus = max(0, self.cast_at_level - self.spell_level)
+        return self.base_damage_dice + upcast_bonus
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate cone direction. Self-range means no LOS check to target position."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        if not self.end_position:
+            return declaration_event.cancel(status_message="No direction specified for cone")
+
+        # Let parent handle POSITION_AOE multi-target validation
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply cone of cold damage to current target (called once per target by convolution)."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate spell DC
+        dc = caster.spell_save_dc()
+
+        # 2. Request CON save
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="constitution",
+            dc=dc
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="constitution",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
+            status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+        )
+
+        # 3. Roll damage
+        num_dice = self.get_damage_dice_count()
+        damage_bonus = caster.get_spell_damage_bonus()
+
+        cold_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=8,
+            dice_numbers=num_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.COLD
+        )
+
+        damage_dice = cold_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+        damage_roll = damage_dice.roll
+
+        # 4. Half damage on successful save
+        final_damage = damage_roll.total // 2 if success else damage_roll.total
+
+        # 5. Apply damage
+        if final_damage > 0:
+            target.health.take_damage(final_damage, DamageType.COLD, source_entity_uuid=caster.uuid)
+
+        save_text = " (saved for half)" if success else ""
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[cold_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,
+            status_message=f"Cone of Cold deals {final_damage} cold damage to {target.name}{save_text}"
+        )
+
+
+class SunburstBlindedEffect(BaseCondition):
+    """
+    Blindness effect from Sunburst spell.
+
+    - Has Blinded as sub-condition
+    - Repeat CON save at end of each turn to end blindness
+    """
+    name: str = "Sunburst Blindness"
+    description: str = "Blinded by brilliant sunlight"
+
+    caster_uuid: Optional[UUID] = None
+    spell_dc: int = 10
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        from dnd.entity import Entity
+
+        if not self.target_entity_uuid:
+            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        sub_condition_uuids: List[UUID] = []
+        handler_uuids: List[UUID] = []
+
+        # Apply Blinded as sub-condition
+        blinded = Blinded(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            parent_condition=self.uuid
+        )
+        sub_event = target.add_condition(blinded)
+        if sub_event and sub_event.phase == EventPhase.COMPLETION:
+            sub_condition_uuids.append(blinded.uuid)
+
+        # Register repeat save handler
+        if self.caster_uuid:
+            handler = self._create_repeat_save_handler()
+            target.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Applied Sunburst blindness to {target.name}"
+        )
+        return [], handler_uuids, sub_condition_uuids, effect_event
+
+    def _create_repeat_save_handler(self) -> EventHandler:
+        """CON save at end of turn to end blindness."""
+        assert self.target_entity_uuid is not None
+        assert self.caster_uuid is not None
+
+        target_uuid = self.target_entity_uuid
+        caster_uuid = self.caster_uuid
+        effect_uuid = self.uuid
+        dc = self.spell_dc
+
+        def repeat_save_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            from dnd.entity import Entity
+
+            if event.source_entity_uuid != target_uuid:
+                return None
+
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+
+            # Check if still affected
+            sunburst_blind = target.active_conditions.get("Sunburst Blindness")
+            if not sunburst_blind or sunburst_blind.uuid != effect_uuid:
+                return None
+
+            caster = Entity.get(caster_uuid)
+            if not caster:
+                # Caster gone, end the effect
+                target.remove_condition("Sunburst Blindness")
+                return None
+
+            # Repeat CON save
+            save_request = caster.create_saving_throw_request(
+                target_entity_uuid=target.uuid,
+                ability_name="constitution",
+                dc=dc
+            )
+            _, _, success = target.saving_throw(save_request)
+
+            if success:
+                # Remove this condition (Blinded auto-removes as sub-condition)
+                target.remove_condition("Sunburst Blindness")
+            return None
+
+        return EventHandler(
+            name=f"Sunburst Blindness Repeat Save ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT)
+            ],
+            event_processor=repeat_save_processor
+        )
+
+
+class Sunburst(SpellAction):
+    """Sunburst - 8th level Evocation
+
+    Brilliant sunlight flashes in a 60-foot radius. Each creature must make
+    a CON save. On failed save: 12d6 radiant damage and blinded for 1 minute.
+    On success: half damage, not blinded.
+
+    Undead and oozes have disadvantage on the save.
+    Repeat CON save at end of each turn to end blindness.
+    """
+    name: str = Field(default="Sunburst")
+    description: str = Field(default="60ft sphere, 12d6 radiant, CON save or blinded")
+    spell_level: int = Field(default=8)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+
+    # AoE configuration
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+
+    # Target filtering
+    include_self: bool = Field(default=True)  # Caster can be hit
+    valid_target_filter: str = Field(default="all")  # Hits everyone
+
+    # Damage configuration
+    base_damage_dice: int = Field(default=12)  # 12d6
+
+    def __init__(self, **kwargs):
+        from dnd.core.aoe import Sphere
+        from uuid import uuid4
+
+        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
+            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
+            kwargs['aoe_shape'] = Sphere(
+                source_entity_uuid=source_uuid,
+                target=kwargs.get('end_position', (0, 0)),
+                radius_feet=60  # 60ft radius
+            )
+        super().__init__(**kwargs)
+
+    def get_range(self) -> Range:
+        return self.spell_range
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate target position LOS and range."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position")
+
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
+
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply sunburst damage and blindness to current target."""
+        from dnd.entity import Entity
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+
+        # Check for disadvantage (undead or ooze)
+        has_disadvantage = target.creature_type in [CreatureType.UNDEAD, CreatureType.OOZE]
+
+        # Add temporary disadvantage modifier if applicable
+        mod_uuid: Optional[UUID] = None
+        if has_disadvantage:
+            disadv_mod = AdvantageModifier(
+                name="Sunburst (Undead/Ooze)",
+                value=AdvantageStatus.DISADVANTAGE,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+            mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
+
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="constitution",
+            dc=dc
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        # Remove temporary disadvantage modifier
+        if has_disadvantage and mod_uuid:
+            target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
+
+        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="constitution",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
+            status_message=f"CON save: {save_roll.total} vs DC {dc}"
+        )
+
+        # Roll damage
+        damage_bonus = caster.get_spell_damage_bonus()
+        radiant_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=6,
+            dice_numbers=self.base_damage_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.RADIANT
+        )
+
+        damage_dice = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+        damage_roll = damage_dice.roll
+
+        # Half damage on save
+        final_damage = damage_roll.total // 2 if success else damage_roll.total
+
+        # Apply damage
+        if final_damage > 0:
+            target.health.take_damage(final_damage, DamageType.RADIANT, caster.uuid)
+
+        # On FAILED save: apply blindness with repeat saves
+        if not success:
+            blind_effect = SunburstBlindedEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+                caster_uuid=caster.uuid,
+                spell_dc=dc
+            )
+            target.add_condition(blind_effect)
+
+        blind_text = " and blinded" if not success else ""
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[radiant_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,
+            status_message=f"Sunburst: {final_damage} radiant{blind_text} to {target.name}"
         )

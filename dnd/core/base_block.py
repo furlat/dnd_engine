@@ -537,14 +537,31 @@ class BaseBlock(BaseModel):
         if condition.uuid in self.active_conditions_by_uuid:
             del self.active_conditions_by_uuid[condition.uuid]
 
+    def _collect_all_sub_conditions(self, condition: BaseCondition) -> List[BaseCondition]:
+        """Recursively collect all sub-conditions (children, grandchildren, etc.).
+
+        This ensures when a condition is removed, ALL nested sub-conditions
+        are also removed from active_conditions, not just immediate children.
+        """
+        all_subs: List[BaseCondition] = []
+        for sub_uuid in condition.sub_conditions:
+            sub = BaseCondition.get(sub_uuid)
+            if sub is not None and isinstance(sub, BaseCondition):
+                all_subs.append(sub)
+                # Recursively get sub-conditions of this sub-condition
+                all_subs.extend(self._collect_all_sub_conditions(sub))
+        return all_subs
+
     def remove_condition(self, condition_name: str) -> None:
         if not self.allow_events_conditions:
             return None
         condition = self.active_conditions.pop(condition_name)
-        for sub_condition_uuid in condition.sub_conditions:
-            sub_condition = BaseCondition.get(sub_condition_uuid)
-            if sub_condition is not None and sub_condition.name is not None:
+        # Recursively collect ALL sub-conditions (not just immediate children)
+        all_sub_conditions = self._collect_all_sub_conditions(condition)
+        for sub_condition in all_sub_conditions:
+            if sub_condition.name is not None and sub_condition.name in self.active_conditions:
                 self.active_conditions.pop(sub_condition.name)
+                self._remove_condition_from_dicts(sub_condition)
         condition.remove()
         self._remove_condition_from_dicts(condition)
     

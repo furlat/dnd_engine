@@ -1,0 +1,689 @@
+"""
+Tests for newly implemented spells (Phase 1-3).
+
+Tests the following spells:
+- Ray of Frost (cantrip - attack + speed reduction)
+- Acid Splash (cantrip - 2-target DEX save)
+- Scorching Ray (L2 - multi-attack)
+- Blur (L2 - disadvantage buff)
+- Misty Step (L2 - bonus action teleport)
+- Blindness/Deafness (L2 - condition application)
+- Fear (L3 - cone AoE + Frightened)
+- Hypnotic Pattern (L3 - cube AoE + Charmed + Incapacitated)
+
+Run with: python examples/test_new_spells.py
+"""
+
+from uuid import uuid4
+
+from dnd.utils import reset_combat_state, get_hp, has_condition, get_position, set_hp
+from dnd.core.gridmap import get_map
+from dnd.entity import Entity, EntityConfig
+from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
+from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.actions_functional import setup_standard_actions
+from dnd.monsters.bestiary import create_sorcerer
+
+
+def create_test_target(name: str, position: tuple, dex: int = 10, con: int = 10, wis: int = 10, faction: str = "monsters"):
+    """Helper to create test targets with specified ability scores."""
+    config = EntityConfig(
+        ability_scores=AbilityScoresConfig(
+            dexterity=AbilityConfig(ability_score=dex),
+            constitution=AbilityConfig(ability_score=con),
+            wisdom=AbilityConfig(ability_score=wis)
+        ),
+        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=10, mode="maximums")]),
+        position=position,
+        faction=faction,
+        proficiency_bonus=2,
+    )
+    entity = Entity.create(name=name, source_entity_uuid=uuid4(), config=config)
+    setup_standard_actions(entity)
+    return entity
+
+
+# =============================================================================
+# Ray of Frost Tests
+# =============================================================================
+
+def test_ray_of_frost_hit_damage():
+    """Ray of Frost deals cold damage on hit."""
+    print("\n=== Test: Ray of Frost Hit Damage ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import RayOfFrost
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    # Low DEX = low AC, easier to hit
+    target = create_test_target("Target", (2, 0), dex=1)
+
+    Entity.update_all_entities_senses()
+
+    initial_hp = get_hp(target)
+
+    # Force hit via high attack bonus
+    from dnd.core.modifiers import NumericalModifier
+    hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
+    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
+
+    ray = RayOfFrost(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
+    result = ray.apply()
+
+    caster.spellcasting.spell_attack_bonus.self_static.remove_modifier(mod_uuid)
+
+    final_hp = get_hp(target)
+    damage = initial_hp - final_hp
+
+    assert damage > 0, f"Should deal damage on hit, dealt {damage}"
+    print(f"  Damage dealt: {damage}")
+    print("PASS: Ray of Frost deals damage on hit")
+
+
+def test_ray_of_frost_speed_reduction():
+    """Ray of Frost reduces target speed by 10ft on hit."""
+    print("\n=== Test: Ray of Frost Speed Reduction ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import RayOfFrost
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target = create_test_target("Target", (2, 0), dex=1)
+
+    Entity.update_all_entities_senses()
+
+    initial_speed = target.action_economy.movement.normalized_score
+
+    # Force hit
+    from dnd.core.modifiers import NumericalModifier
+    hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
+    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
+
+    ray = RayOfFrost(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
+    ray.apply()
+
+    caster.spellcasting.spell_attack_bonus.self_static.remove_modifier(mod_uuid)
+
+    final_speed = target.action_economy.movement.normalized_score
+    speed_reduction = initial_speed - final_speed
+
+    assert has_condition(target, "Ray of Frost Slowed"), "Should have Ray of Frost Slowed condition"
+    assert speed_reduction == 10, f"Speed should be reduced by 10, got {speed_reduction}"
+    print(f"  Initial speed: {initial_speed}")
+    print(f"  Final speed: {final_speed}")
+    print("PASS: Ray of Frost reduces speed by 10ft")
+
+
+# =============================================================================
+# Acid Splash Tests
+# =============================================================================
+
+def test_acid_splash_single_target():
+    """Acid Splash works on single target."""
+    print("\n=== Test: Acid Splash Single Target ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import AcidSplash
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    # Low DEX = guaranteed fail
+    target = create_test_target("Target", (2, 0), dex=1)
+
+    Entity.update_all_entities_senses()
+
+    initial_hp = get_hp(target)
+
+    acid = AcidSplash(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
+    result = acid.apply()
+
+    final_hp = get_hp(target)
+    damage = initial_hp - final_hp
+
+    assert damage > 0, f"Should deal damage on failed save, dealt {damage}"
+    print(f"  Damage dealt: {damage}")
+    print("PASS: Acid Splash damages single target")
+
+
+def test_acid_splash_two_targets():
+    """Acid Splash can hit two targets within 5ft of each other."""
+    print("\n=== Test: Acid Splash Two Targets ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import AcidSplash
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target1 = create_test_target("Target1", (2, 0), dex=1)  # Adjacent
+    target2 = create_test_target("Target2", (2, 1), dex=1)  # Within 5ft of target1
+
+    Entity.update_all_entities_senses()
+
+    initial_hp1 = get_hp(target1)
+    initial_hp2 = get_hp(target2)
+
+    acid = AcidSplash(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target1.uuid,
+        extra_target_entity_uuids=[target2.uuid],
+        caster_level=1
+    )
+    result = acid.apply()
+
+    damage1 = initial_hp1 - get_hp(target1)
+    damage2 = initial_hp2 - get_hp(target2)
+
+    assert damage1 > 0, f"Target1 should take damage, got {damage1}"
+    assert damage2 > 0, f"Target2 should take damage, got {damage2}"
+    print(f"  Target1 damage: {damage1}")
+    print(f"  Target2 damage: {damage2}")
+    print("PASS: Acid Splash hits two targets")
+
+
+def test_acid_splash_rejects_distant_targets():
+    """Acid Splash rejects targets not within 5ft of each other."""
+    print("\n=== Test: Acid Splash Rejects Distant Targets ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import AcidSplash
+    from dnd.core.events import EventPhase
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target1 = create_test_target("Target1", (2, 0), dex=1)
+    target2 = create_test_target("Target2", (5, 0), dex=1)  # Too far from target1
+
+    Entity.update_all_entities_senses()
+
+    acid = AcidSplash(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target1.uuid,
+        extra_target_entity_uuids=[target2.uuid],
+        caster_level=1
+    )
+    result = acid.apply()
+
+    assert result.phase == EventPhase.CANCEL, f"Should be canceled, got {result.phase}"
+    assert "5ft" in result.status_message.lower(), f"Message should mention 5ft: {result.status_message}"
+    print(f"  Cancel message: {result.status_message}")
+    print("PASS: Acid Splash rejects distant targets")
+
+
+# =============================================================================
+# Scorching Ray Tests
+# =============================================================================
+
+def test_scorching_ray_three_rays():
+    """Scorching Ray fires 3 rays at base level."""
+    print("\n=== Test: Scorching Ray Three Rays ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import ScorchingRay
+    from dnd.core.modifiers import NumericalModifier
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target = create_test_target("Target", (2, 0), dex=1)
+
+    Entity.update_all_entities_senses()
+
+    initial_hp = get_hp(target)
+
+    # Force all hits
+    hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
+    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
+
+    scorching = ScorchingRay(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, cast_at_level=2, caster_level=5)
+
+    # Check projectile count
+    num_rays = scorching.get_num_projectiles()
+    assert num_rays == 3, f"Should have 3 rays at level 2, got {num_rays}"
+
+    result = scorching.apply()
+    caster.spellcasting.spell_attack_bonus.self_static.remove_modifier(mod_uuid)
+
+    final_hp = get_hp(target)
+    damage = initial_hp - final_hp
+
+    # 3 rays x 2d6 = minimum 6 damage (3x2)
+    assert damage >= 6, f"Should deal at least 6 damage from 3 rays, dealt {damage}"
+    print(f"  Rays: {num_rays}")
+    print(f"  Total damage: {damage}")
+    print("PASS: Scorching Ray fires 3 rays")
+
+
+def test_scorching_ray_upcast():
+    """Scorching Ray gains rays when upcast."""
+    print("\n=== Test: Scorching Ray Upcast ===")
+    reset_combat_state()
+
+    from dnd.spells import ScorchingRay
+
+    # Check ray scaling
+    for level, expected_rays in [(2, 3), (3, 4), (4, 5), (5, 6)]:
+        spell = ScorchingRay(source_entity_uuid=uuid4(), cast_at_level=level, caster_level=10)
+        rays = spell.get_num_projectiles()
+        assert rays == expected_rays, f"Level {level} should have {expected_rays} rays, got {rays}"
+        print(f"  Level {level}: {rays} rays")
+
+    print("PASS: Scorching Ray upcast scaling correct")
+
+
+# =============================================================================
+# Blur Tests
+# =============================================================================
+
+def test_blur_applies_disadvantage():
+    """Blur gives attackers disadvantage."""
+    print("\n=== Test: Blur Applies Disadvantage ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import Blur
+    from dnd.core.modifiers import AdvantageStatus
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    attacker = create_test_target("Attacker", (1, 0), faction="monsters")
+
+    Entity.update_all_entities_senses()
+
+    # Cast Blur on self
+    blur = Blur(source_entity_uuid=caster.uuid, caster_level=5)
+    blur.apply()
+
+    assert has_condition(caster, "Blur"), "Caster should have Blur condition"
+    assert has_condition(caster, "Concentrating"), "Caster should be Concentrating"
+
+    # Check that attacker gets disadvantage via to_target propagation
+    from dnd.blocks.equipment import WeaponSlot
+    attacker_bonus = attacker.attack_bonus(WeaponSlot.MELEE_MAIN, caster.uuid)
+    caster_ac = caster.ac_bonus(attacker.uuid)
+    attacker_bonus.set_from_target(caster_ac)
+
+    adv_status = attacker_bonus.advantage
+    assert adv_status == AdvantageStatus.DISADVANTAGE, f"Attacker should have disadvantage, got {adv_status}"
+
+    attacker_bonus.reset_from_target()
+
+    print("PASS: Blur gives attackers disadvantage")
+
+
+def test_blur_concentration():
+    """Blur ends when concentration breaks."""
+    print("\n=== Test: Blur Concentration ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import Blur
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    blur = Blur(source_entity_uuid=caster.uuid, caster_level=5)
+    blur.apply()
+
+    assert has_condition(caster, "Blur"), "Should have Blur"
+    assert has_condition(caster, "Concentrating"), "Should be Concentrating"
+
+    # Break concentration
+    caster.remove_condition("Concentrating")
+
+    assert not has_condition(caster, "Blur"), "Blur should end when concentration breaks"
+    print("PASS: Blur ends with concentration")
+
+
+# =============================================================================
+# Misty Step Tests
+# =============================================================================
+
+def test_misty_step_teleport():
+    """Misty Step teleports caster to visible location."""
+    print("\n=== Test: Misty Step Teleport ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import MistyStep
+    from dnd.core.events import EventPhase
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    start_pos = get_position(caster)
+    target_pos = (5, 0)  # 25ft away
+
+    misty = MistyStep(source_entity_uuid=caster.uuid, end_position=target_pos, caster_level=5)
+    result = misty.apply()
+
+    end_pos = get_position(caster)
+
+    assert result.phase == EventPhase.COMPLETION, f"Should complete, got {result.phase}"
+    assert end_pos == target_pos, f"Should be at {target_pos}, got {end_pos}"
+    print(f"  Start: {start_pos}")
+    print(f"  End: {end_pos}")
+    print("PASS: Misty Step teleports correctly")
+
+
+def test_misty_step_range_limit():
+    """Misty Step fails beyond 30ft."""
+    print("\n=== Test: Misty Step Range Limit ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import MistyStep
+    from dnd.core.events import EventPhase
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    target_pos = (8, 0)  # 40ft away (8 tiles * 5ft)
+
+    misty = MistyStep(source_entity_uuid=caster.uuid, end_position=target_pos, caster_level=5)
+    result = misty.apply()
+
+    assert result.phase == EventPhase.CANCEL, f"Should cancel, got {result.phase}"
+    assert "range" in result.status_message.lower(), f"Message should mention range: {result.status_message}"
+    print(f"  Cancel message: {result.status_message}")
+    print("PASS: Misty Step respects 30ft range")
+
+
+def test_misty_step_bonus_action():
+    """Misty Step uses bonus action, not action."""
+    print("\n=== Test: Misty Step Bonus Action ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import MistyStep
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    initial_actions = caster.action_economy.actions.normalized_score
+    initial_bonus = caster.action_economy.bonus_actions.normalized_score
+
+    target_pos = (3, 0)
+    misty = MistyStep(source_entity_uuid=caster.uuid, end_position=target_pos, caster_level=5)
+    misty.apply()
+
+    final_actions = caster.action_economy.actions.normalized_score
+    final_bonus = caster.action_economy.bonus_actions.normalized_score
+
+    assert final_actions == initial_actions, f"Actions should be unchanged, was {initial_actions}, now {final_actions}"
+    assert final_bonus == initial_bonus - 1, f"Bonus action should be spent, was {initial_bonus}, now {final_bonus}"
+    print(f"  Actions: {initial_actions} -> {final_actions}")
+    print(f"  Bonus: {initial_bonus} -> {final_bonus}")
+    print("PASS: Misty Step uses bonus action")
+
+
+# =============================================================================
+# Blindness/Deafness Tests
+# =============================================================================
+
+def test_blindness_deafness_applies_blinded():
+    """Blindness/Deafness can apply Blinded condition."""
+    print("\n=== Test: Blindness/Deafness Applies Blinded ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import BlindnessDeafness
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    # Low CON = guaranteed fail
+    target = create_test_target("Target", (2, 0), con=1)
+
+    Entity.update_all_entities_senses()
+
+    spell = BlindnessDeafness(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        effect_type="blinded",
+        caster_level=5
+    )
+    spell.apply()
+
+    assert has_condition(target, "Blindness/Deafness"), "Should have Blindness/Deafness"
+    assert has_condition(target, "Blinded"), "Should have Blinded sub-condition"
+    print("PASS: Blindness/Deafness applies Blinded")
+
+
+def test_blindness_deafness_applies_deafened():
+    """Blindness/Deafness can apply Deafened condition."""
+    print("\n=== Test: Blindness/Deafness Applies Deafened ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import BlindnessDeafness
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target = create_test_target("Target", (2, 0), con=1)
+
+    Entity.update_all_entities_senses()
+
+    spell = BlindnessDeafness(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        effect_type="deafened",
+        caster_level=5
+    )
+    spell.apply()
+
+    assert has_condition(target, "Blindness/Deafness"), "Should have Blindness/Deafness"
+    assert has_condition(target, "Deafened"), "Should have Deafened sub-condition"
+    print("PASS: Blindness/Deafness applies Deafened")
+
+
+def test_blindness_deafness_not_concentration():
+    """Blindness/Deafness is NOT concentration."""
+    print("\n=== Test: Blindness/Deafness Not Concentration ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import BlindnessDeafness
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target = create_test_target("Target", (2, 0), con=1)
+
+    Entity.update_all_entities_senses()
+
+    spell = BlindnessDeafness(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        effect_type="blinded",
+        caster_level=5
+    )
+    spell.apply()
+
+    # Caster should NOT be concentrating
+    assert not has_condition(caster, "Concentrating"), "Caster should NOT be concentrating"
+    print("PASS: Blindness/Deafness is not concentration")
+
+
+# =============================================================================
+# Fear Tests
+# =============================================================================
+
+def test_fear_applies_frightened():
+    """Fear applies Frightened condition on failed save."""
+    print("\n=== Test: Fear Applies Frightened ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import Fear
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    # Low WIS = guaranteed fail
+    target = create_test_target("Target", (2, 0), wis=1)
+
+    Entity.update_all_entities_senses()
+
+    fear = Fear(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
+    fear.apply()
+
+    assert has_condition(target, "Fear"), "Target should have Fear effect"
+    assert has_condition(target, "Frightened"), "Target should have Frightened sub-condition"
+    assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
+    print("PASS: Fear applies Frightened")
+
+
+def test_fear_cone_shape():
+    """Fear affects targets in 30ft cone."""
+    print("\n=== Test: Fear Cone Shape ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import Fear
+
+    caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
+    # Targets in cone direction (east)
+    target_in_cone = create_test_target("InCone", (8, 5), wis=1)
+    # Target outside cone (behind caster)
+    target_outside = create_test_target("Outside", (2, 5), wis=1)
+
+    Entity.update_all_entities_senses()
+
+    fear = Fear(source_entity_uuid=caster.uuid, end_position=(10, 5), caster_level=5)
+    fear.apply()
+
+    assert has_condition(target_in_cone, "Fear"), "Target in cone should be affected"
+    assert not has_condition(target_outside, "Fear"), "Target outside cone should not be affected"
+    print("PASS: Fear cone targets correctly")
+
+
+# =============================================================================
+# Hypnotic Pattern Tests
+# =============================================================================
+
+def test_hypnotic_pattern_applies_conditions():
+    """Hypnotic Pattern applies Charmed + Incapacitated."""
+    print("\n=== Test: Hypnotic Pattern Applies Conditions ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import HypnoticPattern
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    # Low WIS = guaranteed fail
+    target = create_test_target("Target", (5, 0), wis=1)
+
+    Entity.update_all_entities_senses()
+
+    hp = HypnoticPattern(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
+    hp.apply()
+
+    assert has_condition(target, "Hypnotic Pattern"), "Target should have Hypnotic Pattern effect"
+    assert has_condition(target, "Charmed"), "Target should have Charmed sub-condition"
+    assert has_condition(target, "Incapacitated"), "Target should have Incapacitated sub-condition"
+    print("PASS: Hypnotic Pattern applies conditions")
+
+
+def test_hypnotic_pattern_concentration_cleanup():
+    """Hypnotic Pattern ends when concentration breaks."""
+    print("\n=== Test: Hypnotic Pattern Concentration Cleanup ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.spells import HypnoticPattern
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target = create_test_target("Target", (5, 0), wis=1)
+
+    Entity.update_all_entities_senses()
+
+    hp = HypnoticPattern(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
+    hp.apply()
+
+    assert has_condition(target, "Hypnotic Pattern"), "Should have Hypnotic Pattern"
+    assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
+
+    # Break concentration
+    caster.remove_condition("Concentrating")
+
+    # Effect should be removed via external_conditions cleanup
+    assert not has_condition(target, "Hypnotic Pattern"), "Hypnotic Pattern should end"
+    assert not has_condition(target, "Charmed"), "Charmed should be removed"
+    assert not has_condition(target, "Incapacitated"), "Incapacitated should be removed"
+    print("PASS: Hypnotic Pattern ends with concentration")
+
+
+# =============================================================================
+# Run All Tests
+# =============================================================================
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("NEW SPELLS TEST SUITE (Phases 1-3)")
+    print("=" * 60)
+
+    tests = [
+        # Ray of Frost
+        test_ray_of_frost_hit_damage,
+        test_ray_of_frost_speed_reduction,
+        # Acid Splash
+        test_acid_splash_single_target,
+        test_acid_splash_two_targets,
+        test_acid_splash_rejects_distant_targets,
+        # Scorching Ray
+        test_scorching_ray_three_rays,
+        test_scorching_ray_upcast,
+        # Blur
+        test_blur_applies_disadvantage,
+        test_blur_concentration,
+        # Misty Step
+        test_misty_step_teleport,
+        test_misty_step_range_limit,
+        test_misty_step_bonus_action,
+        # Blindness/Deafness
+        test_blindness_deafness_applies_blinded,
+        test_blindness_deafness_applies_deafened,
+        test_blindness_deafness_not_concentration,
+        # Fear
+        test_fear_applies_frightened,
+        test_fear_cone_shape,
+        # Hypnotic Pattern
+        test_hypnotic_pattern_applies_conditions,
+        test_hypnotic_pattern_concentration_cleanup,
+    ]
+
+    passed = 0
+    failed = 0
+
+    for test in tests:
+        try:
+            test()
+            passed += 1
+        except AssertionError as e:
+            print(f"\n*** FAILED: {test.__name__} ***")
+            print(f"    {e}")
+            failed += 1
+        except Exception as e:
+            print(f"\n*** ERROR: {test.__name__} ***")
+            print(f"    {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            failed += 1
+
+    print("\n" + "=" * 60)
+    print(f"RESULTS: {passed} passed, {failed} failed out of {len(tests)} tests")
+    print("=" * 60)
+
+    if failed > 0:
+        exit(1)
