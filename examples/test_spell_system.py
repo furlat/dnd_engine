@@ -11,14 +11,13 @@ Tests:
 from uuid import uuid4
 
 # Reset state first
-from dnd.utils import reset_combat_state, get_hp, set_hp
+from dnd.utils import reset_combat_state, set_hp
 reset_combat_state()
 
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.spellcasting import SpellcastingConfig, SpellcastingBlock
-from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier, DamageType
 
 
@@ -607,6 +606,8 @@ def test_fire_bolt_combat():
 
     # Check that attack outcome is recorded
     from dnd.core.dice import AttackOutcome
+    from dnd.actions import SpellEvent
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.attack_outcome is not None, "Attack outcome should be recorded"
     print(f"  Attack outcome: {result.attack_outcome.value}")
 
@@ -670,6 +671,8 @@ def test_sacred_flame_combat():
 
     assert result is not None, "Sacred Flame should return an event"
     assert not result.canceled, f"Sacred Flame should not be canceled: {result.status_message}"
+    from dnd.actions import SpellEvent
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     # Check save result is recorded
     assert result.save_dc == dc, "Save DC should be recorded in event"
@@ -731,6 +734,8 @@ def test_magic_missile_combat():
 
     assert result_l1 is not None, "Should get result event"
     assert not result_l1.canceled, "Magic Missile should not be canceled"
+    from dnd.actions import SpellEvent
+    assert isinstance(result_l1, SpellEvent), "Result should be SpellEvent"
     # MULTI_ENTITY returns target_results list and total_damage
     assert result_l1.total_targets == 3, f"Should have 3 dart results, got {result_l1.total_targets}"
     damage_l1 = result_l1.total_damage
@@ -754,6 +759,7 @@ def test_magic_missile_combat():
 
     assert result_l3 is not None, "Should get result event"
     assert not result_l3.canceled, "Magic Missile should not be canceled"
+    assert isinstance(result_l3, SpellEvent), "Result should be SpellEvent"
     assert result_l3.total_targets == 5, f"Should have 5 dart results, got {result_l3.total_targets}"
     damage_l3 = result_l3.total_damage
     assert damage_l3 >= 10, f"L3 MM (5 darts) should deal at least 10 damage, got {damage_l3}"

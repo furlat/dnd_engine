@@ -16,6 +16,7 @@ from dnd.core.gridmap import get_map
 
 # Spell imports
 from dnd.spells.evocation import Shatter
+from dnd.actions import SpellEvent
 
 # Test utilities
 from dnd.utils import get_hp, set_hp
@@ -104,7 +105,7 @@ def test_shatter_full_damage_on_failed_save():
     # Caster with high spell DC
     caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
     # Target with CON 1 (-5 mod) - will always fail
-    target = create_target(name="Weak", position=(10, 5), constitution=1, hp=100)
+    _target = create_target(name="Weak", position=(10, 5), constitution=1, hp=100)
     Entity.update_all_entities_senses()
 
     dc = caster.spell_save_dc()
@@ -119,14 +120,18 @@ def test_shatter_full_damage_on_failed_save():
 
     result = shatter.apply()
     assert result is not None and not result.canceled, f"Shatter failed: {result.status_message if result else 'None'}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target = result.target_results[0] if result.target_results else result
+    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
+    per_target = result.target_results[0]
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save failed
     assert per_target.save_success == False, "Target with CON 1 should fail save"
 
     # Full damage (not halved)
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     assert per_target.total_damage == rolled_damage, \
         f"Should be full damage, got {per_target.total_damage} vs rolled {rolled_damage}"
 
@@ -144,7 +149,7 @@ def test_shatter_half_damage_on_passed_save():
     # Caster with low spell DC
     caster = create_caster(name="Weak Wizard", position=(5, 5), intelligence=10, proficiency=2)
     # Target with CON 30 (+10 mod) - will always pass
-    target = create_target(name="Tough", position=(10, 5), constitution=30, hp=100)
+    _target = create_target(name="Tough", position=(10, 5), constitution=30, hp=100)
     Entity.update_all_entities_senses()
 
     dc = caster.spell_save_dc()
@@ -159,14 +164,18 @@ def test_shatter_half_damage_on_passed_save():
 
     result = shatter.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target = result.target_results[0] if result.target_results else result
+    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
+    per_target = result.target_results[0]
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save succeeded
     assert per_target.save_success == True, "Target with CON 30 should always save"
 
     # Half damage
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     expected_damage = rolled_damage // 2
     assert per_target.total_damage == expected_damage, \
         f"Should be half damage: {rolled_damage}//2={expected_damage}, got {per_target.total_damage}"
@@ -270,6 +279,7 @@ def test_shatter_range_validation():
     # Should fail due to range or LOS
     assert result is not None
     if result.canceled:
+        assert result.status_message is not None, "Should have status message"
         msg = result.status_message.lower()
         assert "out of range" in msg or "line of sight" in msg, \
             f"Expected range or LOS error, got: {result.status_message}"
@@ -290,6 +300,7 @@ def test_shatter_range_validation():
     # This should succeed (position is within range)
     # May fail if no targets, but shouldn't fail on range
     if result_in_range and result_in_range.canceled:
+        assert result_in_range.status_message is not None, "Should have status message"
         msg = result_in_range.status_message.lower()
         assert "out of range" not in msg, f"In-range cast should not fail on range: {result_in_range.status_message}"
 
@@ -326,7 +337,7 @@ def test_shatter_wall_blocks():
         template=False
     )
 
-    result = shatter.apply()
+    _result = shatter.apply()
 
     visible_after = get_hp(target_visible)
     blocked_after = get_hp(target_blocked)
@@ -375,6 +386,7 @@ def test_shatter_los_to_center():
     result = shatter_blocked.apply()
 
     if result and result.canceled:
+        assert result.status_message is not None, "Should have status message"
         assert "not in line of sight" in result.status_message.lower(), \
             f"Expected LOS error, got: {result.status_message}"
         print(f"  Correctly blocked: {result.status_message}")
@@ -391,13 +403,13 @@ def test_shatter_statistical_saves():
     successes = 0
     failures = 0
 
-    for i in range(10):
+    for _ in range(10):
         reset_combat_state()
         setup_basic_arena(20, 20)
 
         # Neutral DC and save bonus for 50/50 chance
         caster = create_caster(name="Wizard", position=(5, 5), intelligence=14, proficiency=2)
-        target = create_target(name="Target", position=(10, 5), constitution=14, hp=100)
+        _target = create_target(name="Target", position=(10, 5), constitution=14, hp=100)
         Entity.update_all_entities_senses()
 
         shatter = Shatter(
@@ -408,9 +420,9 @@ def test_shatter_statistical_saves():
         )
 
         result = shatter.apply()
-        if result and not result.canceled:
-            per_target = result.target_results[0] if result.target_results else result
-            if per_target.save_success:
+        if result and not result.canceled and isinstance(result, SpellEvent):
+            per_target = result.target_results[0] if result.target_results else None
+            if per_target is not None and isinstance(per_target, SpellEvent) and per_target.save_success:
                 successes += 1
             else:
                 failures += 1

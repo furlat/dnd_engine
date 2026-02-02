@@ -17,7 +17,7 @@ from dnd.core.gridmap import reset_map, get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
 from dnd.classes.fighter_factory import FighterConfig, create_fighter
-from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
+from dnd.actions_functional import get_available_actions, execute_action
 from dnd.encounter import Encounter
 from dnd.controller import PassController
 from dnd.core.events import EventQueue
@@ -118,7 +118,7 @@ def test_fighter_available_actions_level_1():
     print("\n=== Test: Level 1 Fighter Available Actions ===")
     result = TestResult()
 
-    fighter, skeleton = setup_fighter_vs_skeleton(fighter_level=1, distance_tiles=1)
+    fighter, _skeleton = setup_fighter_vs_skeleton(fighter_level=1, distance_tiles=1)
 
     print(f"  Fighter HP: {fighter.get_hp()}, AC: {fighter.ac_bonus().normalized_score}")
     print(f"  Fighter conditions: {list(fighter.active_conditions.keys())}")
@@ -158,7 +158,7 @@ def test_fighter_available_actions_level_5():
     print("\n=== Test: Level 5 Fighter Available Actions ===")
     result = TestResult()
 
-    fighter, skeleton = setup_fighter_vs_skeleton(fighter_level=5, distance_tiles=1)
+    fighter, _skeleton = setup_fighter_vs_skeleton(fighter_level=5, distance_tiles=1)
 
     print(f"  Fighter HP: {fighter.get_hp()}, AC: {fighter.ac_bonus().normalized_score}")
     print(f"  Fighter conditions: {list(fighter.active_conditions.keys())}")
@@ -200,7 +200,7 @@ def test_second_wind_action():
     print("\n=== Test: Second Wind Action ===")
     result = TestResult()
 
-    fighter, skeleton = setup_fighter_vs_skeleton(fighter_level=5, distance_tiles=1)
+    fighter, _skeleton = setup_fighter_vs_skeleton(fighter_level=5, distance_tiles=1)
 
     # Deal some damage to fighter
     initial_hp = fighter.get_hp()
@@ -251,7 +251,7 @@ def test_action_surge_grants_extra_action():
     print("\n=== Test: Action Surge Grants Extra Action ===")
     result = TestResult()
 
-    fighter, skeleton = setup_fighter_vs_skeleton(fighter_level=5, distance_tiles=1)
+    fighter, _skeleton = setup_fighter_vs_skeleton(fighter_level=5, distance_tiles=1)
 
     # Check initial action economy
     initial_actions = fighter.action_economy.actions.normalized_score

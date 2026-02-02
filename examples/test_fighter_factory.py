@@ -242,8 +242,10 @@ def test_level_20_champion():
         "Should not have Improved Critical at level 15+"
 
     # Verify Extra Attack has 3 extra attacks
+    from dnd.classes.fighter import ExtraAttackFeature
     extra_attack = fighter.active_conditions.get("Extra Attack")
-    assert extra_attack is not None
+    assert extra_attack is not None, "Extra Attack should exist"
+    assert isinstance(extra_attack, ExtraAttackFeature), "Should be ExtraAttackFeature"
     assert extra_attack.extra_attacks == 3, \
         f"Expected 3 extra attacks, got {extra_attack.extra_attacks}"
 
@@ -254,6 +256,7 @@ def test_level_20_champion():
     print(f"DEX: {fighter.ability_scores.dexterity.ability_score.score} (mod {fighter.ability_scores.dexterity.modifier})")
     print(f"CON: {fighter.ability_scores.constitution.ability_score.score} (mod {fighter.ability_scores.constitution.modifier})")
     print(f"Conditions: {list(fighter.active_conditions.keys())}")
+    assert extra_attack is not None  # For type narrowing
     print(f"Extra Attacks: {extra_attack.extra_attacks}")
     print("PASSED!")
     print()
@@ -316,7 +319,7 @@ def test_validation_errors():
 
     # Test: Same ability for +2 and +1 bonus
     try:
-        config = FighterConfig(
+        _config = FighterConfig(
             level=1,
             bonus_plus_2="strength",
             bonus_plus_1="strength",  # Same as +2!
@@ -327,7 +330,7 @@ def test_validation_errors():
 
     # Test: Second fighting style before level 10
     try:
-        config = FighterConfig(
+        _config = FighterConfig(
             level=5,
             fighting_style="defense",
             second_fighting_style="archery",
@@ -339,7 +342,7 @@ def test_validation_errors():
 
     # Test: Same fighting style twice
     try:
-        config = FighterConfig(
+        _config = FighterConfig(
             level=10,
             fighting_style="defense",
             second_fighting_style="defense",
@@ -353,7 +356,7 @@ def test_validation_errors():
 
     # Test: Missing ASI for level
     try:
-        config = FighterConfig(
+        _config = FighterConfig(
             level=5,
             fighting_style="defense",
             # Missing asi_4!
@@ -364,7 +367,7 @@ def test_validation_errors():
 
     # Test: ASI not totaling +2
     try:
-        config = FighterConfig(
+        _config = FighterConfig(
             level=4,
             fighting_style="defense",
             asi_4=[("strength", 1)],  # Only +1, should be +2

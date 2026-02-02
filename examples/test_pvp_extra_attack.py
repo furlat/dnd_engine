@@ -84,12 +84,14 @@ def test_pvp_extra_attack() -> None:
             hero_index = i
             break
 
+    assert hero_index is not None, "Hero should be found in initiative order"
     if hero_index != 0:
         # Swap to put hero first
         encounter.initiative_order[0], encounter.initiative_order[hero_index] = \
             encounter.initiative_order[hero_index], encounter.initiative_order[0]
 
-    print(f"Initiative order: {[Entity.get(uid).name for uid in encounter.initiative_order]}")
+    entity_names = [e.name for uid in encounter.initiative_order if (e := Entity.get(uid)) is not None]
+    print(f"Initiative order: {entity_names}")
     print()
 
     # === TURN 1 (Hero) ===
@@ -187,7 +189,7 @@ def test_pvp_extra_attack() -> None:
         print()
         print("Debug info:")
         print(f"  EventQueue handlers: {len(EventQueue._event_handlers)}")
-        for handler_uuid, handler in EventQueue._event_handlers.items():
+        for _, handler in EventQueue._event_handlers.items():
             print(f"    Handler: {handler.name}, source: {handler.source_entity_uuid}")
         print(f"  Hero active conditions: {list(hero.active_conditions.keys())}")
         print(f"  Hero resources: {list(hero.action_economy.resources.keys())}")

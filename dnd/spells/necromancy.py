@@ -268,7 +268,7 @@ class BlindnessDeafnessEffect(BaseCondition):
                 ability_name="constitution",
                 dc=dc
             )
-            _, _, success = target.saving_throw(save_request)
+            _roll, _outcome, success = target.saving_throw(save_request)
 
             if success:
                 target.remove_condition("Blindness/Deafness")
