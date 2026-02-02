@@ -13,7 +13,7 @@ Run: python examples/test_multi_target_allies.py
 from uuid import uuid4
 
 # Reset state first
-from dnd.utils import reset_combat_state, get_hp, set_hp
+from dnd.utils import reset_combat_state
 from dnd.core.gridmap import get_map
 reset_combat_state()
 
@@ -21,6 +21,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.spells.enchantment import TestBless
+from dnd.actions import SpellEvent
 
 
 def create_test_caster(name: str = "Caster", position: tuple = (0, 0), faction: str = "heroes") -> Entity:
@@ -86,6 +87,7 @@ def test_target_self_and_allies():
     result = spell.apply()
     assert result is not None, "Spell should execute"
     assert not result.canceled, f"Spell should not be canceled: {result.status_message}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets == 3, f"Expected 3 targets blessed, got {result.total_targets}"
 
     print(f"  Successfully blessed self + 2 allies ({result.total_targets} targets)")
@@ -113,6 +115,7 @@ def test_cannot_target_enemies():
     result = spell.apply()
     assert result is not None, "Should get result"
     assert result.canceled, "Spell should be canceled when targeting enemy"
+    assert result.status_message is not None, "Should have status message"
     assert "not self or an ally" in result.status_message.lower() or "ally" in result.status_message.lower(), \
         f"Expected ally validation message, got: {result.status_message}"
 
@@ -142,19 +145,21 @@ def test_cannot_target_same_twice():
     assert spell.allow_same_target == False, "TestBless should NOT allow same target"
 
     # get_all_targets should filter duplicates due to override
-    targets = spell.get_all_targets()
+    _targets = spell.get_all_targets()
     # But validation should catch it if duplicates sneak through
 
     result = spell.apply()
     # The get_all_targets already filters, so it may succeed with 1 target
     # OR the validation catches duplicates in the input
     if result and result.canceled:
+        assert result.status_message is not None, "Should have status message"
         assert "multiple times" in result.status_message.lower() or "same" in result.status_message.lower(), \
             f"Expected same-target validation message, got: {result.status_message}"
         print(f"  Correctly rejected duplicate target: {result.status_message}")
     else:
         # get_all_targets filtered the duplicates, so only 1 was targeted
         print(f"  get_all_targets filtered duplicates, only 1 unique target processed")
+        assert result is not None and isinstance(result, SpellEvent), "Result should be SpellEvent"
         assert result.total_targets == 1, f"Should have 1 unique target after filtering"
 
 
@@ -189,6 +194,7 @@ def test_max_targets_limit():
 
     result = spell.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_targets == 3, f"Expected 3 targets, got {result.total_targets}"
 
     print(f"  Correctly limited to 3 targets (tried 5)")
@@ -218,6 +224,7 @@ def test_mixed_valid_invalid():
     result = spell.apply()
     assert result is not None, "Should get result"
     assert result.canceled, "Spell should be canceled with enemy in targets"
+    assert result.status_message is not None, "Should have status message"
     assert "not self or an ally" in result.status_message.lower() or "enemy" in result.status_message.lower() or "ally" in result.status_message.lower(), \
         f"Expected ally validation message, got: {result.status_message}"
 

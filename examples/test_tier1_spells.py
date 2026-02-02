@@ -13,14 +13,18 @@ Run with: python examples/test_tier1_spells.py
 
 from uuid import uuid4
 
-from dnd.utils import reset_combat_state, get_hp, has_condition
+from dnd.utils import reset_combat_state, has_condition
 from dnd.core.gridmap import get_map
+from dnd.core.events import EventPhase
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowConfig
 from dnd.actions_functional import setup_standard_actions
 from dnd.core.modifiers import CreatureType, NumericalModifier
+from dnd.conditions import Concentrating
+from dnd.monsters.bestiary import create_goblin, create_skeleton, create_sorcerer
+from dnd.spells import HoldPerson, HoldMonster, Sunburst, PoisonSpray
 
 
 # =============================================================================
@@ -49,8 +53,6 @@ def test_creature_type_entity_defaults():
     """Default creature_type is HUMANOID, skeleton is UNDEAD."""
     print("\n=== Test: Creature Type Entity Defaults ===")
     reset_combat_state()
-
-    from dnd.monsters.bestiary import create_goblin, create_skeleton
 
     goblin = create_goblin(name="Goblin", position=(0, 0))
     skeleton = create_skeleton(name="Skeleton", position=(1, 0))
@@ -96,10 +98,6 @@ def test_hold_person_rejects_non_humanoid():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import HoldPerson
-    from dnd.core.events import EventPhase
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     skeleton = create_skeleton(name="Skeleton", position=(1, 0), faction="monsters")
 
@@ -113,8 +111,10 @@ def test_hold_person_rejects_non_humanoid():
     )
     result = hold_skeleton.apply()
 
+    assert result is not None, "Result should not be None"
     assert result.phase == EventPhase.CANCEL, \
         f"Should CANCEL for undead, got {result.phase}"
+    assert result.status_message is not None, "status_message should not be None"
     assert "humanoid" in result.status_message.lower(), \
         f"Should mention 'humanoid' in error, got: {result.status_message}"
     print(f"  Rejected: {result.status_message}")
@@ -127,10 +127,6 @@ def test_hold_person_accepts_humanoid():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import HoldPerson
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     goblin = create_goblin(name="Goblin", position=(1, 0), faction="monsters")
@@ -146,7 +142,9 @@ def test_hold_person_accepts_humanoid():
     result = hold_goblin.apply()
 
     # Should NOT be cancelled due to creature type
+    assert result is not None, "Result should not be None"
     if result.phase == EventPhase.CANCEL:
+        assert result.status_message is not None, "status_message should not be None"
         assert "humanoid" not in result.status_message.lower(), \
             f"Should NOT reject humanoid, got: {result.status_message}"
     print(f"  Result: {result.phase} - {result.status_message}")
@@ -159,9 +157,6 @@ def test_hold_person_applies_paralyzed():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import HoldPerson
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
@@ -220,10 +215,6 @@ def test_hold_person_concentration():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import HoldPerson
-    from dnd.conditions import Concentrating
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
     # Create weak target to guarantee effect applies
@@ -266,10 +257,6 @@ def test_hold_monster_rejects_undead():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import HoldMonster
-    from dnd.core.events import EventPhase
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Give caster a level 5 spell slot
     caster.action_economy.spell_slot_5.self_static.add_value_modifier(
@@ -287,7 +274,9 @@ def test_hold_monster_rejects_undead():
     )
     result = hold.apply()
 
+    assert result is not None, "Result should not be None"
     assert result.phase == EventPhase.CANCEL, f"Should CANCEL, got {result.phase}"
+    assert result.status_message is not None, "status_message should not be None"
     assert "undead" in result.status_message.lower(), \
         f"Should mention 'undead', got: {result.status_message}"
     print(f"  Rejected: {result.status_message}")
@@ -300,10 +289,6 @@ def test_hold_monster_accepts_non_undead():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import HoldMonster
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_5.self_static.add_value_modifier(
@@ -320,7 +305,9 @@ def test_hold_monster_accepts_non_undead():
     )
     result = hold.apply()
 
+    assert result is not None, "Result should not be None"
     if result.phase == EventPhase.CANCEL:
+        assert result.status_message is not None, "status_message should not be None"
         assert "undead" not in result.status_message.lower(), \
             f"Should NOT reject non-undead, got: {result.status_message}"
     print(f"  Result: {result.phase}")
@@ -330,7 +317,6 @@ def test_hold_monster_accepts_non_undead():
 def test_hold_monster_multi_target_calculation():
     """Hold Monster max targets = 1 + (cast_level - 5)."""
     print("\n=== Test: Hold Monster Multi-Target Calculation ===")
-    from dnd.spells import HoldMonster
 
     test_cases = [
         (5, 1),   # Base level
@@ -355,9 +341,6 @@ def test_hold_monster_applies_paralyzed():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import HoldMonster
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_5.self_static.add_value_modifier(
@@ -399,9 +382,6 @@ def test_hold_monster_concentration_cleanup():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import HoldMonster
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_5.self_static.add_value_modifier(
@@ -456,9 +436,6 @@ def test_sunburst_full_damage_and_blind_on_fail():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import Sunburst
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_8.self_static.add_value_modifier(
         NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
@@ -484,7 +461,7 @@ def test_sunburst_full_damage_and_blind_on_fail():
     print(f"  Caster DC: {caster.spell_save_dc()}")
 
     sunburst = Sunburst(source_entity_uuid=caster.uuid, end_position=(1, 0), cast_at_level=8)
-    result = sunburst.apply()
+    _result = sunburst.apply()  # Result checked via HP/conditions, not phase
 
     damage_dealt = initial_hp - target.get_hp()
     assert damage_dealt > 0, "Should deal damage"
@@ -509,10 +486,6 @@ def test_sunburst_half_damage_no_blind_on_success():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import Sunburst
-    from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowConfig
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_8.self_static.add_value_modifier(
@@ -571,9 +544,6 @@ def test_sunburst_undead_gets_disadvantage():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import Sunburst
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_8.self_static.add_value_modifier(
         NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
@@ -608,9 +578,6 @@ def test_sunburst_sub_condition_cleanup():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import Sunburst
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_8.self_static.add_value_modifier(
@@ -660,10 +627,6 @@ def test_poison_spray_works_at_10ft():
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import PoisonSpray
-    from dnd.core.events import EventPhase
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_goblin(name="Target", position=(2, 0), faction="monsters")  # 10ft
 
@@ -689,10 +652,6 @@ def test_poison_spray_fails_at_15ft_with_range_error():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
-
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import PoisonSpray
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_goblin(name="Target", position=(3, 0), faction="monsters")  # 15ft
@@ -733,10 +692,6 @@ def test_poison_spray_no_damage_on_save():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
-
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import PoisonSpray
-    from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowConfig
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
@@ -785,9 +740,6 @@ def test_poison_spray_deals_damage_on_failed_save():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import PoisonSpray
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
     # CON 1 = -5 mod, GUARANTEED to fail
@@ -822,7 +774,6 @@ def test_poison_spray_deals_damage_on_failed_save():
 def test_poison_spray_cantrip_scaling():
     """Poison Spray scales: 1d12 at L1, 2d12 at L5, 3d12 at L11, 4d12 at L17."""
     print("\n=== Test: Poison Spray Cantrip Scaling ===")
-    from dnd.spells import PoisonSpray
 
     test_cases = [
         (1, 1),    # Level 1-4: 1d12

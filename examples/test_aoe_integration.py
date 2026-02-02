@@ -157,6 +157,7 @@ def test_dead_entity_filtering():
     assert target_at_pos is not None
     # Only alive target should be affected
     assert target_at_pos.affected_count == 1, f"Expected 1 affected (alive only), got {target_at_pos.affected_count}"
+    assert target_at_pos.affected_entity_names is not None, "Should have affected names"
     assert "AliveTarget" in target_at_pos.affected_entity_names
     assert "DeadTarget" not in target_at_pos.affected_entity_names
     print(f"✓ Dead entities correctly excluded from AoE targeting")
@@ -170,6 +171,8 @@ def test_dead_entity_filtering():
         if action.template_name == "Fireball":
             fireball_with_dead = action
             break
+
+    assert fireball_with_dead is not None, "Fireball action should be found"
 
     target_with_dead = None
     for target in fireball_with_dead.valid_targets:

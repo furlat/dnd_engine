@@ -16,6 +16,7 @@ from dnd.core.gridmap import get_map
 
 # Spell imports
 from dnd.spells.evocation import BurningHands
+from dnd.actions import SpellEvent
 
 # Test utilities
 from dnd.utils import get_hp, set_hp
@@ -119,6 +120,7 @@ def test_burning_hands_basic_damage():
 
     assert result is not None, "Burning Hands should return a result"
     assert not result.canceled, f"Burning Hands was canceled: {result.status_message}"
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
     assert result.total_damage > 0, "Burning Hands should deal damage"
     assert get_hp(target) < initial_hp, "Target should have taken damage"
 
@@ -136,7 +138,7 @@ def test_burning_hands_full_damage_on_failed_save():
     # Caster with high spell DC
     caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
     # Target with DEX 1 (-5 mod) - will always fail vs high DC
-    target = create_target(name="Slow", position=(7, 5), dexterity=1, hp=100)
+    _target = create_target(name="Slow", position=(7, 5), dexterity=1, hp=100)
     Entity.update_all_entities_senses()
 
     dc = caster.spell_save_dc()
@@ -151,15 +153,19 @@ def test_burning_hands_full_damage_on_failed_save():
 
     result = burning_hands.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     # Get per-target result
-    per_target = result.target_results[0] if result.target_results else result
+    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
+    per_target = result.target_results[0]
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save failed
     assert per_target.save_success == False, "Target with DEX 1 should fail save vs high DC"
 
     # Full damage (not halved)
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     assert per_target.total_damage == rolled_damage, f"Should be full damage, got {per_target.total_damage} vs rolled {rolled_damage}"
 
     print(f"  Save failed as expected")
@@ -176,7 +182,7 @@ def test_burning_hands_half_damage_on_passed_save():
     # Caster with low spell DC
     caster = create_caster(name="Weak Wizard", position=(5, 5), intelligence=10, proficiency=2)
     # Target with DEX 30 (+10 mod) - will always pass
-    target = create_target(name="Nimble", position=(7, 5), dexterity=30, hp=100)
+    _target = create_target(name="Nimble", position=(7, 5), dexterity=30, hp=100)
     Entity.update_all_entities_senses()
 
     dc = caster.spell_save_dc()
@@ -191,14 +197,18 @@ def test_burning_hands_half_damage_on_passed_save():
 
     result = burning_hands.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target = result.target_results[0] if result.target_results else result
+    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
+    per_target = result.target_results[0]
+    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
 
     # Verify save succeeded
     assert per_target.save_success == True, "Target with DEX 30 should always save"
 
     # Half damage
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
+    assert per_target.damage_rolls is not None, "Should have damage_rolls"
+    rolled_damage = sum(r.total for r in per_target.damage_rolls)
     expected_damage = rolled_damage // 2
     assert per_target.total_damage == expected_damage, \
         f"Should be half damage: {rolled_damage}//2={expected_damage}, got {per_target.total_damage}"
@@ -284,7 +294,7 @@ def test_burning_hands_caster_excluded():
     setup_basic_arena(20, 20)
 
     caster = create_caster(name="Wizard", position=(5, 5), hp=100)
-    target = create_target(name="Goblin", position=(7, 5), hp=50)
+    _target = create_target(name="Goblin", position=(7, 5), hp=50)
     Entity.update_all_entities_senses()
 
     caster_initial = get_hp(caster)
@@ -297,8 +307,8 @@ def test_burning_hands_caster_excluded():
         include_self=False  # Default
     )
 
-    result = burning_hands.apply()
-    assert result is not None and not result.canceled
+    _result = burning_hands.apply()
+    assert _result is not None and not _result.canceled
 
     assert get_hp(caster) == caster_initial, "Caster should NOT take damage from own Burning Hands"
 
@@ -332,7 +342,7 @@ def test_burning_hands_wall_blocks():
         template=False
     )
 
-    result = burning_hands.apply()
+    _result = burning_hands.apply()
 
     # The target behind the wall should be protected
     blocked_after = get_hp(target_blocked)
@@ -353,9 +363,9 @@ def test_burning_hands_multiple_targets():
 
     caster = create_caster(name="Wizard", position=(5, 5))
     # Multiple targets in cone direction
-    target1 = create_target(name="Goblin1", position=(6, 5), hp=50, dexterity=1)  # Close
-    target2 = create_target(name="Goblin2", position=(7, 5), hp=50, dexterity=30)  # Mid, will save
-    target3 = create_target(name="Goblin3", position=(7, 4), hp=50, dexterity=1)  # Side
+    _target1 = create_target(name="Goblin1", position=(6, 5), hp=50, dexterity=1)  # Close
+    _target2 = create_target(name="Goblin2", position=(7, 5), hp=50, dexterity=30)  # Mid, will save
+    _target3 = create_target(name="Goblin3", position=(7, 4), hp=50, dexterity=1)  # Side
     Entity.update_all_entities_senses()
 
     burning_hands = BurningHands(
@@ -368,6 +378,7 @@ def test_burning_hands_multiple_targets():
 
     result = burning_hands.apply()
     assert result is not None and not result.canceled
+    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
     # Check how many targets were hit
     targets_hit = result.total_targets
@@ -391,13 +402,13 @@ def test_burning_hands_statistical_saves():
     successes = 0
     failures = 0
 
-    for i in range(10):
+    for _ in range(10):
         reset_combat_state()
         setup_basic_arena(20, 20)
 
         # Neutral DC and save bonus for 50/50 chance
         caster = create_caster(name="Wizard", position=(5, 5), intelligence=14, proficiency=2)  # DC 12
-        target = create_target(name="Target", position=(7, 5), dexterity=14, hp=100)  # +2 save
+        _target = create_target(name="Target", position=(7, 5), dexterity=14, hp=100)  # +2 save
         Entity.update_all_entities_senses()
 
         burning_hands = BurningHands(
@@ -408,9 +419,9 @@ def test_burning_hands_statistical_saves():
         )
 
         result = burning_hands.apply()
-        if result and not result.canceled:
-            per_target = result.target_results[0] if result.target_results else result
-            if per_target.save_success:
+        if result and not result.canceled and isinstance(result, SpellEvent):
+            per_target = result.target_results[0] if result.target_results else None
+            if per_target is not None and isinstance(per_target, SpellEvent) and per_target.save_success:
                 successes += 1
             else:
                 failures += 1

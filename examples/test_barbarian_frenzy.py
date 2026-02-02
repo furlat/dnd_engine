@@ -190,8 +190,8 @@ def test_frenzied_includes_raging():
     # Use Frenzy action (the correct way to enter frenzied rage)
     frenzy_template = barbarian.get_action_template("Frenzy")
     assert frenzy_template is not None, "Frenzy action should be registered"
-    frenzy_action = frenzy_template.instantiate()
-    frenzy_action.apply()
+    frenzy_instance = frenzy_template.instantiate()
+    frenzy_instance.apply()
 
     # Check both conditions exist
     has_frenzied = "Frenzied" in barbarian.active_conditions
@@ -427,8 +427,9 @@ def test_frenzy_maintenance():
 
     # Use Frenzy action to enter frenzied rage (applies both Raging and Frenzied)
     frenzy_template = barbarian.get_action_template("Frenzy")
-    frenzy_action = frenzy_template.instantiate()
-    frenzy_action.apply()
+    assert frenzy_template is not None, "Frenzy action should be registered"
+    frenzy_instance = frenzy_template.instantiate()
+    frenzy_instance.apply()
 
     assert "Frenzied" in barbarian.active_conditions, "Should be frenzied"
     assert "Raging" in barbarian.active_conditions, "Should be raging"
@@ -466,8 +467,9 @@ def test_no_exhaustion():
 
     # Use Frenzy action to enter frenzied rage
     frenzy_template = barbarian.get_action_template("Frenzy")
-    frenzy_action = frenzy_template.instantiate()
-    frenzy_action.apply()
+    assert frenzy_template is not None, "Frenzy action should be registered"
+    frenzy_instance = frenzy_template.instantiate()
+    frenzy_instance.apply()
 
     # End frenzy by removing Raging (which cascades to remove Frenzied)
     barbarian.remove_condition("Raging")
@@ -491,14 +493,15 @@ def test_frenzy_removes_frenzied_strike():
     Entity._entity_by_position.clear()
 
     barbarian = create_test_barbarian("Cleanup Test", position=(0, 0))
-    target = create_test_target("Target", position=(1, 0))  # Need target for senses
+    _target = create_test_target("Target", position=(1, 0))  # Need target for senses
 
     Entity.update_all_entities_senses()
 
     # Use Frenzy action to enter frenzied rage (costs bonus action)
     frenzy_template = barbarian.get_action_template("Frenzy")
-    frenzy_action = frenzy_template.instantiate()
-    frenzy_action.apply()
+    assert frenzy_template is not None, "Frenzy action should be registered"
+    frenzy_instance = frenzy_template.instantiate()
+    frenzy_instance.apply()
 
     # Simulate attacking target to maintain rage (apply HasAttacked marker)
     from dnd.conditions import HasAttacked

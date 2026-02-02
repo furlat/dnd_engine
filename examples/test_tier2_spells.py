@@ -16,11 +16,17 @@ from uuid import uuid4
 
 from dnd.utils import reset_combat_state, get_hp, has_condition, set_hp
 from dnd.core.gridmap import get_map
+from dnd.core.events import EventPhase
+from dnd.core.aoe import Cone, Sphere
 from dnd.entity import Entity, EntityConfig
-from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.actions_functional import setup_standard_actions
 from dnd.core.modifiers import CreatureType, DamageType
+from dnd.monsters.bestiary import create_sorcerer, create_skeleton, create_goblin
+from dnd.spells import (
+    ConeOfCold, CircleOfDeath, Blight, PowerWordKill,
+    ProtectionFromEnergy, Stoneskin
+)
 
 
 # =============================================================================
@@ -34,9 +40,6 @@ def test_cone_of_cold_shape():
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import ConeOfCold
-
     caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
     Entity.update_all_entities_senses()
 
@@ -48,6 +51,7 @@ def test_cone_of_cold_shape():
 
     # Check shape exists and has correct length
     assert spell.aoe_shape is not None, "AoE shape should be created"
+    assert isinstance(spell.aoe_shape, Cone), f"Should be a Cone, got {type(spell.aoe_shape)}"
     assert spell.aoe_shape.length_feet == 60, f"Should be 60ft, got {spell.aoe_shape.length_feet}"
 
     print(f"  Cone length: {spell.aoe_shape.length_feet}ft")
@@ -60,9 +64,6 @@ def test_cone_of_cold_damage_and_save():
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
-
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import ConeOfCold
 
     caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
 
@@ -81,6 +82,7 @@ def test_cone_of_cold_damage_and_save():
         cast_at_level=5
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     final_hp = get_hp(target)
     damage_dealt = initial_hp - final_hp
@@ -97,8 +99,6 @@ def test_cone_of_cold_damage_and_save():
 def test_cone_of_cold_upcast():
     """Upcast adds +1d8 per level above 5th."""
     print("\n=== Test: Cone of Cold Upcast ===")
-
-    from dnd.spells import ConeOfCold
 
     # Level 5: 8d8
     spell_5 = ConeOfCold(source_entity_uuid=uuid4(), cast_at_level=5)
@@ -129,10 +129,6 @@ def test_circle_of_death_range():
     grid = get_map()
     grid.create_rectangle(0, 0, 40, 40)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import CircleOfDeath
-    from dnd.core.events import EventPhase
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
@@ -143,9 +139,11 @@ def test_circle_of_death_range():
         cast_at_level=6
     )
     result = spell_150.apply()
+    assert result is not None, "Result should not be None"
 
     # Note: Might fail due to no targets, but NOT due to range
     if result.phase == EventPhase.CANCEL:
+        assert result.status_message is not None, "status_message should not be None"
         assert "range" not in result.status_message.lower(), \
             f"150ft should NOT fail for range: {result.status_message}"
 
@@ -157,11 +155,10 @@ def test_circle_of_death_radius():
     """60ft radius sphere hits correct positions."""
     print("\n=== Test: Circle of Death Radius ===")
 
-    from dnd.spells import CircleOfDeath
-
     spell = CircleOfDeath(source_entity_uuid=uuid4(), end_position=(10, 10))
 
     assert spell.aoe_shape is not None, "AoE shape should exist"
+    assert isinstance(spell.aoe_shape, Sphere), f"Should be a Sphere, got {type(spell.aoe_shape)}"
     assert spell.aoe_shape.radius_feet == 60, f"Should be 60ft radius, got {spell.aoe_shape.radius_feet}"
 
     print(f"  Sphere radius: {spell.aoe_shape.radius_feet}ft")
@@ -171,8 +168,6 @@ def test_circle_of_death_radius():
 def test_circle_of_death_upcast():
     """Upcast adds +2d6 per level above 6th."""
     print("\n=== Test: Circle of Death Upcast ===")
-
-    from dnd.spells import CircleOfDeath
 
     # Level 6: 8d6
     spell_6 = CircleOfDeath(source_entity_uuid=uuid4(), cast_at_level=6)
@@ -203,9 +198,6 @@ def test_blight_rejects_undead():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import Blight
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     skeleton = create_skeleton(name="Skeleton", position=(1, 0), faction="monsters")
@@ -219,8 +211,10 @@ def test_blight_rejects_undead():
         cast_at_level=4
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     assert result.phase == EventPhase.CANCEL, f"Should CANCEL for undead, got {result.phase}"
+    assert result.status_message is not None, "status_message should not be None"
     assert "undead" in result.status_message.lower(), \
         f"Should mention 'undead': {result.status_message}"
 
@@ -235,9 +229,6 @@ def test_blight_rejects_construct():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import Blight
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
@@ -259,8 +250,10 @@ def test_blight_rejects_construct():
         cast_at_level=4
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     assert result.phase == EventPhase.CANCEL, f"Should CANCEL for construct, got {result.phase}"
+    assert result.status_message is not None, "status_message should not be None"
     assert "construct" in result.status_message.lower(), \
         f"Should mention 'construct': {result.status_message}"
 
@@ -275,9 +268,6 @@ def test_blight_plant_max_damage():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import Blight
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
@@ -301,7 +291,7 @@ def test_blight_plant_max_damage():
         target_entity_uuid=plant.uuid,
         cast_at_level=4
     )
-    result = spell.apply()
+    _result = spell.apply()  # Result checked via HP, not event fields
 
     final_hp = get_hp(plant)
     damage_dealt = initial_hp - final_hp
@@ -324,9 +314,6 @@ def test_blight_normal_target():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import Blight
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     goblin = create_goblin(name="Goblin", position=(1, 0), faction="monsters")
@@ -342,7 +329,7 @@ def test_blight_normal_target():
         target_entity_uuid=goblin.uuid,
         cast_at_level=4
     )
-    result = spell.apply()
+    _result = spell.apply()  # Result checked via HP, not event fields
 
     final_hp = get_hp(goblin)
     damage_dealt = initial_hp - final_hp
@@ -366,8 +353,6 @@ def test_pwk_kills_at_threshold():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import PowerWordKill
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
@@ -391,6 +376,7 @@ def test_pwk_kills_at_threshold():
         cast_at_level=9
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     print(f"  Target HP after: {get_hp(target)}")
     print(f"  Result: {result.status_message}")
@@ -406,8 +392,6 @@ def test_pwk_kills_below_threshold():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import PowerWordKill
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="monsters")
@@ -423,6 +407,7 @@ def test_pwk_kills_below_threshold():
         cast_at_level=9
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     print(f"  Target HP after: {get_hp(target)}")
     print(f"  Result: {result.status_message}")
@@ -438,8 +423,6 @@ def test_pwk_fails_above_threshold():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import PowerWordKill
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
@@ -464,6 +447,7 @@ def test_pwk_fails_above_threshold():
         cast_at_level=9
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     hp_after = get_hp(target)
     print(f"  Target HP after: {hp_after}")
@@ -478,7 +462,6 @@ def test_pwk_no_save():
     print("\n=== Test: Power Word Kill No Save ===")
 
     # Just verify the spell doesn't have save-related attributes
-    from dnd.spells import PowerWordKill
 
     spell = PowerWordKill(source_entity_uuid=uuid4(), cast_at_level=9)
 
@@ -501,9 +484,6 @@ def test_protection_from_energy_fire_resistance():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import ProtectionFromEnergy
-    from dnd.core.events import EventPhase
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="heroes")
@@ -517,6 +497,7 @@ def test_protection_from_energy_fire_resistance():
         cast_at_level=3
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     print(f"  Result: {result.status_message}")
 
@@ -546,8 +527,6 @@ def test_protection_from_energy_cold_resistance():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import ProtectionFromEnergy
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="heroes")
@@ -580,8 +559,6 @@ def test_protection_from_energy_concentration_cleanup():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_skeleton
-    from dnd.spells import ProtectionFromEnergy
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="heroes")
@@ -626,8 +603,6 @@ def test_protection_from_energy_self_target():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer
-    from dnd.spells import ProtectionFromEnergy
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
@@ -639,6 +614,7 @@ def test_protection_from_energy_self_target():
         cast_at_level=3
     )
     result = spell.apply()
+    assert result is not None, "Result should not be None"
 
     print(f"  Result: {result.status_message}")
 
@@ -658,8 +634,6 @@ def test_stoneskin_bludgeoning_resistance():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import Stoneskin
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton (bludgeoning vulnerability)
@@ -694,8 +668,6 @@ def test_stoneskin_piercing_resistance():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import Stoneskin
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton
@@ -728,8 +700,6 @@ def test_stoneskin_slashing_resistance():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import Stoneskin
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton
@@ -762,8 +732,6 @@ def test_stoneskin_concentration_cleanup():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import Stoneskin
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton (bludgeoning vulnerability)
@@ -806,8 +774,6 @@ def test_stoneskin_other_damage_unaffected():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    from dnd.monsters.bestiary import create_sorcerer, create_goblin
-    from dnd.spells import Stoneskin
 
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton

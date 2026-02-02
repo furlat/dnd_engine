@@ -96,7 +96,7 @@ def test_get_all_targets_position_aoe():
     assert target2.uuid in targets, "Target2 should be in targets"
     assert caster.uuid not in targets, "Caster should NOT be in targets (include_self=False)"
 
-    target_names = [Entity.get(uid).name for uid in targets if Entity.get(uid)]
+    target_names = [e.name for uid in targets if (e := Entity.get(uid)) is not None]
     print(f"  Targets: {target_names}")
     print("  get_all_targets() correctly computes targets from shape")
 
@@ -145,7 +145,7 @@ def test_valid_target_filter():
     grid.create_rectangle(0, 0, 20, 20)
 
     caster = create_skeleton(name="Caster", position=(0, 0), faction="heroes")
-    enemy = create_skeleton(name="Enemy", position=(5, 5), faction="monsters")
+    _enemy = create_skeleton(name="Enemy", position=(5, 5), faction="monsters")
     ally = create_skeleton(name="Ally", position=(6, 5), faction="heroes")
 
     Entity.update_all_entities_senses()
@@ -214,7 +214,8 @@ def test_convolution_calls_apply_per_target():
 
     # Debug: check what targets we get
     all_targets = action.get_all_targets()
-    print(f"  Targets from get_all_targets(): {[Entity.get(uid).name if Entity.get(uid) else uid for uid in all_targets]}")
+    target_names_debug = [e.name if (e := Entity.get(uid)) else str(uid) for uid in all_targets]
+    print(f"  Targets from get_all_targets(): {target_names_debug}")
 
     result = action.apply()
 
@@ -240,7 +241,9 @@ def test_convolution_calls_apply_per_target():
     # Check aggregated result
     assert hasattr(result, 'total_targets'), "Result should have total_targets"
     assert hasattr(result, 'total_damage'), "Result should have total_damage"
-    print(f"  Result: {result.total_targets} targets, {result.total_damage} total damage")
+    total_targets = getattr(result, 'total_targets', 0)
+    total_damage = getattr(result, 'total_damage', 0)
+    print(f"  Result: {total_targets} targets, {total_damage} total damage")
 
 
 def test_preview_matches_execution():
