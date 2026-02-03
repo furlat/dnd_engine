@@ -19,7 +19,7 @@ from dnd.core.base_actions import (
 )
 from dnd.core.events import (
     Event, EventPhase, EventType, EventQueue,
-    Trigger, EventHandler, DamageRolledEvent, RangeType, WeaponSlot, SavingThrowEvent
+    Trigger, EventHandler, DamageRollResultEvent, RangeType, WeaponSlot, SavingThrowEvent
 )
 from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
@@ -294,9 +294,9 @@ class FightingStyleDueling(BaseCondition):
 # -----------------------------------------------------------------------------
 
 def great_weapon_fighting_processor(
-    event: DamageRolledEvent,
+    event: DamageRollResultEvent,
     source_entity_uuid: UUID
-) -> Optional[DamageRolledEvent]:
+) -> Optional[DamageRollResultEvent]:
     """
     Event processor for Great Weapon Fighting.
 
@@ -399,13 +399,13 @@ class GreatWeaponFighting(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Create event handler for DAMAGE_ROLLED events
+        # Create event handler for DAMAGE_ROLL_RESULT events
         handler = EventHandler(
             name="Great Weapon Fighting",
             source_entity_uuid=target.uuid,
             trigger_conditions=[
                 Trigger(
-                    event_type=EventType.DAMAGE_ROLLED,
+                    event_type=EventType.DAMAGE_ROLL_RESULT,
                     event_phase=EventPhase.EFFECT
                 )
             ],

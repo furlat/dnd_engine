@@ -10,7 +10,7 @@ sys.path.insert(0, '.')
 from uuid import uuid4
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, DamageRolledEvent
+from dnd.core.events import EventQueue, DamageRollResultEvent
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.classes.fighter import GreatWeaponFighting, create_modified_dice_roll
@@ -173,11 +173,11 @@ def test_great_weapon_fighting_attack():
         print(f"  Damage rolls: {[r.total for r in event.damage_rolls]}")
         print(f"  Damage taken: {initial_hp - target.get_hp()}")
 
-        # Check the DAMAGE_ROLLED events for any modifications
+        # Check the DAMAGE_ROLL_RESULT events for any modifications
         from dnd.core.events import EventType
-        damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
+        damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLL_RESULT)
         for de in damage_events:
-            if isinstance(de, DamageRolledEvent) and de.roll_modifications:
+            if isinstance(de, DamageRollResultEvent) and de.roll_modifications:
                 print(f"  GWF modifications: {de.roll_modifications}")
 
     print("  Attack test completed (results depend on RNG)")
@@ -224,10 +224,10 @@ def test_gwf_does_not_apply_to_ranged():
 
     # Check that no modifications were made (GWF shouldn't apply)
     from dnd.core.events import EventType
-    damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
+    damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLL_RESULT)
     gwf_applied = False
     for de in damage_events:
-        if isinstance(de, DamageRolledEvent) and de.roll_modifications:
+        if isinstance(de, DamageRollResultEvent) and de.roll_modifications:
             gwf_applied = True
 
     if not gwf_applied:
@@ -289,10 +289,10 @@ def test_gwf_does_not_apply_to_one_handed():
 
     # Check that no modifications were made
     from dnd.core.events import EventType
-    damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
+    damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLL_RESULT)
     gwf_applied = False
     for de in damage_events:
-        if isinstance(de, DamageRolledEvent) and de.roll_modifications:
+        if isinstance(de, DamageRollResultEvent) and de.roll_modifications:
             gwf_applied = True
 
     if not gwf_applied:
@@ -374,9 +374,9 @@ def test_gwf_statistics(num_runs: int = 20):
                     total_damage += roll.total
 
         # Check for GWF modifications
-        damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLLED)
+        damage_events = EventQueue.get_events_by_type(EventType.DAMAGE_ROLL_RESULT)
         for de in damage_events:
-            if isinstance(de, DamageRolledEvent) and de.roll_modifications:
+            if isinstance(de, DamageRollResultEvent) and de.roll_modifications:
                 for mod in de.roll_modifications:
                     handler_name, _, old_total, new_total, reason = mod
                     if handler_name == "Great Weapon Fighting":

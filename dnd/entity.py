@@ -10,7 +10,10 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 
-from dnd.core.events import Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent
+from dnd.core.events import (
+    Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
+    D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent
+)
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
@@ -1045,18 +1048,85 @@ class Entity(BaseBlock):
         return [e for e in cls._entity_registry.values()
                 if e.faction == faction and e.get_hp() > 0]
 
-    def roll_d20(self, bonus: ModifiableValue,roll_type: RollType = RollType.ATTACK) -> DiceRoll:
+    def roll_d20(
+        self,
+        bonus: ModifiableValue,
+        roll_type: RollType = RollType.ATTACK,
+        context: Optional[Dict[str, Any]] = None,
+        ability_name: Optional[AbilityName] = None,
+        skill_name: Optional[SkillName] = None,
+        weapon_slot: Optional[WeaponSlot] = None
+    ) -> DiceRoll:
         """
-        Roll attack dice based on attack bonus.
+        Roll a d20 with the given bonus.
+
+        Fires the appropriate D20RollResultEvent subclass allowing handlers to intercept.
+        - RollType.ATTACK → AttackD20RollResultEvent
+        - RollType.SAVE → SavingThrowD20RollResultEvent
+        - RollType.CHECK → SkillCheckD20RollResultEvent
 
         Args:
-            attack_bonus: The total attack bonus to use
-            
+            bonus: The modifier value to add to the roll
+            roll_type: Type of roll (ATTACK, SAVE, CHECK)
+            context: Optional context dict for handler decisions
+            ability_name: Required for SAVE rolls
+            skill_name: Required for CHECK rolls
+            weapon_slot: Optional for ATTACK rolls
+
         Returns:
-            DiceRoll: The result of the attack roll
+            DiceRoll: The result of the roll (possibly modified by handlers)
         """
-        attack_dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
-        return attack_dice.roll
+        # 1. Create the actual roll
+        dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
+        initial_roll = dice.roll
+
+        # 2. Create appropriate event subclass based on roll_type
+        common_fields = {
+            "source_entity_uuid": self.uuid,
+            "target_entity_uuid": bonus.target_entity_uuid,
+            "roll": initial_roll,
+            "original_roll": initial_roll,
+            "bonus": bonus,
+            "context": context or {},
+            "phase": EventPhase.DECLARATION,
+            "roll_type": roll_type
+        }
+
+        if roll_type == RollType.ATTACK:
+            event: D20RollResultEvent = AttackD20RollResultEvent(
+                **common_fields,
+                weapon_slot=weapon_slot
+            )
+        elif roll_type == RollType.SAVE:
+            if ability_name is None:
+                # Fallback to base class if ability_name not provided
+                event = D20RollResultEvent(**common_fields)
+            else:
+                event = SavingThrowD20RollResultEvent(
+                    **common_fields,
+                    ability_name=ability_name
+                )
+        elif roll_type == RollType.CHECK:
+            if skill_name is None:
+                # Fallback to base class if skill_name not provided
+                event = D20RollResultEvent(**common_fields)
+            else:
+                event = SkillCheckD20RollResultEvent(
+                    **common_fields,
+                    skill_name=skill_name
+                )
+        else:
+            # Fallback to base class
+            event = D20RollResultEvent(**common_fields)
+
+        # 3. Transition to EFFECT phase - handlers intercept here
+        event = event.phase_to(EventPhase.EFFECT, status_message="D20 rolled, handlers may modify")
+
+        # 4. Complete the event
+        event = event.phase_to(EventPhase.COMPLETION)
+
+        # 5. Return effective roll (possibly modified)
+        return event.get_effective_roll()
         
     
     def create_saving_throw_request(self, target_entity_uuid: UUID, ability_name: AbilityName, dc: Union[int,UUID]) -> SavingThrowEvent:
@@ -1145,8 +1215,8 @@ class Entity(BaseBlock):
             status_message=f"Rolling {request.ability_name} save vs DC {dc}"
         )
 
-        # Roll the dice
-        roll = self.roll_d20(save_bonus, RollType.SAVE)
+        # Roll the dice (with ability_name for event handlers)
+        roll = self.roll_d20(save_bonus, RollType.SAVE, ability_name=request.ability_name)
         outcome = determine_attack_outcome(roll, dc)
         success = outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
 
@@ -1188,9 +1258,9 @@ class Entity(BaseBlock):
         dc = request.get_dc()
         if dc is None:
             raise ValueError(f"DC is not set for {request.skill_name} skill check with event id {request.uuid}")
-        #create the dice
-        roll = self.roll_d20(skill_check,RollType.CHECK)
-        skill_check_outcome = determine_attack_outcome(roll,dc)
+        #create the dice (with skill_name for event handlers)
+        roll = self.roll_d20(skill_check, RollType.CHECK, skill_name=request.skill_name)
+        skill_check_outcome = determine_attack_outcome(roll, dc)
         self.clear_target_entity()
         return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
 

@@ -9,12 +9,19 @@ __all__ = [
     "AbilityName", "SkillName",
     # Core event classes
     "Event", "Trigger", "EventHandler", "EventQueue",
-    # D20 events
+    # D20 events (legacy)
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
+    # Unified dice roll events
+    "DiceRollResultEvent",
+    "D20RollResultEvent",
+    "AttackD20RollResultEvent",
+    "SavingThrowD20RollResultEvent",
+    "SkillCheckD20RollResultEvent",
+    "DamageRollResultEvent",
     # Spatial events
     "SpatialChangeEvent", "ForcedMovementEvent",
     # Combat events
-    "DamageRolledEvent", "TakeDamageEvent",
+    "DamageRolledEvent", "TakeDamageEvent",  # DamageRolledEvent is DEPRECATED
     # Combat data
     "Range", "Damage",
     # Encounter/Turn events
@@ -27,7 +34,7 @@ __all__ = [
 
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple
+from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any
 from dnd.core.values import ModifiableValue
 
 # Import combat log utilities for generate_combat_log methods and combat_log field
@@ -125,8 +132,13 @@ class EventType(str, Enum):
 
     #Dice roll events
     DICE_ROLL = "dice_roll"
-    DICE_ROLL_RESULT = "dice_roll_result"
-    DAMAGE_ROLLED = "damage_rolled"  # After damage dice rolled, before applied
+    DICE_ROLL_RESULT = "dice_roll_result"  # Base type for unified dice roll events
+    D20_ROLL_RESULT = "d20_roll_result"    # D20 base (Lucky triggers on this)
+    ATTACK_D20_ROLL_RESULT = "attack_d20_roll"  # Attack rolls
+    SAVE_D20_ROLL_RESULT = "save_d20_roll"      # Saving throws
+    CHECK_D20_ROLL_RESULT = "check_d20_roll"    # Skill checks
+    DAMAGE_ROLL_RESULT = "damage_roll_result"   # After damage dice rolled, before applied
+    DAMAGE_ROLLED = "damage_rolled"  # DEPRECATED: Use DAMAGE_ROLL_RESULT instead
 
     # Combat events
     ENEMY_SPOTTED = "enemy_spotted"
@@ -567,19 +579,37 @@ class EventQueue:
     
     @classmethod
     def _get_handlers_for_event(cls, event: Event) -> List[EventHandler]:
-        """Get all listeners for a specific event"""
+        """Get all handlers that should process this event.
 
-        trigger_condition = event.get_trigger()
-        if not trigger_condition.is_simple():
-            simple_trigger = trigger_condition.get_simple_trigger()
-            simple_handlers = cls._event_handlers_by_simple_trigger.get(simple_trigger, [])
-            complex_handlers = cls._event_handlers_by_trigger.get(trigger_condition, [])
+        This finds handlers by:
+        1. Getting simple handlers (no source/target filter) via simple trigger lookup
+        2. Iterating through all handlers and checking if their trigger matches the event
+           using Trigger.__call__ which properly handles source/target filtering
+        """
+        # Get the simple trigger for the event (just type + phase)
+        simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
 
-            all_handlers = simple_handlers + complex_handlers
-        else:
-             all_handlers = cls._event_handlers_by_trigger.get(trigger_condition, [])
+        # Get handlers registered with simple triggers
+        simple_handlers = cls._event_handlers_by_simple_trigger.get(simple_trigger, [])
 
-        return all_handlers
+        # For handlers with complex triggers (source/target filtering),
+        # we need to check each one since their trigger may filter by source/target UUID.
+        # Use a set to avoid duplicates (handlers may be in both registries)
+        handler_set: set[UUID] = {h.uuid for h in simple_handlers}
+        matching_handlers = list(simple_handlers)
+
+        # Check all handlers to find ones with complex triggers that match this event
+        for handler in cls._event_handlers.values():
+            if handler.uuid in handler_set:
+                continue  # Already included
+            # Check if any of the handler's triggers match this event
+            for trigger in handler.trigger_conditions:
+                if trigger(event):  # Uses Trigger.__call__ for proper matching
+                    matching_handlers.append(handler)
+                    handler_set.add(handler.uuid)
+                    break  # Only add handler once even if multiple triggers match
+
+        return matching_handlers
     
     @classmethod
     def add_event_handler(cls, event_handler: EventHandler) -> None:
@@ -1154,7 +1184,158 @@ class Damage(BaseObject):
 
 
 # =============================================================================
-# Damage Rolled Event (for damage dice manipulation)
+# Unified Dice Roll Event Hierarchy
+# =============================================================================
+
+class DiceRollResultEvent(Event):
+    """
+    Base class for all dice roll result events.
+
+    Provides unified handler interception for d20 rolls, damage rolls, etc.
+    """
+    event_type: EventType = Field(default=EventType.DICE_ROLL_RESULT)
+
+    # Roll type classification
+    roll_type: RollType = Field(
+        ...,
+        description="ATTACK, SAVE, CHECK, or DAMAGE - determines handler eligibility"
+    )
+
+    # Handler context (arbitrary data for handler decisions)
+    context: Dict[str, Any] = Field(default_factory=dict)
+
+    # Modification tracking
+    roll_modifications: List[Tuple[str, str]] = Field(
+        default_factory=list,
+        description="[(handler_name, reason), ...] for combat log/debugging"
+    )
+
+    def add_modification(self, handler_name: str, reason: str) -> None:
+        """Track that a handler modified this roll."""
+        self.roll_modifications.append((handler_name, reason))
+        self.modified = True
+
+
+class D20RollResultEvent(DiceRollResultEvent):
+    """
+    Base class for d20 roll results.
+
+    Subclasses: AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent
+
+    Handlers like Lucky can register for this base type to catch ALL d20 rolls.
+    Type-specific handlers register for the specific subclass.
+    """
+    event_type: EventType = Field(default=EventType.D20_ROLL_RESULT)
+
+    # The Roll (single d20)
+    roll: DiceRoll = Field(..., description="The initial roll result")
+    original_roll: DiceRoll = Field(..., description="Immutable copy for audit trail")
+    final_roll: Optional[DiceRoll] = Field(default=None, description="After handler modifications")
+
+    # D20-specific context
+    dc: Optional[int] = Field(default=None, description="Difficulty class if known")
+    bonus: Optional[ModifiableValue] = Field(default=None, description="All modifiers applied")
+    result: Optional[bool] = Field(default=None, description="Success/failure - set AFTER outcome")
+
+    def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> None:
+        """Replace the roll result. Handler helper method."""
+        old_total = self.roll.total
+        new_total = new_roll.total
+        self.final_roll = new_roll
+        self.add_modification(handler_name, f"{reason} ({old_total} → {new_total})")
+
+    def get_effective_roll(self) -> DiceRoll:
+        """Return final_roll if modified, otherwise original roll."""
+        return self.final_roll if self.final_roll is not None else self.roll
+
+
+class AttackD20RollResultEvent(D20RollResultEvent):
+    """
+    Event for attack d20 rolls.
+
+    Additional context: weapon_slot for weapon-specific handlers.
+    """
+    event_type: EventType = Field(default=EventType.ATTACK_D20_ROLL_RESULT)
+    roll_type: RollType = Field(default=RollType.ATTACK)
+
+    # Attack-specific context
+    weapon_slot: Optional[WeaponSlot] = Field(default=None, description="Weapon used for attack")
+
+
+class SavingThrowD20RollResultEvent(D20RollResultEvent):
+    """
+    Event for saving throw d20 rolls.
+
+    Additional context: ability_name for ability-specific handlers (e.g., Evasion for DEX saves).
+    """
+    event_type: EventType = Field(default=EventType.SAVE_D20_ROLL_RESULT)
+    roll_type: RollType = Field(default=RollType.SAVE)
+
+    # Save-specific context
+    ability_name: AbilityName = Field(..., description="The ability being saved against")
+
+
+class SkillCheckD20RollResultEvent(D20RollResultEvent):
+    """
+    Event for skill check d20 rolls.
+
+    Additional context: skill_name for skill-specific handlers (e.g., Reliable Talent).
+    """
+    event_type: EventType = Field(default=EventType.CHECK_D20_ROLL_RESULT)
+    roll_type: RollType = Field(default=RollType.CHECK)
+
+    # Skill-specific context
+    skill_name: SkillName = Field(..., description="The skill being checked")
+
+
+# =============================================================================
+# Damage Roll Result Event (for damage dice manipulation)
+# =============================================================================
+
+class DamageRollResultEvent(DiceRollResultEvent):
+    """
+    Event fired after damage dice are rolled but before damage is applied.
+
+    Handlers create new DiceRoll versions - original rolls are immutable.
+    After all handlers run, final_rolls contains the versions to apply.
+
+    This enables:
+    - Reroll and substitute (Great Weapon Fighting)
+    - Reroll and keep best (Halfling Lucky, Elemental Adept)
+    - Partial rerolls (only lightning damage dice)
+    - Audit trail (see what changed and why)
+    """
+    name: str = Field(default="Damage Roll Result")
+    event_type: EventType = Field(default=EventType.DAMAGE_ROLL_RESULT)
+    roll_type: RollType = Field(default=RollType.DAMAGE)
+
+    # Attack context (read-only)
+    weapon_slot: WeaponSlot = Field(description="The weapon slot used for the attack")
+    attack_outcome: AttackOutcome = Field(description="The outcome of the attack (HIT, CRIT, etc.)")
+    damages: List[Damage] = Field(description="Damage specifications")
+
+    # IMMUTABLE: Original rolls (never modified)
+    original_rolls: List[DiceRoll] = Field(description="Original dice rolls before any modifications")
+
+    # MUTABLE: Current best rolls (handlers replace with new versions)
+    # Initialized to copy of original_rolls
+    final_rolls: List[DiceRoll] = Field(description="Final dice rolls after handler modifications")
+
+    # AUDIT: History of modifications (override parent's simpler format)
+    roll_modifications: List[Tuple[str, int, int, int, str]] = Field(  # type: ignore[assignment]
+        default_factory=list,
+        description="Audit trail of roll modifications: (handler_name, roll_index, old_total, new_total, reason)"
+    )
+
+    def replace_roll(self, index: int, new_roll: DiceRoll, handler_name: str, reason: str) -> None:  # type: ignore[override]
+        """Helper for handlers to replace a roll and track the change."""
+        old_roll = self.final_rolls[index]
+        self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
+        self.final_rolls[index] = new_roll
+
+
+# =============================================================================
+# DEPRECATED: DamageRolledEvent - Use DamageRollResultEvent instead
 # =============================================================================
 
 class DamageRolledEvent(Event):

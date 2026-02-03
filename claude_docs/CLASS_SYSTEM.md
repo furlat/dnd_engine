@@ -21,7 +21,7 @@ Character classes are implemented as **collections of conditions** applied to en
 │                                                                              │
 │  FightingStyleDefense → adds AC modifier                                     │
 │  FightingStyleArchery → adds ranged attack modifier                          │
-│  GreatWeaponFighting  → registers EventHandler (DAMAGE_ROLLED)               │
+│  GreatWeaponFighting  → registers EventHandler (DAMAGE_ROLL_RESULT)          │
 │  ImprovedCritical     → adds critical threshold modifier                     │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -66,7 +66,7 @@ All Fighter features + Champion archetype are implemented in `dnd/classes/fighte
 | `FightingStyleArchery` | +2 to ranged attack rolls | Numerical modifier on `attack_bonus` |
 | `FightingStyleDefense` | +1 AC when wearing armor | Contextual modifier on `ac_bonus` |
 | `FightingStyleDueling` | +2 damage with one-handed weapon | Contextual modifier on `damage_bonus` |
-| `GreatWeaponFighting` | Reroll 1s and 2s on damage dice | EventHandler on `DAMAGE_ROLLED` |
+| `GreatWeaponFighting` | Reroll 1s and 2s on damage dice | EventHandler on `DAMAGE_ROLL_RESULT` |
 | `FightingStyleProtection` | Impose disadvantage on ally attacks | EventHandler on `ATTACK` (reaction) |
 | `FightingStyleTwoWeaponFighting` | Add ability mod to off-hand damage | Numerical modifier on off-hand damage |
 
@@ -113,15 +113,15 @@ class SecondWindFeature(BaseCondition):
 
 ## Event Handler Patterns
 
-### Dice Manipulation (DAMAGE_ROLLED)
+### Dice Manipulation (DAMAGE_ROLL_RESULT)
 
 Used by Great Weapon Fighting to reroll 1s and 2s:
 
 ```python
 def great_weapon_fighting_processor(
-    event: DamageRolledEvent,
+    event: DamageRollResultEvent,
     source_entity_uuid: UUID
-) -> Optional[DamageRolledEvent]:
+) -> Optional[DamageRollResultEvent]:
     if event.source_entity_uuid != source_entity_uuid:
         return None
 

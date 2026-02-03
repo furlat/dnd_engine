@@ -220,12 +220,12 @@ dnd/
 ├── items/          # Weapon/armor factories (WEAPONS, ARMORS, SHIELDS dicts)
 ├── spells/         # Spell implementations by school
 │   ├── evocation.py    # FireBolt, SacredFlame, MagicMissile, Fireball
-│   ├── abjuration.py   # MageArmor
+│   ├── abjuration.py   # MageArmor, MageArmorCondition
 │   ├── enchantment.py  # HoldPerson, HoldPersonEffect
 │   └── conjuration.py  # CallLightning, CallLightningStrike
 ├── monsters/       # Creature factories (bestiary.py)
 ├── actions.py      # Attack, Move, Jump, Shove, Dash, Dodge, Disengage, SpellAction
-├── conditions.py   # All D&D conditions + MageArmorCondition, Concentrating
+├── conditions.py   # All D&D conditions + Concentrating
 ├── entity.py       # Main Entity class (includes weight, passive_skill)
 └── encounter.py    # Turn-based combat management
 
