@@ -316,7 +316,7 @@ def create_my_handler(source_entity_uuid: UUID) -> EventHandler:
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
-                event_type=EventType.DAMAGE_ROLLED,
+                event_type=EventType.DAMAGE_ROLL_RESULT,
                 event_phase=EventPhase.EFFECT
             )
         ],
@@ -340,7 +340,7 @@ return [], [handler.uuid], [], effect_event
 | EventType | Phase | Use Case |
 |-----------|-------|----------|
 | `ATTACK` | `EXECUTION` | Protection (impose disadvantage before roll) |
-| `DAMAGE_ROLLED` | `EFFECT` | Great Weapon Fighting (reroll dice) |
+| `DAMAGE_ROLL_RESULT` | `EFFECT` | Great Weapon Fighting (reroll dice) |
 | `SAVING_THROW` | `EFFECT` | Indomitable (reroll failed save) |
 | `TURN_START` | `EXECUTION` | Survivor (heal at turn start) |
 
@@ -348,12 +348,12 @@ return [], [handler.uuid], [], effect_event
 
 ---
 
-## Dice Manipulation Pattern (DAMAGE_ROLLED)
+## Dice Manipulation Pattern (DAMAGE_ROLL_RESULT)
 
 For abilities that modify dice results (Great Weapon Fighting, Elemental Adept):
 
 ```python
-def my_dice_processor(event: DamageRolledEvent, source_entity_uuid: UUID) -> Optional[DamageRolledEvent]:
+def my_dice_processor(event: DamageRollResultEvent, source_entity_uuid: UUID) -> Optional[DamageRollResultEvent]:
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
