@@ -9,11 +9,139 @@ from pydantic import Field
 
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase, RangeType, Range
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
 
 from dnd.actions import SpellAction, SpellEvent
 
+
+# =============================================================================
+# MAGE ARMOR CONDITION
+# =============================================================================
+
+class MageArmorCondition(BaseCondition):
+    """
+    Mage Armor spell effect.
+
+    Sets AC to 13 + DEX mod when unarmored (using UnarmoredAc.MAGIC_ARMOR).
+    Ends if the target equips armor.
+
+    Duration: 8 hours (but concentration-free, so just a long duration in rounds
+    would be ~4800 rounds in 6-second increments - we use PERMANENT for simplicity
+    and the armor equip handler ends it).
+    """
+    name: str = "Mage Armor"
+    description: str = "AC equals 13 + DEX modifier when unarmored"
+
+    # Track the old unarmored type to restore on removal
+    _old_unarmored_type: Optional[str] = None  # Store as string for Pydantic serialization
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        from dnd.entity import Entity
+        from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
+
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity:
+            return [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+
+        if not isinstance(target_entity, Entity):
+            return [], [], [], declaration_event.cancel(status_message=f"Target is not an Entity")
+
+        # Check if target is wearing armor - Mage Armor doesn't work on armored targets
+        if not target_entity.equipment.is_unarmored():
+            return [], [], [], declaration_event.cancel(status_message="Target is wearing armor - Mage Armor has no effect")
+
+        outs: List[Tuple[UUID, UUID]] = []
+        handler_uuids: List[UUID] = []
+
+        # Store old unarmored type and set to MAGIC_ARMOR
+        self._old_unarmored_type = target_entity.equipment.unarmored_ac_type.value
+        target_entity.equipment.unarmored_ac_type = UnarmoredAc.MAGIC_ARMOR
+
+        # Create armor equip handler that ends the condition when armor is equipped
+        # Capture target_entity_uuid in closure to avoid None issues
+        condition_target_uuid = self.target_entity_uuid
+
+        def mage_armor_equip_processor(event: Event, handler_source_uuid: UUID) -> Optional[Event]:
+            """End Mage Armor if any armor is equipped."""
+            _ = handler_source_uuid  # Unused but required by signature
+
+            # Only care about the target's equipment changes
+            if event.source_entity_uuid != condition_target_uuid:
+                return None
+
+            entity = Entity.get(condition_target_uuid)
+            if not entity:
+                return None
+
+            # Must have Mage Armor
+            if "Mage Armor" not in entity.active_conditions:
+                return None
+
+            # Check if armor was equipped (not a shield)
+            if isinstance(event, ArmorEquipEvent):
+                # Remove Mage Armor
+                entity.remove_condition("Mage Armor")
+                return event.model_copy(update={
+                    "modified": True,
+                    "status_message": f"{entity.name}'s Mage Armor ends (equipped armor)"
+                })
+
+            return None
+
+        # Create the handler
+        handler = EventHandler(
+            name="Mage Armor Watch",
+            source_entity_uuid=self.target_entity_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ARMOR_EQUIP,
+                    event_phase=EventPhase.EXECUTION
+                )
+            ],
+            event_processor=mage_armor_equip_processor
+        )
+
+        # Register handler with entity (auto-registers with EventQueue)
+        target_entity.add_event_handler(handler)
+        handler_uuids.append(handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied Mage Armor to {target_entity.name} (AC = 13 + DEX)"
+        )
+
+        return outs, handler_uuids, [], effect_event
+
+    def _remove(self, _removal_event: Optional[Event] = None) -> None:
+        """Restore the old unarmored AC type on removal."""
+        from dnd.entity import Entity
+        from dnd.blocks.equipment import UnarmoredAc
+
+        if not self.target_entity_uuid:
+            return
+
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity or not isinstance(target_entity, Entity):
+            return
+
+        # Restore old unarmored type
+        if self._old_unarmored_type:
+            try:
+                target_entity.equipment.unarmored_ac_type = UnarmoredAc(self._old_unarmored_type)
+            except ValueError:
+                target_entity.equipment.unarmored_ac_type = UnarmoredAc.NONE
+        else:
+            target_entity.equipment.unarmored_ac_type = UnarmoredAc.NONE
+
+
+# =============================================================================
+# MAGE ARMOR SPELL
+# =============================================================================
 
 class MageArmor(SpellAction):
     """Mage Armor - 1st level Abjuration
@@ -65,7 +193,7 @@ class MageArmor(SpellAction):
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Mage Armor condition to target."""
         from dnd.entity import Entity
-        from dnd.conditions import MageArmorCondition
+        # MageArmorCondition is defined in this file
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster

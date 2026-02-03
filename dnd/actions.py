@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRolledEvent, TakeDamageEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, TakeDamageEvent
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
@@ -812,9 +812,9 @@ class Attack(BaseAction):
                     roll = dice.roll
                     original_rolls.append(roll)
 
-                # Step 2: Create DAMAGE_ROLLED event
+                # Step 2: Create DAMAGE_ROLL_RESULT event
                 # final_rolls starts as copy of original_rolls - handlers will replace entries
-                damage_rolled_event = DamageRolledEvent(
+                damage_roll_event = DamageRollResultEvent(
                     source_entity_uuid=source_entity.uuid,
                     target_entity_uuid=target_entity.uuid,
                     weapon_slot=weapon_slot,
@@ -827,13 +827,13 @@ class Attack(BaseAction):
                 )
 
                 # Step 3: Transition to EFFECT phase - handlers intercept here
-                damage_rolled_event = damage_rolled_event.phase_to(
+                damage_roll_event = damage_roll_event.phase_to(
                     EventPhase.EFFECT,
                     status_message="Damage dice rolled"
                 )
 
                 # Step 4: Apply final_rolls (possibly modified by handlers)
-                damage_rolls = damage_rolled_event.final_rolls
+                damage_rolls = damage_roll_event.final_rolls
                 total_damage = sum(roll.total for roll in damage_rolls)
 
                 # Step 5: Create TAKE_DAMAGE event (allows handlers to track/modify/cancel)

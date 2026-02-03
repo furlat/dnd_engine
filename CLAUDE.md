@@ -622,7 +622,7 @@ All conditions in `dnd/conditions.py`:
 | **FightingStyleArchery** | +2 ranged attack bonus | Modifier on attack rolls |
 | **FightingStyleDefense** | +1 AC when wearing armor | AC modifier |
 | **FightingStyleDueling** | +2 damage with one-handed weapon | Damage modifier |
-| **GreatWeaponFighting** | Reroll 1s and 2s on damage dice | EventHandler on DAMAGE_ROLLED |
+| **GreatWeaponFighting** | Reroll 1s and 2s on damage dice | EventHandler on DAMAGE_ROLL_RESULT |
 | **FightingStyleProtection** | Impose disadvantage on attacks vs allies | EventHandler, uses reaction |
 | **FightingStyleTwoWeaponFighting** | Add ability mod to off-hand damage | Damage modifier |
 | **SecondWindFeature** | Grants Second Wind action + resource | Level-based healing |
@@ -796,7 +796,8 @@ Each `phase_to()` creates new event with same `lineage_uuid`. EventQueue notifie
 | `ATTACK` | Attack action |
 | `MOVEMENT` | Move action (triggers OA when leaving threat) |
 | `FORCED_MOVEMENT` | Push/pull movement (does NOT trigger OA) - used by Shove, Thunderwave |
-| `DAMAGE_ROLLED` | After dice rolled, before applied (for dice manipulation) |
+| `D20_ROLL_RESULT` | After d20 rolled, before outcome (for Lucky, Portent, etc.) |
+| `DAMAGE_ROLL_RESULT` | After damage dice rolled, before applied (for GWF, Savage Attacker) |
 | `TAKE_DAMAGE` | Damage application |
 | `SAVING_THROW` | Save requested/resolved |
 | `SKILL_CHECK` | Skill check (e.g., Athletics contest for Shove) |
