@@ -17,10 +17,12 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, SpatialChangeType
+from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier, DamageType
 from dnd.core.dice import Dice, RollType
 from dnd.core.values import ModifiableValue
+from dnd.entity import Entity
 
 
 def parse_dice_string(dice_str: str) -> Tuple[int, int]:
@@ -58,8 +60,6 @@ class TileEffectCondition(BaseCondition):
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
         """Apply tile effect modifiers and handlers."""
-        from dnd.core.gridmap import get_map
-
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
@@ -97,17 +97,12 @@ class TileEffectCondition(BaseCondition):
 
     def _create_entry_damage_handler(self, tile_uuid: UUID) -> EventHandler:
         """Create an event handler that deals damage when entities enter this tile."""
-        from dnd.core.events import SpatialChangeType
-
         damage_dice_str = self.damage_on_entry_dice
         damage_type = self.damage_on_entry_type
         source_uuid = self.source_entity_uuid
 
         def entry_damage_processor(event: Event, _handler_source_uuid: UUID) -> Optional[Event]:
             """Deal damage when entity enters the tile."""
-            from dnd.core.gridmap import get_map
-            from dnd.entity import Entity
-
             # Check event type
             if not hasattr(event, 'change_type'):
                 return None
@@ -160,9 +155,6 @@ class TileEffectCondition(BaseCondition):
 
         def turn_start_damage_processor(event: Event, _handler_source_uuid: UUID) -> Optional[Event]:
             """Deal damage at turn start if entity is on this tile."""
-            from dnd.core.gridmap import get_map
-            from dnd.entity import Entity
-
             if event.event_type != EventType.TURN_START:
                 return None
 
@@ -277,8 +269,6 @@ class ZoneControlCondition(BaseCondition):
 
     def _apply_to_tiles(self, _declaration_event: Event) -> None:
         """Apply tile effect conditions to all affected tiles."""
-        from dnd.core.gridmap import get_map
-
         tile_effect_class = self.get_tile_effect_class()
         grid = get_map()
 
