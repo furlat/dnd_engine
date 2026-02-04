@@ -10,10 +10,7 @@ from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import (
-    EventHandler, Trigger, EventType, EventPhase,
-    SpatialChangeEvent, SpatialChangeType
-)
+from dnd.core.events import ( EventType, SpatialChangeType)
 
 if TYPE_CHECKING:
     from dnd.core.events import Event

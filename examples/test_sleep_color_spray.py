@@ -1,6 +1,6 @@
 """Test HP-pool targeting for Sleep and Color Spray spells."""
 from uuid import uuid4
-from typing import Tuple
+from typing import Tuple, List, Union
 
 # Reset state FIRST - critical!
 from dnd.utils import reset_combat_state
@@ -176,8 +176,9 @@ def test_sleep_undead_immunity():
     sleep.hp_pool_remaining = 20
 
     targets = sleep.get_all_targets()
-
-    target_names = [Entity.get(uid).name for uid in targets if Entity.get(uid)]
+    target_entities_with_none: List[Union[Entity, None]] = [Entity.get(uid) for uid in targets]
+    target_entities: List[Entity] = [e for e in target_entities_with_none if e is not None]
+    target_names = [e.name for e in target_entities]
     print(f"Targets: {target_names}")
     assert skeleton.uuid not in targets, "Skeleton (undead) should be immune"
     assert goblin.uuid in targets, "Goblin (humanoid) should be affected"
@@ -334,8 +335,10 @@ def test_color_spray_skips_unconscious():
     color_spray.hp_pool_remaining = 50
 
     targets = color_spray.get_all_targets()
+    target_entities_with_none: List[Union[Entity, None]] = [Entity.get(uid) for uid in targets]
+    target_entities: List[Entity] = [e for e in target_entities_with_none if e is not None]
+    target_names = [e.name for e in target_entities]
 
-    target_names = [Entity.get(uid).name for uid in targets if Entity.get(uid)]
     print(f"Targets: {target_names}")
     assert unconscious_target.uuid not in targets, "Unconscious target should be skipped"
     assert conscious.uuid in targets, "Conscious target should be affected"
@@ -375,7 +378,9 @@ def test_color_spray_skips_already_blinded():
 
     targets = color_spray.get_all_targets()
 
-    target_names = [Entity.get(uid).name for uid in targets if Entity.get(uid)]
+    target_entities_with_none: List[Union[Entity, None]] = [Entity.get(uid) for uid in targets]
+    target_entities: List[Entity] = [e for e in target_entities_with_none if e is not None]
+    target_names = [e.name for e in target_entities]
     print(f"Targets: {target_names}")
     assert blinded_target.uuid not in targets, "Already-blinded target should be skipped"
     assert normal.uuid in targets, "Normal target should be affected"
@@ -444,7 +449,6 @@ def test_sleep_skip_high_hp():
     caster = create_caster(name="Wizard", position=(0, 0))
 
     # Single target with HP > pool
-    target = create_target(name="Tough Goblin", position=(5, 5), hp=15)
 
     Entity.update_all_entities_senses(max_distance=20)
 
