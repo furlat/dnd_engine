@@ -155,10 +155,11 @@ def deal_damage_to(
     source_uuid: Optional[UUID] = None
 ) -> int:
     """
-    Apply damage to an entity.
+    Apply damage to an entity with proper event firing.
 
-    Uses entity.health.take_damage() which handles resistances and fires
-    TakeDamageEvent for handlers (RelentlessRage, Retaliation, etc.) to respond.
+    Uses entity.receive_damage() which fires TakeDamageEvent, allowing
+    handlers (RelentlessRage, Retaliation, Sleep wake, Concentration, etc.)
+    to respond to damage.
 
     Args:
         entity: Entity to damage
@@ -172,9 +173,8 @@ def deal_damage_to(
     if source_uuid is None:
         source_uuid = entity.uuid  # Self-damage if no source
 
-    # Apply damage through Health.take_damage which handles resistances
-    # and fires appropriate events
-    actual = entity.health.take_damage(amount, damage_type, source_uuid)
+    # Apply damage through receive_damage which fires TakeDamageEvent
+    actual = entity.receive_damage(amount, damage_type, source_uuid)
     return actual
 
 

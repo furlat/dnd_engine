@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, TakeDamageEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
@@ -836,44 +836,16 @@ class Attack(BaseAction):
                 damage_rolls = damage_roll_event.final_rolls
                 total_damage = sum(roll.total for roll in damage_rolls)
 
-                # Step 5: Create TAKE_DAMAGE event (allows handlers to track/modify/cancel)
-                take_damage_event = TakeDamageEvent(
-                    name="Take Damage",
+                # Step 5: Apply damage (fires TakeDamageEvent internally)
+                # Use primary damage type for the event (handlers see total damage)
+                target_entity.receive_damage(
+                    amount=total_damage,
+                    damage_type=damages[0].damage_type,
                     source_entity_uuid=source_entity.uuid,
-                    target_entity_uuid=target_entity.uuid,
-                    total_damage=total_damage,
                     damage_rolls=damage_rolls,
                     damages=damages,
-                    parent_event=attack_event.uuid,
-                    phase=EventPhase.DECLARATION
+                    parent_event=attack_event.uuid
                 )
-
-                # Progress through phases - handlers can intercept at EFFECT
-                take_damage_event = take_damage_event.phase_to(EventPhase.EXECUTION)
-                take_damage_event = take_damage_event.phase_to(EventPhase.EFFECT)
-
-                # Step 6: Apply damage if not canceled
-                if not take_damage_event.canceled:
-                    effective_damage = take_damage_event.get_effective_damage()
-                    # Apply damage for each roll, proportionally if modified
-                    if take_damage_event.final_damage is not None and total_damage > 0:
-                        # Damage was modified - apply as single amount with first damage type
-                        target_entity.health.take_damage(
-                            effective_damage,
-                            damages[0].damage_type,
-                            source_entity_uuid=source_entity.uuid
-                        )
-                    else:
-                        # Apply each damage roll individually
-                        for i, roll in enumerate(damage_rolls):
-                            damage_type = damages[i].damage_type
-                            target_entity.health.take_damage(
-                                roll.total,
-                                damage_type,
-                                source_entity_uuid=source_entity.uuid
-                            )
-
-                take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
 
                 attack_event = attack_event.phase_to(
                     new_phase=EventPhase.EFFECT,

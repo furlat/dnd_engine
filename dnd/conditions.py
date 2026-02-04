@@ -1012,6 +1012,47 @@ class Concentrating(BaseCondition):
         return super()._remove(removal_event)
 
 
+class NoReactions(BaseCondition):
+    """
+    Prevents the target from taking reactions.
+
+    Used by Shocking Grasp - "target can't take reactions until the start
+    of its next turn."
+
+    This condition sets max reactions to 0 via self_static.
+    Duration: 1 round (expires at start of target's next turn).
+    """
+    name: str = "No Reactions"
+    description: str = "Cannot take reactions"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity:
+            return [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+
+        # Set max reactions to 0
+        reaction_max_uuid = target_entity.action_economy.reactions.self_static.add_max_constraint(
+            constraint=NumericalModifier(
+                name="No Reactions",
+                value=0,
+                source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid
+            )
+        )
+        outs.append((target_entity.action_economy.reactions.uuid, reaction_max_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied No Reactions to {target_entity.name}"
+        )
+        return outs, [], [], effect_event
+
+
 class ConditionType(str, Enum):
     # NOTE: Fighter-specific conditions (HasAttacked, ActionSurging) moved to dnd/classes/fighter.py
     BLINDED = "BLINDED"

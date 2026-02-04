@@ -1,6 +1,6 @@
 """Illusion spells - deceiving the senses and mind.
 
-Contains: Blur, Fear, HypnoticPattern
+Contains: Blur, Fear, HypnoticPattern, ColorSpray
 """
 from typing import Optional, List, Tuple
 from uuid import UUID
@@ -9,13 +9,13 @@ from pydantic import Field
 from typing import cast as type_cast
 
 from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.aoe import AoEShape
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
-from dnd.conditions import Concentrating, Frightened, Charmed, Incapacitated
+from dnd.conditions import Concentrating, Frightened, Charmed, Incapacitated, Blinded
 
 
 class BlurEffect(BaseCondition):
@@ -556,4 +556,202 @@ class HypnoticPattern(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{target.name} is mesmerized by Hypnotic Pattern"
+        )
+
+
+class ColorSprayEffect(BaseCondition):
+    """Effect from Color Spray spell.
+
+    Target is Blinded for 1 round (until end of caster's next turn).
+    """
+    name: str = "Color Spray"
+    description: str = "Blinded by dazzling colors"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        sub_condition_uuids: List[UUID] = []
+
+        # Apply Blinded as sub-condition
+        blinded = Blinded(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            parent_condition=self.uuid
+        )
+        sub_event = target.add_condition(blinded)
+        if sub_event and sub_event.phase == EventPhase.COMPLETION:
+            sub_condition_uuids.append(blinded.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Applied Color Spray blindness to {target.name}"
+        )
+        return [], [], sub_condition_uuids, effect_event
+
+
+class ColorSpray(SpellAction):
+    """Color Spray - 1st level Illusion
+
+    Roll 6d10 HP pool. Creatures in 15ft cone are Blinded for 1 round
+    in order of lowest HP until pool exhausted.
+
+    Skip: Unconscious creatures, already-blinded creatures
+    Upcast: +2d10 per slot level above 1st.
+    """
+    name: str = Field(default="Color Spray")
+    description: str = Field(default="Roll 6d10 HP pool. Affects creatures in order of lowest HP.")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="illusion")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    # AoE configuration
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+
+    # Target filtering - but we override get_all_targets for HP-pool logic
+    include_self: bool = Field(default=False)  # Cone emanates from caster
+    valid_target_filter: str = Field(default="all")
+
+    # HP pool tracking (set during get_all_targets)
+    hp_pool_rolled: int = Field(default=0)
+    hp_pool_remaining: int = Field(default=0)
+
+    def __init__(self, **kwargs):
+        from dnd.core.aoe import Cone
+        from uuid import uuid4
+
+        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
+            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
+            kwargs['aoe_shape'] = Cone(
+                source_entity_uuid=source_uuid,
+                target=kwargs.get('end_position', (1, 0)),  # Direction target
+                length_feet=15
+            )
+        super().__init__(**kwargs)
+
+    def get_range(self) -> Range:
+        return self.spell_range
+
+    def get_hp_pool_dice(self) -> Tuple[int, int]:
+        """Returns (dice_count, dice_value). 6d10 base + 2d10 per upcast."""
+        base_dice = 6
+        upcast_bonus = max(0, self.cast_at_level - self.spell_level) * 2
+        return (base_dice + upcast_bonus, 10)
+
+    def get_all_targets(self) -> List[UUID]:
+        """Override: Select targets by HP pool instead of all AoE targets.
+
+        1. Get AoE candidates using parent logic
+        2. Filter: skip unconscious, skip already-blinded
+        3. Sort by current HP (ascending)
+        4. Select targets until HP pool exhausted
+        """
+        # 1. Get AoE candidates
+        if not (self.aoe_shape and self.end_position):
+            return []
+
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return []
+
+        self.aoe_shape.compute_objective(caster.position)
+
+        # 2. Filter candidates
+        candidates: List[Tuple[int, UUID]] = []
+        for uid in self.aoe_shape.affected_entity_uuids:
+            # Skip caster (cone emanates from self)
+            if uid == self.source_entity_uuid:
+                continue
+
+            entity = Entity.get(uid)
+            if not entity or entity.get_hp() <= 0:
+                continue
+
+            # Color Spray skips unconscious creatures
+            if "Unconscious" in entity.active_conditions:
+                continue
+
+            # Skip already-blinded creatures (they can't be affected further)
+            if "Blinded" in entity.active_conditions:
+                continue
+
+            # Skip creatures immune to blindness
+            if entity.check_condition_immunity("Blinded"):
+                continue
+
+            candidates.append((entity.get_hp(), uid))
+
+        # 3. Sort by HP ascending (lowest first)
+        # Tie-breaker: UUID for deterministic ordering
+        candidates.sort(key=lambda x: (x[0], str(x[1])))
+
+        # 4. Roll HP pool if not already rolled
+        if self.hp_pool_rolled == 0:
+            dice_count, dice_value = self.get_hp_pool_dice()
+            import random
+            roll_results = [random.randint(1, dice_value) for _ in range(dice_count)]
+            total = sum(roll_results)
+            self.hp_pool_rolled = total
+            self.hp_pool_remaining = total
+
+        # 5. Select targets until pool exhausted
+        targets: List[UUID] = []
+        remaining = self.hp_pool_remaining
+        for hp, uid in candidates:
+            if hp <= remaining:
+                targets.append(uid)
+                remaining -= hp
+
+        self.hp_pool_remaining = remaining
+        return targets
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate cone direction. Self-range means no LOS check to target position."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        if not self.end_position:
+            return declaration_event.cancel(status_message="No direction specified for cone")
+
+        # Let parent handle POSITION_AOE multi-target validation
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply Color Spray blindness to current target (called once per target by convolution)."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Color Spray affecting {target.name} ({target.get_hp()} HP)"
+        )
+
+        # Apply ColorSprayEffect condition (has Blinded as sub-condition)
+        # Duration: 1 round (ends at start of caster's next turn)
+        color_spray_effect = ColorSprayEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            duration=Duration(
+                duration=1,
+                duration_type=DurationType.ROUNDS,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=caster.uuid  # Duration tied to caster's turns
+            )
+        )
+        target.add_condition(color_spray_effect)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} is blinded by Color Spray ({target.get_hp()} HP)"
         )
