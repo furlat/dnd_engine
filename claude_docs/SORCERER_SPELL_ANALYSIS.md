@@ -273,7 +273,7 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
 | **Acid Splash** | Conjuration | DEX Save | 1d6 acid, 2 targets within 5ft | **DONE** | 2-target cantrip ✓ |
-| **Chill Touch** | Necromancy | Attack | 1d8 necrotic, prevents healing | MEDIUM | Pattern 1 + new NoHealing condition |
+| **Chill Touch** | Necromancy | Attack | 1d8 necrotic, prevents healing | **DONE** | Pattern 1 + NoHealing condition ✓ |
 | **Dancing Lights** | Evocation | Utility | Creates lights | BLOCKED | No combat effect |
 | **Fire Bolt** | Evocation | Attack | 1d10 fire | **DONE** | Pattern 1 ✓ |
 | **Light** | Evocation | Utility | Object sheds light | BLOCKED | No combat effect |
@@ -284,13 +284,13 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Poison Spray** | Conjuration | CON Save | 1d12 poison, 10ft range | **DONE** | 10ft cantrip ✓ |
 | **Prestidigitation** | Transmutation | Utility | Minor tricks | BLOCKED | No combat effect |
 | **Ray of Frost** | Evocation | Attack | 1d8 cold, -10 speed | **DONE** | Speed reduction ✓ |
-| **Shocking Grasp** | Evocation | Melee Attack | 1d8 lightning, no reactions | MEDIUM | Melee spell attack pattern |
+| **Shocking Grasp** | Evocation | Melee Attack | 1d8 lightning, no reactions | **DONE** | Pattern 11, metal armor adv ✓ |
 | **True Strike** | Divination | Buff | Advantage on next attack | MEDIUM | Delayed buff condition |
 
 ### Cantrip Summary
-- **DONE**: 5 (Fire Bolt, Sacred Flame*, Poison Spray, Ray of Frost, Acid Splash)
-- **MEDIUM**: 3 (Chill Touch, Shocking Grasp, True Strike)
-- **BLOCKED**: 7 (utility cantrips)
+- **DONE**: 7 (Fire Bolt, Sacred Flame*, Poison Spray, Ray of Frost, Acid Splash, Chill Touch, Shocking Grasp)
+- **MEDIUM**: 1 (True Strike)
+- **BLOCKED**: 6 (utility cantrips)
 
 *Sacred Flame is Cleric but implemented
 
@@ -301,28 +301,31 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
 | **Burning Hands** | Evocation | Cone AoE | 3d6 fire, 15ft cone | **DONE** | Pattern 3 ✓ |
-| **Charm Person** | Enchantment | WIS Save | Charmed condition | EASY | Pattern 5, condition exists |
-| **Color Spray** | Illusion | HP-pool | Blinds by HP pool, cone | EASY | HP-pool + AoE (Pattern 9 + 3) |
+| **Charm Person** | Enchantment | WIS Save | Charmed condition | **DONE** | Pattern 5 + duration ✓ |
+| **Color Spray** | Illusion | HP-pool | Blinds by HP pool, cone | **DONE** | Pattern 12 (HP-pool cone) ✓ |
 | **Comprehend Languages** | Divination | Utility | Understand languages | BLOCKED | No combat effect |
 | **Detect Magic** | Divination | Utility | Sense magic | BLOCKED | No combat effect |
 | **Disguise Self** | Illusion | Utility | Change appearance | BLOCKED | No combat effect |
 | **Expeditious Retreat** | Transmutation | Buff | Bonus action Dash each turn | EASY | Pattern 6, Dash exists |
-| **False Life** | Necromancy | Buff | 1d4+4 temp HP | EASY | Temp HP implemented |
+| **False Life** | Necromancy | Buff | 1d4+4 temp HP | **DONE** | Temp HP, upcasting ✓ |
 | **Feather Fall** | Transmutation | Reaction | Slow falling | BLOCKED | Requires Z-axis & falling damage |
 | **Fog Cloud** | Conjuration | Zone | 20ft sphere obscured | MEDIUM | Pattern 8 (spatial events) |
+| **Guiding Bolt** | Evocation | Attack + Mark | 4d6 radiant, next attack adv | **DONE** | Pattern 1 + mark condition ✓ |
 | **Jump** | Transmutation | Buff | Triple jump distance | EASY | Jump action exists |
 | **Mage Armor** | Abjuration | Buff | AC = 13 + DEX | **DONE** | Pattern 5 ✓ |
 | **Magic Missile** | Evocation | Auto-hit | 3× 1d4+1 force | **DONE** | Pattern 4 ✓ |
 | **Shield** | Abjuration | Reaction | +5 AC | EASY | Pattern 10 (clone Protection) |
 | **Silent Image** | Illusion | Utility | Create illusion | BLOCKED | No combat effect |
-| **Sleep** | Enchantment | HP-pool | Unconscious by HP | EASY | AoE + sorted targets + HP pool (Pattern 9 + 3) |
+| **Sleep** | Enchantment | HP-pool | Unconscious by HP | **DONE** | Pattern 12 (HP-pool sphere) ✓ |
 | **Thunderwave** | Evocation | Cube AoE | 2d8 thunder, push | **DONE** | Pattern 3 + 7 ✓ |
 
 ### Level 1 Summary
-- **DONE**: 4 (Burning Hands, Mage Armor, Magic Missile, Thunderwave)
-- **EASY**: 7 (Charm Person, Color Spray, Expeditious Retreat, False Life, Jump, Shield, Sleep)
+- **DONE**: 9 (Burning Hands, Mage Armor, Magic Missile, Thunderwave, False Life, Charm Person, Sleep, Color Spray, Guiding Bolt*)
+- **EASY**: 3 (Expeditious Retreat, Jump, Shield)
 - **MEDIUM**: 1 (Fog Cloud)
-- **BLOCKED**: 5 (utility spells + Feather Fall)
+- **BLOCKED**: 4 (utility spells + Feather Fall)
+
+*Guiding Bolt is Cleric but implemented
 
 ---
 
@@ -495,12 +498,11 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 | **Dominate Monster** | Enchantment | WIS Save | Control any creature | VERY HARD | Mind control/AI |
 | **Earthquake** | Evocation | Zone | 100ft, prone, fissures | HARD | Massive AoE + terrain |
 | **Incendiary Cloud** | Conjuration | Zone | 20ft moving, 10d8 fire | MEDIUM | Pattern 8 + movement |
-| **Power Word Stun** | Enchantment | HP-based | Stunned if ≤150 HP | EASY | Pattern 9, Stunned exists |
+| **Power Word Stun** | Enchantment | HP-based | Stunned if ≤150 HP | **DONE** | Pattern 9 + repeat save ✓ |
 | **Sunburst** | Evocation | Sphere AoE | 12d6 radiant + blind | **DONE** | 60ft sphere, undead disadv ✓ |
 
 ### Level 8 Summary
-- **DONE**: 1 (Sunburst)
-- **EASY**: 1 (Power Word Stun)
+- **DONE**: 2 (Sunburst, Power Word Stun)
 - **MEDIUM**: 1 (Incendiary Cloud)
 - **HARD**: 1 (Earthquake)
 - **VERY HARD**: 1 (Dominate Monster)
@@ -528,9 +530,9 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 
 | Difficulty | Count | Percentage |
 |------------|-------|------------|
-| **DONE** | 28 | 23% |
-| **EASY** | 13 | 11% |
-| **MEDIUM** | 23 | 19% |
+| **DONE** | 36 | 30% |
+| **EASY** | 6 | 5% |
+| **MEDIUM** | 22 | 18% |
 | **HARD** | 14 | 12% |
 | **VERY HARD** | 14 | 12% |
 | **BLOCKED** | 26 | 22% |
@@ -539,18 +541,18 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 **Require new subsystems**: 28 spells (HARD + VERY HARD)
 **Out of scope for combat engine**: 26 spells (BLOCKED)
 
-### Progress: 28 of 94 combat-relevant spells implemented (30%)
+### Progress: 36 of 94 combat-relevant spells implemented (38%)
 ### With existing patterns: 64 of 94 combat-relevant spells implementable (68%)
 
 ---
 
 ## Implementation Priority
 
-### Tier 0: Already Done (28 spells)
+### Tier 0: Already Done (36 spells)
 
-**Cantrips (5):** Fire Bolt, Sacred Flame*, Poison Spray, Ray of Frost, Acid Splash
+**Cantrips (7):** Fire Bolt, Sacred Flame*, Poison Spray, Ray of Frost, Acid Splash, Chill Touch, Shocking Grasp
 
-**Level 1 (4):** Magic Missile, Mage Armor, Burning Hands, Thunderwave
+**Level 1 (9):** Magic Missile, Mage Armor, Burning Hands, Thunderwave, False Life, Charm Person, Sleep, Color Spray, Guiding Bolt*
 
 **Level 2 (6):** Hold Person, Shatter, Scorching Ray, Blur, Misty Step, Blindness/Deafness
 
@@ -562,46 +564,38 @@ Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase
 
 **Level 6 (1):** Circle of Death
 
-**Level 8 (1):** Sunburst
+**Level 8 (2):** Sunburst, Power Word Stun
 
 **Level 9 (1):** Power Word Kill
 
-*Sacred Flame = Cleric, Call Lightning = Druid (but implemented)
+*Sacred Flame = Cleric, Call Lightning = Druid, Guiding Bolt = Cleric (but implemented)
 
-### Tier 1: Easy Extensions (13 spells, 30min-2hr each)
+### Tier 1: Easy Extensions (6 spells, 30min-2hr each)
 
 Use established patterns with minor additions:
 
 | Spell | Level | What's Needed |
 |-------|-------|---------------|
-| Charm Person | 1 | Duration timer on Charmed |
-| Color Spray | 1 | Cone AoE + HP-pool sorted targets (clone Sleep pattern) |
-| Expeditious Retreat | 1 | Granted Dash action |
-| False Life | 1 | Temp HP application |
+| Expeditious Retreat | 1 | Granted Dash action (Pattern 6) |
 | Jump | 1 | Jump distance modifier |
 | Shield | 1 | Reaction +5 AC (Pattern 10, clone Protection) |
-| Sleep | 1 | Sphere AoE + HP-pool with sorted targets |
 | Enhance Ability | 2 | Ability check advantage |
-| Gust of Wind | 2 | Line + push (Pattern 3+7) |
 | Ice Storm | 4 | Cylinder + difficult terrain |
 | Disintegrate | 6 | Single target + special death |
-| Sunbeam | 6 | Line + blind + repeatable |
-| Power Word Stun | 8 | HP check + Stunned |
 
-### Tier 3: Medium Effort (23 spells, 2-6hr each)
+### Tier 3: Medium Effort (22 spells, 2-6hr each)
 
 New conditions or moderate new code:
 
 | Spell | Level | What's Needed |
 |-------|-------|---------------|
-| Chill Touch | 0 | NoHealing condition |
-| Shocking Grasp | 0 | Melee spell attack + no reactions |
 | True Strike | 0 | Delayed advantage buff |
 | Fog Cloud | 1 | Spatial event zone |
 | Alter Self | 2 | Natural Weapons option |
 | Darkness | 2 | Zone + light blocking |
 | Darkvision | 2 | Vision extension |
 | Enlarge/Reduce | 2 | Size-based damage modifier |
+| Gust of Wind | 2 | Line + push (Pattern 3+7) |
 | Levitate | 2 | Vertical movement |
 | See Invisibility | 2 | Vision extension |
 | Web | 2 | Zone + Restrained on enter |
@@ -619,6 +613,7 @@ New conditions or moderate new code:
 | Wall of Stone | 5 | Zone + destructible |
 | Chain Lightning | 6 | Multi-target with chaining |
 | Eyebite | 6 | Multiple condition options |
+| Sunbeam | 6 | Line + blind + repeatable (Pattern 6) |
 | True Seeing | 6 | Vision extension |
 | Delayed Blast Fireball | 7 | Delayed trigger |
 | Incendiary Cloud | 8 | Moving zone |
@@ -654,13 +649,13 @@ New conditions or moderate new code:
 ## Recommended Next Steps
 
 ### Immediate: Complete Easy Spells
-13 spells remaining, each 30min-2hr:
-1. **Sleep, Color Spray** - HP-pool AoE patterns
-2. **Ice Storm** - Cylinder AoE + difficult terrain
-3. **Shield** - Reaction +5 AC (clone Protection pattern)
-4. **Disintegrate, Power Word Stun** - HP-threshold + effects
-5. **Charm Person** - Duration-based Charmed condition
-6. **Sunbeam** - Line AoE + blind + repeatable action
+6 spells remaining, each 30min-2hr:
+1. **Shield** - Reaction +5 AC (clone Protection pattern)
+2. **Expeditious Retreat** - Granted Dash action each turn
+3. **Jump** - Jump distance modifier
+4. **Enhance Ability** - Ability check advantage
+5. **Ice Storm** - Cylinder AoE + difficult terrain
+6. **Disintegrate** - HP-threshold + special death effect
 
 ### Short-term: Zone Spells (Pattern 8)
 Build the spatial event handler pattern with:
@@ -670,11 +665,11 @@ Build the spatial event handler pattern with:
 4. **Cloudkill** - Moving zone
 
 ### Medium-term: Remaining Medium Spells
-23 spells need moderate work:
-- Melee spell attacks (Shocking Grasp)
+22 spells need moderate work:
 - Vision extension spells (Darkvision, See Invisibility, True Seeing)
 - Complex debuffs (Slow, Enlarge/Reduce)
 - Counterspell (reaction on CAST_SPELL event)
+- Sunbeam (Pattern 6 granted action)
 
 ### Quick Win: Reaction Spells (Pattern 10)
 **Shield** and **Counterspell** use the exact same EventHandler pattern as Protection fighting style and opportunity attacks. No new architecture needed!
@@ -687,12 +682,22 @@ Build the spatial event handler pattern with:
 
 With the AoE system complete and the convolution pattern established, the spell implementation landscape has dramatically improved. Of 120 sorcerer spells:
 
-- **28 spells (23%)** already implemented
-- **13 more spells (11%)** use existing patterns (EASY)
-- **23 spells (19%)** need moderate new work (MEDIUM)
+- **36 spells (30%)** already implemented
+- **6 more spells (5%)** use existing patterns (EASY)
+- **22 spells (18%)** need moderate new work (MEDIUM)
 - **14 spells (12%)** need new subsystems (HARD)
 - **14 spells (12%)** need major architecture (VERY HARD)
 - **26 spells (22%)** have no combat mechanics (BLOCKED)
+
+**Recent additions (8 spells):**
+- **Chill Touch, Shocking Grasp** - Cantrips with special effects (NoHealing, NoReactions)
+- **False Life, Charm Person, Sleep, Color Spray** - Level 1 utility/control spells
+- **Guiding Bolt** - Attack spell with advantage mark
+- **Power Word Stun** - HP-threshold spell with repeat save
+
+**New patterns established:**
+- **Pattern 11 (Melee Spell Attack):** Shocking Grasp - uses `RangeType.REACH`, spell attack bonus, conditional advantage
+- **Pattern 12 (HP-Pool AoE):** Sleep, Color Spray - sorted targets by HP, pool exhaustion
 
 **Key insight:** The AoE system unlocked the largest batch of damage spells. The next high-value system is **Zone/Terrain spells via Pattern 8**, which uses existing spatial events infrastructure.
 
@@ -704,6 +709,6 @@ With the AoE system complete and the convolution pattern established, the spell 
 
 **Multi-AoE spells moved to HARD:** Fire Storm and Meteor Swarm require multiple position targeting UI which isn't straightforward.
 
-**HP-Pool spells reassessed:** Sleep and Color Spray are EASY. The pattern is simply AoE targeting + sorted-by-HP targets + HP pool exhaustion. No new subsystem needed.
+**HP-Pool spells now DONE:** Sleep and Color Spray implemented using Pattern 12. The pattern is simply AoE targeting + sorted-by-HP targets + HP pool exhaustion.
 
 **Total implementable:** 64 spells (68% of combat-relevant) are DONE/EASY/MEDIUM with current architecture.
