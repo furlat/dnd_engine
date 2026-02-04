@@ -6,13 +6,14 @@ from dnd.spells.base import SpellAction, SpellEvent
 from dnd.spells.evocation import (
     FireBolt, SacredFlame, MagicMissile, Fireball,
     BurningHands, LightningBolt, Thunderwave, Shatter, Sunburst,
-    ConeOfCold, CircleOfDeath, RayOfFrost, ScorchingRay
+    ConeOfCold, CircleOfDeath, RayOfFrost, ScorchingRay,
+    ShockingGrasp, GuidingBolt, GuidingBoltMarked
 )
 from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin
-from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill
+from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep
-from dnd.spells.necromancy import Blight, BlindnessDeafness
-from dnd.spells.illusion import Blur, Fear, HypnoticPattern
+from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing
+from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray
 
 # Lookup dictionaries (like dnd/items/__init__.py)
 CANTRIPS = {
@@ -21,6 +22,8 @@ CANTRIPS = {
     "Poison Spray": PoisonSpray,
     "Ray of Frost": RayOfFrost,
     "Acid Splash": AcidSplash,
+    "Chill Touch": ChillTouch,
+    "Shocking Grasp": ShockingGrasp,
 }
 
 LEVEL_1_SPELLS = {
@@ -28,6 +31,11 @@ LEVEL_1_SPELLS = {
     "Mage Armor": MageArmor,
     "Burning Hands": BurningHands,
     "Thunderwave": Thunderwave,
+    "False Life": FalseLife,
+    "Charm Person": CharmPerson,
+    "Sleep": Sleep,
+    "Color Spray": ColorSpray,
+    "Guiding Bolt": GuidingBolt,
 }
 
 LEVEL_2_SPELLS = {
@@ -64,6 +72,7 @@ LEVEL_6_SPELLS = {
 
 LEVEL_8_SPELLS = {
     "Sunburst": Sunburst,
+    "Power Word Stun": PowerWordStun,
 }
 
 LEVEL_9_SPELLS = {
@@ -92,11 +101,22 @@ __all__ = [
     "PoisonSpray",
     "RayOfFrost",
     "AcidSplash",
+    "ChillTouch",
+    "ShockingGrasp",
+    # Spell-specific conditions
+    "NoHealing",
+    "GuidingBoltMarked",
+    "PowerWordStunEffect",
     # Level 1
     "MagicMissile",
     "MageArmor",
     "BurningHands",
     "Thunderwave",
+    "FalseLife",
+    "CharmPerson",
+    "Sleep",
+    "ColorSpray",
+    "GuidingBolt",
     # Level 2
     "HoldPerson",
     "Shatter",
@@ -122,6 +142,7 @@ __all__ = [
     "CircleOfDeath",
     # Level 8
     "Sunburst",
+    "PowerWordStun",
     # Level 9
     "PowerWordKill",
     # Lookup dicts

@@ -377,6 +377,18 @@ class Health(BaseBlock):
         else:
             return 0
     
+    def is_healing_blocked(self) -> bool:
+        """Check if healing is blocked by a condition (e.g., Chill Touch).
+
+        Returns:
+            True if the entity cannot regain hit points.
+        """
+        from dnd.entity import Entity
+        entity = Entity.get(self.source_entity_uuid)
+        if entity and "No Healing" in entity.active_conditions:
+            return True
+        return False
+
     def heal(self, heal: int) -> None:
         """
         Heal the entity by removing damage. Cannot remove damage taken by the temporary hit points.
@@ -384,6 +396,10 @@ class Health(BaseBlock):
         Args:
             heal (int): The amount of healing to apply.
         """
+        # Check for healing block (e.g., Chill Touch)
+        if self.is_healing_blocked():
+            return
+
         if self.temporary_hit_points.score > 0:
             #check if we have temporary hit points that absorbed the damage taken, 
             # sicne we can not heal them we can only heal the portion that went through them

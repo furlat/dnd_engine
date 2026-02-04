@@ -114,11 +114,73 @@ def test_ray_of_frost_speed_reduction():
     final_speed = target.action_economy.movement.normalized_score
     speed_reduction = initial_speed - final_speed
 
-    assert has_condition(target, "Ray of Frost Slowed"), "Should have Ray of Frost Slowed condition"
+    # Effect condition lives on CASTER (tracks duration until caster's turn)
+    assert has_condition(caster, "Ray of Frost Effect"), "Caster should have Ray of Frost Effect condition"
     assert speed_reduction == 10, f"Speed should be reduced by 10, got {speed_reduction}"
     print(f"  Initial speed: {initial_speed}")
     print(f"  Final speed: {final_speed}")
     print("PASS: Ray of Frost reduces speed by 10ft")
+
+
+def test_ray_of_frost_duration():
+    """Ray of Frost slow expires at START of CASTER's next turn, not target's.
+
+    This test verifies the fix for the duration bug. The SRD says the speed
+    reduction lasts "until the start of your next turn" (caster's turn).
+    Before the fix, it expired at the start of the target's turn (wrong).
+    """
+    print("\n=== Test: Ray of Frost Duration (Caster's Turn) ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    target = create_test_target("Target", (2, 0), dex=1)
+
+    Entity.update_all_entities_senses()
+
+    # Force hit
+    hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
+    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
+
+    ray = RayOfFrost(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
+    ray.apply()
+
+    caster.spellcasting.spell_attack_bonus.self_static.remove_modifier(mod_uuid)
+
+    # Verify setup: caster has effect condition (which tracks the speed modifier on target)
+    base_speed = 30  # Default speed
+    assert has_condition(caster, "Ray of Frost Effect"), "Caster should have RayOfFrostEffect"
+    assert target.action_economy.movement.normalized_score == base_speed - 10, "Target should be slowed"
+    print("  Setup verified: caster has effect, target speed reduced")
+
+    # Simulate TARGET's turn start - target should STILL be slowed!
+    # The effect is on caster, so target's turn doesn't affect it
+    target.on_turn_start()
+    assert target.action_economy.movement.normalized_score == base_speed - 10, \
+        "Target should STILL be slowed after their turn start"
+    print("  After target's turn start: still slowed (correct!)")
+
+    # Simulate TARGET's turn end
+    target.on_turn_end()
+    assert target.action_economy.movement.normalized_score == base_speed - 10, \
+        "Target should still be slowed after their turn end"
+    print("  After target's turn end: still slowed")
+
+    # Simulate CASTER's turn start - NOW the effect should expire
+    caster.on_turn_start()
+    assert not has_condition(caster, "Ray of Frost Effect"), "Caster's effect should expire at their turn start"
+    assert target.action_economy.movement.normalized_score == base_speed, \
+        "Target speed should be restored when effect expires"
+    print("  After caster's turn start: effect expired, target speed restored")
+
+    # Verify speed is restored
+    expected_speed = 30  # Default speed
+    actual_speed = target.action_economy.movement.normalized_score
+    assert actual_speed == expected_speed, f"Speed should be restored to {expected_speed}, got {actual_speed}"
+    print(f"  Target speed: {actual_speed} (restored)")
+
+    print("PASS: Ray of Frost expires at caster's turn start (correct per SRD)")
 
 
 # =============================================================================
@@ -622,6 +684,7 @@ if __name__ == "__main__":
         # Ray of Frost
         test_ray_of_frost_hit_damage,
         test_ray_of_frost_speed_reduction,
+        test_ray_of_frost_duration,
         # Acid Splash
         test_acid_splash_single_target,
         test_acid_splash_two_targets,

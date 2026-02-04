@@ -22,21 +22,28 @@ This document analyzes all **120 sorcerer spells** from D&D 5e SRD for implement
 | Level 9 | 5 |
 | **Total** | **120** |
 
-### Currently Implemented Spells (28)
+### Currently Implemented Spells (36)
 
 | Spell | Level | School | Type | Notes |
 |-------|-------|--------|------|-------|
-| **Cantrips (5)** |
+| **Cantrips (7)** |
 | Fire Bolt | 0 | Evocation | Attack | Cantrip scaling ✓ |
 | Sacred Flame | 0 | Evocation | DEX Save | Cantrip scaling ✓ |
 | Poison Spray | 0 | Conjuration | CON Save | 10ft range, 1d12 poison ✓ |
 | Ray of Frost | 0 | Evocation | Attack | Speed reduction ✓ |
 | Acid Splash | 0 | Conjuration | DEX Save | 2-target cantrip ✓ |
-| **Level 1 (4)** |
+| Chill Touch | 0 | Necromancy | Attack | NoHealing condition ✓ |
+| Shocking Grasp | 0 | Evocation | Melee Attack | Melee spell attack, NoReactions ✓ |
+| **Level 1 (9)** |
 | Magic Missile | 1 | Evocation | Auto-hit | Upcasting, multi-target ✓ |
 | Mage Armor | 1 | Abjuration | Buff | AC = 13 + DEX ✓ |
 | Burning Hands | 1 | Evocation | Cone AoE | 15ft cone, DEX save ✓ |
 | Thunderwave | 1 | Evocation | Cube AoE | 15ft cube, CON save, push ✓ |
+| False Life | 1 | Necromancy | Buff | 1d4+4 temp HP, upcasts ✓ |
+| Charm Person | 1 | Enchantment | WIS Save | Charmed condition ✓ |
+| Sleep | 1 | Enchantment | HP-Pool AoE | 20ft sphere, sorted by HP ✓ |
+| Color Spray | 1 | Illusion | HP-Pool Cone | 15ft cone, Blinded ✓ |
+| Guiding Bolt | 1 | Evocation | Attack + Mark | 4d6 radiant, next attack has adv ✓ |
 | **Level 2 (6)** |
 | Hold Person | 2 | Enchantment | WIS Save | Humanoid only, paralyzed ✓ |
 | Shatter | 2 | Evocation | Sphere AoE | 10ft sphere, CON save ✓ |
@@ -59,12 +66,13 @@ This document analyzes all **120 sorcerer spells** from D&D 5e SRD for implement
 | Cone of Cold | 5 | Evocation | Cone AoE | 60ft cone, 8d8 cold ✓ |
 | **Level 6 (1)** |
 | Circle of Death | 6 | Necromancy | Sphere AoE | 60ft sphere, 8d6 necrotic ✓ |
-| **Level 8 (1)** |
+| **Level 8 (2)** |
 | Sunburst | 8 | Evocation | Sphere AoE | 60ft sphere, blind, undead disadv ✓ |
+| Power Word Stun | 8 | Enchantment | HP-Threshold | Stunned if ≤150 HP, CON repeat save ✓ |
 | **Level 9 (1)** |
 | Power Word Kill | 9 | Enchantment | HP-check | Kill if ≤100 HP ✓ |
 
-*Note: Sacred Flame is primarily a Cleric spell but is implemented. Call Lightning is Druid.*
+*Note: Sacred Flame is primarily a Cleric spell but is implemented. Call Lightning is Druid. Guiding Bolt is Cleric.*
 
 ---
 
@@ -160,12 +168,14 @@ These patterns document the tricks and techniques already used in the codebase. 
 **Key insight:** SPATIAL_ENTITY_ENTERED events already fire via GridMap - "terrain" spells are just event handlers!
 
 ### Pattern 9: HP-Threshold Effect
-**Would enable:** Power Word Kill/Stun, Sleep, Color Spray
-**Effort:** EASY for threshold check, MEDIUM for HP-pool
+**Used by:** Power Word Kill, Power Word Stun
+**Effort:** EASY - simple HP check
 
 ```
 For threshold: Check target.get_hp() against threshold → instant effect
-For HP-pool (Sleep): Subtract HP from pool, apply condition to each target
+  - Power Word Kill: HP ≤ 100 → instant death
+  - Power Word Stun: HP ≤ 150 → Stunned + CON repeat save at turn end
+No saving throw - just HP check determines success.
 ```
 
 ### Pattern 10: Reaction Spell
@@ -187,6 +197,33 @@ For HP-pool (Sleep): Subtract HP from pool, apply condition to each target
 - Shield: listens for ATTACK at EXECUTION, adds +5 to AC
 
 Both `attack_bonus` and `ac` are attached to the ATTACK event at EXECUTION phase.
+
+### Pattern 11: Melee Spell Attack
+**Used by:** Shocking Grasp
+**Effort:** EASY once pattern established
+
+```
+1. Use RangeType.REACH with normal=5 (melee range)
+2. Get spell_attack_bonus from caster (NOT weapon attack)
+3. Cross-propagate with target AC via set_from_target()
+4. roll_d20() → determine_attack_outcome()
+5. Apply damage on hit + additional effects (NoReactions for Shocking Grasp)
+6. Optional: Conditional advantage (metal armor detection)
+```
+**Key insight:** Uses spell attack bonus, not weapon attack. Can check equipment for conditional effects.
+
+### Pattern 12: HP-Pool AoE
+**Used by:** Sleep, Color Spray
+**Effort:** EASY - straightforward algorithm
+
+```
+1. Get AoE candidates (sphere/cone based on shape)
+2. Filter by immunity (undead, charm-immune for Sleep)
+3. Sort targets by current HP (ascending)
+4. Select targets until HP pool exhausted
+5. Apply condition to each selected target (Unconscious/Blinded)
+```
+**Key insight:** Override `get_all_targets()` to implement HP-pool selection. Works with any AoE shape.
 
 ---
 

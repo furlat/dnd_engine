@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from collections import defaultdict
 
 from dnd.core.values import ModifiableValue, AdvantageStatus
-from dnd.core.modifiers import NumericalModifier, CreatureType
+from dnd.core.modifiers import NumericalModifier, CreatureType, DamageType
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
@@ -12,7 +12,8 @@ from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 from dnd.core.events import (
     Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
-    D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent
+    D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
+    TakeDamageEvent
 )
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
@@ -736,7 +737,7 @@ class Entity(BaseBlock):
     
     def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
         """ From each damage we get the dice and damage type and we roll it """
-        
+
         rolls = []
         for damage in damages:
             dice = damage.get_dice(attack_outcome=attack_outcome)
@@ -746,7 +747,67 @@ class Entity(BaseBlock):
 
 
         return rolls
-    
+
+    def receive_damage(
+        self,
+        amount: int,
+        damage_type: DamageType,
+        source_entity_uuid: UUID,
+        damage_rolls: Optional[List[DiceRoll]] = None,
+        damages: Optional[List[Damage]] = None,
+        parent_event: Optional[UUID] = None
+    ) -> int:
+        """
+        Apply damage with proper event firing.
+
+        Fires TakeDamageEvent through phases, allowing handlers to:
+        - Track damage (HasTakenDamage, Concentration)
+        - Modify damage (future features)
+        - Cancel damage (future features)
+        - React to damage (Retaliation, Sleep wake)
+
+        Args:
+            amount: Damage amount (pre-resistance)
+            damage_type: Type of damage
+            source_entity_uuid: Who/what dealt the damage
+            damage_rolls: Optional dice roll details for combat log
+            damages: Optional damage specifications
+            parent_event: Optional parent event UUID for lineage
+
+        Returns:
+            Actual damage taken after resistances (0 if canceled)
+        """
+        # Create event at DECLARATION phase
+        take_damage_event = TakeDamageEvent(
+            name="Take Damage",
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=self.uuid,
+            total_damage=amount,
+            damage_rolls=damage_rolls or [],
+            damages=damages or [],
+            parent_event=parent_event,
+            phase=EventPhase.DECLARATION
+        )
+
+        # Progress through phases - handlers can intercept at EFFECT
+        take_damage_event = take_damage_event.phase_to(EventPhase.EXECUTION)
+        take_damage_event = take_damage_event.phase_to(EventPhase.EFFECT)
+
+        # Apply damage if not canceled
+        actual_damage = 0
+        if not take_damage_event.canceled:
+            effective_damage = take_damage_event.get_effective_damage()
+            actual_damage = self.health.take_damage(
+                effective_damage,
+                damage_type,
+                source_entity_uuid=source_entity_uuid
+            )
+
+        # Complete the event
+        take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
+
+        return actual_damage
+
     def get_hp(self) -> int:
         """ total health of the entity """
         con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
