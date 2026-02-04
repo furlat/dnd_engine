@@ -284,16 +284,17 @@ class Raging(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -375,7 +376,7 @@ class Raging(BaseCondition):
             status_message=f"{target.name} enters a rage!"
         )
 
-        return outs, handler_uuids, [], effect_event
+        return outs, handler_uuids, [], [], effect_event
 
 
 # =============================================================================
@@ -634,16 +635,17 @@ class RageFeature(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -676,7 +678,7 @@ class RageFeature(BaseCondition):
             status_message=f"Granted Rage ({self.rage_uses} uses, +{self.rage_damage} damage) to {target.name}"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up resource and action on removal."""
@@ -721,16 +723,17 @@ class Frenzied(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -747,7 +750,7 @@ class Frenzied(BaseCondition):
             status_message=f"{target.name} is frenzied!"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up FrenziedStrike action on removal."""
@@ -1032,16 +1035,17 @@ class FrenzyFeature(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1058,7 +1062,7 @@ class FrenzyFeature(BaseCondition):
             status_message=f"Granted Frenzy to {target.name}"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up Frenzy action on removal."""

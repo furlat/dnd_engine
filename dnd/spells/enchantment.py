@@ -213,18 +213,18 @@ class HoldPersonEffect(BaseCondition):
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
-        
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+
 
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
 
         if not isinstance(target, Entity):
-            return [], [], [], declaration_event.cancel(status_message=f"Target is not an Entity")
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target is not an Entity")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -258,7 +258,7 @@ class HoldPersonEffect(BaseCondition):
             status_message=f"Applied Hold Person effect to {target.name}"
         )
 
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """Create handler for repeat WIS saves at end of target's turn."""
@@ -477,14 +477,14 @@ class HoldMonsterEffect(BaseCondition):
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply Paralyzed sub-condition and register repeat save handler."""
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message=f"Target entity not found")
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity not found")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -515,7 +515,7 @@ class HoldMonsterEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Hold Monster effect to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """Create handler for repeat WIS saves at end of target's turn."""
@@ -891,13 +891,13 @@ class SleepEffect(BaseCondition):
     name: str = "Sleep"
     description: str = "Magically asleep"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -921,7 +921,7 @@ class SleepEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Sleep effect to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_wake_on_damage_handler(self) -> EventHandler:
         """Wake target when they take damage."""
@@ -1138,13 +1138,13 @@ class PowerWordStunEffect(BaseCondition):
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -1169,7 +1169,7 @@ class PowerWordStunEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Power Word Stun to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """CON save at end of turn to end stun."""

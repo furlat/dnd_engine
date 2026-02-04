@@ -180,16 +180,16 @@ class RayOfFrostEffect(BaseCondition):
     description: str = "Tracking condition for Ray of Frost speed reduction"
     affected_target_uuid: Optional[UUID] = None  # The target whose speed is reduced
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         from dnd.entity import Entity
         from dnd.core.modifiers import NumericalModifier
 
         if not self.affected_target_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
 
         target = Entity.get(self.affected_target_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
@@ -209,7 +209,7 @@ class RayOfFrostEffect(BaseCondition):
             update={"condition": self},
             status_message=f"Applied Ray of Frost speed reduction to {target.name}"
         )
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class RayOfFrost(SpellAction):
@@ -1825,15 +1825,15 @@ class SunburstBlindedEffect(BaseCondition):
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         from dnd.entity import Entity
 
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -1858,7 +1858,7 @@ class SunburstBlindedEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Sunburst blindness to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """CON save at end of turn to end blindness."""
@@ -2268,14 +2268,14 @@ class GuidingBoltMarked(BaseCondition):
     # Track caster for duration
     caster_uuid: Optional[UUID] = None
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         from dnd.entity import Entity
 
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target entity not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity not found")
 
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
@@ -2301,7 +2301,7 @@ class GuidingBoltMarked(BaseCondition):
             update={"condition": self},
             status_message=f"Applied Guiding Bolt mark to {target.name}"
         )
-        return outs, handler_uuids, [], effect_event
+        return outs, handler_uuids, [], [], effect_event
 
     def _create_remove_on_attack_handler(self) -> EventHandler:
         """Remove this condition after first attack against target."""

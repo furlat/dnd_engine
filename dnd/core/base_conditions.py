@@ -7,7 +7,7 @@ from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler
+from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
 class DurationType(str,Enum):
     ROUNDS = "rounds"
     PERMANENT = "permanent"
@@ -104,6 +104,7 @@ class BaseCondition(BaseObject):
     parent_condition: Optional[UUID] = Field(default=None,description="the UUID of the parent condition, if it exists")
     sub_conditions: List[UUID] = Field(default_factory=list,description="list of condition UUIDs that are sub conditions of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the sub conditions will triget sub events ")
     event_handlers_uuids: List[UUID] = Field(default_factory=list,description="list of event handler UUIDs that are event handlers of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the event handlers will trigger event handlers ")
+    spatial_handler_uuids: List[UUID] = Field(default_factory=list, description="list of spatial handler UUIDs that are spatial handlers of this condition, they will be removed when this condition is removed via remove_spatial_handlers()")
     external_conditions: List[Tuple[UUID, UUID]] = Field(
         default_factory=list,
         description="List of (target_entity_uuid, condition_uuid) for conditions this condition caused on OTHER entities. These 'nephews' are removed when this condition is removed."
@@ -155,16 +156,27 @@ class BaseCondition(BaseObject):
             parent_event=parent_event.uuid if parent_event else None
         )
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
-        """ Apply the condition and return the modifiers associated with the condition full implementation is in the subclass 
-        the event is used as parent if subconditions are triggered (e.g. sub conditons application)"""
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:
+        """Apply the condition and return the modifiers associated with the condition.
+
+        Full implementation is in the subclass. The event is used as parent if
+        subconditions are triggered (e.g. sub conditions application).
+
+        Returns:
+            Tuple of:
+            - List[Tuple[UUID, UUID]]: (modifiable_value_uuid, modifier_uuid) pairs
+            - List[UUID]: event_handler_uuids (trigger-based handlers)
+            - List[UUID]: subcondition_uuids
+            - List[UUID]: spatial_handler_uuids (position-indexed handlers)
+            - Optional[Event]: completion event
+        """
         # event is declared in the main apply method
-        
+
         event = declaration_event.phase_to(EventPhase.EXECUTION, update={"condition":self}) # execution is defined, last chance to modify it
         event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self}) # effect is defined reactions to the effect applications
-        #completions happend in main apply method such that 
-        
-        return [],[],[], event
+        #completions happen in main apply method such that
+
+        return [],[],[],[], event
     
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Custom extra Remove the condition full implementation is in the subclass if needed"""
@@ -187,17 +199,27 @@ class BaseCondition(BaseObject):
         #first create the declaration event
         if declaration_event is None:
             declaration_event = self.declare_event(parent_event)
-     
+
         if declaration_event.canceled: #check if event was canceled at declaration
             return None
-        
+
         #
         #then apply the condition
-        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, effect_event = self._apply(declaration_event)
-        if not effect_event or (len(modifers_uuids) == 0 and len(event_handlers_uuids) == 0 and len(sub_conditions_uuids) == 0):
+        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, spatial_handler_uuids, effect_event = self._apply(declaration_event)
+
+        # Check if condition actually did something - must have effect_event AND at least one of:
+        # modifiers, event_handlers, sub_conditions, spatial_handlers, or terrain_conditions (for zone spells)
+        has_effects = (
+            len(modifers_uuids) > 0 or
+            len(event_handlers_uuids) > 0 or
+            len(sub_conditions_uuids) > 0 or
+            len(spatial_handler_uuids) > 0 or
+            len(self.terrain_conditions) > 0
+        )
+        if not effect_event or not has_effects:
             return declaration_event.cancel(status_message=f"Condition {self.name} was not applied for some unknown reason, check the implementaiton of _apply method")
-        
-        
+
+
         for block_uuid, modifiers_uuids in modifers_uuids:
             if block_uuid not in self.modifers_uuids:
                 self.modifers_uuids[block_uuid] = []
@@ -209,6 +231,9 @@ class BaseCondition(BaseObject):
         for sub_condition_uuid in sub_conditions_uuids:
             if sub_condition_uuid not in self.sub_conditions:
                 self.sub_conditions.append(sub_condition_uuid)
+        for spatial_handler_uuid in spatial_handler_uuids:
+            if spatial_handler_uuid not in self.spatial_handler_uuids:
+                self.spatial_handler_uuids.append(spatial_handler_uuid)
 
         self.applied = True
         completed_event = effect_event.phase_to(EventPhase.COMPLETION)
@@ -350,9 +375,24 @@ class BaseCondition(BaseObject):
         for event_handler_uuid in self.event_handlers_uuids:
             event_handler = EventHandler.get(event_handler_uuid)
             if event_handler is None:
-                return True #event handler not found, it was already removed
-            elif isinstance(event_handler,EventHandler):
+                continue  # event handler not found, it was already removed
+            elif isinstance(event_handler, EventHandler):
                 event_handler.remove()
+        self.event_handlers_uuids.clear()
+        return True
+
+    def remove_spatial_handlers(self) -> bool:
+        """Remove all spatial handlers owned by this condition.
+
+        Spatial handlers are position-indexed handlers registered via
+        EventQueue.add_spatial_handler(). They are stored separately
+        from trigger-based EventHandlers.
+        """
+        if not self.applied:
+            return False
+        for handler_uuid in self.spatial_handler_uuids:
+            EventQueue.remove_spatial_handler(handler_uuid)
+        self.spatial_handler_uuids.clear()
         return True
 
     def remove(self, expire: bool = False, skip_parent_removal: bool = False, parent_event: Optional[Event] = None) -> bool:
@@ -383,6 +423,7 @@ class BaseCondition(BaseObject):
         if not skip_parent_removal:
             self.remove_condition_from_parent()
         self.remove_event_handlers()
+        self.remove_spatial_handlers()  # Position-indexed handler cleanup
 
         # Mark as no longer applied AFTER all cleanup is done
         self.applied = False

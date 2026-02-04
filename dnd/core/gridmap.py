@@ -9,14 +9,14 @@ Manages:
 - Cell subscriptions for spatial events
 """
 
-from typing import Dict, List, Optional, Tuple, Set, DefaultDict
+from typing import Dict, List, Optional, Tuple, Set, DefaultDict, cast
 from uuid import UUID, uuid4
 from collections import defaultdict
 
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
 from dnd.core.base_tiles import Tile, MovementMode
-from dnd.core.events import SpatialChangeEvent, SpatialChangeType
+from dnd.core.events import SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue
 
 
 class GridMap:
@@ -83,25 +83,51 @@ class GridMap:
     # Event Firing
     # =========================================================================
 
-    def _fire_spatial_event(self, event: 'SpatialChangeEvent') -> None:
+    def _fire_spatial_event(self, event: 'SpatialChangeEvent') -> Optional['SpatialChangeEvent']:
         """
-        Fire a spatial change event.
+        Fire a spatial change event through full phase lifecycle.
 
-        If events are enabled, fires immediately.
-        If disabled (batch mode), queues for later.
+        Progresses: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
+
+        Returns None if event was cancelled, otherwise returns completed event.
+        If events are disabled (batch mode), queues for later and returns None.
         """
-        if self._events_enabled:
-            # Event is already registered with EventQueue in its __init__
-            # The event system will handle notifying subscribers
-            pass
-        else:
+        if not self._events_enabled:
             self._pending_events.append(event)
+            return None
+
+        # Register at DECLARATION phase - handlers can react/cancel
+        current_event = cast(SpatialChangeEvent, EventQueue.register(event))
+        if current_event.canceled:
+            return None
+
+        # Progress to EXECUTION
+        current_event = current_event.phase_to(EventPhase.EXECUTION)
+        current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
+        if current_event.canceled:
+            return None
+
+        # Progress to EFFECT - this is where damage/saves/conditions happen
+        current_event = current_event.phase_to(EventPhase.EFFECT)
+        current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
+        if current_event.canceled:
+            return None
+
+        # Progress to COMPLETION - informational only
+        # SpatialSensesCallback fires here via _on_event_callbacks
+        current_event = current_event.phase_to(EventPhase.COMPLETION)
+        current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
+
+        return current_event
 
     def enable_events(self) -> None:
-        """Enable event firing and flush pending events."""
+        """Enable event firing and flush pending events through full lifecycle."""
         self._events_enabled = True
-        # Flush pending events (events were already registered, just clear the queue)
+        # Fire all pending events through full lifecycle
+        pending = self._pending_events.copy()
         self._pending_events.clear()
+        for event in pending:
+            self._fire_spatial_event(event)
 
     def disable_events(self) -> None:
         """Disable event firing (for batch operations)."""
