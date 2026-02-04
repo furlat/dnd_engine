@@ -106,13 +106,13 @@ class NoHealing(BaseCondition):
     name: str = "No Healing"
     description: str = "Cannot regain hit points"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         # Add a dummy +0 modifier so applied=True (required for proper cleanup)
         # We use proficiency_bonus as it's always present
@@ -130,7 +130,7 @@ class NoHealing(BaseCondition):
             update={"condition": self},
             status_message=f"{target.name} cannot regain hit points"
         )
-        return [(target.proficiency_bonus.uuid, mod_uuid)], [], [], effect_event
+        return [(target.proficiency_bonus.uuid, mod_uuid)], [], [], [], effect_event
 
 
 class ChillTouchEffect(BaseCondition):
@@ -165,17 +165,17 @@ class ChillTouchEffect(BaseCondition):
             )
         return None
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.affected_target_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
 
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Caster UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Caster UUID not set")
 
         target = Entity.get(self.affected_target_uuid)
         caster = Entity.get(self.target_entity_uuid)  # Condition is on caster
         if not target or not caster:
-            return [], [], [], declaration_event.cancel(status_message="Target or caster not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target or caster not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
@@ -210,7 +210,7 @@ class ChillTouchEffect(BaseCondition):
             mod_uuid = caster.proficiency_bonus.self_static.add_value_modifier(dummy_mod)
             outs.append((caster.proficiency_bonus.uuid, mod_uuid))
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class ChillTouch(SpellAction):
@@ -542,13 +542,13 @@ class BlindnessDeafnessEffect(BaseCondition):
     spell_dc: int = 10
     effect_type: str = "blinded"  # "blinded" or "deafened"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -581,7 +581,7 @@ class BlindnessDeafnessEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied {self.effect_type.capitalize()} to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """CON save at end of turn to end the effect."""

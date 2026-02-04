@@ -144,12 +144,12 @@ class DualWielder(BaseCondition):
     name: str = "Dual Wielder"
     description: str = "You gain a +1 bonus to AC while wielding a separate melee weapon in each hand."
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             # Add the contextual AC bonus
@@ -157,20 +157,20 @@ class DualWielder(BaseCondition):
             modifier_uuid = target_entity.equipment.ac_bonus.self_contextual.add_value_modifier(dual_wielder)
             outs.append((target_entity.equipment.ac_bonus.uuid, modifier_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Dual Wielder contextual ac modifer condition to {target_entity.name}")
-            return outs,[],[],effect_event
+            return outs,[],[],[],effect_event
         else:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 class ElementalWeaponMastery(BaseCondition):
     name: str = "Elemental Weapon Mastery"
     description: str = "You have advantage on attack rolls made with weapons that deal acid, cold, fire, lightning, poison, or thunder damage."
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
             # Add the contextual advantage modifier
@@ -178,20 +178,20 @@ class ElementalWeaponMastery(BaseCondition):
             modifier_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(elemental_adv)
             outs.append((target_entity.equipment.attack_bonus.uuid, modifier_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Elemental Weapon Mastery contextual advantage modifier condition to {target_entity.name}")
-            return outs,[],[],effect_event
+            return outs,[],[],[],effect_event
         else:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 class ElementalAffinity(BaseCondition):
     name: str = "Elemental Affinity"
     description: str = "Years of performing with enchanted weapons have attuned you to fire, but left you vulnerable to cold. You have resistance to fire damage but vulnerability to cold damage."
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             fire_resistance = ResistanceModifier(
                 name="Elemental Affinity",
@@ -210,23 +210,23 @@ class ElementalAffinity(BaseCondition):
             fire_resistance_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(fire_resistance)
             cold_vulnerability_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(cold_vulnerability)
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Elemental Affinity resistance modifier condition to {target_entity.name}")
-            return [],[fire_resistance_uuid,cold_vulnerability_uuid],[],effect_event
+            return [],[fire_resistance_uuid,cold_vulnerability_uuid],[],[],effect_event
         else:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 class CircusPerformer(BaseCondition):
     name: str = "Circus Performer"
     description: str = "Your past in the circus has granted you exceptional acrobatic abilities and combat training."
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            
+
             # Acrobatics expertise (+7 and expertise)
             acrobatics = target_entity.skill_set.get_skill("acrobatics")
             acro_mod_uuid = acrobatics.skill_bonus.self_static.add_value_modifier(
@@ -342,23 +342,23 @@ class CircusPerformer(BaseCondition):
             outs.append((target_entity.proficiency_bonus.uuid, prof_mod_uuid))
 
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Circus Performer condition to {target_entity.name}")
-            return outs,[],[],effect_event
+            return outs,[],[],[],effect_event
         else:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}") 
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 class Tired(BaseCondition):
     name: str = "Tired"
     description: str = "You are exhausted from combat or travel, reducing your movement speed and reactions."
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            
+
             # Movement penalty (-10 feet)
             movement_mod_uuid = target_entity.action_economy.movement.self_static.add_value_modifier(
                 NumericalModifier(
@@ -405,6 +405,6 @@ class Tired(BaseCondition):
             outs.append((dex_save.bonus.uuid, dex_adv_uuid))
 
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Tired condition to {target_entity.name}")
-            return outs,[],[],effect_event
+            return outs,[],[],[],effect_event
         else:
-            return [],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}") 
+            return [],[],[],[],declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}") 
