@@ -168,9 +168,23 @@ class Move(BaseAction):
 
     def _setup_costs_from_path(self):
         if self.path is not None and self.use_movement_cost:
-            # Path includes starting position, so actual squares moved = len - 1
-            # Each square = 5 feet in D&D 5e
-            feet_cost = (len(self.path) - 1) * 5
+            # Calculate cost from actual terrain, not just path length
+            from dnd.core.gridmap import get_map
+            from dnd.core.base_tiles import MovementMode
+
+            grid = get_map()
+            total_cost = 0
+
+            # Path includes starting position, so iterate from index 1
+            for i in range(1, len(self.path)):
+                tile = grid.get_tile(*self.path[i])
+                if tile:
+                    total_cost += tile.get_movement_cost(MovementMode.WALKING)
+                else:
+                    total_cost += 1  # Default cost if no tile exists
+
+            # Each cost unit = 5 feet in D&D 5e
+            feet_cost = int(total_cost * 5)
             self.costs.append(Cost(name="Movement Cost",cost_type="movement",cost=feet_cost,evaluator=entity_action_economy_cost_evaluator))
 
     def _setup_path(self):
@@ -274,7 +288,23 @@ class Move(BaseAction):
             # Check if we already have a movement cost
             has_movement_cost = any(c.cost_type == "movement" for c in costs)
             if not has_movement_cost:
-                feet_cost = (len(path) - 1) * 5
+                # Calculate cost from actual terrain, not just path length
+                from dnd.core.gridmap import get_map
+                from dnd.core.base_tiles import MovementMode
+
+                grid = get_map()
+                total_cost = 0
+
+                # Path includes starting position, so iterate from index 1
+                for i in range(1, len(path)):
+                    tile = grid.get_tile(*path[i])
+                    if tile:
+                        total_cost += tile.get_movement_cost(MovementMode.WALKING)
+                    else:
+                        total_cost += 1  # Default cost if no tile exists
+
+                # Each cost unit = 5 feet in D&D 5e
+                feet_cost = int(total_cost * 5)
                 costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=entity_action_economy_cost_evaluator))
 
         return MovementEvent(
@@ -302,12 +332,20 @@ class Move(BaseAction):
             return validated_event
         
     def _apply(self, execution_event: MovementEvent) -> MovementEvent:
-        """Apply the movement action"""
+        """Apply the movement action using cell-by-cell movement.
+
+        Iterates through path, firing StepMovementEvent for each cell transition.
+        This allows OA handlers and terrain effects to interrupt movement.
+        """
+        from dnd.core.events import StepMovementEvent
+        from dnd.core.gridmap import get_map
+        from dnd.core.base_tiles import MovementMode
+
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity or not isinstance(source_entity, Entity):
             return execution_event.cancel(status_message=f"Source entity not found for {execution_event.name}")
 
-        ## first check if we have path and if not it means there are no costs for it
+        # First check if we have path
         if self.path is None and execution_event.path is None:
             return execution_event.cancel(status_message=f"No path found for {execution_event.name}")
         elif self.path is None and execution_event.path is not None:
@@ -318,7 +356,7 @@ class Move(BaseAction):
                 path=self.path,
                 status_message=f"Added paths to {execution_event.uuid}"
             )
-        
+
         costs = [BaseCost.model_validate(cost) for cost in self.costs]
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -327,23 +365,66 @@ class Move(BaseAction):
         )
         if effect_event.canceled:
             return effect_event
-            
-        Entity.update_entity_position(source_entity,execution_event.end_position)
-        Entity.update_all_entities_senses(max_distance=20)  # Use consistent vision range 
-        #now we declare the application of the effect
-        
 
-        if source_entity.position == execution_event.start_position:
-            # here is a good opportunity to recompute the cost if for some resason the movement failed
-            return effect_event.cancel(status_message=f"Failed to move to {execution_event.end_position} for {execution_event.name}")
-        elif source_entity.position != execution_event.start_position and source_entity.position != execution_event.end_position:
-            # here we have a movement that failed
-            return  execution_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
-                status_message=f"Failed to move to {execution_event.end_position} for {execution_event.name}, moved to {source_entity.position} instead",
-                end_position=source_entity.position
+        # Cell-by-cell movement
+        grid = get_map()
+        path = self.path or []
+        total_path_length = len(path)
+        actual_end_position = source_entity.position  # Track where we actually end up
+
+        for i in range(1, total_path_length):
+            from_pos = path[i - 1]
+            to_pos = path[i]
+
+            # Get step cost from terrain
+            tile = grid.get_tile(*to_pos)
+            step_cost_units = tile.get_movement_cost(MovementMode.WALKING) if tile else 1.0
+            step_cost_feet = int(step_cost_units * 5)
+
+            # Check if entity has enough movement remaining (conditions affect this via modifiers)
+            remaining_movement = source_entity.action_economy.movement.normalized_score
+            if remaining_movement < step_cost_feet:
+                break
+
+            # Fire StepMovementEvent (OA and terrain handlers see this)
+            step_event = StepMovementEvent(
+                source_entity_uuid=self.source_entity_uuid,
+                source_entity_name=source_entity.name,
+                from_position=from_pos,
+                to_position=to_pos,
+                path_index=i,
+                total_path_length=total_path_length,
+                movement_cost=step_cost_feet,
+                phase=EventPhase.EFFECT,
+                parent_event=effect_event.uuid
             )
-            
+            # post() returns the processed event (which may have been canceled by handlers)
+            processed_step = step_event.post()
+
+            # Check if step was canceled (e.g., by a reaction or trap)
+            if processed_step.canceled:
+                break
+
+            # Actually move the entity one cell
+            Entity.update_entity_position(source_entity, to_pos)
+            actual_end_position = to_pos
+
+            # Deduct movement cost for this step
+            source_entity.action_economy.consume("movement", step_cost_feet)
+
+        # Note: Senses are updated reactively via SPATIAL events fired by GridMap.move_entity()
+        # Each entity's spatial handler incrementally updates visible_entities
+
+        # Determine final result
+        if source_entity.position == execution_event.start_position:
+            return effect_event.cancel(status_message=f"Failed to move for {execution_event.name}")
+        elif source_entity.position != execution_event.end_position:
+            # Partial movement (stopped early due to death, OA, etc.)
+            return execution_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
+                end_position=actual_end_position
+            )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -351,8 +432,33 @@ class Move(BaseAction):
         )
     
     def _apply_costs(self, completion_event: MovementEvent) -> Optional[MovementEvent]:
-        """Apply the costs of the action"""
-        return entity_action_economy_cost_applier(completion_event,self.source_entity_uuid)
+        """Apply costs - movement is already consumed per-step in _apply().
+
+        Skip movement cost here since cell-by-cell movement already deducts
+        movement per step. Only apply non-movement costs (if any).
+        """
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None or not isinstance(entity, Entity):
+            return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
+
+        for cost in completion_event.costs:
+            # Skip movement cost - already consumed per-step in _apply()
+            if cost.cost_type == "movement":
+                continue
+            # Apply other costs (actions, bonus_actions, reactions)
+            if cost.cost > 0:
+                entity.action_economy.consume(cost.cost_type, cost.cost)
+            # Apply resource costs
+            if cost.resource_cost > 0 and cost.resource_name:
+                if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
+                    return completion_event.cancel(
+                        status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
+                    )
+
+        return completion_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Successfully applied costs for {completion_event.name}"
+        )
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[MovementEvent]:
         """Override to provide specific return type."""
@@ -1432,14 +1538,12 @@ class Jump(BaseAction):
             if distance > movement_available:
                 continue
 
-            # Check walkability (for landing)
+            # Check walkability (for landing) - this handles non-blocking entities (dead)
             if not grid.is_walkable_for(pos[0], pos[1], entity.uuid):
                 continue
 
-            # Check occupancy (can't land on another entity)
-            occupants = grid.get_entities_at(pos)
-            if occupants and occupants != {entity.uuid}:
-                continue
+            # Note: is_walkable_for already checks occupancy excluding non-blocking entities,
+            # so we don't need a separate occupancy check here
 
             valid.append(pos)
 
@@ -1585,14 +1689,12 @@ class Jump(BaseAction):
         if distance > movement_available:
             return declaration_event.cancel(status_message=f"Not enough movement ({distance}ft > {movement_available}ft)")
 
-        # Check walkability
+        # Check walkability - this handles occupancy (excluding non-blocking entities like dead)
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
-            return declaration_event.cancel(status_message=f"Position {end_pos} not walkable")
+            return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
 
-        # Check occupancy
-        occupants = grid.get_entities_at(end_pos)
-        if occupants and occupants != {source_entity.uuid}:
-            return declaration_event.cancel(status_message=f"Position {end_pos} occupied")
+        # Note: is_walkable_for already checks occupancy excluding non-blocking entities,
+        # so we don't need a separate occupancy check here
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -1614,8 +1716,8 @@ class Jump(BaseAction):
             return effect_event
 
         # Teleport entity (bypasses path - that's the point of jumping!)
+        # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
         Entity.update_entity_position(source_entity, execution_event.end_position)
-        Entity.update_all_entities_senses(max_distance=20)
 
         # Verify landing
         if source_entity.position != execution_event.end_position:
@@ -2009,8 +2111,8 @@ class Shove(BaseAction):
             forced_event = forced_event.phase_to(EventPhase.COMPLETION)
 
             # Actually move the target
+            # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
             Entity.update_entity_position(target, final_pos)
-            Entity.update_all_entities_senses()
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
