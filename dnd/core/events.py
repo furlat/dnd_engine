@@ -8,7 +8,7 @@ __all__ = [
     # Type literals
     "AbilityName", "SkillName",
     # Core event classes
-    "Event", "Trigger", "EventHandler", "EventQueue",
+    "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     # D20 events (legacy)
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
     # Unified dice roll events
@@ -34,7 +34,7 @@ __all__ = [
 
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any
+from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set
 from dnd.core.values import ModifiableValue
 
 # Import combat log utilities for generate_combat_log methods and combat_log field
@@ -428,26 +428,54 @@ class Trigger(BaseModel):
         """ get a simple trigger that is only based on the event type and phase """
         return Trigger(event_type=self.event_type, event_phase=self.event_phase)
 
-class EventHandler(BaseObject):
-    """A class that can handle events"""
-    name: str = Field(default="EventHandler",description="The name of the event handler")
-    trigger_conditions: List[Trigger] = Field(default_factory=list,description="The conditions that trigger the event handler")
+class BaseHandler(BaseObject):
+    """Base class for all handlers (EventHandler and SpatialHandler).
+
+    Provides common fields and invocation logic.
+    """
+    name: str = Field(default="BaseHandler", description="The name of the handler")
     event_processor: EventProcessor = Field(description="The event processor to handle the event")
-    
+
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
+        """Execute the event processor."""
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
-        if any(trigger(event) for trigger in self.trigger_conditions):
+        return self.event_processor(event, source_entity_uuid)
+
+    def get_declaration_event(self, parent_event: Optional[Event] = None) -> Event:
+        """Get the declaration event for this handler."""
+        return Event(
+            name=self.name,
+            event_type=EventType.TRIGGER_EVENT,
+            event_phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            status_message=f"Triggering handler {self.name}",
+            parent_event=parent_event.uuid if parent_event else None
+        )
+
+
+class EventHandler(BaseHandler):
+    """A trigger-based handler that matches events via Trigger conditions.
+
+    Use this for:
+    - Non-spatial events (attacks, damage rolls, saves, etc.)
+    - Global spatial event listening (OA needs to check ALL movements)
+    """
+    name: str = Field(default="EventHandler", description="The name of the event handler")
+    trigger_conditions: List[Trigger] = Field(default_factory=list, description="The conditions that trigger the event handler")
+
+    def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
+        """Check triggers then execute processor if any match."""
+        if source_entity_uuid is None:
+            source_entity_uuid = self.source_entity_uuid
+        # Empty trigger_conditions means this handler always fires when called
+        # For spatial handlers with empty triggers, they rely on position index
+        if not self.trigger_conditions or any(trigger(event) for trigger in self.trigger_conditions):
             return self.event_processor(event, source_entity_uuid)
         return None
-    
-    def get_declaration_event(self, parent_event: Optional[Event] = None) -> Event:
-        """ get the declaration event for the event handler """
-        return Event(name=self.name,event_type=EventType.TRIGGER_EVENT, event_phase=EventPhase.DECLARATION, source_entity_uuid=self.source_entity_uuid, status_message=f"Triggering event handler {self.name}", parent_event=parent_event.uuid if parent_event else None)
-    
 
     def remove(self) -> bool:
-        """ Remove the event handler from the EventQueue"""
+        """Remove the event handler from the EventQueue."""
         if self.uuid not in EventQueue._event_handlers:
             return False
         EventQueue.remove_event_handler(self)
@@ -460,6 +488,34 @@ class EventHandler(BaseObject):
 
         return True
 
+
+class SpatialHandler(BaseHandler):
+    """A position-indexed handler for spatial events.
+
+    Use this for zone spells and terrain effects that only care about
+    specific positions. Provides O(1) lookup at those positions.
+
+    Unlike EventHandler, SpatialHandler:
+    - Does NOT use trigger_conditions (position filtering is done by registry)
+    - Is stored in a SEPARATE registry (_spatial_handlers)
+    - Is found via position index, not trigger matching
+    """
+    name: str = Field(default="SpatialHandler", description="The name of the spatial handler")
+    positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Positions this handler fires at")
+    event_type: EventType = Field(default=EventType.SPATIAL_ENTITY_ENTERED, description="The spatial event type")
+    event_phase: EventPhase = Field(default=EventPhase.EFFECT, description="The event phase to trigger at")
+
+    # No trigger check - position filtering is done by registry lookup
+    def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
+        """Execute the event processor (position already validated by registry)."""
+        if source_entity_uuid is None:
+            source_entity_uuid = self.source_entity_uuid
+        return self.event_processor(event, source_entity_uuid)
+
+    def remove(self) -> bool:
+        """Remove the spatial handler from the EventQueue."""
+        return EventQueue.remove_spatial_handler(self.uuid)
+
 class EventQueue:
     """Static registry for events with additional querying and reaction capabilities"""
     # Static registry dictionaries
@@ -471,10 +527,35 @@ class EventQueue:
     _events_by_source : Dict[UUID, List[Event]] = defaultdict(list)
     _events_by_target : Dict[UUID, List[Event]] = defaultdict(list)
     _all_events : List[Event] = []
-    _event_handlers : Dict[UUID, EventHandler] = {}
-    _event_handlers_by_trigger : Dict[Trigger, List[EventHandler]] = defaultdict(list)
-    _event_handlers_by_simple_trigger : Dict[Trigger, List[EventHandler]] = defaultdict(list)
-    _event_handlers_by_source_entity_uuid : Dict[UUID, List[EventHandler]] = defaultdict(list)
+
+    # =========================================================================
+    # EventHandler registries (trigger-based)
+    # =========================================================================
+    _event_handlers : Dict[UUID, 'EventHandler'] = {}
+    _event_handlers_by_trigger : Dict[Trigger, List['EventHandler']] = defaultdict(list)
+    _event_handlers_by_simple_trigger : Dict[Trigger, List['EventHandler']] = defaultdict(list)
+    _event_handlers_by_source_entity_uuid : Dict[UUID, List['EventHandler']] = defaultdict(list)
+
+    # =========================================================================
+    # SpatialHandler registries (position-indexed) - COMPLETELY SEPARATE
+    # =========================================================================
+    # Main registry for spatial handlers
+    _spatial_handlers: Dict[UUID, 'SpatialHandler'] = {}
+
+    # Position-indexed spatial handlers for O(1) lookup
+    # (EventType, EventPhase) -> position -> List[BaseHandler]
+    # Accepts both SpatialHandler (preferred) and legacy EventHandler
+    _spatial_handlers_by_position: Dict[
+        Tuple[EventType, EventPhase],
+        Dict[Tuple[int, int], List['BaseHandler']]
+    ] = defaultdict(lambda: defaultdict(list))
+
+    # Source entity index for spatial handlers
+    _spatial_handlers_by_source_entity_uuid: Dict[UUID, List['SpatialHandler']] = defaultdict(list)
+
+    # Reverse index for batch position updates (handler_uuid -> positions)
+    # Used by update_spatial_handler_positions for efficient delta computation
+    _handler_positions: Dict[UUID, Tuple[Tuple[EventType, EventPhase], Set[Tuple[int, int]]]] = {}
 
     # Passive event callbacks (for monitoring, logging, websocket broadcast)
     # These are called for ALL events after storage, cannot modify events
@@ -579,14 +660,79 @@ class EventQueue:
                 pass  # Don't let callback errors affect event processing
     
     @classmethod
-    def _get_handlers_for_event(cls, event: Event) -> List[EventHandler]:
+    def _get_handlers_for_event(cls, event: Event) -> List['BaseHandler']:
         """Get all handlers that should process this event.
 
         This finds handlers by:
-        1. Getting simple handlers (no source/target filter) via simple trigger lookup
-        2. Iterating through all handlers and checking if their trigger matches the event
+        1. For spatial events with position: O(1) lookup via position index
+        2. Getting simple handlers (no source/target filter) via simple trigger lookup
+        3. Iterating through all handlers and checking if their trigger matches the event
            using Trigger.__call__ which properly handles source/target filtering
         """
+        # Check if this is a spatial event with position - use position-indexed lookup
+        spatial_event_types = (
+            EventType.SPATIAL_ENTITY_ENTERED,
+            EventType.SPATIAL_ENTITY_LEFT,
+            EventType.SPATIAL_TILE_CHANGED
+        )
+        if event.event_type in spatial_event_types:
+            position = getattr(event, 'position', None)
+            if position is not None:
+                return cls._get_handlers_for_spatial_event(event, position)
+
+        # Non-spatial events: use existing lookup logic
+        return cls._get_handlers_for_non_spatial_event(event)
+
+    @classmethod
+    def _get_handlers_for_spatial_event(
+        cls,
+        event: Event,
+        position: Tuple[int, int]
+    ) -> List['BaseHandler']:
+        """Get handlers for spatial events using position-indexed lookup.
+
+        Returns a mix of SpatialHandler and EventHandler instances:
+        1. Position-indexed SpatialHandlers (O(1) lookup) - from _spatial_handlers
+        2. Simple trigger EventHandlers (backward compatibility for OA pattern)
+        3. Complex trigger EventHandlers that match this event
+
+        Key insight: Step 3 only iterates _event_handlers, NOT _spatial_handlers.
+        This prevents O(N) iteration over all spatial handlers.
+        """
+        event_key = (event.event_type, event.phase)
+        handlers: List['BaseHandler'] = []
+        seen: Set[UUID] = set()
+
+        # 1. Position-indexed SpatialHandlers (O(1) lookup) - from SEPARATE registry
+        pos_handlers = cls._spatial_handlers_by_position[event_key].get(position, [])
+        for h in pos_handlers:
+            if h.uuid not in seen:
+                handlers.append(h)
+                seen.add(h.uuid)
+
+        # 2. Simple trigger EventHandlers (e.g., OA on STEP_MOVEMENT)
+        simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
+        for h in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
+            if h.uuid not in seen:
+                handlers.append(h)
+                seen.add(h.uuid)
+
+        # 3. Complex trigger EventHandlers (source/target filtering)
+        # Only iterates _event_handlers, NOT _spatial_handlers
+        for handler in cls._event_handlers.values():
+            if handler.uuid in seen:
+                continue
+            for trigger in handler.trigger_conditions:
+                if trigger(event):
+                    handlers.append(handler)
+                    seen.add(handler.uuid)
+                    break
+
+        return handlers
+
+    @classmethod
+    def _get_handlers_for_non_spatial_event(cls, event: Event) -> List['BaseHandler']:
+        """Get handlers for non-spatial events using existing lookup logic."""
         # Get the simple trigger for the event (just type + phase)
         simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
 
@@ -596,8 +742,8 @@ class EventQueue:
         # For handlers with complex triggers (source/target filtering),
         # we need to check each one since their trigger may filter by source/target UUID.
         # Use a set to avoid duplicates (handlers may be in both registries)
-        handler_set: set[UUID] = {h.uuid for h in simple_handlers}
-        matching_handlers = list(simple_handlers)
+        handler_set: Set[UUID] = {h.uuid for h in simple_handlers}
+        matching_handlers: List['BaseHandler'] = list(simple_handlers)
 
         # Check all handlers to find ones with complex triggers that match this event
         for handler in cls._event_handlers.values():
@@ -632,13 +778,26 @@ class EventQueue:
     
     @classmethod
     def remove_event_handler(cls, event_handler: EventHandler) -> None:
-        """Remove a handler"""
+        """Remove a handler from all indices."""
+        # Remove from trigger indices
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
-                cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].remove(event_handler)
-            cls._event_handlers_by_trigger[trigger].remove(event_handler)
-            cls._event_handlers.pop(event_handler.uuid)
-        cls._event_handlers_by_source_entity_uuid[event_handler.source_entity_uuid].remove(event_handler)
+                simple_trigger = trigger.get_simple_trigger()
+                if event_handler in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
+                    cls._event_handlers_by_simple_trigger[simple_trigger].remove(event_handler)
+            if event_handler in cls._event_handlers_by_trigger.get(trigger, []):
+                cls._event_handlers_by_trigger[trigger].remove(event_handler)
+
+        # Remove from main handler dict (only once, outside the loop)
+        cls._event_handlers.pop(event_handler.uuid, None)
+
+        # Remove from source entity index
+        source_handlers = cls._event_handlers_by_source_entity_uuid.get(event_handler.source_entity_uuid, [])
+        if event_handler in source_handlers:
+            source_handlers.remove(event_handler)
+
+        # Remove from spatial handler indices if present
+        cls._remove_from_spatial_indices(event_handler.uuid)
 
     @classmethod
     def remove_event_handlers_by_uuid(cls, uuid: UUID) -> None:
@@ -646,6 +805,248 @@ class EventQueue:
         event_handler = cls._event_handlers.get(uuid)
         if event_handler:
             cls.remove_event_handler(event_handler)
+
+    # =========================================================================
+    # Position-Indexed Spatial Handlers
+    # =========================================================================
+
+    @classmethod
+    def add_spatial_handler(
+        cls,
+        handler: Union['EventHandler', 'SpatialHandler'],
+        positions: Optional[Set[Tuple[int, int]]] = None,
+        event_type: EventType = EventType.SPATIAL_ENTITY_ENTERED,
+        event_phase: EventPhase = EventPhase.EFFECT
+    ) -> None:
+        """
+        Register a handler for specific positions only.
+
+        This provides O(1) handler lookup for spatial events instead of
+        iterating through all handlers. Used by zone spells to efficiently
+        handle entry/exit effects.
+
+        Accepts either:
+        - SpatialHandler: Uses handler.positions, handler.event_type, handler.event_phase
+        - EventHandler: Uses provided positions, event_type, event_phase (legacy support)
+
+        Args:
+            handler: The handler to register (SpatialHandler or EventHandler)
+            positions: Set of (x, y) positions (optional if handler is SpatialHandler)
+            event_type: The spatial event type (default: SPATIAL_ENTITY_ENTERED)
+            event_phase: The event phase to trigger at (default: EFFECT)
+        """
+        # Handle SpatialHandler - use its built-in positions and event settings
+        if isinstance(handler, SpatialHandler):
+            actual_positions = handler.positions if not positions else positions
+            event_key = (handler.event_type, handler.event_phase)
+
+            # Update handler's positions if provided
+            if positions:
+                handler.positions = positions.copy()
+
+            # Add to position index
+            for pos in actual_positions:
+                cls._spatial_handlers_by_position[event_key][pos].append(handler)
+
+            # Track positions in reverse index for efficient updates
+            cls._handler_positions[handler.uuid] = (event_key, actual_positions.copy())
+
+            # Add to SPATIAL handler registries (SEPARATE from _event_handlers)
+            cls._spatial_handlers[handler.uuid] = handler
+            cls._spatial_handlers_by_source_entity_uuid[handler.source_entity_uuid].append(handler)
+
+        else:
+            # Legacy EventHandler support - add to position index but also main registry
+            if positions is None:
+                positions = set()
+
+            event_key = (event_type, event_phase)
+
+            # Add to position index
+            for pos in positions:
+                cls._spatial_handlers_by_position[event_key][pos].append(handler)
+
+            # Track positions in reverse index for efficient updates
+            cls._handler_positions[handler.uuid] = (event_key, positions.copy())
+
+            # Also add to main handler registry (for general queries)
+            cls._event_handlers[handler.uuid] = handler
+            cls._event_handlers_by_source_entity_uuid[handler.source_entity_uuid].append(handler)
+
+    @classmethod
+    def update_spatial_handler_positions(
+        cls,
+        handler_uuid: UUID,
+        new_positions: Set[Tuple[int, int]],
+        event_type: Optional[EventType] = None,
+        event_phase: Optional[EventPhase] = None
+    ) -> bool:
+        """
+        Batch update handler positions - compute delta, only change affected positions.
+
+        This is efficient for zone movement: instead of removing all positions
+        and adding all new positions, we only modify the difference.
+
+        Args:
+            handler_uuid: UUID of the handler to update
+            new_positions: New set of positions for this handler
+            event_type: Override event type (uses stored value if None)
+            event_phase: Override event phase (uses stored value if None)
+
+        Returns:
+            True if handler was found and updated, False otherwise
+        """
+        if handler_uuid not in cls._handler_positions:
+            return False
+
+        # Look for handler in both registries
+        handler: Optional['BaseHandler'] = cls._spatial_handlers.get(handler_uuid)
+        if not handler:
+            handler = cls._event_handlers.get(handler_uuid)
+        if not handler:
+            return False
+
+        old_event_key, old_positions = cls._handler_positions[handler_uuid]
+
+        # Use new event key if provided, otherwise keep old
+        if event_type is not None and event_phase is not None:
+            new_event_key = (event_type, event_phase)
+        else:
+            new_event_key = old_event_key
+
+        # If event key changed, remove from all old positions and add to all new
+        if new_event_key != old_event_key:
+            # Remove from old event key positions
+            for pos in old_positions:
+                handlers_at_pos = cls._spatial_handlers_by_position[old_event_key].get(pos, [])
+                if handler in handlers_at_pos:
+                    handlers_at_pos.remove(handler)
+                    if not handlers_at_pos:
+                        del cls._spatial_handlers_by_position[old_event_key][pos]
+
+            # Add to new event key positions
+            for pos in new_positions:
+                cls._spatial_handlers_by_position[new_event_key][pos].append(handler)
+        else:
+            # Same event key - compute position delta
+            positions_to_remove = old_positions - new_positions
+            positions_to_add = new_positions - old_positions
+
+            # Remove handler from positions we're leaving
+            for pos in positions_to_remove:
+                handlers_at_pos = cls._spatial_handlers_by_position[new_event_key].get(pos, [])
+                if handler in handlers_at_pos:
+                    handlers_at_pos.remove(handler)
+                    if not handlers_at_pos:
+                        del cls._spatial_handlers_by_position[new_event_key][pos]
+
+            # Add handler to new positions
+            for pos in positions_to_add:
+                cls._spatial_handlers_by_position[new_event_key][pos].append(handler)
+
+        # Update reverse index
+        cls._handler_positions[handler_uuid] = (new_event_key, new_positions.copy())
+
+        # If this is a SpatialHandler, also update its positions field
+        if isinstance(handler, SpatialHandler):
+            handler.positions = new_positions.copy()
+
+        return True
+
+    @classmethod
+    def remove_spatial_handler(cls, handler_uuid: UUID) -> bool:
+        """
+        Remove a spatial handler from all position indices.
+
+        Works with both SpatialHandler (in _spatial_handlers) and
+        legacy EventHandler (in _event_handlers) registered via add_spatial_handler.
+
+        Args:
+            handler_uuid: UUID of the handler to remove
+
+        Returns:
+            True if handler was found and removed, False otherwise
+        """
+        if handler_uuid not in cls._handler_positions:
+            return False
+
+        # Look for handler in both registries
+        handler: Optional['BaseHandler'] = cls._spatial_handlers.get(handler_uuid)
+        is_spatial_handler = handler is not None
+
+        if not handler:
+            handler = cls._event_handlers.get(handler_uuid)
+
+        if not handler:
+            # Still clean up indices even if handler is gone
+            cls._remove_from_spatial_indices(handler_uuid)
+            return True
+
+        # Remove from spatial indices
+        cls._remove_from_spatial_indices(handler_uuid)
+
+        # Remove from appropriate registry
+        if is_spatial_handler:
+            cls._spatial_handlers.pop(handler_uuid, None)
+            source_handlers = cls._spatial_handlers_by_source_entity_uuid.get(handler.source_entity_uuid, [])
+            if handler in source_handlers:
+                source_handlers.remove(handler)
+        else:
+            cls._event_handlers.pop(handler_uuid, None)
+            source_handlers = cls._event_handlers_by_source_entity_uuid.get(handler.source_entity_uuid, [])
+            if handler in source_handlers:
+                source_handlers.remove(handler)
+
+        return True
+
+    @classmethod
+    def _remove_from_spatial_indices(cls, handler_uuid: UUID) -> None:
+        """Internal helper to remove handler from spatial position indices."""
+        if handler_uuid not in cls._handler_positions:
+            return
+
+        event_key, positions = cls._handler_positions[handler_uuid]
+
+        # Look for handler in both registries
+        handler: Optional['BaseHandler'] = cls._spatial_handlers.get(handler_uuid)
+        if not handler:
+            handler = cls._event_handlers.get(handler_uuid)
+
+        # Remove from each position
+        for pos in positions:
+            handlers_at_pos = cls._spatial_handlers_by_position[event_key].get(pos, [])
+            if handler and handler in handlers_at_pos:
+                handlers_at_pos.remove(handler)
+                if not handlers_at_pos:
+                    del cls._spatial_handlers_by_position[event_key][pos]
+
+        # Remove from reverse index
+        del cls._handler_positions[handler_uuid]
+
+    @classmethod
+    def get_spatial_handlers_at(
+        cls,
+        position: Tuple[int, int],
+        event_type: EventType = EventType.SPATIAL_ENTITY_ENTERED,
+        event_phase: EventPhase = EventPhase.EFFECT
+    ) -> List['BaseHandler']:
+        """
+        Get all spatial handlers registered for a specific position.
+
+        Args:
+            position: The (x, y) position to query
+            event_type: The spatial event type
+            event_phase: The event phase
+
+        Returns:
+            List of handlers registered at this position (may be empty)
+        """
+        event_key = (event_type, event_phase)
+        return cls._spatial_handlers_by_position[event_key].get(position, []).copy()
+
+    # =========================================================================
+    # End Spatial Handler Methods
+    # =========================================================================
 
     @classmethod
     def reset(cls) -> None:
@@ -659,11 +1060,16 @@ class EventQueue:
         cls._events_by_target.clear()
         cls._events_by_lineage.clear()
         cls._events_by_timestamp.clear()
-        # Clear handlers
+        # Clear EventHandler registries
         cls._event_handlers.clear()
         cls._event_handlers_by_trigger.clear()
         cls._event_handlers_by_simple_trigger.clear()
         cls._event_handlers_by_source_entity_uuid.clear()
+        # Clear SpatialHandler registries (SEPARATE)
+        cls._spatial_handlers.clear()
+        cls._spatial_handlers_by_position.clear()
+        cls._spatial_handlers_by_source_entity_uuid.clear()
+        cls._handler_positions.clear()
     
 
     @classmethod
@@ -1020,7 +1426,14 @@ class SpatialChangeEvent(Event):
     def entity_entered(cls, position: Tuple[int, int], entity_uuid: UUID,
                        old_position: Optional[Tuple[int, int]] = None,
                        source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
-        """Create an event for an entity entering a cell."""
+        """Create an event for an entity entering a cell.
+
+        Event starts at DECLARATION phase to allow full lifecycle:
+        DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
+
+        Handlers can react at EFFECT phase (entry damage, saves, etc.)
+        Callbacks fire at COMPLETION for passive updates (senses).
+        """
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
             event_type=EventType.SPATIAL_ENTITY_ENTERED,
@@ -1028,14 +1441,21 @@ class SpatialChangeEvent(Event):
             position=position,
             entity_uuid=entity_uuid,
             old_position=old_position,
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.DECLARATION,
+            use_register=False  # GridMap controls registration via _fire_spatial_event
         )
 
     @classmethod
     def entity_left(cls, position: Tuple[int, int], entity_uuid: UUID,
                     new_position: Optional[Tuple[int, int]] = None,
                     source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
-        """Create an event for an entity leaving a cell."""
+        """Create an event for an entity leaving a cell.
+
+        Event starts at DECLARATION phase to allow full lifecycle:
+        DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
+
+        Note: old_position field stores the new_position for reference.
+        """
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
             event_type=EventType.SPATIAL_ENTITY_LEFT,
@@ -1043,13 +1463,17 @@ class SpatialChangeEvent(Event):
             position=position,
             entity_uuid=entity_uuid,
             old_position=new_position,  # Store new position in old_position field for reference
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.DECLARATION,
+            use_register=False  # GridMap controls registration via _fire_spatial_event
         )
 
     @classmethod
     def tile_changed(cls, position: Tuple[int, int], walkable: bool, visible: bool,
                      source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
-        """Create an event for a tile property change."""
+        """Create an event for a tile property change.
+
+        Event starts at DECLARATION phase to allow full lifecycle.
+        """
         return cls(
             source_entity_uuid=source_entity_uuid or uuid4(),
             event_type=EventType.SPATIAL_TILE_CHANGED,
@@ -1057,7 +1481,8 @@ class SpatialChangeEvent(Event):
             position=position,
             tile_walkable=walkable,
             tile_visible=visible,
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.DECLARATION,
+            use_register=False  # GridMap controls registration via _fire_spatial_event
         )
 
 

@@ -298,7 +298,12 @@ def test_entity_senses_with_gridmap():
 
 
 def test_no_duplicate_events():
-    """Test that moving an entity doesn't cause duplicate events."""
+    """Test that moving an entity produces consistent event counts.
+
+    With the full spatial event lifecycle (DECLARATION -> EXECUTION -> EFFECT -> COMPLETION),
+    each spatial event (LEFT or ENTERED) fires at all 4 phases.
+    So a move produces: 4 LEFT events + 4 ENTERED events = 8 total events.
+    """
     print("\n=== Test: No Duplicate Events ===")
     clear_state()
 
@@ -326,8 +331,10 @@ def test_no_duplicate_events():
     move1_events = events_after_move1 - events_after_creation
     print(f"Events from first move: {move1_events}")
 
-    # Each move should produce exactly 2 events: 1 left, 1 entered
-    assert move1_events == 2, f"Expected 2 events per move, got {move1_events}"
+    # Each move produces 8 events: 4 phases × 2 event types (LEFT + ENTERED)
+    # LEFT: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
+    # ENTERED: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
+    assert move1_events == 8, f"Expected 8 events per move (4 phases × 2 types), got {move1_events}"
 
     # Move again
     Entity.update_entity_position(entity, (5, 5))
@@ -336,9 +343,9 @@ def test_no_duplicate_events():
     move2_events = events_after_move2 - events_after_move1
     print(f"Events from second move: {move2_events}")
 
-    assert move2_events == 2, f"Expected 2 events per move, got {move2_events}"
+    assert move2_events == 8, f"Expected 8 events per move, got {move2_events}"
 
-    print("✓ No duplicate events on movement")
+    print("✓ Consistent event counts on movement")
 
 
 def test_tile_change_events():

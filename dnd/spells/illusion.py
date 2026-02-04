@@ -26,13 +26,13 @@ class BlurEffect(BaseCondition):
     name: str = "Blur"
     description: str = "Your body becomes blurred, giving attackers disadvantage"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
@@ -51,7 +51,7 @@ class BlurEffect(BaseCondition):
             update={"condition": self},
             status_message=f"Applied Blur to {target.name}"
         )
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class Blur(SpellAction):
@@ -134,13 +134,13 @@ class FearEffect(BaseCondition):
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -165,7 +165,7 @@ class FearEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Fear effect to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """WIS save at end of turn to end fear (only if can't see caster)."""
@@ -355,13 +355,13 @@ class HypnoticPatternEffect(BaseCondition):
     name: str = "Hypnotic Pattern"
     description: str = "Charmed and incapacitated by swirling pattern"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
@@ -395,7 +395,7 @@ class HypnoticPatternEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Hypnotic Pattern effect to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, effect_event
+        return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_damage_break_handler(self) -> EventHandler:
         """Break Hypnotic Pattern when target takes damage."""
@@ -567,13 +567,13 @@ class ColorSprayEffect(BaseCondition):
     name: str = "Color Spray"
     description: str = "Blinded by dazzling colors"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
 
@@ -591,7 +591,7 @@ class ColorSprayEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Color Spray blindness to {target.name}"
         )
-        return [], [], sub_condition_uuids, effect_event
+        return [], [], sub_condition_uuids, [], effect_event
 
 
 class ColorSpray(SpellAction):

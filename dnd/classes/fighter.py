@@ -88,16 +88,17 @@ class FightingStyleArchery(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -117,7 +118,7 @@ class FightingStyleArchery(BaseCondition):
             status_message=f"Applied Archery fighting style to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # -----------------------------------------------------------------------------
@@ -166,16 +167,17 @@ class FightingStyleDefense(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -196,7 +198,7 @@ class FightingStyleDefense(BaseCondition):
             status_message=f"Applied Defense fighting style to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # -----------------------------------------------------------------------------
@@ -256,16 +258,17 @@ class FightingStyleDueling(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -286,7 +289,7 @@ class FightingStyleDueling(BaseCondition):
             status_message=f"Applied Dueling fighting style to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # -----------------------------------------------------------------------------
@@ -386,16 +389,17 @@ class GreatWeaponFighting(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -421,7 +425,7 @@ class GreatWeaponFighting(BaseCondition):
         )
 
         # Return handler UUID so it gets cleaned up when condition is removed
-        return [], [handler.uuid], [], effect_event
+        return [], [handler.uuid], [], [], effect_event
 
 
 # -----------------------------------------------------------------------------
@@ -537,16 +541,17 @@ class FightingStyleProtection(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -560,7 +565,7 @@ class FightingStyleProtection(BaseCondition):
         )
 
         # Track handler for auto-cleanup when condition is removed
-        return [], [handler.uuid], [], effect_event
+        return [], [handler.uuid], [], [], effect_event
 
 
 # -----------------------------------------------------------------------------
@@ -643,16 +648,17 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -683,7 +689,7 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
             status_message=f"Applied Two-Weapon Fighting to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -806,16 +812,17 @@ class SecondWindFeature(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -839,7 +846,7 @@ class SecondWindFeature(BaseCondition):
             status_message=f"Granted Second Wind to {target.name}"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up resource and action on removal."""
@@ -865,13 +872,13 @@ class ActionSurging(BaseCondition):
     name: str = "ActionSurging"
     description: str = "+1 action this turn (Action Surge used)"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
 
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
 
         # Set duration to 1 round (expires at start of next turn)
         self.duration.duration_type = DurationType.ROUNDS
@@ -895,7 +902,7 @@ class ActionSurging(BaseCondition):
             status_message=f"{target_entity.name} surges with extra action!"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class ActionSurge(BaseAction):
@@ -1008,16 +1015,17 @@ class ActionSurgeFeature(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1040,7 +1048,7 @@ class ActionSurgeFeature(BaseCondition):
             status_message=f"Applied Action Surge feature ({self.num_uses} uses) to {target.name}"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up resource and action on removal."""
@@ -1075,16 +1083,17 @@ class ImprovedCritical(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1104,7 +1113,7 @@ class ImprovedCritical(BaseCondition):
             status_message=f"Applied Improved Critical to {target.name} - crits on 19-20"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -1133,13 +1142,14 @@ class ExtraAttacksGranted(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message="Marked as ExtraAttacksGranted"
         )
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
 
 def extra_attack_resource_processor(
@@ -1381,16 +1391,17 @@ class ExtraAttackFeature(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1428,7 +1439,7 @@ class ExtraAttackFeature(BaseCondition):
         )
 
         # Return handler UUID for cleanup when condition is removed
-        return [], handler_uuids, [], effect_event
+        return [], handler_uuids, [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """
@@ -1540,16 +1551,17 @@ class Indomitable(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1569,7 +1581,7 @@ class Indomitable(BaseCondition):
             status_message=f"Applied Indomitable ({self.num_uses} uses) to {target.name}"
         )
 
-        return [], [handler.uuid], [], effect_event
+        return [], [handler.uuid], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Custom removal: clean up resource."""
@@ -1606,16 +1618,17 @@ class SuperiorCritical(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1635,7 +1648,7 @@ class SuperiorCritical(BaseCondition):
             status_message=f"Applied Superior Critical to {target.name} - crits on 18-20"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -1721,16 +1734,17 @@ class Survivor(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1745,4 +1759,4 @@ class Survivor(BaseCondition):
         )
 
         # Return handler UUID for cleanup when condition is removed
-        return [], [handler.uuid], [], effect_event
+        return [], [handler.uuid], [], [], effect_event

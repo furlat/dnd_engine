@@ -36,7 +36,7 @@ class MageArmorCondition(BaseCondition):
     # Track the old unarmored type to restore on removal
     _old_unarmored_type: Optional[str] = None  # Store as string for Pydantic serialization
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         from dnd.entity import Entity
         from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
@@ -45,14 +45,14 @@ class MageArmorCondition(BaseCondition):
 
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
 
         if not isinstance(target_entity, Entity):
-            return [], [], [], declaration_event.cancel(status_message=f"Target is not an Entity")
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target is not an Entity")
 
         # Check if target is wearing armor - Mage Armor doesn't work on armored targets
         if not target_entity.equipment.is_unarmored():
-            return [], [], [], declaration_event.cancel(status_message="Target is wearing armor - Mage Armor has no effect")
+            return [], [], [], [], declaration_event.cancel(status_message="Target is wearing armor - Mage Armor has no effect")
 
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
@@ -115,7 +115,7 @@ class MageArmorCondition(BaseCondition):
             status_message=f"Applied Mage Armor to {target_entity.name} (AC = 13 + DEX)"
         )
 
-        return outs, handler_uuids, [], effect_event
+        return outs, handler_uuids, [], [], effect_event
 
     def _remove(self, _removal_event: Optional[Event] = None) -> None:
         """Restore the old unarmored AC type on removal."""
@@ -241,15 +241,15 @@ class ProtectionFromEnergyEffect(BaseCondition):
     # The chosen energy type (set by spell)
     energy_type: DamageType = DamageType.FIRE
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         from dnd.entity import Entity
 
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
@@ -269,7 +269,7 @@ class ProtectionFromEnergyEffect(BaseCondition):
             status_message=f"Applied {self.energy_type.value} resistance to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class ProtectionFromEnergy(SpellAction):
@@ -386,15 +386,15 @@ class StoneskinEffect(BaseCondition):
     name: str = "Stoneskin"
     description: str = "Resistant to bludgeoning, piercing, and slashing damage"
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         from dnd.entity import Entity
 
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
@@ -415,7 +415,7 @@ class StoneskinEffect(BaseCondition):
             status_message=f"Applied physical resistance to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class Stoneskin(SpellAction):

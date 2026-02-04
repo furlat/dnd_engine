@@ -9,19 +9,27 @@ Zone Spell Pattern:
     Caster: Concentrating(spell_name="Fog Cloud")
         +-- external_conditions -> FogCloudZone (on caster)
                 +-- terrain_conditions -> FogCloudTileEffect (on each tile)
+
+Event Handling:
+- SPATIAL events now fire through full lifecycle: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
+- Entry damage handlers fire at EFFECT phase using standard EventHandlers
+- Turn start damage handlers also fire at EFFECT phase
+- SpatialSensesCallback still uses callbacks for passive senses updates at COMPLETION
 """
 
 import re
-from typing import List, Optional, Tuple, Type
+from typing import List, Optional, Tuple, Type, Set, Dict
+
+from dnd.core.base_tiles import Tile
 from uuid import UUID
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, SpatialChangeType
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, SpatialHandler, EventQueue, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier, DamageType
-from dnd.core.dice import Dice, RollType
 from dnd.core.values import ModifiableValue
+import random
 from dnd.entity import Entity
 
 
@@ -41,6 +49,10 @@ class TileEffectCondition(BaseCondition):
     The target_entity_uuid is the tile's UUID.
 
     Subclasses should override _apply() to add specific effects.
+
+    Event Handling:
+    - Entry damage uses position-indexed spatial handlers for O(1) lookup
+    - Turn start damage uses EventHandler at EFFECT phase (not spatial)
     """
     name: str = "Tile Effect"
     description: str = "A tile effect from a zone spell"
@@ -58,19 +70,25 @@ class TileEffectCondition(BaseCondition):
     damage_on_turn_start_dice: Optional[str] = Field(default=None, description="Dice string for turn start damage")
     damage_on_turn_start_type: DamageType = Field(default=DamageType.FIRE, description="Damage type for turn start")
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+    # Private attribute to track the entry handler UUID for cleanup
+    _entry_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply tile effect modifiers and handlers."""
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
+        spatial_handler_uuids: List[UUID] = []
 
         # target_entity_uuid is the tile UUID
         if self.target_entity_uuid is None:
-            return [], [], [], None
+            return [], [], [], [], None
 
         grid = get_map()
         tile = grid.get_tile_by_uuid(self.target_entity_uuid)
         if not tile:
-            return [], [], [], None
+            return [], [], [], [], None
 
         # Apply difficult terrain modifier
         if self.adds_difficult_terrain:
@@ -82,70 +100,68 @@ class TileEffectCondition(BaseCondition):
             mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
             outs.append((tile.walking_cost.uuid, mod_uuid))
 
-        # Register entry damage handler if needed
+        # Register entry damage handler using SpatialHandler class
         if self.damage_on_entry_dice:
-            handler = self._create_entry_damage_handler(tile.uuid)
-            handler_uuids.append(handler.uuid)
+            handler = self._create_entry_damage_handler(tile)
+            EventQueue.add_spatial_handler(handler)
+            self._entry_handler_uuid = handler.uuid
+            spatial_handler_uuids.append(handler.uuid)
 
-        # Register turn start damage handler if needed
+        # Register turn start damage handler (NOT spatial - uses normal triggers)
         if self.damage_on_turn_start_dice:
             handler = self._create_turn_start_damage_handler(tile.uuid)
+            EventQueue.add_event_handler(handler)
             handler_uuids.append(handler.uuid)
 
-        effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
-        return outs, handler_uuids, [], effect_event
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        else:
+            effect_event = None
+        return outs, handler_uuids, [], spatial_handler_uuids, effect_event
 
-    def _create_entry_damage_handler(self, tile_uuid: UUID) -> EventHandler:
-        """Create an event handler that deals damage when entities enter this tile."""
+    def _create_entry_damage_handler(self, tile: Tile) -> SpatialHandler:
+        """Create a spatial handler that deals damage when entities enter this tile.
+
+        Uses SpatialHandler class for position-indexed lookup (O(1)).
+        Position check is handled by the registry - no need to check in processor.
+        """
         damage_dice_str = self.damage_on_entry_dice
         damage_type = self.damage_on_entry_type
         source_uuid = self.source_entity_uuid
 
         def entry_damage_processor(event: Event, _handler_source_uuid: UUID) -> Optional[Event]:
-            """Deal damage when entity enters the tile."""
-            # Check event type
-            if not hasattr(event, 'change_type'):
-                return None
-            if event.change_type != SpatialChangeType.ENTITY_ENTERED:  # type: ignore
-                return None
+            """Deal damage when entity enters this tile.
 
-            # Check position matches this tile
-            grid = get_map()
-            tile = grid.get_tile_by_uuid(tile_uuid)
-            if not tile or tile.position != event.position:  # type: ignore
-                return None
-
+            Position already validated by SpatialHandler registry - no need to check.
+            """
             # Get entering entity
-            if not hasattr(event, 'entity_uuid'):
+            entity_uuid = getattr(event, 'entity_uuid', None)
+            if not entity_uuid:
                 return None
-            entity = Entity.get(event.entity_uuid)  # type: ignore
+            entity = Entity.get(entity_uuid)
             if not entity:
                 return None
 
-            # Deal damage
+            # Deal damage (simple roll, no attack required)
             if damage_dice_str:
                 count, value = parse_dice_string(damage_dice_str)
-                bonus = ModifiableValue.create(source_entity_uuid=source_uuid, base_value=0, value_name="Damage Bonus")
-                dice = Dice(count=count, value=value, bonus=bonus, roll_type=RollType.DAMAGE)
-                roll = dice.roll
+                damage = sum(random.randint(1, value) for _ in range(count))
                 entity.health.take_damage(
-                    roll.total,
+                    damage,
                     damage_type,
                     source_entity_uuid=source_uuid
                 )
 
             return None
 
-        handler = EventHandler(
+        return SpatialHandler(
             name=f"{self.name} Entry Damage",
-            source_entity_uuid=tile_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.SPATIAL_ENTITY_ENTERED,
-                event_phase=EventPhase.EFFECT
-            )],
+            source_entity_uuid=tile.uuid,
+            positions={tile.position},  # Single position
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            event_phase=EventPhase.EFFECT,
             event_processor=entry_damage_processor
         )
-        return handler
 
     def _create_turn_start_damage_handler(self, tile_uuid: UUID) -> EventHandler:
         """Create an event handler that deals damage at turn start if entity is on tile."""
@@ -172,21 +188,19 @@ class TileEffectCondition(BaseCondition):
             if entity.senses.position != tile.position:
                 return None
 
-            # Deal damage
+            # Deal damage (simple roll, no attack required)
             if damage_dice_str:
                 count, value = parse_dice_string(damage_dice_str)
-                bonus = ModifiableValue.create(source_entity_uuid=source_uuid, base_value=0, value_name="Damage Bonus")
-                dice = Dice(count=count, value=value, bonus=bonus, roll_type=RollType.DAMAGE)
-                roll = dice.roll
+                damage = sum(random.randint(1, value) for _ in range(count))
                 entity.health.take_damage(
-                    roll.total,
+                    damage,
                     damage_type,
                     source_entity_uuid=source_uuid
                 )
 
             return None
 
-        handler = EventHandler(
+        return EventHandler(
             name=f"{self.name} Turn Start Damage",
             source_entity_uuid=tile_uuid,
             trigger_conditions=[Trigger(
@@ -195,19 +209,37 @@ class TileEffectCondition(BaseCondition):
             )],
             event_processor=turn_start_damage_processor
         )
-        return handler
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clean up spatial handler for entry damage.
+
+        Entry damage handlers are now tracked in spatial_handler_uuids and
+        cleaned up by parent class's remove_spatial_handlers().
+        Turn start handlers are tracked in event_handlers_uuids and
+        cleaned up by parent class's remove_event_handlers().
+        """
+        # Clear local reference (cleanup happens in parent)
+        self._entry_handler_uuid = None
+        return super()._remove(event)
 
 
 class ZoneControlCondition(BaseCondition):
     """
     Base condition for controlling a zone of tile effects.
 
-    Applied to the caster. Manages affected tiles via terrain_conditions.
-    When this condition is removed, all tile effects are automatically cleaned up.
+    Applied to the caster. Uses position-indexed spatial handlers for efficient
+    O(1) lookup when entities enter/exit the zone, instead of O(tiles) handlers.
+
+    Key architecture:
+    - ONE handler per effect type per zone (not per tile)
+    - Handlers are registered via EventQueue.add_spatial_handler() with position set
+    - Zone movement uses EventQueue.update_spatial_handler_positions() for O(delta) updates
+    - Terrain modifiers (difficult terrain) are separate from event handlers
 
     Subclasses should:
-    1. Override get_tile_effect_class() to return the TileEffectCondition subclass to use
-    2. Override _compute_affected_positions() if using custom geometry
+    1. Override _has_entry_effect() and _create_zone_entry_handler() for entry effects
+    2. Override _has_exit_effect() and _create_zone_exit_handler() for exit effects
+    3. Override _compute_affected_positions() if using custom geometry
     """
     name: str = "Zone Control"
     description: str = "Controls a zone of tile effects"
@@ -218,21 +250,68 @@ class ZoneControlCondition(BaseCondition):
     zone_radius_feet: int = Field(default=20, description="Radius/size in feet")
     zone_direction: Optional[Tuple[int, int]] = Field(default=None, description="Direction for cones/lines")
 
-    # Track affected positions
-    affected_positions: List[Tuple[int, int]] = Field(default_factory=list, description="Currently affected tile positions")
+    # Terrain effects
+    adds_difficult_terrain: bool = Field(default=False, description="If True, adds +1 to walking cost")
 
-    # Tile effect class name (for serialization - actual class set at runtime)
-    tile_effect_class_name: str = Field(default="TileEffectCondition", description="Name of TileEffectCondition subclass to use")
+    # Track affected positions as a set for efficient operations
+    affected_positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Currently affected tile positions")
 
-    def get_tile_effect_class(self) -> Type[TileEffectCondition]:
-        """Get the TileEffectCondition class to use for this zone.
+    # Zone-level handler UUIDs (ONE per effect type, not per tile)
+    _entry_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _exit_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _turn_start_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
 
-        Override in subclasses to return the specific tile effect class.
-        Default returns base TileEffectCondition.
+    # Terrain modifier tracking (separate from handlers)
+    # Maps tile.walking_cost.uuid -> [modifier_uuid, ...]
+    _terrain_modifier_uuids: Dict[UUID, List[UUID]] = PrivateAttr(default_factory=dict)
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    # =========================================================================
+    # Override Points for Subclasses
+    # =========================================================================
+
+    def _has_entry_effect(self) -> bool:
+        """Return True if this zone has an effect when entities enter."""
+        return False
+
+    def _has_exit_effect(self) -> bool:
+        """Return True if this zone has an effect when entities exit."""
+        return False
+
+    def _has_turn_start_effect(self) -> bool:
+        """Return True if this zone has a turn start effect."""
+        return False
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        """Create the zone-level entry handler.
+
+        Override in subclasses. This handler will be registered for ALL
+        positions in the zone - no need to check position in the processor.
         """
-        return TileEffectCondition
+        raise NotImplementedError("Subclass must implement _create_zone_entry_handler")
 
-    def _compute_affected_positions(self) -> List[Tuple[int, int]]:
+    def _create_zone_exit_handler(self) -> EventHandler:
+        """Create the zone-level exit handler.
+
+        Override in subclasses. This handler will be registered for ALL
+        positions in the zone - no need to check position in the processor.
+        """
+        raise NotImplementedError("Subclass must implement _create_zone_exit_handler")
+
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        """Create a turn start handler for entities in the zone.
+
+        Note: Turn start handlers are NOT spatial handlers - they use normal
+        trigger registration and check position in the processor.
+        """
+        raise NotImplementedError("Subclass must implement _create_zone_turn_start_handler")
+
+    # =========================================================================
+    # Geometry
+    # =========================================================================
+
+    def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
         """Compute which tile positions are affected by this zone.
 
         Override in subclasses for custom geometry.
@@ -265,59 +344,196 @@ class ZoneControlCondition(BaseCondition):
             )
 
         shape.compute_objective(self.zone_center)
-        return list(shape.affected_tiles)
+        return set(shape.affected_positions)
+
+    # =========================================================================
+    # Terrain Modifiers (separate from event handlers)
+    # =========================================================================
+
+    def _apply_terrain_modifiers(self) -> List[Tuple[UUID, UUID]]:
+        """Apply difficult terrain modifiers to affected tiles.
+
+        Returns:
+            List of (value_uuid, modifier_uuid) pairs for tracking in modifers_uuids.
+        """
+        outs: List[Tuple[UUID, UUID]] = []
+        if not self.adds_difficult_terrain:
+            return outs
+
+        grid = get_map()
+        for pos in self.affected_positions:
+            tile = grid.get_tile(*pos)
+            if tile:
+                mod = NumericalModifier.create(
+                    source_entity_uuid=self.source_entity_uuid,
+                    name=f"{self.name} Difficult Terrain",
+                    value=1  # +1 to walking cost (total = 2)
+                )
+                mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
+                self._terrain_modifier_uuids[tile.walking_cost.uuid] = [mod_uuid]
+                outs.append((tile.walking_cost.uuid, mod_uuid))
+        return outs
+
+    def _remove_terrain_modifiers(self) -> None:
+        """Remove terrain modifiers before zone move or removal."""
+        for value_uuid, mod_uuids in self._terrain_modifier_uuids.items():
+            value = ModifiableValue.get(value_uuid)
+            if value is not None:
+                for mod_uuid in mod_uuids:
+                    try:
+                        value.self_static.remove_modifier(mod_uuid)
+                    except (ValueError, KeyError):
+                        pass  # Modifier already removed
+        self._terrain_modifier_uuids.clear()
+
+    # =========================================================================
+    # Core Apply / Remove / Move
+    # =========================================================================
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply zone control - compute positions and register spatial handlers."""
+        handler_uuids: List[UUID] = []
+        spatial_handler_uuids: List[UUID] = []
+
+        # Compute affected positions
+        self.affected_positions = self._compute_affected_positions()
+
+        # Create and register entry handler using position-indexed spatial registration
+        if self._has_entry_effect():
+            handler = self._create_zone_entry_handler()
+            EventQueue.add_spatial_handler(
+                handler,
+                self.affected_positions,
+                EventType.SPATIAL_ENTITY_ENTERED,
+                EventPhase.EFFECT
+            )
+            self._entry_handler_uuid = handler.uuid
+            spatial_handler_uuids.append(handler.uuid)
+
+        # Create and register exit handler if needed
+        if self._has_exit_effect():
+            handler = self._create_zone_exit_handler()
+            EventQueue.add_spatial_handler(
+                handler,
+                self.affected_positions,
+                EventType.SPATIAL_ENTITY_LEFT,
+                EventPhase.EFFECT
+            )
+            self._exit_handler_uuid = handler.uuid
+            spatial_handler_uuids.append(handler.uuid)
+
+        # Turn start handler (not spatial - uses normal trigger)
+        if self._has_turn_start_effect():
+            handler = self._create_zone_turn_start_handler()
+            EventQueue.add_event_handler(handler)
+            self._turn_start_handler_uuid = handler.uuid
+            handler_uuids.append(handler.uuid)
+
+        # Apply terrain modifiers and get modifier pairs for tracking
+        terrain_modifiers = self._apply_terrain_modifiers()
+
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        else:
+            effect_event = None
+
+        return terrain_modifiers, handler_uuids, [], spatial_handler_uuids, effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Custom removal logic - clean up spatial handlers and modifiers.
+
+        Called by parent's remove() method during removal process.
+        """
+        # Remove spatial handlers from position indices
+        if self._entry_handler_uuid:
+            EventQueue.remove_spatial_handler(self._entry_handler_uuid)
+            self._entry_handler_uuid = None
+
+        if self._exit_handler_uuid:
+            EventQueue.remove_spatial_handler(self._exit_handler_uuid)
+            self._exit_handler_uuid = None
+
+        if self._turn_start_handler_uuid:
+            # Turn start handler is in the normal event_handlers_uuids list,
+            # so parent's remove_event_handlers() will handle it, but clear our ref
+            self._turn_start_handler_uuid = None
+
+        # Remove terrain modifiers
+        self._remove_terrain_modifiers()
+
+        # Call parent _remove for standard event progression
+        return super()._remove(event)
+
+    def move_zone(self, new_center: Tuple[int, int]) -> bool:
+        """Move the zone to a new position using efficient batch update.
+
+        This method:
+        1. Removes terrain modifiers from old positions
+        2. Computes new affected positions
+        3. Uses batch position update for handlers (O(delta) not O(total))
+        4. Applies terrain modifiers to new positions
+
+        Returns True on success.
+        """
+        # Remove old terrain modifiers
+        self._remove_terrain_modifiers()
+
+        # Compute new positions
+        self.zone_center = new_center
+        new_positions = self._compute_affected_positions()
+
+        # Batch update handler positions (efficient - only changes delta)
+        if self._entry_handler_uuid:
+            EventQueue.update_spatial_handler_positions(
+                self._entry_handler_uuid,
+                new_positions,
+                EventType.SPATIAL_ENTITY_ENTERED,
+                EventPhase.EFFECT
+            )
+
+        if self._exit_handler_uuid:
+            EventQueue.update_spatial_handler_positions(
+                self._exit_handler_uuid,
+                new_positions,
+                EventType.SPATIAL_ENTITY_LEFT,
+                EventPhase.EFFECT
+            )
+
+        self.affected_positions = new_positions
+
+        # Apply terrain modifiers to new positions
+        self._apply_terrain_modifiers()
+
+        return True
+
+    # =========================================================================
+    # Legacy Compatibility: Tile Effect Pattern
+    # =========================================================================
+
+    def get_tile_effect_class(self) -> Type[TileEffectCondition]:
+        """Get the TileEffectCondition class to use for this zone.
+
+        DEPRECATED: Use _has_entry_effect() and _create_zone_entry_handler() instead.
+        This method is kept for backward compatibility with zones that use
+        the per-tile TileEffectCondition pattern.
+        """
+        return TileEffectCondition
 
     def _apply_to_tiles(self, _declaration_event: Event) -> None:
-        """Apply tile effect conditions to all affected tiles."""
+        """Apply tile effect conditions to all affected tiles.
+
+        DEPRECATED: Use position-indexed spatial handlers instead.
+        This method is kept for backward compatibility.
+        """
         tile_effect_class = self.get_tile_effect_class()
         grid = get_map()
 
         for pos in self.affected_positions:
             tile = grid.get_tile(*pos)
             if tile:
-                # Create tile effect condition
                 effect = tile_effect_class(
                     source_entity_uuid=self.source_entity_uuid,
-                    target_entity_uuid=tile.uuid,
-                    parent_condition=self.uuid
+                    target_entity_uuid=tile.uuid
                 )
                 tile.add_condition(effect)
-
-                # Track in terrain_conditions for automatic cleanup
                 self.add_terrain_condition(tile.uuid, effect.uuid)
-
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
-        """Apply zone control - compute positions and apply tile effects."""
-        # Compute affected positions
-        self.affected_positions = self._compute_affected_positions()
-
-        # Apply tile effects
-        self._apply_to_tiles(declaration_event)
-
-        effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
-        return [], [], [], effect_event
-
-    def move_zone(self, new_center: Tuple[int, int]) -> bool:
-        """Move the zone to a new position.
-
-        Removes old tile effects and applies to new positions.
-        Returns False if move is invalid.
-        """
-        # Remove from old positions (via terrain_conditions)
-        self.remove_terrain_conditions()
-        self.affected_positions.clear()
-
-        # Update center
-        self.zone_center = new_center
-        self.affected_positions = self._compute_affected_positions()
-
-        # Apply to new positions (need a dummy event for _apply_to_tiles)
-        # In practice, moving a zone would fire its own event
-        dummy_event = Event(
-            name="Zone Move",
-            source_entity_uuid=self.source_entity_uuid,
-            phase=EventPhase.EFFECT
-        )
-        self._apply_to_tiles(dummy_event)
-
-        return True

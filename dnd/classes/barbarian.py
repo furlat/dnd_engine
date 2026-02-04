@@ -187,16 +187,17 @@ class UnarmoredDefense(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -217,7 +218,7 @@ class UnarmoredDefense(BaseCondition):
             status_message=f"Applied Unarmored Defense to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -244,16 +245,17 @@ class RecklessAttacking(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -289,7 +291,7 @@ class RecklessAttacking(BaseCondition):
             status_message=f"{target.name} attacks recklessly!"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class RecklessAttack(BaseAction):
@@ -373,16 +375,17 @@ class RecklessAttackFeature(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -398,7 +401,7 @@ class RecklessAttackFeature(BaseCondition):
             status_message=f"Granted Reckless Attack to {target.name}"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up action on removal."""
@@ -463,16 +466,17 @@ class DangerSense(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -495,7 +499,7 @@ class DangerSense(BaseCondition):
             status_message=f"Applied Danger Sense to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -543,16 +547,17 @@ class FastMovement(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -573,7 +578,7 @@ class FastMovement(BaseCondition):
             status_message=f"Applied Fast Movement to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -616,16 +621,17 @@ class MindlessRage(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -647,7 +653,7 @@ class MindlessRage(BaseCondition):
             status_message=f"Applied Mindless Rage to {target.name}"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up condition immunities on removal."""
@@ -680,16 +686,17 @@ class FeralInstinct(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -715,7 +722,7 @@ class FeralInstinct(BaseCondition):
             status_message=f"Applied Feral Instinct to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -742,16 +749,17 @@ class BrutalCritical(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -773,7 +781,7 @@ class BrutalCritical(BaseCondition):
             status_message=f"Applied Brutal Critical ({self.extra_dice} dice) to {target.name}"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -870,16 +878,17 @@ class RelentlessRage(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -912,7 +921,7 @@ class RelentlessRage(BaseCondition):
             status_message=f"Applied Relentless Rage to {target.name}"
         )
 
-        return [], handler_uuids, [], effect_event
+        return [], handler_uuids, [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up resource on removal."""
@@ -943,6 +952,7 @@ class PersistentRage(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         # Pure marker condition - no modifiers or handlers
@@ -953,7 +963,7 @@ class PersistentRage(BaseCondition):
             status_message="Persistent Rage active"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
 
 # =============================================================================
@@ -1031,16 +1041,17 @@ class IndomitableMight(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1056,7 +1067,7 @@ class IndomitableMight(BaseCondition):
             status_message=f"Applied Indomitable Might to {target.name}"
         )
 
-        return [], handler_uuids, [], effect_event
+        return [], handler_uuids, [], [], effect_event
 
 
 # =============================================================================
@@ -1080,16 +1091,17 @@ class PrimalChampion(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1118,7 +1130,7 @@ class PrimalChampion(BaseCondition):
             status_message=f"Applied Primal Champion to {target.name}: +4 STR, +4 CON"
         )
 
-        return outs, [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 # =============================================================================
@@ -1206,16 +1218,17 @@ class Retaliation(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1231,7 +1244,7 @@ class Retaliation(BaseCondition):
             status_message=f"Applied Retaliation to {target.name}"
         )
 
-        return [], handler_uuids, [], effect_event
+        return [], handler_uuids, [], [], effect_event
 
 
 # =============================================================================
@@ -1255,6 +1268,7 @@ class IntimidatingPresenceImmunity(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         # Pure marker condition - no modifiers or handlers
@@ -1266,7 +1280,7 @@ class IntimidatingPresenceImmunity(BaseCondition):
             status_message="Intimidating Presence immunity applied"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
 
 def intimidating_presence_end_check_processor(
@@ -1632,16 +1646,17 @@ class IntimidatingPresenceFeature(BaseCondition):
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
+        List[UUID],
         Optional[Event]
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -1664,7 +1679,7 @@ class IntimidatingPresenceFeature(BaseCondition):
             status_message=f"Granted Intimidating Presence to {target.name}"
         )
 
-        return [], [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up actions on removal."""
