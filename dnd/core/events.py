@@ -107,6 +107,7 @@ class EventType(str, Enum):
     BASE_ACTION = "base_action"
     ATTACK = "attack"
     MOVEMENT = "movement"
+    STEP_MOVEMENT = "step_movement"  # Single cell transition within a path - triggers OA
     FORCED_MOVEMENT = "forced_movement"  # Push, pull, teleport by others - does NOT trigger OA
     ABILITY_CHECK = "ability_check"
     SAVING_THROW = "saving_throw"
@@ -1133,6 +1134,49 @@ class ForcedMovementEvent(Event):
                 "end_position": list(self.end_position)
             },
             success=self.actual_distance > 0
+        )
+
+
+class StepMovementEvent(Event):
+    """Single cell transition within a movement path.
+
+    Fires for each step during cell-by-cell movement. Opportunity attacks
+    and terrain effects trigger on this event type.
+
+    The source_entity_uuid is the entity moving.
+    """
+    name: str = Field(default="Step Movement")
+    event_type: EventType = Field(default=EventType.STEP_MOVEMENT)
+
+    from_position: Tuple[int, int] = Field(description="Position before this step")
+    to_position: Tuple[int, int] = Field(description="Position after this step")
+    path_index: int = Field(default=0, description="Index of this step in the overall path")
+    total_path_length: int = Field(default=0, description="Total number of positions in path")
+    movement_cost: float = Field(default=5.0, description="Movement cost in feet for this step")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate combat log for a movement step (usually not logged individually)."""
+        source_name = self.source_entity_name or "Unknown"
+
+        compact_text = f"{md_color(source_name, 'cyan')} steps to {self.to_position}"
+        verbose_text = f"{md_color(source_name, 'cyan')} {self.from_position} → {self.to_position}"
+        detailed_text = f"{verbose_text} (step {self.path_index}/{self.total_path_length - 1}, {self.movement_cost}ft)"
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.MOVEMENT,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
+            data={
+                "type": "step_movement",
+                "from_position": list(self.from_position),
+                "to_position": list(self.to_position),
+                "path_index": self.path_index,
+                "movement_cost": self.movement_cost
+            },
+            success=True
         )
 
 

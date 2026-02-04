@@ -1370,9 +1370,9 @@ class Thunderwave(SpellAction):
                 forced_event.phase_to(EventPhase.COMPLETION)
 
                 # Apply movement via Entity helper
+                # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
                 from dnd.entity import Entity as EntityClass
                 EntityClass.update_entity_position(target, end_pos)
-                EntityClass.update_all_entities_senses()
                 push_applied = True
 
         save_text = " (saved for half)" if success else ""

@@ -725,9 +725,8 @@ class Encounter(BaseObject):
 
         # Check if encounter should end (only one side remaining)
         if death_events:
-            # Refresh senses for all entities so they can see newly-available movement
-            # (dead entities are now non-blocking, paths need to be recomputed)
-            Entity.update_all_entities_senses(max_distance=20)
+            # Note: Senses are updated reactively via DEATH events
+            # Each observer's SpatialSensesCallback handles path recalculation
             self._check_encounter_end()
 
         return death_events
@@ -781,6 +780,11 @@ class Encounter(BaseObject):
 
         # Manually generate combat_log since we're created directly at COMPLETION
         event.combat_log = event.generate_combat_log()
+
+        # Post event so callbacks (like SpatialSensesCallback) can react
+        # This triggers senses recalculation for observers - paths through
+        # dead body's cell become available
+        event.post()
 
         return event
 

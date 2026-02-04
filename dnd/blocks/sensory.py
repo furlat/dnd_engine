@@ -1,6 +1,6 @@
-from typing import Dict, Optional,  List, Self,  Tuple, Set, DefaultDict
+from typing import Dict, Optional, List, Self, Tuple, Set, DefaultDict, TYPE_CHECKING, Callable
 from uuid import UUID
-from pydantic import  Field
+from pydantic import Field
 
 
 from enum import Enum
@@ -9,6 +9,14 @@ import math
 from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
+from dnd.core.gridmap import get_map
+from dnd.core.events import (
+    EventHandler, Trigger, EventType, EventPhase,
+    SpatialChangeEvent, SpatialChangeType
+)
+
+if TYPE_CHECKING:
+    from dnd.core.events import Event
 
 class SensesType(str, Enum):
     BLINDSIGHT = "Blindsight"
@@ -99,4 +107,127 @@ class Senses(BaseBlock):
     @classmethod
     def create(cls,source_entity_uuid: UUID,name: str = "Senses", source_entity_name: Optional[str] = None, target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, position: Tuple[int,int] = (0,0)) -> Self:
         return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, position=position)
+
+    def create_spatial_callback(
+        self,
+        owner_uuid: UUID,
+        update_senses_func: Optional[Callable[[], None]] = None
+    ) -> "SpatialSensesCallback":
+        """Create a callback that updates senses when spatial events fire.
+
+        Uses closure to access the senses instance without importing Entity.
+        The callback fires on SPATIAL events and triggers a full senses update
+        so that FOV and paths are recalculated in real-time.
+
+        This uses the passive callback system (EventQueue._on_event_callbacks)
+        instead of EventHandlers because spatial events fire at COMPLETION phase
+        and we don't need to modify them, just react to them.
+
+        Args:
+            owner_uuid: UUID of the entity that owns this Senses block
+            update_senses_func: Optional callable to trigger full senses update.
+                If provided, spatial events trigger this instead of just updating
+                the entities dict. Entity passes its update_entity_senses method.
+
+        Returns:
+            SpatialSensesCallback that should be registered with EventQueue
+        """
+        return SpatialSensesCallback(self, owner_uuid, update_senses_func)
+
+
+class SpatialSensesCallback:
+    """Callback that updates senses when spatial events fire.
+
+    This is registered with EventQueue.add_on_event_callback() and fires
+    for ALL events. It filters to events that affect senses and triggers
+    appropriate updates:
+    - Entity movement: recompute paths (entities block movement)
+    - Tile changes: recompute FOV + paths (tiles block vision and movement)
+    - Entity death: recompute paths (dead bodies no longer block movement)
+
+    Using callbacks instead of EventHandlers because:
+    - Spatial events fire at COMPLETION phase
+    - EventHandlers don't fire for COMPLETION events (by design)
+    - Callbacks fire for ALL events and can't modify them (perfect for reactive senses)
+    """
+
+    # Spatial event types we care about
+    SPATIAL_EVENTS = (
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_TILE_CHANGED,
+    )
+
+    def __init__(
+        self,
+        senses: Senses,
+        owner_uuid: UUID,
+        update_senses_func: Optional[Callable[[], None]] = None
+    ):
+        self.senses = senses
+        self.owner_uuid = owner_uuid
+        self.update_senses_func = update_senses_func
+
+    def __call__(self, event: "Event") -> None:
+        """Process any event, filtering to events that affect our senses."""
+        # Handle DEATH events - dead entity no longer blocks paths
+        if event.event_type == EventType.DEATH:
+            self._handle_death_event(event)
+            return
+
+        # Handle spatial events
+        if event.event_type not in self.SPATIAL_EVENTS:
+            return
+
+        # Get position from event
+        position = getattr(event, 'position', None)
+        if position is None:
+            return
+
+        # Ignore events about ourselves moving
+        entity_uuid = getattr(event, 'entity_uuid', None)
+        if entity_uuid == self.owner_uuid:
+            return
+
+        # Check if owner is subscribed to the affected cell
+        grid = get_map()
+        subscribers = grid.get_subscribers_at(position)
+        if self.owner_uuid not in subscribers:
+            return  # Not watching this cell, ignore
+
+        # Trigger senses update
+        if self.update_senses_func is not None:
+            # Full senses update - recalculates FOV, paths, and entities
+            # This is the proper behavior for real-time updates
+            self.update_senses_func()
+        else:
+            # Fallback: incremental entity dict update only (legacy behavior)
+            # This only tracks "who is where" without recalculating paths
+            change_type = getattr(event, 'change_type', None)
+            if change_type == SpatialChangeType.ENTITY_ENTERED:
+                if entity_uuid is not None:
+                    self.senses.entities[entity_uuid] = position
+            elif change_type == SpatialChangeType.ENTITY_LEFT:
+                if entity_uuid is not None:
+                    self.senses.entities.pop(entity_uuid, None)
+
+    def _handle_death_event(self, event: "Event") -> None:
+        """Handle entity death - dead entities no longer block paths."""
+        # Get the dead entity's UUID
+        dead_uuid = getattr(event, 'entity_uuid', None)
+        if dead_uuid is None:
+            return
+
+        # Ignore if WE died
+        if dead_uuid == self.owner_uuid:
+            return
+
+        # Check if the dead entity was in our visible entities
+        # If so, we need to recalculate paths (dead body no longer blocks)
+        if dead_uuid in self.senses.entities:
+            if self.update_senses_func is not None:
+                self.update_senses_func()
+            else:
+                # Fallback: just remove from entities dict
+                self.senses.entities.pop(dead_uuid, None)
     

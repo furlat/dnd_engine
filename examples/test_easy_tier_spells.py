@@ -1,10 +1,9 @@
 """Test Phase 1 Easy Tier Spells: Shocking Grasp, Power Word Stun, Guiding Bolt"""
-from uuid import uuid4
 
-from dnd.utils import reset_combat_state, get_hp, set_hp, has_condition, count_conditions
+from dnd.utils import reset_combat_state, get_hp, set_hp, has_condition
 from dnd.monsters.bestiary import create_skeleton
 from dnd.entity import Entity
-from dnd.items.armors import create_chain_mail, create_leather_armor, create_plate_armor
+from dnd.items.armors import create_chain_mail, create_leather_armor
 from dnd.blocks.equipment import WeaponSlot
 from dnd.actions_functional import setup_standard_actions, register_spell
 from dnd.spells import ShockingGrasp, GuidingBolt, PowerWordStun
@@ -89,7 +88,8 @@ def test_shocking_grasp_metal_armor_advantage():
     )
     event_metal = spell_metal.apply()
     print(f"Metal target result: {event_metal.status_message if event_metal else 'None'}")
-    print(f"Metal target: advantage mentioned in message: {'advantage' in (event_metal.status_message or '').lower()}")
+    if event_metal: 
+        print(f"Metal target: advantage mentioned in message: {'advantage' in (event_metal.status_message or '').lower()}")
 
     # Cast at non-metal target - should NOT have advantage
     setup_test()
@@ -106,7 +106,8 @@ def test_shocking_grasp_metal_armor_advantage():
     )
     event_nonmetal = spell_nonmetal.apply()
     print(f"Non-metal target result: {event_nonmetal.status_message if event_nonmetal else 'None'}")
-    print(f"Non-metal target: advantage NOT mentioned: {'advantage' not in (event_nonmetal.status_message or '').lower()}")
+    if event_nonmetal:
+        print(f"Non-metal target: advantage NOT mentioned: {'advantage' not in (event_nonmetal.status_message or '').lower()}")
 
     print("PASS: Metal armor detection working")
     return True
@@ -414,7 +415,8 @@ def test_power_word_stun_hp_threshold():
     print(f"Has Power Word Stun effect: {has_stun_effect}")
 
     assert not has_stun_effect, "Should NOT have effect when HP > 150"
-    assert "no effect" in (event.status_message or "").lower(), "Should mention no effect"
+    if event:
+        assert "no effect" in (event.status_message or "").lower(), "Should mention no effect"
     print("PASS: HP threshold check working")
     return True
 

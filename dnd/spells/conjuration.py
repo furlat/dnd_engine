@@ -628,8 +628,8 @@ class MistyStep(SpellAction):
         )
 
         # Teleport (direct position update, no path)
+        # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
         Entity.update_entity_position(caster, target_pos)
-        Entity.update_all_entities_senses()
 
         distance = abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5
 
