@@ -108,6 +108,10 @@ class BaseCondition(BaseObject):
         default_factory=list,
         description="List of (target_entity_uuid, condition_uuid) for conditions this condition caused on OTHER entities. These 'nephews' are removed when this condition is removed."
     )
+    terrain_conditions: List[Tuple[UUID, UUID]] = Field(
+        default_factory=list,
+        description="List of (tile_uuid, condition_uuid) for conditions this condition placed on tiles. Removed when this condition is removed."
+    )
     
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
@@ -251,6 +255,18 @@ class BaseCondition(BaseObject):
         """
         self.external_conditions.append((target_entity_uuid, condition_uuid))
 
+    def add_terrain_condition(self, tile_uuid: UUID, condition_uuid: UUID) -> None:
+        """Track a condition we placed on a tile.
+
+        When this condition is removed, the terrain condition will also be removed
+        from the tile. This enables zone spell cleanup.
+
+        Args:
+            tile_uuid: The UUID of the tile that has the condition
+            condition_uuid: The UUID of the condition on that tile
+        """
+        self.terrain_conditions.append((tile_uuid, condition_uuid))
+
     def remove_external_conditions(self, parent_event: Optional[Event] = None) -> bool:
         """Remove all conditions this condition caused on other entities ('nephews').
 
@@ -280,6 +296,39 @@ class BaseCondition(BaseObject):
                     target.remove_condition(cond_name)
                     break
 
+        return True
+
+    def remove_terrain_conditions(self, parent_event: Optional[Event] = None) -> bool:
+        """Remove all conditions this condition placed on tiles.
+
+        This is called during condition removal to clean up zone spell effects.
+        For example, when a zone control condition is removed, this removes the
+        tile effects from all affected tiles.
+
+        Args:
+            parent_event: Optional parent event for event chain tracking
+
+        Returns:
+            True if removal was successful
+        """
+        # Late import to avoid circular dependency
+        from dnd.core.gridmap import get_map
+        _ = parent_event  # Reserved for future event chain integration
+
+        grid = get_map()
+
+        for tile_uuid, condition_uuid in self.terrain_conditions:
+            tile = grid.get_tile_by_uuid(tile_uuid)
+            if not tile:
+                continue  # Tile no longer exists
+
+            # Find the condition by UUID and remove it
+            for cond_name, cond in list(tile.active_conditions.items()):
+                if cond.uuid == condition_uuid:
+                    tile.remove_condition(cond_name)
+                    break
+
+        self.terrain_conditions.clear()
         return True
     
     def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
@@ -330,6 +379,7 @@ class BaseCondition(BaseObject):
         self.remove_condition_modifiers()
         self.remove_sub_conditions(parent_event=event)
         self.remove_external_conditions(parent_event=event)  # Cross-entity cleanup
+        self.remove_terrain_conditions(parent_event=event)  # Tile cleanup for zone spells
         if not skip_parent_removal:
             self.remove_condition_from_parent()
         self.remove_event_handlers()

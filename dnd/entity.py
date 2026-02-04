@@ -11,7 +11,7 @@ from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 
 from dnd.core.events import (
-    Event, EventPhase, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
+    Event, EventPhase, EventQueue, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent
 )
@@ -157,6 +157,18 @@ class Entity(BaseBlock):
         get_map().register_entity(self.uuid, self.position)
         # Note: Action templates are set up via actions_functional.setup_standard_actions()
         # Called from entity factories (e.g., bestiary.py) after entity creation
+
+        # Register spatial callback for reactive senses updates
+        # This callback fires on SPATIAL events (entity movement, tile changes)
+        # and triggers full senses recalculation for real-time FOV/paths updates
+        # Using callbacks instead of EventHandlers because spatial events
+        # fire at COMPLETION phase and handlers don't fire for COMPLETION events
+        if self.senses is not None:
+            # Pass update function so callback can trigger full senses recalculation
+            # Using lambda to capture self and provide default max_distance
+            update_func = lambda: self.update_entity_senses(max_distance=20)
+            spatial_callback = self.senses.create_spatial_callback(self.uuid, update_func)
+            EventQueue.add_on_event_callback(spatial_callback)
 
     @classmethod
     def update_entity_position(cls, entity: 'Entity', new_position: Tuple[int, int]):
@@ -1613,12 +1625,17 @@ class Entity(BaseBlock):
                 continue
             valid_positions: List[AvailableTarget] = []
             idx = 0
-            for pos, path in self.senses.paths.items():
+            for pos, _ in self.senses.paths.items():
                 if pos == self.senses.position:
                     continue
                 template.set_target_position(pos)
                 if template.pre_validate():
-                    path_cost = (len(path) - 1) * 5  # feet
+                    # Get actual terrain-based movement cost from template's computed costs
+                    path_cost = 0
+                    for cost in template.costs:
+                        if cost.cost_type == "movement":
+                            path_cost = cost.cost
+                            break
                     valid_positions.append(AvailableTarget(
                         index=idx,
                         position=pos,
