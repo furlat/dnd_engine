@@ -83,8 +83,9 @@ class AoEShape(BaseObject):
         """
         Compute affected positions using caster's existing senses.
 
-        This is fast (reuses existing FOV data) but may miss entities
-        the caster can't see. Good for UI previews.
+        For shapes where origin != caster position (e.g., Fireball exploding
+        at target location), we compute FOV from the origin and intersect
+        with caster's FOV. This ensures preview matches actual execution.
 
         Args:
             caster_pos: Caster's current position
@@ -93,23 +94,46 @@ class AoEShape(BaseObject):
         Returns:
             Self for chaining
         """
+        from dnd.core.gridmap import get_map
+
         self.computed_origin = self.get_origin(caster_pos)
 
         # Get positions visible to caster
-        perceived_fov = {pos for pos, vis in senses.visible.items() if vis}
+        caster_fov = {pos for pos, vis in senses.visible.items() if vis}
+
+        # If origin differs from caster, also compute origin's FOV
+        # This handles cases like Fireball where explosion spreads from target
+        if self.computed_origin != caster_pos:
+            grid = get_map()
+            origin_fov = set(
+                grid.compute_fov(self.computed_origin, self._get_max_radius_tiles())
+            )
+            # Preview shows intersection: what caster sees AND what origin can hit
+            perceived_fov = caster_fov & origin_fov
+        else:
+            perceived_fov = caster_fov
 
         # Get geometric positions in shape
         geometric = self._get_positions_in_shape(self.computed_origin)
 
-        # Intersection: only positions both in shape AND visible to caster
+        # Intersection: only positions both in shape AND in perceived FOV
         self.affected_positions = geometric & perceived_fov
 
-        # Find entities at affected positions (from caster's perception)
-        self.affected_entity_uuids = {
-            uuid
-            for uuid, pos in senses.entities.items()
-            if pos in self.affected_positions
-        }
+        # Find entities at affected positions
+        # When origin != caster, use GridMap for fresh entity data
+        if self.computed_origin != caster_pos:
+            grid = get_map()
+            self.affected_entity_uuids = set()
+            for pos in self.affected_positions:
+                for uuid in grid.get_entities_at(pos):
+                    self.affected_entity_uuids.add(uuid)
+        else:
+            # Use caster's perception (fast path)
+            self.affected_entity_uuids = {
+                uuid
+                for uuid, pos in senses.entities.items()
+                if pos in self.affected_positions
+            }
 
         return self
 
