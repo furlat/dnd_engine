@@ -1,7 +1,8 @@
 """Evocation spells - dealing damage and channeling energy.
 
 Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
-          LightningBolt, Thunderwave, Shatter, Sunburst, RayOfFrost, ScorchingRay
+          LightningBolt, Thunderwave, Shatter, Sunburst, RayOfFrost, ScorchingRay,
+          ShockingGrasp, GuidingBolt
 """
 from typing import Optional, List, Tuple
 from uuid import UUID
@@ -165,34 +166,40 @@ class FireBolt(SpellAction):
         )
 
 
-class RayOfFrostSlowed(BaseCondition):
-    """Speed reduction from Ray of Frost spell.
+class RayOfFrostEffect(BaseCondition):
+    """Tracks Ray of Frost speed reduction on caster.
 
-    Target's speed is reduced by 10 feet until start of caster's next turn.
     Duration: 1 round (expires at start of caster's next turn).
+
+    This follows the SRD: "until the start of YOUR next turn" = CASTER's turn.
+    The condition lives on the caster but applies a speed modifier to the target.
+    The modifier is tracked via modifiers_uuids, so it gets cleaned up automatically
+    when this condition expires at caster's turn start.
     """
-    name: str = "Ray of Frost Slowed"
-    description: str = "Speed reduced by 10 feet"
+    name: str = "Ray of Frost Effect"
+    description: str = "Tracking condition for Ray of Frost speed reduction"
+    affected_target_uuid: Optional[UUID] = None  # The target whose speed is reduced
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
         from dnd.entity import Entity
         from dnd.core.modifiers import NumericalModifier
 
-        if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+        if not self.affected_target_uuid:
+            return [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
 
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(self.affected_target_uuid)
         if not target:
             return [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Apply -10 speed modifier
+        # Apply -10 speed modifier to TARGET's movement
+        # This modifier is tracked by this condition and cleaned up when it expires
         speed_reduction = NumericalModifier(
             name="Ray of Frost",
             value=-10,
             source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid
+            target_entity_uuid=self.affected_target_uuid
         )
         mod_uuid = target.action_economy.movement.self_static.add_value_modifier(speed_reduction)
         outs.append((target.action_economy.movement.uuid, mod_uuid))
@@ -313,18 +320,22 @@ class RayOfFrost(SpellAction):
         # Apply damage
         target.health.take_damage(damage_roll.total, DamageType.COLD, source_entity_uuid=caster.uuid)
 
-        # 7. Apply speed reduction (1 round duration)
-        speed_condition = RayOfFrostSlowed(
+        # 7. Apply speed reduction
+        # The effect condition goes on CASTER with duration=1 round
+        # This ensures it expires at the start of CASTER's next turn (SRD correct)
+        # The condition tracks the speed modifier on the TARGET via modifiers_uuids
+        effect_condition = RayOfFrostEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
+            target_entity_uuid=caster.uuid,  # Lives on caster
+            affected_target_uuid=target.uuid,  # But affects target's speed
             duration=Duration(
                 duration=1,
                 duration_type=DurationType.ROUNDS,
                 source_entity_uuid=caster.uuid,
-                target_entity_uuid=target.uuid
+                target_entity_uuid=caster.uuid
             )
         )
-        target.add_condition(speed_condition)
+        caster.add_condition(effect_condition)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2056,4 +2067,420 @@ class Sunburst(SpellAction):
             damage_rolls=[damage_roll],
             total_damage=final_damage,
             status_message=f"Sunburst: {final_damage} radiant{blind_text} to {target.name}"
+        )
+
+
+def _is_wearing_metal_armor(entity) -> bool:
+    """Check if entity is wearing metal armor (for Shocking Grasp advantage).
+
+    Metal armors in D&D 5e SRD:
+    - Heavy armor: Ring Mail, Chain Mail, Splint, Plate (all metal)
+    - Medium armor: Chain Shirt, Scale Mail, Half Plate (metal); Hide, Breastplate (not metal)
+    - Light armor: None are metal
+    - Shields: Standard shields can be metal
+
+    We check by armor name since ArmorType.HEAVY is always metal,
+    and some medium armors contain "Chain", "Scale", or "Plate" in their name.
+    """
+    from dnd.blocks.equipment import ArmorType
+
+    body_armor = entity.equipment.body_armor
+    if body_armor is None:
+        return False
+
+    # Heavy armor is always metal
+    if body_armor.type == ArmorType.HEAVY:
+        return True
+
+    # Check medium armor names for metal types
+    if body_armor.type == ArmorType.MEDIUM:
+        armor_name = body_armor.name.lower()
+        metal_keywords = ["chain", "scale", "half plate"]
+        return any(keyword in armor_name for keyword in metal_keywords)
+
+    return False
+
+
+class ShockingGrasp(SpellAction):
+    """Shocking Grasp - Evocation cantrip
+
+    Lightning springs from your hand to deliver a shock to a creature you try
+    to touch. Make a melee spell attack against the target. You have advantage
+    on the attack roll if the target is wearing armor made of metal. On a hit,
+    the target takes 1d8 lightning damage, and it can't take reactions until
+    the start of its next turn.
+
+    Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
+    """
+    name: str = Field(default="Shocking Grasp")
+    description: str = Field(default="Melee spell attack, 1d8 lightning, advantage vs metal armor, no reactions")
+    spell_level: int = Field(default=0)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+    )
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate range (melee: 5ft) and line of sight."""
+        from dnd.entity import Entity
+
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source_entity or not target_entity:
+            return declaration_event.cancel(status_message="Source or target entity not found")
+
+        # Melee range check (5 feet)
+        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        if distance > 5:
+            return declaration_event.cancel(
+                status_message=f"Target out of melee range ({distance}ft > 5ft)"
+            )
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Execute melee spell attack with advantage vs metal armor."""
+        from dnd.entity import Entity, determine_attack_outcome
+        from dnd.conditions import NoReactions  # type: ignore[attr-defined]
+        from dnd.core.base_conditions import Duration, DurationType
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate bonuses
+        attack_bonus = caster.spell_attack_bonus(target.uuid)
+        target_ac = target.ac_bonus(caster.uuid)
+
+        # 2. Check for metal armor advantage
+        has_metal_armor = _is_wearing_metal_armor(target)
+        metal_adv_uuid: Optional[UUID] = None
+        if has_metal_armor:
+            metal_adv = AdvantageModifier(
+                name="Shocking Grasp (Metal Armor)",
+                value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+            metal_adv_uuid = attack_bonus.self_static.add_advantage_modifier(metal_adv)
+
+        # 3. Cross-propagate modifiers
+        attack_bonus.set_from_target(target_ac)
+        target_ac.set_from_target(attack_bonus)
+
+        # 4. Roll attack
+        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
+        crit_threshold = caster.get_spell_crit_threshold()
+        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
+
+        # 5. Clean up
+        attack_bonus.reset_from_target()
+        target_ac.reset_from_target()
+        if metal_adv_uuid:
+            attack_bonus.self_static.remove_modifier(metal_adv_uuid)
+
+        metal_text = " (advantage: metal armor)" if has_metal_armor else ""
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            attack_bonus=attack_bonus,
+            ac=target_ac,
+            dice_roll=dice_roll,
+            attack_outcome=outcome,
+            status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}{metal_text}: {outcome.value}"
+        )
+
+        # 6. On miss
+        if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{self.name} missed"
+            )
+
+        # 7. On hit: roll damage
+        num_dice = self._get_cantrip_dice_count(self.caster_level)
+        is_crit = outcome == AttackOutcome.CRIT
+
+        crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
+        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
+
+        damage_bonus = caster.get_spell_damage_bonus()
+        lightning_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=8,
+            dice_numbers=total_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.LIGHTNING
+        )
+
+        damage_dice = lightning_damage.get_dice(attack_outcome=outcome)
+        damage_roll = damage_dice.roll
+
+        # Apply damage
+        target.health.take_damage(damage_roll.total, DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+
+        # 8. Apply No Reactions condition (1 round duration - until start of target's next turn)
+        no_reactions = NoReactions(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            duration=Duration(
+                duration=1,
+                duration_type=DurationType.ROUNDS,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+        )
+        target.add_condition(no_reactions)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[lightning_damage],
+            damage_rolls=[damage_roll],
+            status_message=f"{self.name} hit for {damage_roll.total} lightning damage, no reactions until next turn"
+        )
+
+
+class GuidingBoltMarked(BaseCondition):
+    """
+    Target marked by Guiding Bolt.
+
+    "The next attack roll made against this target before the end of your
+    next turn has advantage."
+
+    Duration: Until next attack against target OR end of caster's next turn.
+    Uses to_target_static to grant attackers advantage.
+    Has an EventHandler to remove after first attack against target.
+    """
+    name: str = "Guiding Bolt"
+    description: str = "Next attack against this creature has advantage"
+
+    # Track caster for duration
+    caster_uuid: Optional[UUID] = None
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], Optional[Event]]:
+        from dnd.entity import Entity
+
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], declaration_event.cancel(status_message="Target entity not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+        handler_uuids: List[UUID] = []
+
+        # Add advantage to attacks against this target (to_target_static)
+        adv_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(
+            AdvantageModifier(
+                name="Guiding Bolt",
+                value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=self.target_entity_uuid,
+                target_entity_uuid=self.source_entity_uuid
+            )
+        )
+        outs.append((target.equipment.ac_bonus.uuid, adv_uuid))
+
+        # Register handler to remove on first attack against target
+        handler = self._create_remove_on_attack_handler()
+        target.add_event_handler(handler)
+        handler_uuids.append(handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied Guiding Bolt mark to {target.name}"
+        )
+        return outs, handler_uuids, [], effect_event
+
+    def _create_remove_on_attack_handler(self) -> EventHandler:
+        """Remove this condition after first attack against target."""
+        from dnd.entity import Entity
+
+        assert self.target_entity_uuid is not None
+
+        target_uuid = self.target_entity_uuid
+        effect_uuid = self.uuid
+
+        def remove_on_attack_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            # Only trigger for attacks against this target
+            if event.target_entity_uuid != target_uuid:
+                return None
+
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+
+            # Check if still marked by this specific Guiding Bolt
+            guiding_mark = target.active_conditions.get("Guiding Bolt")
+            if not guiding_mark or guiding_mark.uuid != effect_uuid:
+                return None
+
+            # Remove the condition (advantage was already applied via to_target_static)
+            target.remove_condition("Guiding Bolt")
+            return None
+
+        return EventHandler(
+            name=f"Guiding Bolt Remove ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK,
+                    event_phase=EventPhase.EFFECT  # After hit/miss determined, before damage
+                )
+            ],
+            event_processor=remove_on_attack_processor
+        )
+
+
+class GuidingBolt(SpellAction):
+    """Guiding Bolt - 1st level Evocation
+
+    A flash of light streaks toward a creature of your choice within range.
+    Make a ranged spell attack against the target. On a hit, the target takes
+    4d6 radiant damage, and the next attack roll made against this target
+    before the end of your next turn has advantage.
+
+    At Higher Levels: +1d6 damage per slot level above 1st.
+    """
+    name: str = Field(default="Guiding Bolt")
+    description: str = Field(default="Ranged spell attack, 4d6 radiant, next attack has advantage")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+    )
+
+    # Damage configuration
+    base_damage_dice: int = Field(default=4)  # 4d6 at level 1
+
+    def get_damage_dice_count(self) -> int:
+        """4d6 base + 1d6 per level above 1st."""
+        upcast_bonus = max(0, self.cast_at_level - self.spell_level)
+        return self.base_damage_dice + upcast_bonus
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate range and line of sight."""
+        from dnd.entity import Entity
+
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source_entity or not target_entity:
+            return declaration_event.cancel(status_message="Source or target entity not found")
+
+        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Execute ranged spell attack and apply guiding mark on hit."""
+        from dnd.entity import Entity, determine_attack_outcome
+        from dnd.core.base_conditions import Duration, DurationType
+
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate bonuses
+        attack_bonus = caster.spell_attack_bonus(target.uuid)
+        target_ac = target.ac_bonus(caster.uuid)
+
+        # 2. Cross-propagate modifiers
+        attack_bonus.set_from_target(target_ac)
+        target_ac.set_from_target(attack_bonus)
+
+        # 3. Roll attack
+        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
+        crit_threshold = caster.get_spell_crit_threshold()
+        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
+
+        # 4. Clean up
+        attack_bonus.reset_from_target()
+        target_ac.reset_from_target()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            attack_bonus=attack_bonus,
+            ac=target_ac,
+            dice_roll=dice_roll,
+            attack_outcome=outcome,
+            status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
+        )
+
+        # 5. On miss
+        if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{self.name} missed"
+            )
+
+        # 6. On hit: roll damage
+        num_dice = self.get_damage_dice_count()
+        is_crit = outcome == AttackOutcome.CRIT
+
+        crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
+        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
+
+        damage_bonus = caster.get_spell_damage_bonus()
+        radiant_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=6,
+            dice_numbers=total_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.RADIANT
+        )
+
+        damage_dice = radiant_damage.get_dice(attack_outcome=outcome)
+        damage_roll = damage_dice.roll
+
+        # Apply damage
+        target.health.take_damage(damage_roll.total, DamageType.RADIANT, source_entity_uuid=caster.uuid)
+
+        # 7. Apply Guiding Bolt mark (advantage on next attack)
+        # Duration: Until next attack against target OR "until the end of your next turn"
+        # We use 2 rounds to cover "end of your next turn" - the handler removes on first attack
+        guiding_mark = GuidingBoltMarked(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            caster_uuid=caster.uuid,
+            duration=Duration(
+                duration=2,  # End of caster's next turn
+                duration_type=DurationType.ROUNDS,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=caster.uuid  # Expires relative to caster
+            )
+        )
+        target.add_condition(guiding_mark)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[radiant_damage],
+            damage_rolls=[damage_roll],
+            status_message=f"{self.name} hit for {damage_roll.total} radiant damage, next attack has advantage"
         )
