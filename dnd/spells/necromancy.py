@@ -328,8 +328,13 @@ class ChillTouch(SpellAction):
         damage_dice = necrotic_damage.get_dice(attack_outcome=outcome)
         damage_roll = damage_dice.roll
 
-        # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.NECROTIC, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.NECROTIC,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         # 7. Apply debuffs using effect condition on caster
         is_undead = target.creature_type == CreatureType.UNDEAD
@@ -465,11 +470,12 @@ class Blight(SpellAction):
             )
             mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
 
-        # 3. Request CON save
+        # 3. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -515,9 +521,14 @@ class Blight(SpellAction):
             # Half damage on successful save
             final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 6. Apply damage
+        # 6. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.NECROTIC, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.NECROTIC,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         save_text = " (saved for half)" if success and not is_plant else ""
         plant_text = " (maximum damage)" if is_plant else ""
@@ -612,11 +623,12 @@ class BlindnessDeafnessEffect(BaseCondition):
                 target.remove_condition("Blindness/Deafness")
                 return None
 
-            # Repeat CON save
+            # Repeat CON save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _roll, _outcome, success = target.saving_throw(save_request)
 
@@ -720,11 +732,12 @@ class BlindnessDeafness(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # CON save
+        # CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 

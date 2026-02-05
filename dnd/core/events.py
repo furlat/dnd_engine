@@ -28,8 +28,8 @@ __all__ = [
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
     "TurnEvent", "TurnStartEvent", "TurnEndEvent",
-    # Death/Unconscious events
-    "DeathEvent", "UnconsciousEvent",
+    # Death event
+    "DeathEvent",
 ]
 
 from enum import Enum
@@ -159,7 +159,6 @@ class EventType(str, Enum):
     TURN_START = "turn_start"
     TURN_END = "turn_end"
     DEATH = "death"
-    UNCONSCIOUS = "unconscious"  # Entity dropped to 0 HP (before death determination)
 
 
 class SpatialChangeType(str, Enum):
@@ -279,7 +278,17 @@ class Event(BaseObject):
                 temp_event = self.model_copy(update=phase_updates)
                 combat_log = temp_event.generate_combat_log()
                 if combat_log is not None:
+                    # CENTRALIZED: Collect children here, not in each generate_combat_log()
+                    child_logs = temp_event._collect_child_combat_logs()
+                    if child_logs:
+                        combat_log.sub_entries = child_logs
                     phase_updates['combat_log'] = combat_log
+
+                    # Auto-add top-level events via callback
+                    if self.parent_event is None and EventQueue._combat_log_callback:
+                        # Create temp event with updated combat_log for callback
+                        final_event = self.model_copy(update=phase_updates)
+                        EventQueue._combat_log_callback(final_event)
             except Exception:
                 pass  # Don't break event flow if log generation fails
 
@@ -333,7 +342,27 @@ class Event(BaseObject):
         if self.parent_event:
             return EventQueue.get_event_by_uuid(self.parent_event)
         return None
-    
+
+    def _collect_child_combat_logs(self) -> List['CombatLogEntry']:
+        """Collect combat logs from direct children (recursive via sub_entries).
+
+        Returns a list of CombatLogEntry objects from child events.
+        Each child's combat_log already has ITS children in sub_entries
+        (because this method runs when each child completes).
+
+        De-duplicates by lineage_uuid to avoid adding the same event's log
+        multiple times when the event phases through (each phase has a new uuid
+        but the same lineage_uuid).
+        """
+        child_logs = []
+        seen_lineages: Set[UUID] = set()
+        for child_uuid in self.lineage_children_events:
+            child = EventQueue.get_event_by_uuid(child_uuid)
+            if child and child.combat_log and child.lineage_uuid not in seen_lineages:
+                child_logs.append(child.combat_log)
+                seen_lineages.add(child.lineage_uuid)
+        return child_logs
+
     def get_history(self) -> List['Event']:
         """ get all previous version of the event by getting the full list by uuid and getting the current event as last element
         """
@@ -561,6 +590,19 @@ class EventQueue:
     # These are called for ALL events after storage, cannot modify events
     _on_event_callbacks: List[Callable[['Event'], None]] = []
 
+    # Callback for combat log auto-capture (set by Encounter)
+    # Called for top-level events (parent_event=None) when they complete with combat_log
+    _combat_log_callback: Optional[Callable[['Event'], None]] = None
+
+    @classmethod
+    def set_combat_log_callback(cls, callback: Optional[Callable[['Event'], None]]) -> None:
+        """Register callback for auto-adding events to combat log.
+
+        Called by Encounter when it becomes active. The callback receives
+        top-level events (parent_event=None) when they complete with a combat_log.
+        """
+        cls._combat_log_callback = callback
+
     @classmethod
     def add_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
         """Add a callback that fires for every event after storage.
@@ -719,8 +761,13 @@ class EventQueue:
 
         # 3. Complex trigger EventHandlers (source/target filtering)
         # Only iterates _event_handlers, NOT _spatial_handlers
+        # IMPORTANT: Skip handlers that are position-indexed (in _handler_positions)
+        # - those should ONLY fire at their registered positions, not globally
         for handler in cls._event_handlers.values():
             if handler.uuid in seen:
+                continue
+            # Skip position-indexed handlers - they should only fire via step 1 at their positions
+            if handler.uuid in cls._handler_positions:
                 continue
             for trigger in handler.trigger_conditions:
                 if trigger(event):
@@ -1425,7 +1472,8 @@ class SpatialChangeEvent(Event):
     @classmethod
     def entity_entered(cls, position: Tuple[int, int], entity_uuid: UUID,
                        old_position: Optional[Tuple[int, int]] = None,
-                       source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                       source_entity_uuid: Optional[UUID] = None,
+                       parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity entering a cell.
 
         Event starts at DECLARATION phase to allow full lifecycle:
@@ -1433,6 +1481,13 @@ class SpatialChangeEvent(Event):
 
         Handlers can react at EFFECT phase (entry damage, saves, etc.)
         Callbacks fire at COMPLETION for passive updates (senses).
+
+        Args:
+            position: Grid position being entered
+            entity_uuid: UUID of entity entering
+            old_position: Previous position (if moving)
+            source_entity_uuid: Source entity for event (defaults to entity_uuid)
+            parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
         """
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
@@ -1442,19 +1497,28 @@ class SpatialChangeEvent(Event):
             entity_uuid=entity_uuid,
             old_position=old_position,
             phase=EventPhase.DECLARATION,
-            use_register=False  # GridMap controls registration via _fire_spatial_event
+            use_register=False,  # GridMap controls registration via _fire_spatial_event
+            parent_event=parent_event
         )
 
     @classmethod
     def entity_left(cls, position: Tuple[int, int], entity_uuid: UUID,
                     new_position: Optional[Tuple[int, int]] = None,
-                    source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                    source_entity_uuid: Optional[UUID] = None,
+                    parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity leaving a cell.
 
         Event starts at DECLARATION phase to allow full lifecycle:
         DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
 
         Note: old_position field stores the new_position for reference.
+
+        Args:
+            position: Grid position being left
+            entity_uuid: UUID of entity leaving
+            new_position: New position (if moving)
+            source_entity_uuid: Source entity for event (defaults to entity_uuid)
+            parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
         """
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
@@ -1464,7 +1528,8 @@ class SpatialChangeEvent(Event):
             entity_uuid=entity_uuid,
             old_position=new_position,  # Store new position in old_position field for reference
             phase=EventPhase.DECLARATION,
-            use_register=False  # GridMap controls registration via _fire_spatial_event
+            use_register=False,  # GridMap controls registration via _fire_spatial_event
+            parent_event=parent_event
         )
 
     @classmethod
@@ -1889,6 +1954,58 @@ class TakeDamageEvent(Event):
         """Get the damage amount to apply (final_damage if set, else total_damage)."""
         return self.final_damage if self.final_damage is not None else self.total_damage
 
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for taking damage.
+
+        Used for damage from zones, terrain, environmental effects, etc.
+        Attack damage is logged by the attack event itself.
+        """
+        target_name = self.target_entity_name or "Unknown"
+        source_name = self.source_entity_name or "terrain"  # Default to terrain for zone damage
+
+        damage = self.get_effective_damage()
+
+        # Get damage type from first damage entry, or default to "damage"
+        damage_type_str = "damage"
+        if self.damages:
+            damage_type_str = str(self.damages[0].damage_type.value).lower()
+
+        # COMPACT: "Skeleton takes 5 piercing"
+        compact_text = f"{md_color(target_name, 'yellow')} takes {md_color(str(damage), 'red')} {damage_type_str}"
+
+        # VERBOSE: Add source
+        verbose_text = f"{md_color(target_name, 'yellow')} takes {md_color(str(damage), 'red')} {damage_type_str}"
+        if source_name and source_name != "terrain":
+            verbose_text += f" from {md_color(source_name, 'cyan')}"
+
+        # DETAILED: Add roll info if available
+        detailed_text = verbose_text
+        if self.damage_rolls:
+            roll_strs = []
+            for roll in self.damage_rolls:
+                if hasattr(roll, 'results') and roll.results:
+                    roll_strs.append(f"{roll.results}")
+            if roll_strs:
+                detailed_text += f"\n  Rolls: {', '.join(roll_strs)}"
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.DAMAGE_TAKEN,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
+            data={
+                "target_name": target_name,
+                "damage": damage,
+                "damage_type": damage_type_str,
+                "source_name": source_name,
+            },
+            success=True
+        )
+
 
 # =============================================================================
 # Encounter/Turn Events
@@ -2039,23 +2156,4 @@ class DeathEvent(Event):
         )
 
 
-class UnconsciousEvent(Event):
-    """
-    Fired when an entity drops to 0 HP (before death determination).
-
-    This event allows handlers to react to becoming unconscious:
-    - Rage ending (Barbarian)
-    - Concentration checks
-    - Other features that trigger on dropping to 0 HP
-
-    Note: This fires AFTER damage is applied, so RelentlessRage (which modifies
-    damage at TAKE_DAMAGE EFFECT) has already had its chance to prevent this.
-    If RelentlessRage succeeds, HP stays at 1 and this event never fires.
-    """
-    name: str = Field(default="Unconscious", description="Entity dropped to 0 HP")
-    event_type: EventType = Field(default=EventType.UNCONSCIOUS)
-    entity_uuid: UUID = Field(description="UUID of the entity that dropped to 0 HP")
-    entity_name: str = Field(default="", description="Name of the entity")
-    damage_source_uuid: Optional[UUID] = Field(default=None, description="UUID of entity that caused the unconsciousness")
-    final_hp: int = Field(default=0, description="HP after damage (typically 0 or negative)")
 

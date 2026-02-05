@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field, ConfigDict
-from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range
+from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData, MultiEntityLogData, md_color
 from dnd.core.aoe import AoEShape
-from typing import Optional, Callable, OrderedDict, List, Literal, Tuple
+from typing import Optional, Callable, OrderedDict, List, Literal, Tuple, cast
 from uuid import UUID, uuid4
 from enum import Enum
 
@@ -45,8 +45,8 @@ class ActionEvent(Event):
     event_type: EventType = Field(default=EventType.BASE_ACTION,description="The type of event")
     description: str = Field(default="", description="Action description for combat log generation")
 
-    # Multi-target result fields (for MULTI_ENTITY actions)
-    target_results: Optional[List[Event]] = Field(default=None, description="Results from each per-target _apply() call")
+    # Multi-target summary fields (for MULTI_ENTITY actions)
+    # Note: Per-target results are now children via parent_event, not stored here
     total_targets: int = Field(default=0, description="Number of targets affected")
     total_damage: int = Field(default=0, description="Total damage dealt across all targets")
 
@@ -68,13 +68,14 @@ class ActionEvent(Event):
         Uses self.name and self.description. Subclasses (AttackEvent,
         MovementEvent, SpellEvent) override with specific implementations.
 
-        For multi-target actions (with target_results), generates an aggregate log.
+        For multi-target actions (total_targets > 0), generates a summary log.
+        Sub-entries come from _collect_child_combat_logs() via parent_event relationship.
 
         Returns:
             CombatLogEntry for self-targeting actions, or None for base events.
         """
-        # Check if this is a multi-target action with results
-        if self.target_results and len(self.target_results) > 0:
+        # Check if this is a multi-target action (total_targets set by convolution)
+        if self.total_targets > 0:
             return self._generate_multi_target_log()
 
         # Original single-target logic
@@ -106,13 +107,14 @@ class ActionEvent(Event):
         )
 
     def _generate_multi_target_log(self) -> CombatLogEntry:
-        """Generate aggregate summary log for multi-target actions.
+        """Generate summary log for multi-target actions.
 
-        This is just a summary line - per-target details come from individual
-        target_results events which have their own combat_logs.
+        This is just a summary line. Per-target details come from child events
+        (via parent_event relationship) which are collected as sub_entries
+        by _collect_child_combat_logs() in Event.phase_to().
         """
         source_name = self.source_entity_name or "Unknown"
-        n_targets = len(self.target_results) if self.target_results else 0
+        n_targets = self.total_targets
         total_dmg = self.total_damage or 0
 
         # Summary line with position if AoE
@@ -123,16 +125,16 @@ class ActionEvent(Event):
             location = ""
         summary = f"{md_color(source_name, 'cyan')} uses {md_color(action_name, 'yellow')}{location} → {n_targets} targets, {md_color(str(total_dmg), 'red')} total damage"
 
-        # Data model for structured access (per-target logs stored here)
-        data = MultiEntityLogData.from_target_results(
+        # Data model for structured access (summary only, per-target data in sub_entries)
+        data = MultiEntityLogData(
             action_name=self.name or "Action",
             caster_name=source_name,
-            target_results=self.target_results or [],
+            total_targets=n_targets,
             total_damage=total_dmg,
             aoe_center=self.aoe_position
         )
 
-        # All verbosity levels show just the summary - per-target details are separate logs
+        # Summary only - sub_entries populated by _collect_child_combat_logs() in Event.phase_to()
         return CombatLogEntry(
             entry_type=CombatLogEntryType.MULTI_ENTITY_ACTION,
             source_name=source_name,
@@ -572,17 +574,33 @@ class BaseAction(BaseObject):
             original_target = self.target_entity_uuid
 
             # CONVOLUTION: Call _apply() for each target IN ORDER
-            all_results: List[ActionEvent] = []
+            # Each per-target event becomes a CHILD of execution_event (not a phase)
             total_damage = 0
 
             for target_uuid in all_target_uuids:
                 # Set current target
                 self.target_entity_uuid = target_uuid
 
-                # Call normal _apply() - no new method needed!
-                result_event = self._apply(execution_event)
+                # Get target entity name for combat log
+                target_entity = BaseBlock.get(target_uuid)
+                target_entity_name = getattr(target_entity, 'name', None) if target_entity else None
+
+                # Create CHILD event for this target (not a phase of execution_event)
+                # Key: parent_event is set, and lineage_uuid is NEW (not shared)
+                per_target_event = execution_event.model_copy(update={
+                    'uuid': uuid4(),  # New UUID
+                    'lineage_uuid': uuid4(),  # NEW lineage (isolated save/damage tracking)
+                    'parent_event': execution_event.uuid,  # Child of parent
+                    'target_entity_uuid': target_uuid,
+                    'target_entity_name': target_entity_name,
+                    'children_events': [],
+                    'lineage_children_events': [],
+                })
+                per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
+
+                # Call normal _apply() with the child event
+                result_event = self._apply(per_target_event)
                 if result_event:
-                    all_results.append(result_event)
                     # CONTRACT: _apply() must set total_damage if it deals damage
                     damage = getattr(result_event, 'total_damage', 0) or 0
                     total_damage += damage
@@ -590,14 +608,14 @@ class BaseAction(BaseObject):
             # Restore original target
             self.target_entity_uuid = original_target
 
-            # Aggregate into final completion event
+            # Parent completion - _collect_child_combat_logs() will find per-target children
+            # via parent_event relationship (no target_results field needed)
             completion_event = execution_event.phase_to(
                 EventPhase.COMPLETION,
-                target_results=all_results,
-                total_targets=len(all_results),
+                total_targets=len(all_target_uuids),
                 total_damage=total_damage,
                 aoe_position=self.end_position,  # Pass AoE center for combat log
-                status_message=f"{self.name} affected {len(all_results)} targets for {total_damage} total damage"
+                status_message=f"{self.name} affected {len(all_target_uuids)} targets for {total_damage} total damage"
             )
         else:
             # Existing single-target flow

@@ -233,8 +233,15 @@ class Move(BaseAction):
         }
         update_dict.update(overrides)
 
-        # model_copy preserves object types
-        return self.model_copy(deep=True, update=update_dict)
+        # model_copy preserves object types but bypasses __init__()
+        instance = self.model_copy(deep=True, update=update_dict)
+
+        # FIX: Explicitly compute path and costs since model_copy() bypasses __init__()
+        if instance.end_position is not None:
+            instance._setup_path()
+            instance._setup_costs_from_path()
+
+        return instance
 
     @staticmethod
     def validate_path(declaration_event: MovementEvent,source_entity_uuid: UUID) -> MovementEvent:
@@ -372,48 +379,75 @@ class Move(BaseAction):
         total_path_length = len(path)
         actual_end_position = source_entity.position  # Track where we actually end up
 
-        for i in range(1, total_path_length):
-            from_pos = path[i - 1]
-            to_pos = path[i]
+        # Set is_moving flag so SpatialSensesCallback does visibility-only updates per step
+        source_entity.is_moving = True
 
-            # Get step cost from terrain
-            tile = grid.get_tile(*to_pos)
-            step_cost_units = tile.get_movement_cost(MovementMode.WALKING) if tile else 1.0
-            step_cost_feet = int(step_cost_units * 5)
+        try:
+            for i in range(1, total_path_length):
+                from_pos = path[i - 1]
+                to_pos = path[i]
 
-            # Check if entity has enough movement remaining (conditions affect this via modifiers)
-            remaining_movement = source_entity.action_economy.movement.normalized_score
-            if remaining_movement < step_cost_feet:
-                break
+                # Check if next step is still valid (tile walkable, not blocked by entity)
+                # Handles: tile destroyed, enemy moved into path, etc.
+                if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
+                    break
 
-            # Fire StepMovementEvent (OA and terrain handlers see this)
-            step_event = StepMovementEvent(
-                source_entity_uuid=self.source_entity_uuid,
-                source_entity_name=source_entity.name,
-                from_position=from_pos,
-                to_position=to_pos,
-                path_index=i,
-                total_path_length=total_path_length,
-                movement_cost=step_cost_feet,
-                phase=EventPhase.EFFECT,
-                parent_event=effect_event.uuid
-            )
-            # post() returns the processed event (which may have been canceled by handlers)
-            processed_step = step_event.post()
+                # Get step cost from terrain
+                tile = grid.get_tile(*to_pos)
+                step_cost_units = tile.get_movement_cost(MovementMode.WALKING) if tile else 1.0
+                step_cost_feet = int(step_cost_units * 5)
 
-            # Check if step was canceled (e.g., by a reaction or trap)
-            if processed_step.canceled:
-                break
+                # Check if entity has enough movement remaining (conditions affect this via modifiers)
+                remaining_movement = source_entity.action_economy.movement.normalized_score
+                if remaining_movement < step_cost_feet:
+                    break
 
-            # Actually move the entity one cell
-            Entity.update_entity_position(source_entity, to_pos)
-            actual_end_position = to_pos
+                # Fire StepMovementEvent (OA and terrain handlers see this)
+                step_event = StepMovementEvent(
+                    source_entity_uuid=self.source_entity_uuid,
+                    source_entity_name=source_entity.name,
+                    from_position=from_pos,
+                    to_position=to_pos,
+                    path_index=i,
+                    total_path_length=total_path_length,
+                    movement_cost=step_cost_feet,
+                    phase=EventPhase.EFFECT,
+                    parent_event=effect_event.uuid
+                )
+                # post() returns the processed event (which may have been canceled by handlers)
+                processed_step = step_event.post()
 
-            # Deduct movement cost for this step
-            source_entity.action_economy.consume("movement", step_cost_feet)
+                # Check if step was canceled (e.g., by a reaction or trap)
+                if processed_step.canceled:
+                    break
 
-        # Note: Senses are updated reactively via SPATIAL events fired by GridMap.move_entity()
-        # Each entity's spatial handler incrementally updates visible_entities
+                # Actually move the entity - pass step event UUID so terrain damage links to it
+                # NOTE: We pass the EFFECT phase UUID here, and complete the step AFTER
+                # spatial events fire. This ensures terrain damage (TakeDamageEvent) is
+                # collected as a child of this step when combat_log is generated.
+                Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
+                actual_end_position = to_pos
+
+                # Now progress to COMPLETION - generates combat_log with all children
+                # (including TakeDamageEvents from terrain that just fired)
+                processed_step.phase_to(EventPhase.COMPLETION)
+
+                # Check for death during movement (e.g., from terrain damage like spikes)
+                # receive_damage() applies Dead condition → Incapacitated → movement=0
+                # We need to break BEFORE trying to consume movement
+                if "Dead" in source_entity.active_conditions:
+                    break
+
+                # Deduct movement cost for this step
+                source_entity.action_economy.consume("movement", step_cost_feet)
+
+        finally:
+            # ALWAYS clear flag and do full senses update, regardless of how loop exits:
+            # - Normal completion
+            # - break (step canceled, path invalid, not enough movement, death)
+            # - Exception
+            source_entity.is_moving = False
+            source_entity.update_entity_senses(max_distance=20)
 
         # Determine final result
         if source_entity.position == execution_event.start_position:
@@ -2091,7 +2125,7 @@ class Shove(BaseAction):
         push_distance = actual_dist
 
         if actual_dist > 0:
-            # Create ForcedMovementEvent (does NOT trigger OA)
+            # Create ForcedMovementEvent (does NOT trigger OA) - child of shove effect
             forced_event = ForcedMovementEvent(
                 source_entity_uuid=source.uuid,
                 target_entity_uuid=target.uuid,
@@ -2104,15 +2138,16 @@ class Shove(BaseAction):
                 actual_distance=actual_dist,
                 blocked_by_obstacle=blocked,
                 cause="shove",
-                phase=EventPhase.DECLARATION
+                phase=EventPhase.DECLARATION,
+                parent_event=execution_event.uuid
             )
 
             # Move to completion (triggers GridMap spatial events via Entity.update_entity_position)
             forced_event = forced_event.phase_to(EventPhase.COMPLETION)
 
-            # Actually move the target
+            # Actually move the target - spatial events are children of ForcedMovementEvent
             # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
-            Entity.update_entity_position(target, final_pos)
+            Entity.update_entity_position(target, final_pos, parent_event=forced_event.uuid)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2164,8 +2199,8 @@ class SpellEvent(ActionEvent):
         - Save-based spells (Fireball, etc.) with save rolls and damage
         - Attack spells (Fire Bolt) - delegate to generic format for now
         """
-        # Multi-target spells aggregate per-target logs
-        if self.target_results and len(self.target_results) > 0:
+        # Multi-target spells use summary log - sub_entries come from child events
+        if self.total_targets > 0:
             return self._generate_multi_target_log()
 
         # Save-based spell (has save_dc and save_success)

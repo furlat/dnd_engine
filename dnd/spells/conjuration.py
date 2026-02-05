@@ -93,11 +93,12 @@ class CallLightningStrike(BaseAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Request DEX save
+        # Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
-            dc=self.spell_dc
+            dc=self.spell_dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -123,8 +124,13 @@ class CallLightningStrike(BaseAction):
         # Half damage on save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # Apply damage
-        target.receive_damage(amount=final_damage, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=final_damage,
+            damage_type=DamageType.LIGHTNING,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         save_text = " (save for half)" if success else ""
         return effect_event.phase_to(
@@ -208,11 +214,12 @@ class CallLightning(SpellAction):
             status_message=f"Storm cloud appears - requesting DEX save DC {dc}"
         )
 
-        # 1. Initial strike - DEX save
+        # 1. Initial strike - DEX save (child of effect event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
-            dc=dc
+            dc=dc,
+            parent_event=effect_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -238,8 +245,13 @@ class CallLightning(SpellAction):
         # Half damage on save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # Apply damage
-        target.receive_damage(amount=final_damage, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=final_damage,
+            damage_type=DamageType.LIGHTNING,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         # 2. Register Call Lightning Strike action
         strike_action = CallLightningStrike(
@@ -366,10 +378,12 @@ class PoisonSpray(SpellAction):
 
         dc = caster.spell_save_dc()
 
+        # CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, _save_roll, success = target.saving_throw(save_request)
 
@@ -397,7 +411,13 @@ class PoisonSpray(SpellAction):
         damage_dice = poison_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.POISON, source_entity_uuid=caster.uuid)
+        # Apply damage (child of execution event since no separate effect phase)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.POISON,
+            source_entity_uuid=caster.uuid,
+            parent_event=execution_event.uuid
+        )
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,
@@ -497,11 +517,12 @@ class AcidSplash(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # DEX save
+        # DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -542,7 +563,13 @@ class AcidSplash(SpellAction):
         damage_dice = acid_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.ACID, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.ACID,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -692,11 +719,12 @@ class GreaseZone(ZoneControlCondition):
             if not entity:
                 return None
 
-            # Make DEX save
+            # Make DEX save (child of triggering event)
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
                 ability_name="dexterity",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -745,11 +773,12 @@ class GreaseZone(ZoneControlCondition):
             if "Prone" in entity.active_conditions:
                 return None
 
-            # Make DEX save
+            # Make DEX save (child of triggering event)
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
                 ability_name="dexterity",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -881,11 +910,12 @@ class Grease(SpellAction):
                     continue
                 if ent.uuid == caster.uuid:
                     continue  # Don't affect caster
-                # DEX save
+                # DEX save (child of effect event)
                 save_request = caster.create_saving_throw_request(
                     target_entity_uuid=ent.uuid,
                     ability_name="dexterity",
-                    dc=dc
+                    dc=dc,
+                    parent_event=effect_event.uuid
                 )
                 _, _, success = ent.saving_throw(save_request)
                 if not success:
@@ -1091,11 +1121,12 @@ class WebZone(ZoneControlCondition):
             if "Web Restrained" in entity.active_conditions:
                 return None
 
-            # Make DEX save
+            # Make DEX save (child of triggering event)
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
                 ability_name="dexterity",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -1235,11 +1266,12 @@ class Web(SpellAction):
                     continue
                 if ent.uuid == caster.uuid:
                     continue  # Don't affect caster
-                # DEX save
+                # DEX save (child of effect event)
                 save_request = caster.create_saving_throw_request(
                     target_entity_uuid=ent.uuid,
                     ability_name="dexterity",
-                    dc=dc
+                    dc=dc,
+                    parent_event=effect_event.uuid
                 )
                 _, _, success = ent.saving_throw(save_request)
                 if not success:
@@ -1325,11 +1357,12 @@ class CloudkillZone(ZoneControlCondition):
             if not entity:
                 return None
 
-            # Make CON save
+            # Make CON save (child of triggering event)
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
                 ability_name="constitution",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -1338,7 +1371,7 @@ class CloudkillZone(ZoneControlCondition):
             if success:
                 damage = damage // 2
 
-            entity.receive_damage(damage, DamageType.POISON, source_uuid)
+            entity.receive_damage(damage, DamageType.POISON, source_uuid, parent_event=event.uuid)
 
             return None
 
@@ -1375,11 +1408,12 @@ class CloudkillZone(ZoneControlCondition):
             if entity.senses.position not in zone_condition.affected_positions:
                 return None
 
-            # Make CON save
+            # Make CON save (child of triggering event)
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
                 ability_name="constitution",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -1388,7 +1422,7 @@ class CloudkillZone(ZoneControlCondition):
             if success:
                 damage = damage // 2
 
-            entity.receive_damage(damage, DamageType.POISON, source_uuid)
+            entity.receive_damage(damage, DamageType.POISON, source_uuid, parent_event=event.uuid)
 
             return None
 
@@ -1573,11 +1607,12 @@ class Cloudkill(SpellAction):
                 if not ent:
                     continue
                 # Note: Cloudkill affects everyone, including caster
-                # CON save
+                # CON save (child of effect event)
                 save_request = caster.create_saving_throw_request(
                     target_entity_uuid=ent.uuid,
                     ability_name="constitution",
-                    dc=dc
+                    dc=dc,
+                    parent_event=effect_event.uuid
                 )
                 _, _, success = ent.saving_throw(save_request)
 
@@ -1586,7 +1621,7 @@ class Cloudkill(SpellAction):
                 if success:
                     damage = damage // 2
 
-                ent.receive_damage(damage, DamageType.POISON, caster.uuid)
+                ent.receive_damage(damage, DamageType.POISON, caster.uuid, parent_event=effect_event.uuid)
                 damage_count += 1
 
         return effect_event.phase_to(
@@ -1772,11 +1807,12 @@ class SpiritGuardiansZone(ZoneControlCondition):
             if "Spirit Guardians Triggered" in entity.active_conditions:
                 return None
 
-            # WIS save + damage
+            # WIS save + damage (child of triggering event)
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
                 ability_name="wisdom",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -1785,7 +1821,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
             if success:
                 damage = damage // 2
 
-            entity.receive_damage(damage, dmg_type, source_uuid)
+            entity.receive_damage(damage, dmg_type, source_uuid, parent_event=event.uuid)
 
             # Apply marker (prevents repeat damage this turn)
             marker = SpiritGuardiansTriggered(
@@ -1850,11 +1886,12 @@ class SpiritGuardiansZone(ZoneControlCondition):
             if "Spirit Guardians Triggered" in entity.active_conditions:
                 return None
 
-            # WIS save + damage
+            # WIS save + damage (child of triggering event)
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
                 ability_name="wisdom",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -1863,7 +1900,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
             if success:
                 damage = damage // 2
 
-            entity.receive_damage(damage, dmg_type, source_uuid)
+            entity.receive_damage(damage, dmg_type, source_uuid, parent_event=event.uuid)
 
             # Apply marker (prevents repeat damage this turn)
             marker = SpiritGuardiansTriggered(
@@ -2049,11 +2086,12 @@ class SpiritGuardians(SpellAction):
                 if ent.is_ally(caster):
                     continue  # Skip allies
 
-                # WIS save
+                # WIS save (child of effect event)
                 save_request = caster.create_saving_throw_request(
                     target_entity_uuid=ent.uuid,
                     ability_name="wisdom",
-                    dc=dc
+                    dc=dc,
+                    parent_event=effect_event.uuid
                 )
                 _, _, success = ent.saving_throw(save_request)
 
@@ -2062,7 +2100,7 @@ class SpiritGuardians(SpellAction):
                 if success:
                     damage = damage // 2
 
-                ent.receive_damage(damage, self.damage_type, caster.uuid)
+                ent.receive_damage(damage, self.damage_type, caster.uuid, parent_event=effect_event.uuid)
                 damage_count += 1
 
                 # Apply marker

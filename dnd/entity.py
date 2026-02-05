@@ -140,6 +140,10 @@ class Entity(BaseBlock):
     # Turn tracking - True during this entity's turn (set by on_turn_start, cleared by on_turn_end)
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
 
+    # Movement tracking - True during Move._apply() execution
+    # Used by SpatialSensesCallback to decide between visibility-only vs full senses update
+    is_moving: bool = Field(default=False, description="True while Move._apply() is executing")
+
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
@@ -167,20 +171,36 @@ class Entity(BaseBlock):
         # Using callbacks instead of EventHandlers because spatial events
         # fire at COMPLETION phase and handlers don't fire for COMPLETION events
         if self.senses is not None:
-            # Pass update function so callback can trigger full senses recalculation
+            # Pass update functions so callback can trigger appropriate updates
             # Using lambda to capture self and provide default max_distance
-            update_func = lambda: self.update_entity_senses(max_distance=20)
-            spatial_callback = self.senses.create_spatial_callback(self.uuid, update_func)
+            update_senses_func = lambda: self.update_entity_senses(max_distance=20)
+            update_visibility_func = lambda: self.update_entity_visibility(max_distance=20)
+            spatial_callback = self.senses.create_spatial_callback(
+                self.uuid,
+                update_senses_func=update_senses_func,
+                update_visibility_func=update_visibility_func
+            )
             EventQueue.add_on_event_callback(spatial_callback)
 
     @classmethod
-    def update_entity_position(cls, entity: 'Entity', new_position: Tuple[int, int]):
-        """Update entity position in both class registry and GridMap."""
+    def update_entity_position(
+        cls,
+        entity: 'Entity',
+        new_position: Tuple[int, int],
+        parent_event: Optional[UUID] = None
+    ):
+        """Update entity position in both class registry and GridMap.
+
+        Args:
+            entity: The entity to move
+            new_position: New grid position
+            parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
+        """
         cls._entity_by_position[entity.position].remove(entity)
         cls._entity_by_position[new_position].append(entity)
         entity._set_position(new_position)
         # Also update GridMap (handles dirty tracking)
-        get_map().move_entity(entity.uuid, new_position)
+        get_map().move_entity(entity.uuid, new_position, parent_event=parent_event)
 
     @classmethod
     def register_entity(cls, entity: 'Entity'):
@@ -784,9 +804,14 @@ class Entity(BaseBlock):
 
         Fires TakeDamageEvent through phases, allowing handlers to:
         - Track damage (HasTakenDamage, Concentration)
-        - Modify damage (future features)
+        - Modify damage (Relentless Rage)
         - Cancel damage (future features)
         - React to damage (Retaliation, Sleep wake)
+
+        Also handles:
+        - Adding combat log entry
+        - Applying Dead condition when HP <= 0
+        - Firing DeathEvent when entity dies
 
         Args:
             amount: Damage amount (pre-resistance)
@@ -799,19 +824,34 @@ class Entity(BaseBlock):
         Returns:
             Actual damage taken after resistances (0 if canceled)
         """
+        from dnd.core.events import DeathEvent
+
+        # Create damages list for combat log if not provided
+        # This ensures damage type is shown even for simple receive_damage calls
+        event_damages = damages if damages else [
+            Damage(
+                damage_type=damage_type,
+                dice_numbers=1,  # Placeholder for combat log
+                damage_dice=4,   # Placeholder for combat log
+                source_entity_uuid=source_entity_uuid
+            )
+        ]
+
         # Create event at DECLARATION phase
         take_damage_event = TakeDamageEvent(
             name="Take Damage",
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=self.uuid,
+            target_entity_name=self.name,
             total_damage=amount,
             damage_rolls=damage_rolls or [],
-            damages=damages or [],
+            damages=event_damages,
             parent_event=parent_event,
             phase=EventPhase.DECLARATION
         )
 
         # Progress through phases - handlers can intercept at EFFECT
+        # (e.g., Relentless Rage can modify damage to keep entity at 1 HP)
         take_damage_event = take_damage_event.phase_to(EventPhase.EXECUTION)
         take_damage_event = take_damage_event.phase_to(EventPhase.EFFECT)
 
@@ -826,7 +866,44 @@ class Entity(BaseBlock):
             )
 
         # Complete the event
+        # NOTE: Combat log auto-captured via callback in phase_to() for top-level events.
+        # Sub-events (with parent_event) are collected by their parent's sub_entries.
         take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
+
+        # Handle death if HP <= 0
+        # Note: Relentless Rage already had its chance at EFFECT phase
+        # If HP <= 0 here, the save either failed or wasn't triggered
+        if self.get_hp() <= 0 and "Dead" not in self.active_conditions:
+            from dnd.conditions import Dead
+
+            # Apply Dead condition (includes Incapacitated → movement=0)
+            dead_condition = Dead(
+                source_entity_uuid=source_entity_uuid,
+                target_entity_uuid=self.uuid
+            )
+            self.add_condition(dead_condition, check_save_throw=False)
+
+            # Mark as non-blocking in GridMap
+            get_map().set_entity_blocking(self.uuid, blocking=False)
+
+            # Fire DeathEvent through phases so handlers can react (e.g., rage ending)
+            # NOTE: Combat log auto-captured via callback in phase_to() at COMPLETION
+            # DeathEvent is a child of the TakeDamageEvent that caused it
+            death_event = DeathEvent(
+                source_entity_uuid=source_entity_uuid,
+                target_entity_uuid=self.uuid,
+                entity_uuid=self.uuid,
+                entity_name=self.name,
+                killer_uuid=source_entity_uuid,
+                final_hp=self.get_hp(),
+                phase=EventPhase.DECLARATION,
+                parent_event=take_damage_event.uuid
+            )
+            # Progress through phases - handlers can react at EXECUTION/EFFECT
+            death_event = death_event.phase_to(EventPhase.EXECUTION)
+            death_event = death_event.phase_to(EventPhase.EFFECT)
+            # phase_to(COMPLETION) auto-generates combat_log and calls callback
+            death_event = death_event.phase_to(EventPhase.COMPLETION)
 
         return actual_damage
 
@@ -1212,7 +1289,13 @@ class Entity(BaseBlock):
         return event.get_effective_roll()
         
     
-    def create_saving_throw_request(self, target_entity_uuid: UUID, ability_name: AbilityName, dc: Union[int,UUID]) -> SavingThrowEvent:
+    def create_saving_throw_request(
+        self,
+        target_entity_uuid: UUID,
+        ability_name: AbilityName,
+        dc: Union[int, UUID],
+        parent_event: Optional[UUID] = None
+    ) -> SavingThrowEvent:
         """ request a saving throw from the target entity """
         #if dc is a uuid get the modifiable value ensure is coming from self (has self.uuid as source entity uuid)
         if isinstance(dc,UUID):
@@ -1238,11 +1321,18 @@ class Entity(BaseBlock):
             ability_name=ability_name,
             dc=int_dc,
             source_entity_name=self.name,
-            target_entity_name=target_entity_name
+            target_entity_name=target_entity_name,
+            parent_event=parent_event
         )
     
 
-    def create_skill_check_request(self, target_entity_uuid: UUID, skill_name: SkillName, dc: Union[int,UUID]) -> SkillCheckEvent:
+    def create_skill_check_request(
+        self,
+        target_entity_uuid: UUID,
+        skill_name: SkillName,
+        dc: Union[int, UUID],
+        parent_event: Optional[UUID] = None
+    ) -> SkillCheckEvent:
         """ request a skill check from the target entity """
         if isinstance(dc,UUID):
             self.set_target_entity(dc)
@@ -1269,7 +1359,8 @@ class Entity(BaseBlock):
             skill_name=skill_name,
             dc=int_dc,
             source_entity_name=self.name,
-            target_entity_name=target_entity_name
+            target_entity_name=target_entity_name,
+            parent_event=parent_event
         )
     
     def saving_throw(self, request: SavingThrowEvent) -> Tuple[AttackOutcome, DiceRoll, bool]:
@@ -1447,6 +1538,45 @@ class Entity(BaseBlock):
         """Update the senses for all entities."""
         for entity in cls.get_all_entities():
             entity.update_entity_senses(max_distance)
+
+    def update_entity_visibility(self, max_distance: int = 10):
+        """
+        Lightweight FOV-only update (no path recomputation).
+
+        Used during movement to update what entity can see at each step
+        without the cost of recomputing all paths (which is done once at end).
+
+        This recomputes:
+        - Visible cells from current position
+        - Entities in visible cells
+
+        Does NOT recompute paths (expensive, done once at movement end).
+
+        Args:
+            max_distance: Maximum view distance (default 10)
+        """
+        grid = get_map()
+        # Compute FOV only - returns list of visible positions
+        visible_positions = grid.compute_fov(self.position, max_distance)
+
+        # Convert to dict format expected by Senses
+        visible_dict: Dict[Tuple[int, int], bool] = {pos: True for pos in visible_positions}
+
+        # Find entities in visible cells
+        visible_entities: Dict[UUID, Tuple[int, int]] = {}
+        for pos in visible_positions:
+            for ent_uuid in grid.get_entities_at(pos):
+                if ent_uuid != self.uuid:
+                    visible_entities[ent_uuid] = pos
+
+        # Update visibility and entities (keep existing paths)
+        self.senses.visible = visible_dict
+        self.senses.update_seen(visible_dict)
+        self.senses.entities = visible_entities
+
+        # Update subscriptions to newly visible cells
+        visible_cells = set(visible_positions)
+        grid.subscribe_to_cells(self.uuid, visible_cells)
 
     # =========================================================================
     # Action Registry System
