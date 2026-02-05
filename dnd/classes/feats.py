@@ -80,16 +80,17 @@ class LuckyFeature(BaseCondition):
         List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
         List[UUID],               # event_handler_uuids
         List[UUID],               # subcondition_uuids
+        List[UUID],               # spatial_handler_uuids
         Optional[Event]           # completion event
     ]:
         if not self.target_entity_uuid:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message="Target entity UUID is not set"
             )
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(
+            return [], [], [], [], declaration_event.cancel(
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
@@ -129,4 +130,4 @@ class LuckyFeature(BaseCondition):
             status_message=f"Applied Lucky feat to {target.name}"
         )
 
-        return [], [handler.uuid], [], effect_event
+        return [], [handler.uuid], [], [], effect_event
