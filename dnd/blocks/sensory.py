@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List, Self, Tuple, Set, DefaultDict, TYPE_CHECKING, Callable
+from typing import Dict, Optional, List, Self, Tuple, Set, DefaultDict, Callable
 from uuid import UUID
 from pydantic import Field
 
@@ -10,10 +10,7 @@ from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import ( EventType, SpatialChangeType)
-
-if TYPE_CHECKING:
-    from dnd.core.events import Event
+from dnd.core.events import Event, EventType, SpatialChangeType
 
 class SensesType(str, Enum):
     BLINDSIGHT = "Blindsight"
@@ -29,6 +26,7 @@ class Senses(BaseBlock):
     paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=lambda: defaultdict(list))
     extra_senses: List[SensesType] = Field(default_factory=list)
     seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
+    is_moving: bool = Field(default=False, description="True while entity is actively moving (for senses callback optimization)")
 
 
 
@@ -194,19 +192,16 @@ class SpatialSensesCallback:
         # Handle self-movement events (we moved to a new cell)
         entity_uuid = getattr(event, 'entity_uuid', None)
         if entity_uuid == self.owner_uuid:
-            # Get entity to check is_moving flag
-            from dnd.entity import Entity
-            entity = Entity.get(self.owner_uuid)
-            if entity:
-                if entity.is_moving:
-                    # During movement: visibility-only update per step
-                    # Paths are recomputed once at end of Move._apply()
-                    if self.update_visibility_func:
-                        self.update_visibility_func()
-                else:
-                    # Not moving (e.g., teleport, forced movement): full update
-                    if self.update_senses_func:
-                        self.update_senses_func()
+            # Check is_moving flag on senses (set by Move action)
+            if self.senses.is_moving:
+                # During movement: visibility-only update per step
+                # Paths are recomputed once at end of Move._apply()
+                if self.update_visibility_func:
+                    self.update_visibility_func()
+            else:
+                # Not moving (e.g., teleport, forced movement): full update
+                if self.update_senses_func:
+                    self.update_senses_func()
             return
 
         # Check if owner is subscribed to the affected cell

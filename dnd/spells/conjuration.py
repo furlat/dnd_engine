@@ -2,6 +2,7 @@
 
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web
 """
+import random
 from typing import Optional, List, Tuple
 from uuid import UUID
 
@@ -10,12 +11,14 @@ from pydantic import Field
 from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, BaseCost
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import AttackOutcome
-from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event
-from dnd.core.modifiers import DamageType
+from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent
+from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.conditions import Concentrating
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.conditions import Concentrating, Prone, Restrained
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition
+from dnd.spells.evocation import validate_line_of_sight
 
 
 class CallLightningStrike(BaseAction):
@@ -50,7 +53,6 @@ class CallLightningStrike(BaseAction):
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:
         """Validate target is in range and LOS."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -62,7 +64,6 @@ class CallLightningStrike(BaseAction):
         if "Concentrating" not in caster.active_conditions:
             return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
 
-        from dnd.conditions import Concentrating
         conc = caster.active_conditions.get("Concentrating")
         if not isinstance(conc, Concentrating) or conc.spell_name != "Call Lightning":
             return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
@@ -85,7 +86,6 @@ class CallLightningStrike(BaseAction):
 
     def _apply(self, execution_event: Event) -> Optional[Event]:
         """Strike with lightning - DEX save for half damage."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -166,8 +166,6 @@ class CallLightning(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
-        from dnd.entity import Entity
-        from dnd.spells.evocation import validate_line_of_sight
 
         # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -194,8 +192,6 @@ class CallLightning(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Call Lightning - initial strike + grant repeatable action."""
-        from dnd.entity import Entity
-        from dnd.conditions import Concentrating
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -290,8 +286,7 @@ class CallLightning(SpellAction):
 
         def cleanup_processor(event, _source_entity_uuid: UUID):
             """When Concentrating on Call Lightning is removed, remove the strike action."""
-            from dnd.conditions import Concentrating
-
+    
             # Only trigger for caster's condition removal
             if event.target_entity_uuid != caster_uuid:
                 return None
@@ -350,7 +345,6 @@ class PoisonSpray(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate LOS and 10ft range."""
-        from dnd.spells.evocation import validate_line_of_sight
 
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
@@ -625,7 +619,6 @@ class MistyStep(SpellAction):
             )
 
         # Check if destination is unoccupied
-        from dnd.core.gridmap import get_map
         grid = get_map()
         entities_at_dest = grid.get_entities_at(target_pos)
         if entities_at_dest:
@@ -709,7 +702,6 @@ class GreaseZone(ZoneControlCondition):
         dc = self.spell_dc
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            from dnd.conditions import Prone
 
             entity_uuid = getattr(event, 'entity_uuid', None)
             if not entity_uuid:
@@ -755,7 +747,6 @@ class GreaseZone(ZoneControlCondition):
         zone_condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            from dnd.conditions import Prone
 
             if event.event_type != EventType.TURN_START:
                 return None
@@ -898,8 +889,6 @@ class Grease(SpellAction):
         concentration.add_external_condition(caster.uuid, zone.uuid)
 
         # Check creatures already in the zone
-        from dnd.conditions import Prone
-        from dnd.core.gridmap import get_map
         grid = get_map()
         prone_count = 0
         for pos in zone.affected_positions:
@@ -947,7 +936,6 @@ class WebRestrained(BaseCondition):
     spell_dc: int = Field(default=10)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.conditions import Restrained
 
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
@@ -1016,7 +1004,6 @@ class EscapeWebAction(BaseAction):
     ])
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        from dnd.core.base_actions import ActionEvent
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -1052,7 +1039,6 @@ class EscapeWebAction(BaseAction):
             return execution_event.cancel(status_message="Entity not found")
 
         # STR check (Athletics) vs spell DC
-        from dnd.core.events import SkillCheckEvent
         check_event = SkillCheckEvent(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
@@ -1076,7 +1062,6 @@ class EscapeWebAction(BaseAction):
             )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        from dnd.actions import entity_action_economy_cost_applier
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
@@ -1255,7 +1240,6 @@ class Web(SpellAction):
         concentration.add_external_condition(caster.uuid, zone.uuid)
 
         # Check creatures already in the zone
-        from dnd.core.gridmap import get_map
         grid = get_map()
         restrained_count = 0
         for pos in zone.affected_positions:
@@ -1333,7 +1317,6 @@ class CloudkillZone(ZoneControlCondition):
 
         # Add auto-move handler (moves zone on caster's turn start)
         auto_move_handler = self._create_auto_move_handler()
-        from dnd.core.events import EventQueue
         EventQueue.add_event_handler(auto_move_handler)
         handler_uuids.append(auto_move_handler.uuid)
 
@@ -1346,8 +1329,6 @@ class CloudkillZone(ZoneControlCondition):
         base_dice = 5 + self.upcast_dice
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            import random
-            from dnd.core.modifiers import DamageType
 
             entity_uuid = getattr(event, 'entity_uuid', None)
             if not entity_uuid:
@@ -1393,8 +1374,6 @@ class CloudkillZone(ZoneControlCondition):
         zone_condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            import random
-            from dnd.core.modifiers import DamageType
 
             if event.event_type != EventType.TURN_START:
                 return None
@@ -1592,9 +1571,6 @@ class Cloudkill(SpellAction):
         concentration.add_external_condition(caster.uuid, zone.uuid)
 
         # Damage creatures already in the zone
-        import random
-        from dnd.core.modifiers import DamageType
-        from dnd.core.gridmap import get_map
 
         grid = get_map()
         damage_count = 0
@@ -1646,7 +1622,6 @@ class SpiritGuardiansTriggered(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         # Create handler to remove at turn end
         handler = self._create_cleanup_handler()
-        from dnd.core.events import EventQueue
         EventQueue.add_event_handler(handler)
 
         effect_event = declaration_event.phase_to(
@@ -1696,7 +1671,6 @@ class SpiritGuardiansSlowed(BaseCondition):
     description: str = "Speed halved by Spirit Guardians"
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.core.modifiers import NumericalModifier
 
         outs: List[Tuple[UUID, UUID]] = []
 
@@ -1765,7 +1739,6 @@ class SpiritGuardiansZone(ZoneControlCondition):
 
         # Add follow-caster handler (zone moves when caster moves)
         follow_handler = self._create_follow_caster_handler()
-        from dnd.core.events import EventQueue
         EventQueue.add_event_handler(follow_handler)
         handler_uuids.append(follow_handler.uuid)
 
@@ -1784,7 +1757,6 @@ class SpiritGuardiansZone(ZoneControlCondition):
         dmg_type = self.damage_type
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            import random
 
             entity_uuid = getattr(event, 'entity_uuid', None)
             if not entity_uuid:
@@ -1859,7 +1831,6 @@ class SpiritGuardiansZone(ZoneControlCondition):
         zone_condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            import random
 
             if event.event_type != EventType.TURN_START:
                 return None
@@ -2068,8 +2039,6 @@ class SpiritGuardians(SpellAction):
         concentration.add_external_condition(caster.uuid, zone.uuid)
 
         # Damage enemies already in the zone
-        import random
-        from dnd.core.gridmap import get_map
 
         grid = get_map()
         damage_count = 0

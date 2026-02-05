@@ -2,8 +2,9 @@
 
 Contains: Blur, Fear, HypnoticPattern, ColorSpray
 """
+import random
 from typing import Optional, List, Tuple
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import Field
 from typing import cast as type_cast
@@ -12,7 +13,7 @@ from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
-from dnd.core.aoe import AoEShape
+from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
 from dnd.conditions import Concentrating, Frightened, Charmed, Incapacitated, Blinded
@@ -74,7 +75,6 @@ class Blur(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Self-targeting spell - minimal validation."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -87,7 +87,6 @@ class Blur(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Blur effect to self."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -253,8 +252,6 @@ class Fear(SpellAction):
     valid_target_filter: str = Field(default="all")
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Cone
-        from uuid import uuid4
 
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
             source_uuid = kwargs.get('source_entity_uuid') or uuid4()
@@ -461,8 +458,6 @@ class HypnoticPattern(SpellAction):
     valid_target_filter: str = Field(default="all")
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Cube
-        from uuid import uuid4
 
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
             source_uuid = kwargs.get('source_entity_uuid') or uuid4()
@@ -625,8 +620,6 @@ class ColorSpray(SpellAction):
     hp_pool_remaining: int = Field(default=0)
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Cone
-        from uuid import uuid4
 
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
             source_uuid = kwargs.get('source_entity_uuid') or uuid4()
@@ -696,7 +689,6 @@ class ColorSpray(SpellAction):
         # 4. Roll HP pool if not already rolled
         if self.hp_pool_rolled == 0:
             dice_count, dice_value = self.get_hp_pool_dice()
-            import random
             roll_results = [random.randint(1, dice_value) for _ in range(dice_count)]
             total = sum(roll_results)
             self.hp_pool_rolled = total

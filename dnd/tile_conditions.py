@@ -29,6 +29,7 @@ from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
+from dnd.core.aoe import Sphere, Cone, Line, Cube
 
 
 def parse_dice_string(dice_str: str) -> Tuple[int, int]:
@@ -179,8 +180,6 @@ class ZoneControlCondition(BaseCondition):
         Override in subclasses for custom geometry.
         Default uses AoE shapes from dnd.core.aoe.
         """
-        from dnd.core.aoe import Sphere, Cone, Line, Cube
-
         shape_classes = {
             "sphere": Sphere,
             "cone": Cone,

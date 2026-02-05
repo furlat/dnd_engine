@@ -328,7 +328,7 @@ class BaseCondition(BaseObject):
         Returns:
             True if removal was successful
         """
-        # Late import to avoid circular dependency
+        # Late import to avoid circular dependency: base_conditions <- base_block <- base_tiles <- gridmap
         from dnd.core.gridmap import get_map
         _ = parent_event  # Reserved for future event chain integration
 

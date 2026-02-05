@@ -103,7 +103,7 @@ def test_paths_updated_after_move():
             # Entity might be out of movement
             print("  INFO: No more movement available (expected after long move)")
             # Check if is_moving flag is cleared
-            if not skeleton.is_moving:
+            if not skeleton.senses.is_moving:
                 print("  PASS: is_moving flag is cleared")
             else:
                 print("  FAIL: is_moving should be False")
@@ -155,7 +155,7 @@ def test_death_stops_movement():
             print("  INFO: RNG may have rolled low damage")
 
         # CRITICAL: is_moving flag should be cleared even after death
-        if not skeleton.is_moving:
+        if not skeleton.senses.is_moving:
             print("  PASS: is_moving flag cleared after death")
         else:
             print("  FAIL: is_moving should be False after movement ends")
@@ -173,8 +173,8 @@ def test_is_moving_cleared_on_early_exit():
     skeleton = create_skeleton(name='Test', position=(0, 5))
     Entity.update_all_entities_senses()
 
-    print(f"  Initial is_moving: {skeleton.is_moving}")
-    assert not skeleton.is_moving, "Should start with is_moving=False"
+    print(f"  Initial is_moving: {skeleton.senses.is_moving}")
+    assert not skeleton.senses.is_moving, "Should start with is_moving=False"
 
     # Move normally
     actions = get_available_actions(skeleton)
@@ -183,9 +183,9 @@ def test_is_moving_cleared_on_early_exit():
 
     if target:
         execute_action(skeleton, "Move", target)
-        print(f"  After move, is_moving: {skeleton.is_moving}")
+        print(f"  After move, is_moving: {skeleton.senses.is_moving}")
 
-        if not skeleton.is_moving:
+        if not skeleton.senses.is_moving:
             print("  PASS: is_moving cleared after normal move")
         else:
             print("  FAIL: is_moving should be False after move")

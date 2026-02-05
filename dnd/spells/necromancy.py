@@ -15,6 +15,7 @@ from dnd.core.modifiers import (
     DamageType, AdvantageModifier, AdvantageStatus, CreatureType,
     NumericalModifier, ContextualAdvantageModifier
 )
+from dnd.core.values import ModifiableValue
 from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity, determine_attack_outcome
@@ -60,7 +61,6 @@ class FalseLife(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply False Life - gain temporary hit points."""
-        from dnd.core.values import ModifiableValue
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -100,7 +100,7 @@ class FalseLife(SpellAction):
 class NoHealing(BaseCondition):
     """Prevents target from regaining hit points.
 
-    This condition is checked by Health.heal() to block healing.
+    Sets Health.healing_blocked = True on apply, False on remove.
     Used by Chill Touch and similar effects.
     """
     name: str = "No Healing"
@@ -114,23 +114,25 @@ class NoHealing(BaseCondition):
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        # Add a dummy +0 modifier so applied=True (required for proper cleanup)
-        # We use proficiency_bonus as it's always present
-        source_uuid = self.source_entity_uuid if self.source_entity_uuid else self.target_entity_uuid
-        dummy_mod = NumericalModifier(
-            name="No Healing Marker",
-            value=0,
-            source_entity_uuid=source_uuid,
-            target_entity_uuid=self.target_entity_uuid
-        )
-        mod_uuid = target.proficiency_bonus.self_static.add_value_modifier(dummy_mod)
+        # Set healing_blocked flag on Health block
+        target.health.healing_blocked = True
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
             status_message=f"{target.name} cannot regain hit points"
         )
-        return [(target.proficiency_bonus.uuid, mod_uuid)], [], [], [], effect_event
+        return [], [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Reset healing_blocked when condition is removed."""
+        if self.target_entity_uuid:
+            target = Entity.get(self.target_entity_uuid)
+            if target:
+                target.health.healing_blocked = False
+
+        # Call parent _remove for event handling
+        return super()._remove(event)
 
 
 class ChillTouchEffect(BaseCondition):
@@ -408,7 +410,6 @@ class Blight(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range, LOS, and creature type (not undead/construct)."""
-        from dnd.entity import Entity
 
         # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -445,7 +446,6 @@ class Blight(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute Blight - CON save or necrotic damage."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
