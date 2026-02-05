@@ -96,6 +96,10 @@ class APITile(BaseModel):
     walkable: bool
     visible: bool
     name: str = "Floor"  # Tile name: "Floor", "Wall", "Water", etc.
+    # Terrain properties
+    walking_cost: int = 1  # 1=normal, 2=difficult terrain
+    is_hazardous: bool = False  # Has damage handlers (spikes, fire, etc.)
+    conditions: List[str] = []  # Active condition names on tile
 
 
 class APIGrid(BaseModel):
@@ -109,10 +113,26 @@ class APIGrid(BaseModel):
     @classmethod
     def create(cls, grid: 'GridMap') -> 'APIGrid':
         bounds = grid.bounds  # Returns (min_x, min_y, max_x, max_y)
-        tiles = [
-            APITile(x=x, y=y, walkable=td.walkable, visible=td.visible, name=td.name)
-            for (x, y), td in grid._tiles.items()
-        ]
+        tiles = []
+        for (x, y), td in grid._tiles.items():
+            # Get walking cost (normalized score, usually 1 or 2)
+            walking_cost = int(td.walking_cost.normalized_score) if hasattr(td, 'walking_cost') else 1
+
+            # Check if tile has any event handlers (hazardous)
+            is_hazardous = len(td.event_handlers) > 0 if hasattr(td, 'event_handlers') else False
+
+            # Get active conditions
+            conditions = list(td.active_conditions.keys()) if hasattr(td, 'active_conditions') else []
+
+            tiles.append(APITile(
+                x=x, y=y,
+                walkable=td.walkable,
+                visible=td.visible,
+                name=td.name,
+                walking_cost=walking_cost,
+                is_hazardous=is_hazardous,
+                conditions=conditions
+            ))
         return cls(
             min_x=bounds[0], min_y=bounds[1],
             max_x=bounds[2], max_y=bounds[3],

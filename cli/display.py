@@ -396,17 +396,30 @@ def render_map_content(
                 else:
                     char, style = "#", "white"
             else:
-                char = "."
-                in_hero = pos in hero_visible
-                in_enemy = pos in enemy_visible
-                if in_hero and in_enemy:
-                    style = "yellow"
-                elif in_hero:
-                    style = "green"
-                elif in_enemy:
-                    style = "red"
+                # Walkable tile - check for terrain types
+                tile_name = tile.get("name", "Floor")
+                is_hazardous = tile.get("is_hazardous", False)
+                walking_cost = tile.get("walking_cost", 1)
+
+                if is_hazardous or tile_name == "Spikes":
+                    # Hazardous terrain (spikes, fire, etc.)
+                    char, style = "^", "bold red"
+                elif walking_cost > 1 or tile_name == "Difficult Terrain":
+                    # Difficult terrain (2x movement)
+                    char, style = ",", "yellow"
                 else:
-                    style = "dim"
+                    # Normal floor - color by visibility
+                    char = "."
+                    in_hero = pos in hero_visible
+                    in_enemy = pos in enemy_visible
+                    if in_hero and in_enemy:
+                        style = "yellow"
+                    elif in_hero:
+                        style = "green"
+                    elif in_enemy:
+                        style = "red"
+                    else:
+                        style = "dim"
 
             result.append(" ")
             result.append(char, style=style)
@@ -441,6 +454,10 @@ def render_map_content(
 
     result.append("# ", style="white")
     result.append("Wall  ")
+    result.append(", ", style="yellow")
+    result.append("Slow  ")
+    result.append("^ ", style="bold red")
+    result.append("Spikes  ")
     result.append("+ ", style="bold magenta")
     result.append("Path")
 
@@ -629,12 +646,19 @@ def _format_breakdown(breakdown: List[Dict[str, Any]]) -> str:
     return f"[{', '.join(parts)}]" if parts else ""
 
 
-def _render_log_entry(entry: Dict[str, Any], content: Text):
+def _render_log_entry(entry: Dict[str, Any], content: Text, depth: int = 0):
     """Render a single combat log entry with rich formatting.
 
     Uses the new verbosity-based markdown format from CombatLogEntry.
     Falls back to legacy type-based rendering for backward compatibility.
+
+    Args:
+        entry: The combat log entry dict
+        content: Rich Text object to append to
+        depth: Indentation depth for sub-entries (0 = top level)
     """
+    indent = "  " * depth  # Two spaces per level
+
     # Check for new verbosity-based format (has compact/verbose/detailed fields)
     if "compact" in entry:
         # New format: use verbosity setting to pick text level
@@ -645,9 +669,21 @@ def _render_log_entry(entry: Dict[str, Any], content: Text):
         else:  # DETAILED
             text = entry.get("detailed", entry.get("verbose", entry.get("compact", "")))
 
+        # Add indentation to each line
+        if depth > 0 and text:
+            lines = text.split("\n")
+            text = "\n".join(indent + line for line in lines)
+
         # Convert markdown to Rich markup and append
         rich_text = markdown_to_rich(text)
         content.append(Text.from_markup(rich_text))
+
+        # Recursively render sub-entries with increased depth
+        sub_entries = entry.get("sub_entries", [])
+        for sub_entry in sub_entries:
+            content.append("\n")
+            _render_log_entry(sub_entry, content, depth + 1)
+
         return
 
     # Legacy format: use type-based rendering

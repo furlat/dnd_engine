@@ -506,8 +506,9 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: Optional
             pvp_status = client.get_pvp_status()
             claude_connected = pvp_status.get("claude_connected", False)
             display.set_session_info(claude_connected=claude_connected)
-        except Exception:
-            pass  # Don't fail render if status check fails
+        except Exception as e:
+            # Log but don't fail render
+            display.console.print(f"[dim red]PvP status error: {e}[/dim red]")
 
     # Use the new full-screen render with session-stable shortcuts
     display.render_full_screen(
@@ -554,7 +555,9 @@ def wait_for_ai_turn(client: APIClient, state: GameState) -> bool:
             if state.turn.get("is_human_turn", False):
                 return True
 
-        except Exception:
+        except Exception as e:
+            # Log but continue polling - transient errors are OK
+            display.console.print(f"[dim red]AI poll error: {e}[/dim red]")
             continue
 
     display.show_error("Timeout waiting for AI turn")
@@ -653,7 +656,11 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
                 return False
 
         except Exception as e:
-            pass  # Silently ignore connection hiccups during polling
+            # Log error but don't break loop - transient failures are OK
+            # This helps debug server hangs/errors
+            display.console.print(f"[dim red]Poll error: {e}[/dim red]")
+            time.sleep(0.5)
+            continue
 
         time.sleep(poll_interval)
 

@@ -156,7 +156,12 @@ class FireBolt(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.FIRE,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -318,7 +323,12 @@ class RayOfFrost(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.COLD, source_entity_uuid=caster.uuid)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.COLD,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         # 7. Apply speed reduction
         # The effect condition goes on CASTER with duration=1 round
@@ -399,11 +409,12 @@ class SacredFlame(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save
+        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -446,8 +457,13 @@ class SacredFlame(SpellAction):
         damage_dice = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.RADIANT, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.RADIANT,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -571,8 +587,13 @@ class MagicMissile(SpellAction):
         damage_dice = dart_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.FORCE, source_entity_uuid=caster.uuid)
+        # Apply damage (child of execution event since no effect phase for auto-hit)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.FORCE,
+            source_entity_uuid=caster.uuid,
+            parent_event=execution_event.uuid
+        )
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -724,8 +745,13 @@ class ScorchingRay(SpellAction):
         damage_dice = fire_damage.get_dice(attack_outcome=outcome)
         damage_roll = damage_dice.roll
 
-        # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.FIRE,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -831,11 +857,12 @@ class Fireball(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save
+        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -872,9 +899,14 @@ class Fireball(SpellAction):
         # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage
+        # 5. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.FIRE,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -965,11 +997,12 @@ class BurningHands(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save
+        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -1006,9 +1039,14 @@ class BurningHands(SpellAction):
         # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage
+        # 5. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.FIRE,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1099,11 +1137,12 @@ class LightningBolt(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save
+        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -1140,9 +1179,14 @@ class LightningBolt(SpellAction):
         # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage
+        # 5. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.LIGHTNING,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1295,11 +1339,12 @@ class Thunderwave(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save
+        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -1336,9 +1381,14 @@ class Thunderwave(SpellAction):
         # 4. Half damage on successful save, no push
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage
+        # 5. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.THUNDER, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.THUNDER,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         # 6. Push on failed save only
         push_applied = False
@@ -1351,7 +1401,7 @@ class Thunderwave(SpellAction):
             )
 
             if end_pos != start_pos:
-                # Fire forced movement event
+                # Fire forced movement event (child of effect event)
                 forced_event = ForcedMovementEvent(
                     source_entity_uuid=caster.uuid,
                     target_entity_uuid=target.uuid,
@@ -1364,7 +1414,8 @@ class Thunderwave(SpellAction):
                     actual_distance=push_distance_actual,
                     blocked_by_obstacle=was_blocked,
                     cause="thunderwave",
-                    phase=EventPhase.DECLARATION
+                    phase=EventPhase.DECLARATION,
+                    parent_event=effect_event.uuid
                 )
                 # Move to completion
                 forced_event.phase_to(EventPhase.COMPLETION)
@@ -1372,7 +1423,7 @@ class Thunderwave(SpellAction):
                 # Apply movement via Entity helper
                 # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
                 from dnd.entity import Entity as EntityClass
-                EntityClass.update_entity_position(target, end_pos)
+                EntityClass.update_entity_position(target, end_pos, parent_event=effect_event.uuid)
                 push_applied = True
 
         save_text = " (saved for half)" if success else ""
@@ -1478,11 +1529,12 @@ class Shatter(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save
+        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -1519,9 +1571,14 @@ class Shatter(SpellAction):
         # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage
+        # 5. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.THUNDER, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.THUNDER,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1625,11 +1682,12 @@ class CircleOfDeath(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save
+        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -1666,9 +1724,14 @@ class CircleOfDeath(SpellAction):
         # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage
+        # 5. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.NECROTIC, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.NECROTIC,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1757,11 +1820,12 @@ class ConeOfCold(SpellAction):
         # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save
+        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -1798,9 +1862,14 @@ class ConeOfCold(SpellAction):
         # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage
+        # 5. Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.COLD, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.COLD,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -2005,10 +2074,12 @@ class Sunburst(SpellAction):
             )
             mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
 
+        # CON save request (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -2046,9 +2117,14 @@ class Sunburst(SpellAction):
         # Half damage on save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # Apply damage
+        # Apply damage (child of effect event)
         if final_damage > 0:
-            target.receive_damage(amount=final_damage, damage_type=DamageType.RADIANT, source_entity_uuid=caster.uuid)
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.RADIANT,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
 
         # On FAILED save: apply blindness with repeat saves
         if not success:
@@ -2227,8 +2303,13 @@ class ShockingGrasp(SpellAction):
         damage_dice = lightning_damage.get_dice(attack_outcome=outcome)
         damage_roll = damage_dice.roll
 
-        # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.LIGHTNING,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         # 8. Apply No Reactions condition (1 round duration - until start of target's next turn)
         no_reactions = NoReactions(
@@ -2459,8 +2540,13 @@ class GuidingBolt(SpellAction):
         damage_dice = radiant_damage.get_dice(attack_outcome=outcome)
         damage_roll = damage_dice.roll
 
-        # Apply damage
-        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.RADIANT, source_entity_uuid=caster.uuid)
+        # Apply damage (child of effect event)
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.RADIANT,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
 
         # 7. Apply Guiding Bolt mark (advantage on next attack)
         # Duration: Until next attack against target OR "until the end of your next turn"

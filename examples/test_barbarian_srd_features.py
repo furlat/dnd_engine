@@ -2,7 +2,7 @@
 Test Barbarian SRD Missing Features
 
 Tests for:
-1. Rage ends when unconscious (UNCONSCIOUS event)
+1. Rage ends when dying (DEATH event)
 2. Voluntary rage end (End Rage bonus action)
 3. Danger Sense disabled by conditions (contextual)
 4. Mindless Rage suspends existing Charmed/Frightened
@@ -12,7 +12,7 @@ Tests for:
 
 from uuid import uuid4
 
-from dnd.core.events import EventPhase, UnconsciousEvent, TurnEndEvent, EventQueue
+from dnd.core.events import EventPhase, DeathEvent, TurnEndEvent, EventQueue
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -64,9 +64,9 @@ def reset_test_state():
     Entity._entity_by_position.clear()
 
 
-def test_unconscious_event_fires():
-    """Test that UNCONSCIOUS event fires when HP drops to 0."""
-    print("\n=== Test: UNCONSCIOUS Event Fires ===")
+def test_death_event_fires():
+    """Test that DEATH event fires when HP drops to 0."""
+    print("\n=== Test: DEATH Event Fires ===")
     reset_test_state()
 
     # Create a simple entity
@@ -88,8 +88,8 @@ def test_unconscious_event_fires():
     )
     entity = Entity.create(name="Test Victim", source_entity_uuid=source_id, config=config)
 
-    # Manually fire UNCONSCIOUS event (simulating what encounter.check_deaths does)
-    unconscious_event = UnconsciousEvent(
+    # Manually fire DEATH event through phases (simulating what receive_damage does)
+    death_event = DeathEvent(
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
         entity_uuid=entity.uuid,
@@ -97,20 +97,20 @@ def test_unconscious_event_fires():
         final_hp=0,
         phase=EventPhase.DECLARATION
     )
-    unconscious_event = unconscious_event.phase_to(EventPhase.EXECUTION)
-    unconscious_event = unconscious_event.phase_to(EventPhase.EFFECT)
-    unconscious_event = unconscious_event.phase_to(EventPhase.COMPLETION)
+    death_event = death_event.phase_to(EventPhase.EXECUTION)
+    death_event = death_event.phase_to(EventPhase.EFFECT)
+    death_event = death_event.phase_to(EventPhase.COMPLETION)
 
-    print(f"  UNCONSCIOUS event fired: {unconscious_event is not None}")
-    print(f"  Event phase: {unconscious_event.phase}")
-    assert unconscious_event is not None, "Event should fire"
-    assert unconscious_event.phase == EventPhase.COMPLETION, "Event should reach COMPLETION"
-    print("  [PASS] UNCONSCIOUS event infrastructure works")
+    print(f"  DEATH event fired: {death_event is not None}")
+    print(f"  Event phase: {death_event.phase}")
+    assert death_event is not None, "Event should fire"
+    assert death_event.phase == EventPhase.COMPLETION, "Event should reach COMPLETION"
+    print("  [PASS] DEATH event infrastructure works")
 
 
-def test_rage_ends_when_unconscious():
-    """Test that rage ends when falling unconscious."""
-    print("\n=== Test: Rage Ends When Unconscious ===")
+def test_rage_ends_when_dying():
+    """Test that rage ends when entity dies."""
+    print("\n=== Test: Rage Ends When Dying ===")
     reset_test_state()
 
     barbarian = create_test_barbarian()
@@ -135,8 +135,9 @@ def test_rage_ends_when_unconscious():
     print(f"  Is raging: {'Raging' in barbarian.active_conditions}")
     assert "Raging" in barbarian.active_conditions, "Should be raging"
 
-    # Fire UNCONSCIOUS event (simulating dropping to 0 HP)
-    unconscious_event = UnconsciousEvent(
+    # Fire DEATH event through phases (simulating death at 0 HP)
+    # Must go through phases so handlers can react at EXECUTION phase
+    death_event = DeathEvent(
         source_entity_uuid=barbarian.uuid,
         target_entity_uuid=barbarian.uuid,
         entity_uuid=barbarian.uuid,
@@ -144,13 +145,13 @@ def test_rage_ends_when_unconscious():
         final_hp=0,
         phase=EventPhase.DECLARATION
     )
-    unconscious_event = unconscious_event.phase_to(EventPhase.EXECUTION)
-    unconscious_event = unconscious_event.phase_to(EventPhase.EFFECT)
-    unconscious_event = unconscious_event.phase_to(EventPhase.COMPLETION)
+    death_event = death_event.phase_to(EventPhase.EXECUTION)
+    death_event = death_event.phase_to(EventPhase.EFFECT)
+    death_event = death_event.phase_to(EventPhase.COMPLETION)
 
-    print(f"  Is raging after unconscious: {'Raging' in barbarian.active_conditions}")
-    assert "Raging" not in barbarian.active_conditions, "Rage should end when unconscious"
-    print("  [PASS] Rage ends when falling unconscious")
+    print(f"  Is raging after death: {'Raging' in barbarian.active_conditions}")
+    assert "Raging" not in barbarian.active_conditions, "Rage should end when dying"
+    print("  [PASS] Rage ends when dying")
 
 
 def test_voluntary_rage_end():
@@ -396,8 +397,8 @@ if __name__ == "__main__":
     print("BARBARIAN SRD FEATURES TESTS")
     print("=" * 60)
 
-    test_unconscious_event_fires()
-    test_rage_ends_when_unconscious()
+    test_death_event_fires()
+    test_rage_ends_when_dying()
     test_voluntary_rage_end()
     test_danger_sense_contextual()
     test_mindless_rage_suspends_existing()

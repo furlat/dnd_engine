@@ -108,13 +108,15 @@ class Senses(BaseBlock):
     def create_spatial_callback(
         self,
         owner_uuid: UUID,
-        update_senses_func: Optional[Callable[[], None]] = None
+        update_senses_func: Optional[Callable[[], None]] = None,
+        update_visibility_func: Optional[Callable[[], None]] = None
     ) -> "SpatialSensesCallback":
         """Create a callback that updates senses when spatial events fire.
 
         Uses closure to access the senses instance without importing Entity.
-        The callback fires on SPATIAL events and triggers a full senses update
-        so that FOV and paths are recalculated in real-time.
+        The callback fires on SPATIAL events and triggers appropriate updates:
+        - During movement (is_moving=True): visibility-only update
+        - Otherwise: full senses update (visibility + paths)
 
         This uses the passive callback system (EventQueue._on_event_callbacks)
         instead of EventHandlers because spatial events fire at COMPLETION phase
@@ -122,14 +124,17 @@ class Senses(BaseBlock):
 
         Args:
             owner_uuid: UUID of the entity that owns this Senses block
-            update_senses_func: Optional callable to trigger full senses update.
-                If provided, spatial events trigger this instead of just updating
-                the entities dict. Entity passes its update_entity_senses method.
+            update_senses_func: Optional callable to trigger full senses update
+                (visibility + paths). Used when not moving.
+            update_visibility_func: Optional callable to trigger visibility-only
+                update. Used during movement for efficiency.
 
         Returns:
             SpatialSensesCallback that should be registered with EventQueue
         """
-        return SpatialSensesCallback(self, owner_uuid, update_senses_func)
+        return SpatialSensesCallback(
+            self, owner_uuid, update_senses_func, update_visibility_func
+        )
 
 
 class SpatialSensesCallback:
@@ -141,6 +146,9 @@ class SpatialSensesCallback:
     - Entity movement: recompute paths (entities block movement)
     - Tile changes: recompute FOV + paths (tiles block vision and movement)
     - Entity death: recompute paths (dead bodies no longer block movement)
+
+    When the owner entity is moving (is_moving=True), only visibility is updated
+    per step for efficiency. Full path recomputation happens at movement end.
 
     Using callbacks instead of EventHandlers because:
     - Spatial events fire at COMPLETION phase
@@ -159,11 +167,13 @@ class SpatialSensesCallback:
         self,
         senses: Senses,
         owner_uuid: UUID,
-        update_senses_func: Optional[Callable[[], None]] = None
+        update_senses_func: Optional[Callable[[], None]] = None,
+        update_visibility_func: Optional[Callable[[], None]] = None
     ):
         self.senses = senses
         self.owner_uuid = owner_uuid
         self.update_senses_func = update_senses_func
+        self.update_visibility_func = update_visibility_func
 
     def __call__(self, event: "Event") -> None:
         """Process any event, filtering to events that affect our senses."""
@@ -181,9 +191,22 @@ class SpatialSensesCallback:
         if position is None:
             return
 
-        # Ignore events about ourselves moving
+        # Handle self-movement events (we moved to a new cell)
         entity_uuid = getattr(event, 'entity_uuid', None)
         if entity_uuid == self.owner_uuid:
+            # Get entity to check is_moving flag
+            from dnd.entity import Entity
+            entity = Entity.get(self.owner_uuid)
+            if entity:
+                if entity.is_moving:
+                    # During movement: visibility-only update per step
+                    # Paths are recomputed once at end of Move._apply()
+                    if self.update_visibility_func:
+                        self.update_visibility_func()
+                else:
+                    # Not moving (e.g., teleport, forced movement): full update
+                    if self.update_senses_func:
+                        self.update_senses_func()
             return
 
         # Check if owner is subscribed to the affected cell
@@ -192,7 +215,7 @@ class SpatialSensesCallback:
         if self.owner_uuid not in subscribers:
             return  # Not watching this cell, ignore
 
-        # Trigger senses update
+        # Trigger senses update (other entity moved in our FOV)
         if self.update_senses_func is not None:
             # Full senses update - recalculates FOV, paths, and entities
             # This is the proper behavior for real-time updates

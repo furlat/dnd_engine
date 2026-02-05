@@ -207,16 +207,18 @@ def create_rage_armor_handler(source_entity_uuid: UUID) -> EventHandler:
     )
 
 
-def rage_unconscious_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+def rage_death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """
-    End rage when falling unconscious.
+    End rage when entity dies.
 
     SRD: "Your rage ends early if you fall unconscious."
+    Note: We use DEATH instead of UNCONSCIOUS since monsters die at 0 HP.
 
-    Triggers on UNCONSCIOUS at EXECUTION phase (when HP drops to 0).
+    Triggers on DEATH at EXECUTION phase (when entity dies).
     """
-    # Only when WE go unconscious
-    if event.target_entity_uuid != source_entity_uuid:
+    # Get the dead entity UUID from the event
+    entity_uuid = getattr(event, 'entity_uuid', None)
+    if entity_uuid != source_entity_uuid:
         return None
 
     entity = Entity.get(source_entity_uuid)
@@ -235,22 +237,22 @@ def rage_unconscious_processor(event: Event, source_entity_uuid: UUID) -> Option
 
     return event.model_copy(update={
         "modified": True,
-        "status_message": f"{entity.name}'s rage ends (fell unconscious)"
+        "status_message": f"{entity.name}'s rage ends (died)"
     })
 
 
-def create_rage_unconscious_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create handler that ends rage when falling unconscious."""
+def create_rage_death_handler(source_entity_uuid: UUID) -> EventHandler:
+    """Create handler that ends rage when entity dies."""
     return EventHandler(
-        name="Rage Unconscious End",
+        name="Rage Death End",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
-                event_type=EventType.UNCONSCIOUS,
+                event_type=EventType.DEATH,
                 event_phase=EventPhase.EXECUTION
             )
         ],
-        event_processor=rage_unconscious_processor
+        event_processor=rage_death_processor
     )
 
 
@@ -366,10 +368,11 @@ class Raging(BaseCondition):
         target.add_event_handler(armor_handler)
         handler_uuids.append(armor_handler.uuid)
 
-        # Handler E: End rage if falling unconscious (SRD)
-        unconscious_handler = create_rage_unconscious_handler(target.uuid)
-        target.add_event_handler(unconscious_handler)
-        handler_uuids.append(unconscious_handler.uuid)
+        # Handler E: End rage if entity dies (SRD: "rage ends if you fall unconscious")
+        # We use DEATH instead of UNCONSCIOUS since monsters die at 0 HP
+        death_handler = create_rage_death_handler(target.uuid)
+        target.add_event_handler(death_handler)
+        handler_uuids.append(death_handler.uuid)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,

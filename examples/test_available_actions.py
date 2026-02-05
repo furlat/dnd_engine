@@ -15,7 +15,7 @@ from typing import List
 from dnd.core.gridmap import reset_map, get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.actions import Dash, Dodge, Disengage, StandUp, Move
+from dnd.actions import Dash, Dodge, Disengage, Move
 from dnd.actions_functional import get_available_actions, execute_by_index
 from dnd.conditions import Incapacitated, Grappled
 from dnd.encounter import Encounter
@@ -311,12 +311,12 @@ def test_opportunity_attack_without_disengage():
 
 
 def test_prone_actions():
-    """Test Prone condition and Stand Up action.
+    """Test Prone condition and BG3-style auto-stand behavior.
 
-    Note: DropProne is not a registered action - Prone is applied by effects/spells.
-    We test StandUp which is a registered action that requires Prone condition.
+    Note: StandUp is NOT a registered action - Prone auto-removes at turn start (BG3 style).
+    See test_prone_auto_stand.py for comprehensive Prone behavior tests.
     """
-    print("\n=== Test: Prone Actions ===")
+    print("\n=== Test: Prone Actions (BG3 Auto-Stand) ===")
     result = TestResult()
 
     goblin, _ = setup_grid_and_entities()
@@ -330,10 +330,10 @@ def test_prone_actions():
     # Should not be prone initially
     result.check("Prone" not in goblin.active_conditions, "Not prone initially")
 
-    # Check available actions - Stand Up should NOT be available (not prone)
+    # Check available actions - Stand Up should NOT be available (BG3 style - no manual stand)
     actions_result = get_available_actions(goblin)
     self_action_names = [a.template_name for a in actions_result.self_actions]
-    result.check("Stand Up" not in self_action_names, "Stand Up is NOT available (not prone)")
+    result.check("Stand Up" not in self_action_names, "Stand Up is NOT available (BG3 auto-stand)")
 
     # Apply Prone condition directly (simulating spell/effect knockdown)
     from dnd.conditions import Prone
@@ -341,18 +341,16 @@ def test_prone_actions():
     goblin.add_condition(prone)
     result.check("Prone" in goblin.active_conditions, "Now Prone (from effect)")
 
-    # Check available actions now show Stand Up
+    # StandUp should STILL not be available (BG3 style uses auto-stand at turn start)
     actions_result = get_available_actions(goblin)
     self_action_names = [a.template_name for a in actions_result.self_actions]
-    result.check("Stand Up" in self_action_names, "Stand Up IS available")
+    result.check("Stand Up" not in self_action_names, "Stand Up NOT available (BG3 auto-stand)")
 
-    # Stand up (costs half movement)
+    # Trigger turn start - should auto-stand and consume half movement
     initial_movement = goblin.action_economy.movement.normalized_score
-    stand = StandUp(source_entity_uuid=goblin.uuid)
-    event = stand.apply()
-    assert event is not None
-    result.check(not event.canceled, "Stand Up succeeded")
-    result.check("Prone" not in goblin.active_conditions, "No longer Prone")
+    goblin.on_turn_start()
+
+    result.check("Prone" not in goblin.active_conditions, "No longer Prone (auto-stood)")
 
     # Check movement was consumed
     remaining = goblin.action_economy.movement.normalized_score

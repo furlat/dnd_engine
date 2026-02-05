@@ -186,6 +186,16 @@ class APIClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_tile_info(self, x: int, y: int) -> Dict[str, Any]:
+        """Get detailed information about a specific tile.
+
+        Returns:
+            Tile info including name, walkable, walking_cost, conditions, handlers, entities
+        """
+        resp = self.client.get(f"/tile/{x}/{y}")
+        resp.raise_for_status()
+        return resp.json()
+
     def get_events(self, limit: int = 50, event_type: Optional[str] = None, phase: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get recent events from the server.

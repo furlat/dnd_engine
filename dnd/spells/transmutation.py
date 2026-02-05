@@ -65,7 +65,7 @@ class SpikeGrowthZone(ZoneControlCondition):
             # Roll and apply damage (using receive_damage for proper event firing)
             count, value = parse_dice_string(damage_dice)
             damage = sum(random.randint(1, value) for _ in range(count))
-            entity.receive_damage(damage, DamageType.PIERCING, source_uuid)
+            entity.receive_damage(damage, DamageType.PIERCING, source_uuid, parent_event=event.uuid)
 
             return None
 

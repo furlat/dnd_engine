@@ -146,11 +146,12 @@ class CharmPerson(SpellAction):
             )
             advantage_mod_uuid = target.saving_throws.get_saving_throw("wisdom").bonus.self_static.add_advantage_modifier(adv_mod)
 
-        # 4. Request WIS save
+        # 4. Request WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -297,10 +298,12 @@ class HoldPersonEffect(BaseCondition):
                 target.remove_condition("Hold Person")
                 return None
 
+            # Repeat WIS save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = target.saving_throw(save_request)
 
@@ -426,11 +429,12 @@ class HoldPerson(SpellAction):
             status_message=f"Requesting WIS save DC {dc}"
         )
 
-        # 3. Request WIS save
+        # 3. Request WIS save (child of effect event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
-            dc=dc
+            dc=dc,
+            parent_event=effect_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -545,11 +549,12 @@ class HoldMonsterEffect(BaseCondition):
                 target.remove_condition("Hold Monster")
                 return None
 
-            # Repeat WIS save
+            # Repeat WIS save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = target.saving_throw(save_request)
 
@@ -666,11 +671,12 @@ class HoldMonster(SpellAction):
         else:
             concentration_condition = existing_conc
 
-        # Request WIS save
+        # Request WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -781,7 +787,8 @@ class PowerWordKill(SpellAction):
             target.receive_damage(
                 amount=99999,
                 damage_type=DamageType.FORCE,  # Force damage can't be resisted
-                source_entity_uuid=caster.uuid
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
             )
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
@@ -1200,11 +1207,12 @@ class PowerWordStunEffect(BaseCondition):
                 target.remove_condition("Power Word Stun")
                 return None
 
-            # Repeat CON save
+            # Repeat CON save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = target.saving_throw(save_request)
 
