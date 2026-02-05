@@ -1,6 +1,30 @@
 # Spatial Handler Registry - Position-Indexed Implementation Plan
 
-## Problem Statement
+## STATUS: COMPLETE ✓
+
+This infrastructure has been fully implemented and tested.
+
+**Next step:** Implement zone spells using this infrastructure. See `claude_docs/ZONE_SPELLS_IMPLEMENTATION_PLAN.md`.
+
+**Key implementation differences from original plan:**
+- Used `SpatialHandler` class instead of generic `EventHandler` with position registration
+- Method names: `add_spatial_handler()` instead of `register_spatial_handler()`
+- Registries: `_spatial_handlers`, `_spatial_handlers_by_position`, `_handler_positions`
+- `_apply()` returns 5-tuple: `(modifiers, handlers, sub_conditions, spatial_handlers, event)`
+- `BaseCondition` has `spatial_handler_uuids` field for tracking
+- `TileEffectCondition` is now minimal - subclasses implement their own `_apply()`
+
+**Verification (ALL PASS):**
+```bash
+python examples/test_spatial_handler_registry.py
+python examples/spatial_events_test.py
+python examples/test_terrain_movement_system.py
+python examples/test_legacy_migration.py
+```
+
+---
+
+## Problem Statement (SOLVED)
 
 ### Current Architecture
 
@@ -577,41 +601,43 @@ class CloudkillZone(ZoneControlCondition):
 
 ## Implementation Order
 
-### Phase 1: EventQueue Spatial Registry (Foundation)
+### Phase 1: EventQueue Spatial Registry (Foundation) ✓ COMPLETE
 
-1. Add new class attributes:
-   - `_spatial_handlers_by_position`
-   - `_positions_by_spatial_handler`
+1. ✓ Added new class attributes:
+   - `_spatial_handlers: Dict[UUID, SpatialHandler]`
+   - `_spatial_handlers_by_position: Dict[(EventType, EventPhase), Dict[pos, Set[UUID]]]`
+   - `_handler_positions: Dict[UUID, (Set[pos], EventType, EventPhase)]`
 
-2. Add new methods:
-   - `register_spatial_handler()`
-   - `update_spatial_handler_positions()`
-   - `remove_spatial_handler()`
-   - `_is_spatial_event()`
-   - `_get_spatial_handlers_for_event()`
+2. ✓ Added new methods:
+   - `add_spatial_handler(handler, positions?, event_type?, event_phase?)`
+   - `update_spatial_handler_positions(uuid, new_positions, event_type, event_phase)`
+   - `remove_spatial_handler(uuid)`
 
-3. Modify `_get_handlers_for_event()` to check spatial events first
+3. ✓ Modified `_get_handlers_for_event()` to check spatial events
 
-4. Modify `reset()` to clear new indices
+4. ✓ Modified `reset()` to clear spatial indices
 
-5. **Test:** Verify spatial handlers only fire for registered positions
+5. ✓ **Tested:** `examples/test_spatial_handler_registry.py`
 
-### Phase 2: Update ZoneControlCondition
+### Phase 2: Update ZoneControlCondition ✓ COMPLETE
 
-1. Remove per-tile handler creation in TileEffectCondition
-2. Add zone-level handler management to ZoneControlCondition
-3. Implement `move_zone()` using `update_spatial_handler_positions()`
-4. Separate tile modifications (difficult terrain) from handlers
+1. ✓ `TileEffectCondition` is now minimal (just `get_tile()` helper)
+2. ✓ Zone-level handler management in `ZoneControlCondition`
+3. ✓ `move_zone()` uses `update_spatial_handler_positions()`
+4. ✓ Terrain modifiers separate from handlers
 
-5. **Test:** Verify existing zone spells still work with new architecture
+5. ✓ **Tested:** `examples/test_terrain_movement_system.py`
 
-### Phase 3: Update Existing Tile Conditions
+### Phase 3: Update Existing Tile Conditions ✓ COMPLETE
 
-1. Migrate existing TileEffectCondition usage to new pattern
-2. Update `test_terrain_movement_system.py`
-3. Verify entry damage, turn start damage still work
+1. ✓ `TileEffectCondition` base class is minimal - subclasses implement `_apply()`
+2. ✓ Test subclasses in `examples/test_terrain_movement_system.py` refactored
+3. ✓ Test subclasses in `examples/test_legacy_migration.py` refactored
+4. ✓ Entry damage, turn start damage verified working
 
-### Phase 4: Implement Zone Spells
+### Phase 4: Implement Zone Spells - PENDING
+
+See `claude_docs/ZONE_SPELLS_IMPLEMENTATION_PLAN.md` for spell implementation details.
 
 1. Spike Growth (static zone, per-5ft damage)
 2. Grease (static zone, turn-end handler)

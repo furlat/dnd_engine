@@ -630,9 +630,13 @@ class Poisoned(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 class Prone(BaseCondition):
-    """disadvantage to prone entity attacksa and when targeted add disadvantage to attacks from >5feet and advantage to attacks within 5 feet"""
+    """BG3-style Prone: disadvantage to attacks, advantage/disadvantage for attackers based on distance.
+
+    Auto-stands at turn start (deducts half movement). No manual StandUp action needed.
+    If knocked prone during own turn with movement available, immediately stands (condition doesn't apply).
+    """
     name: str = "Prone"
-    description: str = "A prone creature has disadvantage on all attack rolls and ability checks. Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage."
+    description: str = "A prone creature has disadvantage on all attack rolls. Attack rolls against the creature have advantage if within 5ft, disadvantage otherwise. Automatically stands at turn start (costs half movement)."
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -640,20 +644,86 @@ class Prone(BaseCondition):
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
-        elif isinstance(target_entity,Entity):
-            outs = []
-            #add disadvantage to all attacks
-            self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Prone",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((target_entity.equipment.attack_bonus.uuid,self_static_attack_uuid))
-            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Prone self to others disadvantage modifier to {target_entity.name}")
+        elif isinstance(target_entity, Entity):
+            # BG3-style: If it's the entity's turn and they have movement, they immediately stand
+            # Consume movement and don't apply the condition
+            if target_entity.is_my_turn:
+                base_movement = target_entity.action_economy.get_base_value("movement")
+                half_movement = base_movement // 2
+                current_movement = target_entity.action_economy.movement.normalized_score
+                if current_movement >= half_movement:
+                    target_entity.action_economy.consume("movement", half_movement)
+                    effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self},
+                                                              status_message=f"{target_entity.name} fell prone but immediately stood up")
+                    # Return empty lists - condition won't be applied
+                    return [], [], [], [], effect_event
 
-            #add conditional advantage to attacks within 5 feet
-            to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Prone",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.prone_distance_advantage))
-            outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Prone to target contextual advantage modifier to {target_entity.name}")
-            return outs, [], [], [], effect_event
+            # Normal case: apply Prone modifiers
+            outs: List[Tuple[UUID, UUID]] = []
+            handler_uuids: List[UUID] = []
+
+            # Add disadvantage to all attacks
+            self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(
+                AdvantageModifier(name="Prone", value=AdvantageStatus.DISADVANTAGE,
+                                  source_entity_uuid=self.target_entity_uuid, target_entity_uuid=self.source_entity_uuid)
+            )
+            outs.append((target_entity.equipment.attack_bonus.uuid, self_static_attack_uuid))
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self},
+                                                       status_message=f"Applied Prone to {target_entity.name}")
+
+            # Add conditional advantage to attacks within 5 feet
+            to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(
+                modifier=ContextualAdvantageModifier(name="Prone", source_entity_uuid=self.target_entity_uuid,
+                                                     target_entity_uuid=self.source_entity_uuid, callable=self.prone_distance_advantage)
+            )
+            outs.append((target_entity.equipment.ac_bonus.uuid, to_target_contextual_uuid))
+
+            # Create auto-stand handler (triggers at turn start)
+            handler = self._create_auto_stand_handler()
+            EventQueue.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+            return outs, handler_uuids, [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+
+    def _create_auto_stand_handler(self) -> EventHandler:
+        """Create handler to auto-stand at turn start (BG3 style)."""
+        if self.target_entity_uuid is None:
+            raise ValueError("Target entity UUID is not set")
+        target_uuid: UUID = self.target_entity_uuid
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type != EventType.TURN_START:
+                return None
+            if event.source_entity_uuid != target_uuid:
+                return None
+
+            entity = Entity.get(target_uuid)
+            if not entity:
+                return None
+
+            # Check if still prone
+            if "Prone" not in entity.active_conditions:
+                return None
+
+            # Deduct half movement and remove Prone
+            base_movement = entity.action_economy.get_base_value("movement")
+            half_movement = base_movement // 2
+            entity.action_economy.consume("movement", half_movement)
+            entity.remove_condition("Prone")
+            return None
+
+        return EventHandler(
+            name="Prone Auto-Stand",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target_uuid
+            )],
+            event_processor=processor
+        )
 
     @staticmethod
     def prone_distance_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
@@ -662,12 +732,12 @@ class Prone(BaseCondition):
         if target_entity_uuid:
             target_entity = Entity.get(target_entity_uuid)
             source_entity = Entity.get(source_entity_uuid)
-            if isinstance(source_entity,Entity) and isinstance(target_entity,Entity):
+            if isinstance(source_entity, Entity) and isinstance(target_entity, Entity):
                 distance = source_entity.senses.get_feet_distance(target_entity.position)
                 if distance <= 5:
-                    return AdvantageModifier(name="Prone",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=source_entity_uuid,target_entity_uuid=target_entity_uuid)
+                    return AdvantageModifier(name="Prone", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
                 else:
-                    return AdvantageModifier(name="Prone",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=source_entity_uuid,target_entity_uuid=target_entity_uuid)
+                    return AdvantageModifier(name="Prone", value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
         return None
 
 
@@ -910,7 +980,7 @@ class Concentrating(BaseCondition):
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], declaration_event.cancel(status_message="Target not found")
+            return [], [], [],[], declaration_event.cancel(status_message="Target not found")
 
         handler_uuids: List[UUID] = []
 
@@ -1030,7 +1100,7 @@ class NoReactions(BaseCondition):
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
-            return [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 

@@ -11,18 +11,147 @@ Tests verify:
 6. Backward compatibility for any remaining legacy patterns
 """
 
-from uuid import uuid4
-from typing import List, Tuple
+from uuid import uuid4, UUID
+from typing import List, Tuple, Optional
+import random
 
 from dnd.utils import reset_combat_state, get_hp, get_position, move_entity
-from dnd.core.events import EventQueue, EventType, EventPhase, Event, EventHandler, Trigger
+from dnd.core.events import EventQueue, EventType, EventPhase, Event, EventHandler, Trigger, SpatialHandler
 from dnd.core.gridmap import get_map
-from dnd.tile_conditions import TileEffectCondition, ZoneControlCondition
+from dnd.tile_conditions import TileEffectCondition, ZoneControlCondition, parse_dice_string
 from dnd.core.modifiers import DamageType
 from dnd.monsters.bestiary import create_skeleton
 from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import PassController
+from pydantic import PrivateAttr
+
+
+# ============================================================================
+# Test Subclasses - Proper _apply() implementations
+# ============================================================================
+
+class TestEntryDamageTile(TileEffectCondition):
+    """Test tile effect with entry damage.
+
+    Implements _apply() to create entry damage handler.
+    """
+    name: str = "Test Entry Damage"
+    description: str = "Deals damage when entities enter"
+
+    # Spell-specific fields
+    damage_dice: str = "2d6"
+    damage_type: DamageType = DamageType.FIRE
+
+    # Track handler UUID for tests
+    _entry_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
+
+    def _apply(self, declaration_event):
+        """Apply entry damage handler to the tile."""
+        spatial_handler_uuids = []
+        tile = self.get_tile()
+        if tile:
+            handler = self._create_entry_damage_handler(tile)
+            EventQueue.add_spatial_handler(handler)
+            self._entry_handler_uuid = handler.uuid
+            spatial_handler_uuids.append(handler.uuid)
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], [], [], spatial_handler_uuids, effect_event
+
+    def _create_entry_damage_handler(self, tile):
+        """Create a spatial handler that deals damage when entities enter this tile."""
+        damage_dice_str = self.damage_dice
+        damage_type = self.damage_type
+        source_uuid = self.source_entity_uuid
+
+        def entry_damage_processor(event, _handler_source_uuid):
+            entity_uuid = getattr(event, 'entity_uuid', None)
+            if not entity_uuid:
+                return None
+            entity = Entity.get(entity_uuid)
+            if not entity:
+                return None
+
+            count, value = parse_dice_string(damage_dice_str)
+            damage = sum(random.randint(1, value) for _ in range(count))
+            entity.health.take_damage(damage, damage_type, source_entity_uuid=source_uuid)
+            return None
+
+        return SpatialHandler(
+            name=f"{self.name} Entry Damage",
+            source_entity_uuid=tile.uuid,
+            positions={tile.position},
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            event_phase=EventPhase.EFFECT,
+            event_processor=entry_damage_processor
+        )
+
+
+class TestTurnStartDamageTile(TileEffectCondition):
+    """Test tile effect with turn start damage.
+
+    Implements _apply() to create turn start damage handler.
+    """
+    name: str = "Test Turn Start Damage"
+    description: str = "Deals damage at turn start"
+
+    # Spell-specific fields
+    damage_dice: str = "1d6"
+    damage_type: DamageType = DamageType.FIRE
+
+    def _apply(self, declaration_event):
+        """Apply turn start damage handler."""
+        handler_uuids = []
+        tile = self.get_tile()
+        if tile:
+            handler = self._create_turn_start_damage_handler(tile.uuid)
+            EventQueue.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], handler_uuids, [], [], effect_event
+
+    def _create_turn_start_damage_handler(self, tile_uuid):
+        """Create an event handler that deals damage at turn start if entity is on tile."""
+        damage_dice_str = self.damage_dice
+        damage_type = self.damage_type
+        source_uuid = self.source_entity_uuid
+
+        def turn_start_damage_processor(event, _handler_source_uuid):
+            if event.event_type != EventType.TURN_START:
+                return None
+
+            entity = Entity.get(event.source_entity_uuid)
+            if not entity:
+                return None
+
+            grid = get_map()
+            tile = grid.get_tile_by_uuid(tile_uuid)
+            if not tile:
+                return None
+
+            if entity.senses.position != tile.position:
+                return None
+
+            count, value = parse_dice_string(damage_dice_str)
+            damage = sum(random.randint(1, value) for _ in range(count))
+            entity.health.take_damage(damage, damage_type, source_entity_uuid=source_uuid)
+            return None
+
+        return EventHandler(
+            name=f"{self.name} Turn Start Damage",
+            source_entity_uuid=tile_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=turn_start_damage_processor
+        )
 
 
 # ============================================================================
@@ -52,11 +181,12 @@ def test_tile_effect_entry_fires_only_at_correct_position():
 
     # Create tile effect with entry damage at (5, 0)
     fire_tile = grid.get_tile(5, 0)
-    fire_effect = TileEffectCondition(
+    assert fire_tile is not None
+    fire_effect = TestEntryDamageTile(
         source_entity_uuid=uuid4(),
         target_entity_uuid=fire_tile.uuid,
-        damage_on_entry_dice="2d6",
-        damage_on_entry_type=DamageType.FIRE,
+        damage_dice="2d6",
+        damage_type=DamageType.FIRE,
     )
     fire_tile.add_condition(fire_effect)
 
@@ -123,11 +253,12 @@ def test_multiple_tile_effects_efficient():
     for i in range(10):
         x = 10 + i
         tile = grid.get_tile(x, 0)
-        effect = TileEffectCondition(
+        assert tile is not None
+        effect = TestEntryDamageTile(
             source_entity_uuid=uuid4(),
             target_entity_uuid=tile.uuid,
-            damage_on_entry_dice="1d4",
-            damage_on_entry_type=DamageType.FIRE,
+            damage_dice="1d4",
+            damage_type=DamageType.FIRE,
         )
         tile.add_condition(effect)
 
@@ -164,7 +295,7 @@ class TestEntryZone(ZoneControlCondition):
     def _create_zone_entry_handler(self) -> EventHandler:
         zone = self
 
-        def track_entry(event: Event, _: uuid4) -> None:
+        def track_entry(event: Event, _: UUID) -> None:
             pos = getattr(event, 'position', None)
             if pos:
                 zone.entries_tracked.append(pos)
@@ -213,11 +344,12 @@ def test_tile_effect_and_zone_coexist():
 
     # Create a tile effect at (10, 10)
     far_tile = grid.get_tile(10, 10)
-    tile_effect = TileEffectCondition(
+    assert far_tile is not None
+    tile_effect = TestEntryDamageTile(
         source_entity_uuid=uuid4(),
         target_entity_uuid=far_tile.uuid,
-        damage_on_entry_dice="2d6",
-        damage_on_entry_type=DamageType.FIRE,
+        damage_dice="2d6",
+        damage_type=DamageType.FIRE,
     )
     far_tile.add_condition(tile_effect)
 
@@ -279,11 +411,12 @@ def test_tile_effect_cleanup_removes_spatial_handler():
 
     # Create tile effect at (2, 0)
     fire_tile = grid.get_tile(2, 0)
-    fire_effect = TileEffectCondition(
+    assert fire_tile is not None
+    fire_effect = TestEntryDamageTile(
         source_entity_uuid=uuid4(),
         target_entity_uuid=fire_tile.uuid,
-        damage_on_entry_dice="2d6",
-        damage_on_entry_type=DamageType.FIRE,
+        damage_dice="2d6",
+        damage_type=DamageType.FIRE,
     )
     fire_tile.add_condition(fire_effect)
     handler_uuid = fire_effect._entry_handler_uuid
@@ -350,11 +483,12 @@ def test_turn_start_damage_still_works():
 
     # Create tile effect with turn start damage at (2, 0)
     fire_tile = grid.get_tile(2, 0)
-    fire_effect = TileEffectCondition(
+    assert fire_tile is not None
+    fire_effect = TestTurnStartDamageTile(
         source_entity_uuid=uuid4(),
         target_entity_uuid=fire_tile.uuid,
-        damage_on_turn_start_dice="1d6",
-        damage_on_turn_start_type=DamageType.FIRE,
+        damage_dice="1d6",
+        damage_type=DamageType.FIRE,
     )
     fire_tile.add_condition(fire_effect)
 

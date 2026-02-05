@@ -25,12 +25,10 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, SpatialHandler, EventQueue, Trigger
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQueue
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import NumericalModifier, DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
-import random
-from dnd.entity import Entity
 
 
 def parse_dice_string(dice_str: str) -> Tuple[int, int]:
@@ -45,181 +43,45 @@ class TileEffectCondition(BaseCondition):
     """
     Base condition applied to tiles by zone spells.
 
-    Handles common patterns: cost modification, entry damage, obscurement.
     The target_entity_uuid is the tile's UUID.
+    Subclasses override _apply() to add specific effects (terrain modifiers,
+    damage handlers, obscurement, etc.).
 
-    Subclasses should override _apply() to add specific effects.
-
-    Event Handling:
-    - Entry damage uses position-indexed spatial handlers for O(1) lookup
-    - Turn start damage uses EventHandler at EFFECT phase (not spatial)
+    This is a minimal base class - spell-specific logic belongs in subclasses.
     """
     name: str = "Tile Effect"
     description: str = "A tile effect from a zone spell"
 
-    # Effect properties (override in subclasses)
-    adds_difficult_terrain: bool = Field(default=False, description="If True, adds +1 to walking cost")
-    heavily_obscured: bool = Field(default=False, description="Blocks vision through this tile")
-    lightly_obscured: bool = Field(default=False, description="Provides light obscurement")
-
-    # Damage on entry (optional)
-    damage_on_entry_dice: Optional[str] = Field(default=None, description="Dice string like '2d4' for entry damage")
-    damage_on_entry_type: DamageType = Field(default=DamageType.PIERCING, description="Damage type")
-
-    # Damage at turn start (optional)
-    damage_on_turn_start_dice: Optional[str] = Field(default=None, description="Dice string for turn start damage")
-    damage_on_turn_start_type: DamageType = Field(default=DamageType.FIRE, description="Damage type for turn start")
-
-    # Private attribute to track the entry handler UUID for cleanup
-    _entry_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
-
     model_config = {"arbitrary_types_allowed": True}
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Apply tile effect modifiers and handlers."""
-        outs: List[Tuple[UUID, UUID]] = []
-        handler_uuids: List[UUID] = []
-        spatial_handler_uuids: List[UUID] = []
+    def get_tile(self) -> Optional[Tile]:
+        """Helper to get the tile this condition is applied to.
 
-        # target_entity_uuid is the tile UUID
+        The target_entity_uuid is the tile's UUID.
+        """
         if self.target_entity_uuid is None:
-            return [], [], [], [], None
-
+            return None
         grid = get_map()
-        tile = grid.get_tile_by_uuid(self.target_entity_uuid)
-        if not tile:
-            return [], [], [], [], None
+        return grid.get_tile_by_uuid(self.target_entity_uuid)
 
-        # Apply difficult terrain modifier
-        if self.adds_difficult_terrain:
-            mod = NumericalModifier.create(
-                source_entity_uuid=self.source_entity_uuid,
-                name=f"{self.name} Difficult Terrain",
-                value=1  # +1 to walking cost (total = 2)
-            )
-            mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
-            outs.append((tile.walking_cost.uuid, mod_uuid))
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Subclasses must override to add specific effects.
 
-        # Register entry damage handler using SpatialHandler class
-        if self.damage_on_entry_dice:
-            handler = self._create_entry_damage_handler(tile)
-            EventQueue.add_spatial_handler(handler)
-            self._entry_handler_uuid = handler.uuid
-            spatial_handler_uuids.append(handler.uuid)
-
-        # Register turn start damage handler (NOT spatial - uses normal triggers)
-        if self.damage_on_turn_start_dice:
-            handler = self._create_turn_start_damage_handler(tile.uuid)
-            EventQueue.add_event_handler(handler)
-            handler_uuids.append(handler.uuid)
-
+        Default implementation does nothing - returns empty lists.
+        """
+        effect_event = None
         if declaration_event is not None:
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
-        else:
-            effect_event = None
-        return outs, handler_uuids, [], spatial_handler_uuids, effect_event
-
-    def _create_entry_damage_handler(self, tile: Tile) -> SpatialHandler:
-        """Create a spatial handler that deals damage when entities enter this tile.
-
-        Uses SpatialHandler class for position-indexed lookup (O(1)).
-        Position check is handled by the registry - no need to check in processor.
-        """
-        damage_dice_str = self.damage_on_entry_dice
-        damage_type = self.damage_on_entry_type
-        source_uuid = self.source_entity_uuid
-
-        def entry_damage_processor(event: Event, _handler_source_uuid: UUID) -> Optional[Event]:
-            """Deal damage when entity enters this tile.
-
-            Position already validated by SpatialHandler registry - no need to check.
-            """
-            # Get entering entity
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if not entity_uuid:
-                return None
-            entity = Entity.get(entity_uuid)
-            if not entity:
-                return None
-
-            # Deal damage (simple roll, no attack required)
-            if damage_dice_str:
-                count, value = parse_dice_string(damage_dice_str)
-                damage = sum(random.randint(1, value) for _ in range(count))
-                entity.health.take_damage(
-                    damage,
-                    damage_type,
-                    source_entity_uuid=source_uuid
-                )
-
-            return None
-
-        return SpatialHandler(
-            name=f"{self.name} Entry Damage",
-            source_entity_uuid=tile.uuid,
-            positions={tile.position},  # Single position
-            event_type=EventType.SPATIAL_ENTITY_ENTERED,
-            event_phase=EventPhase.EFFECT,
-            event_processor=entry_damage_processor
-        )
-
-    def _create_turn_start_damage_handler(self, tile_uuid: UUID) -> EventHandler:
-        """Create an event handler that deals damage at turn start if entity is on tile."""
-        damage_dice_str = self.damage_on_turn_start_dice
-        damage_type = self.damage_on_turn_start_type
-        source_uuid = self.source_entity_uuid
-
-        def turn_start_damage_processor(event: Event, _handler_source_uuid: UUID) -> Optional[Event]:
-            """Deal damage at turn start if entity is on this tile."""
-            if event.event_type != EventType.TURN_START:
-                return None
-
-            # Get entity whose turn is starting
-            entity = Entity.get(event.source_entity_uuid)
-            if not entity:
-                return None
-
-            # Check if entity is on this tile
-            grid = get_map()
-            tile = grid.get_tile_by_uuid(tile_uuid)
-            if not tile:
-                return None
-
-            if entity.senses.position != tile.position:
-                return None
-
-            # Deal damage (simple roll, no attack required)
-            if damage_dice_str:
-                count, value = parse_dice_string(damage_dice_str)
-                damage = sum(random.randint(1, value) for _ in range(count))
-                entity.health.take_damage(
-                    damage,
-                    damage_type,
-                    source_entity_uuid=source_uuid
-                )
-
-            return None
-
-        return EventHandler(
-            name=f"{self.name} Turn Start Damage",
-            source_entity_uuid=tile_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
-            )],
-            event_processor=turn_start_damage_processor
-        )
+        return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up spatial handler for entry damage.
+        """Remove the tile effect condition.
 
-        Entry damage handlers are now tracked in spatial_handler_uuids and
+        Spatial handlers are tracked in spatial_handler_uuids and
         cleaned up by parent class's remove_spatial_handlers().
-        Turn start handlers are tracked in event_handlers_uuids and
+        Event handlers are tracked in event_handlers_uuids and
         cleaned up by parent class's remove_event_handlers().
         """
-        # Clear local reference (cleanup happens in parent)
-        self._entry_handler_uuid = None
         return super()._remove(event)
 
 

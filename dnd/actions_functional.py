@@ -28,7 +28,7 @@ from dnd.core.base_actions import (
 from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
-from dnd.actions import Move, Dash, Dodge, Disengage, StandUp, Attack, Jump, Shove
+from dnd.actions import Move, Dash, Dodge, Disengage, Attack, Jump, Shove
 from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler
 
 
@@ -55,7 +55,7 @@ def setup_standard_actions(entity: 'Entity') -> None:
     entity.register_action(Dash(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Dodge(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(StandUp(source_entity_uuid=entity.uuid, template=True))
+    # Note: StandUp is no longer registered - Prone auto-stands at turn start (BG3 style)
     entity.register_action(Shove(source_entity_uuid=entity.uuid, template=True))
     # Note: DropProne is not registered - Prone is applied by spells/effects, not as a voluntary action
 
