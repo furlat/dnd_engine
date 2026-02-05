@@ -329,7 +329,7 @@ class ChillTouch(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.NECROTIC, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.NECROTIC, source_entity_uuid=caster.uuid)
 
         # 7. Apply debuffs using effect condition on caster
         is_undead = target.creature_type == CreatureType.UNDEAD
@@ -517,7 +517,7 @@ class Blight(SpellAction):
 
         # 6. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.NECROTIC, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.NECROTIC, source_entity_uuid=caster.uuid)
 
         save_text = " (saved for half)" if success and not is_plant else ""
         plant_text = " (maximum damage)" if is_plant else ""

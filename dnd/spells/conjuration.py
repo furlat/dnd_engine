@@ -124,7 +124,7 @@ class CallLightningStrike(BaseAction):
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
         # Apply damage
-        target.health.take_damage(final_damage, DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=final_damage, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
 
         save_text = " (save for half)" if success else ""
         return effect_event.phase_to(
@@ -239,7 +239,7 @@ class CallLightning(SpellAction):
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
         # Apply damage
-        target.health.take_damage(final_damage, DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=final_damage, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
 
         # 2. Register Call Lightning Strike action
         strike_action = CallLightningStrike(
@@ -397,7 +397,7 @@ class PoisonSpray(SpellAction):
         damage_dice = poison_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        target.health.take_damage(damage_roll.total, DamageType.POISON, caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.POISON, source_entity_uuid=caster.uuid)
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,
@@ -542,7 +542,7 @@ class AcidSplash(SpellAction):
         damage_dice = acid_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        target.health.take_damage(damage_roll.total, DamageType.ACID, caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.ACID, source_entity_uuid=caster.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -768,7 +768,7 @@ class GreaseZone(ZoneControlCondition):
             source_entity_uuid=source_uuid,
             trigger_conditions=[Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT
+                event_phase=EventPhase.EXECUTION  # Fire BEFORE auto-stand at EFFECT
             )],
             event_processor=processor
         )
