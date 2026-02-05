@@ -1744,7 +1744,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
 
         # Add exit handler (remove speed debuff when leaving)
         exit_handler = self._create_zone_exit_handler()
-        EventQueue.add_spatial_handler(exit_handler, self.affected_positions)
+        EventQueue.add_spatial_handler(exit_handler, self.affected_positions, EventType.SPATIAL_ENTITY_LEFT, EventPhase.EFFECT)
         handler_uuids.append(exit_handler.uuid)
 
         return outs, handler_uuids, sub_conditions_uuids, external_uuids, effect_event

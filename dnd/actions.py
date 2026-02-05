@@ -912,15 +912,21 @@ class Attack(BaseAction):
             attack_bonus.reset_from_target()
             
             
-            # If attack was canceled or missed, skip to COMPLETION
+            # If attack was canceled, return early
             if attack_event.canceled:
                 return attack_event
-            elif attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+
+            # On miss: still go through EFFECT phase (so handlers like Guiding Bolt removal fire)
+            if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+                attack_event = attack_event.phase_to(
+                    EventPhase.EFFECT,
+                    status_message=f"Attack missed"
+                )
                 return attack_event.phase_to(
                     new_phase=EventPhase.COMPLETION,
                     status_message=f"Attack missed"
                 )
-            
+
             # Move to EFFECT phase for damage
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid)
             attack_event = attack_event.phase_to(
@@ -928,11 +934,11 @@ class Attack(BaseAction):
                 status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.damage_bonus.normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
                 damages=damages
             )
-            
+
             # If attack was canceled during phase transition, return early
             if attack_event.canceled:
                 return attack_event
-            
+
             # Apply damage if there is an attack outcome
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
                 # Step 1: Roll damage dice (creates immutable DiceRoll objects)

@@ -387,8 +387,69 @@ class BaseCondition(BaseObject):
         self.spatial_handler_uuids.clear()
         return True
 
+    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
+        """Clean up ONLY this condition's modifiers, handlers, and events.
+
+        Cross-object cleanup (sub_conditions, external_conditions, terrain_conditions)
+        is handled by Entity._remove_condition_tree().
+
+        NOTE: _remove() hook is PRESERVED for custom cleanup logic.
+
+        Args:
+            expire: Whether this is an expiration removal
+            parent_event: Parent event for event chain tracking
+
+        Returns:
+            True if cleanup succeeded, False if canceled
+        """
+        if not self.applied:
+            return False
+
+        # Declare the removal event
+        event = self._declare_removal_event(expired=expire, parent_event=parent_event)
+        if event.canceled:
+            return False
+
+        # Handle expiration hook if needed
+        if expire:
+            expired_event = self._expire(event)
+            if expired_event and expired_event.canceled:
+                return False
+
+        # Custom removal logic - PRESERVED HOOK
+        removed_event = self._remove(event)
+        if removed_event and removed_event.canceled:
+            return False
+
+        # Clean up own modifiers and handlers ONLY
+        self.remove_condition_modifiers()
+        self.remove_event_handlers()
+        self.remove_spatial_handlers()
+
+        # Unlink from parent (but don't remove parent)
+        if self.parent_condition:
+            parent = BaseCondition.get(self.parent_condition)
+            if parent is not None and isinstance(parent, BaseCondition):
+                if self.uuid in parent.sub_conditions:
+                    parent.sub_conditions.remove(self.uuid)
+
+        self.applied = False
+
+        # Complete event
+        event.phase_to(EventPhase.COMPLETION)
+        return True
+
     def remove(self, expire: bool = False, skip_parent_removal: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Remove the condition with event handling"""
+        """Remove the condition with event handling.
+
+        DEPRECATED: This method is preserved for backward compatibility with code
+        that calls condition.remove() directly. New code should use Entity's
+        remove_condition() method which handles full tree traversal.
+
+        Note: This still performs cross-object cleanup via late imports for
+        backward compatibility. The late imports will be removed once all
+        callers migrate to Entity.remove_condition().
+        """
         if not self.applied:
             return False
         # First declare the removal event
@@ -427,11 +488,12 @@ class BaseCondition(BaseObject):
         return True
     
     def progress(self) -> bool:
-        """Progress the duration returns True if the condition is removed"""
-        progress_result = self.duration.progress()
-        if progress_result:
-            self.remove(expire=True)
-        return progress_result
+        """Progress the duration, return True if expired.
+
+        NOTE: Does NOT remove the condition - caller must handle removal.
+        This avoids circular imports by letting Entity handle tree traversal.
+        """
+        return self.duration.progress()
     
     def long_rest(self) -> None:
         """ Set the long rested flag to True """
