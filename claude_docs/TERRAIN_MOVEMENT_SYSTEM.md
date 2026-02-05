@@ -21,9 +21,22 @@ This document describes the terrain movement cost system, zone spell conditions,
 - [x] Move action terrain cost integration - `dnd/actions.py`
 - [x] **Spatial Event Lifecycle Fix (P0)** - Events now progress through all 4 phases
 - [x] **EventHandler-based entry damage** - No more callbacks needed
+- [x] **Position-indexed spatial handlers** - O(1) handler lookup via `EventQueue.add_spatial_handler()`
+- [x] **Prone auto-stand (BG3 style)** - `dnd/conditions.py:632`
 
-### Tested Features (Verified in `test_terrain_movement_system.py`)
+### Zone Spells (Complete)
 
+| Spell | Level | File | Key Features |
+|-------|-------|------|--------------|
+| **Spike Growth** | 2nd | `dnd/spells/transmutation.py` | 2d4 piercing on entry, difficult terrain |
+| **Grease** | 1st | `dnd/spells/conjuration.py` | DEX save → Prone, difficult terrain, turn start saves |
+| **Web** | 2nd | `dnd/spells/conjuration.py` | DEX save → Restrained, escape action (STR check), difficult terrain |
+| **Cloudkill** | 5th | `dnd/spells/conjuration.py` | CON save → 5d8 poison (half on save), auto-moves 10ft from caster |
+| **Spirit Guardians** | 3rd | `dnd/spells/conjuration.py` | WIS save → 3d8 radiant (half on save), follows caster, speed halved for enemies |
+
+### Tested Features
+
+**Core System** (Verified in `test_terrain_movement_system.py`):
 - [x] Flying movement mode (ignores difficult terrain, blocked by walls)
 - [x] Swimming movement mode (works in water, blocked on land)
 - [x] Diagonal tile borders
@@ -32,15 +45,20 @@ This document describes the terrain movement cost system, zone spell conditions,
 - [x] Zone + Concentration integration
 - [x] Multi-step movement damage (entry damage per tile)
 
+**Zone Spells** (Individual test files):
+- [x] `test_prone_auto_stand.py` - BG3-style Prone behavior (5 tests)
+- [x] `test_spike_growth.py` - Entry damage + difficult terrain (4 tests)
+- [x] `test_grease.py` - DEX save → Prone, turn start + entry (6 tests)
+- [x] `test_web.py` - DEX save → Restrained, escape action (5 tests)
+- [x] `test_cloudkill.py` - CON save + auto-move zone (6 tests)
+- [x] `test_spirit_guardians.py` - WIS save + follow caster + speed halving (9 tests)
+
 ### Not Yet Implemented
 
 - [ ] Movement modes on entities (fly speed, swim speed) - entities assume WALKING
 - [ ] Light system (connect obscurement fields to FOV)
 - [ ] Cover calculation
-- [ ] Save-based entry effects (Web, Grease)
-- [ ] Per-5ft-movement damage (Spike Growth)
-- [ ] Turn-end handlers (Grease)
-- [ ] Escape action grants (Web)
+- [ ] Fog Cloud, Darkness (need light/obscurement system)
 
 ---
 
@@ -213,34 +231,69 @@ The Move action integrates with terrain:
 
 ## Zone Spell Pattern
 
-### Hierarchy
+### New Architecture: Position-Indexed Spatial Handlers
+
+**Key insight**: Instead of one handler per tile (O(tiles)), zones now use **one handler per effect type** registered for all positions in the zone. Handler lookup is O(1) via position-indexed map.
 
 ```
-Caster: Concentrating(spell_name="Fog Cloud")
+Caster: Concentrating(spell_name="Web")
     │
-    └── external_conditions ──► FogCloudZone (on caster)
+    └── external_conditions ──► WebZone (ZoneControlCondition on caster)
                                     │
-                                    └── terrain_conditions ──► FogCloudTileEffect (on each tile)
+                                    ├── _entry_handler_uuid  (ONE handler for all positions)
+                                    ├── _exit_handler_uuid   (ONE handler for all positions)
+                                    ├── _turn_start_handler_uuid (regular event handler)
+                                    └── _terrain_modifier_uuids  (modifiers on tile.walking_cost)
+```
+
+### Handler Registration
+
+```python
+# In ZoneControlCondition._apply():
+# Create entry handler (fires for ANY position in the zone)
+handler = self._create_zone_entry_handler()
+EventQueue.add_spatial_handler(
+    handler,
+    self.affected_positions,           # Set of (x, y) positions
+    EventType.SPATIAL_ENTITY_ENTERED,
+    EventPhase.EFFECT
+)
+self._entry_handler_uuid = handler.uuid
+```
+
+### Zone Movement (O(delta))
+
+When zone moves, only the difference is updated:
+
+```python
+def move_zone(self, new_center: Tuple[int, int]) -> bool:
+    # Remove old terrain modifiers
+    self._remove_terrain_modifiers()
+
+    # Compute new positions
+    self.zone_center = new_center
+    new_positions = self._compute_affected_positions()
+
+    # Efficient batch update (only changes delta positions)
+    EventQueue.update_spatial_handler_positions(
+        self._entry_handler_uuid,
+        new_positions,
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventPhase.EFFECT
+    )
+
+    self.affected_positions = new_positions
+    self._apply_terrain_modifiers()
+    return True
 ```
 
 ### Automatic Cleanup
 
-When concentration breaks, the chain cleans up automatically:
+When concentration breaks:
 1. `Concentrating.remove()` calls `remove_external_conditions()`
-2. `FogCloudZone.remove()` calls `remove_terrain_conditions()`
-3. Each `FogCloudTileEffect` is removed from its tile
-4. Tile costs return to normal
-
-### BaseCondition.terrain_conditions
-
-New field tracking conditions placed on tiles:
-```python
-terrain_conditions: List[Tuple[UUID, UUID]]  # (tile_uuid, condition_uuid)
-```
-
-Methods:
-- `add_terrain_condition(tile_uuid, condition_uuid)` - Track a tile condition
-- `remove_terrain_conditions()` - Remove all tracked tile conditions (called in `remove()`)
+2. `WebZone._remove()` removes spatial handlers via `EventQueue.remove_spatial_handler()`
+3. `WebZone._remove()` removes terrain modifiers from tiles
+4. Standard event handler cleanup via parent class
 
 ### TileEffectCondition Base Class
 
@@ -248,23 +301,93 @@ Base condition for effects applied to tiles. Features:
 - `adds_difficult_terrain: bool` - If True, adds +1 to walking cost
 - `heavily_obscured: bool` - Blocks vision (NOT CONNECTED TO FOV YET)
 - `lightly_obscured: bool` - Light obscurement (NOT CONNECTED TO FOV YET)
-- `damage_on_entry_dice: str` - E.g., "2d4" for entry damage
-- `damage_on_entry_type: DamageType` - Damage type
-- `damage_on_turn_start_dice: str` - Damage at turn start
-- `damage_on_turn_start_type: DamageType`
+
+**Note**: Entry damage and turn start damage are now handled via ZoneControlCondition's spatial handlers, not TileEffectCondition fields.
 
 ### ZoneControlCondition Base Class
 
-Base condition for controlling a zone of tile effects. Features:
+Base condition for controlling a zone of effects. **Primary pattern for zone spells**.
+
+**Fields**:
 - `zone_center: Tuple[int, int]` - Center position
 - `zone_shape: str` - "sphere", "cone", "line", "cube"
 - `zone_radius_feet: int` - Radius in feet
 - `zone_direction: Optional[Tuple[int, int]]` - For cones/lines
+- `adds_difficult_terrain: bool` - If True, adds +1 to walking cost
+- `affected_positions: Set[Tuple[int, int]]` - Computed tile positions
 
-Methods:
-- `get_tile_effect_class()` - Override to return specific TileEffectCondition subclass
+**Override Points**:
+```python
+def _has_entry_effect(self) -> bool: ...     # Return True if entry triggers effect
+def _has_exit_effect(self) -> bool: ...      # Return True if exit triggers effect
+def _has_turn_start_effect(self) -> bool: ... # Return True if turn start triggers effect
+
+def _create_zone_entry_handler(self) -> EventHandler: ...
+def _create_zone_exit_handler(self) -> EventHandler: ...
+def _create_zone_turn_start_handler(self) -> EventHandler: ...
+```
+
+**Methods**:
 - `_compute_affected_positions()` - Uses AoE shapes to compute affected tiles
-- `move_zone(new_center)` - Move the zone to a new position
+- `move_zone(new_center)` - Move the zone to a new position (efficient O(delta))
+
+---
+
+## Prone Auto-Stand (BG3 Style)
+
+Prone has been updated to match Baldur's Gate 3 behavior - automatic standing with movement cost, no manual "Stand Up" action needed.
+
+### Behavior Rules
+
+| Situation | Result |
+|-----------|--------|
+| **Turn start while Prone** | Auto-stand, consume half base movement (e.g., 15ft for 30ft speed) |
+| **Knocked Prone during own turn with movement** | Immediately stand, consume half movement, Prone doesn't apply |
+| **Knocked Prone during own turn without movement** | Stay Prone (can't afford to stand) |
+| **Knocked Prone outside own turn** | Stay Prone (will auto-stand at next turn start) |
+
+### Implementation Details
+
+**File**: `dnd/conditions.py:632`
+
+The `Prone._apply()` method checks `entity.is_my_turn` and available movement:
+
+```python
+def _apply(self, declaration_event):
+    # BG3-style: If it's the entity's turn and they have movement, immediately stand
+    if target_entity.is_my_turn:
+        base_movement = target_entity.action_economy.get_base_value("movement")
+        half_movement = base_movement // 2
+        current_movement = target_entity.action_economy.movement.normalized_score
+        if current_movement >= half_movement:
+            target_entity.action_economy.consume("movement", half_movement)
+            # Return empty lists - condition doesn't apply
+            return [], [], [], [], effect_event
+
+    # Normal case: apply Prone modifiers + auto-stand handler for turn start
+    # ...
+```
+
+The auto-stand handler fires at `TURN_START` in `EventPhase.EFFECT`:
+1. Checks `event.source_entity_uuid == target_uuid` (is it the Prone entity's turn?)
+2. Deducts half movement
+3. Removes the Prone condition
+
+### Integration with Grease
+
+Grease spell applies Prone on failed DEX saves. Because of BG3 auto-stand:
+- Entity knocked Prone during **their own turn** with movement → immediately stands (movement consumed)
+- Entity knocked Prone **outside their turn** → stays Prone until turn start
+- Entity starting turn in Grease zone → DEX save, if fail: Prone applied, then auto-stand (movement consumed)
+
+### Test Coverage
+
+`examples/test_prone_auto_stand.py` verifies:
+1. Turn start auto-stand with movement cost
+2. Prone only auto-stands on own turn
+3. StandUp action is not registered
+4. Immediate stand when Prone applied during own turn with movement
+5. Stay Prone when no movement available
 
 ---
 
@@ -309,78 +432,84 @@ distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.WALKING
 distances, paths = grid.compute_paths((0, 0), movement_mode=MovementMode.FLYING)
 ```
 
-### Creating a Zone Spell Effect
+### Creating a Zone Spell Effect (Modern Pattern)
+
+The modern pattern uses position-indexed spatial handlers for efficiency:
 
 ```python
-from dnd.tile_conditions import ZoneControlCondition, TileEffectCondition
+from dnd.tile_conditions import ZoneControlCondition
 from dnd.conditions import Concentrating
-from typing import Type
+from dnd.core.events import EventHandler, Trigger, EventType, EventPhase
 
-# Define the tile effect
-class WebTileEffect(TileEffectCondition):
-    name: str = "Web"
-    adds_difficult_terrain: bool = True
-    # Could add: restrained on entry via handler
-
-# Define the zone control
-class WebZone(ZoneControlCondition):
-    name: str = "Web Zone"
-    zone_shape: str = "cube"
+class MyZone(ZoneControlCondition):
+    """Zone with entry damage and difficult terrain."""
+    name: str = "My Zone"
+    zone_shape: str = "sphere"
     zone_radius_feet: int = 20
+    adds_difficult_terrain: bool = True  # Built-in terrain modifier
+    spell_dc: int = 15  # Custom field
 
-    def get_tile_effect_class(self) -> Type[TileEffectCondition]:
-        return WebTileEffect
+    def _has_entry_effect(self) -> bool:
+        return True  # Triggers _create_zone_entry_handler
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+
+        def processor(event, _):
+            entity_uuid = getattr(event, 'entity_uuid', None)
+            entity = Entity.get(entity_uuid)
+            if not entity or entity.uuid == source_uuid:
+                return None
+            # Your effect logic here (e.g., save, damage, condition)
+            return None
+
+        return EventHandler(
+            name="My Zone Entry",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
 
 # In spell's _apply method:
-# 1. Create and apply zone to caster
-zone = WebZone(
+zone = MyZone(
     source_entity_uuid=caster.uuid,
     target_entity_uuid=caster.uuid,
-    zone_center=(5, 5)
+    zone_center=(5, 5),
+    spell_dc=caster.spell_save_dc()
 )
 caster.add_condition(zone)
 
-# 2. Create and apply concentration
+# Link to concentration for auto-cleanup
 concentration = Concentrating(
     source_entity_uuid=caster.uuid,
     target_entity_uuid=caster.uuid,
-    spell_name="Web"
+    spell_name="My Spell"
 )
 caster.add_condition(concentration)
-
-# 3. Link zone as external condition (automatic cleanup on concentration break)
 concentration.add_external_condition(caster.uuid, zone.uuid)
 ```
 
-### Entry Damage Tile Effect
+### Existing Zone Spell Examples
 
-```python
-from dnd.tile_conditions import TileEffectCondition
-from dnd.core.modifiers import DamageType
+See implemented spells for complete patterns:
 
-class FireTileEffect(TileEffectCondition):
-    name: str = "Fire"
-    description: str = "Burns entities that enter"
-    damage_on_entry_dice: str = "2d4"
-    damage_on_entry_type: DamageType = DamageType.FIRE
-
-# Apply to a tile
-tile = grid.get_tile(5, 5)
-effect = FireTileEffect(
-    source_entity_uuid=caster.uuid,
-    target_entity_uuid=tile.uuid
-)
-tile.add_condition(effect)
-
-# When entity enters tile (5,5), handler fires at EFFECT phase
-# Entity takes 2d4 fire damage automatically
-```
+| Spell | Pattern | Key Handlers |
+|-------|---------|--------------|
+| `SpikeGrowthZone` | Entry damage only | `_create_zone_entry_handler` |
+| `GreaseZone` | Entry + turn start save → Prone | Entry + turn start handlers |
+| `WebZone` | Entry save → WebRestrained | Entry handler, grants escape action |
+| `CloudkillZone` | Entry + turn start + auto-move | Entry + turn start + caster turn handler |
+| `SpiritGuardiansZone` | Entry + turn start + follow caster + exit cleanup | All four handler types |
 
 ---
 
 ## Test Coverage
 
-### Test File: `examples/test_terrain_movement_system.py`
+### Core Infrastructure: `examples/test_terrain_movement_system.py`
 
 All tests passing.
 
@@ -435,72 +564,190 @@ All tests passing.
 
 ---
 
+### Prone Auto-Stand: `examples/test_prone_auto_stand.py`
+
+| Test | Description |
+|------|-------------|
+| `test_prone_auto_stand` | Turn start removes Prone, deducts half movement |
+| `test_prone_not_auto_stand_on_other_turn` | Prone only removes on entity's own turn |
+| `test_stand_up_no_longer_registered` | StandUp action is not in available actions |
+| `test_prone_during_own_turn_with_movement` | Immediate stand when Prone applied during own turn |
+| `test_prone_during_own_turn_no_movement` | Stay Prone when no movement available |
+
+---
+
+### Zone Spell Tests
+
+#### `examples/test_spike_growth.py`
+
+| Test | Description |
+|------|-------------|
+| `test_spike_growth_zone_creation` | Zone created, caster concentrating |
+| `test_spike_growth_entry_damage` | 2d4 piercing on entry |
+| `test_spike_growth_difficult_terrain` | Tiles have walking cost 2 |
+| `test_spike_growth_concentration_break` | Zone removed when concentration breaks |
+
+#### `examples/test_grease.py`
+
+| Test | Description |
+|------|-------------|
+| `test_grease_zone_creation` | Zone created with difficult terrain |
+| `test_grease_entry_prone` | DEX save on entry, Prone on fail |
+| `test_grease_turn_start_prone` | DEX save at turn start, BG3 auto-stand |
+| `test_grease_turn_start_no_movement` | Stay Prone if no movement for auto-stand |
+| `test_grease_not_own_turn` | Stay Prone when knocked down outside turn |
+| `test_grease_concentration_break` | Zone removed, terrain restored |
+
+#### `examples/test_web.py`
+
+| Test | Description |
+|------|-------------|
+| `test_web_zone_creation` | Zone created with difficult terrain |
+| `test_web_entry_restrained` | DEX save on entry, Restrained on fail |
+| `test_web_escape_success` | Escape action STR check removes Restrained |
+| `test_web_escape_failure` | Failed STR check, still Restrained |
+| `test_web_concentration_break` | Zone removed, Restrained persists (spell-specific) |
+
+#### `examples/test_cloudkill.py`
+
+| Test | Description |
+|------|-------------|
+| `test_cloudkill_zone_creation` | Zone created at target position |
+| `test_cloudkill_entry_damage` | 5d8 poison on entry (CON save half) |
+| `test_cloudkill_turn_start_damage` | Damage on turn start in zone |
+| `test_cloudkill_auto_move` | Zone moves 10ft from caster at caster's turn |
+| `test_cloudkill_upcast` | +1d8 per level above 5th |
+| `test_cloudkill_concentration_break` | Zone removed when concentration breaks |
+
+#### `examples/test_spirit_guardians.py`
+
+| Test | Description |
+|------|-------------|
+| `test_spirit_guardians_zone_creation` | Zone created centered on caster |
+| `test_spirit_guardians_enemy_damage` | 3d8 radiant on enemy entry (WIS save half) |
+| `test_spirit_guardians_ally_safe` | Allies not affected |
+| `test_spirit_guardians_entry_damage` | Damage when enemy enters |
+| `test_spirit_guardians_once_per_turn` | Marker prevents repeat damage |
+| `test_spirit_guardians_follows_caster` | Zone center updates on caster move |
+| `test_spirit_guardians_speed_halved` | Enemy speed halved in zone |
+| `test_spirit_guardians_speed_restored` | Speed restored on exit |
+| `test_spirit_guardians_concentration_break` | Zone removed when concentration breaks |
+
+---
+
 ## Future Work
 
-### Priority 1: Extended TileEffectCondition Features
-
-Based on SRD spells, the infrastructure needs more than basic entry damage:
-
-#### 1a. Per-Movement Damage (Spike Growth)
-
-Spike Growth deals 2d4 per **5 feet traveled**, not per entry. Need:
-
-```python
-# New fields
-damage_per_5ft_dice: Optional[str] = None  # "2d4"
-damage_per_5ft_type: DamageType = DamageType.PIERCING
-```
-
-Implementation: Use `StepMovementEvent` instead of `SPATIAL_ENTITY_ENTERED`.
-
-#### 1b. Turn-End Handler (Grease)
-
-Grease triggers save on **ending turn** in the area.
-
-```python
-# New fields
-save_on_turn_end_ability: Optional[str] = None
-save_on_turn_end_dc: Optional[int] = None
-condition_on_turn_end_failed_save: Optional[str] = None  # "Prone"
-```
-
-Implementation: Add `_create_turn_end_handler()` listening for `TURN_END`.
-
-#### 1c. Save + Condition on Entry/Turn Start (Web, Grease)
-
-```python
-# New fields
-save_on_entry_ability: Optional[str] = None  # "dexterity"
-save_on_entry_dc: Optional[int] = None
-condition_on_entry_failed_save: Optional[str] = None  # "Restrained"
-```
-
-#### 1d. Escape Action Grant (Web)
-
-Web-restrained creatures can use action to escape. Need "Break Free" action template.
-
-### Priority 2: Zone Spell Implementations
-
-| Spell | Level | Key Features | Infrastructure Needed |
-|-------|-------|--------------|----------------------|
-| **Spike Growth** | 2nd | 2d4 per 5ft traveled, no save | Per-5ft-movement damage |
-| **Grease** | 1st | DEX save → Prone on entry/turn end | Turn-end handler, Prone |
-| **Web** | 2nd | DEX save → Restrained, escape action | Restrained, action grant |
-
-**Skipped** (needs vision/light system):
-- Fog Cloud - Needs obscurement affecting FOV
-- Darkness - Needs light system
-
-**Deferred** (movement-following zones):
-- Spirit Guardians - Zone moves with caster
-- Cloudkill - Moving zone
-
-### Priority 3: Vision/Light System (Deferred)
+### Priority 1: Vision/Light System
 
 Requires significant refactoring:
 - Connect `heavily_obscured` / `lightly_obscured` to FOV calculations
-- Light source system
-- Darkvision, Blindsight, etc.
+- Light source system (torches, lanterns, light spell)
+- Darkvision, Blindsight, Truesight, Devil's Sight
+- Zone spells needing this: **Fog Cloud**, **Darkness**
+
+### Priority 2: Cover System
+
+- Half cover (+2 AC, +2 DEX saves)
+- Three-quarters cover (+5 AC, +5 DEX saves)
+- Full cover (can't be targeted)
+- Cover detection from obstacles/creatures
+
+### Priority 3: Entity Movement Modes
+
+Currently all entities use WALKING mode. Need:
+- `fly_speed` on Entity
+- `swim_speed` on Entity
+- Movement mode selection in Move action
+- Hover vs regular flying (falling when incapacitated)
+
+### Priority 4: Additional Zone Spells
+
+**Blocked by vision/light system**:
+- Fog Cloud (heavily obscures, no damage)
+- Darkness (heavily obscures, magical darkness)
+
+**Other potential spells**:
+- Wall of Fire (line/ring shape, one-sided damage)
+- Entangle (difficult terrain + restrained, plant-based)
+- Moonbeam (damage + shapechange save)
+
+---
+
+## Implemented Zone Spells Reference
+
+### Spike Growth (2nd level, Transmutation)
+
+**File**: `dnd/spells/transmutation.py`
+
+| Property | Value |
+|----------|-------|
+| Range | 150ft |
+| Zone | 20ft radius sphere |
+| Duration | Concentration, up to 10 minutes |
+| Terrain | Difficult terrain (+1 walking cost) |
+| Effect | 2d4 piercing on entry (no save) |
+| Notes | Caster is immune. Camouflaged (WIS Perception DC = spell DC to notice - not implemented). |
+
+### Grease (1st level, Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+| Property | Value |
+|----------|-------|
+| Range | 60ft |
+| Zone | 10ft cube |
+| Duration | Concentration (BG3-style for cleanup) |
+| Terrain | Difficult terrain |
+| Effect | DEX save on entry/turn start or Prone |
+| Notes | Creatures in zone on cast also save. Uses BG3 auto-stand. |
+
+### Web (2nd level, Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+| Property | Value |
+|----------|-------|
+| Range | 60ft |
+| Zone | 20ft cube |
+| Duration | Concentration, up to 1 hour |
+| Terrain | Difficult terrain |
+| Effect | DEX save on entry or Restrained |
+| Escape | Action + STR (Athletics) check vs spell DC |
+| Notes | `WebRestrained` applies Restrained sub-condition + grants `EscapeWebAction`. |
+
+### Cloudkill (5th level, Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+| Property | Value |
+|----------|-------|
+| Range | 120ft |
+| Zone | 20ft radius sphere |
+| Duration | Concentration, up to 10 minutes |
+| Terrain | Heavily obscured (not connected to FOV yet) |
+| Effect | 5d8 poison on entry/turn start (CON save for half) |
+| Movement | Zone moves 10ft away from caster at caster's turn start |
+| Upcast | +1d8 per level above 5th |
+| Notes | Affects everyone including caster. Uses `move_zone()` for efficient movement. |
+
+### Spirit Guardians (3rd level, Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+| Property | Value |
+|----------|-------|
+| Range | Self |
+| Zone | 15ft radius sphere centered on caster |
+| Duration | Concentration, up to 10 minutes |
+| Effect | Enemies: 3d8 radiant (WIS save for half), speed halved |
+| Movement | Zone follows caster automatically |
+| Once per turn | Marker condition prevents multiple damage |
+| Upcast | +1d8 per level above 3rd |
+| Notes | Allies unaffected. Uses faction system (`is_ally()`). Exit removes speed debuff. |
+
+**Helper Conditions**:
+- `SpiritGuardiansTriggered` - Marker removed at target's turn end
+- `SpiritGuardiansSlowed` - Speed halving, removed on zone exit
 
 ---
 
@@ -509,4 +756,5 @@ Requires significant refactoring:
 - `CLAUDE.md` - Main codebase guide
 - `IMPLEMENTATION_GUIDE.md` - How to implement conditions and event handlers
 - `AOE_TARGETING_REFERENCE.md` - AoE shape calculations
+- `ZONE_SPELLS_IMPLEMENTATION_PLAN.md` - Original planning document for zone spells
 - `TERRAIN_AND_3D_PLAN.md` - Original terrain planning document (historical)
