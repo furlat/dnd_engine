@@ -207,17 +207,9 @@ class BaseCondition(BaseObject):
         #then apply the condition
         modifers_uuids, event_handlers_uuids, sub_conditions_uuids, spatial_handler_uuids, effect_event = self._apply(declaration_event)
 
-        # Check if condition actually did something - must have effect_event AND at least one of:
-        # modifiers, event_handlers, sub_conditions, spatial_handlers, or terrain_conditions (for zone spells)
-        has_effects = (
-            len(modifers_uuids) > 0 or
-            len(event_handlers_uuids) > 0 or
-            len(sub_conditions_uuids) > 0 or
-            len(spatial_handler_uuids) > 0 or
-            len(self.terrain_conditions) > 0
-        )
-        if not effect_event or not has_effects:
-            return declaration_event.cancel(status_message=f"Condition {self.name} was not applied for some unknown reason, check the implementaiton of _apply method")
+        # Check if _apply returned an effect event (marker conditions are valid even without modifiers)
+        if not effect_event:
+            return declaration_event.cancel(status_message=f"Condition {self.name} was not applied - _apply() returned no effect event")
 
 
         for block_uuid, modifiers_uuids in modifers_uuids:

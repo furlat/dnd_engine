@@ -70,6 +70,54 @@ def setup_standard_actions(entity: 'Entity') -> None:
     entity.add_event_handler(create_has_attacked_handler(entity.uuid))
     entity.add_event_handler(create_has_taken_damage_handler(entity.uuid))
 
+    # Register Prone auto-stand handler (BG3 style - always present, fires at turn start)
+    entity.add_event_handler(_create_prone_auto_stand_handler(entity.uuid))
+
+
+def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
+    """Create handler to auto-stand at turn start (BG3 style).
+
+    This handler is always registered (via setup_standard_actions) and checks
+    at turn start if the entity has Prone. If so, it consumes half movement
+    and removes the Prone condition.
+
+    Args:
+        entity_uuid: The entity this handler is for
+
+    Returns:
+        EventHandler that processes TURN_START at EFFECT phase
+    """
+    def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+        # Only process this entity's turn start
+        if event.source_entity_uuid != entity_uuid:
+            return None
+
+        entity = Entity.get(entity_uuid)
+        if not entity:
+            return None
+
+        # Check if prone
+        if "Prone" not in entity.active_conditions:
+            return None
+
+        # Deduct half movement and remove Prone
+        base_movement = entity.action_economy.get_base_value("movement")
+        half_movement = base_movement // 2
+        entity.action_economy.consume("movement", half_movement)
+        entity.remove_condition("Prone")
+        return None
+
+    return EventHandler(
+        name="Prone Auto-Stand",
+        source_entity_uuid=entity_uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.TURN_START,
+            event_phase=EventPhase.EFFECT,  # After zone effects (Grease at EXECUTION) apply prone
+            event_source_entity_uuid=entity_uuid
+        )],
+        event_processor=processor
+    )
+
 
 def _setup_weapon_event_handlers(entity: 'Entity') -> None:
     """Set up event handlers to auto-update attack templates on weapon changes.

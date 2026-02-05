@@ -778,9 +778,9 @@ class PowerWordKill(SpellAction):
             # Instant death - deal massive damage to ensure death
             # Using 99999 to guarantee death even with resistances
             from dnd.core.modifiers import DamageType
-            target.health.take_damage(
-                99999,
-                DamageType.FORCE,  # Force damage can't be resisted
+            target.receive_damage(
+                amount=99999,
+                damage_type=DamageType.FORCE,  # Force damage can't be resisted
                 source_entity_uuid=caster.uuid
             )
             return effect_event.phase_to(

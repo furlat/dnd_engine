@@ -362,9 +362,6 @@ class Entity(BaseBlock):
         Returns:
             TurnStartEvent after all phases complete
         """
-        # Set turn flag (cleared in on_turn_end)
-        self.is_my_turn = True
-
         # Create event at DECLARATION phase
         event = TurnStartEvent(
             source_entity_uuid=self.uuid,
@@ -377,7 +374,7 @@ class Entity(BaseBlock):
             phase=EventPhase.DECLARATION
         )
 
-        # Advance to EXECUTION - handlers like Survivor trigger here
+        # Advance to EXECUTION - handlers like Survivor, Grease turn start trigger here
         event = event.phase_to(EventPhase.EXECUTION)
 
         # Advance condition durations (at start of turn per SRD)
@@ -389,6 +386,10 @@ class Entity(BaseBlock):
         # Reset action economy
         self.action_economy.reset_all_costs()
         self.action_economy.on_turn_start()  # Recharge TURN_START resources
+
+        # Set turn flag AFTER action economy reset (cleared in on_turn_end)
+        # This ensures is_my_turn is only True when entity has full action economy
+        self.is_my_turn = True
 
         # Get current action economy values for event
         actions = self.action_economy.actions.normalized_score
