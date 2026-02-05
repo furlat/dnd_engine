@@ -126,28 +126,29 @@ def test_thunderwave_full_damage_and_push_on_failed_save():
     assert result is not None and not result.canceled, f"Thunderwave failed: {result.status_message if result else 'None'}"
     assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target = result.target_results[0] if result.target_results else result
-    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
+    # Verify via combat log
+    assert result.combat_log is not None, "Should have combat_log"
+    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+    log_data = result.combat_log.sub_entries[0].data
 
     # Verify save failed
-    assert per_target.save_success == False, "Target with CON 1 should fail save"
+    assert log_data.get('save_success') == False, "Target with CON 1 should fail save"
 
     # Full damage (not halved)
-    assert per_target.damage_rolls is not None, "Should have damage_rolls"
-    rolled_damage = sum(r.total for r in per_target.damage_rolls)
-    assert per_target.total_damage == rolled_damage, \
-        f"Should be full damage, got {per_target.total_damage} vs rolled {rolled_damage}"
+    base_damage = log_data.get('base_damage', 0)
+    final_damage = log_data.get('final_damage', 0)
+    assert final_damage == base_damage, \
+        f"Should be full damage, got {final_damage} vs rolled {base_damage}"
 
     # Should have been pushed
     final_pos = get_position(target)
     assert final_pos != initial_pos, "Target should have been pushed"
     # Push should be away from caster (eastward), 10ft = 2 tiles
-    _expected_push_x = initial_pos[0] + 2  # 2 tiles east
     # Allow for diagonal push or partial movement
     assert final_pos[0] >= initial_pos[0], "Target should move away from caster (east)"
 
     print(f"  Save failed as expected")
-    print(f"  Full damage: {per_target.total_damage}")
+    print(f"  Full damage: {final_damage}")
     print(f"  Position: {initial_pos} -> {final_pos} (pushed)")
     print("PASS: Full damage and push on failed CON save")
 
@@ -181,24 +182,27 @@ def test_thunderwave_half_damage_no_push_on_passed_save():
     assert result is not None and not result.canceled
     assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target = result.target_results[0] if result.target_results else result
-    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
+    # Verify via combat log
+    assert result.combat_log is not None, "Should have combat_log"
+    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+    log_data = result.combat_log.sub_entries[0].data
 
     # Verify save succeeded
-    assert per_target.save_success == True, "Target with CON 30 should always save"
+    assert log_data.get('save_success') == True, "Target with CON 30 should always save"
 
     # Half damage
-    rolled_damage = sum(r.total for r in per_target.damage_rolls) if per_target.damage_rolls else 0
-    expected_damage = rolled_damage // 2
-    assert per_target.total_damage == expected_damage, \
-        f"Should be half damage: {rolled_damage}//2={expected_damage}, got {per_target.total_damage}"
+    base_damage = log_data.get('base_damage', 0)
+    final_damage = log_data.get('final_damage', 0)
+    expected_damage = base_damage // 2
+    assert final_damage == expected_damage, \
+        f"Should be half damage: {base_damage}//2={expected_damage}, got {final_damage}"
 
     # Should NOT have been pushed
     final_pos = get_position(target)
     assert final_pos == initial_pos, f"Target should NOT have been pushed, but moved from {initial_pos} to {final_pos}"
 
     print(f"  Save passed as expected")
-    print(f"  Half damage: {per_target.total_damage} (rolled {rolled_damage})")
+    print(f"  Half damage: {final_damage} (rolled {base_damage})")
     print(f"  Position: {initial_pos} -> {final_pos} (unchanged)")
     print("PASS: Half damage and no push on passed CON save")
 
@@ -429,12 +433,14 @@ def test_thunderwave_multiple_targets_mixed_saves():
     print(f"  Weak (CON 1): {weak_initial_pos} -> {weak_final_pos}")
     print(f"  Tough (CON 30): {tough_initial_pos} -> {tough_final_pos}")
 
-    # Check saves from target_results
-    if isinstance(result, SpellEvent) and result.target_results:
-        for tr in result.target_results:
-            if tr.status_message and "Weak" in tr.status_message:
+    # Check saves from combat log sub_entries
+    if isinstance(result, SpellEvent) and result.combat_log and result.combat_log.sub_entries:
+        for sub in result.combat_log.sub_entries:
+            target_name = sub.data.get('target_name', '')
+            save_success = sub.data.get('save_success', False)
+            if "Weak" in target_name:
                 # Weak should fail and be pushed
-                if "saved" not in tr.status_message.lower():
+                if not save_success:
                     if weak_final_pos == weak_initial_pos:
                         # Might have been blocked by tough target in path
                         print("  Weak target not pushed (possibly blocked by Tough)")
@@ -442,9 +448,9 @@ def test_thunderwave_multiple_targets_mixed_saves():
                         print(f"  Weak target pushed correctly")
                 else:
                     print(f"  Weak target unexpectedly saved")
-            if tr.status_message and "Tough" in tr.status_message:
+            if "Tough" in target_name:
                 # Tough should save and NOT be pushed
-                if "saved" in tr.status_message.lower():
+                if save_success:
                     assert tough_final_pos == tough_initial_pos, "Tough target should NOT move after saving"
                     print(f"  Tough target saved, not pushed")
 
@@ -478,9 +484,9 @@ def test_thunderwave_statistical_saves():
         )
 
         result = thunderwave.apply()
-        if result and not result.canceled and isinstance(result, SpellEvent):
-            per_target = result.target_results[0] if result.target_results else result
-            if isinstance(per_target, SpellEvent) and per_target.save_success:
+        if result and not result.canceled and isinstance(result, SpellEvent) and result.combat_log:
+            sub_entries = result.combat_log.sub_entries
+            if sub_entries and sub_entries[0].data.get('save_success'):
                 successes += 1
             else:
                 failures += 1

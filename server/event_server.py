@@ -40,6 +40,8 @@ from dnd.actions_functional import get_available_actions, execute_action, execut
 from dnd.actions import MovementEvent, JumpEvent
 from dnd.core.base_actions import TargetType, AvailableTarget
 from dnd.reactions import add_opportunity_attack_handler
+from dnd.tiles import create_spike_zone
+from dnd.core.base_tiles import difficult_terrain_factory
 
 from server.api_models import (
     APIEntitySummary, APIEntityFull, APIGrid, APIEncounter,
@@ -53,33 +55,6 @@ from server.session import (
     SessionManager, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
 )
-
-
-def add_event_to_combat_log(sim_state: "SimulationState", event: Event, entry_type_override: Optional[str] = None) -> Optional[int]:
-    """Add event's combat log entry to encounter's combat log.
-
-    Uses event.combat_log if available (auto-generated at COMPLETION phase).
-    Returns the log entry index, or None if no log entry was created.
-
-    Args:
-        sim_state: The SimulationState (used to access encounter).
-        event: The event containing the combat log.
-        entry_type_override: Unused, kept for backward compatibility.
-
-    Returns:
-        Log entry index if successful, None otherwise.
-    """
-    # entry_type_override is kept for backward compatibility but not used
-    del entry_type_override
-
-    if event.combat_log is None:
-        return None
-
-    # Use encounter's combat log directly
-    if sim_state.encounter:
-        return sim_state.encounter.add_event_to_combat_log(event)
-
-    return None
 
 
 class EventMonitor:
@@ -274,6 +249,28 @@ def setup_arena_combat(
         grid.set_tile(x, 3, walkable=False, visible=True, name="Water")
     # The island is at (0,0), (0,1), (0,2), (1,0), (1,1), (1,2) - floor tiles
     # Now isolated by water - reachable only by Jump (LOS passes through water)
+
+    # ADD: Spike zone in bottom-left corner (opposite the water island)
+    # x: 0-4, y: 11-14 (5x4 = 20 tiles, ONE handler)
+    spike_positions = {(x, y) for x in range(5) for y in range(11, 15)}
+    spike_tiles, _ = create_spike_zone(spike_positions)
+    for tile in spike_tiles:
+        grid._tiles[tile.position] = tile
+        grid._tiles_by_uuid[tile.uuid] = tile.position
+
+    # ADD: Difficult terrain at wall ends (3x3 zones)
+    # Top of wall: x: 6-8, y: 0-2
+    for x in range(6, 9):
+        for y in range(0, 3):
+            tile = difficult_terrain_factory((x, y))
+            grid._tiles[tile.position] = tile
+            grid._tiles_by_uuid[tile.uuid] = tile.position
+    # Bottom of wall: x: 6-8, y: 12-14
+    for x in range(6, 9):
+        for y in range(12, 15):
+            tile = difficult_terrain_factory((x, y))
+            grid._tiles[tile.position] = tile
+            grid._tiles_by_uuid[tile.uuid] = tile.position
 
     # Create Hero based on character class
     if character_class == "barbarian":
@@ -669,6 +666,48 @@ async def get_entity(entity_uuid: str):
 async def get_grid():
     """Get grid/map data."""
     return APIGrid.create(get_map())
+
+
+@app.get("/tile/{x}/{y}")
+async def get_tile_info(x: int, y: int):
+    """
+    Get detailed information about a specific tile.
+
+    Returns tile data including conditions, handlers, and entities at position.
+    """
+    grid = get_map()
+    tile = grid.get_tile(x, y)
+
+    if not tile:
+        raise HTTPException(status_code=404, detail=f"No tile at ({x}, {y})")
+
+    # Get entities at this position
+    entity_uuids = grid.get_entities_at((x, y))
+    entities_at = []
+    for uuid in entity_uuids:
+        entity = Entity.get(uuid)
+        if entity:
+            entities_at.append({
+                "uuid": str(entity.uuid),
+                "name": entity.name,
+                "hp": entity.get_hp(),
+                "is_dead": entity.get_hp() <= 0
+            })
+
+    # Get handler names
+    handler_names = [h.name for h in tile.event_handlers.values()] if hasattr(tile, 'event_handlers') else []
+
+    return {
+        "position": (x, y),
+        "name": tile.name,
+        "walkable": tile.walkable,
+        "visible": tile.visible,
+        "walking_cost": int(tile.walking_cost.normalized_score) if hasattr(tile, 'walking_cost') else 1,
+        "conditions": list(tile.active_conditions.keys()) if hasattr(tile, 'active_conditions') else [],
+        "handlers": handler_names,
+        "entities": entities_at,
+        "height": tile.height if hasattr(tile, 'height') else 0
+    }
 
 
 @app.get("/encounter")
@@ -1275,12 +1314,9 @@ async def execute_self_action(request: SelfActionRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Collect combat log entries
+    # Collect combat log entries (callback adds to encounter.combat_log automatically)
     action_log_entries: list = []
-
-    # Add to combat log using event.combat_log
     if event and event.combat_log:
-        add_event_to_combat_log(sim, event)
         action_log_entries.append(event.combat_log.to_dict())
 
     return ActionResult(
@@ -1337,23 +1373,21 @@ async def execute_entity_action(request: EntityActionRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
-    # Collect combat log entries
+    # Collect combat log entries (callback adds to encounter.combat_log automatically)
     action_log_entries: list = []
 
     # Build event data for attacks using event.combat_log
     event_data = None
     if event and hasattr(event, 'attack_outcome') and event.combat_log:
-        add_event_to_combat_log(sim, event)
         action_log_entries.append(event.combat_log.to_dict())
         # Pass through the full combat log data - CLI now supports new structure
         event_data = dict(event.combat_log.data)
         # Add target_hp for ActionResult
         event_data["target_hp"] = target.get_hp()
 
-    # Log death events to encounter's combat log
+    # Death events are added to encounter.combat_log by callback
     for death_event in deaths:
-        if sim.encounter and death_event.combat_log:
-            sim.encounter.add_event_to_combat_log(death_event)
+        if death_event.combat_log:
             action_log_entries.append(death_event.combat_log.to_dict())
 
     return ActionResult(
@@ -1364,7 +1398,7 @@ async def execute_entity_action(request: EntityActionRequest):
         entity_hp=entity.get_hp(),
         target_hp=target.get_hp(),
         deaths=death_names,
-        turn_continues=not encounter_ended,
+        turn_continues=not encounter_ended and entity.get_hp() > 0,
         encounter_ended=encounter_ended,
         combat_log_entries=action_log_entries
     )
@@ -1390,21 +1424,8 @@ async def execute_position_action(request: PositionActionRequest):
             detail=f"Action {request.action_name} is not a position action (is {template.target_type.value})"
         )
 
-    # Track opportunity attacks triggered by movement
-    captured_oa_events: list = []  # Store events for combat_log usage
-
-    def capture_opportunity_attack(event: Event) -> None:
-        """Capture attack events targeting the moving entity (opportunity attacks)."""
-        if event.phase != EventPhase.COMPLETION:
-            return
-
-        event_type = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
-
-        if event_type == "attack" and event.target_entity_uuid == entity.uuid:
-            captured_oa_events.append(event)  # Store event for combat_log
-
-    # Register callback before move
-    EventQueue.add_on_event_callback(capture_opportunity_attack)
+    # Track combat log length before action to capture all new entries
+    log_start_index = len(sim.encounter.combat_log) if sim.encounter else 0
 
     try:
         # Execute via functional API
@@ -1412,10 +1433,7 @@ async def execute_position_action(request: PositionActionRequest):
         action_target = AvailableTarget(index=0, position=pos)
         event = execute_action(entity, request.action_name, action_target)
     except ValueError as e:
-        EventQueue.remove_on_event_callback(capture_opportunity_attack)
         raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        EventQueue.remove_on_event_callback(capture_opportunity_attack)
 
     # Check for deaths
     deaths = sim.encounter.check_deaths() if sim.encounter else []
@@ -1424,19 +1442,10 @@ async def execute_position_action(request: PositionActionRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
-    # Collect combat log entries
-    action_log_entries: list = []
-
-    # Extract event data
+    # Extract event data for movement/jump (callback adds to encounter.combat_log automatically)
     event_data = None
-    triggered_reactions: list = []
-
     if isinstance(event, (MovementEvent, JumpEvent)):
-        # Log move/jump using event.combat_log
         if event.combat_log:
-            add_event_to_combat_log(sim, event)
-            action_log_entries.append(event.combat_log.to_dict())
-            # Pass through the full combat log data
             event_data = dict(event.combat_log.data)
         else:
             # Fallback if no combat_log (shouldn't happen)
@@ -1446,42 +1455,32 @@ async def execute_position_action(request: PositionActionRequest):
                 "end_position": list(event.end_position),
                 "path": [list(p) for p in event.path] if event.path else []
             }
+    elif template.target_type == TargetType.POSITION_AOE and event:
+        # AoE spell - extract event data (callback adds to combat_log automatically)
+        if event.combat_log:
+            event_data = dict(event.combat_log.data)
+        # Per-target logs are also added by callback via parent_event linkage
 
-        # Log opportunity attacks using event.combat_log
-        for oa_event in captured_oa_events:
-            if oa_event.combat_log:
-                add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
-                # Add to combat_log_entries with type override
-                entry_dict = oa_event.combat_log.to_dict()
-                entry_dict["entry_type"] = "opportunity_attack"
-                action_log_entries.append(entry_dict)
-                # Pass through full combat log data - CLI now supports new structure
-                oa_data = dict(oa_event.combat_log.data)
+    # Death events are added to encounter.combat_log by callback
+
+    # Collect ALL new combat log entries since action started (includes terrain damage, OAs, deaths)
+    action_log_entries: list = []
+    triggered_reactions: list = []
+    if sim.encounter:
+        new_entries = sim.encounter.combat_log[log_start_index:]
+        for entry in new_entries:
+            entry_dict = entry.to_dict()
+            action_log_entries.append(entry_dict)
+            # Identify opportunity attacks (attack entries targeting the mover)
+            if entry.entry_type.value == "attack" and entry.target_uuid and str(entry.target_uuid) == str(entity.uuid):
+                oa_data = dict(entry.data)
                 oa_data["type"] = "opportunity_attack"
                 oa_data["is_opportunity_attack"] = True
                 triggered_reactions.append(oa_data)
 
-    elif template.target_type == TargetType.POSITION_AOE and event:
-        # AoE spell - log aggregate combat log
-        if event.combat_log:
-            add_event_to_combat_log(sim, event)
-            action_log_entries.append(event.combat_log.to_dict())
-            event_data = dict(event.combat_log.data)
-
-        # Also add per-target logs for detailed display
-        target_results = getattr(event, 'target_results', None)
-        if target_results:
-            for tr in target_results:
-                combat_log = getattr(tr, 'combat_log', None)
-                if combat_log:
-                    add_event_to_combat_log(sim, tr)
-                    action_log_entries.append(combat_log.to_dict())
-
-    # Log death events
-    for death_event in deaths:
-        if sim.encounter and death_event.combat_log:
-            sim.encounter.add_event_to_combat_log(death_event)
-            action_log_entries.append(death_event.combat_log.to_dict())
+    # Fallback: if no entries from combat_log, add primary event directly
+    if not action_log_entries and event and event.combat_log:
+        action_log_entries.append(event.combat_log.to_dict())
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1491,7 +1490,7 @@ async def execute_position_action(request: PositionActionRequest):
         entity_hp=entity.get_hp(),
         deaths=death_names,
         triggered_reactions=triggered_reactions,
-        turn_continues=not encounter_ended,
+        turn_continues=not encounter_ended and entity.get_hp() > 0,
         encounter_ended=encounter_ended,
         combat_log_entries=action_log_entries
     )
@@ -1510,19 +1509,8 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     if template is None:
         raise HTTPException(status_code=400, detail=f"Unknown action: {request.template_name}")
 
-    # For POSITION actions (Move), need to capture opportunity attacks
-    captured_oa_events: list = []  # Store events for combat_log usage
-
-    def capture_opportunity_attack(event: Event) -> None:
-        if event.phase != EventPhase.COMPLETION:
-            return
-        event_type = event.event_type.value if hasattr(event.event_type, 'value') else str(event.event_type)
-        if event_type == "attack" and event.target_entity_uuid == entity.uuid:
-            captured_oa_events.append(event)  # Store event for combat_log
-
-    # Register callback if this might trigger OAs (position-based movement actions)
-    if template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
-        EventQueue.add_on_event_callback(capture_opportunity_attack)
+    # Track combat log length before action to capture all new entries
+    log_start_index = len(sim.encounter.combat_log) if sim.encounter else 0
 
     try:
         event = execute_by_index(
@@ -1532,12 +1520,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
             extra_target_uuids=request.extra_target_uuids
         )
     except ValueError as e:
-        if template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
-            EventQueue.remove_on_event_callback(capture_opportunity_attack)
         raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        if template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
-            EventQueue.remove_on_event_callback(capture_opportunity_attack)
 
     # Check for deaths
     deaths = sim.encounter.check_deaths() if sim.encounter else []
@@ -1546,21 +1529,14 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
-    # Collect combat log entries
-    action_log_entries: list = []
-
-    # Build response based on action type
+    # Extract event_data and add main event to combat log
     event_data = None
     target_hp = None
 
-    triggered_reactions: list = []
-
+    # Extract event_data for response (callback adds to encounter.combat_log automatically)
     if template.target_type == TargetType.ENTITY and event and event.combat_log:
         # Entity-targeting actions (attacks, shove, grapple, etc.)
-        add_event_to_combat_log(sim, event)
-        action_log_entries.append(event.combat_log.to_dict())
         event_data = dict(event.combat_log.data)
-
         # Add target HP for attacks
         if hasattr(event, 'attack_outcome'):
             target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
@@ -1568,14 +1544,11 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
             event_data["target_hp"] = target_hp
 
     elif template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
-        # Movement actions (Move, Jump) - both have start_position, end_position, path
+        # Movement actions (Move, Jump)
         if event and isinstance(event, (MovementEvent, JumpEvent)):
             if event.combat_log:
-                add_event_to_combat_log(sim, event)
-                action_log_entries.append(event.combat_log.to_dict())
                 event_data = dict(event.combat_log.data)
             else:
-                # Fallback if no combat_log
                 event_data = {
                     "entity_name": entity.name,
                     "start_position": list(event.start_position),
@@ -1583,70 +1556,48 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
                     "path": [list(p) for p in event.path] if event.path else []
                 }
 
-            # Log opportunity attacks using event.combat_log
-            for oa_event in captured_oa_events:
-                if oa_event.combat_log:
-                    add_event_to_combat_log(sim, oa_event, entry_type_override="opportunity_attack")
-                    # Add to combat_log_entries with type override
-                    entry_dict = oa_event.combat_log.to_dict()
-                    entry_dict["entry_type"] = "opportunity_attack"
-                    action_log_entries.append(entry_dict)
-                    # Pass through full combat log data - CLI now supports new structure
-                    oa_data = dict(oa_event.combat_log.data)
-                    oa_data["type"] = "opportunity_attack"
-                    oa_data["is_opportunity_attack"] = True
-                    triggered_reactions.append(oa_data)
-
     elif template.target_type == TargetType.POSITION_AOE:
         # AoE spells (Fireball, Lightning Bolt, etc.)
-        # Add aggregate summary log first
         if event and event.combat_log:
-            add_event_to_combat_log(sim, event)
-            action_log_entries.append(event.combat_log.to_dict())
             event_data = dict(event.combat_log.data)
-
-        # Add per-target logs with full details (save rolls, damage dice)
-        target_results = getattr(event, 'target_results', None)
-        if target_results:
-            for tr in target_results:
-                combat_log = getattr(tr, 'combat_log', None)
-                if combat_log:
-                    action_log_entries.append(combat_log.to_dict())
+        # Per-target logs are added by callback via parent_event linkage
 
     elif template.target_type == TargetType.MULTI_ENTITY:
         # Multi-target spells (Magic Missile)
-        # Add aggregate summary log first
         if event and event.combat_log:
-            add_event_to_combat_log(sim, event)
-            action_log_entries.append(event.combat_log.to_dict())
             event_data = dict(event.combat_log.data)
-
-        # Add per-target logs with full details
-        target_results = getattr(event, 'target_results', None)
-        if target_results:
-            for tr in target_results:
-                combat_log = getattr(tr, 'combat_log', None)
-                if combat_log:
-                    action_log_entries.append(combat_log.to_dict())
+        # Per-target logs are added by callback via parent_event linkage
 
     elif template.target_type == TargetType.SELF:
-        # Self action - use event.combat_log
+        # Self action
         if event and event.combat_log:
-            add_event_to_combat_log(sim, event)
-            action_log_entries.append(event.combat_log.to_dict())
             event_data = dict(event.combat_log.data)
         elif event:
-            # Fallback if no combat_log
             event_data = {
                 "entity_name": entity.name,
                 "action_name": request.template_name,
             }
 
-    # Log deaths to encounter's combat log
-    for death_event in deaths:
-        if sim.encounter and death_event.combat_log:
-            sim.encounter.add_event_to_combat_log(death_event)
-            action_log_entries.append(death_event.combat_log.to_dict())
+    # Death events are added to encounter.combat_log by callback
+
+    # Collect ALL new combat log entries since action started (includes terrain damage, OAs, deaths)
+    action_log_entries: list = []
+    triggered_reactions: list = []
+    if sim.encounter:
+        new_entries = sim.encounter.combat_log[log_start_index:]
+        for entry in new_entries:
+            entry_dict = entry.to_dict()
+            action_log_entries.append(entry_dict)
+            # Identify opportunity attacks (attack entries targeting the mover)
+            if entry.entry_type.value == "attack" and entry.target_uuid and str(entry.target_uuid) == str(entity.uuid):
+                oa_data = dict(entry.data)
+                oa_data["type"] = "opportunity_attack"
+                oa_data["is_opportunity_attack"] = True
+                triggered_reactions.append(oa_data)
+
+    # Fallback: if no entries from combat_log, add primary event directly
+    if not action_log_entries and event and event.combat_log:
+        action_log_entries.append(event.combat_log.to_dict())
 
     return ActionResult(
         success=not event.canceled if event else False,
@@ -1657,7 +1608,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         target_hp=target_hp,
         deaths=death_names,
         triggered_reactions=triggered_reactions,
-        turn_continues=not encounter_ended,
+        turn_continues=not encounter_ended and entity.get_hp() > 0,
         encounter_ended=encounter_ended,
         combat_log_entries=action_log_entries
     )

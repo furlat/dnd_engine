@@ -158,22 +158,23 @@ def test_fireball_dex_save_half_damage():
     assert result is not None and not result.canceled
     assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    # Get the per-target result (convolution creates target_results)
-    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
-    per_target = result.target_results[0]
-    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
+    # Verify via combat log - per-target data is in sub_entries
+    assert result.combat_log is not None, "Should have combat_log"
+    assert len(result.combat_log.sub_entries) == 1, "Should have 1 target in sub_entries"
+
+    per_target_log = result.combat_log.sub_entries[0]
+    log_data = per_target_log.data
 
     # Check save succeeded
-    assert per_target.save_success == True, "Target with DEX 30 should always save vs DC 11"
+    assert log_data.get('save_success') == True, "Target with DEX 30 should always save vs DC 11"
 
-    # Damage should be halved - verify from the rolled damage vs applied
-    assert per_target.damage_rolls is not None, "Should have damage_rolls"
-    rolled_damage = sum(r.total for r in per_target.damage_rolls)
-    applied_damage = per_target.total_damage
+    # Damage should be halved - verify from the log data
+    base_damage = log_data.get('base_damage', 0)
+    final_damage = log_data.get('final_damage', 0)
 
-    assert applied_damage == rolled_damage // 2, f"Expected half damage: {rolled_damage}//2={rolled_damage//2}, got {applied_damage}"
+    assert final_damage == base_damage // 2, f"Expected half damage: {base_damage}//2={base_damage//2}, got {final_damage}"
 
-    print(f"  Rolled: {rolled_damage}, Applied (halved): {applied_damage}")
+    print(f"  Rolled: {base_damage}, Applied (halved): {final_damage}")
     print("PASS: DEX save halves damage")
 
 
@@ -408,18 +409,18 @@ def test_fireball_multiple_targets():
     assert get_hp(enemy2) < 50, "Enemy2 should be damaged"
     assert get_hp(enemy3) < 50, "Enemy3 should be damaged"
 
-    # target_results should have 3 entries
-    assert result.target_results is not None, "Should have target_results"
-    assert len(result.target_results) == 3, f"Should have 3 results, got {len(result.target_results)}"
+    # Combat log should have 3 sub_entries (one per target)
+    assert result.combat_log is not None, "Should have combat_log"
+    assert len(result.combat_log.sub_entries) == 3, f"Should have 3 sub_entries, got {len(result.combat_log.sub_entries)}"
 
-    # Sum of individual damages should equal total_damage
-    sum_individual = sum(r.total_damage for r in result.target_results if isinstance(r, SpellEvent))
+    # Sum of individual damages from log should equal total_damage
+    individual_damages = [entry.data.get('final_damage', 0) for entry in result.combat_log.sub_entries]
+    sum_individual = sum(individual_damages)
     assert sum_individual == result.total_damage, \
         f"Sum of individual ({sum_individual}) should equal total ({result.total_damage})"
 
     print(f"  Targets hit: {result.total_targets}")
     print(f"  Total damage: {result.total_damage}")
-    individual_damages = [r.total_damage for r in result.target_results if isinstance(r, SpellEvent)]
     print(f"  Individual results: {individual_damages}")
     print("PASS: Multiple targets aggregation works")
 

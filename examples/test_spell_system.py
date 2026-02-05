@@ -736,7 +736,7 @@ def test_magic_missile_combat():
     assert not result_l1.canceled, "Magic Missile should not be canceled"
     from dnd.actions import SpellEvent
     assert isinstance(result_l1, SpellEvent), "Result should be SpellEvent"
-    # MULTI_ENTITY returns target_results list and total_damage
+    # MULTI_ENTITY spell returns total_targets and total_damage
     assert result_l1.total_targets == 3, f"Should have 3 dart results, got {result_l1.total_targets}"
     damage_l1 = result_l1.total_damage
     assert damage_l1 >= 6, f"L1 MM (3 darts) should deal at least 6 damage, got {damage_l1}"

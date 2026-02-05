@@ -276,7 +276,10 @@ class ActionEconomy(BaseBlock):
     def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None) -> None:
         """Consume an action resource."""
         value = self._get_value_for_cost_type(cost_type)
-        if value.self_static.normalized_score - amount < 0:
+        # Use normalized_score (aggregates all channels) not self_static.normalized_score
+        # This is consistent with how movement is checked in Move._apply() line 401
+        # Important for features that add movement via self_contextual (e.g., FastMovement)
+        if value.normalized_score - amount < 0:
             raise ValueError(f"Not enough {cost_type} to consume {amount} {cost_name if cost_name is not None else 'cost'}")
 
         modifier_name = f"{cost_name}_cost" if cost_name is not None else "cost"

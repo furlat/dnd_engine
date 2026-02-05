@@ -35,6 +35,8 @@ class MetaCommand(Enum):
     FIRST_TURN = "ft"
     # Verbosity control
     LOG_VERBOSITY = "log"
+    # Tile inspection
+    TILE_INSPECT = "tile_inspect"
 
 
 # Command aliases
@@ -101,6 +103,21 @@ def parse_command(input_str: str, actions: Optional[AvailableActionsState] = Non
 
     cmd = parts[0]
     args = parts[1:]
+
+    # Special case: '? X Y' is tile inspection, not help
+    if cmd == "?" and len(args) >= 2:
+        try:
+            int(args[0])
+            int(args[1])
+            # Both are valid integers - this is tile inspection
+            return ParsedCommand(
+                command=MetaCommand.TILE_INSPECT.value,
+                args=args[:2],
+                raw=input_str,
+                is_meta=True
+            )
+        except ValueError:
+            pass  # Not coordinates, fall through to normal alias handling
 
     # Apply aliases
     cmd = ALIASES.get(cmd, cmd)
@@ -230,6 +247,9 @@ def execute_meta_command(
 
         elif cmd.command == MetaCommand.LOG_VERBOSITY.value:
             return handle_log_verbosity(cmd)
+
+        elif cmd.command == MetaCommand.TILE_INSPECT.value:
+            return handle_tile_inspect(cmd, client)
 
         else:
             display.set_output([
@@ -432,6 +452,59 @@ def handle_history_first(state: GameState) -> Optional[str]:
     else:
         display.show_info("No history available.")
         return None
+
+
+# =============================================================================
+# Tile Inspection
+# =============================================================================
+
+def handle_tile_inspect(cmd: ParsedCommand, client: APIClient) -> Optional[str]:
+    """Handle tile inspection command (? X Y).
+
+    Shows detailed info about a tile including terrain, conditions, and entities.
+    """
+    if len(cmd.args) < 2:
+        display.set_output(["Usage: ? X Y  (e.g., '? 5 3' to inspect tile at 5,3)"])
+        return "refresh"
+
+    try:
+        x = int(cmd.args[0])
+        y = int(cmd.args[1])
+    except ValueError:
+        display.set_output(["Invalid coordinates. Usage: ? X Y"])
+        return "refresh"
+
+    try:
+        tile_info = client.get_tile_info(x, y)
+    except Exception as e:
+        display.set_output([f"Error: {str(e)}"])
+        return "refresh"
+
+    # Format tile info
+    lines = [
+        f"Tile at ({x}, {y}): {tile_info.get('name', 'Unknown')}",
+        f"  Walkable: {tile_info.get('walkable', True)}",
+        f"  Walking cost: {tile_info.get('walking_cost', 1)}x",
+    ]
+
+    # Conditions
+    conditions = tile_info.get('conditions', [])
+    if conditions:
+        lines.append(f"  Conditions: {', '.join(conditions)}")
+
+    # Handlers (effects)
+    handlers = tile_info.get('handlers', [])
+    if handlers:
+        lines.append(f"  Effects: {', '.join(handlers)}")
+
+    # Entities at position
+    entities = tile_info.get('entities', [])
+    if entities:
+        entity_strs = [f"{e['name']} ({e['hp']} HP)" for e in entities]
+        lines.append(f"  Entities: {', '.join(entity_strs)}")
+
+    display.set_output(lines)
+    return "preview"
 
 
 # =============================================================================

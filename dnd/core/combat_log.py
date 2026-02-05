@@ -295,6 +295,13 @@ class CombatLogEntry(BaseModel):
     # Success indicator (for attacks, saves, checks)
     success: Optional[bool] = None
 
+    # Hierarchical sub-entries (for parent events that have children)
+    # Supports recursive nesting (sub-entries can have sub-entries)
+    sub_entries: List["CombatLogEntry"] = Field(
+        default_factory=list,
+        description="Combat log entries from child events, in order"
+    )
+
     def get_text(self, verbosity: CombatLogVerbosity) -> str:
         """Get formatted text at specified verbosity level."""
         if verbosity == CombatLogVerbosity.COMPACT:
@@ -303,6 +310,34 @@ class CombatLogEntry(BaseModel):
             return self.verbose
         else:  # DETAILED
             return self.detailed
+
+    def get_text_with_children(
+        self,
+        verbosity: str = "compact",
+        indent_str: str = "  ",
+        depth: int = 0
+    ) -> str:
+        """Get formatted text including sub-entries with indentation.
+
+        Recursively processes sub_entries with increasing indentation.
+
+        Args:
+            verbosity: One of "compact", "verbose", or "detailed"
+            indent_str: String to use for each level of indentation
+            depth: Current indentation depth (starts at 0)
+
+        Returns:
+            Formatted text with all sub-entries properly indented
+        """
+        text_field = getattr(self, verbosity, self.compact)
+        prefix = indent_str * depth
+        lines = [prefix + text_field]
+
+        for sub_entry in self.sub_entries:
+            # Recursive call handles nested sub-entries
+            lines.append(sub_entry.get_text_with_children(verbosity, indent_str, depth + 1))
+
+        return "\n".join(lines)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""

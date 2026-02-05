@@ -155,21 +155,21 @@ def test_burning_hands_full_damage_on_failed_save():
     assert result is not None and not result.canceled
     assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    # Get per-target result
-    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
-    per_target = result.target_results[0]
-    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
+    # Verify via combat log
+    assert result.combat_log is not None, "Should have combat_log"
+    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+    log_data = result.combat_log.sub_entries[0].data
 
     # Verify save failed
-    assert per_target.save_success == False, "Target with DEX 1 should fail save vs high DC"
+    assert log_data.get('save_success') == False, "Target with DEX 1 should fail save vs high DC"
 
     # Full damage (not halved)
-    assert per_target.damage_rolls is not None, "Should have damage_rolls"
-    rolled_damage = sum(r.total for r in per_target.damage_rolls)
-    assert per_target.total_damage == rolled_damage, f"Should be full damage, got {per_target.total_damage} vs rolled {rolled_damage}"
+    base_damage = log_data.get('base_damage', 0)
+    final_damage = log_data.get('final_damage', 0)
+    assert final_damage == base_damage, f"Should be full damage, got {final_damage} vs rolled {base_damage}"
 
     print(f"  Save failed as expected")
-    print(f"  Full damage applied: {per_target.total_damage}")
+    print(f"  Full damage applied: {final_damage}")
     print("PASS: Full damage on failed DEX save")
 
 
@@ -199,22 +199,23 @@ def test_burning_hands_half_damage_on_passed_save():
     assert result is not None and not result.canceled
     assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    assert result.target_results is not None and len(result.target_results) > 0, "Should have target_results"
-    per_target = result.target_results[0]
-    assert isinstance(per_target, SpellEvent), "Per-target result should be SpellEvent"
+    # Verify via combat log
+    assert result.combat_log is not None, "Should have combat_log"
+    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+    log_data = result.combat_log.sub_entries[0].data
 
     # Verify save succeeded
-    assert per_target.save_success == True, "Target with DEX 30 should always save"
+    assert log_data.get('save_success') == True, "Target with DEX 30 should always save"
 
     # Half damage
-    assert per_target.damage_rolls is not None, "Should have damage_rolls"
-    rolled_damage = sum(r.total for r in per_target.damage_rolls)
-    expected_damage = rolled_damage // 2
-    assert per_target.total_damage == expected_damage, \
-        f"Should be half damage: {rolled_damage}//2={expected_damage}, got {per_target.total_damage}"
+    base_damage = log_data.get('base_damage', 0)
+    final_damage = log_data.get('final_damage', 0)
+    expected_damage = base_damage // 2
+    assert final_damage == expected_damage, \
+        f"Should be half damage: {base_damage}//2={expected_damage}, got {final_damage}"
 
     print(f"  Save passed as expected")
-    print(f"  Half damage applied: {per_target.total_damage} (rolled {rolled_damage})")
+    print(f"  Half damage applied: {final_damage} (rolled {base_damage})")
     print("PASS: Half damage on passed DEX save")
 
 
@@ -387,10 +388,10 @@ def test_burning_hands_multiple_targets():
     # At least target1 and target2 should be hit (in direct cone path)
     assert targets_hit >= 2, f"Should hit at least 2 targets, got {targets_hit}"
 
-    # Check individual damages
-    if result.target_results:
-        for tr in result.target_results:
-            print(f"    {tr.status_message}")
+    # Check individual damages via combat log
+    if result.combat_log and result.combat_log.sub_entries:
+        for sub in result.combat_log.sub_entries:
+            print(f"    {sub.compact}")
 
     print("PASS: Multiple targets in cone handled")
 
@@ -419,9 +420,9 @@ def test_burning_hands_statistical_saves():
         )
 
         result = burning_hands.apply()
-        if result and not result.canceled and isinstance(result, SpellEvent):
-            per_target = result.target_results[0] if result.target_results else None
-            if per_target is not None and isinstance(per_target, SpellEvent) and per_target.save_success:
+        if result and not result.canceled and isinstance(result, SpellEvent) and result.combat_log:
+            sub_entries = result.combat_log.sub_entries
+            if sub_entries and sub_entries[0].data.get('save_success'):
                 successes += 1
             else:
                 failures += 1

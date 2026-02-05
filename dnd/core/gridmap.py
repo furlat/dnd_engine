@@ -465,8 +465,19 @@ class GridMap:
         else:
             self._non_blocking_entities.add(entity_uuid)
 
-    def move_entity(self, entity_uuid: UUID, new_position: Tuple[int, int]) -> None:
-        """Move an entity to a new position and fire spatial events."""
+    def move_entity(
+        self,
+        entity_uuid: UUID,
+        new_position: Tuple[int, int],
+        parent_event: Optional[UUID] = None
+    ) -> None:
+        """Move an entity to a new position and fire spatial events.
+
+        Args:
+            entity_uuid: UUID of the entity to move
+            new_position: New grid position
+            parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
+        """
         old_position = self._entity_positions.get(entity_uuid)
 
         # Update position tracking
@@ -475,7 +486,7 @@ class GridMap:
 
             # Fire entity left event for old position
             if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(old_position, entity_uuid, new_position)
+                event = SpatialChangeEvent.entity_left(old_position, entity_uuid, new_position, parent_event=parent_event)
                 self._fire_spatial_event(event)
 
         self._entity_positions[entity_uuid] = new_position
@@ -483,7 +494,7 @@ class GridMap:
 
         # Fire entity entered event for new position
         if self._events_enabled:
-            event = SpatialChangeEvent.entity_entered(new_position, entity_uuid, old_position)
+            event = SpatialChangeEvent.entity_entered(new_position, entity_uuid, old_position, parent_event=parent_event)
             self._fire_spatial_event(event)
 
     def get_entity_position(self, entity_uuid: UUID) -> Optional[Tuple[int, int]]:

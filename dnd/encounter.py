@@ -25,11 +25,11 @@ from enum import Enum
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, RollType
 from dnd.core.events import (
-    Event, EventPhase,
+    Event, EventPhase, EventQueue,
     EncounterStartEvent, EncounterEndEvent,
     RoundStartEvent, RoundEndEvent,
     TurnStartEvent, TurnEndEvent,
-    DeathEvent, UnconsciousEvent
+    DeathEvent,
 )
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.gridmap import get_map
@@ -121,6 +121,7 @@ class Encounter(BaseObject):
 
     # Class-level registry
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
+    _active_encounter: ClassVar[Optional['Encounter']] = None
 
     name: str = Field(default="Encounter", description="Name of this encounter")
 
@@ -157,9 +158,15 @@ class Encounter(BaseObject):
         return cls._encounter_registry.get(uuid)
 
     @classmethod
+    def get_active(cls) -> Optional['Encounter']:
+        """Get the currently active encounter (if any)."""
+        return cls._active_encounter
+
+    @classmethod
     def clear_registry(cls) -> None:
         """Clear the encounter registry (for testing)."""
         cls._encounter_registry.clear()
+        cls._active_encounter = None
 
     # =========================================================================
     # Combatant Management
@@ -330,6 +337,12 @@ class Encounter(BaseObject):
         self.started_at = datetime.now()
         self.round_number = 1
 
+        # Set as active encounter for combat log updates from damage events
+        Encounter._active_encounter = self
+
+        # Register combat log callback for auto-capturing top-level events
+        EventQueue.set_combat_log_callback(self._on_event_combat_log)
+
         # Notify controllers
         self._notify_controllers_encounter_start()
 
@@ -366,6 +379,13 @@ class Encounter(BaseObject):
 
         self.state = EncounterState.ENDED
         self.ended_at = datetime.now()
+
+        # Clear active encounter if we are the active one
+        if Encounter._active_encounter is self:
+            Encounter._active_encounter = None
+
+        # Unregister combat log callback
+        EventQueue.set_combat_log_callback(None)
 
         # Notify controllers
         self._notify_controllers_encounter_end()
@@ -469,8 +489,7 @@ class Encounter(BaseObject):
             turn_index=self.current_turn_index
         )
 
-        # Add turn start to combat log
-        self.add_event_to_combat_log(event)
+        # NOTE: Combat log auto-captured via callback in phase_to()
 
         # Update senses (use larger range to cover typical combat arenas)
         entity.update_entity_senses(max_distance=20)
@@ -512,8 +531,7 @@ class Encounter(BaseObject):
             turn_index=self.current_turn_index
         )
 
-        # Add turn end to combat log
-        self.add_event_to_combat_log(event)
+        # NOTE: Combat log auto-captured via callback in phase_to()
 
         # Notify controller
         if controller:
@@ -644,6 +662,15 @@ class Encounter(BaseObject):
     # Combat Log Management
     # =========================================================================
 
+    def _on_event_combat_log(self, event: Event) -> None:
+        """Callback for auto-capturing event combat logs.
+
+        Called by EventQueue when a top-level event (parent_event=None)
+        completes with a combat_log. The combat_log already includes
+        nested sub_entries from child events.
+        """
+        self.add_event_to_combat_log(event)
+
     def add_event_to_combat_log(self, event: Event) -> Optional[int]:
         """
         Add event's combat_log entry to encounter log.
@@ -687,44 +714,35 @@ class Encounter(BaseObject):
         Check all combatants for death and handle any that died.
 
         Called after actions to detect and handle deaths.
-        Fires UnconsciousEvent first to allow handlers to react (e.g., rage ending).
+        Note: Death is now primarily handled by Entity.receive_damage() which
+        applies Dead condition and fires DeathEvent. This method handles
+        deaths that occur outside of receive_damage (e.g., HP set directly).
 
         Returns:
             List of DeathEvent for any combatants that died
         """
         death_events = []
+        any_new_deaths = False
 
         for combatant in self.combatants.values():
             if combatant.is_dead:
-                continue  # Already dead
+                continue  # Already marked dead at encounter level
 
             entity = combatant.entity
             if entity is None:
                 continue
 
             if entity.get_hp() <= 0:
-                # Fire UnconsciousEvent first - allows handlers to react
-                # (e.g., Barbarian rage ending when unconscious)
-                unconscious_event = UnconsciousEvent(
-                    source_entity_uuid=entity.uuid,
-                    target_entity_uuid=entity.uuid,
-                    entity_uuid=entity.uuid,
-                    entity_name=entity.name,
-                    final_hp=entity.get_hp(),
-                    phase=EventPhase.DECLARATION
-                )
-                # Progress through phases so handlers can react
-                unconscious_event = unconscious_event.phase_to(EventPhase.EXECUTION)
-                unconscious_event = unconscious_event.phase_to(EventPhase.EFFECT)
-                unconscious_event = unconscious_event.phase_to(EventPhase.COMPLETION)
-
-                # Now handle death (entity is still at 0 HP)
+                any_new_deaths = True
+                # Handle death - _handle_death checks if already handled by receive_damage
                 event = self._handle_death(combatant)
                 if event:
                     death_events.append(event)
 
         # Check if encounter should end (only one side remaining)
-        if death_events:
+        # Note: Check even if death_events is empty - receive_damage may have
+        # already handled the death (applied Dead condition, fired DeathEvent)
+        if any_new_deaths:
             # Note: Senses are updated reactively via DEATH events
             # Each observer's SpatialSensesCallback handles path recalculation
             self._check_encounter_end()
@@ -742,12 +760,19 @@ class Encounter(BaseObject):
 
         Event handlers are PRESERVED - Incapacitated sets reactions=0 so OA won't fire.
         Resurrection can simply: remove Dead condition, set blocking, set HP, mark alive.
+
+        Note: If Dead condition is already applied (by receive_damage), this method
+        only marks combatant.is_dead and returns None (no duplicate DeathEvent).
         """
         entity = combatant.entity
         if entity is None:
             return None
 
         combatant.is_dead = True
+
+        # Check if already handled by receive_damage
+        if "Dead" in entity.active_conditions:
+            return None  # Death already processed, avoid duplicate
 
         # === CLEAN APPROACH: Use Dead condition ===
         # 1. Mark as non-blocking in GridMap (stays registered for resurrection/looting)
@@ -916,16 +941,12 @@ class Encounter(BaseObject):
                 break
 
             # Execute the action
+            # NOTE: Combat log auto-captured via callback in phase_to()
             event = action.apply()
 
-            # AUTO-CAPTURE: Add event's combat log to encounter
-            if event:
-                self.add_event_to_combat_log(event)
-
             # Check for deaths after action
+            # NOTE: Death events auto-captured via callback in phase_to()
             deaths = self.check_deaths()
-            for death_event in deaths:
-                self.add_event_to_combat_log(death_event)
 
             if deaths and self.state != EncounterState.ACTIVE:
                 # Someone died and encounter ended
@@ -1048,13 +1069,10 @@ class Encounter(BaseObject):
         # Execute via functional API (handles template lookup + instantiation)
         event = execute_by_index(entity, template_name, target_index or 0)
 
-        # Capture to combat log
-        if event:
-            self.add_event_to_combat_log(event)
+        # NOTE: Combat log auto-captured via callback in phase_to()
 
         # Check deaths
-        deaths = self.check_deaths()
-        for death_event in deaths:
-            self.add_event_to_combat_log(death_event)
+        # NOTE: Death events auto-captured via callback in phase_to()
+        _ = self.check_deaths()
 
         return event

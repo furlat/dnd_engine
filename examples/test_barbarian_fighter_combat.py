@@ -130,26 +130,29 @@ def test_rage_ends_when_unconscious():
     current_hp = get_hp(barbarian)
     print(f"  Starting HP: {current_hp}, raging: True")
 
-    # Fire UNCONSCIOUS event (simulating what happens at 0 HP)
-    # In real gameplay this would trigger from TakeDamage
-    from dnd.core.events import Event, EventType, EventPhase
-    unconscious_event = Event(
-        name="Unconscious",
-        event_type=EventType.UNCONSCIOUS,
+    # Fire DEATH event through phases (simulating what happens at 0 HP)
+    # In real gameplay this triggers from receive_damage when HP <= 0
+    from dnd.core.events import DeathEvent, EventPhase
+    death_event = DeathEvent(
         source_entity_uuid=fighter.uuid,
         target_entity_uuid=barbarian.uuid,
+        entity_uuid=barbarian.uuid,
+        entity_name=barbarian.name,
+        final_hp=0,
         phase=EventPhase.DECLARATION
     )
-    _ = unconscious_event.phase_to(EventPhase.EXECUTION)
+    death_event = death_event.phase_to(EventPhase.EXECUTION)
+    death_event = death_event.phase_to(EventPhase.EFFECT)
+    death_event = death_event.phase_to(EventPhase.COMPLETION)
 
     # Check rage ended
     still_raging = has_condition(barbarian, "Raging")
-    print(f"  After unconscious event: raging = {still_raging}")
+    print(f"  After death event: raging = {still_raging}")
 
     if not still_raging:
-        print("  PASS: Rage ends when falling unconscious")
+        print("  PASS: Rage ends when dying")
     else:
-        print("  FAIL: Rage should end on unconscious")
+        print("  FAIL: Rage should end on death")
 
 
 def test_relentless_rage():

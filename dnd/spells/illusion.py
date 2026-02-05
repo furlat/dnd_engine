@@ -201,11 +201,12 @@ class FearEffect(BaseCondition):
                 # Can still see caster - no save this turn
                 return None
 
-            # Repeat WIS save
+            # Repeat WIS save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _roll, _outcome, success = target.saving_throw(save_request)
 
@@ -289,11 +290,12 @@ class Fear(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # WIS save
+        # WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
@@ -505,11 +507,12 @@ class HypnoticPattern(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # WIS save
+        # WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
-            dc=dc
+            dc=dc,
+            parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
