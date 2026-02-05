@@ -345,7 +345,7 @@ class RayOfFrost(SpellAction):
                 target_entity_uuid=caster.uuid
             )
         )
-        caster.add_condition(effect_condition)
+        caster.add_condition(effect_condition, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1913,7 +1913,7 @@ class SunburstBlindedEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event = target.add_condition(blinded)
+        sub_event = target.add_condition(blinded, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(blinded.uuid)
 
@@ -2134,7 +2134,7 @@ class Sunburst(SpellAction):
                 caster_uuid=caster.uuid,
                 spell_dc=dc
             )
-            target.add_condition(blind_effect)
+            target.add_condition(blind_effect, parent_event=effect_event)
 
         blind_text = " and blinded" if not success else ""
         return effect_event.phase_to(
@@ -2322,7 +2322,7 @@ class ShockingGrasp(SpellAction):
                 target_entity_uuid=target.uuid
             )
         )
-        target.add_condition(no_reactions)
+        target.add_condition(no_reactions, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2562,7 +2562,7 @@ class GuidingBolt(SpellAction):
                 target_entity_uuid=caster.uuid  # Expires relative to caster
             )
         )
-        target.add_condition(guiding_mark)
+        target.add_condition(guiding_mark, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

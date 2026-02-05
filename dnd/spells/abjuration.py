@@ -213,7 +213,7 @@ class MageArmor(SpellAction):
         )
 
         # Apply condition
-        result = target.add_condition(condition)
+        result = target.add_condition(condition, parent_event=effect_event)
         if result is None or result.canceled:
             return effect_event.cancel(status_message="Failed to apply Mage Armor")
 
@@ -347,7 +347,7 @@ class ProtectionFromEnergy(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Protection from Energy"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -360,7 +360,7 @@ class ProtectionFromEnergy(SpellAction):
             target_entity_uuid=target.uuid,
             energy_type=self.chosen_energy_type
         )
-        target.add_condition(protection)
+        target.add_condition(protection, parent_event=effect_event)
 
         # 3. Link via external_conditions for cleanup
         concentration.add_external_condition(target.uuid, protection.uuid)
@@ -486,7 +486,7 @@ class Stoneskin(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Stoneskin"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -498,7 +498,7 @@ class Stoneskin(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(stoneskin)
+        target.add_condition(stoneskin, parent_event=effect_event)
 
         # 3. Link via external_conditions for cleanup
         concentration.add_external_condition(target.uuid, stoneskin.uuid)

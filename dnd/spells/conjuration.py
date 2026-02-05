@@ -270,7 +270,7 @@ class CallLightning(SpellAction):
             spell_name="Call Lightning"
             # No spell_effect_uuid - we handle cleanup via handler instead
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=effect_event)
 
         # 4. Register cleanup handler to remove the action when concentration breaks
         self._register_action_cleanup(caster, strike_action.name)
@@ -734,7 +734,7 @@ class GreaseZone(ZoneControlCondition):
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=entity.uuid
                 )
-                entity.add_condition(prone)
+                entity.add_condition(prone, parent_event=event)
 
             return None
 
@@ -788,7 +788,7 @@ class GreaseZone(ZoneControlCondition):
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=entity.uuid
                 )
-                entity.add_condition(prone)
+                entity.add_condition(prone, parent_event=event)
 
             return None
 
@@ -884,7 +884,7 @@ class Grease(SpellAction):
             zone_center=target_pos,
             spell_dc=dc
         )
-        caster.add_condition(zone)
+        caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
         concentration = Concentrating(
@@ -892,7 +892,7 @@ class Grease(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Grease"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_external_condition(caster.uuid, zone.uuid)
@@ -923,7 +923,7 @@ class Grease(SpellAction):
                         source_entity_uuid=caster.uuid,
                         target_entity_uuid=ent.uuid
                     )
-                    ent.add_condition(prone)
+                    ent.add_condition(prone, parent_event=effect_event)
                     prone_count += 1
 
         return effect_event.phase_to(
@@ -968,7 +968,7 @@ class WebRestrained(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        target.add_condition(restrained)
+        target.add_condition(restrained, parent_event=declaration_event)
         sub_conditions_uuids.append(restrained.uuid)
 
         # Grant escape action
@@ -1137,7 +1137,7 @@ class WebZone(ZoneControlCondition):
                     target_entity_uuid=entity.uuid,
                     spell_dc=dc
                 )
-                entity.add_condition(web_restrained)
+                entity.add_condition(web_restrained, parent_event=event)
 
             return None
 
@@ -1241,7 +1241,7 @@ class Web(SpellAction):
             zone_center=target_pos,
             spell_dc=dc
         )
-        caster.add_condition(zone)
+        caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
         concentration = Concentrating(
@@ -1249,7 +1249,7 @@ class Web(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Web"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_external_condition(caster.uuid, zone.uuid)
@@ -1280,7 +1280,7 @@ class Web(SpellAction):
                         target_entity_uuid=ent.uuid,
                         spell_dc=dc
                     )
-                    ent.add_condition(web_restrained)
+                    ent.add_condition(web_restrained, parent_event=effect_event)
                     restrained_count += 1
 
         return effect_event.phase_to(
@@ -1578,7 +1578,7 @@ class Cloudkill(SpellAction):
             spell_dc=dc,
             upcast_dice=upcast_bonus
         )
-        caster.add_condition(zone)
+        caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
         concentration = Concentrating(
@@ -1586,7 +1586,7 @@ class Cloudkill(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Cloudkill"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_external_condition(caster.uuid, zone.uuid)
@@ -1828,7 +1828,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
                 source_entity_uuid=source_uuid,
                 target_entity_uuid=entity.uuid
             )
-            entity.add_condition(marker)
+            entity.add_condition(marker, parent_event=event)
 
             # Apply speed debuff if not already slowed
             if "Spirit Guardians Slowed" not in entity.active_conditions:
@@ -1836,7 +1836,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=entity.uuid
                 )
-                entity.add_condition(slowed)
+                entity.add_condition(slowed, parent_event=event)
 
             return None
 
@@ -1907,7 +1907,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
                 source_entity_uuid=source_uuid,
                 target_entity_uuid=entity.uuid
             )
-            entity.add_condition(marker)
+            entity.add_condition(marker, parent_event=event)
 
             return None
 
@@ -2054,7 +2054,7 @@ class SpiritGuardians(SpellAction):
             damage_type=self.damage_type,
             upcast_dice=upcast_bonus
         )
-        caster.add_condition(zone)
+        caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
         concentration = Concentrating(
@@ -2062,7 +2062,7 @@ class SpiritGuardians(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Spirit Guardians"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_external_condition(caster.uuid, zone.uuid)
@@ -2108,7 +2108,7 @@ class SpiritGuardians(SpellAction):
                     source_entity_uuid=caster.uuid,
                     target_entity_uuid=ent.uuid
                 )
-                ent.add_condition(marker)
+                ent.add_condition(marker, parent_event=effect_event)
 
                 # Apply speed debuff
                 if "Spirit Guardians Slowed" not in ent.active_conditions:
@@ -2116,7 +2116,7 @@ class SpiritGuardians(SpellAction):
                         source_entity_uuid=caster.uuid,
                         target_entity_uuid=ent.uuid
                     )
-                    ent.add_condition(slowed)
+                    ent.add_condition(slowed, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
