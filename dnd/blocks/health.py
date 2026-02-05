@@ -284,6 +284,7 @@ class Health(BaseBlock):
     temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Temporary Hit Points"), description="Temporary Hit Points, e.g. False Life spell")
     damage_taken: int = Field(default=0,ge=0, description="The amount of damage taken")
     damage_reduction: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Damage Reduction"), description="Damage Reduction, e.g. Damage Resistance")
+    healing_blocked: bool = Field(default=False, description="If True, entity cannot regain HP (e.g., Chill Touch)")
 
     def get_resistance(self,damage_type: DamageType) -> ResistanceStatus:
         return self.damage_reduction.resistance[damage_type]
@@ -383,11 +384,7 @@ class Health(BaseBlock):
         Returns:
             True if the entity cannot regain hit points.
         """
-        from dnd.entity import Entity
-        entity = Entity.get(self.source_entity_uuid)
-        if entity and "No Healing" in entity.active_conditions:
-            return True
-        return False
+        return self.healing_blocked
 
     def heal(self, heal: int) -> None:
         """

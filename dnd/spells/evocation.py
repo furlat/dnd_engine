@@ -5,27 +5,28 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           ShockingGrasp, GuidingBolt
 """
 from typing import Optional, List, Tuple
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome, RollType
 from typing import cast as type_cast
 from dnd.core.events import EventPhase, RangeType, Range, Damage, ForcedMovementEvent, EventType, EventHandler, Trigger, Event
-from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType
-from dnd.core.aoe import AoEShape
+from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType, NumericalModifier
+from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube
+from dnd.core.gridmap import get_map
+from dnd.blocks.equipment import ArmorType
 
+from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import SpellAction, SpellEvent
-from dnd.conditions import Blinded
+from dnd.conditions import Blinded, NoReactions
 
 
 def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
     """Validate if the source entity and target entity are in line of sight."""
-    from dnd.entity import Entity
-
     source_entity = Entity.get(source_entity_uuid)
     if not source_entity:
         return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
@@ -65,7 +66,6 @@ class FireBolt(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
-        from dnd.entity import Entity
 
         # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -90,7 +90,6 @@ class FireBolt(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute the spell attack."""
-        from dnd.entity import Entity, determine_attack_outcome
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -186,8 +185,6 @@ class RayOfFrostEffect(BaseCondition):
     affected_target_uuid: Optional[UUID] = None  # The target whose speed is reduced
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.entity import Entity
-        from dnd.core.modifiers import NumericalModifier
 
         if not self.affected_target_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
@@ -237,7 +234,6 @@ class RayOfFrost(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
-        from dnd.entity import Entity
 
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
@@ -260,8 +256,6 @@ class RayOfFrost(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute the spell attack."""
-        from dnd.entity import Entity, determine_attack_outcome
-        from dnd.core.base_conditions import Duration, DurationType
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -373,7 +367,6 @@ class SacredFlame(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
-        from dnd.entity import Entity
 
         # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -398,7 +391,6 @@ class SacredFlame(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute the save-based spell."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -520,7 +512,6 @@ class MagicMissile(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight for all targets."""
-        from dnd.entity import Entity
 
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity:
@@ -561,7 +552,6 @@ class MagicMissile(SpellAction):
 
         Called once per dart by the convolution loop in BaseAction.apply().
         """
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -647,7 +637,6 @@ class ScorchingRay(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and LOS for all targets."""
-        from dnd.entity import Entity
 
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity:
@@ -684,7 +673,6 @@ class ScorchingRay(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply single ray to current target (called once per ray by convolution)."""
-        from dnd.entity import Entity, determine_attack_outcome
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -793,8 +781,6 @@ class Fireball(SpellAction):
     base_damage_dice: int = Field(default=8)  # 8d6 at level 3
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Sphere
-        from uuid import uuid4
 
         # Set up shape before super().__init__ if not provided
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
@@ -817,7 +803,6 @@ class Fireball(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -846,7 +831,6 @@ class Fireball(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply fireball damage to current target (called once per target by convolution)."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -946,8 +930,6 @@ class BurningHands(SpellAction):
     base_damage_dice: int = Field(default=3)  # 3d6 at level 1
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Cone
-        from uuid import uuid4
 
         # Set up cone shape if not provided
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
@@ -970,7 +952,6 @@ class BurningHands(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction. Self-range means no LOS check to target position."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -986,7 +967,6 @@ class BurningHands(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply burning hands damage to current target (called once per target by convolution)."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1086,8 +1066,6 @@ class LightningBolt(SpellAction):
     base_damage_dice: int = Field(default=8)  # 8d6 at level 3
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Line
-        from uuid import uuid4
 
         # Set up line shape if not provided
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
@@ -1111,7 +1089,6 @@ class LightningBolt(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line direction. Self-range means no LOS check to target position."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -1126,7 +1103,6 @@ class LightningBolt(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply lightning bolt damage to current target (called once per target by convolution)."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1227,8 +1203,6 @@ class Thunderwave(SpellAction):
     push_distance_feet: int = Field(default=10)  # Push 10ft on failed save
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Cube
-        from uuid import uuid4
 
         # Set up cube shape if not provided
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
@@ -1282,7 +1256,6 @@ class Thunderwave(SpellAction):
 
         Returns: (final_position, actual_distance_feet, was_blocked)
         """
-        from dnd.core.gridmap import get_map
 
         grid = get_map()
         distance_tiles = distance_feet // 5
@@ -1313,7 +1286,6 @@ class Thunderwave(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cube direction. Self-range means no LOS check to target position."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -1328,7 +1300,6 @@ class Thunderwave(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply thunderwave damage and push to current target."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1422,8 +1393,7 @@ class Thunderwave(SpellAction):
 
                 # Apply movement via Entity helper
                 # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
-                from dnd.entity import Entity as EntityClass
-                EntityClass.update_entity_position(target, end_pos, parent_event=effect_event.uuid)
+                Entity.update_entity_position(target, end_pos, parent_event=effect_event.uuid)
                 push_applied = True
 
         save_text = " (saved for half)" if success else ""
@@ -1465,8 +1435,6 @@ class Shatter(SpellAction):
     base_damage_dice: int = Field(default=3)  # 3d8 at level 2
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Sphere
-        from uuid import uuid4
 
         # Set up sphere shape if not provided
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
@@ -1489,7 +1457,6 @@ class Shatter(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -1518,7 +1485,6 @@ class Shatter(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply shatter damage to current target (called once per target by convolution)."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1618,8 +1584,6 @@ class CircleOfDeath(SpellAction):
     base_damage_dice: int = Field(default=8)  # 8d6 at level 6
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Sphere
-        from uuid import uuid4
 
         # Set up sphere shape if not provided
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
@@ -1642,7 +1606,6 @@ class CircleOfDeath(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -1671,7 +1634,6 @@ class CircleOfDeath(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply circle of death damage to current target (called once per target by convolution)."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1770,8 +1732,6 @@ class ConeOfCold(SpellAction):
     base_damage_dice: int = Field(default=8)  # 8d8 at level 5
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Cone
-        from uuid import uuid4
 
         # Set up cone shape if not provided
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
@@ -1794,7 +1754,6 @@ class ConeOfCold(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction. Self-range means no LOS check to target position."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -1809,7 +1768,6 @@ class ConeOfCold(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply cone of cold damage to current target (called once per target by convolution)."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1895,7 +1853,6 @@ class SunburstBlindedEffect(BaseCondition):
     spell_dc: int = 10
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.entity import Entity
 
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
@@ -1940,8 +1897,7 @@ class SunburstBlindedEffect(BaseCondition):
         dc = self.spell_dc
 
         def repeat_save_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            from dnd.entity import Entity
-
+    
             if event.source_entity_uuid != target_uuid:
                 return None
 
@@ -2011,8 +1967,6 @@ class Sunburst(SpellAction):
     base_damage_dice: int = Field(default=12)  # 12d6
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Sphere
-        from uuid import uuid4
 
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
             source_uuid = kwargs.get('source_entity_uuid') or uuid4()
@@ -2028,7 +1982,6 @@ class Sunburst(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position LOS and range."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -2050,7 +2003,6 @@ class Sunburst(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply sunburst damage and blindness to current target."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -2158,7 +2110,6 @@ def _is_wearing_metal_armor(entity) -> bool:
     We check by armor name since ArmorType.HEAVY is always metal,
     and some medium armors contain "Chain", "Scale", or "Plate" in their name.
     """
-    from dnd.blocks.equipment import ArmorType
 
     body_armor = entity.equipment.body_armor
     if body_armor is None:
@@ -2199,7 +2150,6 @@ class ShockingGrasp(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range (melee: 5ft) and line of sight."""
-        from dnd.entity import Entity
 
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
@@ -2225,9 +2175,6 @@ class ShockingGrasp(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute melee spell attack with advantage vs metal armor."""
-        from dnd.entity import Entity, determine_attack_outcome
-        from dnd.conditions import NoReactions  # type: ignore[attr-defined]
-        from dnd.core.base_conditions import Duration, DurationType
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -2350,7 +2297,6 @@ class GuidingBoltMarked(BaseCondition):
     caster_uuid: Optional[UUID] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.entity import Entity
 
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
@@ -2386,7 +2332,6 @@ class GuidingBoltMarked(BaseCondition):
 
     def _create_remove_on_attack_handler(self) -> EventHandler:
         """Remove this condition after first attack against target."""
-        from dnd.entity import Entity
 
         assert self.target_entity_uuid is not None
 
@@ -2453,7 +2398,6 @@ class GuidingBolt(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
-        from dnd.entity import Entity
 
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
@@ -2478,8 +2422,6 @@ class GuidingBolt(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute ranged spell attack and apply guiding mark on hit."""
-        from dnd.entity import Entity, determine_attack_outcome
-        from dnd.core.base_conditions import Duration, DurationType
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None

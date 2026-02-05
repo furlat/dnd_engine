@@ -13,7 +13,7 @@ from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 from dnd.core.events import (
     Event, EventPhase, EventQueue, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
-    TakeDamageEvent
+    TakeDamageEvent, DeathEvent
 )
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
@@ -139,10 +139,6 @@ class Entity(BaseBlock):
 
     # Turn tracking - True during this entity's turn (set by on_turn_start, cleared by on_turn_end)
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
-
-    # Movement tracking - True during Move._apply() execution
-    # Used by SpatialSensesCallback to decide between visibility-only vs full senses update
-    is_moving: bool = Field(default=False, description="True while Move._apply() is executing")
 
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
@@ -824,8 +820,6 @@ class Entity(BaseBlock):
         Returns:
             Actual damage taken after resistances (0 if canceled)
         """
-        from dnd.core.events import DeathEvent
-
         # Create damages list for combat log if not provided
         # This ensures damage type is shown even for simple receive_damage calls
         event_damages = damages if damages else [
@@ -874,19 +868,7 @@ class Entity(BaseBlock):
         # Note: Relentless Rage already had its chance at EFFECT phase
         # If HP <= 0 here, the save either failed or wasn't triggered
         if self.get_hp() <= 0 and "Dead" not in self.active_conditions:
-            from dnd.conditions import Dead
-
-            # Apply Dead condition (includes Incapacitated → movement=0)
-            dead_condition = Dead(
-                source_entity_uuid=source_entity_uuid,
-                target_entity_uuid=self.uuid
-            )
-            self.add_condition(dead_condition, check_save_throw=False)
-
-            # Mark as non-blocking in GridMap
-            get_map().set_entity_blocking(self.uuid, blocking=False)
-
-            # Fire DeathEvent through phases so handlers can react (e.g., rage ending)
+            # Fire DeathEvent through phases - death_handler applies Dead condition at EXECUTION
             # NOTE: Combat log auto-captured via callback in phase_to() at COMPLETION
             # DeathEvent is a child of the TakeDamageEvent that caused it
             death_event = DeathEvent(
@@ -899,7 +881,7 @@ class Entity(BaseBlock):
                 phase=EventPhase.DECLARATION,
                 parent_event=take_damage_event.uuid
             )
-            # Progress through phases - handlers can react at EXECUTION/EFFECT
+            # Progress through phases - death_handler applies Dead condition at EXECUTION
             death_event = death_event.phase_to(EventPhase.EXECUTION)
             death_event = death_event.phase_to(EventPhase.EFFECT)
             # phase_to(COMPLETION) auto-generates combat_log and calls callback
@@ -1369,8 +1351,6 @@ class Entity(BaseBlock):
         This enables event handlers (like Indomitable) to intercept and modify
         saving throw results at the EFFECT phase.
         """
-        from dnd.core.events import EventPhase
-
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
 

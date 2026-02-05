@@ -4,7 +4,9 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent
+from dnd.core.gridmap import get_map
+from dnd.core.base_tiles import MovementMode
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
@@ -169,9 +171,6 @@ class Move(BaseAction):
     def _setup_costs_from_path(self):
         if self.path is not None and self.use_movement_cost:
             # Calculate cost from actual terrain, not just path length
-            from dnd.core.gridmap import get_map
-            from dnd.core.base_tiles import MovementMode
-
             grid = get_map()
             total_cost = 0
 
@@ -296,9 +295,6 @@ class Move(BaseAction):
             has_movement_cost = any(c.cost_type == "movement" for c in costs)
             if not has_movement_cost:
                 # Calculate cost from actual terrain, not just path length
-                from dnd.core.gridmap import get_map
-                from dnd.core.base_tiles import MovementMode
-
                 grid = get_map()
                 total_cost = 0
 
@@ -344,10 +340,6 @@ class Move(BaseAction):
         Iterates through path, firing StepMovementEvent for each cell transition.
         This allows OA handlers and terrain effects to interrupt movement.
         """
-        from dnd.core.events import StepMovementEvent
-        from dnd.core.gridmap import get_map
-        from dnd.core.base_tiles import MovementMode
-
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity or not isinstance(source_entity, Entity):
             return execution_event.cancel(status_message=f"Source entity not found for {execution_event.name}")
@@ -379,8 +371,8 @@ class Move(BaseAction):
         total_path_length = len(path)
         actual_end_position = source_entity.position  # Track where we actually end up
 
-        # Set is_moving flag so SpatialSensesCallback does visibility-only updates per step
-        source_entity.is_moving = True
+        # Set is_moving flag on senses so SpatialSensesCallback does visibility-only updates per step
+        source_entity.senses.is_moving = True
 
         try:
             for i in range(1, total_path_length):
@@ -446,7 +438,7 @@ class Move(BaseAction):
             # - Normal completion
             # - break (step canceled, path invalid, not enough movement, death)
             # - Exception
-            source_entity.is_moving = False
+            source_entity.senses.is_moving = False
             source_entity.update_entity_senses(max_distance=20)
 
         # Determine final result
@@ -1545,8 +1537,6 @@ class Jump(BaseAction):
         4. Walkable tile
         5. Unoccupied by other entities
         """
-        from dnd.core.gridmap import get_map
-
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return []
@@ -1698,8 +1688,6 @@ class Jump(BaseAction):
 
     def _validate(self, declaration_event: JumpEvent) -> JumpEvent:
         """Validate the jump action."""
-        from dnd.core.gridmap import get_map
-
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity:
             return declaration_event.cancel(status_message="Entity not found")
@@ -1944,8 +1932,6 @@ class Shove(BaseAction):
         Returns:
             (final_position, actual_distance_feet, was_blocked)
         """
-        from dnd.core.gridmap import get_map
-
         grid = get_map()
         current = start
         cells_to_move = distance_feet // 5  # 5ft per cell
@@ -2045,8 +2031,6 @@ class Shove(BaseAction):
 
     def _apply(self, execution_event: ShoveEvent) -> ShoveEvent:
         """Apply the shove - contest and push/prone."""
-        from dnd.core.events import ForcedMovementEvent
-
         source = Entity.get(self.source_entity_uuid)
         target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 

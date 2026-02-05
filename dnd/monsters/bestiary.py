@@ -31,6 +31,13 @@ from dnd.items import (
     create_wooden_shield,
 )
 
+# Import spellcasting and spells for sorcerer
+from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.spells.evocation import (
+    Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
+)
+from dnd.actions_functional import register_spell
+
 
 def create_armor_scraps(source_id: UUID) -> BodyArmor:
     """Creates armor scraps - AC 13 (like skeleton's natural armor)"""
@@ -376,12 +383,6 @@ def create_sorcerer(
     """
     if source_id is None:
         source_id = uuid4()
-
-    from dnd.blocks.spellcasting import SpellcastingConfig
-    from dnd.spells.evocation import (
-        Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
-    )
-    from dnd.actions_functional import register_spell
 
     # Ability scores - CHA primary
     ability_scores_config = AbilityScoresConfig(

@@ -32,9 +32,9 @@ from dnd.core.events import (
     DeathEvent,
 )
 from dnd.core.combat_log import CombatLogEntry
-from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.controller import Controller, TurnContext
+from dnd.actions_functional import execute_by_index
 
 
 class EncounterState(str, Enum):
@@ -774,25 +774,12 @@ class Encounter(BaseObject):
         if "Dead" in entity.active_conditions:
             return None  # Death already processed, avoid duplicate
 
-        # === CLEAN APPROACH: Use Dead condition ===
-        # 1. Mark as non-blocking in GridMap (stays registered for resurrection/looting)
-        get_map().set_entity_blocking(entity.uuid, blocking=False)
-
-        # 2. Apply Dead condition (includes Incapacitated, disables all action economy)
-        #    Event handlers are PRESERVED - Incapacitated sets reactions=0 so OA won't fire
-        from dnd.conditions import Dead
-        dead_condition = Dead(
-            source_entity_uuid=entity.uuid,
-            target_entity_uuid=entity.uuid
-        )
-        entity.add_condition(dead_condition, check_save_throw=False)
-        # === END CLEAN APPROACH ===
-
         # Note: Dead entities are filtered from attack targets via
         # get_visible_enemies(include_dead=False) which checks HP.
         # They remain visible for looting, resurrection, corpse-explosion, etc.
 
-        # Fire death event
+        # Fire DeathEvent through all phases - death_handler applies Dead condition at EXECUTION
+        # and marks entity as non-blocking in GridMap
         event = DeathEvent(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
@@ -800,16 +787,13 @@ class Encounter(BaseObject):
             entity_name=entity.name,
             final_hp=entity.get_hp(),
             encounter_uuid=self.uuid,
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.DECLARATION
         )
-
-        # Manually generate combat_log since we're created directly at COMPLETION
-        event.combat_log = event.generate_combat_log()
-
-        # Post event so callbacks (like SpatialSensesCallback) can react
-        # This triggers senses recalculation for observers - paths through
-        # dead body's cell become available
-        event.post()
+        # Progress through phases - death_handler fires at EXECUTION
+        event = event.phase_to(EventPhase.EXECUTION)
+        event = event.phase_to(EventPhase.EFFECT)
+        # phase_to(COMPLETION) auto-generates combat_log and calls callback
+        event = event.phase_to(EventPhase.COMPLETION)
 
         return event
 
@@ -942,7 +926,7 @@ class Encounter(BaseObject):
 
             # Execute the action
             # NOTE: Combat log auto-captured via callback in phase_to()
-            event = action.apply()
+            _event = action.apply()
 
             # Check for deaths after action
             # NOTE: Death events auto-captured via callback in phase_to()
@@ -1060,8 +1044,6 @@ class Encounter(BaseObject):
         Raises:
             ValueError: If entity not found or action fails
         """
-        from dnd.actions_functional import execute_by_index
-
         entity = Entity.get(entity_uuid)
         if not entity:
             raise ValueError(f"Entity {entity_uuid} not found")
