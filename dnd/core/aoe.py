@@ -21,7 +21,7 @@ Usage:
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Set, Tuple
+from typing import Optional, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -33,9 +33,8 @@ from dnd.core.geometry import (
     line_positions,
     rectangle_positions,
 )
-
-if TYPE_CHECKING:
-    from dnd.blocks.sensory import Senses
+from dnd.core.gridmap import get_map
+from dnd.blocks.sensory import Senses
 
 
 class AoEShape(BaseObject):
@@ -94,8 +93,6 @@ class AoEShape(BaseObject):
         Returns:
             Self for chaining
         """
-        from dnd.core.gridmap import get_map
-
         self.computed_origin = self.get_origin(caster_pos)
 
         # Get positions visible to caster
@@ -150,8 +147,6 @@ class AoEShape(BaseObject):
         Returns:
             Self for chaining
         """
-        from dnd.core.gridmap import get_map
-
         grid = get_map()
         self.computed_origin = self.get_origin(caster_pos)
 

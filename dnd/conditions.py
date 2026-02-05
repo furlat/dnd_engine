@@ -11,7 +11,8 @@ from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiri
 from dnd.blocks.sensory import SensesType
 from uuid import UUID
 from functools import partial
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent
+from dnd.core.gridmap import get_map
 from enum import Enum
 
 
@@ -906,6 +907,54 @@ class Dead(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+def death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """Apply Dead condition when entity dies.
+
+    This processor is triggered by DEATH events. It applies the Dead condition
+    and marks the entity as non-blocking in GridMap.
+
+    This uses the event handler pattern to avoid circular imports between
+    entity.py and conditions.py.
+    """
+
+    # Only process for our entity (DeathEvent has entity_uuid)
+    event_entity_uuid = getattr(event, 'entity_uuid', None)
+    if event_entity_uuid != source_entity_uuid:
+        return None
+
+    entity = Entity.get(source_entity_uuid)
+    if not entity or "Dead" in entity.active_conditions:
+        return None
+
+    # Apply Dead condition (includes Incapacitated as sub-condition)
+    dead_condition = Dead(
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=source_entity_uuid
+    )
+    entity.add_condition(dead_condition, check_save_throw=False)
+
+    # Mark as non-blocking in GridMap (stays registered for resurrection/looting)
+    get_map().set_entity_blocking(source_entity_uuid, blocking=False)
+
+    return None
+
+
+def create_death_handler(source_entity_uuid: UUID) -> EventHandler:
+    """Create handler that applies Dead condition on DEATH event.
+
+    This handler is registered for all entities via setup_standard_actions().
+    When a DEATH event fires for this entity, it applies the Dead condition.
+    """
+    return EventHandler(
+        name="Death Condition Handler",
+        source_entity_uuid=source_entity_uuid,
+        trigger_conditions=[
+            Trigger(event_type=EventType.DEATH, event_phase=EventPhase.EXECUTION)
+        ],
+        event_processor=death_processor
+    )
+
+
 # =============================================================================
 # CONCENTRATION SYSTEM
 # =============================================================================
@@ -952,7 +1001,6 @@ class Concentrating(BaseCondition):
         # Register the concentration break handler
         def concentration_break_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
             """On damage, make CON save or lose concentration."""
-            from dnd.core.events import TakeDamageEvent
 
             # Only trigger for the concentrating entity taking damage
             if event.target_entity_uuid != source_entity_uuid:
@@ -979,7 +1027,6 @@ class Concentrating(BaseCondition):
 
             # Make Constitution saving throw
             # Note: The caster is both source and target of this save
-            from dnd.core.events import SavingThrowEvent
             save_request = SavingThrowEvent(
                 source_entity_uuid=source_entity_uuid,
                 target_entity_uuid=source_entity_uuid,

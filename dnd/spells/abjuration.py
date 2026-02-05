@@ -11,8 +11,11 @@ from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
+from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
+from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
+from dnd.conditions import Concentrating
 
 
 # =============================================================================
@@ -37,8 +40,6 @@ class MageArmorCondition(BaseCondition):
     _old_unarmored_type: Optional[str] = None  # Store as string for Pydantic serialization
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.entity import Entity
-        from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
@@ -119,8 +120,6 @@ class MageArmorCondition(BaseCondition):
 
     def _remove(self, _removal_event: Optional[Event] = None) -> None:
         """Restore the old unarmored AC type on removal."""
-        from dnd.entity import Entity
-        from dnd.blocks.equipment import UnarmoredAc
 
         if not self.target_entity_uuid:
             return
@@ -162,7 +161,6 @@ class MageArmor(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target is unarmored and in range."""
-        from dnd.entity import Entity
 
         source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -192,7 +190,6 @@ class MageArmor(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Mage Armor condition to target."""
-        from dnd.entity import Entity
         # MageArmorCondition is defined in this file
 
         caster = Entity.get(self.source_entity_uuid)
@@ -242,7 +239,6 @@ class ProtectionFromEnergyEffect(BaseCondition):
     energy_type: DamageType = DamageType.FIRE
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.entity import Entity
 
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
@@ -297,7 +293,6 @@ class ProtectionFromEnergy(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target and range."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
@@ -332,8 +327,6 @@ class ProtectionFromEnergy(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Protection from Energy - grants resistance to chosen energy type."""
-        from dnd.entity import Entity
-        from dnd.conditions import Concentrating
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
@@ -387,7 +380,6 @@ class StoneskinEffect(BaseCondition):
     description: str = "Resistant to bludgeoning, piercing, and slashing damage"
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.entity import Entity
 
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
@@ -443,7 +435,6 @@ class Stoneskin(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target and range."""
-        from dnd.entity import Entity
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
@@ -471,8 +462,6 @@ class Stoneskin(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Stoneskin - grants B/P/S resistance."""
-        from dnd.entity import Entity
-        from dnd.conditions import Concentrating
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster

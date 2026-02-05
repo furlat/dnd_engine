@@ -29,7 +29,8 @@ from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase,
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
 from dnd.actions import Move, Dash, Dodge, Disengage, Attack, Jump, Shove
-from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler
+from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler, create_death_handler
+from dnd.spells import ALL_SPELLS
 
 
 def setup_standard_actions(entity: 'Entity') -> None:
@@ -69,6 +70,9 @@ def setup_standard_actions(entity: 'Entity') -> None:
     # These track combat state for features like Extra Attack and Rage Maintenance
     entity.add_event_handler(create_has_attacked_handler(entity.uuid))
     entity.add_event_handler(create_has_taken_damage_handler(entity.uuid))
+
+    # Register death handler (applies Dead condition when DEATH event fires)
+    entity.add_event_handler(create_death_handler(entity.uuid))
 
     # Register Prone auto-stand handler (BG3 style - always present, fires at turn start)
     entity.add_event_handler(_create_prone_auto_stand_handler(entity.uuid))
@@ -346,7 +350,6 @@ def register_spells_by_name(entity: 'Entity', spell_names: list, caster_level: i
     Raises:
         ValueError: If a spell name is not found in ALL_SPELLS
     """
-    from dnd.spells import ALL_SPELLS
 
     for name in spell_names:
         if name not in ALL_SPELLS:

@@ -2,20 +2,22 @@
 
 Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep
 """
+import random
 from typing import Optional, List, Tuple, cast as type_cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, CreatureType
-from dnd.core.aoe import AoEShape
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, CreatureType, DamageType
+from dnd.core.aoe import AoEShape, Sphere
 
-from dnd.actions import SpellAction, SpellEvent
 from dnd.entity import Entity
-from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned
+from dnd.actions import SpellAction, SpellEvent
+from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned, Concentrating
+from dnd.spells.evocation import validate_line_of_sight
 
 
 class CharmPerson(SpellAction):
@@ -77,7 +79,6 @@ class CharmPerson(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range, LOS, and creature type (humanoid only)."""
-        from dnd.spells.evocation import validate_line_of_sight
 
         # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -263,7 +264,6 @@ class HoldPersonEffect(BaseCondition):
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """Create handler for repeat WIS saves at end of target's turn."""
-        from dnd.entity import Entity
 
         # Capture values for closure - these are validated before handler creation
         assert self.target_entity_uuid is not None
@@ -311,7 +311,6 @@ class HoldPersonEffect(BaseCondition):
                 # Remove concentration from caster - this will automatically
                 # remove HoldPersonEffect via external_conditions, which removes Paralyzed via sub_conditions
                 if "Concentrating" in caster.active_conditions:
-                    from dnd.conditions import Concentrating
                     conc = caster.active_conditions.get("Concentrating")
                     if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Person":
                         caster.remove_condition("Concentrating")
@@ -354,9 +353,6 @@ class HoldPerson(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range, line of sight, and creature type (humanoid only)."""
-        from dnd.entity import Entity
-        from dnd.spells.evocation import validate_line_of_sight
-        from dnd.core.modifiers import CreatureType
 
         # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -401,8 +397,6 @@ class HoldPerson(SpellAction):
                                                               │
                                                               └── sub_conditions ──► Paralyzed
         """
-        from dnd.entity import Entity
-        from dnd.conditions import Concentrating
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -561,7 +555,6 @@ class HoldMonsterEffect(BaseCondition):
             if success:
                 # Remove concentration (auto-cleans up via external_conditions)
                 if "Concentrating" in caster.active_conditions:
-                    from dnd.conditions import Concentrating
                     conc = caster.active_conditions.get("Concentrating")
                     if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Monster":
                         caster.remove_condition("Concentrating")
@@ -618,8 +611,6 @@ class HoldMonster(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range, LOS, and creature type (not undead)."""
-        from dnd.core.modifiers import CreatureType
-        from dnd.spells.evocation import validate_line_of_sight
 
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
@@ -648,7 +639,6 @@ class HoldMonster(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute Hold Monster - WIS save or Paralyzed."""
-        from dnd.conditions import Concentrating
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -738,7 +728,6 @@ class PowerWordKill(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and LOS."""
-        from dnd.spells.evocation import validate_line_of_sight
 
         # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -783,7 +772,6 @@ class PowerWordKill(SpellAction):
         if current_hp <= self.hp_threshold:
             # Instant death - deal massive damage to ensure death
             # Using 99999 to guarantee death even with resistances
-            from dnd.core.modifiers import DamageType
             target.receive_damage(
                 amount=99999,
                 damage_type=DamageType.FORCE,  # Force damage can't be resisted
@@ -993,8 +981,6 @@ class Sleep(SpellAction):
     hp_pool_remaining: int = Field(default=0)
 
     def __init__(self, **kwargs):
-        from dnd.core.aoe import Sphere
-        from uuid import uuid4
 
         if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
             source_uuid = kwargs.get('source_entity_uuid') or uuid4()
@@ -1061,7 +1047,6 @@ class Sleep(SpellAction):
         if self.hp_pool_rolled == 0:
             dice_count, dice_value = self.get_hp_pool_dice()
             # Simple roll without full Dice machinery for efficiency
-            import random
             roll_results = [random.randint(1, dice_value) for _ in range(dice_count)]
             total = sum(roll_results)
             self.hp_pool_rolled = total
@@ -1254,7 +1239,6 @@ class PowerWordStun(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and LOS."""
-        from dnd.spells.evocation import validate_line_of_sight
 
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:

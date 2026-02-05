@@ -8,7 +8,7 @@ Subclass this for different control modes:
 - ScriptedController: Follows a predefined action sequence
 """
 
-from typing import Optional, Dict, List, ClassVar, TYPE_CHECKING
+from typing import Optional, Dict, List, ClassVar
 
 __all__ = [
     "TurnContext",
@@ -21,10 +21,9 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_object import BaseObject
-
-if TYPE_CHECKING:
-    from dnd.entity import Entity
-    from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import BaseAction
+from dnd.actions_functional import get_available_actions
+from dnd.entity import Entity
 
 
 class TurnContext(BaseObject):
@@ -220,9 +219,6 @@ class MeleeAIController(Controller):
         context: TurnContext
     ) -> Optional['BaseAction']:
         """Pick the next action based on available options."""
-        # Import here to avoid circular imports at module level
-        from dnd.actions_functional import get_available_actions
-
         available = get_available_actions(entity)
 
         # Priority 1: Attack if we can

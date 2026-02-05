@@ -46,6 +46,7 @@ from dnd.actions import (
 from dnd.conditions import Frightened
 from typing import Optional, List, Tuple
 from uuid import UUID
+from functools import partial
 
 # Import rage/frenzy system from rage.py
 from dnd.classes.rage import (
@@ -1338,8 +1339,6 @@ def create_intimidating_presence_end_handler(
 
     Uses functools.partial to bind the barbarian_uuid to the processor.
     """
-    from functools import partial
-
     bound_processor = partial(
         intimidating_presence_end_check_processor,
         barbarian_uuid=barbarian_uuid
