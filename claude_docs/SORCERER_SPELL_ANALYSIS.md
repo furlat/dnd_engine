@@ -212,6 +212,8 @@ def move_zone(self, new_center):
 
 **Key insight:** Zone spells are now EASY - just subclass ZoneControlCondition and override `_has_*_effect()` + `_create_*_handler()` methods.
 
+**Phase ordering for turn start handlers:** Zone spell turn-start effects (Grease prone, Cloudkill damage) must use `EventPhase.EXECUTION` so they fire BEFORE the entity's action_economy resets. This allows Prone auto-stand (at `EFFECT` phase) to properly consume movement. See "Turn Start Phase Ordering" section below.
+
 ### Pattern 9: HP-Threshold Effect
 **Used by:** Power Word Kill, Power Word Stun
 **Effort:** EASY - simple HP check
@@ -761,6 +763,57 @@ With the AoE system complete, concentration mechanics solid, and **zone spells n
 - Auto-stand at turn start (costs half movement)
 - Immediate stand during own turn if movement available
 - Stays prone if no movement or not their turn
+
+### Turn Start Phase Ordering (Critical for Zone + Prone Interaction)
+
+The `on_turn_start()` method has a specific phase sequence that zone spells like Grease must respect:
+
+```
+on_turn_start() in dnd/entity.py
+─────────────────────────────────────────────────────────
+1. DECLARATION - event created
+
+2. phase_to(EXECUTION) ───► Zone handlers fire here (Grease)
+   │                        is_my_turn = False (not set yet)
+   │                        action_economy NOT reset yet
+   │
+   └─ Grease applies Prone (entity has no movement to stand)
+
+3. [BETWEEN EXECUTION and EFFECT]:
+   └─ advance_duration_condition() - expires Dodge, etc.
+   └─ action_economy.reset_all_costs() - movement becomes 30ft
+   └─ is_my_turn = True ◄────────────────────────────────────
+
+4. phase_to(EFFECT) ─────► Auto-stand handler fires here
+   │                       Entity now has movement, stands up
+   │                       Consumes 15ft, removes Prone
+   │
+   └─ Result: Prone=False, Movement=15ft
+
+5. phase_to(COMPLETION) ─► Handlers blocked (EventQueue skips)
+```
+
+**Key Design Points:**
+- `is_my_turn` is set AFTER action_economy reset, not before
+- This ensures "immediate stand during own turn" only fires mid-turn (after reset)
+- Zone spell turn-start effects use EXECUTION phase (before reset)
+- Auto-stand uses EFFECT phase (after reset, entity has movement)
+- Handlers never register for COMPLETION (EventQueue.register() skips it)
+
+**Why This Matters:**
+If `is_my_turn` was set before EXECUTION, Prone's `_apply()` would see it's the entity's turn with full movement and immediately cancel itself - then the action_economy reset would wipe out the movement cost, effectively giving free standing.
+
+**Handler Phase Assignments:**
+| Handler | Phase | Reason |
+|---------|-------|--------|
+| Grease turn start | EXECUTION | Apply Prone BEFORE auto-stand at EFFECT |
+| Cloudkill turn start | EFFECT | Damage only, no Prone interaction |
+| Spirit Guardians turn start | EFFECT | Damage only, no Prone interaction |
+| Prone auto-stand | EFFECT | Fire AFTER action_economy reset, consume movement |
+| Survivor (heal at turn start) | EXECUTION | HP-based, doesn't need movement |
+| Rage maintenance check | EXECUTION | Check markers before they expire |
+
+**Rule of Thumb:** Zone spells that apply Prone use EXECUTION. Zone spells that only deal damage can use EFFECT.
 
 **Reaction spells (Shield, Counterspell)** use the **same EventHandler pattern as Protection fighting style**. No new trigger system needed!
 
