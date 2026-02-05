@@ -160,7 +160,7 @@ class SpikeGrowth(SpellAction):
             zone_center=target_pos,
             spell_dc=dc
         )
-        caster.add_condition(zone)
+        caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
         concentration = Concentrating(
@@ -168,7 +168,7 @@ class SpikeGrowth(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Spike Growth"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_external_condition(caster.uuid, zone.uuid)

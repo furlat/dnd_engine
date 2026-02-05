@@ -103,7 +103,7 @@ class Blur(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid
         )
-        caster.add_condition(blur_effect)
+        caster.add_condition(blur_effect, parent_event=effect_event)
 
         # Apply Concentrating condition
         concentration = Concentrating(
@@ -111,7 +111,7 @@ class Blur(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Blur"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=effect_event)
 
         # Link effect to concentration
         concentration.add_external_condition(caster.uuid, blur_effect.uuid)
@@ -151,7 +151,7 @@ class FearEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event = target.add_condition(frightened)
+        sub_event = target.add_condition(frightened, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(frightened.uuid)
 
@@ -325,7 +325,7 @@ class Fear(SpellAction):
             caster_uuid=caster.uuid,
             spell_dc=dc
         )
-        target.add_condition(fear_effect)
+        target.add_condition(fear_effect, parent_event=effect_event)
 
         # Apply Concentrating (only on first target via convolution)
         # Note: Convolution handles multi-target, but concentration is per-spell
@@ -335,7 +335,7 @@ class Fear(SpellAction):
                 target_entity_uuid=caster.uuid,
                 spell_name="Fear"
             )
-            caster.add_condition(concentration)
+            caster.add_condition(concentration, parent_event=effect_event)
 
         # Link fear effect to concentration
         conc = caster.active_conditions.get("Concentrating")
@@ -374,7 +374,7 @@ class HypnoticPatternEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event = target.add_condition(charmed)
+        sub_event = target.add_condition(charmed, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(charmed.uuid)
 
@@ -384,7 +384,7 @@ class HypnoticPatternEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event2 = target.add_condition(incapacitated)
+        sub_event2 = target.add_condition(incapacitated, parent_event=declaration_event)
         if sub_event2 and sub_event2.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(incapacitated.uuid)
 
@@ -540,7 +540,7 @@ class HypnoticPattern(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(hp_effect)
+        target.add_condition(hp_effect, parent_event=effect_event)
 
         # Apply Concentrating (only on first target)
         if "Concentrating" not in caster.active_conditions:
@@ -549,7 +549,7 @@ class HypnoticPattern(SpellAction):
                 target_entity_uuid=caster.uuid,
                 spell_name="Hypnotic Pattern"
             )
-            caster.add_condition(concentration)
+            caster.add_condition(concentration, parent_event=effect_event)
 
         # Link effect to concentration
         conc = caster.active_conditions.get("Concentrating")
@@ -586,7 +586,7 @@ class ColorSprayEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event = target.add_condition(blinded)
+        sub_event = target.add_condition(blinded, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(blinded.uuid)
 
@@ -752,7 +752,7 @@ class ColorSpray(SpellAction):
                 target_entity_uuid=caster.uuid  # Duration tied to caster's turns
             )
         )
-        target.add_condition(color_spray_effect)
+        target.add_condition(color_spray_effect, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

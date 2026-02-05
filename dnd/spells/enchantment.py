@@ -186,7 +186,7 @@ class CharmPerson(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(charmed)
+        target.add_condition(charmed, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -242,7 +242,7 @@ class HoldPersonEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid  # Links child to parent
         )
-        sub_condition_event = target.add_condition(paralyzed)
+        sub_condition_event = target.add_condition(paralyzed, parent_event=execution_event)
 
         if sub_condition_event is not None and sub_condition_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(paralyzed.uuid)
@@ -420,7 +420,7 @@ class HoldPerson(SpellAction):
             target_entity_uuid=caster.uuid,
             spell_name="Hold Person"
         )
-        caster.add_condition(concentration)
+        caster.add_condition(concentration, parent_event=execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -457,7 +457,7 @@ class HoldPerson(SpellAction):
             caster_uuid=caster.uuid,
             spell_dc=dc
         )
-        target.add_condition(hold_effect)
+        target.add_condition(hold_effect, parent_event=effect_event)
 
         # 6. Link Concentrating → HoldPersonEffect via external_conditions
         # When concentration breaks, HoldPersonEffect is removed, which removes Paralyzed
@@ -505,7 +505,7 @@ class HoldMonsterEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event = target.add_condition(paralyzed)
+        sub_event = target.add_condition(paralyzed, parent_event=execution_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(paralyzed.uuid)
 
@@ -666,7 +666,7 @@ class HoldMonster(SpellAction):
                 target_entity_uuid=caster.uuid,
                 spell_name="Hold Monster"
             )
-            caster.add_condition(concentration)
+            caster.add_condition(concentration, parent_event=execution_event)
             concentration_condition = concentration
         else:
             concentration_condition = existing_conc
@@ -701,7 +701,7 @@ class HoldMonster(SpellAction):
             caster_uuid=caster.uuid,
             spell_dc=dc
         )
-        target.add_condition(hold_effect)
+        target.add_condition(hold_effect, parent_event=effect_event)
 
         # Link to concentration
         if isinstance(concentration_condition, Concentrating):
@@ -915,7 +915,7 @@ class SleepEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event = target.add_condition(unconscious)
+        sub_event = target.add_condition(unconscious, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(unconscious.uuid)
 
@@ -1124,7 +1124,7 @@ class Sleep(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(sleep_effect)
+        target.add_condition(sleep_effect, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1162,7 +1162,7 @@ class PowerWordStunEffect(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid
         )
-        sub_event = target.add_condition(stunned)
+        sub_event = target.add_condition(stunned, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(stunned.uuid)
 
@@ -1305,7 +1305,7 @@ class PowerWordStun(SpellAction):
                 caster_uuid=caster.uuid,
                 spell_dc=dc
             )
-            target.add_condition(stun_effect)
+            target.add_condition(stun_effect, parent_event=effect_event)
 
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,

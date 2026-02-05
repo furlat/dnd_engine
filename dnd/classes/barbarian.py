@@ -1178,9 +1178,10 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
     attack = Attack(
         source_entity_uuid=source_entity_uuid,
         target_entity_uuid=event.source_entity_uuid,
-        weapon_slot=WeaponSlot.MELEE_MAIN
+        weapon_slot=WeaponSlot.MELEE_MAIN,
+        parent_event=event  # Link to triggering damage event
     )
-    attack.apply()
+    attack.apply(parent_event=event)
 
     # Consume reaction
     entity.action_economy.consume("reactions", 1)

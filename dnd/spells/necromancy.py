@@ -352,14 +352,14 @@ class ChillTouch(SpellAction):
                 target_entity_uuid=caster.uuid
             )
         )
-        caster.add_condition(effect_condition)
+        caster.add_condition(effect_condition, parent_event=effect_event)
 
         # Apply No Healing to target
         no_healing = NoHealing(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
-        target.add_condition(no_healing)
+        target.add_condition(no_healing, parent_event=effect_event)
 
         # Link via external_conditions for cleanup
         effect_condition.add_external_condition(target.uuid, no_healing.uuid)
@@ -578,7 +578,7 @@ class BlindnessDeafnessEffect(BaseCondition):
                 parent_condition=self.uuid
             )
 
-        sub_event = target.add_condition(effect)
+        sub_event = target.add_condition(effect, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(effect.uuid)
 
@@ -768,7 +768,7 @@ class BlindnessDeafness(SpellAction):
             spell_dc=dc,
             effect_type=self.effect_type
         )
-        target.add_condition(bd_effect)
+        target.add_condition(bd_effect, parent_event=effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
