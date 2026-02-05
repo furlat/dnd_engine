@@ -85,6 +85,55 @@ This document analyzes all **120 sorcerer spells** from D&D 5e SRD for implement
 
 These patterns document the tricks and techniques already used in the codebase. Recognizing which pattern a spell uses determines its difficulty rating.
 
+### Critical: Event Relationship Pattern (parent_event)
+
+**All sub-events must link to their parent event** via the `parent_event` parameter. This ensures:
+1. Combat log entries nest correctly (sub-events appear as `sub_entries` of parent)
+2. No orphan events that trigger duplicate combat log callbacks
+3. Clear event hierarchy for debugging
+
+**Rule:** Only events with `parent_event=None` trigger the combat log callback. Child events need `parent_event` set.
+
+**Signature differences by method:**
+
+| Method | `parent_event` Type | Pattern |
+|--------|---------------------|---------|
+| `Entity.add_condition()` | `Event` object | `parent_event=effect_event` or `parent_event=event` |
+| `Entity.receive_damage()` | `UUID` | `parent_event=event.uuid` |
+| `Entity.create_saving_throw_request()` | `UUID` | `parent_event=event.uuid` |
+
+**In SpellAction._apply(execution_event):**
+```python
+effect_event = execution_event.phase_to(EventPhase.EFFECT, ...)
+
+# Conditions are children of the effect event
+target.add_condition(spell_effect, parent_event=effect_event)
+caster.add_condition(concentration, parent_event=effect_event)
+
+# Damage and saves take UUID
+target.receive_damage(..., parent_event=effect_event.uuid)
+save_request = caster.create_saving_throw_request(..., parent_event=effect_event.uuid)
+```
+
+**In BaseCondition._apply(declaration_event):**
+```python
+execution_event = declaration_event.phase_to(EventPhase.EXECUTION, ...)
+
+# Sub-conditions are children of the execution event
+target.add_condition(paralyzed, parent_event=execution_event)
+```
+
+**In EventHandler processors (zone spells):**
+```python
+def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+    # The event passed to processor is the parent
+    entity.add_condition(prone, parent_event=event)
+    entity.receive_damage(..., parent_event=event.uuid)
+    save_request = entity.create_saving_throw_request(..., parent_event=event.uuid)
+```
+
+**Important:** `parent_event` for add_condition is the Event object, NOT the UUID!
+
 ### Pattern 1: Single-Target Attack Spell
 **Used by:** Fire Bolt
 **Effort:** TRIVIAL for new spells using this pattern
@@ -100,23 +149,66 @@ These patterns document the tricks and techniques already used in the codebase. 
 **Used by:** Sacred Flame
 **Effort:** TRIVIAL for new spells using this pattern
 
+```python
+def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+    dc = caster.spell_save_dc()
+
+    effect_event = execution_event.phase_to(EventPhase.EFFECT, ...)
+
+    # Save request takes UUID (parent_event=effect_event.uuid)
+    save_request = caster.create_saving_throw_request(
+        target_entity_uuid=target.uuid,
+        ability_name="dexterity",
+        dc=dc,
+        parent_event=effect_event.uuid  # UUID!
+    )
+    _, save_roll, success = target.saving_throw(save_request)
+
+    # Damage takes UUID (parent_event=effect_event.uuid)
+    final_damage = damage_roll.total if not success else damage_roll.total // 2
+    target.receive_damage(final_damage, damage_type, caster.uuid, parent_event=effect_event.uuid)
+
+    return effect_event.phase_to(EventPhase.COMPLETION, ...)
 ```
-1. Get DC from caster.spell_save_dc()
-2. Target makes saving_throw()
-3. Apply full/half/no damage based on success
-```
+
+**Key:** `receive_damage()` and `create_saving_throw_request()` take `event.uuid` (UUID), not the Event object.
 
 ### Pattern 3: AoE Save Spell (Convolution)
 **Used by:** Fireball, Lightning Bolt, Burning Hands, Thunderwave, Shatter
 **Effort:** EASY - just clone and change shape/damage/save
 
+```python
+class MyAoE(SpellAction):
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    aoe_shape: AoEShape = Field(default_factory=lambda: AoEShape(type="sphere", radius=20))
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        # Called once per affected entity via convolution
+        dc = caster.spell_save_dc()
+
+        effect_event = execution_event.phase_to(EventPhase.EFFECT, ...)
+
+        # Save request takes UUID
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="dexterity",
+            dc=dc,
+            parent_event=effect_event.uuid  # UUID!
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        # Damage takes UUID
+        final_damage = damage_roll.total if not success else damage_roll.total // 2
+        target.receive_damage(final_damage, damage_type, caster.uuid, parent_event=effect_event.uuid)
+
+        # If applying conditions (e.g., Thunderwave push), use Event object
+        if not success and self.has_push_effect:
+            # Forced movement or conditions take Event object
+            # ... forced movement handling ...
+
+        return effect_event.phase_to(EventPhase.COMPLETION, ...)
 ```
-1. target_type = POSITION_AOE
-2. aoe_shape = Sphere/Cone/Line/Cube with parameters
-3. Convolution loop calls _apply() per affected entity
-4. Each target makes save → full/half damage
-```
-**Key insight:** FOV from explosion center blocks entities behind walls.
+**Key insight:** FOV from explosion center blocks entities behind walls. Each target gets its own event chain via convolution.
 
 ### Pattern 4: Multi-Target Explicit Selection
 **Used by:** Magic Missile
@@ -132,12 +224,29 @@ These patterns document the tricks and techniques already used in the codebase. 
 **Used by:** Mage Armor, Hold Person, Call Lightning
 **Effort:** EASY once condition is written
 
+```python
+def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+    # ... validation ...
+
+    effect_event = execution_event.phase_to(EventPhase.EFFECT, ...)
+
+    # 1. Apply spell-effect condition to target (MUST pass parent_event)
+    spell_effect = MySpellEffect(source=caster.uuid, target=target.uuid)
+    target.add_condition(spell_effect, parent_event=effect_event)
+
+    # 2. Apply Concentrating to caster (MUST pass parent_event)
+    concentration = Concentrating(source=caster.uuid, target=caster.uuid, spell_name="My Spell")
+    caster.add_condition(concentration, parent_event=effect_event)
+
+    # 3. Link via external_conditions for auto-cleanup
+    concentration.add_external_condition(target.uuid, spell_effect.uuid)
+
+    # 4. Optional: repeat saves via EventHandler on TURN_END (in spell_effect._apply())
+
+    return effect_event.phase_to(EventPhase.COMPLETION, ...)
 ```
-1. Apply spell-effect condition to target
-2. Apply Concentrating to caster (if concentration)
-3. Link via external_conditions for auto-cleanup
-4. Optional: repeat saves via EventHandler on TURN_END
-```
+
+**Key:** Always pass `parent_event=effect_event` to `add_condition()` - this links condition events to the spell event for proper combat log nesting.
 
 ### Pattern 6: Granted Action
 **Used by:** Call Lightning (grants CallLightningStrike action)
@@ -190,13 +299,38 @@ class MyZone(ZoneControlCondition):
         return True  # Triggers _create_zone_turn_start_handler()
 
     def _create_zone_entry_handler(self) -> EventHandler:
-        def processor(event, _):
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             entity_uuid = getattr(event, 'entity_uuid', None)
             entity = Entity.get(entity_uuid)
-            # Apply damage, save, condition, etc.
+            if not entity:
+                return None
+
+            # Saves take UUID (parent_event=event.uuid)
+            save_request = entity.create_saving_throw_request(
+                target_entity_uuid=entity.uuid,
+                ability_name="dexterity",
+                dc=dc,
+                parent_event=event.uuid  # UUID!
+            )
+            _, _, success = entity.saving_throw(save_request)
+
+            if not success:
+                # Conditions take Event object (parent_event=event)
+                prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid)
+                entity.add_condition(prone, parent_event=event)  # Event object!
+
+                # Damage takes UUID (parent_event=event.uuid)
+                entity.receive_damage(10, DamageType.FIRE, source_uuid, parent_event=event.uuid)
+
             return None
+
         return EventHandler(...)
 ```
+
+**Key:** In handler processors, the `event` parameter IS the parent. Pass `event` (object) to `add_condition`, `event.uuid` to damage/saves.
 
 **Zone movement (Spirit Guardians, Cloudkill):**
 ```python
@@ -758,6 +892,13 @@ With the AoE system complete, concentration mechanics solid, and **zone spells n
 - Override points: `_has_entry_effect()`, `_has_turn_start_effect()`, `_create_zone_*_handler()`
 - Zone movement via `move_zone()` with O(delta) position updates
 - Concentration cleanup via `external_conditions` chain
+
+**Event Relationship Pattern (parent_event) - CRITICAL:**
+- All sub-events must link to their parent via `parent_event` parameter
+- `add_condition()` takes Event object: `parent_event=effect_event`
+- `receive_damage()` and `create_saving_throw_request()` take UUID: `parent_event=event.uuid`
+- In handler processors, the `event` parameter IS the parent
+- This ensures combat log entries nest correctly and no orphan events
 
 **BG3-style Prone auto-stand** implemented for Grease spell:
 - Auto-stand at turn start (costs half movement)
