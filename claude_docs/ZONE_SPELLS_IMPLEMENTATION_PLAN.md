@@ -1,16 +1,75 @@
 # Zone Spells Implementation Plan
 
-## Overview
+## Status: Infrastructure COMPLETE
 
-Five zone spells requiring three different architectural patterns:
+The spatial handler infrastructure is fully implemented and tested. This document describes how to implement zone spells using the **subclass pattern** - each spell creates its own condition subclass with custom `_apply()` logic.
 
-| Spell | Pattern | Zone Movement | Key Challenge |
-|-------|---------|---------------|---------------|
-| **Spike Growth** | Static Tile-Based | None | Per-5ft damage tracking |
-| **Grease** | Static Tile-Based | None | Turn-end handler, Prone |
-| **Web** | Static Tile-Based | None | Restrained + escape action |
-| **Cloudkill** | Controlled Movement | Auto (start of turn) | Zone auto-moves away from caster |
-| **Spirit Guardians** | Caster-Centered | Follows caster | Not tile-based at all |
+---
+
+## Implemented Infrastructure
+
+### SpatialHandler System (COMPLETE)
+
+- `BaseHandler` class in `dnd/core/events.py`
+- `SpatialHandler` class for position-indexed handlers
+- Separate registries: `_spatial_handlers`, `_spatial_handlers_by_position`
+- Methods: `add_spatial_handler()`, `remove_spatial_handler()`, `update_spatial_handler_positions()`
+- 5-tuple return signature for `_apply()`: `(modifiers, handlers, sub_conditions, spatial_handlers, event)`
+- `spatial_handler_uuids` field on `BaseCondition`
+- All 56 conditions updated to new signature
+
+### Base Classes (MINIMAL - No Spell-Specific Fields)
+
+From `dnd/tile_conditions.py`:
+
+```python
+# TileEffectCondition - MINIMAL base class (actual code)
+class TileEffectCondition(BaseCondition):
+    """
+    Base condition applied to tiles by zone spells.
+
+    The target_entity_uuid is the tile's UUID.
+    Subclasses override _apply() to add specific effects (terrain modifiers,
+    damage handlers, obscurement, etc.).
+
+    This is a minimal base class - spell-specific logic belongs in subclasses.
+    """
+    name: str = "Tile Effect"
+    description: str = "A tile effect from a zone spell"
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def get_tile(self) -> Optional[Tile]:
+        """Helper to get the tile this condition is applied to."""
+        if self.target_entity_uuid is None:
+            return None
+        grid = get_map()
+        return grid.get_tile_by_uuid(self.target_entity_uuid)
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Subclasses must override to add specific effects.
+
+        Default implementation does nothing - returns empty lists.
+        """
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], [], [], [], effect_event
+```
+
+`ZoneControlCondition` retains more structure because it manages a zone of tiles:
+- `zone_center`, `zone_shape`, `zone_radius_feet` - geometry fields
+- `adds_difficult_terrain` - convenience for terrain modifier on all tiles
+- Override points: `_has_entry_effect()`, `_create_zone_entry_handler()`, etc.
+
+### Verification Commands (ALL PASS)
+
+```bash
+python examples/test_spatial_handler_registry.py
+python examples/spatial_events_test.py
+python examples/test_terrain_movement_system.py
+python examples/test_legacy_migration.py
+```
 
 ---
 
@@ -18,7 +77,9 @@ Five zone spells requiring three different architectural patterns:
 
 ### Pattern 1: Static Tile-Based (Spike Growth, Grease, Web)
 
-Current infrastructure works. Zone is fixed at cast position.
+Zone is fixed at cast position. Each spell creates:
+- A `ZoneControlCondition` subclass that manages the zone
+- A `TileEffectCondition` subclass with custom `_apply()` for tile-level effects
 
 ```
 Caster: Concentrating(spell_name="Web")
@@ -28,529 +89,396 @@ Caster: Concentrating(spell_name="Web")
 
 ### Pattern 2: Controlled Movement (Cloudkill)
 
-Zone can be moved. For Cloudkill, movement is **automatic** at start of caster's turn.
+Zone can move automatically. The zone subclass adds a TURN_START handler.
 
 ```
 Caster: Concentrating(spell_name="Cloudkill")
     └── external_conditions ──► CloudkillZone (on caster)
-                                    ├── terrain_conditions ──► CloudkillTileEffect (on each tile)
-                                    └── EventHandler: TURN_START (caster) → move_zone()
+                                    ├── terrain_conditions ──► CloudkillTileEffect
+                                    └── EventHandler: TURN_START → move_zone()
 ```
-
-**Implementation:**
-- Add EventHandler in ZoneControlCondition._apply() that listens for TURN_START
-- Handler checks if event.source_entity_uuid == caster.uuid
-- Handler calls `self.move_zone(new_position)` with calculated direction
-
-**Movement Direction:** "10 feet away from caster" = calculate vector from caster to zone center, normalize, multiply by 2 tiles.
 
 ### Pattern 3: Caster-Centered (Spirit Guardians)
 
-**Critical Insight:** Tile-based is inefficient here. Every caster movement would require:
-- Remove N tile conditions from old positions
-- Add N tile conditions to new positions
-- Delete/recreate N EventHandlers
-
-**Better Approach:** Entity-distance-based handlers, no tile conditions.
+Zone follows caster using `move_zone()` which is now efficient thanks to `update_spatial_handler_positions()`.
 
 ```
 Caster: Concentrating(spell_name="Spirit Guardians")
-    └── external_conditions ──► SpiritGuardiansAura (on caster)
-                                    ├── EventHandler: SPATIAL_ENTITY_ENTERED → check distance, save/damage
-                                    ├── EventHandler: TURN_START → check distance, save/damage
-                                    └── Speed modifier (aura-style) on affected entities
+    └── external_conditions ──► SpiritGuardiansZone (on caster)
+                                    ├── SpatialHandler: SPATIAL_ENTITY_ENTERED (damage on entry)
+                                    ├── EventHandler: TURN_START (damage if still in zone)
+                                    ├── EventHandler: caster SPATIAL_ENTITY_ENTERED → move_zone()
+                                    └── Speed modifiers on affected entities
 ```
-
-**New Class:** `AuraCondition` - doesn't use tiles, uses distance checks
-
-```python
-class AuraCondition(BaseCondition):
-    """Aura centered on an entity that affects nearby creatures."""
-    aura_radius_feet: int = 15
-
-    def is_in_aura(self, entity: Entity) -> bool:
-        """Check if entity is within aura radius of the caster."""
-        caster = Entity.get(self.source_entity_uuid)
-        distance = caster.senses.get_feet_distance(entity.senses.position)
-        return distance <= self.aura_radius_feet
-```
-
-**Speed Halving:** This is tricky. Options:
-1. Add/remove speed modifier dynamically as entities enter/leave
-2. Use contextual modifier that checks distance at evaluation time
-
-Option 2 is cleaner - use `ContextualNumericalModifier` on movement that checks aura presence.
-
-**"First time on a turn" tracking:**
-- Store `triggered_this_round: Set[UUID]` on the condition
-- Clear at start of caster's turn
-- Check before triggering save
 
 ---
 
-## Infrastructure Additions Needed
+## The Subclass Pattern
 
-### 1. TileEffectCondition Extensions
+**CRITICAL**: Spell-specific logic belongs in subclasses, NOT in base class fields.
 
-```python
-class TileEffectCondition(BaseCondition):
-    # EXISTING
-    adds_difficult_terrain: bool = False
-    damage_on_entry_dice: Optional[str] = None
-    damage_on_entry_type: DamageType = DamageType.FIRE
-    damage_on_turn_start_dice: Optional[str] = None
-    damage_on_turn_start_type: DamageType = DamageType.FIRE
-
-    # NEW: Per-5ft movement damage (Spike Growth)
-    damage_per_5ft_dice: Optional[str] = None
-    damage_per_5ft_type: DamageType = DamageType.PIERCING
-
-    # NEW: Turn-end triggers (Grease)
-    save_on_turn_end_ability: Optional[str] = None  # "dexterity"
-    save_on_turn_end_dc: Optional[int] = None
-    condition_on_turn_end_failed_save: Optional[str] = None  # "Prone"
-
-    # NEW: Save-based entry effects (Web, Grease)
-    save_on_entry_ability: Optional[str] = None
-    save_on_entry_dc: Optional[int] = None
-    condition_on_entry_failed_save: Optional[str] = None  # "Restrained"
-    save_on_entry_damage_dice: Optional[str] = None  # For Cloudkill (damage on save)
-    save_on_entry_damage_type: DamageType = DamageType.POISON
-    save_on_entry_half_on_success: bool = False  # Cloudkill does half on success
-
-    # NEW: Save-based turn start effects (Web)
-    save_on_turn_start_ability: Optional[str] = None
-    save_on_turn_start_dc: Optional[int] = None
-    condition_on_turn_start_failed_save: Optional[str] = None
-    save_on_turn_start_damage_dice: Optional[str] = None
-    save_on_turn_start_damage_type: DamageType = DamageType.POISON
-    save_on_turn_start_half_on_success: bool = False
-```
-
-### 2. ZoneControlCondition Extensions
+### Example: Spike Growth Tile Effect
 
 ```python
-class ZoneControlCondition(BaseCondition):
-    # EXISTING
-    zone_center: Tuple[int, int]
-    zone_shape: str
-    zone_radius_feet: int
-    zone_direction: Optional[Tuple[int, int]]
-    affected_positions: List[Tuple[int, int]]
+# In dnd/spells/transmutation.py
+class SpikeGrowthTileEffect(TileEffectCondition):
+    """Spike Growth - deals 2d4 piercing per 5ft traveled."""
+    name: str = "Spike Growth"
+    description: str = "Camouflaged ground covered with spikes"
 
-    # NEW: Auto-movement (Cloudkill)
-    auto_move_on_caster_turn: bool = False
-    auto_move_distance_feet: int = 10
-    auto_move_direction: str = "away_from_caster"  # or "toward_caster", "fixed_direction"
+    # Spell-specific fields (NOT on base class)
+    spell_dc: int = 10
+    damage_dice: str = "2d4"
 
-    # NEW: Handler tracking for auto-movement
-    _movement_handler_uuid: Optional[UUID] = None
+    def _apply(self, declaration_event) -> Tuple[...]:
+        """Add difficult terrain modifier and entry damage handler."""
+        outs = []
+        spatial_handler_uuids = []
+        tile = self.get_tile()
+
+        if tile:
+            # 1. Add difficult terrain modifier
+            mod = NumericalModifier.create(
+                source_entity_uuid=self.source_entity_uuid,
+                name="Spike Growth Difficult Terrain",
+                value=1
+            )
+            mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
+            outs.append((tile.walking_cost.uuid, mod_uuid))
+
+            # 2. Create entry damage handler
+            handler = self._create_spike_damage_handler(tile)
+            EventQueue.add_spatial_handler(handler)
+            spatial_handler_uuids.append(handler.uuid)
+
+        effect_event = declaration_event.phase_to(EventPhase.EFFECT) if declaration_event else None
+        return outs, [], [], spatial_handler_uuids, effect_event
+
+    def _create_spike_damage_handler(self, tile: Tile) -> SpatialHandler:
+        """Create handler for spike damage on entry."""
+        def processor(event: Event, _) -> Optional[Event]:
+            entity_uuid = getattr(event, 'entity_uuid', None)
+            if not entity_uuid:
+                return None
+            entity = Entity.get(entity_uuid)
+            if not entity:
+                return None
+
+            # Deal 2d4 piercing damage
+            count, value = parse_dice_string(self.damage_dice)
+            damage = sum(random.randint(1, value) for _ in range(count))
+            entity.health.take_damage(damage, DamageType.PIERCING, source_entity_uuid=self.source_entity_uuid)
+            return None
+
+        return SpatialHandler(
+            name="Spike Growth Entry Damage",
+            source_entity_uuid=tile.uuid,
+            positions={tile.position},
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            event_phase=EventPhase.EFFECT,
+            event_processor=processor
+        )
 ```
 
-### 3. New Base Class: AuraCondition
+### Example: Web Tile Effect (with Save)
 
 ```python
-class AuraCondition(BaseCondition):
-    """
-    Aura effect centered on an entity.
+class WebTileEffect(TileEffectCondition):
+    """Web - DEX save or Restrained."""
+    name: str = "Web"
+    spell_dc: int = 13  # Set from caster's spell DC
 
-    Unlike ZoneControlCondition, this doesn't use tile conditions.
-    Instead, uses distance checks from the source entity.
-    More efficient for effects that move with the caster.
-    """
-    aura_radius_feet: int = 15
+    def _apply(self, declaration_event) -> Tuple[...]:
+        outs = []
+        spatial_handler_uuids = []
+        tile = self.get_tile()
 
-    # Damage configuration
-    save_ability: Optional[str] = None  # "wisdom"
-    save_dc: Optional[int] = None
-    damage_dice: Optional[str] = None  # "3d8"
-    damage_type: DamageType = DamageType.RADIANT
-    half_damage_on_success: bool = True
+        if tile:
+            # 1. Difficult terrain
+            mod = NumericalModifier.create(...)
+            mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
+            outs.append((tile.walking_cost.uuid, mod_uuid))
 
-    # Speed modifier
-    speed_modifier: Optional[str] = None  # "half" or numerical
+            # 2. Entry save handler
+            handler = self._create_web_entry_handler(tile)
+            EventQueue.add_spatial_handler(handler)
+            spatial_handler_uuids.append(handler.uuid)
 
-    # Trigger tracking
-    triggers_on_entry: bool = True
-    triggers_on_turn_start: bool = True
-    once_per_turn: bool = True  # Spirit Guardians: "first time on a turn"
+        return outs, [], [], spatial_handler_uuids, effect_event
 
-    # Ally/enemy filtering
-    affects_allies: bool = False
-    affects_enemies: bool = True
-    designated_unaffected: List[UUID] = []  # Spirit Guardians: caster chooses
+    def _create_web_entry_handler(self, tile: Tile) -> SpatialHandler:
+        """DEX save or become Restrained."""
+        def processor(event: Event, _) -> Optional[Event]:
+            entity = Entity.get(getattr(event, 'entity_uuid', None))
+            if not entity:
+                return None
 
-    # Internal tracking
-    _triggered_this_round: Set[UUID] = set()  # For once_per_turn
-    _entry_handler_uuid: Optional[UUID] = None
-    _turn_start_handler_uuid: Optional[UUID] = None
+            # Make DEX save
+            save_result = entity.saving_throw(SavingThrowRequest(
+                ability="dexterity",
+                dc=self.spell_dc,
+                source_entity_uuid=self.source_entity_uuid
+            ))
+
+            if not save_result.success:
+                # Apply WebRestrained (which has Restrained as sub-condition)
+                restrained = WebRestrained(
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=entity.uuid,
+                    spell_dc=self.spell_dc
+                )
+                entity.add_condition(restrained)
+
+            return None
+
+        return SpatialHandler(...)
 ```
 
-### 4. Escape Action Mechanism
+### Working Reference: Test Subclasses
 
-For Web's "use action to make STR check to escape":
+The actual working implementations are in `examples/test_terrain_movement_system.py`.
 
+**TestDifficultTerrain** - Adds terrain modifier:
 ```python
-class EscapeRestrainedAction(BaseAction):
-    """Action to attempt escaping from a restraining effect."""
-    name: str = "Break Free"
-    action_type: str = "action"
+class TestDifficultTerrain(TileEffectCondition):
+    name: str = "Test Difficult"
+    description: str = "Test difficult terrain effect"
 
-    # Reference to the condition to remove on success
-    restraining_condition_uuid: UUID
-    check_ability: str = "strength"  # Could be STR or DEX
-    dc: int
+    def _apply(self, declaration_event):
+        from dnd.core.events import EventPhase
+        outs = []
+        tile = self.get_tile()
+        if tile:
+            mod = NumericalModifier.create(
+                source_entity_uuid=self.source_entity_uuid,
+                name=f"{self.name} Difficult Terrain",
+                value=1  # +1 to walking cost (total = 2)
+            )
+            mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
+            outs.append((tile.walking_cost.uuid, mod_uuid))
 
-    def _apply(self, event: ActionEvent) -> ActionEvent:
-        # Make ability check
-        entity = Entity.get(event.source_entity_uuid)
-        check_result = entity.ability_check(self.check_ability, self.dc)
-
-        if check_result.success:
-            # Remove the restraining condition
-            condition = BaseObject.get(self.restraining_condition_uuid)
-            if condition:
-                entity.remove_condition(condition.name)
-            # Also remove this action template
-            entity.remove_action_template(self.uuid)
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return outs, [], [], [], effect_event
 ```
 
-**Linking:** When WebTileEffect applies Restrained, also register EscapeRestrainedAction template.
+**TestFireTile** - Entry damage with SpatialHandler:
+```python
+class TestFireTile(TileEffectCondition):
+    name: str = "Test Fire"
+    description: str = "Burns entities that enter"
+
+    def _apply(self, declaration_event):
+        from dnd.core.events import EventPhase, EventQueue
+        spatial_handler_uuids = []
+        tile = self.get_tile()
+        if tile:
+            handler = self._create_entry_damage_handler(tile, "1d6", DamageType.FIRE)
+            EventQueue.add_spatial_handler(handler)
+            spatial_handler_uuids.append(handler.uuid)
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], [], [], spatial_handler_uuids, effect_event
+
+    def _create_entry_damage_handler(self, tile, damage_dice_str, damage_type):
+        from dnd.core.events import EventType, EventPhase, SpatialHandler
+        from dnd.tile_conditions import parse_dice_string
+        import random
+
+        source_uuid = self.source_entity_uuid
+
+        def entry_damage_processor(event, _handler_source_uuid):
+            entity_uuid = getattr(event, 'entity_uuid', None)
+            if not entity_uuid:
+                return None
+            entity = Entity.get(entity_uuid)
+            if not entity:
+                return None
+
+            count, value = parse_dice_string(damage_dice_str)
+            damage = sum(random.randint(1, value) for _ in range(count))
+            entity.health.take_damage(damage, damage_type, source_entity_uuid=source_uuid)
+            return None
+
+        return SpatialHandler(
+            name=f"{self.name} Entry Damage",
+            source_entity_uuid=tile.uuid,
+            positions={tile.position},
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            event_phase=EventPhase.EFFECT,
+            event_processor=entry_damage_processor
+        )
+```
+
+**TestSpikedFloor** - Turn start damage with EventHandler:
+```python
+class TestSpikedFloor(TileEffectCondition):
+    name: str = "Test Spikes"
+    description: str = "Damages at turn start"
+
+    def _apply(self, declaration_event):
+        from dnd.core.events import EventPhase, EventQueue
+        handler_uuids = []
+        tile = self.get_tile()
+        if tile:
+            handler = self._create_turn_start_damage_handler(tile.uuid, "1d4", DamageType.PIERCING)
+            EventQueue.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], handler_uuids, [], [], effect_event
+
+    def _create_turn_start_damage_handler(self, tile_uuid, damage_dice_str, damage_type):
+        from dnd.core.events import EventType, EventPhase, EventHandler, Trigger
+        from dnd.tile_conditions import parse_dice_string
+        import random
+
+        source_uuid = self.source_entity_uuid
+
+        def turn_start_damage_processor(event, _handler_source_uuid):
+            if event.event_type != EventType.TURN_START:
+                return None
+
+            entity = Entity.get(event.source_entity_uuid)
+            if not entity:
+                return None
+
+            grid = get_map()
+            tile = grid.get_tile_by_uuid(tile_uuid)
+            if not tile:
+                return None
+
+            if entity.senses.position != tile.position:
+                return None
+
+            count, value = parse_dice_string(damage_dice_str)
+            damage = sum(random.randint(1, value) for _ in range(count))
+            entity.health.take_damage(damage, damage_type, source_entity_uuid=source_uuid)
+            return None
+
+        return EventHandler(
+            name=f"{self.name} Turn Start Damage",
+            source_entity_uuid=tile_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=turn_start_damage_processor
+        )
+```
+
+Also see `examples/test_legacy_migration.py` for:
+- `TestEntryDamageTile` - Entry damage with configurable dice/type
+- `TestTurnStartDamageTile` - Turn start damage with configurable dice/type
+
+---
+
+## Design Decisions (Formerly "Open Questions")
+
+### D1: Per-5ft Damage
+
+Use `SPATIAL_ENTITY_ENTERED` - it fires per cell via Move action. Each tile's `_apply()` creates a SpatialHandler at its position.
+
+### D2: "First Time on a Turn" Tracking
+
+Apply a marker condition (e.g., `SpiritGuardiansTriggered`) to the entity when damaged. Entry handler checks `entity.has_condition("SpiritGuardiansTriggered")` before applying damage. Marker is removed at entity's turn end (1-round duration).
+
+### D3: Speed Halving (Spirit Guardians)
+
+Apply a condition (e.g., `SpiritGuardiansSlowed`) to entities when they enter the zone. Exit handler removes the condition. The condition itself contains the speed modifier - no separate tracking needed.
+
+### D4: Escape Action Linking
+
+1. `WebTileEffect` creates `WebRestrained` on entity
+2. `WebRestrained._apply()` creates `EscapeRestrainedAction` template
+3. Action stores `restraining_condition_uuid`
+4. On success: action removes condition, condition removal removes action template
+5. On dispel: condition removal removes action template
+
+### D5: Initial Cast Saves
+
+In zone's `_apply()`, iterate `affected_positions`, find entities at each position via `Entity.get_entities_at_position()`, trigger saves immediately.
 
 ---
 
 ## Spell Implementations
 
-### Phase 1: Spike Growth (Simplest - No Saves)
-
-**New Infrastructure:**
-- `damage_per_5ft_dice` field in TileEffectCondition
-- Handler on `StepMovementEvent` (not SPATIAL_ENTITY_ENTERED)
-
-**Spell Files:**
-- `dnd/spells/transmutation.py` → `SpikeGrowth`, `SpikeGrowthZone`, `SpikeGrowthTileEffect`
-
-**Key Code:**
-```python
-class SpikeGrowthTileEffect(TileEffectCondition):
-    name: str = "Spike Growth"
-    adds_difficult_terrain: bool = True
-    damage_per_5ft_dice: str = "2d4"
-    damage_per_5ft_type: DamageType = DamageType.PIERCING
-```
-
-**Handler Logic:**
-```python
-def _create_movement_damage_handler(self, tile_uuid: UUID) -> EventHandler:
-    """Deal damage for each 5ft of movement through this tile."""
-    def processor(event: Event, _) -> Optional[Event]:
-        if event.event_type != EventType.STEP_MOVEMENT:
-            return None
-        # StepMovementEvent has: entity_uuid, from_pos, to_pos
-        # Check if to_pos matches this tile
-        # If so, deal 2d4 damage (each step is 5ft)
-```
-
-**Note:** Need to verify `StepMovementEvent` exists and has the right fields. If not, may need to use SPATIAL_ENTITY_ENTERED which fires per cell anyway.
-
-### Phase 2: Grease (Save + Prone + Turn End)
-
-**New Infrastructure:**
-- `save_on_entry_*` fields
-- `save_on_turn_end_*` fields
-- `_create_turn_end_handler()` method
-
-**Spell Files:**
-- `dnd/spells/conjuration.py` → `Grease`, `GreaseZone`, `GreaseTileEffect`
-
-**Key Code:**
-```python
-class GreaseTileEffect(TileEffectCondition):
-    name: str = "Grease"
-    adds_difficult_terrain: bool = True  # Slick surface
-
-    # Entry save
-    save_on_entry_ability: str = "dexterity"
-    save_on_entry_dc: int  # Set from spell
-    condition_on_entry_failed_save: str = "Prone"
-
-    # Turn end save
-    save_on_turn_end_ability: str = "dexterity"
-    save_on_turn_end_dc: int
-    condition_on_turn_end_failed_save: str = "Prone"
-```
-
-**Initial Cast:** Also need to trigger saves for creatures already in the area when spell is cast.
-
-### Phase 3: Web (Restrained + Escape Action)
-
-**New Infrastructure:**
-- Escape action mechanism
-- Linking condition to action template
-
-**Spell Files:**
-- `dnd/spells/conjuration.py` → `Web`, `WebZone`, `WebTileEffect`, `WebRestrained`
-
-**Special Condition:**
-```python
-class WebRestrained(BaseCondition):
-    """
-    Restrained by Web spell.
-
-    Unlike generic Restrained, this:
-    - Grants "Break Free" action
-    - Can be escaped via STR check vs spell DC
-    """
-    name: str = "Web Restrained"
-    spell_dc: int
-
-    def _apply(self, event):
-        # Apply Restrained as sub-condition
-        restrained = Restrained(...)
-        target.add_condition(restrained)
-        sub_conditions.append(restrained.uuid)
-
-        # Register escape action
-        escape_action = EscapeRestrainedAction(
-            restraining_condition_uuid=self.uuid,
-            check_ability="strength",
-            dc=self.spell_dc,
-            template=True
-        )
-        target.add_action_template(escape_action)
-        # Track for cleanup
-        self._escape_action_uuid = escape_action.uuid
-```
-
-### Phase 4: Cloudkill (Auto-Movement)
-
-**New Infrastructure:**
-- `auto_move_on_caster_turn` in ZoneControlCondition
-- TURN_START handler that moves zone
-
-**Spell Files:**
-- `dnd/spells/conjuration.py` → `Cloudkill`, `CloudkillZone`, `CloudkillTileEffect`
-
-**Key Code:**
-```python
-class CloudkillZone(ZoneControlCondition):
-    name: str = "Cloudkill Zone"
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 20
-    auto_move_on_caster_turn: bool = True
-    auto_move_distance_feet: int = 10
-    auto_move_direction: str = "away_from_caster"
-
-    def _create_movement_handler(self) -> EventHandler:
-        def processor(event: Event, _) -> Optional[Event]:
-            if event.event_type != EventType.TURN_START:
-                return None
-            if event.source_entity_uuid != self.source_entity_uuid:
-                return None
-
-            # Calculate new position
-            caster = Entity.get(self.source_entity_uuid)
-            direction = self._get_direction_away_from(caster.senses.position)
-            new_center = self._move_in_direction(self.zone_center, direction, 2)  # 10ft = 2 tiles
-
-            self.move_zone(new_center)
-            return None
-```
-
-**Tile Effect:**
-```python
-class CloudkillTileEffect(TileEffectCondition):
-    name: str = "Cloudkill"
-    heavily_obscured: bool = True
-
-    # Entry damage with save
-    save_on_entry_ability: str = "constitution"
-    save_on_entry_dc: int
-    save_on_entry_damage_dice: str = "5d8"
-    save_on_entry_damage_type: DamageType = DamageType.POISON
-    save_on_entry_half_on_success: bool = True
-
-    # Turn start damage with save
-    save_on_turn_start_ability: str = "constitution"
-    save_on_turn_start_dc: int
-    save_on_turn_start_damage_dice: str = "5d8"
-    save_on_turn_start_damage_type: DamageType = DamageType.POISON
-    save_on_turn_start_half_on_success: bool = True
-```
-
-### Phase 5: Spirit Guardians (Caster-Centered Aura)
-
-**New Infrastructure:**
-- `AuraCondition` base class (entirely new pattern)
-
-**Spell Files:**
-- `dnd/spells/conjuration.py` → `SpiritGuardians`, `SpiritGuardiansAura`
-
-**Key Code:**
-```python
-class SpiritGuardiansAura(AuraCondition):
-    name: str = "Spirit Guardians"
-    aura_radius_feet: int = 15
-
-    save_ability: str = "wisdom"
-    save_dc: int
-    damage_dice: str = "3d8"
-    damage_type: DamageType = DamageType.RADIANT  # Or NECROTIC based on alignment
-    half_damage_on_success: bool = True
-
-    triggers_on_entry: bool = True
-    triggers_on_turn_start: bool = True
-    once_per_turn: bool = True
-
-    speed_modifier: str = "half"
-    affects_allies: bool = False
-    affects_enemies: bool = True
-```
-
-**Handler Logic:**
-```python
-def _create_entry_handler(self) -> EventHandler:
-    def processor(event: Event, _) -> Optional[Event]:
-        if event.event_type != EventType.SPATIAL_ENTITY_ENTERED:
-            return None
-
-        entity_uuid = event.entity_uuid
-
-        # Skip if already triggered this turn
-        if self.once_per_turn and entity_uuid in self._triggered_this_round:
-            return None
-
-        # Skip if designated unaffected
-        if entity_uuid in self.designated_unaffected:
-            return None
-
-        # Check if in aura
-        if not self._is_in_aura(entity_uuid):
-            return None
-
-        # Check faction
-        entity = Entity.get(entity_uuid)
-        caster = Entity.get(self.source_entity_uuid)
-        if self.affects_enemies and not caster.is_enemy(entity):
-            return None
-
-        # Trigger save and damage
-        self._trigger_effect(entity)
-        self._triggered_this_round.add(entity_uuid)
-
-        return None
-```
-
-**Speed Halving via Contextual Modifier:**
-```python
-# Applied to ALL entities when aura is created
-# Uses contextual check to only affect those in range
-def speed_half_condition(entity: Entity) -> Optional[NumericalModifier]:
-    caster = Entity.get(caster_uuid)
-    if caster.senses.get_feet_distance(entity.senses.position) <= 15:
-        return NumericalModifier(name="Spirit Guardians", value=-entity.action_economy.movement.base_value // 2)
-    return None
-```
-
-Actually, this is complex. Simpler: apply/remove modifier dynamically when entities enter/leave. Track in `_entities_in_aura: Set[UUID]`.
-
----
-
-## Implementation Order
-
-### Week 1: Static Zones
-
-1. **TileEffectCondition extensions** (all new fields)
-2. **Spike Growth** - test per-5ft damage
-3. **Grease** - test turn-end handler
-4. **Web** - test escape action
-
-### Week 2: Moving Zones
-
-5. **ZoneControlCondition auto-movement**
-6. **Cloudkill** - test auto-movement
-7. **AuraCondition base class**
-8. **Spirit Guardians** - test caster-following
-
----
-
-## Open Questions
-
-### Q1: Per-5ft Damage - Use StepMovementEvent or SPATIAL_ENTITY_ENTERED?
-
-Need to check if `StepMovementEvent` has the right fields. If SPATIAL_ENTITY_ENTERED fires per cell (which it does via Move action), we might just use that.
-
-**Answer needed:** Verify StepMovementEvent exists and what fields it has.
-
-### Q2: How to Handle "First Time on a Turn"?
-
-Options:
-1. Store `Set[UUID]` on condition, clear at caster turn start
-2. Add marker condition on affected entity, remove at their turn end
-
-Option 1 is simpler but requires handler on caster's TURN_START to clear the set.
-
-### Q3: Speed Halving in Spirit Guardians - Dynamic or Contextual?
-
-Options:
-1. **Dynamic:** Add modifier when entity enters, remove when leaves
-   - Requires tracking `_entities_in_aura`
-   - Handler on SPATIAL_ENTITY_LEFT to remove modifier
-
-2. **Contextual:** Global modifier that checks distance each time
-   - Simpler but evaluated every time movement is calculated
-   - May have issues with which entity's movement we're checking
-
-Recommendation: **Dynamic** - cleaner semantics, clearer when it applies.
-
-### Q4: Escape Action - How to Link to Condition?
-
-When entity is restrained by Web:
-1. WebTileEffect creates WebRestrained on entity
-2. WebRestrained creates EscapeRestrainedAction template
-3. Action stores condition UUID
-4. On success, action removes condition
-5. Condition removal removes action template
-
-Need to ensure cleanup works both ways:
-- If condition removed (dispel): action template removed
-- If action succeeds: condition removed, action removed
-
-### Q5: Grease Initial Cast - How to Trigger Saves for Existing Creatures?
-
-When Grease is cast, creatures already in the area make saves immediately.
-
-Options:
-1. In `GreaseZone._apply()`, iterate affected positions, find entities, trigger saves
-2. Fire a special "zone created" event that handlers react to
-
-Option 1 is simpler and more explicit.
-
----
-
-## Test Files Needed
-
-| Spell | Test File | Key Tests |
-|-------|-----------|-----------|
-| Spike Growth | `test_spike_growth.py` | Per-5ft damage, difficult terrain |
-| Grease | `test_grease.py` | Entry save, turn-end save, Prone |
-| Web | `test_web.py` | Restrained, escape action, difficult terrain |
-| Cloudkill | `test_cloudkill.py` | Auto-movement, damage/save |
-| Spirit Guardians | `test_spirit_guardians.py` | Following caster, once-per-turn, speed halving |
+### Spike Growth (Transmutation)
+
+**File**: `dnd/spells/transmutation.py`
+
+**Components**:
+- `SpikeGrowthTileEffect(TileEffectCondition)` - Custom `_apply()` with terrain + entry damage
+- `SpikeGrowthZone(ZoneControlCondition)` - Creates tile effects at positions
+- `SpikeGrowth(SpellAction)` - Creates zone, links to Concentrating
+
+### Grease (Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+**Components**:
+- `GreaseTileEffect(TileEffectCondition)` - Custom `_apply()` with DEX save on entry + turn end
+- `GreaseZone(ZoneControlCondition)` - Creates tile effects, handles initial saves
+- `Grease(SpellAction)` - Creates zone, links to Concentrating
+
+### Web (Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+**Components**:
+- `WebTileEffect(TileEffectCondition)` - Custom `_apply()` with DEX save on entry
+- `WebRestrained(BaseCondition)` - Has Restrained as sub-condition, grants escape action
+- `EscapeRestrainedAction(BaseAction)` - STR check to escape
+- `WebZone(ZoneControlCondition)` - Creates tile effects
+- `Web(SpellAction)` - Creates zone, links to Concentrating
+
+### Cloudkill (Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+**Components**:
+- `CloudkillTileEffect(TileEffectCondition)` - Custom `_apply()` with CON save + damage on entry/turn
+- `CloudkillZone(ZoneControlCondition)` - Override `_apply()` to add TURN_START movement handler
+- `Cloudkill(SpellAction)` - Creates zone, links to Concentrating
+
+### Spirit Guardians (Conjuration)
+
+**File**: `dnd/spells/conjuration.py`
+
+**Components**:
+- `SpiritGuardiansZone(ZoneControlCondition)` - Zone that follows caster
+- `SpiritGuardiansTriggered(BaseCondition)` - Marker (1-round), prevents repeat damage
+- `SpiritGuardiansSlowed(BaseCondition)` - Has speed halving modifier
+- Override `_apply()` to:
+  - Call `super()._apply()` for standard zone setup
+  - Add EventHandler for caster's `SPATIAL_ENTITY_ENTERED` → calls `move_zone()`
+- Override `_has_entry_effect()` → True, `_has_exit_effect()` → True
+- Entry handler:
+  - Skip if `entity.has_condition("SpiritGuardiansTriggered")`
+  - WIS save + damage
+  - Apply `SpiritGuardiansTriggered` marker
+  - Apply `SpiritGuardiansSlowed` condition
+- Exit handler:
+  - Remove `SpiritGuardiansSlowed` condition
+- `SpiritGuardians(SpellAction)` - Creates zone, links to Concentrating
 
 ---
 
 ## File Changes Summary
 
 ### New Files
-- `dnd/spells/transmutation.py` (Spike Growth)
-- `dnd/tile_conditions.py` - AuraCondition class (or new file `dnd/aura_conditions.py`)
+- `dnd/spells/transmutation.py` - Spike Growth
 
 ### Modified Files
-- `dnd/tile_conditions.py` - TileEffectCondition + ZoneControlCondition extensions
 - `dnd/spells/conjuration.py` - Grease, Web, Cloudkill, Spirit Guardians
 - `dnd/spells/__init__.py` - exports
-- `dnd/actions.py` or new file - EscapeRestrainedAction
+- `dnd/actions.py` - `EscapeRestrainedAction`
+- `dnd/tile_conditions.py` - **NO CHANGES** (base classes stay minimal)
 
 ### Test Files
 - `examples/test_spike_growth.py`
@@ -558,3 +486,14 @@ Option 1 is simpler and more explicit.
 - `examples/test_web.py`
 - `examples/test_cloudkill.py`
 - `examples/test_spirit_guardians.py`
+
+---
+
+## Key Principles
+
+1. **Base classes are minimal** - Only helpers like `get_tile()`, no spell-specific fields
+2. **Subclasses own their logic** - Each spell's `_apply()` does exactly what that spell needs
+3. **No field bloat** - Don't add 15 fields to handle every possible spell variation
+4. **Test subclasses as examples** - See `examples/test_terrain_movement_system.py` for patterns
+5. **Spatial handlers for position-based** - Use `SpatialHandler` for efficient O(1) lookup
+6. **Event handlers for non-spatial** - Use `EventHandler` for turn start/end effects

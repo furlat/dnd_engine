@@ -11,9 +11,10 @@ from dnd.spells.evocation import (
 )
 from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
-from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep
+from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray
+from dnd.spells.transmutation import SpikeGrowth
 
 # Lookup dictionaries (like dnd/items/__init__.py)
 CANTRIPS = {
@@ -36,6 +37,7 @@ LEVEL_1_SPELLS = {
     "Sleep": Sleep,
     "Color Spray": ColorSpray,
     "Guiding Bolt": GuidingBolt,
+    "Grease": Grease,
 }
 
 LEVEL_2_SPELLS = {
@@ -45,6 +47,8 @@ LEVEL_2_SPELLS = {
     "Blur": Blur,
     "Misty Step": MistyStep,
     "Blindness/Deafness": BlindnessDeafness,
+    "Spike Growth": SpikeGrowth,
+    "Web": Web,
 }
 
 LEVEL_3_SPELLS = {
@@ -54,6 +58,7 @@ LEVEL_3_SPELLS = {
     "Protection from Energy": ProtectionFromEnergy,
     "Fear": Fear,
     "Hypnotic Pattern": HypnoticPattern,
+    "Spirit Guardians": SpiritGuardians,
 }
 
 LEVEL_4_SPELLS = {
@@ -64,6 +69,7 @@ LEVEL_4_SPELLS = {
 LEVEL_5_SPELLS = {
     "Hold Monster": HoldMonster,
     "Cone of Cold": ConeOfCold,
+    "Cloudkill": Cloudkill,
 }
 
 LEVEL_6_SPELLS = {
@@ -117,6 +123,7 @@ __all__ = [
     "Sleep",
     "ColorSpray",
     "GuidingBolt",
+    "Grease",
     # Level 2
     "HoldPerson",
     "Shatter",
@@ -124,6 +131,8 @@ __all__ = [
     "Blur",
     "MistyStep",
     "BlindnessDeafness",
+    "SpikeGrowth",
+    "Web",
     # Level 3
     "CallLightning",
     "CallLightningStrike",
@@ -132,12 +141,14 @@ __all__ = [
     "ProtectionFromEnergy",
     "Fear",
     "HypnoticPattern",
+    "SpiritGuardians",
     # Level 4
     "Blight",
     "Stoneskin",
     # Level 5
     "HoldMonster",
     "ConeOfCold",
+    "Cloudkill",
     # Level 6
     "CircleOfDeath",
     # Level 8
