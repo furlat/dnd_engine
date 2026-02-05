@@ -23,7 +23,7 @@ from typing import Set, Tuple
 from dnd.core.events import (
     EventQueue, EventHandler, EventType, EventPhase, Trigger, Event
 )
-from dnd.core.gridmap import get_map, GridMap
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
 from dnd.utils import reset_combat_state

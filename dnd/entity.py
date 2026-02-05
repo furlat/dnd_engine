@@ -137,6 +137,9 @@ class Entity(BaseBlock):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
 
+    # Turn tracking - True during this entity's turn (set by on_turn_start, cleared by on_turn_end)
+    is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
+
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
@@ -316,7 +319,7 @@ class Entity(BaseBlock):
                 else:
                     return None
         condition_applied = condition.apply(declaration_event=declaration_event)
-        if condition_applied:
+        if condition_applied and not condition_applied.canceled:
             if condition.name in self.active_conditions:
                 #already present we need to remove the old one and add the new one for now not stackable
                 self.remove_condition(condition.name)
@@ -359,6 +362,9 @@ class Entity(BaseBlock):
         Returns:
             TurnStartEvent after all phases complete
         """
+        # Set turn flag (cleared in on_turn_end)
+        self.is_my_turn = True
+
         # Create event at DECLARATION phase
         event = TurnStartEvent(
             source_entity_uuid=self.uuid,
@@ -454,6 +460,9 @@ class Entity(BaseBlock):
 
         # COMPLETION
         event = event.phase_to(EventPhase.COMPLETION)
+
+        # Clear turn flag
+        self.is_my_turn = False
 
         return event
 

@@ -20,8 +20,7 @@ from uuid import uuid4
 
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_tiles import (
-    floor_factory, wall_factory, water_factory,
-    difficult_terrain_factory, MovementMode
+    floor_factory, wall_factory, water_factory, MovementMode
 )
 from dnd.core.modifiers import NumericalModifier, DamageType
 from dnd.entity import Entity
@@ -343,26 +342,149 @@ def test_orthogonal_borders_dont_affect_diagonal():
 # =============================================================================
 
 class TestDifficultTerrain(TileEffectCondition):
-    """Test tile effect that adds difficult terrain."""
+    """Test tile effect that adds difficult terrain.
+
+    Implements _apply() to add terrain modifier directly instead of
+    relying on base class field handling.
+    """
     name: str = "Test Difficult"
     description: str = "Test difficult terrain effect"
-    adds_difficult_terrain: bool = True
+
+    def _apply(self, declaration_event):
+        """Apply difficult terrain modifier to the tile."""
+        from dnd.core.events import EventPhase
+        outs = []
+        tile = self.get_tile()
+        if tile:
+            mod = NumericalModifier.create(
+                source_entity_uuid=self.source_entity_uuid,
+                name=f"{self.name} Difficult Terrain",
+                value=1  # +1 to walking cost (total = 2)
+            )
+            mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
+            outs.append((tile.walking_cost.uuid, mod_uuid))
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return outs, [], [], [], effect_event
 
 
 class TestFireTile(TileEffectCondition):
-    """Test tile effect with entry damage."""
+    """Test tile effect with entry damage.
+
+    Implements _apply() to create entry damage handler directly.
+    """
     name: str = "Test Fire"
     description: str = "Burns entities that enter"
-    damage_on_entry_dice: str = "1d6"
-    damage_on_entry_type: DamageType = DamageType.FIRE
+
+    def _apply(self, declaration_event):
+        """Apply entry damage handler to the tile."""
+        from dnd.core.events import EventPhase, EventQueue
+        spatial_handler_uuids = []
+        tile = self.get_tile()
+        if tile:
+            handler = self._create_entry_damage_handler(tile, "1d6", DamageType.FIRE)
+            EventQueue.add_spatial_handler(handler)
+            spatial_handler_uuids.append(handler.uuid)
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], [], [], spatial_handler_uuids, effect_event
+
+    def _create_entry_damage_handler(self, tile, damage_dice_str, damage_type):
+        """Create a spatial handler that deals damage when entities enter this tile."""
+        from dnd.core.events import EventType, EventPhase, SpatialHandler
+        from dnd.tile_conditions import parse_dice_string
+        import random
+
+        source_uuid = self.source_entity_uuid
+
+        def entry_damage_processor(event, _handler_source_uuid):
+            entity_uuid = getattr(event, 'entity_uuid', None)
+            if not entity_uuid:
+                return None
+            entity = Entity.get(entity_uuid)
+            if not entity:
+                return None
+
+            count, value = parse_dice_string(damage_dice_str)
+            damage = sum(random.randint(1, value) for _ in range(count))
+            entity.health.take_damage(damage, damage_type, source_entity_uuid=source_uuid)
+            return None
+
+        return SpatialHandler(
+            name=f"{self.name} Entry Damage",
+            source_entity_uuid=tile.uuid,
+            positions={tile.position},
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            event_phase=EventPhase.EFFECT,
+            event_processor=entry_damage_processor
+        )
 
 
 class TestSpikedFloor(TileEffectCondition):
-    """Test tile effect with turn start damage."""
+    """Test tile effect with turn start damage.
+
+    Implements _apply() to create turn start damage handler directly.
+    """
     name: str = "Test Spikes"
     description: str = "Damages at turn start"
-    damage_on_turn_start_dice: str = "1d4"
-    damage_on_turn_start_type: DamageType = DamageType.PIERCING
+
+    def _apply(self, declaration_event):
+        """Apply turn start damage handler."""
+        from dnd.core.events import EventPhase, EventQueue
+        handler_uuids = []
+        tile = self.get_tile()
+        if tile:
+            handler = self._create_turn_start_damage_handler(tile.uuid, "1d4", DamageType.PIERCING)
+            EventQueue.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], handler_uuids, [], [], effect_event
+
+    def _create_turn_start_damage_handler(self, tile_uuid, damage_dice_str, damage_type):
+        """Create an event handler that deals damage at turn start if entity is on tile."""
+        from dnd.core.events import EventType, EventPhase, EventHandler, Trigger
+        from dnd.tile_conditions import parse_dice_string
+        import random
+
+        source_uuid = self.source_entity_uuid
+
+        def turn_start_damage_processor(event, _handler_source_uuid):
+            if event.event_type != EventType.TURN_START:
+                return None
+
+            entity = Entity.get(event.source_entity_uuid)
+            if not entity:
+                return None
+
+            grid = get_map()
+            tile = grid.get_tile_by_uuid(tile_uuid)
+            if not tile:
+                return None
+
+            if entity.senses.position != tile.position:
+                return None
+
+            count, value = parse_dice_string(damage_dice_str)
+            damage = sum(random.randint(1, value) for _ in range(count))
+            entity.health.take_damage(damage, damage_type, source_entity_uuid=source_uuid)
+            return None
+
+        return EventHandler(
+            name=f"{self.name} Turn Start Damage",
+            source_entity_uuid=tile_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=turn_start_damage_processor
+        )
 
 
 def test_tile_effect_adds_difficult_terrain():
@@ -513,10 +635,31 @@ def test_tile_effect_cleanup_on_removal():
 # =============================================================================
 
 class TestZoneTileEffect(TileEffectCondition):
-    """Tile effect for test zone."""
+    """Tile effect for test zone.
+
+    Implements _apply() to add terrain modifier directly.
+    """
     name: str = "Test Zone Effect"
     description: str = "Effect from test zone"
-    adds_difficult_terrain: bool = True
+
+    def _apply(self, declaration_event):
+        """Apply difficult terrain modifier to the tile."""
+        from dnd.core.events import EventPhase
+        outs = []
+        tile = self.get_tile()
+        if tile:
+            mod = NumericalModifier.create(
+                source_entity_uuid=self.source_entity_uuid,
+                name=f"{self.name} Difficult Terrain",
+                value=1
+            )
+            mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
+            outs.append((tile.walking_cost.uuid, mod_uuid))
+
+        effect_event = None
+        if declaration_event is not None:
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return outs, [], [], [], effect_event
 
 
 class TestZoneControl(ZoneControlCondition):
