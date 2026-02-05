@@ -15,7 +15,7 @@ from uuid import uuid4, UUID
 from typing import List, Tuple, Optional
 import random
 
-from dnd.utils import reset_combat_state, get_hp, get_position, move_entity
+from dnd.utils import reset_combat_state, get_hp
 from dnd.core.events import EventQueue, EventType, EventPhase, Event, EventHandler, Trigger, SpatialHandler
 from dnd.core.gridmap import get_map
 from dnd.tile_conditions import TileEffectCondition, ZoneControlCondition, parse_dice_string
@@ -196,7 +196,7 @@ def test_tile_effect_entry_fires_only_at_correct_position():
     # Move to (2, 0) - should NOT trigger damage
     print("\n--- Moving to (2, 0) ---")
     grid.move_entity(entity.uuid, (2, 0))
-    entity.senses._position = (2, 0)
+    entity.senses.position = (2, 0)
     Entity.update_all_entities_senses()
     hp_at_2 = get_hp(entity)
     print(f"HP at (2, 0): {hp_at_2}")
@@ -205,7 +205,7 @@ def test_tile_effect_entry_fires_only_at_correct_position():
     # Move to (4, 0) - still should NOT trigger damage
     print("\n--- Moving to (4, 0) ---")
     grid.move_entity(entity.uuid, (4, 0))
-    entity.senses._position = (4, 0)
+    entity.senses.position = (4, 0)
     Entity.update_all_entities_senses()
     hp_at_4 = get_hp(entity)
     print(f"HP at (4, 0): {hp_at_4}")
@@ -214,7 +214,7 @@ def test_tile_effect_entry_fires_only_at_correct_position():
     # Move to (5, 0) - SHOULD trigger damage
     print("\n--- Moving to (5, 0) - fire tile ---")
     grid.move_entity(entity.uuid, (5, 0))
-    entity.senses._position = (5, 0)
+    entity.senses.position = (5, 0)
     Entity.update_all_entities_senses()
     hp_at_5 = get_hp(entity)
     print(f"HP at (5, 0): {hp_at_5}")
@@ -241,13 +241,9 @@ def test_multiple_tile_effects_efficient():
     for x in range(20):
         grid.set_tile(x, 0, walkable=True, name="Floor")
 
-    # Create entity at (0, 0)
-    entity = create_skeleton(name="Walker", position=(0, 0))
+    # Create entity at (0, 0) - needed for Entity.update_all_entities_senses()
+    _entity = create_skeleton(name="Walker", position=(0, 0))
     Entity.update_all_entities_senses()
-
-    # Track handler invocations
-    invocation_count = [0]
-    original_processors = {}
 
     # Create 10 tile effects at positions 10-19 with tracking
     for i in range(10):
@@ -360,7 +356,7 @@ def test_tile_effect_and_zone_coexist():
     # Move through zone
     print("\n--- Moving to (3, 3) - zone center ---")
     grid.move_entity(entity.uuid, (3, 3))
-    entity.senses._position = (3, 3)
+    entity.senses.position = (3, 3)
     Entity.update_all_entities_senses()
     print(f"Zone entries: {zone.entries_tracked}")
     hp_in_zone = get_hp(entity)
@@ -370,13 +366,13 @@ def test_tile_effect_and_zone_coexist():
     # Move out of zone
     print("\n--- Moving to (7, 7) - outside zone ---")
     grid.move_entity(entity.uuid, (7, 7))
-    entity.senses._position = (7, 7)
+    entity.senses.position = (7, 7)
     Entity.update_all_entities_senses()
 
     # Move to tile effect
     print("\n--- Moving to (10, 10) - fire tile ---")
     grid.move_entity(entity.uuid, (10, 10))
-    entity.senses._position = (10, 10)
+    entity.senses.position = (10, 10)
     Entity.update_all_entities_senses()
     hp_on_fire = get_hp(entity)
     assert hp_on_fire < initial_hp, f"Should have taken fire damage! HP: {initial_hp} -> {hp_on_fire}"
@@ -448,7 +444,7 @@ def test_tile_effect_cleanup_removes_spatial_handler():
     # Move to the position - should NOT take damage
     print("\n--- Moving to (2, 0) after cleanup ---")
     grid.move_entity(entity.uuid, (2, 0))
-    entity.senses._position = (2, 0)
+    entity.senses.position = (2, 0)
     Entity.update_all_entities_senses()
     final_hp = get_hp(entity)
     assert final_hp == initial_hp, f"Should not take damage after cleanup! HP: {initial_hp} -> {final_hp}"
@@ -537,7 +533,7 @@ def test_backward_compatibility_legacy_handlers():
     # Create a legacy-style handler (uses add_event_handler, not add_spatial_handler)
     legacy_fires = [0]
 
-    def legacy_processor(event: Event, _: uuid4) -> None:
+    def legacy_processor(_event: Event, _handler_uuid: UUID) -> None:
         legacy_fires[0] += 1
         return None
 
@@ -558,11 +554,11 @@ def test_backward_compatibility_legacy_handlers():
 
     # Move twice
     grid.move_entity(entity.uuid, (1, 0))
-    entity.senses._position = (1, 0)
+    entity.senses.position = (1, 0)
     Entity.update_all_entities_senses()
 
     grid.move_entity(entity.uuid, (2, 0))
-    entity.senses._position = (2, 0)
+    entity.senses.position = (2, 0)
     Entity.update_all_entities_senses()
 
     print(f"Legacy handler fired {legacy_fires[0]} times for 2 moves")
