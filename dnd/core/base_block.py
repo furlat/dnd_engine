@@ -553,17 +553,34 @@ class BaseBlock(BaseModel):
         return all_subs
 
     def remove_condition(self, condition_name: str) -> None:
+        """Remove a condition from this block.
+
+        For BaseBlock (e.g., Tile), this handles sub-conditions but NOT
+        cross-object cleanup (external_conditions, terrain_conditions).
+        Entity overrides this for full tree traversal.
+
+        Args:
+            condition_name: Name of the condition to remove
+        """
         if not self.allow_events_conditions:
             return None
+        if condition_name not in self.active_conditions:
+            return None
+
         condition = self.active_conditions.pop(condition_name)
+
         # Recursively collect ALL sub-conditions (not just immediate children)
         all_sub_conditions = self._collect_all_sub_conditions(condition)
         for sub_condition in all_sub_conditions:
             if sub_condition.name is not None and sub_condition.name in self.active_conditions:
                 self.active_conditions.pop(sub_condition.name)
-                self._remove_condition_from_dicts(sub_condition)
-        condition.remove()
+            self._remove_condition_from_dicts(sub_condition)
+            # Clean up sub-condition's own state
+            sub_condition.cleanup_own_state()
+
         self._remove_condition_from_dicts(condition)
+        # Clean up the main condition's own state
+        condition.cleanup_own_state()
     
     def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
         if not self.allow_events_conditions:

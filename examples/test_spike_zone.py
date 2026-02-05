@@ -28,7 +28,7 @@ def test_damage_per_step_through_zone():
 
     # Spike zone at y=5, x=3-6 (4 tiles)
     spike_positions = {(3, 5), (4, 5), (5, 5), (6, 5)}
-    tiles, handler = create_spike_zone(spike_positions)
+    tiles, _ = create_spike_zone(spike_positions)
     for tile in tiles:
         grid._tiles[tile.position] = tile
 
@@ -79,6 +79,7 @@ def test_paths_updated_after_move():
     # Move to (3, 5)
     actions = get_available_actions(skeleton)
     move_action = next((a for a in actions.position_actions if a.template_name == "Move"), None)
+    assert move_action is not None, "Should have Move action"
     target = next((t for t in move_action.valid_targets if t.position == (3, 5)), None)
 
     if target:
@@ -120,7 +121,7 @@ def test_death_stops_movement():
 
     # Spike zone at y=5, x=3-6
     spike_positions = {(3, 5), (4, 5), (5, 5), (6, 5)}
-    tiles, handler = create_spike_zone(spike_positions)
+    tiles, _ = create_spike_zone(spike_positions)
     for tile in tiles:
         grid._tiles[tile.position] = tile
 
@@ -135,6 +136,7 @@ def test_death_stops_movement():
     # Try to move through spike zone to (7,5)
     actions = get_available_actions(skeleton)
     move_action = next((a for a in actions.position_actions if a.template_name == "Move"), None)
+    assert move_action is not None, "Should have Move action"
     target = next((t for t in move_action.valid_targets if t.position == (7, 5)), None)
 
     if target:
@@ -179,6 +181,7 @@ def test_is_moving_cleared_on_early_exit():
     # Move normally
     actions = get_available_actions(skeleton)
     move_action = next((a for a in actions.position_actions if a.template_name == "Move"), None)
+    assert move_action is not None, "Should have Move action"
     target = next((t for t in move_action.valid_targets if t.position == (2, 5)), None)
 
     if target:
@@ -202,7 +205,7 @@ def test_spike_zone_with_encounter():
 
     # Spike zone
     spike_positions = {(3, 5), (4, 5)}
-    tiles, handler = create_spike_zone(spike_positions)
+    tiles, _ = create_spike_zone(spike_positions)
     for tile in tiles:
         grid._tiles[tile.position] = tile
 
@@ -226,6 +229,7 @@ def test_spike_zone_with_encounter():
     # Move through spikes
     actions = get_available_actions(skeleton)
     move_action = next((a for a in actions.position_actions if a.template_name == "Move"), None)
+    assert move_action is not None, "Should have Move action"
     move_target = next((t for t in move_action.valid_targets if t.position[0] >= 4), None)
 
     if move_target:
@@ -255,7 +259,7 @@ def test_dead_condition_applied_on_spike_death():
 
     # Spike zone
     spike_positions = {(3, 5), (4, 5), (5, 5)}
-    tiles, handler = create_spike_zone(spike_positions)
+    tiles, _ = create_spike_zone(spike_positions)
     for tile in tiles:
         grid._tiles[tile.position] = tile
 
@@ -269,6 +273,7 @@ def test_dead_condition_applied_on_spike_death():
     # Move through spikes
     actions = get_available_actions(skeleton)
     move_action = next((a for a in actions.position_actions if a.template_name == "Move"), None)
+    assert move_action is not None, "Should have Move action"
     move_target = next((t for t in move_action.valid_targets if t.position[0] >= 5), None)
 
     if move_target:

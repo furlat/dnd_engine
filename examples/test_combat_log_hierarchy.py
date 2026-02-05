@@ -139,8 +139,8 @@ def test_fireball_combat_log_hierarchy():
         print(f"Sub {i}: {len(sub.sub_entries)} children")
 
     # Check that we have proper data
-    print(f"\nParent total_damage: {result.total_damage if result else 'N/A'}")
-    print(f"Parent total_targets: {result.total_targets if result else 'N/A'}")
+    print(f"\nParent total_damage: {getattr(result, 'total_damage', 'N/A') if result else 'N/A'}")
+    print(f"Parent total_targets: {getattr(result, 'total_targets', 'N/A') if result else 'N/A'}")
 
     print("\n" + "=" * 60)
     print("TEST PASSED - Combat log hierarchy is correct!")
