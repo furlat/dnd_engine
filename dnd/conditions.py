@@ -646,17 +646,18 @@ class Prone(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity, Entity):
             # BG3-style: If it's the entity's turn and they have movement, they immediately stand
-            # Consume movement and don't apply the condition
+            # Consume movement and cancel the condition (don't apply it)
+            # Note: is_my_turn is only True AFTER action_economy reset, so this only fires mid-turn
             if target_entity.is_my_turn:
                 base_movement = target_entity.action_economy.get_base_value("movement")
                 half_movement = base_movement // 2
                 current_movement = target_entity.action_economy.movement.normalized_score
                 if current_movement >= half_movement:
                     target_entity.action_economy.consume("movement", half_movement)
-                    effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self},
-                                                              status_message=f"{target_entity.name} fell prone but immediately stood up")
-                    # Return empty lists - condition won't be applied
-                    return [], [], [], [], effect_event
+                    # Cancel the event - condition won't be added to active_conditions
+                    return [], [], [], [], declaration_event.cancel(
+                        status_message=f"{target_entity.name} fell prone but immediately stood up"
+                    )
 
             # Normal case: apply Prone modifiers
             outs: List[Tuple[UUID, UUID]] = []
@@ -678,52 +679,12 @@ class Prone(BaseCondition):
             )
             outs.append((target_entity.equipment.ac_bonus.uuid, to_target_contextual_uuid))
 
-            # Create auto-stand handler (triggers at turn start)
-            handler = self._create_auto_stand_handler()
-            EventQueue.add_event_handler(handler)
-            handler_uuids.append(handler.uuid)
+            # Note: Auto-stand handler is registered by setup_standard_actions(), not here
+            # This ensures it's always present regardless of when Prone is applied
 
             return outs, handler_uuids, [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
-
-    def _create_auto_stand_handler(self) -> EventHandler:
-        """Create handler to auto-stand at turn start (BG3 style)."""
-        if self.target_entity_uuid is None:
-            raise ValueError("Target entity UUID is not set")
-        target_uuid: UUID = self.target_entity_uuid
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.event_type != EventType.TURN_START:
-                return None
-            if event.source_entity_uuid != target_uuid:
-                return None
-
-            entity = Entity.get(target_uuid)
-            if not entity:
-                return None
-
-            # Check if still prone
-            if "Prone" not in entity.active_conditions:
-                return None
-
-            # Deduct half movement and remove Prone
-            base_movement = entity.action_economy.get_base_value("movement")
-            half_movement = base_movement // 2
-            entity.action_economy.consume("movement", half_movement)
-            entity.remove_condition("Prone")
-            return None
-
-        return EventHandler(
-            name="Prone Auto-Stand",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT,
-                event_source_entity_uuid=target_uuid
-            )],
-            event_processor=processor
-        )
 
     @staticmethod
     def prone_distance_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:

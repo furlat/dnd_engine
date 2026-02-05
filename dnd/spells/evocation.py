@@ -156,7 +156,7 @@ class FireBolt(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.FIRE, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -318,7 +318,7 @@ class RayOfFrost(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.COLD, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.COLD, source_entity_uuid=caster.uuid)
 
         # 7. Apply speed reduction
         # The effect condition goes on CASTER with duration=1 round
@@ -447,7 +447,7 @@ class SacredFlame(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.RADIANT, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.RADIANT, source_entity_uuid=caster.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -572,7 +572,7 @@ class MagicMissile(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.FORCE, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.FORCE, source_entity_uuid=caster.uuid)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -725,7 +725,7 @@ class ScorchingRay(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.FIRE, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -874,7 +874,7 @@ class Fireball(SpellAction):
 
         # 5. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.FIRE, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1008,7 +1008,7 @@ class BurningHands(SpellAction):
 
         # 5. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.FIRE, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid)
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1142,7 +1142,7 @@ class LightningBolt(SpellAction):
 
         # 5. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1338,7 +1338,7 @@ class Thunderwave(SpellAction):
 
         # 5. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.THUNDER, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.THUNDER, source_entity_uuid=caster.uuid)
 
         # 6. Push on failed save only
         push_applied = False
@@ -1521,7 +1521,7 @@ class Shatter(SpellAction):
 
         # 5. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.THUNDER, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.THUNDER, source_entity_uuid=caster.uuid)
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1668,7 +1668,7 @@ class CircleOfDeath(SpellAction):
 
         # 5. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.NECROTIC, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.NECROTIC, source_entity_uuid=caster.uuid)
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -1800,7 +1800,7 @@ class ConeOfCold(SpellAction):
 
         # 5. Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.COLD, source_entity_uuid=caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.COLD, source_entity_uuid=caster.uuid)
 
         save_text = " (saved for half)" if success else ""
         return effect_event.phase_to(
@@ -2048,7 +2048,7 @@ class Sunburst(SpellAction):
 
         # Apply damage
         if final_damage > 0:
-            target.health.take_damage(final_damage, DamageType.RADIANT, caster.uuid)
+            target.receive_damage(amount=final_damage, damage_type=DamageType.RADIANT, source_entity_uuid=caster.uuid)
 
         # On FAILED save: apply blindness with repeat saves
         if not success:
@@ -2228,7 +2228,7 @@ class ShockingGrasp(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.LIGHTNING, source_entity_uuid=caster.uuid)
 
         # 8. Apply No Reactions condition (1 round duration - until start of target's next turn)
         no_reactions = NoReactions(
@@ -2460,7 +2460,7 @@ class GuidingBolt(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage
-        target.health.take_damage(damage_roll.total, DamageType.RADIANT, source_entity_uuid=caster.uuid)
+        target.receive_damage(amount=damage_roll.total, damage_type=DamageType.RADIANT, source_entity_uuid=caster.uuid)
 
         # 7. Apply Guiding Bolt mark (advantage on next attack)
         # Duration: Until next attack against target OR "until the end of your next turn"
