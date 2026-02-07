@@ -427,11 +427,16 @@ class Encounter(BaseObject):
         return event
 
     def _environment_step(self) -> None:
-        """Advance tile condition durations. Called at end of each round."""
+        """Advance tile and floor-item condition durations. Called at end of each round."""
         grid = get_map()
+        # Tile conditions
         for tile in grid.get_tiles_with_conditions():
             for cond_name in list(tile.active_conditions.keys()):
                 tile.advance_duration(cond_name)
+        # Floor item conditions (items on the grid, not in inventories)
+        for item_block in grid.get_objects_with_conditions():
+            for cond_name in list(item_block.active_conditions.keys()):
+                item_block.advance_duration(cond_name)
 
     def _advance_round(self) -> None:
         """Advance to the next round."""

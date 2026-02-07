@@ -28,7 +28,7 @@ from dnd.core.base_actions import (
 from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
-from dnd.actions import Move, Dash, Dodge, Disengage, Attack, Jump, Shove
+from dnd.actions import Move, Dash, Dodge, Disengage, Attack, Jump, Shove, PickUp, AttackObject, Drop
 from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler, create_death_handler
 from dnd.spells import ALL_SPELLS
 
@@ -58,6 +58,8 @@ def setup_standard_actions(entity: 'Entity') -> None:
     entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))
     # Note: StandUp is no longer registered - Prone auto-stands at turn start (BG3 style)
     entity.register_action(Shove(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(PickUp(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(AttackObject(source_entity_uuid=entity.uuid, template=True))
     # Note: DropProne is not registered - Prone is applied by spells/effects, not as a voluntary action
 
     # Register attack templates for currently equipped weapons
@@ -261,6 +263,11 @@ def execute_action(entity: 'Entity', template_name: str, target: AvailableTarget
             raise ValueError("POSITION action requires position")
         instance = template.instantiate(end_position=target.position)
 
+    elif template.target_type == TargetType.OBJECT:
+        if target.target_uuid is None:
+            raise ValueError("OBJECT action requires target_uuid")
+        instance = template.instantiate(target_entity_uuid=target.target_uuid)
+
     else:  # SELF
         instance = template.instantiate()
 
@@ -355,3 +362,28 @@ def register_spells_by_name(entity: 'Entity', spell_names: list, caster_level: i
         if name not in ALL_SPELLS:
             raise ValueError(f"Unknown spell: {name}")
         register_spell(entity, ALL_SPELLS[name], caster_level)
+
+
+# =============================================================================
+# Drop Item (API-only, not registered as template)
+# =============================================================================
+
+def execute_drop(entity: 'Entity', item_uuid: UUID) -> Optional[Event]:
+    """Drop an item from entity's inventory onto the ground.
+
+    This creates and executes a Drop action. Not registered as a template
+    so it does not appear in get_available_actions (avoids inventory spam).
+
+    Args:
+        entity: The entity dropping the item
+        item_uuid: UUID of the item to drop (must be in entity's inventory)
+
+    Returns:
+        The resulting event, or None if the action failed
+    """
+    action = Drop(
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=item_uuid,
+        template=False
+    )
+    return action.apply()

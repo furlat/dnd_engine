@@ -23,7 +23,9 @@ from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponP
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses
+from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
+from dnd.blocks.base_item import BaseItem
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.base_actions import (
@@ -127,6 +129,7 @@ class Entity(BaseBlock):
     proficiency_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="proficiency_bonus", base_value=2))
     initiative: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="initiative", base_value=0))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
+    inventory: Inventory = Field(default_factory=lambda: Inventory(source_entity_uuid=uuid4()))
     spellcasting: SpellcastingBlock = Field(
         default_factory=lambda: SpellcastingBlock.create(source_entity_uuid=uuid4()),
         description="Spellcasting block (always present, defaults are harmless for non-casters)"
@@ -259,6 +262,9 @@ class Entity(BaseBlock):
                 config=config.spellcasting  # None → uses defaults
             )
 
+            # Inventory (always created - empty by default)
+            inventory = Inventory(source_entity_uuid=source_entity_uuid)
+
             return cls(
                 uuid=source_entity_uuid,
                 source_entity_uuid=source_entity_uuid,
@@ -270,6 +276,7 @@ class Entity(BaseBlock):
                 health=health,
                 equipment=equipment,
                 senses=senses,
+                inventory=inventory,
                 action_economy=action_economy,
                 proficiency_bonus=proficiency_bonus,
                 initiative=initiative,
@@ -1444,13 +1451,44 @@ class Entity(BaseBlock):
             return False
         return True
 
+    # =========================================================================
+    # Inventory / Loot / Drop
+    # =========================================================================
+
+    def loot_item(self, item: BaseItem) -> bool:
+        """Pick up item into inventory. Removes from GridMap if placed.
+
+        Returns False if inventory is full.
+        """
+        if not self.inventory.can_add(item):
+            return False
+        item.source_entity_uuid = self.uuid
+        self.inventory.add_item(item)
+        gridmap = get_map()
+        if gridmap.get_object_position(item.uuid) is not None:
+            gridmap.remove_object(item.uuid)  # fires SPATIAL_OBJECT_REMOVED
+        item.loot()
+        return True
+
+    def drop_item(self, item_uuid: UUID) -> Optional[BaseItem]:
+        """Drop item from inventory to ground at entity position.
+
+        Returns the dropped item, or None if not found in inventory.
+        """
+        item = self.inventory.remove_item(item_uuid)
+        if item is None:
+            return None
+        item.drop()
+        get_map().place_object(item.uuid, self.position)  # fires SPATIAL_OBJECT_PLACED
+        return item
+
     @staticmethod
     def compute_senses_from_position(
         position: Tuple[int, int],
         seen: Set[Tuple[int, int]],
         max_distance: int = 10,
         entity_uuid: Optional[UUID] = None
-    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]]]:
+    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]], Dict[UUID, Tuple[int, int]]]:
         """
         Compute senses data from a position.
 
@@ -1461,7 +1499,7 @@ class Entity(BaseBlock):
             entity_uuid: If provided, pathfinding will exclude cells occupied by other entities
 
         Returns:
-            (visible_dict, paths, walkable, visible_entities)
+            (visible_dict, paths, walkable, visible_entities, visible_objects)
         """
         grid = get_map()
 
@@ -1488,16 +1526,22 @@ class Entity(BaseBlock):
             for entity in entities:
                 visible_entities[entity.uuid] = pos
 
+        # Get objects at visible positions
+        visible_objects: Dict[UUID, Tuple[int, int]] = {}
+        for pos in visible_positions:
+            for obj_uuid in grid.get_objects_at(pos):
+                visible_objects[obj_uuid] = pos
+
         # Build walkable dict from grid
         walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in visible_positions}
 
-        return visible_dict, filtered_paths, walkable, visible_entities
+        return visible_dict, filtered_paths, walkable, visible_entities, visible_objects
 
     def create_senses_copy_at_position(self, position: Tuple[int, int], max_distance: int = 10) -> 'Senses':
         """Create a copy of senses as if entity were at a different position."""
         senses = self.senses.model_copy(deep=True)
         senses.position = position
-        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(
+        visible_dict, filtered_paths, walkable, visible_entities, visible_objects = Entity.compute_senses_from_position(
             position, self.senses.seen, max_distance, entity_uuid=self.uuid
         )
 
@@ -1505,7 +1549,8 @@ class Entity(BaseBlock):
             entities=visible_entities,
             visible=visible_dict,
             walkable=walkable,
-            paths=filtered_paths
+            paths=filtered_paths,
+            objects=visible_objects
         )
         return senses
 
@@ -1524,7 +1569,7 @@ class Entity(BaseBlock):
         Args:
             max_distance: Maximum view/movement distance (default 10)
         """
-        visible_dict, filtered_paths, walkable, visible_entities = Entity.compute_senses_from_position(
+        visible_dict, filtered_paths, walkable, visible_entities, visible_objects = Entity.compute_senses_from_position(
             self.position, self.senses.seen, max_distance, entity_uuid=self.uuid
         )
         # Update the senses block
@@ -1532,7 +1577,8 @@ class Entity(BaseBlock):
             entities=visible_entities,
             visible=visible_dict,
             walkable=walkable,
-            paths=filtered_paths
+            paths=filtered_paths,
+            objects=visible_objects
         )
         # Subscribe to visible cells for spatial change notifications
         visible_cells = set(visible_dict.keys())
@@ -1574,10 +1620,17 @@ class Entity(BaseBlock):
                 if ent_uuid != self.uuid:
                     visible_entities[ent_uuid] = pos
 
-        # Update visibility and entities (keep existing paths)
+        # Find objects in visible cells
+        visible_objects: Dict[UUID, Tuple[int, int]] = {}
+        for pos in visible_positions:
+            for obj_uuid in grid.get_objects_at(pos):
+                visible_objects[obj_uuid] = pos
+
+        # Update visibility, entities, and objects (keep existing paths)
         self.senses.visible = visible_dict
         self.senses.update_seen(visible_dict)
         self.senses.entities = visible_entities
+        self.senses.objects = visible_objects
 
         # Update subscriptions to newly visible cells
         visible_cells = set(visible_positions)
@@ -1639,6 +1692,11 @@ class Entity(BaseBlock):
     def self_actions(self) -> List[BaseAction]:
         """Actions that target self (Dash, Dodge, etc.)."""
         return [a for a in self.registered_actions if a.target_type == TargetType.SELF]
+
+    @property
+    def object_actions(self) -> List[BaseAction]:
+        """Actions that target objects on the grid (Pick Up, Attack Object)."""
+        return [a for a in self.registered_actions if a.target_type == TargetType.OBJECT]
 
     def get_available_actions(
         self,
@@ -1930,6 +1988,42 @@ class Entity(BaseBlock):
                     cost_amount=template.costs[0].cost if template.costs else 1,
                     is_attack=template.is_attack,
                     is_spell=is_spell
+                ))
+
+        # OBJECT actions - discover from templates + nearby visible objects
+        for template in self.object_actions:
+            valid_targets: List[AvailableTarget] = []
+            idx = 0
+            can_afford = template.check_costs()
+
+            for obj_uuid, obj_pos in self.senses.objects.items():
+                template.set_target_entity(obj_uuid)
+                if template.pre_validate():
+                    obj_block = BaseBlock.get(obj_uuid)
+                    obj_name = obj_block.name if obj_block else "Object"
+                    distance = self.senses.get_feet_distance(obj_pos)
+                    valid_targets.append(AvailableTarget(
+                        index=idx,
+                        target_uuid=obj_uuid,
+                        position=obj_pos,
+                        target_name=obj_name,
+                        distance=distance
+                    ))
+                    idx += 1
+
+            if valid_targets:
+                template_name = template.name or "Unknown"
+                result.object_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.OBJECT,
+                    valid_targets=valid_targets,
+                    can_afford=can_afford,
+                    display_name=template_name,
+                    description=template.description,
+                    cost_type=template.costs[0].cost_type if template.costs else "actions",
+                    cost_amount=template.costs[0].cost if template.costs else 0,
+                    is_attack=template.is_attack,
+                    is_spell=False
                 ))
 
         return result

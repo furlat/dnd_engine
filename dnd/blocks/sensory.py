@@ -21,6 +21,7 @@ class SensesType(str, Enum):
 class Senses(BaseBlock):
     """ A block that contains the senses of a creature"""
     entities : Dict[UUID,Tuple[int,int]] = Field(default_factory=dict)
+    objects: Dict[UUID,Tuple[int,int]] = Field(default_factory=dict, description="Visible objects by UUID → position")
     visible: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     walkable: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=lambda: defaultdict(list))
@@ -58,14 +59,16 @@ class Senses(BaseBlock):
         self.seen.update(visible_positions)
 
     
-    def update_senses(self,  entities: Dict[UUID,Tuple[int,int]], visible: Dict[Tuple[int,int],bool], walkable: Dict[Tuple[int,int],bool],paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]]):
+    def update_senses(self, entities: Dict[UUID,Tuple[int,int]], visible: Dict[Tuple[int,int],bool], walkable: Dict[Tuple[int,int],bool], paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]], objects: Optional[Dict[UUID,Tuple[int,int]]] = None):
         #sets all to empty dicts
         self.entities = {}
+        self.objects = {}
         self.visible = {}
         self.walkable = {}
         self.paths = defaultdict(list)
         #sets all to the new values
         self.entities = entities
+        self.objects = objects if objects is not None else {}
         self.visible = visible
         self.update_seen(visible)
         self.walkable = walkable
@@ -159,6 +162,8 @@ class SpatialSensesCallback:
         EventType.SPATIAL_ENTITY_ENTERED,
         EventType.SPATIAL_ENTITY_LEFT,
         EventType.SPATIAL_TILE_CHANGED,
+        EventType.SPATIAL_OBJECT_PLACED,
+        EventType.SPATIAL_OBJECT_REMOVED,
     )
 
     def __init__(
