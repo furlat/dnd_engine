@@ -681,7 +681,7 @@ def test_hypnotic_pattern_concentration_cleanup():
     # Break concentration
     caster.remove_condition("Concentrating")
 
-    # Effect should be removed via external_conditions cleanup
+    # Effect should be removed via linked_conditions cleanup
     assert not has_condition(target, "Hypnotic Pattern"), "Hypnotic Pattern should end"
     assert not has_condition(target, "Charmed"), "Charmed should be removed"
     assert not has_condition(target, "Incapacitated"), "Incapacitated should be removed"

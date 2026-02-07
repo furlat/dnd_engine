@@ -203,7 +203,7 @@ class HoldPersonEffect(BaseCondition):
     - Has Paralyzed as a sub-condition (same entity, auto-cleanup)
     - Can be targeted by Dispel Magic
     - Allows spell-specific immunity (immune to "Hold Person" but not all paralysis)
-    - Is linked to caster's Concentrating via external_conditions
+    - Is linked to caster's Concentrating via linked_conditions
 
     When this condition is removed (by breaking concentration, dispel, or repeat save),
     the Paralyzed sub-condition is automatically removed.
@@ -309,7 +309,7 @@ class HoldPersonEffect(BaseCondition):
 
             if success:
                 # Remove concentration from caster - this will automatically
-                # remove HoldPersonEffect via external_conditions, which removes Paralyzed via sub_conditions
+                # remove HoldPersonEffect via linked_conditions, which removes Paralyzed via sub_conditions
                 if "Concentrating" in caster.active_conditions:
                     conc = caster.active_conditions.get("Concentrating")
                     if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Person":
@@ -393,7 +393,7 @@ class HoldPerson(SpellAction):
         Structure:
         - Caster: Concentrating(spell_name="Hold Person")
                       │
-                      └── external_conditions ──► Target: HoldPersonEffect
+                      └── linked_conditions ──► Target: HoldPersonEffect
                                                               │
                                                               └── sub_conditions ──► Paralyzed
         """
@@ -453,9 +453,9 @@ class HoldPerson(SpellAction):
         )
         target.add_condition(hold_effect, parent_event=effect_event)
 
-        # 6. Link Concentrating → HoldPersonEffect via external_conditions
+        # 6. Link Concentrating → HoldPersonEffect via linked_conditions
         # When concentration breaks, HoldPersonEffect is removed, which removes Paralyzed
-        concentration.add_external_condition(target.uuid, hold_effect.uuid)
+        concentration.add_linked_condition(target.uuid, hold_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -553,7 +553,7 @@ class HoldMonsterEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if success:
-                # Remove concentration (auto-cleans up via external_conditions)
+                # Remove concentration (auto-cleans up via linked_conditions)
                 if "Concentrating" in caster.active_conditions:
                     conc = caster.active_conditions.get("Concentrating")
                     if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Monster":
@@ -695,7 +695,7 @@ class HoldMonster(SpellAction):
 
         # Link to concentration
         if isinstance(concentration_condition, Concentrating):
-            concentration_condition.add_external_condition(target.uuid, hold_effect.uuid)
+            concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

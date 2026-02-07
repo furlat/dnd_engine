@@ -9,21 +9,11 @@ Tiles are stored in GridMap and provide the data/state for each cell.
 """
 
 from typing import Optional, Tuple
-from uuid import uuid4
+from uuid import UUID, uuid4
 from pydantic import Field
-from enum import Enum
-
-from dnd.core.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-
-
-class MovementMode(str, Enum):
-    """Movement modes for entities."""
-    WALKING = "walking"
-    FLYING = "flying"
-    SWIMMING = "swimming"
-    BURROWING = "burrowing"
 
 
 class Tile(BaseBlock):
@@ -106,6 +96,15 @@ class Tile(BaseBlock):
             MovementMode.BURROWING: self.burrowing_cost,
         }
         return cost_map[mode].normalized_score
+
+    def blocks_walking(self, requesting_entity_uuid: Optional['UUID'] = None,
+                       mode: MovementMode = MovementMode.WALKING) -> bool:
+        """A tile blocks walking if its movement cost for the given mode is 0 or less."""
+        return self.get_movement_cost(mode) <= 0
+
+    def blocks_vision(self, requesting_entity_uuid: Optional['UUID'] = None) -> bool:
+        """A tile blocks vision if it is not visible (e.g., walls)."""
+        return not self.visible
 
     def can_enter_from(self, from_position: Tuple[int, int]) -> bool:
         """

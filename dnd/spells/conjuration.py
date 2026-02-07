@@ -886,7 +886,7 @@ class Grease(SpellAction):
         caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
-        concentration.add_external_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         # Check creatures already in the zone
         grid = get_map()
@@ -1237,7 +1237,7 @@ class Web(SpellAction):
         caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
-        concentration.add_external_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         # Check creatures already in the zone
         grid = get_map()
@@ -1568,7 +1568,7 @@ class Cloudkill(SpellAction):
         caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
-        concentration.add_external_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         # Damage creatures already in the zone
 
@@ -2036,7 +2036,7 @@ class SpiritGuardians(SpellAction):
         caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
-        concentration.add_external_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         # Damage enemies already in the zone
 

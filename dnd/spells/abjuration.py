@@ -230,7 +230,7 @@ class ProtectionFromEnergyEffect(BaseCondition):
 
     This condition is applied to the target of Protection from Energy.
     When concentration breaks, this condition is automatically removed
-    via the Concentrating condition's external_conditions mechanism.
+    via the Concentrating condition's linked_conditions mechanism.
     """
     name: str = "Protection from Energy"
     description: str = "Resistant to one energy type"
@@ -355,8 +355,8 @@ class ProtectionFromEnergy(SpellAction):
         )
         target.add_condition(protection, parent_event=effect_event)
 
-        # 3. Link via external_conditions for cleanup
-        concentration.add_external_condition(target.uuid, protection.uuid)
+        # 3. Link via linked_conditions for cleanup
+        concentration.add_linked_condition(target.uuid, protection.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -489,8 +489,8 @@ class Stoneskin(SpellAction):
         )
         target.add_condition(stoneskin, parent_event=effect_event)
 
-        # 3. Link via external_conditions for cleanup
-        concentration.add_external_condition(target.uuid, stoneskin.uuid)
+        # 3. Link via linked_conditions for cleanup
+        concentration.add_linked_condition(target.uuid, stoneskin.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

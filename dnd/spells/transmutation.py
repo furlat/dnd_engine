@@ -171,7 +171,7 @@ class SpikeGrowth(SpellAction):
         caster.add_condition(concentration, parent_event=effect_event)
 
         # Link zone to concentration for cleanup
-        concentration.add_external_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

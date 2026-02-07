@@ -104,7 +104,7 @@ def test_nested_sub_conditions():
 # =============================================================================
 
 def test_external_condition_removal():
-    """Condition with external_conditions cleans up other entities."""
+    """Condition with linked_conditions cleans up other entities."""
     reset_combat_state()
 
     caster = create_skeleton(name="Caster", position=(0, 0))
@@ -126,14 +126,14 @@ def test_external_condition_removal():
     assert "Hold Person" in target.active_conditions
     assert "Paralyzed" in target.active_conditions  # Sub-condition of effect
 
-    # Apply Concentrating to caster with external_conditions link
+    # Apply Concentrating to caster with linked_conditions link
     concentrating = Concentrating(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=caster.uuid,
         spell_name="Hold Person"
     )
     caster.add_condition(concentrating)
-    concentrating.add_external_condition(target.uuid, effect.uuid)
+    concentrating.add_linked_condition(target.uuid, effect.uuid)
 
     assert "Concentrating" in caster.active_conditions
 

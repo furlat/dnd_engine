@@ -113,7 +113,7 @@ class Blur(SpellAction):
         caster.add_condition(concentration, parent_event=effect_event)
 
         # Link effect to concentration
-        concentration.add_external_condition(caster.uuid, blur_effect.uuid)
+        concentration.add_linked_condition(caster.uuid, blur_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -337,7 +337,7 @@ class Fear(SpellAction):
         # Link fear effect to concentration
         conc = caster.active_conditions.get("Concentrating")
         if conc and isinstance(conc, Concentrating) and conc.spell_name == "Fear":
-            conc.add_external_condition(target.uuid, fear_effect.uuid)
+            conc.add_linked_condition(target.uuid, fear_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -549,7 +549,7 @@ class HypnoticPattern(SpellAction):
         # Link effect to concentration
         conc = caster.active_conditions.get("Concentrating")
         if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hypnotic Pattern":
-            conc.add_external_condition(target.uuid, hp_effect.uuid)
+            conc.add_linked_condition(target.uuid, hp_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

@@ -7,8 +7,8 @@ Provides base classes for:
 
 Zone Spell Pattern:
     Caster: Concentrating(spell_name="Fog Cloud")
-        +-- external_conditions -> FogCloudZone (on caster)
-                +-- terrain_conditions -> FogCloudTileEffect (on each tile)
+        +-- linked_conditions -> FogCloudZone (on caster)
+                +-- linked_conditions -> FogCloudTileEffect (on each tile)
 
 Event Handling:
 - SPATIAL events now fire through full lifecycle: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
@@ -397,4 +397,4 @@ class ZoneControlCondition(BaseCondition):
                     target_entity_uuid=tile.uuid
                 )
                 tile.add_condition(effect)
-                self.add_terrain_condition(tile.uuid, effect.uuid)
+                self.add_linked_condition(tile.uuid, effect.uuid)

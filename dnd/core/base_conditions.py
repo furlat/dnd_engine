@@ -105,13 +105,9 @@ class BaseCondition(BaseObject):
     sub_conditions: List[UUID] = Field(default_factory=list,description="list of condition UUIDs that are sub conditions of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the sub conditions will triget sub events ")
     event_handlers_uuids: List[UUID] = Field(default_factory=list,description="list of event handler UUIDs that are event handlers of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the event handlers will trigger event handlers ")
     spatial_handler_uuids: List[UUID] = Field(default_factory=list, description="list of spatial handler UUIDs that are spatial handlers of this condition, they will be removed when this condition is removed via remove_spatial_handlers()")
-    external_conditions: List[Tuple[UUID, UUID]] = Field(
+    linked_conditions: List[Tuple[UUID, UUID]] = Field(
         default_factory=list,
-        description="List of (target_entity_uuid, condition_uuid) for conditions this condition caused on OTHER entities. These 'nephews' are removed when this condition is removed."
-    )
-    terrain_conditions: List[Tuple[UUID, UUID]] = Field(
-        default_factory=list,
-        description="List of (tile_uuid, condition_uuid) for conditions this condition placed on tiles. Removed when this condition is removed."
+        description="(target_block_uuid, condition_uuid) pairs for conditions placed on OTHER BaseBlocks (entities, tiles, items). Removed when this condition is removed."
     )
     
     @model_validator(mode="after")
@@ -244,30 +240,17 @@ class BaseCondition(BaseObject):
                 value.remove_modifier(modifier_uuid)
         return True
     
-    def add_external_condition(self, target_entity_uuid: UUID, condition_uuid: UUID) -> None:
-        """Track a condition we caused on another entity (a 'nephew').
+    def add_linked_condition(self, target_block_uuid: UUID, condition_uuid: UUID) -> None:
+        """Track a condition this condition placed on another BaseBlock.
 
-        When this condition is removed, the external condition will also be removed
-        from the target entity. This enables cross-entity cleanup for concentration
-        spells and similar effects.
-
-        Args:
-            target_entity_uuid: The UUID of the entity that has the condition
-            condition_uuid: The UUID of the condition on that entity
-        """
-        self.external_conditions.append((target_entity_uuid, condition_uuid))
-
-    def add_terrain_condition(self, tile_uuid: UUID, condition_uuid: UUID) -> None:
-        """Track a condition we placed on a tile.
-
-        When this condition is removed, the terrain condition will also be removed
-        from the tile. This enables zone spell cleanup.
+        When this condition is removed, the linked condition will also be removed
+        from the target block. Works for entities, tiles, and future items.
 
         Args:
-            tile_uuid: The UUID of the tile that has the condition
-            condition_uuid: The UUID of the condition on that tile
+            target_block_uuid: The UUID of the BaseBlock that has the condition
+            condition_uuid: The UUID of the condition on that block
         """
-        self.terrain_conditions.append((tile_uuid, condition_uuid))
+        self.linked_conditions.append((target_block_uuid, condition_uuid))
 
     def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
         
@@ -311,8 +294,8 @@ class BaseCondition(BaseObject):
     def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
         """Clean up ONLY this condition's modifiers, handlers, and events.
 
-        Cross-object cleanup (sub_conditions, external_conditions, terrain_conditions)
-        is handled by Entity._remove_condition_tree().
+        Cross-object cleanup (sub_conditions, linked_conditions)
+        is handled by BaseBlock._remove_condition_tree().
 
         NOTE: _remove() hook is PRESERVED for custom cleanup logic.
 

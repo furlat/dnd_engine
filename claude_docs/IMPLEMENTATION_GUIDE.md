@@ -85,10 +85,10 @@ Each `phase_to()` creates a new event UUID but preserves the same `lineage_uuid`
 1. Create: condition = MyCondition(source_entity_uuid=..., target_entity_uuid=...)
 2. Apply:  target.add_condition(condition) → calls condition.apply()
 3. Effect: Modifiers added to appropriate channels
-4. Remove: target.remove_condition("MyCondition") → Entity drives recursive cleanup tree
+4. Remove: target.remove_condition("MyCondition") → BaseBlock drives recursive cleanup tree
 ```
 
-Entity is responsible for all cross-object cleanup. The condition only cleans up its own modifiers/handlers via `cleanup_own_state()`.
+BaseBlock is responsible for all cross-object cleanup. The condition only cleans up its own modifiers/handlers via `cleanup_own_state()`.
 
 ---
 
@@ -348,42 +348,31 @@ def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[E
 
 ### 4d. Condition Removal Architecture
 
-**Entity drives all cleanup. Conditions only clean up their own state.**
+**BaseBlock drives all cleanup. Conditions only clean up their own state.**
 
 ```
-Entity.remove_condition(name) → Entity._remove_condition_tree(condition)
-  ├── 1. Recurse into sub_conditions (same entity, parent-child)
-  ├── 2. Recurse into external_conditions (other entities via Entity.remove_condition_by_uuid)
-  ├── 3. Recurse into terrain_conditions (tiles via Tile.remove_condition)
-  └── 4. Call condition.cleanup_own_state() (removes own modifiers/handlers/spatial_handlers only)
+Entity.remove_condition(name) → BaseBlock._remove_condition_tree(condition)
+  ├── 1. Recurse into sub_conditions (same block, parent-child)
+  ├── 2. Recurse into linked_conditions (other blocks via block.remove_condition_by_uuid)
+  └── 3. Call condition.cleanup_own_state() (removes own modifiers/handlers/spatial_handlers only)
 ```
 
-**Entity._remove_condition_tree():**
+**BaseBlock._remove_condition_tree():**
 ```python
 def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False, parent_event: Optional[Event] = None) -> None:
-    # 1. Handle sub_conditions (same entity)
+    # 1. Handle sub_conditions (same block)
     for sub_uuid in list(condition.sub_conditions):
         sub = BaseCondition.get(sub_uuid)
         if sub is not None and isinstance(sub, BaseCondition):
             self._remove_condition_tree(sub, expire=expire, parent_event=parent_event)
 
-    # 2. Handle external_conditions (other entities)
-    for target_uuid, cond_uuid in condition.external_conditions:
-        target = Entity.get(target_uuid)
-        if target:
-            target.remove_condition_by_uuid(cond_uuid)
+    # 2. Handle linked_conditions (other blocks: entities, tiles, etc.)
+    for target_block_uuid, cond_uuid in condition.linked_conditions:
+        target_block = BaseBlock.get(target_block_uuid)
+        if target_block:
+            target_block.remove_condition_by_uuid(cond_uuid)
 
-    # 3. Handle terrain_conditions (tiles)
-    grid = get_map()
-    for tile_uuid, cond_uuid in condition.terrain_conditions:
-        tile = grid.get_tile_by_uuid(tile_uuid)
-        if tile:
-            for cond_name, cond in list(tile.active_conditions.items()):
-                if cond.uuid == cond_uuid:
-                    tile.remove_condition(cond_name)
-                    break
-
-    # 4. Clean up this condition's OWN state only
+    # 3. Clean up this condition's OWN state only
     condition.cleanup_own_state(expire=expire, parent_event=parent_event)
 ```
 
@@ -544,11 +533,11 @@ Each has a `Contextual*` variant taking a callable that returns the modifier or 
 
 ---
 
-## Section 5: Sub-conditions & External Conditions
+## Section 5: Sub-conditions & Linked Conditions
 
-### Sub-conditions Pattern (Same Entity)
+### Sub-conditions Pattern (Same Block)
 
-Sub-conditions are child conditions on the **same entity**. When the parent is removed, all sub-conditions are automatically removed via `_remove_condition_tree()`.
+Sub-conditions are child conditions on the **same block**. When the parent is removed, all sub-conditions are automatically removed via `_remove_condition_tree()`.
 
 ```python
 # In Paralyzed._apply():
@@ -565,27 +554,28 @@ return outs, [], sub_conditions_uuids, [], effect_event
 # When Paralyzed is removed, Incapacitated is automatically removed too
 ```
 
-### External Conditions Pattern (Cross-Entity)
+### Linked Conditions Pattern (Cross-Block)
 
-Use `external_conditions` when Entity A causes a condition on Entity B, and removing A's condition should clean up B's.
+Use `linked_conditions` when Block A causes a condition on Block B, and removing A's condition should clean up B's. This unified field replaces the old `external_conditions` and `terrain_conditions` -- both are now `linked_conditions` since both Entity and Tile are BaseBlock subclasses.
 
 **Use cases:**
 - Concentration spells (caster's Concentrating → target's spell effect)
 - Grappling (grappler's condition → target's Grappled)
 - Auras (paladin's condition → allies' AuraBonus)
+- Zone spells (caster's condition → tile conditions)
 
 ```python
 # BaseCondition fields:
-external_conditions: List[Tuple[UUID, UUID]] = []  # (target_entity_uuid, condition_uuid)
+linked_conditions: List[Tuple[UUID, UUID]] = []  # (target_block_uuid, condition_uuid)
 
 # Methods:
-condition.add_external_condition(target_entity_uuid, effect_condition_uuid)
+condition.add_linked_condition(target_block_uuid, effect_condition_uuid)
 ```
 
 **Example - Concentration Spell:**
 ```python
 # Structure:
-# Caster: Concentrating → external_conditions → Target: SpellEffect → sub_conditions → Paralyzed
+# Caster: Concentrating → linked_conditions → Target: SpellEffect → sub_conditions → Paralyzed
 
 # In spell's _apply():
 # 1. Apply spell-specific effect to target
@@ -596,37 +586,30 @@ target.add_condition(spell_effect)
 concentration = Concentrating(source=caster.uuid, target=caster.uuid, spell_name="Hold Person")
 caster.add_condition(concentration)
 
-# 3. Link via external_conditions
-concentration.add_external_condition(target.uuid, spell_effect.uuid)
+# 3. Link via linked_conditions
+concentration.add_linked_condition(target.uuid, spell_effect.uuid)
 
 # Cleanup chain when concentration breaks:
-# Entity.remove_condition("Concentrating") → Entity._remove_condition_tree()
-#   → removes external conditions on other entities (HoldPersonEffect)
+# Entity.remove_condition("Concentrating") → BaseBlock._remove_condition_tree()
+#   → removes linked conditions on other blocks (HoldPersonEffect on target entity)
 #   → HoldPersonEffect removal removes sub-conditions (Paralyzed)
 #   → calls condition.cleanup_own_state() for modifiers/handlers
 ```
 
-### Terrain Conditions Pattern (Tiles)
-
-Use `terrain_conditions` for conditions placed on tiles (zone spells):
-
+**Example - Zone Spell (Tile Conditions):**
 ```python
-# BaseCondition fields:
-terrain_conditions: List[Tuple[UUID, UUID]] = []  # (tile_uuid, condition_uuid)
-
-# Methods:
-condition.add_terrain_condition(tile_uuid, tile_condition_uuid)
+# linked_conditions works for tiles too, since Tile is a BaseBlock:
+condition.add_linked_condition(tile.uuid, tile_condition.uuid)
 ```
 
-When the condition is removed, `_remove_condition_tree()` iterates `terrain_conditions` and removes each tile condition.
+When the condition is removed, `_remove_condition_tree()` iterates `linked_conditions` and removes each linked condition from its target block (whether Entity or Tile).
 
-### Three Linkage Types Summary
+### Two Linkage Types Summary
 
 | Field | Target | Use Case | Cleanup |
 |-------|--------|----------|---------|
-| `sub_conditions` | Same entity | Paralyzed → Incapacitated | Entity recurses same-entity |
-| `external_conditions` | Other entities | Concentrating → spell effect on target | Entity calls `target.remove_condition_by_uuid()` |
-| `terrain_conditions` | Tiles | Zone spell → tile conditions | Entity calls `tile.remove_condition()` |
+| `sub_conditions` | Same block | Paralyzed → Incapacitated | BaseBlock recurses same-block |
+| `linked_conditions` | Other blocks (entities, tiles, etc.) | Concentrating → spell effect on target, zone spell → tile conditions | BaseBlock calls `target_block.remove_condition_by_uuid()` |
 
 ---
 
@@ -1330,8 +1313,8 @@ concentration = Concentrating(
 )
 caster.add_condition(concentration)
 
-# 3. Link via external_conditions for cleanup chain
-concentration.add_external_condition(target.uuid, spell_effect.uuid)
+# 3. Link via linked_conditions for cleanup chain
+concentration.add_linked_condition(target.uuid, spell_effect.uuid)
 ```
 
 **CON save on damage**: `Concentrating` registers a handler on `TAKE_DAMAGE/EFFECT` that makes a CON save with DC = max(10, damage/2). Failed save removes the condition.
@@ -2072,7 +2055,7 @@ encounter.start_turn()
 | Missing `parent_event` in child events | **Always pass parent_event** - broken combat logs = missing parent_event |
 | Calling `EventQueue.add_event_handler()` AND `entity.add_event_handler()` | Only call `entity.add_event_handler()` - it auto-registers |
 | Registering rage maintenance at `TURN_START/EFFECT` | Use `TURN_START/EXECUTION` - markers expire at EFFECT |
-| Calling `condition.remove()` directly | Use `Entity.remove_condition(name)` - it drives the full cleanup tree |
+| Calling `condition.remove()` directly | Use `Entity.remove_condition(name)` - BaseBlock drives the full cleanup tree |
 | `AbilityScoresConfig(strength=14)` | `AbilityScoresConfig(strength=AbilityConfig(ability_score=14))` |
 | `create_goblin("Name", ...)` | `create_goblin(name="Name", ...)` - keyword args required |
 | `entity.ability_scores.strength.modifier.value` | `entity.ability_scores.strength.modifier` returns int directly |

@@ -1117,7 +1117,9 @@ class EventQueue:
         cls._spatial_handlers_by_position.clear()
         cls._spatial_handlers_by_source_entity_uuid.clear()
         cls._handler_positions.clear()
-    
+        # Clear event callbacks (spatial senses callbacks, etc.)
+        cls._on_event_callbacks.clear()
+
 
     @classmethod
     def get_events_chronological(cls, start_time: Optional[datetime] = None, 

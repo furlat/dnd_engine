@@ -105,6 +105,8 @@ BaseObject (dnd/core/base_object.py)
     └── BaseBlock (dnd/core/base_block.py)
             │   Container for ModifiableValues
             │   Manages conditions, handlers, context
+            │   Condition lifecycle: add_condition(), remove_condition(), _remove_condition_tree()
+            │   advance_duration() - ticks condition durations and auto-removes expired ones
             │
             └── Entity (dnd/entity.py)
                     Main game object composed of specialized blocks
@@ -338,7 +340,7 @@ The **Attack action** (`dnd/actions.py`) handles propagation for combat.
 1. **Creation**: `condition = Blinded(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)`
 2. **Application**: `target.add_condition(condition)` → calls `condition.apply()`
 3. **Effect**: Modifiers are added to appropriate channels
-4. **Removal**: `target.remove_condition("Blinded")` → Entity drives full cleanup tree
+4. **Removal**: `target.remove_condition("Blinded")` → BaseBlock drives full cleanup tree
 
 ### Implementing a Condition
 
@@ -392,32 +394,30 @@ return outs, [], sub_conditions_uuids, [], effect_event  # 5-tuple
 # When Paralyzed is removed, Incapacitated is automatically removed too
 ```
 
-### Condition Removal (Entity-Driven)
+### Condition Removal (BaseBlock-Driven)
 
-**IMPORTANT**: Condition removal is an **Entity responsibility**, not a BaseCondition responsibility.
+**IMPORTANT**: Condition removal is a **BaseBlock responsibility**, not a BaseCondition responsibility. Since both Entity and Tile inherit from BaseBlock, this provides unified condition removal across all block types.
 
 ```
-Entity.remove_condition(name) → Entity._remove_condition_tree(condition)
-  ├── Recurse into sub_conditions (same entity, parent-child)
-  ├── Recurse into external_conditions (other entities via Entity.remove_condition_by_uuid)
-  ├── Recurse into terrain_conditions (tiles via Tile.remove_condition_by_uuid)
+BaseBlock.remove_condition(name) → BaseBlock._remove_condition_tree(condition)
+  ├── Recurse into sub_conditions (same block, parent-child)
+  ├── Recurse into linked_conditions (other BaseBlocks via BaseBlock.remove_condition_by_uuid)
   └── Call condition.cleanup_own_state() (removes own modifiers/handlers only)
 ```
 
-**Three condition linkage types on BaseCondition:**
-- `sub_conditions: List[UUID]` - Child conditions on **same entity** (e.g., Paralyzed → Incapacitated)
-- `external_conditions: List[Tuple[UUID, UUID]]` - Conditions on **other entities** (e.g., Concentrating → HoldPersonEffect on target)
-- `terrain_conditions: List[Tuple[UUID, UUID]]` - Conditions on **tiles** (e.g., zone spells)
+**Two condition linkage types on BaseCondition:**
+- `sub_conditions: List[UUID]` - Child conditions on **same block** (e.g., Paralyzed → Incapacitated)
+- `linked_conditions: List[Tuple[UUID, UUID]]` - Conditions on **other BaseBlocks** (entities, tiles, items) (e.g., Concentrating → HoldPersonEffect on target, zone spells → tile conditions). Added via `add_linked_condition(target_block_uuid, condition_uuid)`.
 
 **Example - Concentration Spell cleanup chain:**
 ```
 Caster: Concentrating(spell_name="Hold Person")
-            │ external_conditions
+            │ linked_conditions
             └──► Target: HoldPersonEffect
                         │ sub_conditions
                         └──► Paralyzed
 ```
-When concentration breaks, `Entity._remove_condition_tree()` traverses the entire tree: removes HoldPersonEffect from target, which removes Paralyzed as sub-condition.
+When concentration breaks, `BaseBlock._remove_condition_tree()` traverses the entire tree: removes HoldPersonEffect from target, which removes Paralyzed as sub-condition.
 
 ### Modifier Placement Guide
 
@@ -505,7 +505,7 @@ All conditions in `dnd/conditions.py`:
 
 | Condition | Effect | Notes |
 |-----------|--------|-------|
-| **Concentrating** | Tracks spell being concentrated on | CON save on damage (DC = max(10, dmg/2)), one-spell limit, uses `external_conditions` for cleanup |
+| **Concentrating** | Tracks spell being concentrated on | CON save on damage (DC = max(10, dmg/2)), one-spell limit, uses `linked_conditions` for cleanup |
 | **MageArmorCondition** | AC = 13 + DEX when unarmored | Ends if armor equipped |
 | **HoldPersonEffect** | Spell effect for Hold Person | Has Paralyzed as sub-condition, allows spell-specific immunity (in `dnd/spells/enchantment.py`) |
 
@@ -662,7 +662,7 @@ See `dnd/spells/__init__.py` for complete spell dictionaries (`CANTRIPS` through
 Concentration spells are fully implemented:
 - **One spell limit**: Casting a new concentration spell ends the old one
 - **CON saves on damage**: DC = max(10, damage/2)
-- **Automatic cleanup**: Uses `external_conditions` to clean up spell effects on targets when concentration breaks
+- **Automatic cleanup**: Uses `linked_conditions` to clean up spell effects on targets when concentration breaks
 - **Spell-specific effects**: Each concentration spell creates a spell-specific condition (e.g., `HoldPersonEffect`) with the actual effect (e.g., `Paralyzed`) as a sub-condition
 
 See `examples/test_concentration.py` and `examples/test_concentration_spells.py` for tests.

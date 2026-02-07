@@ -12,8 +12,9 @@ Tests:
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_tiles import (
     floor_factory, wall_factory, water_factory,
-    difficult_terrain_factory, MovementMode
+    difficult_terrain_factory,
 )
+from dnd.core.base_block import MovementMode
 
 
 def test_tile_movement_costs():
