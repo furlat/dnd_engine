@@ -17,7 +17,7 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.events import EventQueue, WeaponSlot
-from dnd.blocks.equipment import BodyPart
+from dnd.core.events import BodyPart
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greatsword
 from dnd.items.armors import create_leather_armor, create_chain_shirt, create_chain_mail

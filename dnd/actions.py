@@ -2656,25 +2656,56 @@ class AttackObject(BaseAction):
 
 
 class Drop(BaseAction):
-    """Drop an item from inventory onto the ground at entity's position.
+    """Drop an item from inventory onto the ground at a position.
 
-    Uses target_entity_uuid to hold the item UUID (from inventory).
-    NOT registered as a template — use execute_drop() from actions_functional.
+    Position-target action (POSITION_LOS) bound to a specific item.
+    Valid positions: entity's own cell + adjacent cells (range 5ft).
+    Created on-the-fly via execute_drop() — same pattern as future Use actions.
+
+    The item_uuid is bound at creation time (one Drop per item).
     """
     name: str = Field(default="Drop")
     description: str = Field(default="Drop an item from inventory")
-    target_type: TargetType = Field(default=TargetType.OBJECT)
+    target_type: TargetType = Field(default=TargetType.POSITION_LOS)
     costs: List[Cost] = Field(default_factory=list)  # Free action
+    item_uuid: Optional[UUID] = Field(default=None, description="UUID of the item to drop (bound at creation)")
+
+    def get_range(self) -> Optional[Range]:
+        return Range(type=RangeType.REACH, normal=5)
+
+    def get_valid_positions(self) -> List[Tuple[int, int]]:
+        """Adjacent + own position, must be walkable."""
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return []
+        valid: List[Tuple[int, int]] = [entity.position]  # Can drop at own feet
+        for pos, is_visible in entity.senses.visible.items():
+            if not is_visible:
+                continue
+            if pos == entity.position:
+                continue
+            if entity.senses.get_feet_distance(pos) <= 5:
+                valid.append(pos)
+        return valid
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        if self.target_entity_uuid is None:
+        if self.item_uuid is None:
             return declaration_event.cancel(status_message="No item specified")
-        if not entity.inventory.has_item(self.target_entity_uuid):
+        if not entity.inventory.has_item(self.item_uuid):
             return declaration_event.cancel(status_message="Item not in inventory")
+
+        if self.end_position is None:
+            return declaration_event.cancel(status_message="No drop position specified")
+
+        # Validate distance
+        dx = abs(self.end_position[0] - entity.position[0])
+        dy = abs(self.end_position[1] - entity.position[1])
+        if dx > 1 or dy > 1:
+            return declaration_event.cancel(status_message="Drop position too far (max 5ft)")
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -2683,10 +2714,10 @@ class Drop(BaseAction):
 
     def _apply(self, execution_event: ActionEvent, **kwargs) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity or self.target_entity_uuid is None:
+        if not entity or self.item_uuid is None:
             return execution_event.cancel(status_message="Entity or item not found")
 
-        dropped = entity.drop_item(self.target_entity_uuid)
+        dropped = entity.drop_item(self.item_uuid, position=self.end_position)
         if dropped is None:
             return execution_event.cancel(status_message="Failed to drop item")
 

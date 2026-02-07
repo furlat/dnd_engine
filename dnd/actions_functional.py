@@ -19,7 +19,7 @@ Usage:
     event = execute_action(entity, "Attack_MELEE_MAIN", target)
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from uuid import UUID
 
 from dnd.core.base_actions import (
@@ -368,22 +368,26 @@ def register_spells_by_name(entity: 'Entity', spell_names: list, caster_level: i
 # Drop Item (API-only, not registered as template)
 # =============================================================================
 
-def execute_drop(entity: 'Entity', item_uuid: UUID) -> Optional[Event]:
+def execute_drop(entity: 'Entity', item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[Event]:
     """Drop an item from entity's inventory onto the ground.
 
-    This creates and executes a Drop action. Not registered as a template
-    so it does not appear in get_available_actions (avoids inventory spam).
+    Creates a bound Drop action for the specific item and executes it.
+    Same pattern as future Use actions — item bound at creation time.
 
     Args:
         entity: The entity dropping the item
         item_uuid: UUID of the item to drop (must be in entity's inventory)
+        position: Grid position to drop at (must be within distance 1).
+                  Defaults to entity's position.
 
     Returns:
         The resulting event, or None if the action failed
     """
+    drop_pos = position if position is not None else entity.position
     action = Drop(
         source_entity_uuid=entity.uuid,
-        target_entity_uuid=item_uuid,
+        item_uuid=item_uuid,
+        end_position=drop_pos,
         template=False
     )
     return action.apply()

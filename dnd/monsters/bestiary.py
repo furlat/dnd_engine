@@ -14,8 +14,9 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import (
     EquipmentConfig, BodyArmor,
-    WeaponSlot, ArmorType, BodyPart
+    WeaponSlot, ArmorType
 )
+from dnd.core.events import BodyPart
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.modifiers import DamageType, CreatureType

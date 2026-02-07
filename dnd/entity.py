@@ -1,4 +1,4 @@
-from typing import DefaultDict, Dict, Optional, Any, List, ClassVar, Union, Tuple, Set
+from typing import DefaultDict, Dict, Optional, Any, List, ClassVar, Union, Tuple, Set, cast
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 from collections import defaultdict
@@ -13,13 +13,13 @@ from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 from dnd.core.events import (
     Event, EventPhase, EventQueue, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
-    TakeDamageEvent, DeathEvent
+    TakeDamageEvent, DeathEvent, EquipmentSlot
 )
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import HealthConfig, Health
-from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage
+from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage, Armor, Weapon
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses
@@ -1458,28 +1458,87 @@ class Entity(BaseBlock):
     def loot_item(self, item: BaseItem) -> bool:
         """Pick up item into inventory. Removes from GridMap if placed.
 
+        Sets location tracking fields and calls lifecycle hook with entity context.
         Returns False if inventory is full.
         """
         if not self.inventory.can_add(item):
             return False
         item.source_entity_uuid = self.uuid
         self.inventory.add_item(item)
+        item.owner_uuid = self.uuid
+        item.stored_in_uuid = self.inventory.uuid
+        item.tile_uuid = None
         gridmap = get_map()
         if gridmap.get_object_position(item.uuid) is not None:
             gridmap.remove_object(item.uuid)  # fires SPATIAL_OBJECT_REMOVED
-        item.loot()
+        item.loot(entity_uuid=self.uuid, inventory_uuid=self.inventory.uuid)
         return True
 
-    def drop_item(self, item_uuid: UUID) -> Optional[BaseItem]:
-        """Drop item from inventory to ground at entity position.
+    def drop_item(self, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[BaseItem]:
+        """Drop item from inventory to ground.
+
+        Args:
+            item_uuid: UUID of the item to drop (must be in inventory)
+            position: Grid position to drop at. Defaults to entity's position.
+                      Must be within distance 1 (5ft) of entity.
 
         Returns the dropped item, or None if not found in inventory.
         """
         item = self.inventory.remove_item(item_uuid)
         if item is None:
             return None
-        item.drop()
-        get_map().place_object(item.uuid, self.position)  # fires SPATIAL_OBJECT_PLACED
+        drop_pos = position if position is not None else self.position
+        gridmap = get_map()
+        tile = gridmap.get_tile(drop_pos[0], drop_pos[1])
+        item.owner_uuid = None
+        item.stored_in_uuid = None
+        item.position = drop_pos
+        item.tile_uuid = tile.uuid if tile else None
+        gridmap.place_object(item.uuid, drop_pos)  # fires SPATIAL_OBJECT_PLACED
+        item.drop(entity_uuid=self.uuid, position=drop_pos)
+        return item
+
+    def equip_item(self, item_uuid: UUID, slot: EquipmentSlot) -> bool:
+        """Move item from inventory to equipment slot.
+
+        If the target slot is occupied, unequips the existing item to inventory first.
+        Returns True on success, False if item not found or not equippable.
+        """
+        item = self.inventory.items.get(item_uuid)
+        if item is None or not item.is_equippable:
+            return False
+        # If slot occupied, unequip existing item to inventory first
+        existing = self.equipment.get_item_by_slot(slot)
+        if existing is not None:
+            self.unequip_item(slot)
+        self.inventory.remove_item(item_uuid)
+        self.equipment.equip(cast(Union[Armor, Weapon, Shield], item), slot)
+        # Equipment.equip() sets owner_uuid, stored_in_uuid, is_equipped, equipped_slot
+        return True
+
+    def unequip_item(self, slot: EquipmentSlot) -> Optional[BaseItem]:
+        """Move item from equipment slot to inventory.
+
+        If inventory is full, drops item to ground at entity position.
+        Returns the item, or None if slot was empty.
+        """
+        item = self.equipment.unequip(slot)
+        # Equipment.unequip() calls item.unequip(slot, entity_uuid)
+        # which clears is_equipped and equipped_slot. owner_uuid/stored_in_uuid still set.
+        if item is None:
+            return None
+        if self.inventory.add_item(item):
+            item.owner_uuid = self.uuid
+            item.stored_in_uuid = self.inventory.uuid
+        else:
+            # Inventory full — drop to ground
+            gridmap = get_map()
+            item.owner_uuid = None
+            item.stored_in_uuid = None
+            item.position = self.position
+            tile = gridmap.get_tile(self.position[0], self.position[1])
+            item.tile_uuid = tile.uuid if tile else None
+            gridmap.place_object(item.uuid, self.position)
         return item
 
     @staticmethod

@@ -62,11 +62,16 @@ class Inventory(BaseBlock):
         return [item for item in self.items.values() if tag in item.tags]
 
     def transfer_to(self, item_uuid: UUID, target: 'Inventory') -> bool:
-        """Transfer item to another inventory. Returns False on failure (rollback)."""
+        """Transfer item to another inventory. Returns False on failure (rollback).
+
+        Updates owner_uuid and stored_in_uuid to reflect the new container.
+        """
         item = self.remove_item(item_uuid)
         if item is None:
             return False
         if not target.add_item(item):
             self.add_item(item)  # rollback
             return False
+        item.owner_uuid = target.source_entity_uuid
+        item.stored_in_uuid = target.uuid
         return True
