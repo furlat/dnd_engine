@@ -19,8 +19,9 @@ from dnd.spells.evocation import LightningBolt
 from dnd.actions import SpellEvent
 
 # Test utilities
-from dnd.utils import get_hp, set_hp
+from dnd.utils import get_hp, set_hp, get_save_natural_roll
 from dnd.actions_functional import setup_standard_actions
+import pytest
 
 
 def create_caster(
@@ -99,92 +100,112 @@ def setup_basic_arena(width: int = 30, height: int = 10):
 def test_lightning_bolt_full_damage_on_failed_save():
     """Full 8d6 damage when target fails DEX save (DEX 1 target)."""
     print("\n=== Test 1: Full Damage on Failed DEX Save ===")
-    reset_combat_state()
-    setup_basic_arena(30, 10)
 
-    # Caster with high spell DC
-    caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
-    # Target with DEX 1 (-5 mod) - will always fail
-    _target = create_target(name="Slow", position=(10, 5), dexterity=1, hp=100)
-    Entity.update_all_entities_senses()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_basic_arena(30, 10)
 
-    dc = caster.spell_save_dc()
-    print(f"  Spell DC: {dc}")
+        # Caster with high spell DC
+        caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
+        # Target with DEX 1 (-5 mod) - will always fail
+        _target = create_target(name="Slow", position=(10, 5), dexterity=1, hp=100)
+        Entity.update_all_entities_senses()
 
-    lightning_bolt = LightningBolt(
-        source_entity_uuid=caster.uuid,
-        end_position=(20, 5),  # Direction: east
-        cast_at_level=3,
-        template=False
-    )
+        dc = caster.spell_save_dc()
+        print(f"  Spell DC: {dc}")
 
-    result = lightning_bolt.apply()
-    assert result is not None and not result.canceled, f"Lightning Bolt failed: {result.status_message if result else 'None'}"
-    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
+        lightning_bolt = LightningBolt(
+            source_entity_uuid=caster.uuid,
+            end_position=(20, 5),  # Direction: east
+            cast_at_level=3,
+            template=False
+        )
 
-    # Verify via combat log
-    assert result.combat_log is not None, "Should have combat_log"
-    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
-    log_data = result.combat_log.sub_entries[0].data
+        result = lightning_bolt.apply()
+        assert result is not None and not result.canceled, f"Lightning Bolt failed: {result.status_message if result else 'None'}"
+        assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    # Verify save failed
-    assert log_data.get('save_success') == False, "Target with DEX 1 should fail save"
+        # Verify via combat log
+        assert result.combat_log is not None, "Should have combat_log"
+        assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+        log_data = result.combat_log.sub_entries[0].data
 
-    # Full damage (not halved)
-    base_damage = log_data.get('base_damage', 0)
-    final_damage = log_data.get('final_damage', 0)
-    assert final_damage == base_damage, \
-        f"Should be full damage, got {final_damage} vs rolled {base_damage}"
+        natural_roll = get_save_natural_roll(log_data)
+        if natural_roll == 20:
+            print(f"  Attempt {attempt + 1}: got nat 20, retrying...")
+            continue  # nat 20 auto-success, re-roll
 
-    print(f"  Save failed as expected")
-    print(f"  Full damage applied: {final_damage}")
-    print("PASS: Full damage on failed DEX save")
+        # Verify save failed
+        assert log_data.get('save_success') == False, "Target with DEX 1 should fail save"
+
+        # Full damage (not halved)
+        base_damage = log_data.get('base_damage', 0)
+        final_damage = log_data.get('final_damage', 0)
+        assert final_damage == base_damage, \
+            f"Should be full damage, got {final_damage} vs rolled {base_damage}"
+
+        print(f"  Save failed as expected")
+        print(f"  Full damage applied: {final_damage}")
+        print("PASS: Full damage on failed DEX save")
+        break
+    else:
+        pytest.fail("Got nat 20 on all 10 attempts")
 
 
 def test_lightning_bolt_half_damage_on_passed_save():
     """Half damage when target passes DEX save (DEX 30 target)."""
     print("\n=== Test 2: Half Damage on Passed DEX Save ===")
-    reset_combat_state()
-    setup_basic_arena(30, 10)
 
-    # Caster with low spell DC
-    caster = create_caster(name="Weak Wizard", position=(5, 5), intelligence=10, proficiency=2)
-    # Target with DEX 30 (+10 mod) - will always pass
-    _target = create_target(name="Nimble", position=(10, 5), dexterity=30, hp=100)
-    Entity.update_all_entities_senses()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_basic_arena(30, 10)
 
-    dc = caster.spell_save_dc()
-    print(f"  Spell DC: {dc}")
+        # Caster with low spell DC
+        caster = create_caster(name="Weak Wizard", position=(5, 5), intelligence=10, proficiency=2)
+        # Target with DEX 30 (+10 mod) - will always pass
+        _target = create_target(name="Nimble", position=(10, 5), dexterity=30, hp=100)
+        Entity.update_all_entities_senses()
 
-    lightning_bolt = LightningBolt(
-        source_entity_uuid=caster.uuid,
-        end_position=(20, 5),
-        cast_at_level=3,
-        template=False
-    )
+        dc = caster.spell_save_dc()
+        print(f"  Spell DC: {dc}")
 
-    result = lightning_bolt.apply()
-    assert result is not None and not result.canceled
-    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
+        lightning_bolt = LightningBolt(
+            source_entity_uuid=caster.uuid,
+            end_position=(20, 5),
+            cast_at_level=3,
+            template=False
+        )
 
-    # Verify via combat log
-    assert result.combat_log is not None, "Should have combat_log"
-    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
-    log_data = result.combat_log.sub_entries[0].data
+        result = lightning_bolt.apply()
+        assert result is not None and not result.canceled
+        assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    # Verify save succeeded
-    assert log_data.get('save_success') == True, "Target with DEX 30 should always save"
+        # Verify via combat log
+        assert result.combat_log is not None, "Should have combat_log"
+        assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+        log_data = result.combat_log.sub_entries[0].data
 
-    # Half damage
-    base_damage = log_data.get('base_damage', 0)
-    final_damage = log_data.get('final_damage', 0)
-    expected_damage = base_damage // 2
-    assert final_damage == expected_damage, \
-        f"Should be half damage: {base_damage}//2={expected_damage}, got {final_damage}"
+        natural_roll = get_save_natural_roll(log_data)
+        if natural_roll == 1:
+            print(f"  Attempt {attempt + 1}: got nat 1, retrying...")
+            continue  # nat 1 auto-fail, re-roll
 
-    print(f"  Save passed as expected")
-    print(f"  Half damage applied: {final_damage} (rolled {base_damage})")
-    print("PASS: Half damage on passed DEX save")
+        # Verify save succeeded
+        assert log_data.get('save_success') == True, "Target with DEX 30 should always save"
+
+        # Half damage
+        base_damage = log_data.get('base_damage', 0)
+        final_damage = log_data.get('final_damage', 0)
+        expected_damage = base_damage // 2
+        assert final_damage == expected_damage, \
+            f"Should be half damage: {base_damage}//2={expected_damage}, got {final_damage}"
+
+        print(f"  Save passed as expected")
+        print(f"  Half damage applied: {final_damage} (rolled {base_damage})")
+        print("PASS: Half damage on passed DEX save")
+        break
+    else:
+        pytest.fail("Got nat 1 on all 10 attempts")
 
 
 def test_lightning_bolt_upcast():

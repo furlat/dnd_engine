@@ -19,8 +19,9 @@ from dnd.spells.evocation import Thunderwave
 from dnd.actions import SpellEvent
 
 # Test utilities
-from dnd.utils import get_hp, set_hp, get_position
+from dnd.utils import get_hp, set_hp, get_position, get_save_natural_roll
 from dnd.actions_functional import setup_standard_actions
+import pytest
 
 
 def create_caster(
@@ -99,112 +100,132 @@ def setup_basic_arena(width: int = 20, height: int = 20):
 def test_thunderwave_full_damage_and_push_on_failed_save():
     """Full 2d8 damage AND pushed 10ft when target fails CON save (CON 1 target)."""
     print("\n=== Test 1: Full Damage + Push on Failed CON Save ===")
-    reset_combat_state()
-    setup_basic_arena(20, 20)
 
-    # Caster with high spell DC
-    caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
-    # Target with CON 1 (-5 mod) - will always fail
-    target = create_target(name="Weak", position=(7, 5), constitution=1, hp=100)
-    Entity.update_all_entities_senses()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_basic_arena(20, 20)
 
-    dc = caster.spell_save_dc()
-    print(f"  Spell DC: {dc}")
+        # Caster with high spell DC
+        caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
+        # Target with CON 1 (-5 mod) - will always fail
+        target = create_target(name="Weak", position=(7, 5), constitution=1, hp=100)
+        Entity.update_all_entities_senses()
 
-    _initial_hp = get_hp(target)
-    initial_pos = get_position(target)
-    print(f"  Initial position: {initial_pos}")
+        dc = caster.spell_save_dc()
+        print(f"  Spell DC: {dc}")
 
-    thunderwave = Thunderwave(
-        source_entity_uuid=caster.uuid,
-        end_position=(10, 5),  # Direction: east
-        cast_at_level=1,
-        template=False
-    )
+        _initial_hp = get_hp(target)
+        initial_pos = get_position(target)
+        print(f"  Initial position: {initial_pos}")
 
-    result = thunderwave.apply()
-    assert result is not None and not result.canceled, f"Thunderwave failed: {result.status_message if result else 'None'}"
-    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
+        thunderwave = Thunderwave(
+            source_entity_uuid=caster.uuid,
+            end_position=(10, 5),  # Direction: east
+            cast_at_level=1,
+            template=False
+        )
 
-    # Verify via combat log
-    assert result.combat_log is not None, "Should have combat_log"
-    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
-    log_data = result.combat_log.sub_entries[0].data
+        result = thunderwave.apply()
+        assert result is not None and not result.canceled, f"Thunderwave failed: {result.status_message if result else 'None'}"
+        assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    # Verify save failed
-    assert log_data.get('save_success') == False, "Target with CON 1 should fail save"
+        # Verify via combat log
+        assert result.combat_log is not None, "Should have combat_log"
+        assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+        log_data = result.combat_log.sub_entries[0].data
 
-    # Full damage (not halved)
-    base_damage = log_data.get('base_damage', 0)
-    final_damage = log_data.get('final_damage', 0)
-    assert final_damage == base_damage, \
-        f"Should be full damage, got {final_damage} vs rolled {base_damage}"
+        natural_roll = get_save_natural_roll(log_data)
+        if natural_roll == 20:
+            print(f"  Attempt {attempt + 1}: got nat 20, retrying...")
+            continue  # nat 20 auto-success, re-roll
 
-    # Should have been pushed
-    final_pos = get_position(target)
-    assert final_pos != initial_pos, "Target should have been pushed"
-    # Push should be away from caster (eastward), 10ft = 2 tiles
-    # Allow for diagonal push or partial movement
-    assert final_pos[0] >= initial_pos[0], "Target should move away from caster (east)"
+        # Verify save failed
+        assert log_data.get('save_success') == False, "Target with CON 1 should fail save"
 
-    print(f"  Save failed as expected")
-    print(f"  Full damage: {final_damage}")
-    print(f"  Position: {initial_pos} -> {final_pos} (pushed)")
-    print("PASS: Full damage and push on failed CON save")
+        # Full damage (not halved)
+        base_damage = log_data.get('base_damage', 0)
+        final_damage = log_data.get('final_damage', 0)
+        assert final_damage == base_damage, \
+            f"Should be full damage, got {final_damage} vs rolled {base_damage}"
+
+        # Should have been pushed
+        final_pos = get_position(target)
+        assert final_pos != initial_pos, "Target should have been pushed"
+        # Push should be away from caster (eastward), 10ft = 2 tiles
+        # Allow for diagonal push or partial movement
+        assert final_pos[0] >= initial_pos[0], "Target should move away from caster (east)"
+
+        print(f"  Save failed as expected")
+        print(f"  Full damage: {final_damage}")
+        print(f"  Position: {initial_pos} -> {final_pos} (pushed)")
+        print("PASS: Full damage and push on failed CON save")
+        break
+    else:
+        pytest.fail("Got nat 20 on all 10 attempts")
 
 
 def test_thunderwave_half_damage_no_push_on_passed_save():
     """Half damage and NO push when target passes CON save (CON 30 target)."""
     print("\n=== Test 2: Half Damage + No Push on Passed CON Save ===")
-    reset_combat_state()
-    setup_basic_arena(20, 20)
 
-    # Caster with low spell DC
-    caster = create_caster(name="Weak Wizard", position=(5, 5), intelligence=10, proficiency=2)
-    # Target with CON 30 (+10 mod) - will always pass
-    target = create_target(name="Tough", position=(7, 5), constitution=30, hp=100)
-    Entity.update_all_entities_senses()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_basic_arena(20, 20)
 
-    dc = caster.spell_save_dc()
-    print(f"  Spell DC: {dc}")
+        # Caster with low spell DC
+        caster = create_caster(name="Weak Wizard", position=(5, 5), intelligence=10, proficiency=2)
+        # Target with CON 30 (+10 mod) - will always pass
+        target = create_target(name="Tough", position=(7, 5), constitution=30, hp=100)
+        Entity.update_all_entities_senses()
 
-    _initial_hp = get_hp(target)
-    initial_pos = get_position(target)
+        dc = caster.spell_save_dc()
+        print(f"  Spell DC: {dc}")
 
-    thunderwave = Thunderwave(
-        source_entity_uuid=caster.uuid,
-        end_position=(10, 5),
-        cast_at_level=1,
-        template=False
-    )
+        _initial_hp = get_hp(target)
+        initial_pos = get_position(target)
 
-    result = thunderwave.apply()
-    assert result is not None and not result.canceled
-    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
+        thunderwave = Thunderwave(
+            source_entity_uuid=caster.uuid,
+            end_position=(10, 5),
+            cast_at_level=1,
+            template=False
+        )
 
-    # Verify via combat log
-    assert result.combat_log is not None, "Should have combat_log"
-    assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
-    log_data = result.combat_log.sub_entries[0].data
+        result = thunderwave.apply()
+        assert result is not None and not result.canceled
+        assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    # Verify save succeeded
-    assert log_data.get('save_success') == True, "Target with CON 30 should always save"
+        # Verify via combat log
+        assert result.combat_log is not None, "Should have combat_log"
+        assert len(result.combat_log.sub_entries) > 0, "Should have sub_entries"
+        log_data = result.combat_log.sub_entries[0].data
 
-    # Half damage
-    base_damage = log_data.get('base_damage', 0)
-    final_damage = log_data.get('final_damage', 0)
-    expected_damage = base_damage // 2
-    assert final_damage == expected_damage, \
-        f"Should be half damage: {base_damage}//2={expected_damage}, got {final_damage}"
+        natural_roll = get_save_natural_roll(log_data)
+        if natural_roll == 1:
+            print(f"  Attempt {attempt + 1}: got nat 1, retrying...")
+            continue  # nat 1 auto-fail, re-roll
 
-    # Should NOT have been pushed
-    final_pos = get_position(target)
-    assert final_pos == initial_pos, f"Target should NOT have been pushed, but moved from {initial_pos} to {final_pos}"
+        # Verify save succeeded
+        assert log_data.get('save_success') == True, "Target with CON 30 should always save"
 
-    print(f"  Save passed as expected")
-    print(f"  Half damage: {final_damage} (rolled {base_damage})")
-    print(f"  Position: {initial_pos} -> {final_pos} (unchanged)")
-    print("PASS: Half damage and no push on passed CON save")
+        # Half damage
+        base_damage = log_data.get('base_damage', 0)
+        final_damage = log_data.get('final_damage', 0)
+        expected_damage = base_damage // 2
+        assert final_damage == expected_damage, \
+            f"Should be half damage: {base_damage}//2={expected_damage}, got {final_damage}"
+
+        # Should NOT have been pushed
+        final_pos = get_position(target)
+        assert final_pos == initial_pos, f"Target should NOT have been pushed, but moved from {initial_pos} to {final_pos}"
+
+        print(f"  Save passed as expected")
+        print(f"  Half damage: {final_damage} (rolled {base_damage})")
+        print(f"  Position: {initial_pos} -> {final_pos} (unchanged)")
+        print("PASS: Half damage and no push on passed CON save")
+        break
+    else:
+        pytest.fail("Got nat 1 on all 10 attempts")
 
 
 def test_thunderwave_upcast():

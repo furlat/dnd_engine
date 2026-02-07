@@ -47,7 +47,7 @@ def test_damage_per_step_through_zone():
     if target is None:
         print(f"  Warning: (7,5) not reachable. Available targets: {[t.position for t in move_action.valid_targets[:5]]}...")
         # Try a closer target
-        target = next((t for t in move_action.valid_targets if t.position[0] >= 6), None)
+        target = next((t for t in move_action.valid_targets if t.position is not None and t.position[0] >= 6), None)
 
     if target:
         execute_action(skeleton, "Move", target)
@@ -230,7 +230,7 @@ def test_spike_zone_with_encounter():
     actions = get_available_actions(skeleton)
     move_action = next((a for a in actions.position_actions if a.template_name == "Move"), None)
     assert move_action is not None, "Should have Move action"
-    move_target = next((t for t in move_action.valid_targets if t.position[0] >= 4), None)
+    move_target = next((t for t in move_action.valid_targets if t.position is not None and t.position[0] >= 4), None)
 
     if move_target:
         execute_action(skeleton, "Move", move_target)
@@ -274,7 +274,7 @@ def test_dead_condition_applied_on_spike_death():
     actions = get_available_actions(skeleton)
     move_action = next((a for a in actions.position_actions if a.template_name == "Move"), None)
     assert move_action is not None, "Should have Move action"
-    move_target = next((t for t in move_action.valid_targets if t.position[0] >= 5), None)
+    move_target = next((t for t in move_action.valid_targets if t.position is not None and t.position[0] >= 5), None)
 
     if move_target:
         execute_action(skeleton, "Move", move_target)

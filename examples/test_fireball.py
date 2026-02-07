@@ -19,8 +19,9 @@ from dnd.spells.evocation import Fireball
 from dnd.actions import SpellEvent
 
 # Test utilities
-from dnd.utils import get_hp, set_hp
+from dnd.utils import get_hp, set_hp, get_save_natural_roll
 from dnd.actions_functional import setup_standard_actions
+import pytest
 
 
 def create_caster(
@@ -131,51 +132,61 @@ def test_fireball_basic_damage():
 def test_fireball_dex_save_half_damage():
     """Successful DEX save halves damage."""
     print("\n=== Test 2: DEX Save Half Damage ===")
-    reset_combat_state()
-    setup_basic_arena(20, 20)
 
-    # Caster with low spell DC (8 + 2 prof + 1 INT mod = 11)
-    caster = create_caster(name="Weak Wizard", position=(0, 0), intelligence=12, proficiency=2)
+    for attempt in range(10):
+        reset_combat_state()
+        setup_basic_arena(20, 20)
 
-    # Target with very high DEX (always saves vs DC 11)
-    # DEX 30 = +10 mod, save bonus = +10, always beats DC 11
-    _target = create_target(name="Nimble", position=(5, 0), dexterity=30, hp=100)
-    Entity.update_all_entities_senses()
+        # Caster with low spell DC (8 + 2 prof + 1 INT mod = 11)
+        caster = create_caster(name="Weak Wizard", position=(0, 0), intelligence=12, proficiency=2)
 
-    # Verify spell DC
-    dc = caster.spell_save_dc()
-    print(f"  Spell DC: {dc}")
-    assert dc == 11, f"Expected DC 11, got {dc}"
+        # Target with very high DEX (always saves vs DC 11)
+        # DEX 30 = +10 mod, save bonus = +10, always beats DC 11
+        _target = create_target(name="Nimble", position=(5, 0), dexterity=30, hp=100)
+        Entity.update_all_entities_senses()
 
-    fireball = Fireball(
-        source_entity_uuid=caster.uuid,
-        end_position=(5, 0),
-        cast_at_level=3,
-        template=False
-    )
+        # Verify spell DC
+        dc = caster.spell_save_dc()
+        print(f"  Spell DC: {dc}")
+        assert dc == 11, f"Expected DC 11, got {dc}"
 
-    result = fireball.apply()
-    assert result is not None and not result.canceled
-    assert isinstance(result, SpellEvent), "Result should be SpellEvent"
+        fireball = Fireball(
+            source_entity_uuid=caster.uuid,
+            end_position=(5, 0),
+            cast_at_level=3,
+            template=False
+        )
 
-    # Verify via combat log - per-target data is in sub_entries
-    assert result.combat_log is not None, "Should have combat_log"
-    assert len(result.combat_log.sub_entries) == 1, "Should have 1 target in sub_entries"
+        result = fireball.apply()
+        assert result is not None and not result.canceled
+        assert isinstance(result, SpellEvent), "Result should be SpellEvent"
 
-    per_target_log = result.combat_log.sub_entries[0]
-    log_data = per_target_log.data
+        # Verify via combat log - per-target data is in sub_entries
+        assert result.combat_log is not None, "Should have combat_log"
+        assert len(result.combat_log.sub_entries) == 1, "Should have 1 target in sub_entries"
 
-    # Check save succeeded
-    assert log_data.get('save_success') == True, "Target with DEX 30 should always save vs DC 11"
+        per_target_log = result.combat_log.sub_entries[0]
+        log_data = per_target_log.data
 
-    # Damage should be halved - verify from the log data
-    base_damage = log_data.get('base_damage', 0)
-    final_damage = log_data.get('final_damage', 0)
+        natural_roll = get_save_natural_roll(log_data)
+        if natural_roll == 1:
+            print(f"  Attempt {attempt + 1}: got nat 1, retrying...")
+            continue  # nat 1 auto-fail, re-roll
 
-    assert final_damage == base_damage // 2, f"Expected half damage: {base_damage}//2={base_damage//2}, got {final_damage}"
+        # Check save succeeded
+        assert log_data.get('save_success') == True, "Target with DEX 30 should always save vs DC 11"
 
-    print(f"  Rolled: {base_damage}, Applied (halved): {final_damage}")
-    print("PASS: DEX save halves damage")
+        # Damage should be halved - verify from the log data
+        base_damage = log_data.get('base_damage', 0)
+        final_damage = log_data.get('final_damage', 0)
+
+        assert final_damage == base_damage // 2, f"Expected half damage: {base_damage}//2={base_damage//2}, got {final_damage}"
+
+        print(f"  Rolled: {base_damage}, Applied (halved): {final_damage}")
+        print("PASS: DEX save halves damage")
+        break
+    else:
+        pytest.fail("Got nat 1 on all 10 attempts")
 
 
 def test_fireball_upcast_damage():
