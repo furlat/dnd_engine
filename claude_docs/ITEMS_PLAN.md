@@ -7,7 +7,7 @@ This document describes the complete design for items, inventory, and environmen
 ## Table of Contents
 
 1. [Design Philosophy](#1-design-philosophy)
-2. [Current State](#2-current-state)
+2. [Foundation](#2-foundation)
 3. [Item Class Hierarchy](#3-item-class-hierarchy)
 4. [BaseItem — The Foundation](#4-baseitem--the-foundation)
 5. [EquippableItem — Gear & Equipment](#5-equippableitem--gear--equipment)
@@ -16,7 +16,7 @@ This document describes the complete design for items, inventory, and environmen
 8. [Entity Orchestration](#8-entity-orchestration)
 9. [GridMap & Senses Integration](#9-gridmap--senses-integration)
 10. [Action System Integration](#10-action-system-integration)
-11. [Conditions on Items](#11-conditions-on-items--unifying-condition-management-on-baseblock)
+11. [Conditions on Items](#11-conditions-on-items)
 12. [Breakable Objects](#12-breakable-objects)
 13. [Looting System](#13-looting-system)
 14. [Implementation Phases](#14-implementation-phases)
@@ -48,33 +48,53 @@ Items are discrete objects in the game world with clear type separation. The des
 
 ---
 
-## 2. Current State
+## 2. Foundation
 
-### What Exists Today
+This section describes the infrastructure that items build on — already implemented and tested.
 
-- **Item classes**: `Weapon`, `Armor` (Helmet, BodyArmor, Gauntlets, Greaves, Boots, Amulet, Ring, Cloak), `Shield` — all inherit `BaseBlock` directly. No shared item interface.
-- **Equipment block**: 13 typed slots, 19+ ModifiableValues, equip/unequip with events but no item hooks.
-- **Action templates**: registered on entity, queried via `get_available_actions()`, proven pattern.
-- **GridMap**: tracks tiles + entities, no object concept.
-- **Senses**: sees entities + cells, no objects.
-- **Class features**: SecondWindFeature/RageFeature register actions via conditions — proven pattern for equip-granted actions.
-- **Weapon equip auto-registration**: `actions_functional.py` event handlers register Attack templates on `WEAPON_EQUIP` event at EFFECT phase (lines 134–165) — proven pattern.
+### Polymorphic Spatial Blocking
 
-### Existing Modifier Scoping Architecture
+BaseBlock provides polymorphic `blocks_walking()` and `blocks_vision()` methods with default `False` returns. Tile and Entity override these:
 
-The engine already has a three-level modifier scoping system for attack and damage. This is foundational for understanding what `_equip` hooks need to do vs what's already handled.
+- **Tile**: `blocks_walking()` → `self.get_movement_cost(mode) <= 0`; `blocks_vision()` → `not self.visible`
+- **Entity**: `blocks_walking()` → checks `self.non_blocking` flag and self-avoidance (`requesting_entity_uuid == self.uuid`)
+- **GridMap predicates** (`is_walkable`, `is_walkable_for`, `is_blocking`, `is_visible`) all dispatch through these polymorphic methods
+
+BaseItem will add its own overrides (see Section 4).
+
+### Condition Management on BaseBlock
+
+BaseBlock is the condition host for all block types (entities, tiles, and future items). The full condition lifecycle lives on BaseBlock:
+
+- `add_condition()` / `remove_condition()` with full tree traversal via `_remove_condition_tree()`
+- `remove_condition_by_uuid()` for cross-block cleanup
+- `advance_duration(condition_name)` for simple duration ticking (no saving throws)
+- Entity overrides `add_condition()` to add immunity checks and application saving throws
+- Entity has `advance_duration_condition(condition_name)` for duration ticking WITH removal saving throws
+
+**Tree cleanup** (`_remove_condition_tree()`) handles:
+1. `sub_conditions` — child conditions on the same block (parent-child)
+2. `linked_conditions` — conditions on OTHER blocks via `BaseBlock.get(target_uuid)` (works for entities, tiles, and items)
+3. `cleanup_own_state()` — removes own modifiers and handlers
+
+### Environment Step
+
+`Encounter._environment_step()` runs at the end of each round, advancing tile condition durations. Uses `GridMap.get_tiles_with_conditions()`. Currently handles tiles only — needs extension for floor items (see Section 11).
+
+### Modifier Scoping Architecture
+
+The engine has a three-level modifier scoping system for attack and damage:
 
 **Level 1 — Weapon-inherent modifiers** (scoped to ONE weapon automatically):
-- `weapon.attack_bonus: ModifiableValue` — created in weapon factories (e.g., `create_club()` in `dnd/items/weapons.py`)
+- `weapon.attack_bonus: ModifiableValue` — created in weapon factories
 - `weapon.damage_bonus: Optional[ModifiableValue]` — defaults to None, created for magic weapons
 - These are automatically selected by `Entity._get_attack_bonuses(weapon_slot)` which picks the ACTIVE weapon's own ModifiableValues
 - A +1 sword is simply created with `base_value=1` on attack_bonus and damage_bonus. **No equip hook needed.**
-- Switching weapons automatically switches which weapon's ModifiableValues are used
 
 **Level 2 — Equipment-wide modifiers** (global or weapon-type scoped):
 - `equipment.attack_bonus` — applies to ALL attacks
 - `equipment.melee_attack_bonus` / `equipment.ranged_attack_bonus` — weapon-type scoped
-- `equipment.damage_bonus` / `equipment.melee_damage_bonus` / `equipment.ranged_damage_bonus` — same pattern
+- `equipment.damage_bonus` / `equipment.melee_damage_bonus` / `equipment.ranged_damage_bonus`
 - `equipment.ac_bonus` — AC modifier
 - Fighting styles use these: Archery adds +2 to `equipment.ranged_attack_bonus`, Dueling adds contextual +2 to `equipment.melee_damage_bonus`
 
@@ -125,6 +145,10 @@ def create_club(source_id: UUID) -> Weapon:
 
 A +1 club would change `base_value=0` to `base_value=1` and add a `damage_bonus=ModifiableValue.create(..., base_value=1, ...)`. That's it — no `_equip` hook, no condition. The scoping is automatic.
 
+### Current Item Classes
+
+`Weapon`, `Armor` (Helmet, BodyArmor, Gauntlets, Greaves, Boots, Amulet, Ring, Cloak), `Shield` — all inherit `BaseBlock` directly. No shared item interface yet. Equipment block has 13 typed slots and 19+ ModifiableValues, with equip/unequip events but no item hooks.
+
 ---
 
 ## 3. Item Class Hierarchy
@@ -137,7 +161,7 @@ BaseItem(BaseBlock)                          ← dnd/core/base_item.py
 │   Flags: is_pickable=True, is_equippable=False, is_usable=False
 │   Hooks: _on_loot(), _on_drop(), _on_destroy()
 │   Fields: weight, value, rarity, tags, stack_count, max_stack
-│   Spatial: blocks_movement, blocks_vision (for when on ground)
+│   Spatial: blocks_movement, blocks_vision_field (for when on ground)
 │   Breakable: Optional[Health], damage_immunities, damage_reduction
 │
 ├── EquippableItem(BaseItem)
@@ -213,7 +237,7 @@ class BaseItem(BaseBlock):
 
     # Spatial (when on ground, not in inventory/equipped)
     blocks_movement: bool = False
-    blocks_vision: bool = False
+    blocks_vision_field: bool = False
 
     # Breakable (Section 12)
     is_targetable: bool = False
@@ -260,7 +284,7 @@ Public + private pattern, same as `BaseCondition.apply`/`_apply`:
         pass
 ```
 
-`_destroy` is on BaseItem (not just UsableItem) because both consumable UsableItems and breakable BaseItems need destruction — shared foundation.
+`destroy` is on BaseItem (not just UsableItem) because both consumable UsableItems and breakable BaseItems need destruction — shared foundation.
 
 ### The UUID Pattern
 
@@ -268,13 +292,15 @@ Same as conditions/actions: `self.source_entity_uuid` is set BEFORE hooks fire. 
 
 ### Spatial Methods
 
+BaseBlock already provides `blocks_walking()` and `blocks_vision()` with default `False` returns. BaseItem overrides them to delegate to its fields:
+
 ```python
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
         return self.blocks_movement
 
-    def blocks_vision_check(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        return self.blocks_vision
+    def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
+        return self.blocks_vision_field
 ```
 
 ### Dependency Direction
@@ -519,7 +545,7 @@ class Lever(UsableItem):
 class Door(UsableItem):
     is_pickable: bool = False
     blocks_movement: bool = True   # when closed
-    blocks_vision: bool = True     # when closed
+    blocks_vision_field: bool = True  # when closed
     is_targetable: bool = True     # can be broken
     is_open: bool = False
 
@@ -631,52 +657,22 @@ def unequip_item(self, slot, to_inventory: bool = True) -> Optional[BaseItem]:
 
 ## 9. GridMap & Senses Integration
 
-### The Problem
+### 9.1 Existing Spatial Infrastructure
 
-Currently GridMap tracks only tiles and entities. No concept of objects on the ground.
+The polymorphic spatial interface is in place:
 
-### Solution: `blocks_walking()` / `blocks_vision()` Methods on BaseBlock
+- `blocks_walking()` / `blocks_vision()` on BaseBlock with defaults (`False`)
+- Tile overrides delegate to `get_movement_cost()` and `visible`
+- Entity override checks `non_blocking` flag and self-avoidance
+- GridMap predicates (`is_walkable`, `is_walkable_for`, `is_blocking`, `is_visible`) all use polymorphic dispatch
+- **BaseItem will override** `blocks_walking()` → `return self.blocks_movement` and `blocks_vision()` → `return self.blocks_vision_field`
 
-**On BaseBlock** (default implementations — non-spatial blocks return False):
-```python
-class BaseBlock:
-    def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
-                       mode: MovementMode = MovementMode.WALKING) -> bool:
-        return False
+When items are added to the grid, the same polymorphic dispatch handles them with no predicate changes.
 
-    def blocks_vision_check(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        return False
-```
+### 9.2 Object Registries (to build)
 
-**Tile override:**
-```python
-class Tile(BaseBlock):
-    def blocks_walking(self, requesting_entity_uuid=None, mode=MovementMode.WALKING):
-        return self.get_movement_cost(mode) <= 0
+GridMap needs new registries for items on the ground:
 
-    def blocks_vision_check(self, requesting_entity_uuid=None):
-        return not self.visible
-```
-
-**BaseItem override** (for items on ground):
-```python
-class BaseItem(BaseBlock):
-    def blocks_walking(self, requesting_entity_uuid=None, mode=MovementMode.WALKING):
-        return self.blocks_movement
-
-    def blocks_vision_check(self, requesting_entity_uuid=None):
-        return self.blocks_vision
-```
-
-### Current State (from investigation)
-
-- **Entity blocking**: GridMap uses `_entities_by_position` + `_non_blocking_entities` set. Entity blocks walking for others, not self. Dead entities marked non-blocking via `set_entity_blocking()`.
-- **Vision blocking**: Purely `tile.visible` (hardcoded bool). Entities DON'T block vision.
-- **Tile walking**: `tile.get_movement_cost(mode)` checks `walking_cost` ModifiableValue (line 100 in `base_tiles.py`).
-
-### GridMap Changes
-
-New registries:
 ```python
 _object_positions: Dict[UUID, Tuple[int, int]] = {}
 _objects_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
@@ -687,22 +683,19 @@ New methods:
 - `remove_object(item_uuid)` — unregister from grid
 - `get_objects_at(position) → Set[UUID]` — objects at position
 - `get_object_position(item_uuid) → Optional[Tuple[int, int]]`
+- `get_objects_with_conditions() → List[BaseItem]` — for environment step (analogous to `get_tiles_with_conditions()`)
 
 Updates to existing methods:
 - `is_walkable_for()` — also check `_objects_by_position[(x,y)]`, call `obj.blocks_walking(requesting_entity_uuid)`
-- FOV computation — also check objects via `blocks_vision_check()`
+- FOV computation — also check objects via `blocks_vision()`
 
-### Senses Changes
+### 9.3 Senses (to build)
 
-Add `objects: Dict[UUID, Tuple[int, int]]` field (same pattern as `entities`). `Entity.update_entity_senses()` queries GridMap for visible objects, populates `senses.objects`. Senses does NOT import BaseItem — stores UUID + position only.
+Add `objects: Dict[UUID, Tuple[int, int]]` field to Senses (same pattern as `entities`). `Entity.update_entity_senses()` queries GridMap for visible objects, populates `senses.objects`. Senses does NOT import BaseItem — stores UUID + position only.
 
-### Spatial vs Non-Spatial
+### 9.4 Door Toggle Example
 
-Blocks on the map (tiles, items on ground, entities) have meaningful spatial methods. Blocks inside entities (Equipment, Health, etc.) inherit the BaseBlock defaults (return False). No special flag needed — only blocks registered in GridMap are queried.
-
-### Door Toggle Example
-
-`Door.open()` sets `blocks_movement=False`, `blocks_vision=False`, triggers senses update for nearby entities.
+`Door.open()` sets `blocks_movement=False`, `blocks_vision_field=False`, triggers senses update for nearby entities.
 
 ---
 
@@ -746,146 +739,151 @@ Use actions go into `self_actions`/`entity_actions`/`position_actions` based on 
 
 ---
 
-## 11. Conditions on Items — Unifying Condition Management on BaseBlock
+## 11. Conditions on Items
 
-### Key Architectural Discovery
+### 11.1 Condition Infrastructure
 
-`BaseBlock._registry` (line 144 in `base_block.py`) contains ALL BaseBlock instances — entities, tiles, AND items. `BaseBlock.get(uuid)` can find any of them. This means `_remove_condition_tree()` CAN move to BaseBlock using `BaseBlock.get()` for cross-object lookups, with no circular imports.
+BaseBlock is the condition host for all block types. The condition management API on BaseBlock:
 
-**NOTE**: CLAUDE.md currently says `BaseObject → BaseBlock → Entity` but actual code is `BaseObject(BaseModel)` and `BaseBlock(BaseModel)` — separate hierarchies. CLAUDE.md needs correcting.
+- **`add_condition(condition)`** — registers condition in `active_conditions`, calls `condition.apply()`. Entity overrides to add immunity check + saving throw.
+- **`remove_condition(name)`** — calls `_remove_condition_tree()` for full cleanup:
+  1. Recurses into `sub_conditions` (same block, parent-child)
+  2. Follows `linked_conditions` to OTHER blocks via `BaseBlock.get(target_uuid)` — works for entities, tiles, and items
+  3. Calls `condition.cleanup_own_state()` for modifiers/handlers
+- **`remove_condition_by_uuid(uuid)`** — UUID-based lookup → delegates to `remove_condition(name)`. Used for cross-block cleanup.
+- **`advance_duration(condition_name)`** — decrements duration, removes if expired. No saving throws. Returns `True` if removed.
+- **`linked_conditions: List[Tuple[UUID, UUID]]`** on BaseCondition stores `(target_block_uuid, condition_uuid)` pairs. Added via `add_linked_condition()`. This is the mechanism for cross-object condition cleanup.
 
-### Current State
+Entity adds:
+- `add_condition()` override — immunity check + application saving throw
+- `advance_duration_condition(condition_name)` — duration ticking WITH removal saving throws
 
-| Feature | BaseBlock | Entity |
-|---------|-----------|--------|
-| `add_condition()` | Yes (line 585) | Yes (override — adds saving throw check) |
-| `remove_condition()` | Yes (line 555, sub-conditions only) | Yes (override — full tree traversal, line 389) |
-| `_remove_condition_tree()` | No | Yes (line 347 — handles external_conditions, terrain_conditions) |
-| `remove_condition_by_uuid()` | No | Yes (line 422 — UUID lookup → `remove_condition(name)`) |
-| `advance_duration_condition()` | No | Yes (line 436 — turn-based with removal saves) |
+Environment step: `Encounter._environment_step()` advances tile condition durations at round end via `GridMap.get_tiles_with_conditions()`.
 
-### The Refactor: Move Condition Management DOWN to BaseBlock
+### 11.2 Items as Condition Hosts
 
-This makes tiles and items first-class condition hosts with full cross-object cleanup.
+Since BaseItem inherits BaseBlock, every item automatically gets:
+- `active_conditions` dict
+- `add_condition()` / `remove_condition()` with full tree traversal
+- `advance_duration()` for simple duration ticking
+- Registration in `BaseBlock._registry` — findable via `BaseBlock.get(item.uuid)`
 
-**What moves to BaseBlock:**
-
-1. **`remove_condition_by_uuid()`** — simple UUID lookup in `active_conditions_by_uuid` → delegates to `self.remove_condition(name)`. No imports needed.
-
-2. **`_remove_condition_tree()`** — uses `BaseBlock.get(target_uuid)` instead of `Entity.get()`:
-
-```python
-# In BaseBlock — NO Entity import needed
-def _remove_condition_tree(self, condition, expire=False, parent_event=None):
-    # Sub-conditions (same block)
-    for sub_uuid in list(condition.sub_conditions):
-        sub = BaseCondition.get(sub_uuid)
-        if sub is not None and isinstance(sub, BaseCondition):
-            self._remove_condition_tree(sub, expire, parent_event)
-
-    # External conditions (ANY BaseBlock — entities, items, tiles)
-    for target_uuid, cond_uuid in condition.external_conditions:
-        target = BaseBlock.get(target_uuid)
-        if target is not None:
-            target.remove_condition_by_uuid(cond_uuid)
-
-    # Terrain conditions (tiles — also BaseBlocks)
-    for tile_uuid, cond_uuid in condition.terrain_conditions:
-        target = BaseBlock.get(tile_uuid)
-        if target is not None:
-            target.remove_condition_by_uuid(cond_uuid)
-
-    # Own state cleanup (modifiers, handlers)
-    condition.cleanup_own_state(expire, parent_event)
-```
-
-**Why this works**: Entity, Tile, and (future) BaseItem all inherit BaseBlock. They all register in `BaseBlock._registry` via `__init__()`. `BaseBlock.get(uuid)` finds any of them.
-
-3. **`remove_condition()` upgrade** — BaseBlock's version (line 555) currently handles sub-conditions with `cleanup_own_state()` but NOT cross-object cleanup. After refactor, it calls `_remove_condition_tree()` for full cleanup:
+**Spells can target items directly.** Magic Weapon targets a weapon, not the entity. The condition lives ON the weapon block:
 
 ```python
-# BaseBlock.remove_condition() — now with full tree traversal
-def remove_condition(self, condition_name, expire=False, parent_event=None):
-    condition = self.active_conditions.pop(condition_name)
-    all_subs = self._collect_all_sub_conditions(condition)
-    for sub in all_subs:
-        self._remove_condition_from_dicts(sub)
-    self._remove_condition_from_dicts(condition)
-    self._remove_condition_tree(condition, expire, parent_event)  # Full tree
+# Magic Weapon spell: condition targets the WEAPON, not the entity
+class MagicWeaponCondition(BaseCondition):
+    name: str = "MagicWeaponCondition"
+
+    def _apply(self, declaration_event):
+        weapon = BaseBlock.get(self.target_entity_uuid)  # target is actually a weapon
+        modifier_uuid = weapon.attack_bonus.self_static.add_value_modifier(
+            NumericalModifier(name="Magic Weapon", value=1, ...)
+        )
+        # Also add to damage_bonus if weapon has one
+        return [(weapon.attack_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 ```
 
-Entity's override still adds Entity-specific logic (saving throw checks, additional tracking) while tree traversal is inherited.
+**Cross-object cleanup chain** (the key pattern):
 
-**What stays on Entity:**
-- `advance_duration_condition()` — calls `self.saving_throw()` which is Entity-specific
-- `add_condition()` override — Entity adds saving throw checks before application
+```
+Caster: Concentrating(spell_name="Magic Weapon")
+            │ linked_conditions → (weapon.uuid, magic_weapon_cond.uuid)
+            └──► Weapon: MagicWeaponCondition
+                        │ modifiers on weapon.attack_bonus, weapon.damage_bonus
+```
 
-### Key Implications
+When concentration breaks:
+1. `caster.remove_condition("Concentrating")` fires
+2. `_remove_condition_tree()` follows `linked_conditions`
+3. `BaseBlock.get(weapon_uuid)` finds the weapon (it's in `BaseBlock._registry`)
+4. `weapon.remove_condition_by_uuid(magic_weapon_cond_uuid)` removes it
+5. `cleanup_own_state()` removes the modifiers from weapon.attack_bonus
 
-**For tiles**: Currently tiles only get same-block sub-condition cleanup. With this refactor, if a tile condition creates `external_conditions` on entities (e.g., a trap that applies Poisoned), removing the tile condition now properly cleans up the entity conditions too.
+This works with zero changes to the condition infrastructure — the only prerequisite is Weapon inheriting BaseBlock (which it already does, and will continue to via BaseItem → BaseBlock).
 
-**For items**: Same benefit. If a magic item's condition creates `external_conditions` on the wielder, destroying the item (which calls `destroy` → `remove_condition`) now properly cleans up the entity conditions via the tree.
+### 11.3 Equip-Driven Conditions
 
-### Condition Progression — Two Tracks
+When an equipped item's `_on_equip` hook applies a condition on the ENTITY:
+
+```python
+class CloakOfProtection(EquippableItem):
+    def _on_equip(self, slot):
+        entity = Entity.get(self.source_entity_uuid)
+        entity.add_condition(CloakOfProtectionCondition(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+        ))
+
+    def _on_unequip(self, slot):
+        entity = Entity.get(self.source_entity_uuid)
+        if "CloakOfProtectionCondition" in entity.active_conditions:
+            entity.remove_condition("CloakOfProtectionCondition")
+```
+
+**Key point**: The condition lives on the ENTITY, not the item. The item's `_on_unequip` is responsible for removal. No `linked_conditions` needed here — the hook handles lifecycle directly.
+
+**When to use `linked_conditions` instead**: If the item itself has a condition (e.g., a cursed item where the curse lives on the item and the effect lives on the entity), link them:
+
+```python
+class CursedSword(EquippableItem):
+    def _on_equip(self, slot):
+        entity = Entity.get(self.source_entity_uuid)
+        # Curse condition on the ITEM
+        curse_condition = CursedSwordCurse(source_entity_uuid=self.source_entity_uuid, ...)
+        self.add_condition(curse_condition)  # Condition on the item block
+        # Effect condition on the ENTITY
+        effect = CursedSwordEffect(source_entity_uuid=self.source_entity_uuid,
+                                    target_entity_uuid=self.source_entity_uuid)
+        entity.add_condition(effect)
+        # Link them: destroying the item cleans up the entity effect
+        curse_condition.add_linked_condition(entity.uuid, effect.uuid)
+```
+
+### 11.4 Item Destruction and Condition Cleanup
+
+When `item.destroy()` is called:
+1. Iterates `active_conditions` and calls `remove_condition()` for each
+2. Each removal triggers `_remove_condition_tree()`
+3. Any `linked_conditions` pointing to other blocks (entities, tiles) get cleaned up automatically
+
+This means: a magic item with buffs on its wielder will properly clean up those buffs when the item is destroyed. No manual cleanup code needed in `_on_destroy()` IF the conditions were linked via `linked_conditions`.
+
+### 11.5 Condition Progression — Two Tracks
 
 | Track | What | When | How |
 |-------|------|------|-----|
-| **Entity turn** | Entity conditions + conditions on equipped/inventory items | During entity's `on_turn_start()` | `Entity.advance_duration_condition()` for own conditions. Entity iterates equipped items + inventory items and calls `advance_duration()` on their conditions |
-| **Environment step** | Conditions on tiles + conditions on floor items (items on GridMap) | End of full round | `Encounter._environment_step()` iterates GridMap tiles and floor objects, calls `advance_duration()` on their conditions |
+| **Entity turn** | Entity's own conditions | During `on_turn_start()` | `Entity.advance_duration_condition()` (with saves) |
+| **Entity turn** | Conditions on equipped/inventory items | During `on_turn_start()` | Entity iterates items, calls `item.advance_duration(cond_name)` — **needs implementing** |
+| **Environment step** | Conditions on tiles | End of full round | `Encounter._environment_step()` — **exists today** |
+| **Environment step** | Conditions on floor items | End of full round | Extend `_environment_step()` — **needs implementing** |
 
-**Why this split**: Equipped/inventory items are "part of" their owner entity — their conditions progress on the owner's turn (e.g., a Magic Weapon spell duration ticks when the wielder's turn starts). Floor items and tiles have no owner — they need an "environment step" after all combatants have acted.
+**What needs building:**
+- Entity's `on_turn_start()` needs to iterate equipped items and inventory items, calling `advance_duration()` on their conditions
+- `_environment_step()` needs to also iterate floor objects (once GridMap has object registries)
+- GridMap needs `get_objects_with_conditions()` (analogous to existing `get_tiles_with_conditions()`)
 
-**`advance_duration()` on BaseBlock** (simpler than Entity's `advance_duration_condition`):
-```python
-# On BaseBlock — no saving throws, just duration ticking
-def advance_duration(self, parent_event=None):
-    for cond_name, condition in list(self.active_conditions.items()):
-        if condition.duration is not None:
-            condition.duration -= 1
-            if condition.duration <= 0:
-                self.remove_condition(cond_name, expire=True, parent_event=parent_event)
-```
-
-### Environment Step — New Encounter Lifecycle Concept
-
-The environment step is a first-class concept in the Encounter lifecycle. Environmental dynamics happen independently of any entity: fire spreads from ignited oil, terrain changes, floor objects react, conditions progress.
-
-**Encounter round lifecycle after this change:**
+**Round lifecycle:**
 ```
 Round N:
-  Entity 1 Turn → Entity 2 Turn → ... → Entity N Turn
+  Entity 1 Turn (advance entity conds + equipped/inventory item conds)
+  Entity 2 Turn → ... → Entity N Turn
   → ROUND_END event
-  → ENVIRONMENT STEP ← NEW
+  → ENVIRONMENT STEP
       1. Tile conditions advance_duration()
       2. Floor item conditions advance_duration()
       3. Environmental dynamics (fire spreads, objects react)
   → round_number++
   → ROUND_START event
-Round N+1: ...
 ```
 
-**Insertion point**: `Encounter._advance_round()` (line 428) — between `_fire_round_end()` and `round_number += 1`:
-
-```python
-def _advance_round(self) -> None:
-    self._fire_round_end()
-    self._environment_step()  # NEW
-    self.round_number += 1
-    self.current_turn_index = 0
-    for combatant in self.combatants.values():
-        combatant.has_acted_this_round = False
-    self._fire_round_start()
-```
-
-### When NOT to Use Conditions
+### 11.6 When to Use Conditions vs Direct Modifiers
 
 - `_equip`/`_unequip` can directly add/remove modifiers — no condition needed for simple static bonuses
 - Use conditions when you need: event handlers, sub-conditions, expiration/duration, cross-entity cleanup, removal saving throws
-- A Defender Sword's +1 AC from `_equip` hook can be a direct modifier. A "cursed sword that blocks unequip" needs a condition with event handler.
-
-### Conditions on Items Use Case
-
-Magic Weapon spell → applies `MagicWeaponCondition` to the Weapon block (not the entity!) → adds +1 to `weapon.attack_bonus` ModifiableValue. Concentration on caster links via `external_conditions` → breaking concentration removes weapon condition via `_remove_condition_tree` on BaseBlock. The weapon is found via `BaseBlock.get(weapon_uuid)` — works because Weapon inherits from EquippableItem → BaseItem → BaseBlock.
+- A Defender Sword's +1 AC from `_equip` hook: direct modifier on `equipment.ac_bonus`
+- A cursed sword that blocks unequip: condition with event handler on WEAPON_UNEQUIP
+- A Cloak of Protection (+1 AC + +1 all saves): condition pattern (many modifiers across many ModifiableValues — condition provides centralized tracking for cleanup)
 
 ---
 
@@ -951,121 +949,75 @@ Entity→body transitions (and wall→rubble, etc.) are deferred to a common tra
 
 ## 14. Implementation Phases
 
-### Phase 0: Fix CLAUDE.md
-
-- Correct the "Three-Tier Ownership Hierarchy" section: `BaseBlock(BaseModel)` is the true base for blocks, tiles, and entities. `BaseObject(BaseModel)` is a separate hierarchy for ModifiableValues, Modifiers, Events, Conditions, etc.
-- Update `BaseBlock._registry` documentation to clarify it contains ALL BaseBlocks
-- Dependencies: None
-
-### Phase 1: Condition Management Refactor (BaseBlock)
-
-Delicate refactor — touches core condition lifecycle. Incremental steps with tests after each.
-
-**Step 1.1: Add `remove_condition_by_uuid()` to BaseBlock**
-- Simple method: look up in `active_conditions_by_uuid`, delegate to `self.remove_condition(name)`
-- Verify Entity's version can be replaced by calling super()
-- File: `dnd/core/base_block.py`
-- Test: Full pytest suite
-
-**Step 1.2: Move `_remove_condition_tree()` to BaseBlock**
-- Copy from Entity, replace `Entity.get()` with `BaseBlock.get()`, replace tile GridMap lookup with `BaseBlock.get(tile_uuid)`
-- Keep Entity's version as pass-through to super()
-- **Danger**: Don't change BaseBlock.remove_condition() yet — only Entity.remove_condition() should call the tree
-- Files: `dnd/core/base_block.py`, `dnd/entity.py`
-- Test: Full pytest. Concentration spell cleanup, zone spell cleanup, sub-condition chains.
-
-**Step 1.3: Upgrade BaseBlock.remove_condition() to use `_remove_condition_tree()`**
-- BaseBlock.remove_condition() now calls `_remove_condition_tree()` for full cross-object cleanup
-- Entity.remove_condition() override still adds Entity-specific logic but delegates tree traversal
-- **Danger**: Avoid double-cleanup — ensure override is clean
-- Files: `dnd/core/base_block.py`, `dnd/entity.py`
-- Test: Full pytest. Tile with condition that has external_conditions on entity → remove → verify cleanup.
-
-**Step 1.4: Add `advance_duration()` to BaseBlock**
-- Simple duration ticking: decrement, remove if expired. No saving throws.
-- File: `dnd/core/base_block.py`
-- Test: Tile with duration=3 condition, advance 3 times, verify removed.
-
-**Step 1.5: Add Environment Step in Encounter**
-- New `Encounter._environment_step()` called from `_advance_round()` (line 428)
-- Queries GridMap for tiles and floor objects with active conditions
-- Calls `advance_duration()` on each
-- May need new GridMap iterators: `get_all_tiles_with_conditions()`, `get_all_objects_with_conditions()`
-- Files: `dnd/encounter.py`, `dnd/core/gridmap.py`
-- Test: Apply 2-round condition to tile, run 2 full rounds, verify expired after round 2's environment step.
-
-**Phase 1 is a standalone major task.** Must be fully stable before any item work begins.
-- Dependencies: Phase 0
-
-### Phase 2: BaseItem + Hierarchy
+### Phase 1: BaseItem + Hierarchy
 
 - New file: `dnd/core/base_item.py` with BaseItem, EquippableItem, UsableItem
 - Reparent Weapon, Armor (all subtypes), Shield from `BaseBlock` → `EquippableItem` → `BaseItem` → `BaseBlock`
-- Add `blocks_walking()`/`blocks_vision_check()` to BaseBlock with defaults (return False)
-- Override in Tile (delegates to existing `walking_cost`/`visible`)
+- Add `blocks_walking()` / `blocks_vision()` overrides on BaseItem (delegates to `blocks_movement` / `blocks_vision_field` fields)
 - All existing tests must pass unchanged
-- Dependencies: Phase 0
+- Dependencies: None
 
-### Phase 3: Equip/Unequip Hooks
+### Phase 2: Equip/Unequip Hooks
 
 - Add hook calls in `Equipment.equip()` and `Equipment.unequip()` at insertion points from Section 5
 - Create test items using each approach:
   - Direct modifier: DefenderSword with +1 AC via `_on_equip`
   - Direct action: WandOfFireBolt grants Fire Bolt action
   - Condition: CloakOfProtection grants +1 AC and +1 all saves
-- Dependencies: Phase 2
+- Dependencies: Phase 1
 
-### Phase 4: Inventory Block
+### Phase 3: Inventory Block
 
 - New `Inventory(BaseBlock)` class — flat peer to Equipment on Entity
 - Add `inventory` field to Entity
 - Add Entity orchestration methods (`loot_item`, `drop_item`, `equip_item`, `unequip_item`)
 - Test: add items, remove items, weight tracking, transfers
-- Dependencies: Phase 2
+- Dependencies: Phase 1
 
-### Phase 5: GridMap/Senses for Objects
+### Phase 4: GridMap/Senses for Objects
 
 - Add object registries to GridMap (`_object_positions`, `_objects_by_position`)
 - Add `place_object`/`remove_object`/`get_objects_at`/`get_object_position`
-- Update `is_walkable_for()`/FOV to check objects via `blocks_walking`/`blocks_vision_check`
+- Add `get_objects_with_conditions()` for environment step
+- Update `is_walkable_for()`/FOV to check objects via `blocks_walking()`/`blocks_vision()`
 - Add `objects` field to Senses
 - Update `Entity.update_entity_senses()` to populate `senses.objects`
 - Test: place chest, verify entity sees it, verify movement blocked by door
-- Dependencies: Phase 2
+- Dependencies: Phase 1
 
-### Phase 6: Use Actions (Environment Objects First)
+### Phase 5: Use Actions (Environment Objects)
 
 - Implement `get_use_actions()` on UsableItem
 - Add `source_item_uuid` to BaseAction
 - First items: Lever (removes dangerous terrain), Door (toggles spatial blocking)
 - Integrate with `get_available_actions()` (source 3: environment objects via `senses.objects`, ≤5ft)
 - Test: place lever, move entity adjacent, verify "Pull Lever" appears, execute it
-- Dependencies: Phase 2, Phase 5
+- Dependencies: Phase 1, Phase 4
 
-### Phase 7: Inventory Use Actions
+### Phase 6: Inventory Use Actions
 
 - Integrate inventory actions with `get_available_actions()` (source 2: `inventory.get_all_use_actions`)
 - Update `execute_by_index()` for three-source search (registered → inventory → environment)
 - Add consumable destruction in `BaseAction.apply()` after `_apply_costs()`
 - Create test items: Potion of Healing (consumable, SELF), Scroll of Fireball (wraps SpellAction)
-- Dependencies: Phase 4, Phase 6
+- Dependencies: Phase 3, Phase 5
 
-### Phase 8: Breakable Objects
+### Phase 7: Breakable Objects
 
 - Health on BaseItem, `receive_damage`, `_on_destroy`
 - AttackObject action registered via `setup_standard_actions`
 - AoE `include_objects` flag (optional, incremental)
 - Test: wooden door with HP, attack it, break it, verify spatial state changes
-- Dependencies: Phase 5
+- Dependencies: Phase 4
 
-### Phase 9: Looting
+### Phase 8: Looting
 
 - Create loot body on death (simplified, defer full entity→body transitions)
 - LootAction for item transfer from body Inventory to entity Inventory
 - PickUpAction for items on ground
-- Dependencies: Phase 4, Phase 5
+- Dependencies: Phase 3, Phase 4
 
-### Phase 10: Integration Tests
+### Phase 9: Integration Tests
 
 - Full item lifecycle: create → place on ground → loot → equip → unequip → drop → loot by another
 - Magic item: equip ring → +1 AC → unequip → AC back to normal
@@ -1075,27 +1027,22 @@ Delicate refactor — touches core condition lifecycle. Incremental steps with t
 - Breakable: door with HP → attack → break → permanent open
 - Consumable: potion in inventory → drink → HP healed → potion destroyed
 - Environment turn: tile condition with 3-round duration → verify decrements each round → removed after 3
+- Item condition progression: equipped item condition ticks on owner's turn start
 - Dependencies: All phases
 
 ### Dependency Graph
 
 ```
-Phase 0 (Fix CLAUDE.md)
-    │
-Phase 1 (Condition Mgmt Refactor + Environment Step) ── MAJOR
-    │   Steps 1.1-1.5: delicate, test after each step
-    │   Must be fully stable before proceeding
-    │
-Phase 2 (BaseItem + Hierarchy)
-    ├── Phase 3 (Equip Hooks)
-    ├── Phase 4 (Inventory)
-    ├── Phase 5 (GridMap/Senses)
-    │       ├── Phase 6 (Use Actions / Env Objects)
-    │       ├── Phase 8 (Breakable)
-    │       └── Phase 9 (Looting)
-    └── Phase 7 (Inventory Use Actions) ← depends on Phase 4 + Phase 6
+Phase 1 (BaseItem + Hierarchy)
+    ├── Phase 2 (Equip Hooks)
+    ├── Phase 3 (Inventory)
+    ├── Phase 4 (GridMap/Senses)
+    │       ├── Phase 5 (Use Actions / Env Objects)
+    │       ├── Phase 7 (Breakable)
+    │       └── Phase 8 (Looting)
+    └── Phase 6 (Inventory Use Actions) ← depends on Phase 3 + Phase 5
                                                        │
-Phase 10 (Integration Tests) ← depends on all phases
+Phase 9 (Integration Tests) ← depends on all phases
 ```
 
 ---
@@ -1118,4 +1065,5 @@ Phase 10 (Integration Tests) ← depends on all phases
 | **Level 3 Modifier** | Event handler (dice manipulation). Registered via conditions or hooks. |
 | **Canonical Slot** | Equipment slot with dedicated calculation path (weapon, body armor, shield). Inherent stats consumed automatically. |
 | **Non-Canonical Slot** | Equipment slot without dedicated path (ring, cloak, amulet, etc.). Effects delivered via `_equip` hooks. |
-| **Environment Step** | New encounter lifecycle phase after all entity turns. Progresses tile and floor object conditions. |
+| **Environment Step** | Encounter lifecycle phase after all entity turns. Progresses tile and floor object conditions. |
+| **`linked_conditions`** | `List[Tuple[UUID, UUID]]` on BaseCondition. Stores `(target_block_uuid, condition_uuid)` pairs for cross-object condition cleanup. Added via `add_linked_condition()`. |

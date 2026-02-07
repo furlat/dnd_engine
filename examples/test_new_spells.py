@@ -505,54 +505,69 @@ def test_misty_step_bonus_action():
 def test_blindness_deafness_applies_blinded():
     """Blindness/Deafness can apply Blinded condition."""
     print("\n=== Test: Blindness/Deafness Applies Blinded ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    # Low CON = guaranteed fail
-    target = create_test_target("Target", (2, 0), con=1)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        target = create_test_target("Target", (2, 0), con=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    spell = BlindnessDeafness(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=target.uuid,
-        effect_type="blinded",
-        caster_level=5
-    )
-    spell.apply()
+        spell = BlindnessDeafness(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            effect_type="blinded",
+            caster_level=5
+        )
+        spell.apply()
 
-    assert has_condition(target, "Blindness/Deafness"), "Should have Blindness/Deafness"
-    assert has_condition(target, "Blinded"), "Should have Blinded sub-condition"
-    print("PASS: Blindness/Deafness applies Blinded")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        assert has_condition(target, "Blindness/Deafness"), "Should have Blindness/Deafness"
+        assert has_condition(target, "Blinded"), "Should have Blinded sub-condition"
+        print("PASS: Blindness/Deafness applies Blinded")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 def test_blindness_deafness_applies_deafened():
     """Blindness/Deafness can apply Deafened condition."""
     print("\n=== Test: Blindness/Deafness Applies Deafened ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    target = create_test_target("Target", (2, 0), con=1)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        target = create_test_target("Target", (2, 0), con=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    spell = BlindnessDeafness(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=target.uuid,
-        effect_type="deafened",
-        caster_level=5
-    )
-    spell.apply()
+        spell = BlindnessDeafness(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            effect_type="deafened",
+            caster_level=5
+        )
+        spell.apply()
 
-    assert has_condition(target, "Blindness/Deafness"), "Should have Blindness/Deafness"
-    assert has_condition(target, "Deafened"), "Should have Deafened sub-condition"
-    print("PASS: Blindness/Deafness applies Deafened")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        assert has_condition(target, "Blindness/Deafness"), "Should have Blindness/Deafness"
+        assert has_condition(target, "Deafened"), "Should have Deafened sub-condition"
+        print("PASS: Blindness/Deafness applies Deafened")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 def test_blindness_deafness_not_concentration():
@@ -588,24 +603,31 @@ def test_blindness_deafness_not_concentration():
 def test_fear_applies_frightened():
     """Fear applies Frightened condition on failed save."""
     print("\n=== Test: Fear Applies Frightened ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    # Low WIS = guaranteed fail
-    target = create_test_target("Target", (2, 0), wis=1)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        target = create_test_target("Target", (2, 0), wis=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    fear = Fear(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
-    fear.apply()
+        fear = Fear(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
+        fear.apply()
 
-    assert has_condition(target, "Fear"), "Target should have Fear effect"
-    assert has_condition(target, "Frightened"), "Target should have Frightened sub-condition"
-    assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
-    print("PASS: Fear applies Frightened")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        assert has_condition(target, "Fear"), "Target should have Fear effect"
+        assert has_condition(target, "Frightened"), "Target should have Frightened sub-condition"
+        assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
+        print("PASS: Fear applies Frightened")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 def test_fear_cone_shape():
@@ -639,24 +661,31 @@ def test_fear_cone_shape():
 def test_hypnotic_pattern_applies_conditions():
     """Hypnotic Pattern applies Charmed + Incapacitated."""
     print("\n=== Test: Hypnotic Pattern Applies Conditions ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    # Low WIS = guaranteed fail
-    target = create_test_target("Target", (5, 0), wis=1)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        target = create_test_target("Target", (5, 0), wis=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    hp = HypnoticPattern(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
-    hp.apply()
+        hp = HypnoticPattern(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
+        hp.apply()
 
-    assert has_condition(target, "Hypnotic Pattern"), "Target should have Hypnotic Pattern effect"
-    assert has_condition(target, "Charmed"), "Target should have Charmed sub-condition"
-    assert has_condition(target, "Incapacitated"), "Target should have Incapacitated sub-condition"
-    print("PASS: Hypnotic Pattern applies conditions")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        assert has_condition(target, "Hypnotic Pattern"), "Target should have Hypnotic Pattern effect"
+        assert has_condition(target, "Charmed"), "Target should have Charmed sub-condition"
+        assert has_condition(target, "Incapacitated"), "Target should have Incapacitated sub-condition"
+        print("PASS: Hypnotic Pattern applies conditions")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 def test_hypnotic_pattern_concentration_cleanup():

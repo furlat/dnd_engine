@@ -13,7 +13,7 @@ Run with: python examples/test_tier1_spells.py
 
 from uuid import uuid4
 
-from dnd.utils import reset_combat_state, has_condition, get_save_natural_roll
+from dnd.utils import reset_combat_state, has_condition
 from dnd.core.gridmap import get_map
 from dnd.core.events import EventPhase
 from dnd.entity import Entity, EntityConfig
@@ -373,91 +373,109 @@ def test_hold_monster_multi_target_calculation():
 def test_hold_monster_applies_paralyzed():
     """Hold Monster applies Hold Monster effect + Paralyzed on failed save."""
     print("\n=== Test: Hold Monster Applies Paralyzed ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    caster.action_economy.spell_slot_5.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
-    )
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    # Create non-undead with WIS 1 to GUARANTEE failed save
-    weak_config = EntityConfig(
-        ability_scores=AbilityScoresConfig(
-            wisdom=AbilityConfig(ability_score=1),  # -5 mod
-            constitution=AbilityConfig(ability_score=10),
-        ),
-        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=5, mode="maximums")]),
-        creature_type=CreatureType.BEAST,  # Not undead
-        position=(1, 0),
-        faction="monsters",
-        proficiency_bonus=2,
-    )
-    target = Entity.create(name="Weak Beast", source_entity_uuid=uuid4(), config=weak_config)
-    setup_standard_actions(target)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster.action_economy.spell_slot_5.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
+        )
 
-    Entity.update_all_entities_senses()
+        # Create non-undead with WIS 1 to fail save (unless nat 20)
+        weak_config = EntityConfig(
+            ability_scores=AbilityScoresConfig(
+                wisdom=AbilityConfig(ability_score=1),  # -5 mod
+                constitution=AbilityConfig(ability_score=10),
+            ),
+            health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=5, mode="maximums")]),
+            creature_type=CreatureType.BEAST,  # Not undead
+            position=(1, 0),
+            faction="monsters",
+            proficiency_bonus=2,
+        )
+        target = Entity.create(name="Weak Beast", source_entity_uuid=uuid4(), config=weak_config)
+        setup_standard_actions(target)
 
-    hold = HoldMonster(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, cast_at_level=5)
-    hold.apply()
+        Entity.update_all_entities_senses()
 
-    assert has_condition(target, "Hold Monster"), \
-        f"Should have Hold Monster effect. Conditions: {list(target.active_conditions.keys())}"
-    assert has_condition(target, "Paralyzed"), \
-        f"Should have Paralyzed. Conditions: {list(target.active_conditions.keys())}"
+        hold = HoldMonster(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, cast_at_level=5)
+        hold.apply()
 
-    print(f"  Target conditions: {list(target.active_conditions.keys())}")
-    print("PASS: Hold Monster applies Paralyzed")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        assert has_condition(target, "Hold Monster"), \
+            f"Should have Hold Monster effect. Conditions: {list(target.active_conditions.keys())}"
+        assert has_condition(target, "Paralyzed"), \
+            f"Should have Paralyzed. Conditions: {list(target.active_conditions.keys())}"
+
+        print(f"  Target conditions: {list(target.active_conditions.keys())}")
+        print("PASS: Hold Monster applies Paralyzed")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_hold_monster_concentration_cleanup():
     """Breaking Hold Monster concentration removes effect from target."""
     print("\n=== Test: Hold Monster Concentration Cleanup ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    caster.action_economy.spell_slot_5.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
-    )
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    weak_config = EntityConfig(
-        ability_scores=AbilityScoresConfig(wisdom=AbilityConfig(ability_score=1)),
-        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=5, mode="maximums")]),
-        creature_type=CreatureType.BEAST,
-        position=(1, 0),
-        faction="monsters",
-        proficiency_bonus=2,
-    )
-    target = Entity.create(name="Target", source_entity_uuid=uuid4(), config=weak_config)
-    setup_standard_actions(target)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster.action_economy.spell_slot_5.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
+        )
 
-    Entity.update_all_entities_senses()
+        weak_config = EntityConfig(
+            ability_scores=AbilityScoresConfig(wisdom=AbilityConfig(ability_score=1)),
+            health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=5, mode="maximums")]),
+            creature_type=CreatureType.BEAST,
+            position=(1, 0),
+            faction="monsters",
+            proficiency_bonus=2,
+        )
+        target = Entity.create(name="Target", source_entity_uuid=uuid4(), config=weak_config)
+        setup_standard_actions(target)
 
-    # Cast and verify effect applied
-    hold = HoldMonster(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, cast_at_level=5)
-    hold.apply()
+        Entity.update_all_entities_senses()
 
-    assert has_condition(target, "Hold Monster"), "Effect should be applied"
-    assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
-    print(f"  Before break - Target: {list(target.active_conditions.keys())}")
+        # Cast and verify effect applied
+        hold = HoldMonster(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, cast_at_level=5)
+        hold.apply()
 
-    # Break concentration
-    caster.remove_condition("Concentrating")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    # Verify cleanup - ALL conditions should be removed (including nested sub-conditions)
-    assert not has_condition(caster, "Concentrating"), "Concentration should be removed"
-    assert not has_condition(target, "Hold Monster"), \
-        f"Effect should be cleaned up. Target conditions: {list(target.active_conditions.keys())}"
-    assert not has_condition(target, "Paralyzed"), \
-        f"Paralyzed should be cleaned up. Target conditions: {list(target.active_conditions.keys())}"
-    assert not has_condition(target, "Incapacitated"), \
-        f"Incapacitated (sub-condition of Paralyzed) should be cleaned up. Target conditions: {list(target.active_conditions.keys())}"
+        assert has_condition(target, "Hold Monster"), "Effect should be applied"
+        assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
+        print(f"  Before break - Target: {list(target.active_conditions.keys())}")
 
-    print(f"  After break - Target: {list(target.active_conditions.keys())}")
-    print("PASS: Concentration cleanup works (including nested sub-conditions)")
+        # Break concentration
+        caster.remove_condition("Concentrating")
+
+        # Verify cleanup - ALL conditions should be removed (including nested sub-conditions)
+        assert not has_condition(caster, "Concentrating"), "Concentration should be removed"
+        assert not has_condition(target, "Hold Monster"), \
+            f"Effect should be cleaned up. Target conditions: {list(target.active_conditions.keys())}"
+        assert not has_condition(target, "Paralyzed"), \
+            f"Paralyzed should be cleaned up. Target conditions: {list(target.active_conditions.keys())}"
+        assert not has_condition(target, "Incapacitated"), \
+            f"Incapacitated (sub-condition of Paralyzed) should be cleaned up. Target conditions: {list(target.active_conditions.keys())}"
+
+        print(f"  After break - Target: {list(target.active_conditions.keys())}")
+        print("PASS: Concentration cleanup works (including nested sub-conditions)")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 # =============================================================================
@@ -467,120 +485,130 @@ def test_hold_monster_concentration_cleanup():
 def test_sunburst_full_damage_and_blind_on_fail():
     """Sunburst deals FULL damage and blinds on FAILED save."""
     print("\n=== Test: Sunburst Full Damage + Blind on Failed Save ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 30, 30)
 
-    # Caster at (0,0), target at (14,0) = 70ft apart
-    # Caster is OUTSIDE the 60ft sphere but within 150ft spell range
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    caster.action_economy.spell_slot_8.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
-    )
-    # Add action economy (spells cost an action)
-    caster.action_economy.actions.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="Test Action", value=1)
-    )
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 30, 30)
 
-    # CON 1 = -5 mod, GUARANTEED to fail any DC
-    weak_config = EntityConfig(
-        ability_scores=AbilityScoresConfig(
-            constitution=AbilityConfig(ability_score=1),
-        ),
-        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=20, mode="maximums")]),
-        position=(14, 0),
-        faction="monsters",
-        proficiency_bonus=2,
-    )
-    target = Entity.create(name="Weak Target", source_entity_uuid=uuid4(), config=weak_config)
-    setup_standard_actions(target)
+        # Caster at (0,0), target at (14,0) = 70ft apart
+        # Caster is OUTSIDE the 60ft sphere but within 150ft spell range
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster.action_economy.spell_slot_8.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
+        )
+        # Add action economy (spells cost an action)
+        caster.action_economy.actions.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="Test Action", value=1)
+        )
 
-    Entity.update_all_entities_senses(max_distance=20)
+        # CON 1 = -5 mod, GUARANTEED to fail any DC (unless nat 20)
+        weak_config = EntityConfig(
+            ability_scores=AbilityScoresConfig(
+                constitution=AbilityConfig(ability_score=1),
+            ),
+            health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=20, mode="maximums")]),
+            position=(14, 0),
+            faction="monsters",
+            proficiency_bonus=2,
+        )
+        target = Entity.create(name="Weak Target", source_entity_uuid=uuid4(), config=weak_config)
+        setup_standard_actions(target)
 
-    initial_hp = target.get_hp()
-    print(f"  Target CON mod: {target.ability_scores.constitution.modifier}")
-    print(f"  Caster DC: {caster.spell_save_dc()}")
+        Entity.update_all_entities_senses(max_distance=20)
 
-    sunburst = Sunburst(source_entity_uuid=caster.uuid, end_position=(14, 0), cast_at_level=8)
-    _result = sunburst.apply()  # Result checked via HP/conditions, not phase
+        initial_hp = target.get_hp()
+        print(f"  Target CON mod: {target.ability_scores.constitution.modifier}")
+        print(f"  Caster DC: {caster.spell_save_dc()}")
 
-    damage_dealt = initial_hp - target.get_hp()
-    assert damage_dealt > 0, "Should deal damage"
-    assert has_condition(target, "Sunburst Blindness"), "Should be blinded"
-    assert has_condition(target, "Blinded"), "Should have Blinded sub-condition"
+        sunburst = Sunburst(source_entity_uuid=caster.uuid, end_position=(14, 0), cast_at_level=8)
+        _result = sunburst.apply()
 
-    print(f"  Damage: {damage_dealt}")
-    print(f"  Blinded: YES")
-    print("PASS: Full damage + blind on failed save")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        damage_dealt = initial_hp - target.get_hp()
+        assert damage_dealt > 0, "Should deal damage"
+        assert has_condition(target, "Sunburst Blindness"), "Should be blinded"
+        assert has_condition(target, "Blinded"), "Should have Blinded sub-condition"
+
+        print(f"  Damage: {damage_dealt}")
+        print(f"  Blinded: YES")
+        print("PASS: Full damage + blind on failed save")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_sunburst_half_damage_no_blind_on_success():
-    """Sunburst deals HALF damage and NO blind on SUCCESSFUL save.
-
-    To GUARANTEE a save success, we use:
-    - CON 30 = +10 mod
-    - Proficiency = +2
-    - Bonus modifier +5 via SavingThrowConfig.bonus
-    Total = +17, so roll of 1 gives 1+17=18 > DC 15 (ALWAYS PASS)
-    """
+    """Sunburst deals HALF damage and NO blind on SUCCESSFUL save."""
     print("\n=== Test: Sunburst Half Damage + No Blind on Success ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 30, 30)
 
-    # Caster outside 60ft sphere AoE
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    caster.action_economy.spell_slot_8.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
-    )
-    # Add action economy (spells cost an action)
-    caster.action_economy.actions.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="Test Action", value=1)
-    )
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 30, 30)
 
-    # Create entity with GUARANTEED save success via config
-    # CON 30 (+10) + proficiency (+2) + bonus (+5) = +17
-    # DC 15 means roll 1+17=18 > 15 (ALWAYS PASS)
-    tough_config = EntityConfig(
-        ability_scores=AbilityScoresConfig(
-            constitution=AbilityConfig(ability_score=30),  # +10 mod
-        ),
-        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=20, mode="maximums")]),
-        saving_throws=SavingThrowSetConfig(
-            constitution_saving_throw=SavingThrowConfig(
-                proficiency=True,
-                bonus=5  # Additional +5 bonus via config
-            )
-        ),
-        position=(14, 0),
-        faction="monsters",
-        proficiency_bonus=2,
-    )
-    target = Entity.create(name="Tough Target", source_entity_uuid=uuid4(), config=tough_config)
-    setup_standard_actions(target)
+        # Caster outside 60ft sphere AoE
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster.action_economy.spell_slot_8.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
+        )
+        # Add action economy (spells cost an action)
+        caster.action_economy.actions.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="Test Action", value=1)
+        )
 
-    Entity.update_all_entities_senses(max_distance=20)
+        # CON 30 (+10) + proficiency (+2) + bonus (+5) = +17
+        # DC 15 means roll 1+17=18 > 15 (ALWAYS PASS unless nat 1)
+        tough_config = EntityConfig(
+            ability_scores=AbilityScoresConfig(
+                constitution=AbilityConfig(ability_score=30),  # +10 mod
+            ),
+            health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=20, mode="maximums")]),
+            saving_throws=SavingThrowSetConfig(
+                constitution_saving_throw=SavingThrowConfig(
+                    proficiency=True,
+                    bonus=5  # Additional +5 bonus via config
+                )
+            ),
+            position=(14, 0),
+            faction="monsters",
+            proficiency_bonus=2,
+        )
+        target = Entity.create(name="Tough Target", source_entity_uuid=uuid4(), config=tough_config)
+        setup_standard_actions(target)
 
-    initial_hp = target.get_hp()
-    print(f"  Target CON mod: {target.ability_scores.constitution.modifier}")
-    print(f"  Caster DC: {caster.spell_save_dc()}")
+        Entity.update_all_entities_senses(max_distance=20)
 
-    sunburst = Sunburst(source_entity_uuid=caster.uuid, end_position=(14, 0), cast_at_level=8)
-    _result = sunburst.apply()  # Result checked via HP/conditions, not phase
+        initial_hp = target.get_hp()
+        print(f"  Target CON mod: {target.ability_scores.constitution.modifier}")
+        print(f"  Caster DC: {caster.spell_save_dc()}")
 
-    # Should still take damage (half)
-    damage_dealt = initial_hp - target.get_hp()
-    assert damage_dealt > 0, "Should deal half damage even on save"
+        sunburst = Sunburst(source_entity_uuid=caster.uuid, end_position=(14, 0), cast_at_level=8)
+        _result = sunburst.apply()
 
-    # Should NOT be blinded
-    assert not has_condition(target, "Sunburst Blindness"), \
-        f"Should NOT be blinded on save. Conditions: {list(target.active_conditions.keys())}"
-    assert not has_condition(target, "Blinded"), \
-        f"Should NOT have Blinded. Conditions: {list(target.active_conditions.keys())}"
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    print(f"  Damage: {damage_dealt} (half)")
-    print(f"  Blinded: NO")
-    print("PASS: Half damage + no blind on success")
+        # Should still take damage (half)
+        damage_dealt = initial_hp - target.get_hp()
+        assert damage_dealt > 0, "Should deal half damage even on save"
+
+        # Should NOT be blinded
+        assert not has_condition(target, "Sunburst Blindness"), \
+            f"Should NOT be blinded on save. Conditions: {list(target.active_conditions.keys())}"
+        assert not has_condition(target, "Blinded"), \
+            f"Should NOT have Blinded. Conditions: {list(target.active_conditions.keys())}"
+
+        print(f"  Damage: {damage_dealt} (half)")
+        print(f"  Blinded: NO")
+        print("PASS: Half damage + no blind on success")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_sunburst_undead_gets_disadvantage():
@@ -626,50 +654,59 @@ def test_sunburst_undead_gets_disadvantage():
 def test_sunburst_sub_condition_cleanup():
     """Removing Sunburst Blindness also removes Blinded sub-condition."""
     print("\n=== Test: Sunburst Sub-Condition Cleanup ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 30, 30)
 
-    # Caster outside 60ft sphere AoE
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    caster.action_economy.spell_slot_8.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
-    )
-    # Add action economy (spells cost an action)
-    caster.action_economy.actions.self_static.add_value_modifier(
-        NumericalModifier.create(source_entity_uuid=caster.uuid, name="Test Action", value=1)
-    )
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 30, 30)
 
-    weak_config = EntityConfig(
-        ability_scores=AbilityScoresConfig(constitution=AbilityConfig(ability_score=1)),
-        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=20, mode="maximums")]),
-        position=(14, 0),
-        faction="monsters",
-        proficiency_bonus=2,
-    )
-    target = Entity.create(name="Target", source_entity_uuid=uuid4(), config=weak_config)
-    setup_standard_actions(target)
+        # Caster outside 60ft sphere AoE
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster.action_economy.spell_slot_8.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
+        )
+        # Add action economy (spells cost an action)
+        caster.action_economy.actions.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=caster.uuid, name="Test Action", value=1)
+        )
 
-    Entity.update_all_entities_senses(max_distance=20)
+        weak_config = EntityConfig(
+            ability_scores=AbilityScoresConfig(constitution=AbilityConfig(ability_score=1)),
+            health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=20, mode="maximums")]),
+            position=(14, 0),
+            faction="monsters",
+            proficiency_bonus=2,
+        )
+        target = Entity.create(name="Target", source_entity_uuid=uuid4(), config=weak_config)
+        setup_standard_actions(target)
 
-    # Cast to apply blindness
-    sunburst = Sunburst(source_entity_uuid=caster.uuid, end_position=(14, 0), cast_at_level=8)
-    sunburst.apply()
+        Entity.update_all_entities_senses(max_distance=20)
 
-    assert has_condition(target, "Sunburst Blindness"), "Should be blinded"
-    assert has_condition(target, "Blinded"), "Should have Blinded sub-condition"
-    print(f"  Before removal: {list(target.active_conditions.keys())}")
+        # Cast to apply blindness
+        sunburst = Sunburst(source_entity_uuid=caster.uuid, end_position=(14, 0), cast_at_level=8)
+        sunburst.apply()
 
-    # Remove parent condition
-    target.remove_condition("Sunburst Blindness")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    # Both should be gone
-    assert not has_condition(target, "Sunburst Blindness"), "Parent should be removed"
-    assert not has_condition(target, "Blinded"), \
-        f"Sub-condition should be removed. Conditions: {list(target.active_conditions.keys())}"
+        assert has_condition(target, "Sunburst Blindness"), "Should be blinded"
+        assert has_condition(target, "Blinded"), "Should have Blinded sub-condition"
+        print(f"  Before removal: {list(target.active_conditions.keys())}")
 
-    print(f"  After removal: {list(target.active_conditions.keys())}")
-    print("PASS: Sub-condition cleanup works")
+        # Remove parent condition
+        target.remove_condition("Sunburst Blindness")
+
+        # Both should be gone
+        assert not has_condition(target, "Sunburst Blindness"), "Parent should be removed"
+        assert not has_condition(target, "Blinded"), \
+            f"Sub-condition should be removed. Conditions: {list(target.active_conditions.keys())}"
+
+        print(f"  After removal: {list(target.active_conditions.keys())}")
+        print("PASS: Sub-condition cleanup works")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 # =============================================================================
@@ -736,57 +773,58 @@ def test_poison_spray_fails_at_15ft_with_range_error():
 
 
 def test_poison_spray_no_damage_on_save():
-    """Poison Spray deals NO damage on successful CON save.
-
-    To GUARANTEE a save success, we use:
-    - CON 30 = +10 mod
-    - Proficiency = +2
-    - Bonus modifier +6 via SavingThrowConfig.bonus
-    Total = +18, so nat 1 gives 1+18=19 > DC 15 (ALWAYS PASS even on nat 1)
-    """
+    """Poison Spray deals NO damage on successful CON save."""
     print("\n=== Test: Poison Spray No Damage on Save ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    # Create entity with GUARANTEED save success via config
-    # CON 30 (+10) + proficiency (+2) + bonus (+6) = +18
-    # DC 15 means nat 1 gives 1+18=19 > 15 (ALWAYS PASS even on nat 1)
-    tough_config = EntityConfig(
-        ability_scores=AbilityScoresConfig(constitution=AbilityConfig(ability_score=30)),
-        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=10, mode="maximums")]),
-        saving_throws=SavingThrowSetConfig(
-            constitution_saving_throw=SavingThrowConfig(
-                proficiency=True,
-                bonus=6  # +18 total, so even nat 1 passes DC 15
-            )
-        ),
-        position=(1, 0),
-        faction="monsters",
-        proficiency_bonus=2,
-    )
-    target = Entity.create(name="Tough Target", source_entity_uuid=uuid4(), config=tough_config)
-    setup_standard_actions(target)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
 
-    Entity.update_all_entities_senses()
+        # CON 30 (+10) + proficiency (+2) + bonus (+6) = +18
+        # Always passes unless nat 1 (BG3 auto-fail)
+        tough_config = EntityConfig(
+            ability_scores=AbilityScoresConfig(constitution=AbilityConfig(ability_score=30)),
+            health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=8, hit_dice_count=10, mode="maximums")]),
+            saving_throws=SavingThrowSetConfig(
+                constitution_saving_throw=SavingThrowConfig(
+                    proficiency=True,
+                    bonus=6
+                )
+            ),
+            position=(1, 0),
+            faction="monsters",
+            proficiency_bonus=2,
+        )
+        target = Entity.create(name="Tough Target", source_entity_uuid=uuid4(), config=tough_config)
+        setup_standard_actions(target)
 
-    initial_hp = target.get_hp()
-    print(f"  Target CON mod: {target.ability_scores.constitution.modifier}")
-    print(f"  Caster DC: {caster.spell_save_dc()}")
-    print(f"  Initial HP: {initial_hp}")
+        Entity.update_all_entities_senses()
 
-    poison = PoisonSpray(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=5)
-    _result = poison.apply()  # Result checked via HP, not phase
+        initial_hp = target.get_hp()
+        print(f"  Target CON mod: {target.ability_scores.constitution.modifier}")
+        print(f"  Caster DC: {caster.spell_save_dc()}")
+        print(f"  Initial HP: {initial_hp}")
 
-    final_hp = target.get_hp()
-    damage = initial_hp - final_hp
+        poison = PoisonSpray(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=5)
+        _result = poison.apply()
 
-    assert damage == 0, f"Should deal 0 damage on save, dealt {damage}"
-    print(f"  Final HP: {final_hp}")
-    print(f"  Damage: {damage}")
-    print("PASS: No damage on save")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        final_hp = target.get_hp()
+        damage = initial_hp - final_hp
+
+        assert damage == 0, f"Should deal 0 damage on save, dealt {damage}"
+        print(f"  Final HP: {final_hp}")
+        print(f"  Damage: {damage}")
+        print("PASS: No damage on save")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_poison_spray_deals_damage_on_failed_save():

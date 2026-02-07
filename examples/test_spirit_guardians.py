@@ -15,12 +15,30 @@ Tests:
 10. Zone is removed when concentration breaks
 """
 
+import pytest
+
 from dnd.utils import reset_combat_state, has_condition, get_hp, set_hp
 from dnd.monsters.bestiary import create_skeleton, create_goblin
-from dnd.entity import Entity
+from dnd.entity import Entity, get_natural_roll
 from dnd.spells.conjuration import SpiritGuardians, SpiritGuardiansZone
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
+from dnd.core.events import EventQueue
+
+
+def had_critical_d20() -> bool:
+    """Check if any d20 roll in the current EventQueue had a nat 1 or nat 20."""
+    for event in EventQueue._all_events:
+        for attr in ('dice_roll', 'save_roll'):
+            roll = getattr(event, attr, None)
+            if roll is not None:
+                try:
+                    nat = get_natural_roll(roll)
+                    if nat in (1, 20):
+                        return True
+                except Exception:
+                    pass
+    return False
 
 
 def setup_arena(size: int = 30):
@@ -85,47 +103,50 @@ def test_spirit_guardians_enemy_damage():
     print("TEST: Spirit Guardians Enemy Damage")
     print("=" * 60)
 
-    reset_combat_state()
-    setup_arena()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_arena()
 
-    # Create caster and enemy near each other
-    caster = create_skeleton(name="Caster", position=(10, 10), faction="heroes")
-    enemy = create_goblin(name="Enemy", position=(11, 10), faction="monsters")  # Within 15ft
-    caster.update_entity_senses(max_distance=30)
-
-    # Force enemy to fail WIS save
-    wis_save = enemy.saving_throws.get_saving_throw("wisdom")
-    wis_save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=enemy.uuid,
-            name="Test Penalty",
-            value=-100
+        caster = create_skeleton(name="Caster", position=(10, 10), faction="heroes")
+        enemy = create_goblin(name="Enemy", position=(11, 10), faction="monsters")
+        # Boost HP so goblin survives 3d8 damage
+        enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=enemy.uuid, name="Test HP Boost", value=90)
         )
-    )
+        set_hp(enemy, 100)
+        caster.update_entity_senses(max_distance=30)
 
-    initial_hp = get_hp(enemy)
-    print(f"\n1. Enemy initial HP: {initial_hp}")
+        wis_save = enemy.saving_throws.get_saving_throw("wisdom")
+        wis_save.bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=enemy.uuid,
+                name="Test Penalty",
+                value=-100
+            )
+        )
 
-    # Cast Spirit Guardians
-    spell = SpiritGuardians(
-        source_entity_uuid=caster.uuid
-    )
-    result = spell.apply()
+        initial_hp = get_hp(enemy)
 
-    print(f"\n2. Cast result: {result.status_message if result else 'None'}")
+        spell = SpiritGuardians(
+            source_entity_uuid=caster.uuid
+        )
+        spell.apply()
 
-    final_hp = get_hp(enemy)
-    damage_taken = initial_hp - final_hp
-    print(f"   Enemy HP after: {final_hp}")
-    print(f"   Damage taken: {damage_taken}")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    # 3d8 = 3-24 damage
-    assert damage_taken >= 3, f"Should take at least 3 damage (3d8 min), got {damage_taken}"
-    assert damage_taken <= 24, f"Should take at most 24 damage (3d8 max), got {damage_taken}"
+        final_hp = get_hp(enemy)
+        damage_taken = initial_hp - final_hp
+        print(f"   Damage taken: {damage_taken}")
 
-    print("\n" + "=" * 60)
-    print("PASS: Spirit Guardians enemy damage works!")
-    print("=" * 60)
+        assert damage_taken >= 3, f"Should take at least 3 damage (3d8 min), got {damage_taken}"
+        assert damage_taken <= 24, f"Should take at most 24 damage (3d8 max), got {damage_taken}"
+
+        print("PASS: Spirit Guardians enemy damage works!")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_spirit_guardians_ally_safe():
@@ -167,49 +188,52 @@ def test_spirit_guardians_entry_damage():
     print("TEST: Spirit Guardians Entry Damage")
     print("=" * 60)
 
-    reset_combat_state()
-    setup_arena()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_arena()
 
-    # Create caster and enemy far apart
-    caster = create_skeleton(name="Caster", position=(10, 10), faction="heroes")
-    enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")  # Outside 15ft zone
-    caster.update_entity_senses(max_distance=30)
-
-    # Cast Spirit Guardians first
-    spell = SpiritGuardians(
-        source_entity_uuid=caster.uuid
-    )
-    spell.apply()
-
-    initial_hp = get_hp(enemy)
-    print(f"\n1. Enemy initial HP after cast (outside zone): {initial_hp}")
-
-    # Force enemy to fail WIS save
-    wis_save = enemy.saving_throws.get_saving_throw("wisdom")
-    wis_save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=enemy.uuid,
-            name="Test Penalty",
-            value=-100
+        caster = create_skeleton(name="Caster", position=(10, 10), faction="heroes")
+        enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")
+        # Boost HP so goblin survives 3d8 damage
+        enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
+            NumericalModifier.create(source_entity_uuid=enemy.uuid, name="Test HP Boost", value=90)
         )
-    )
+        set_hp(enemy, 100)
+        caster.update_entity_senses(max_distance=30)
 
-    # Move enemy into the zone
-    print(f"\n2. Moving enemy into zone at (11, 10)")
-    Entity.update_entity_position(enemy, (11, 10))
+        spell = SpiritGuardians(
+            source_entity_uuid=caster.uuid
+        )
+        spell.apply()
 
-    final_hp = get_hp(enemy)
-    damage_taken = initial_hp - final_hp
-    print(f"   Enemy HP after: {final_hp}")
-    print(f"   Damage taken: {damage_taken}")
+        initial_hp = get_hp(enemy)
 
-    # 3d8 = 3-24 damage
-    assert damage_taken >= 3, f"Should take at least 3 damage (3d8 min), got {damage_taken}"
-    assert damage_taken <= 24, f"Should take at most 24 damage (3d8 max), got {damage_taken}"
+        wis_save = enemy.saving_throws.get_saving_throw("wisdom")
+        wis_save.bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=enemy.uuid,
+                name="Test Penalty",
+                value=-100
+            )
+        )
 
-    print("\n" + "=" * 60)
-    print("PASS: Spirit Guardians entry damage works!")
-    print("=" * 60)
+        Entity.update_entity_position(enemy, (11, 10))
+
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        final_hp = get_hp(enemy)
+        damage_taken = initial_hp - final_hp
+        print(f"   Damage taken: {damage_taken}")
+
+        assert damage_taken >= 3, f"Should take at least 3 damage (3d8 min), got {damage_taken}"
+        assert damage_taken <= 24, f"Should take at most 24 damage (3d8 max), got {damage_taken}"
+
+        print("PASS: Spirit Guardians entry damage works!")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_spirit_guardians_once_per_turn():
@@ -320,6 +344,11 @@ def test_spirit_guardians_speed_halved():
     # Create caster and enemy
     caster = create_skeleton(name="Caster", position=(10, 10), faction="heroes")
     enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")
+    # Boost goblin max HP so it survives 3d8 entry damage (goblin default is 10 HP)
+    enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
+        NumericalModifier.create(source_entity_uuid=enemy.uuid, name="Test HP Boost", value=90)
+    )
+    set_hp(enemy, 100)
     caster.update_entity_senses(max_distance=30)
 
     # Get initial speed
