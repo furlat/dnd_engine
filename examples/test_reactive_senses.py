@@ -603,8 +603,8 @@ def test_death_updates_paths():
     print(f"Target is dead: {target.get_hp() <= 0}")
 
     # Check if target is marked non-blocking
-    is_non_blocking = target.uuid in grid._non_blocking_entities
-    print(f"Target marked non-blocking in GridMap: {is_non_blocking}")
+    is_non_blocking = target.non_blocking
+    print(f"Target marked non-blocking: {is_non_blocking}")
 
     # Check paths after death - should now include (2,0)
     paths_after = set(attacker.senses.paths.keys())

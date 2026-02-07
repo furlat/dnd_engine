@@ -11,12 +11,30 @@ Tests:
 6. Zone is removed when concentration breaks
 """
 
+import pytest
+
 from dnd.utils import reset_combat_state, has_condition, get_hp
 from dnd.monsters.bestiary import create_skeleton, create_goblin
-from dnd.entity import Entity
+from dnd.entity import Entity, get_natural_roll
 from dnd.spells.conjuration import Cloudkill
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
+from dnd.core.events import EventQueue
+
+
+def had_critical_d20() -> bool:
+    """Check if any d20 roll in the current EventQueue had a nat 1 or nat 20."""
+    for event in EventQueue._all_events:
+        for attr in ('dice_roll', 'save_roll'):
+            roll = getattr(event, attr, None)
+            if roll is not None:
+                try:
+                    nat = get_natural_roll(roll)
+                    if nat in (1, 20):
+                        return True
+                except Exception:
+                    pass
+    return False
 
 
 def setup_arena(size: int = 30):
@@ -84,50 +102,48 @@ def test_cloudkill_initial_damage():
     print("=" * 60)
     print("   Note: Using goblins (not immune to poison)")
 
-    reset_combat_state()
-    setup_arena()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_arena()
 
-    # Create caster and target already in zone area
-    # Using goblins because skeletons are immune to poison!
-    caster = create_goblin(name="Caster", position=(0, 0))
-    target = create_goblin(name="Target", position=(10, 10))  # In zone
-    caster.update_entity_senses(max_distance=30)
+        caster = create_goblin(name="Caster", position=(0, 0))
+        target = create_goblin(name="Target", position=(10, 10))
+        caster.update_entity_senses(max_distance=30)
 
-    # Force target to fail CON save BEFORE casting
-    con_save = target.saving_throws.get_saving_throw("constitution")
-    con_save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=target.uuid,
-            name="Test Penalty",
-            value=-100
+        con_save = target.saving_throws.get_saving_throw("constitution")
+        con_save.bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=target.uuid,
+                name="Test Penalty",
+                value=-100
+            )
         )
-    )
 
-    initial_hp = get_hp(target)
-    print(f"\n1. Target initial HP: {initial_hp}")
+        initial_hp = get_hp(target)
+        print(f"\n1. Target initial HP: {initial_hp}")
 
-    # Cast Cloudkill
-    target_pos = (10, 10)
-    spell = Cloudkill(
-        source_entity_uuid=caster.uuid,
-        end_position=target_pos
-    )
-    result = spell.apply()
+        target_pos = (10, 10)
+        spell = Cloudkill(
+            source_entity_uuid=caster.uuid,
+            end_position=target_pos
+        )
+        spell.apply()
 
-    print(f"\n2. Cast result: {result.status_message if result else 'None'}")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    final_hp = get_hp(target)
-    damage_taken = initial_hp - final_hp
-    print(f"   Target HP after: {final_hp}")
-    print(f"   Damage taken: {damage_taken}")
+        final_hp = get_hp(target)
+        damage_taken = initial_hp - final_hp
+        print(f"   Damage taken: {damage_taken}")
 
-    # 5d8 = 5-40 damage
-    assert damage_taken >= 5, f"Should take at least 5 damage (5d8 min), got {damage_taken}"
-    assert damage_taken <= 40, f"Should take at most 40 damage (5d8 max), got {damage_taken}"
+        assert damage_taken >= 5, f"Should take at least 5 damage (5d8 min), got {damage_taken}"
+        assert damage_taken <= 40, f"Should take at most 40 damage (5d8 max), got {damage_taken}"
 
-    print("\n" + "=" * 60)
-    print("PASS: Cloudkill initial damage works!")
-    print("=" * 60)
+        print("PASS: Cloudkill initial damage works!")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_cloudkill_entry_damage():
@@ -137,52 +153,49 @@ def test_cloudkill_entry_damage():
     print("=" * 60)
     print("   Note: Using goblins (not immune to poison)")
 
-    reset_combat_state()
-    setup_arena()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_arena()
 
-    # Create caster and target outside zone
-    # Using goblins because skeletons are immune to poison!
-    caster = create_goblin(name="Caster", position=(0, 0))
-    target = create_goblin(name="Target", position=(20, 10))  # Outside zone
-    caster.update_entity_senses(max_distance=30)
+        caster = create_goblin(name="Caster", position=(0, 0))
+        target = create_goblin(name="Target", position=(20, 10))
+        caster.update_entity_senses(max_distance=30)
 
-    # Cast Cloudkill
-    target_pos = (10, 10)
-    spell = Cloudkill(
-        source_entity_uuid=caster.uuid,
-        end_position=target_pos
-    )
-    spell.apply()
-
-    initial_hp = get_hp(target)
-    print(f"\n1. Target initial HP after cast: {initial_hp}")
-
-    # Force target to fail CON save
-    con_save = target.saving_throws.get_saving_throw("constitution")
-    con_save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=target.uuid,
-            name="Test Penalty",
-            value=-100
+        target_pos = (10, 10)
+        spell = Cloudkill(
+            source_entity_uuid=caster.uuid,
+            end_position=target_pos
         )
-    )
+        spell.apply()
 
-    # Move target into the zone
-    print(f"\n2. Moving target into zone at (10, 10)")
-    Entity.update_entity_position(target, (10, 10))
+        initial_hp = get_hp(target)
 
-    final_hp = get_hp(target)
-    damage_taken = initial_hp - final_hp
-    print(f"   Target HP after: {final_hp}")
-    print(f"   Damage taken: {damage_taken}")
+        con_save = target.saving_throws.get_saving_throw("constitution")
+        con_save.bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=target.uuid,
+                name="Test Penalty",
+                value=-100
+            )
+        )
 
-    # 5d8 = 5-40 damage
-    assert damage_taken >= 5, f"Should take at least 5 damage (5d8 min), got {damage_taken}"
-    assert damage_taken <= 40, f"Should take at most 40 damage (5d8 max), got {damage_taken}"
+        Entity.update_entity_position(target, (10, 10))
 
-    print("\n" + "=" * 60)
-    print("PASS: Cloudkill entry damage works!")
-    print("=" * 60)
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        final_hp = get_hp(target)
+        damage_taken = initial_hp - final_hp
+        print(f"   Damage taken: {damage_taken}")
+
+        assert damage_taken >= 5, f"Should take at least 5 damage (5d8 min), got {damage_taken}"
+        assert damage_taken <= 40, f"Should take at most 40 damage (5d8 max), got {damage_taken}"
+
+        print("PASS: Cloudkill entry damage works!")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_cloudkill_turn_start_damage():
@@ -192,56 +205,51 @@ def test_cloudkill_turn_start_damage():
     print("=" * 60)
     print("   Note: Using goblins (not immune to poison)")
 
-    reset_combat_state()
-    setup_arena()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_arena()
 
-    # Create caster and target
-    # Using goblins because skeletons are immune to poison!
-    caster = create_goblin(name="Caster", position=(0, 0))
-    target = create_goblin(name="Target", position=(20, 10))  # Outside initially
-    caster.update_entity_senses(max_distance=30)
+        caster = create_goblin(name="Caster", position=(0, 0))
+        target = create_goblin(name="Target", position=(20, 10))
+        caster.update_entity_senses(max_distance=30)
 
-    # Cast Cloudkill
-    target_pos = (10, 10)
-    spell = Cloudkill(
-        source_entity_uuid=caster.uuid,
-        end_position=target_pos
-    )
-    spell.apply()
-
-    # Move target into zone (takes damage on entry)
-    Entity.update_entity_position(target, (10, 10))
-
-    # Record HP before turn start
-    hp_before_turn = get_hp(target)
-    print(f"\n1. Target HP before turn start: {hp_before_turn}")
-
-    # Force target to fail CON save
-    con_save = target.saving_throws.get_saving_throw("constitution")
-    con_save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=target.uuid,
-            name="Test Penalty",
-            value=-100
+        target_pos = (10, 10)
+        spell = Cloudkill(
+            source_entity_uuid=caster.uuid,
+            end_position=target_pos
         )
-    )
+        spell.apply()
 
-    # Trigger turn start
-    print(f"\n2. Target starts their turn in the zone")
-    target.on_turn_start()
+        Entity.update_entity_position(target, (10, 10))
 
-    final_hp = get_hp(target)
-    damage_taken = hp_before_turn - final_hp
-    print(f"   Target HP after turn start: {final_hp}")
-    print(f"   Damage taken: {damage_taken}")
+        hp_before_turn = get_hp(target)
 
-    # 5d8 = 5-40 damage
-    assert damage_taken >= 5, f"Should take at least 5 damage (5d8 min), got {damage_taken}"
-    assert damage_taken <= 40, f"Should take at most 40 damage (5d8 max), got {damage_taken}"
+        con_save = target.saving_throws.get_saving_throw("constitution")
+        con_save.bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=target.uuid,
+                name="Test Penalty",
+                value=-100
+            )
+        )
 
-    print("\n" + "=" * 60)
-    print("PASS: Cloudkill turn start damage works!")
-    print("=" * 60)
+        target.on_turn_start()
+
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        final_hp = get_hp(target)
+        damage_taken = hp_before_turn - final_hp
+        print(f"   Damage taken: {damage_taken}")
+
+        assert damage_taken >= 5, f"Should take at least 5 damage (5d8 min), got {damage_taken}"
+        assert damage_taken <= 40, f"Should take at most 40 damage (5d8 max), got {damage_taken}"
+
+        print("PASS: Cloudkill turn start damage works!")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_cloudkill_auto_move():

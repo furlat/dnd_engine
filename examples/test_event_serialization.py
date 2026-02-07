@@ -18,7 +18,7 @@ from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity, EntityConfig
 
 
-def test_serialize_event(event: Event, name: str) -> bool:
+def _serialize_event(event: Event, name: str) -> bool:
     """Test that an event can be serialized to JSON."""
     print(f"\n=== {name} ===")
     try:
@@ -59,7 +59,7 @@ def test_basic_events():
         event_type=EventType.BASE_ACTION,
         use_register=False  # Don't register, just test serialization
     )
-    results.append(test_serialize_event(event1, "Basic Event"))
+    results.append(_serialize_event(event1, "Basic Event"))
 
     # SpatialChangeEvent - entity entered
     event2 = SpatialChangeEvent.entity_entered(
@@ -67,7 +67,7 @@ def test_basic_events():
         entity_uuid=uuid4(),
         old_position=(3, 3)
     )
-    results.append(test_serialize_event(event2, "SpatialChangeEvent (entered)"))
+    results.append(_serialize_event(event2, "SpatialChangeEvent (entered)"))
 
     # SpatialChangeEvent - tile changed
     event3 = SpatialChangeEvent.tile_changed(
@@ -75,7 +75,7 @@ def test_basic_events():
         walkable=False,
         visible=True
     )
-    results.append(test_serialize_event(event3, "SpatialChangeEvent (tile)"))
+    results.append(_serialize_event(event3, "SpatialChangeEvent (tile)"))
 
     return all(results)
 
@@ -96,7 +96,7 @@ def test_complex_events():
         dc=15,
         use_register=False
     )
-    results.append(test_serialize_event(event1, "SavingThrowEvent"))
+    results.append(_serialize_event(event1, "SavingThrowEvent"))
 
     # SkillCheckEvent
     event2 = SkillCheckEvent(
@@ -106,7 +106,7 @@ def test_complex_events():
         dc=12,
         use_register=False
     )
-    results.append(test_serialize_event(event2, "SkillCheckEvent"))
+    results.append(_serialize_event(event2, "SkillCheckEvent"))
 
     return all(results)
 
@@ -140,7 +140,7 @@ def test_events_from_actions():
 
     results = []
     for i, event in enumerate(all_events[-5:]):  # Last 5 events
-        results.append(test_serialize_event(event, f"Queue Event {i+1}: {event.event_type.value}"))
+        results.append(_serialize_event(event, f"Queue Event {i+1}: {event.event_type.value}"))
 
     return all(results) if results else True
 
