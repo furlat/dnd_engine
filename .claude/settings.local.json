@@ -28,7 +28,10 @@
       "Bash(for f in examples/test_relentless_rage_intimidating.py examples/test_saving_throw_events.py examples/test_second_wind.py examples/test_shatter.py examples/test_shove.py examples/test_sleep_color_spray.py examples/test_spatial_handler_registry.py examples/test_spell_system.py examples/test_spike_growth.py examples/test_spike_zone.py)",
       "Bash(for f in examples/test_spirit_guardians.py examples/test_survivor.py examples/test_terrain_movement_system.py examples/test_thunderwave.py examples/test_tier1_spells.py examples/test_tier2_spells.py examples/test_turn_end_handler.py examples/test_two_weapon_fighting.py examples/test_web.py)",
       "Bash(for i in 1 2 3 4 5 6 7 8 9 10)",
-      "Bash(do python examples/test_tier1_spells.py)"
+      "Bash(do python examples/test_tier1_spells.py)",
+      "Bash(.venv/bin/python -m pytest:*)",
+      "Bash(for i in 1 2 3 4 5)",
+      "Bash(do echo \"=== Run $i ===\")"
     ]
   }
 }

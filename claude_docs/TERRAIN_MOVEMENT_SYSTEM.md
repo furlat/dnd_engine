@@ -53,13 +53,6 @@ This document describes the terrain movement cost system, zone spell conditions,
 - [x] `test_cloudkill.py` - CON save + auto-move zone (6 tests)
 - [x] `test_spirit_guardians.py` - WIS save + follow caster + speed halving (9 tests)
 
-### Not Yet Implemented
-
-- [ ] Movement modes on entities (fly speed, swim speed) - entities assume WALKING
-- [ ] Light system (connect obscurement fields to FOV)
-- [ ] Cover calculation
-- [ ] Fog Cloud, Darkness (need light/obscurement system)
-
 ---
 
 ## Architecture
@@ -299,8 +292,8 @@ When concentration breaks:
 
 Base condition for effects applied to tiles. Features:
 - `adds_difficult_terrain: bool` - If True, adds +1 to walking cost
-- `heavily_obscured: bool` - Blocks vision (NOT CONNECTED TO FOV YET)
-- `lightly_obscured: bool` - Light obscurement (NOT CONNECTED TO FOV YET)
+- `heavily_obscured: bool` - Blocks vision (see `VISION_HIDING_COVER_PLAN.md` for integration plan)
+- `lightly_obscured: bool` - Light obscurement (see `VISION_HIDING_COVER_PLAN.md` for integration plan)
 
 **Note**: Entry damage and turn start damage are now handled via ZoneControlCondition's spatial handlers, not TileEffectCondition fields.
 
@@ -635,44 +628,6 @@ All tests passing.
 
 ---
 
-## Future Work
-
-### Priority 1: Vision/Light System
-
-Requires significant refactoring:
-- Connect `heavily_obscured` / `lightly_obscured` to FOV calculations
-- Light source system (torches, lanterns, light spell)
-- Darkvision, Blindsight, Truesight, Devil's Sight
-- Zone spells needing this: **Fog Cloud**, **Darkness**
-
-### Priority 2: Cover System
-
-- Half cover (+2 AC, +2 DEX saves)
-- Three-quarters cover (+5 AC, +5 DEX saves)
-- Full cover (can't be targeted)
-- Cover detection from obstacles/creatures
-
-### Priority 3: Entity Movement Modes
-
-Currently all entities use WALKING mode. Need:
-- `fly_speed` on Entity
-- `swim_speed` on Entity
-- Movement mode selection in Move action
-- Hover vs regular flying (falling when incapacitated)
-
-### Priority 4: Additional Zone Spells
-
-**Blocked by vision/light system**:
-- Fog Cloud (heavily obscures, no damage)
-- Darkness (heavily obscures, magical darkness)
-
-**Other potential spells**:
-- Wall of Fire (line/ring shape, one-sided damage)
-- Entangle (difficult terrain + restrained, plant-based)
-- Moonbeam (damage + shapechange save)
-
----
-
 ## Implemented Zone Spells Reference
 
 ### Spike Growth (2nd level, Transmutation)
@@ -724,7 +679,7 @@ Currently all entities use WALKING mode. Need:
 | Range | 120ft |
 | Zone | 20ft radius sphere |
 | Duration | Concentration, up to 10 minutes |
-| Terrain | Heavily obscured (not connected to FOV yet) |
+| Terrain | Heavily obscured (see `VISION_HIDING_COVER_PLAN.md`) |
 | Effect | 5d8 poison on entry/turn start (CON save for half) |
 | Movement | Zone moves 10ft away from caster at caster's turn start |
 | Upcast | +1d8 per level above 5th |
@@ -756,5 +711,6 @@ Currently all entities use WALKING mode. Need:
 - `CLAUDE.md` - Main codebase guide
 - `IMPLEMENTATION_GUIDE.md` - How to implement conditions and event handlers
 - `AOE_TARGETING_REFERENCE.md` - AoE shape calculations
-- `ZONE_SPELLS_IMPLEMENTATION_PLAN.md` - Original planning document for zone spells
-- `TERRAIN_AND_3D_PLAN.md` - Original terrain planning document (historical)
+- `VISION_HIDING_COVER_PLAN.md` - Design doc for lighting, obscurement, hiding/stealth, invisibility, and cover
+- `Z_AXIS_PLAN.md` - Design doc for z-axis/verticality
+- `archive/ZONE_SPELLS_IMPLEMENTATION_PLAN.md` - Original planning document for zone spells (historical)

@@ -242,23 +242,8 @@ class BaseCondition(BaseObject):
                 raise ValueError(f"Trying to remove value with UUID {value_uuid} not found")
             for modifier_uuid in modifiers_uuids:
                 value.remove_modifier(modifier_uuid)
-        # Note: self.applied = False is now set at the end of remove() method
-        # to ensure all cleanup methods (including remove_event_handlers) can run
-
         return True
     
-    def remove_sub_conditions(self,parent_event: Optional[Event] = None) -> bool:
-        """ Remove the sub conditions """
-        # if not self.applied:
-        #     return False
-        for sub_condition_uuid in self.sub_conditions:
-            sub_condition = BaseCondition.get(sub_condition_uuid)
-            if sub_condition is None:
-                raise ValueError(f"Trying to remove sub condition with UUID {sub_condition_uuid} not found sub-condition removal should remove it from the parent reference")
-            elif isinstance(sub_condition,BaseCondition):
-                sub_condition.remove(skip_parent_removal=True,parent_event=parent_event)
-        return True
-
     def add_external_condition(self, target_entity_uuid: UUID, condition_uuid: UUID) -> None:
         """Track a condition we caused on another entity (a 'nephew').
 
@@ -284,70 +269,6 @@ class BaseCondition(BaseObject):
         """
         self.terrain_conditions.append((tile_uuid, condition_uuid))
 
-    def remove_external_conditions(self, parent_event: Optional[Event] = None) -> bool:
-        """Remove all conditions this condition caused on other entities ('nephews').
-
-        This is called during condition removal to clean up cross-entity effects.
-        For example, when Concentrating is removed, this removes the spell effect
-        (like Paralyzed) from the target entity.
-
-        Args:
-            parent_event: Optional parent event for event chain tracking
-
-        Returns:
-            True if removal was successful
-        """
-        # Late import to avoid circular dependency
-        from dnd.entity import Entity
-        _ = parent_event  # Reserved for future event chain integration
-
-        for target_entity_uuid, condition_uuid in self.external_conditions:
-            target = Entity.get(target_entity_uuid)
-            if not target:
-                continue  # Target entity no longer exists
-
-            # Find the condition by UUID and remove it via entity's remove_condition
-            # This respects the target's immunities, handlers, etc.
-            for cond_name, cond in list(target.active_conditions.items()):
-                if cond.uuid == condition_uuid:
-                    target.remove_condition(cond_name)
-                    break
-
-        return True
-
-    def remove_terrain_conditions(self, parent_event: Optional[Event] = None) -> bool:
-        """Remove all conditions this condition placed on tiles.
-
-        This is called during condition removal to clean up zone spell effects.
-        For example, when a zone control condition is removed, this removes the
-        tile effects from all affected tiles.
-
-        Args:
-            parent_event: Optional parent event for event chain tracking
-
-        Returns:
-            True if removal was successful
-        """
-        # Late import to avoid circular dependency: base_conditions <- base_block <- base_tiles <- gridmap
-        from dnd.core.gridmap import get_map
-        _ = parent_event  # Reserved for future event chain integration
-
-        grid = get_map()
-
-        for tile_uuid, condition_uuid in self.terrain_conditions:
-            tile = grid.get_tile_by_uuid(tile_uuid)
-            if not tile:
-                continue  # Tile no longer exists
-
-            # Find the condition by UUID and remove it
-            for cond_name, cond in list(tile.active_conditions.items()):
-                if cond.uuid == condition_uuid:
-                    tile.remove_condition(cond_name)
-                    break
-
-        self.terrain_conditions.clear()
-        return True
-    
     def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
         
         #remove the condition from the parent
@@ -439,54 +360,6 @@ class BaseCondition(BaseObject):
         event.phase_to(EventPhase.COMPLETION)
         return True
 
-    def remove(self, expire: bool = False, skip_parent_removal: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Remove the condition with event handling.
-
-        DEPRECATED: This method is preserved for backward compatibility with code
-        that calls condition.remove() directly. New code should use Entity's
-        remove_condition() method which handles full tree traversal.
-
-        Note: This still performs cross-object cleanup via late imports for
-        backward compatibility. The late imports will be removed once all
-        callers migrate to Entity.remove_condition().
-        """
-        if not self.applied:
-            return False
-        # First declare the removal event
-        event = self._declare_removal_event(expired=expire, parent_event=parent_event)
-        if event.canceled:  # Check if event was canceled at declaration
-            return False
-
-        # Handle expiration if needed
-        if expire:
-            expired_event = self._expire(event)
-            if expired_event and expired_event.canceled:
-                return False
-
-        # Handle removal
-        removed_event = self._remove(event)
-        if removed_event and removed_event.canceled:
-            return False
-
-        # Proceed with actual removal operations
-        self.remove_condition_modifiers()
-        self.remove_sub_conditions(parent_event=event)
-        self.remove_external_conditions(parent_event=event)  # Cross-entity cleanup
-        self.remove_terrain_conditions(parent_event=event)  # Tile cleanup for zone spells
-        if not skip_parent_removal:
-            self.remove_condition_from_parent()
-        self.remove_event_handlers()
-        self.remove_spatial_handlers()  # Position-indexed handler cleanup
-
-        # Mark as no longer applied AFTER all cleanup is done
-        self.applied = False
-
-        # Complete the event
-        if event:
-            event.phase_to(EventPhase.COMPLETION)
-
-        return True
-    
     def progress(self) -> bool:
         """Progress the duration, return True if expired.
 

@@ -201,7 +201,7 @@ pyright
 | `CLI_GUIDE.md` | How to use CLI and Agent commands |
 | `IMPLEMENTATION_GUIDE.md` | How to implement conditions, actions, handlers |
 | `CLASS_SYSTEM.md` | Fighter implementation, feature condition patterns |
-| `EXAMPLE_PATTERNS.md` | Code snippets for writing examples/tests |
+| ~~`EXAMPLE_PATTERNS.md`~~ | Merged into `IMPLEMENTATION_GUIDE.md` (Section 14) |
 | `archive/` | Completed planning docs (historical reference) |
 
 ---
