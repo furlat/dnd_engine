@@ -141,7 +141,7 @@ class ChillTouchEffect(BaseCondition):
     Duration: 1 round (expires at start of caster's next turn).
 
     This follows the SRD: "until the start of your next turn" = CASTER's turn.
-    Uses external_conditions to manage NoHealing on the target.
+    Uses linked_conditions to manage NoHealing on the target.
     If target is undead, also adds disadvantage on attacks vs caster.
     """
     name: str = "Chill Touch Effect"
@@ -363,8 +363,8 @@ class ChillTouch(SpellAction):
         )
         target.add_condition(no_healing, parent_event=effect_event)
 
-        # Link via external_conditions for cleanup
-        effect_condition.add_external_condition(target.uuid, no_healing.uuid)
+        # Link via linked_conditions for cleanup
+        effect_condition.add_linked_condition(target.uuid, no_healing.uuid)
 
         undead_text = " (undead: disadvantage vs caster)" if is_undead else ""
         return effect_event.phase_to(

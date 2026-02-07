@@ -19,9 +19,8 @@ from typing import Type
 from uuid import uuid4
 
 from dnd.core.gridmap import get_map, reset_map
-from dnd.core.base_tiles import (
-    floor_factory, wall_factory, water_factory, MovementMode
-)
+from dnd.core.base_tiles import floor_factory, wall_factory, water_factory
+from dnd.core.base_block import MovementMode
 from dnd.core.modifiers import NumericalModifier, DamageType
 from dnd.entity import Entity
 from dnd.utils import reset_combat_state, setup_combat_arena
@@ -752,7 +751,7 @@ def test_zone_control_applies_tile_effects():
     assert cost == 2, f"Zone should add difficult terrain, got cost {cost}"
 
     print(f"Affected positions: {zone.affected_positions}")
-    print(f"Terrain conditions tracked: {len(zone.terrain_conditions)}")
+    print(f"Linked conditions tracked: {len(zone.linked_conditions)}")
 
     print("\n[PASS] Zone correctly applies tile effects!")
 
@@ -895,7 +894,7 @@ def test_concentration_break_removes_zone():
     caster.add_condition(concentration)
 
     # Link zone as external condition of concentration
-    concentration.add_external_condition(caster.uuid, zone.uuid)
+    concentration.add_linked_condition(caster.uuid, zone.uuid)
 
     # Verify zone is active
     center_tile = grid.get_tile(5, 5)
@@ -909,7 +908,7 @@ def test_concentration_break_removes_zone():
     # Break concentration
     caster.remove_condition("Concentrating")
 
-    # Zone should be removed via external_conditions cleanup
+    # Zone should be removed via linked_conditions cleanup
     cost_after = center_tile.get_movement_cost(MovementMode.WALKING)
     print(f"After concentration break - (5,5) cost: {cost_after}")
     print(f"Caster has Test Zone: {'Test Zone' in caster.active_conditions}")

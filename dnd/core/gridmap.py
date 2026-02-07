@@ -15,7 +15,8 @@ from collections import defaultdict
 
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
-from dnd.core.base_tiles import Tile, MovementMode
+from dnd.core.base_tiles import Tile
+from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.events import SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue
 
 
@@ -56,10 +57,6 @@ class GridMap:
         self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         # entity -> set of cells it's subscribed to
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
-
-        # Non-blocking entities (dead, incorporeal, etc.)
-        # These entities stay registered for resurrection/looting but don't block movement
-        self._non_blocking_entities: Set[UUID] = set()
 
         # Event firing enabled flag (can be disabled during batch operations)
         self._events_enabled: bool = True
@@ -266,7 +263,7 @@ class GridMap:
         tile = self._tiles.get((x, y))
         if tile is None:
             return False
-        return tile.get_movement_cost(mode) > 0
+        return not tile.blocks_walking(mode=mode)
 
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
                         mode: MovementMode = MovementMode.WALKING) -> bool:
@@ -277,34 +274,27 @@ class GridMap:
         1. Tile must exist and be walkable for the given movement mode
         2. Position must not be occupied by another blocking entity
 
-        The requesting entity can always walk on its own position.
-        Non-blocking entities (dead, incorporeal) don't prevent movement.
+        Uses polymorphic dispatch: BaseBlock.get(uuid).blocks_walking() routes
+        to Entity, Tile, or future item overrides. GridMap stays type-unaware.
         """
-        # First check tile walkability for the movement mode
         if not self.is_walkable(x, y, mode):
             return False
 
-        # Check occupancy (excluding non-blocking entities like dead corpses)
-        occupants = self._entities_by_position.get((x, y), set())
-        blocking_occupants = occupants - self._non_blocking_entities
-        if not blocking_occupants:
-            return True
-
-        # If there are blocking occupants, only allow if it's just the requesting entity
-        if requesting_entity_uuid is None:
-            return False  # No entity specified, and position is occupied
-
-        return blocking_occupants == {requesting_entity_uuid}
+        for entity_uuid in self._entities_by_position.get((x, y), set()):
+            block = BaseBlock.get(entity_uuid)
+            if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+                return False
+        return True
 
     def is_visible(self, x: int, y: int) -> bool:
         """Check if position allows vision (has tile and tile allows vision)."""
         tile = self._tiles.get((x, y))
-        return tile is not None and tile.visible
+        return tile is not None and not tile.blocks_vision()
 
     def is_blocking(self, x: int, y: int) -> bool:
         """Check if position blocks line of sight."""
         tile = self._tiles.get((x, y))
-        return tile is None or not tile.visible
+        return tile is None or tile.blocks_vision()
 
     # =========================================================================
     # Grid Bounds (cached)
@@ -445,25 +435,6 @@ class GridMap:
 
         # Also remove subscriptions
         self.unsubscribe_entity(entity_uuid)
-
-        # Also remove from non-blocking set
-        self._non_blocking_entities.discard(entity_uuid)
-
-    def set_entity_blocking(self, entity_uuid: UUID, blocking: bool = True) -> None:
-        """
-        Set whether an entity blocks movement.
-
-        Dead entities should be non-blocking but stay registered for
-        resurrection/looting. Called by Encounter._handle_death().
-
-        Args:
-            entity_uuid: UUID of the entity
-            blocking: True if entity should block movement (default), False if non-blocking
-        """
-        if blocking:
-            self._non_blocking_entities.discard(entity_uuid)
-        else:
-            self._non_blocking_entities.add(entity_uuid)
 
     def move_entity(
         self,
@@ -621,13 +592,16 @@ class GridMap:
         self._entity_positions.clear()
         self._cell_subscribers.clear()
         self._entity_subscriptions.clear()
-        self._non_blocking_entities.clear()
         self._pending_events.clear()
         self._bounds_dirty = True
 
     def get_all_tiles(self) -> Dict[Tuple[int, int], Tile]:
         """Get all tiles (for serialization/debugging)."""
         return self._tiles.copy()
+
+    def get_tiles_with_conditions(self) -> List[Tile]:
+        """Get tiles with active conditions (for environment step)."""
+        return [tile for tile in self._tiles.values() if tile.active_conditions]
 
     def tile_count(self) -> int:
         """Get number of tiles."""

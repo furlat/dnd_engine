@@ -12,7 +12,6 @@ from dnd.blocks.sensory import SensesType
 from uuid import UUID
 from functools import partial
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent
-from dnd.core.gridmap import get_map
 from enum import Enum
 
 
@@ -933,8 +932,8 @@ def death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     )
     entity.add_condition(dead_condition, check_save_throw=False)
 
-    # Mark as non-blocking in GridMap (stays registered for resurrection/looting)
-    get_map().set_entity_blocking(source_entity_uuid, blocking=False)
+    # Mark entity as non-blocking so corpses don't prevent movement
+    entity.non_blocking = True
 
     return None
 
@@ -967,16 +966,16 @@ class Concentrating(BaseCondition):
     - Only one concentration spell can be active at a time
     - Taking damage requires a CON save (DC = max(10, damage/2))
     - Failing the save or casting another concentration spell ends this effect
-    - When concentration ends, the spell effect is also removed via external_conditions
+    - When concentration ends, the spell effect is also removed via linked_conditions
 
     This condition is applied when a concentration spell is cast, not directly.
     The spell's _apply() should:
     1. Create this condition on the caster
     2. Apply the spell effect condition to the target
-    3. Call concentration.add_external_condition(target.uuid, effect.uuid)
+    3. Call concentration.add_linked_condition(target.uuid, effect.uuid)
 
-    The external_conditions mechanism (inherited from BaseCondition) handles
-    cross-entity cleanup automatically when concentration breaks.
+    The linked_conditions mechanism (inherited from BaseCondition) handles
+    cross-block cleanup automatically when concentration breaks.
     """
     name: str = "Concentrating"
     description: str = "Concentrating on a spell"
@@ -1077,13 +1076,13 @@ class Concentrating(BaseCondition):
         return [], handler_uuids, [], [], effect_event
 
     def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        """When concentration ends, spell effects are cleaned up via external_conditions.
+        """When concentration ends, spell effects are cleaned up via linked_conditions.
 
         IMPORTANT: Must call super()._remove() to trigger EXECUTION and EFFECT phases
         so cleanup handlers can respond to the condition removal event.
 
         Note: Cross-entity spell effect cleanup is now handled automatically by
-        BaseCondition.remove_external_conditions() - no manual cleanup needed here.
+        BaseCondition.remove_linked_conditions() - no manual cleanup needed here.
         """
         # Call parent to trigger event phase transitions (EXECUTION -> EFFECT)
         # This allows cleanup handlers subscribed to CONDITION_REMOVAL at EFFECT to fire
