@@ -4,6 +4,24 @@ This document describes the complete design for items, inventory, and environmen
 
 ---
 
+## Implementation Status
+
+| Section | Status | Notes |
+|---------|--------|-------|
+| 4. BaseItem | **IMPLEMENTED** | `dnd/blocks/base_item.py`. Location tracking (`tile_uuid`, `stored_in_uuid`, `get_position()`), lifecycle hooks with params, Health delegation, spatial overrides. 85 tests. |
+| 5. EquippableItem | **IMPLEMENTED** | `_on_equip(slot, entity_uuid)`/`_on_unequip(slot, entity_uuid)` hooks. Weapon/Armor/Shield reparented. `owner_uuid`, `stored_in_uuid`, `is_equipped` tracking. 15 tests. |
+| 6. UsableItem | Stub only | Exists as thin subclass. `get_use_actions()` = Step c/d. |
+| 7. Inventory | **IMPLEMENTED** | `dnd/blocks/inventory.py`. All methods except `get_all_use_actions()` (Step d). `transfer_to()` updates `stored_in_uuid`. |
+| 8. Entity Orchestration | **IMPLEMENTED** | `loot_item`/`drop_item` + `equip_item`/`unequip_item` done with full location tracking (`owner_uuid`, `stored_in_uuid`, `is_equipped`). |
+| 9. GridMap/Senses | **IMPLEMENTED** | Object registries, spatial predicates, FOV, `senses.objects`. |
+| 10. Action System | **Partial** | PickUp/AttackObject/Drop done. Drop is POSITION_LOS with `item_uuid`. Three-source discovery = Step d. |
+| 11. Conditions on Items | **Partial** | Infrastructure done (items as condition hosts, linked cleanup). Item condition ticking deferred. |
+| 12. Breakable Objects | **IMPLEMENTED** | Health delegation, `receive_damage`, `destroy`, AttackObject action. |
+| 13. Looting System | Deferred | Entity→body transitions deferred. |
+| 14. Implementation Steps | **Step a DONE** | See restructured section. |
+
+---
+
 ## Table of Contents
 
 1. [Design Philosophy](#1-design-philosophy)
@@ -147,7 +165,7 @@ A +1 club would change `base_value=0` to `base_value=1` and add a `damage_bonus=
 
 ### Current Item Classes
 
-`Weapon`, `Armor` (Helmet, BodyArmor, Gauntlets, Greaves, Boots, Amulet, Ring, Cloak), `Shield` — all inherit `BaseBlock` directly. No shared item interface yet. Equipment block has 13 typed slots and 19+ ModifiableValues, with equip/unequip events but no item hooks.
+`Weapon`, `Armor` (Helmet, BodyArmor, Gauntlets, Greaves, Boots, Amulet, Ring, Cloak), `Shield` — all inherit `EquippableItem` → `BaseItem` → `BaseBlock`. Equipment block has 13 typed slots and 19+ ModifiableValues, with equip/unequip events and item hooks (`_on_equip`/`_on_unequip`).
 
 ---
 
@@ -156,7 +174,7 @@ A +1 club would change `base_value=0` to `base_value=1` and add a `damage_bonus=
 ### The Resolved Three-Class Model
 
 ```
-BaseItem(BaseBlock)                          ← dnd/core/base_item.py
+BaseItem(BaseBlock)                          ← dnd/blocks/base_item.py
 │   Core: gridmap presence, looting, destruction, optional Health
 │   Flags: is_pickable=True, is_equippable=False, is_usable=False
 │   Hooks: _on_loot(), _on_drop(), _on_destroy()
@@ -207,7 +225,7 @@ BaseItem(BaseBlock)                          ← dnd/core/base_item.py
 
 ## 4. BaseItem — The Foundation
 
-**File location**: `dnd/core/base_item.py`
+**File location**: `dnd/blocks/base_item.py` — **IMPLEMENTED**
 
 ```python
 class BaseItem(BaseBlock):
@@ -247,26 +265,65 @@ class BaseItem(BaseBlock):
 
     # Tracking
     equipped_slot: Optional[Any] = None  # Which slot this is in (None if not equipped)
+
+    # Location tracking (Step a)
+    tile_uuid: Optional[UUID] = None         # UUID of tile at position (set when on floor)
+    stored_in_uuid: Optional[UUID] = None    # UUID of entity/item whose Inventory holds this
 ```
 
-### Lifecycle Hooks
+### Location Tracking — **IMPLEMENTED (Step a)**
 
-Public + private pattern, same as `BaseCondition.apply`/`_apply`:
+Three location states tracked via `tile_uuid` and `stored_in_uuid`:
+
+| State | `tile_uuid` | `stored_in_uuid` | `position` |
+|-------|-------------|-------------------|------------|
+| On floor | tile's UUID | `None` | `(x, y)` set by Entity.drop_item |
+| In inventory | `None` | owner entity UUID | stale (ignore) |
+| Nowhere (just created) | `None` | `None` | `(0, 0)` default |
+
+**`get_position()`** — smart accessor, always use this instead of `self.position`:
+```python
+def get_position(self) -> Optional[Tuple[int, int]]:
+    if self.stored_in_uuid is not None:
+        container = BaseBlock.get(self.stored_in_uuid)
+        if container is None:
+            return None
+        if isinstance(container, BaseItem):
+            return container.get_position()  # Nested storage (chest in chest)
+        return container.position  # Entity or other BaseBlock
+    if self.tile_uuid is not None:
+        # On floor — verify consistency with GridMap (raises ValueError on mismatch)
+        gridmap_pos = get_map().get_object_position(self.uuid)
+        if gridmap_pos != self.position:
+            raise ValueError(f"Item position mismatch: self.position={self.position}, GridMap={gridmap_pos}")
+        return self.position
+    return None  # Not placed anywhere
+```
+
+**Who sets location fields** — Entity is the orchestrator:
+- `Entity.loot_item()`: sets `stored_in_uuid = self.uuid`, clears `tile_uuid`
+- `Entity.drop_item()`: sets `item.position`, `tile_uuid`, clears `stored_in_uuid`
+- `Inventory.transfer_to()`: updates `stored_in_uuid` to new owner
+- `BaseItem.destroy()`: clears both fields during cleanup
+
+### Lifecycle Hooks — **IMPLEMENTED (Step a)**
+
+Public + private pattern with explicit parameters. Items in `dnd/blocks/` cannot import Entity — the caller passes what the hook needs:
 
 ```python
-    def loot(self) -> None:
-        """Called by Entity when item enters inventory."""
-        self._on_loot()
+    def loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
+        """Called by Entity.loot_item() when item enters inventory."""
+        self._on_loot(entity_uuid, inventory_uuid)
 
-    def _on_loot(self) -> None:
+    def _on_loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
         """Override for item-specific loot behavior (e.g., cursed item applies condition)."""
         pass
 
-    def drop(self) -> None:
-        """Called by Entity when item leaves inventory to ground."""
-        self._on_drop()
+    def drop(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
+        """Called by Entity.drop_item() when item leaves inventory to ground."""
+        self._on_drop(entity_uuid, position)
 
-    def _on_drop(self) -> None:
+    def _on_drop(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
         pass
 
     def destroy(self) -> None:
@@ -275,9 +332,15 @@ Public + private pattern, same as `BaseCondition.apply`/`_apply`:
         # Clean up conditions on this item
         for cond_name in list(self.active_conditions.keys()):
             self.remove_condition(cond_name)
-        # Remove from BaseObject registry
+        # Clear location fields
+        self.tile_uuid = None
+        self.stored_in_uuid = None
         # Remove from GridMap if placed
-        # Remove from Inventory if stored
+        gridmap = get_map()
+        if gridmap.get_object_position(self.uuid) is not None:
+            gridmap.remove_object(self.uuid)
+        # Remove from registry
+        BaseBlock._registry.pop(self.uuid, None)
 
     def _on_destroy(self) -> None:
         """Override for item-specific destruction behavior (chest spills contents, etc.)."""
@@ -288,7 +351,7 @@ Public + private pattern, same as `BaseCondition.apply`/`_apply`:
 
 ### The UUID Pattern
 
-Same as conditions/actions: `self.source_entity_uuid` is set BEFORE hooks fire. Hook bodies call `Entity.get(self.source_entity_uuid)` in concrete subclasses (which live in high-level modules that CAN import Entity). BaseItem in `dnd/core/` never imports Entity.
+Hooks receive `entity_uuid` as an explicit parameter — no need to rely on `self.source_entity_uuid` for loot/drop context. Concrete subclasses (which live in high-level modules that CAN import Entity) call `Entity.get(entity_uuid)` in their hook bodies. BaseItem in `dnd/blocks/` never imports Entity.
 
 ### Spatial Methods
 
@@ -308,7 +371,7 @@ BaseBlock already provides `blocks_walking()` and `blocks_vision()` with default
 ```
 Entity → BaseItem → BaseBlock → BaseModel
 ```
-BaseItem lives at same level as Tile. Importable from anywhere safely.
+BaseItem lives in `dnd/blocks/` at same level as other blocks. Imports `get_map()` from `dnd/core/gridmap.py` (downward, blocks → core). GridMap never imports BaseItem (uses BaseBlock polymorphism). Safe dependency direction.
 
 ### Migration
 
@@ -610,28 +673,42 @@ Inventory is independently usable: Chests have Inventory (no Equipment needed). 
 
 ---
 
-## 8. Entity Orchestration
+## 8. Entity Orchestration — **IMPLEMENTED (Steps a + b)**
 
-Entity wraps equip/unequip/loot/drop. Equipment and Inventory don't know about each other.
+Entity wraps equip/unequip/loot/drop. Equipment and Inventory don't know about each other. Entity is the orchestrator that sets location fields and passes hook parameters.
 
 ```python
-# On Entity:
+# On Entity — IMPLEMENTED (Step a):
 def loot_item(self, item: BaseItem) -> bool:
-    """Pick up item into inventory."""
+    """Pick up item into inventory. Sets location fields, calls hook with params."""
+    if not self.inventory.can_add(item):
+        return False
     item.source_entity_uuid = self.uuid
-    success = self.inventory.add_item(item)
-    if success:
-        item.loot()  # Calls _on_loot hook
-    return success
+    self.inventory.add_item(item)
+    item.stored_in_uuid = self.uuid       # Location: now stored in this entity
+    item.tile_uuid = None                  # No longer on floor
+    gridmap = get_map()
+    if gridmap.get_object_position(item.uuid) is not None:
+        gridmap.remove_object(item.uuid)   # Remove from grid
+    item.loot(entity_uuid=self.uuid, inventory_uuid=self.inventory.uuid)
+    return True
 
-def drop_item(self, item_uuid: UUID) -> Optional[BaseItem]:
-    """Drop item from inventory to ground."""
+def drop_item(self, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[BaseItem]:
+    """Drop item from inventory to ground. Position defaults to entity position, can be adjacent."""
     item = self.inventory.remove_item(item_uuid)
-    if item:
-        item.drop()  # Calls _on_drop hook
-        gridmap.place_object(item.uuid, self.senses.position)
+    if item is None:
+        return None
+    drop_pos = position if position is not None else self.position
+    gridmap = get_map()
+    tile = gridmap.get_tile(drop_pos[0], drop_pos[1])
+    item.stored_in_uuid = None             # No longer stored
+    item.position = drop_pos               # Update inherited BaseBlock.position
+    item.tile_uuid = tile.uuid if tile else None
+    gridmap.place_object(item.uuid, drop_pos)
+    item.drop(entity_uuid=self.uuid, position=drop_pos)
     return item
 
+# On Entity — NOT YET IMPLEMENTED (Step b):
 def equip_item(self, item_uuid: UUID, slot) -> bool:
     """Move item from inventory to equipment slot."""
     item = self.inventory.items.get(item_uuid)
@@ -652,6 +729,8 @@ def unequip_item(self, slot, to_inventory: bool = True) -> Optional[BaseItem]:
 ```
 
 **Direct equip still works** for factories/setup — `Equipment.equip(item, slot)` doesn't require item to be in inventory. Essential for bestiary factories and initial entity setup.
+
+**Drop action** (`dnd/actions.py`): Refactored to `TargetType.POSITION_LOS` with `item_uuid` bound at creation. Valid positions = entity position + adjacent visible cells within 5ft. Same pattern as future Use actions — actions created on the fly, bound to a specific item.
 
 ---
 
@@ -947,102 +1026,74 @@ Entity→body transitions (and wall→rubble, etc.) are deferred to a common tra
 
 ---
 
-## 14. Implementation Phases
+## 14. Implementation Steps
 
-### Phase 1: BaseItem + Hierarchy
+> Replaces the original 9-phase plan. Phase 1 core infrastructure (BaseItem, Inventory, GridMap object registries, Senses, PickUp/AttackObject/Drop actions, Breakable) is complete with 85 tests.
 
-- New file: `dnd/core/base_item.py` with BaseItem, EquippableItem, UsableItem
-- Reparent Weapon, Armor (all subtypes), Shield from `BaseBlock` → `EquippableItem` → `BaseItem` → `BaseBlock`
-- Add `blocks_walking()` / `blocks_vision()` overrides on BaseItem (delegates to `blocks_movement` / `blocks_vision_field` fields)
-- All existing tests must pass unchanged
-- Dependencies: None
+### Step a: Item Location Tracking + Lifecycle Hooks — **DONE**
 
-### Phase 2: Equip/Unequip Hooks
+- Added `tile_uuid`, `stored_in_uuid` fields to BaseItem for location tracking
+- Added `get_position()` smart accessor (floor → own position with GridMap consistency check, inventory → container's position, nowhere → None)
+- Fixed hook signatures: `loot(entity_uuid, inventory_uuid)`, `drop(entity_uuid, position)` — items can't import Entity, callers pass what hooks need
+- Updated `Entity.loot_item()` / `drop_item()` to set location fields and pass hook params
+- `drop_item()` accepts optional position (adjacent tiles, distance ≤ 1)
+- `Inventory.transfer_to()` updates `stored_in_uuid` to new owner
+- Refactored Drop action to `TargetType.POSITION_LOS` with `item_uuid` bound at creation
+- Test items with real game effects: OilBarrel (tile conditions on destroy), CursedGem (Poisoned on loot), AuraStone (+2 AC on loot/drop), HealingHerb (heals on loot)
+- 22 new tests in `examples/test_items_lifecycle_hooks.py`, all 85 tests pass
+- **Files**: `dnd/blocks/base_item.py`, `dnd/entity.py`, `dnd/actions.py`, `dnd/actions_functional.py`, `dnd/blocks/inventory.py`
 
-- Add hook calls in `Equipment.equip()` and `Equipment.unequip()` at insertion points from Section 5
-- Create test items using each approach:
-  - Direct modifier: DefenderSword with +1 AC via `_on_equip`
-  - Direct action: WandOfFireBolt grants Fire Bolt action
-  - Condition: CloakOfProtection grants +1 AC and +1 all saves
-- Dependencies: Phase 1
+### Step b: Equip/Unequip Hooks [IMPLEMENTED]
 
-### Phase 3: Inventory Block
+- Reparented Weapon/Armor/Shield → EquippableItem → BaseItem → BaseBlock
+- `_on_equip(slot, entity_uuid)` / `_on_unequip(slot, entity_uuid)` hooks in EquippableItem
+- Hook calls inserted in Equipment.equip()/unequip() for all slot types
+- Location tracking: `owner_uuid` (entity/item), `stored_in_uuid` (inventory/equipment block), `is_equipped` flag
+- `Equipment.get_item_by_slot()` for unified slot lookup
+- `Equipment.unequip()` returns the unequipped item
+- Entity `equip_item()` / `unequip_item()` orchestration (inventory ↔ equipment)
+- Moved `BodyPart`, `RingSlot` to `dnd/core/events.py`, added `EquipmentSlot` type alias
+- 15 tests in `examples/test_items_equip_hooks.py`:
+  - DefenderSword: direct modifier (+1 AC on equipment.ac_bonus)
+  - CloakOfProtection: condition pattern (+1 AC + all saves)
+  - Flaming sword: reparented weapon with extra fire damage in combat
+- Dependencies: Step a
 
-- New `Inventory(BaseBlock)` class — flat peer to Equipment on Entity
-- Add `inventory` field to Entity
-- Add Entity orchestration methods (`loot_item`, `drop_item`, `equip_item`, `unequip_item`)
-- Test: add items, remove items, weight tracking, transfers
-- Dependencies: Phase 1
+### Step c: UsableItem — Environment Object Discovery [NOT STARTED]
 
-### Phase 4: GridMap/Senses for Objects
+- `UsableItem.get_use_actions()` implementation
+- `source_item_uuid` on BaseAction
+- Environment object discovery: `senses.objects` → `get_use_actions()`, within 5ft
+- Integration with `get_available_actions()` (source 3: environment)
+- Deposit action (inventory → chest/storage) — inventory-to-inventory transfer
+- Loot from storage (chest → entity inventory) — via chest's `get_use_actions()`
+- Test items: Lever (removes terrain), Door (toggles spatial), Chest (storage with own Inventory)
+- Dependencies: Step a
 
-- Add object registries to GridMap (`_object_positions`, `_objects_by_position`)
-- Add `place_object`/`remove_object`/`get_objects_at`/`get_object_position`
-- Add `get_objects_with_conditions()` for environment step
-- Update `is_walkable_for()`/FOV to check objects via `blocks_walking()`/`blocks_vision()`
-- Add `objects` field to Senses
-- Update `Entity.update_entity_senses()` to populate `senses.objects`
-- Test: place chest, verify entity sees it, verify movement blocked by door
-- Dependencies: Phase 1
+### Step d: Full Inventory Use Actions [NOT STARTED]
 
-### Phase 5: Use Actions (Environment Objects)
+- `Inventory.get_all_use_actions()` for inventory item actions
+- Three-source discovery in `get_available_actions()` (registered → inventory → environment)
+- `execute_by_index()` three-source search
+- Consumable destruction in `BaseAction.apply()` after `_apply_costs()`
+- Test items: Potion of Healing (consumable, SELF), Scroll of Fireball
+- Dependencies: Step c
 
-- Implement `get_use_actions()` on UsableItem
-- Add `source_item_uuid` to BaseAction
-- First items: Lever (removes dangerous terrain), Door (toggles spatial blocking)
-- Integrate with `get_available_actions()` (source 3: environment objects via `senses.objects`, ≤5ft)
-- Test: place lever, move entity adjacent, verify "Pull Lever" appears, execute it
-- Dependencies: Phase 1, Phase 4
+### Deferred (future — entity transitions / spawning)
 
-### Phase 6: Inventory Use Actions
-
-- Integrate inventory actions with `get_available_actions()` (source 2: `inventory.get_all_use_actions`)
-- Update `execute_by_index()` for three-source search (registered → inventory → environment)
-- Add consumable destruction in `BaseAction.apply()` after `_apply_costs()`
-- Create test items: Potion of Healing (consumable, SELF), Scroll of Fireball (wraps SpellAction)
-- Dependencies: Phase 3, Phase 5
-
-### Phase 7: Breakable Objects
-
-- Health on BaseItem, `receive_damage`, `_on_destroy`
-- AttackObject action registered via `setup_standard_actions`
-- AoE `include_objects` flag (optional, incremental)
-- Test: wooden door with HP, attack it, break it, verify spatial state changes
-- Dependencies: Phase 4
-
-### Phase 8: Looting
-
-- Create loot body on death (simplified, defer full entity→body transitions)
-- LootAction for item transfer from body Inventory to entity Inventory
-- PickUpAction for items on ground
-- Dependencies: Phase 3, Phase 4
-
-### Phase 9: Integration Tests
-
-- Full item lifecycle: create → place on ground → loot → equip → unequip → drop → loot by another
-- Magic item: equip ring → +1 AC → unequip → AC back to normal
-- Weapon scoping: equip +1 sword → verify +1 only on that weapon's attacks
-- Condition on item: Magic Weapon spell on weapon → break concentration → verify condition removed via tree
-- Environment: lever removes terrain, door opens/closes
-- Breakable: door with HP → attack → break → permanent open
-- Consumable: potion in inventory → drink → HP healed → potion destroyed
-- Environment turn: tile condition with 3-round duration → verify decrements each round → removed after 3
-- Item condition progression: equipped item condition ticks on owner's turn start
-- Dependencies: All phases
+- Loot body on death (entity → body transition, LootAction)
+- Encumbrance penalties
+- Item condition ticking on entity turn / environment step
+- Object AC
 
 ### Dependency Graph
 
 ```
-Phase 1 (BaseItem + Hierarchy)
-    ├── Phase 2 (Equip Hooks)
-    ├── Phase 3 (Inventory)
-    ├── Phase 4 (GridMap/Senses)
-    │       ├── Phase 5 (Use Actions / Env Objects)
-    │       ├── Phase 7 (Breakable)
-    │       └── Phase 8 (Looting)
-    └── Phase 6 (Inventory Use Actions) ← depends on Phase 3 + Phase 5
-                                                       │
-Phase 9 (Integration Tests) ← depends on all phases
+Step a (Location Tracking + Hooks) ← DONE
+    ├── Step b (Equip/Unequip Hooks) ← DONE
+    ├── Step c (UsableItem + Environment Objects)
+    │       └── Step d (Inventory Use Actions)
+    └── Deferred (entity transitions, encumbrance)
 ```
 
 ---

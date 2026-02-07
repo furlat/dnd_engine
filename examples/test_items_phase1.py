@@ -15,10 +15,9 @@ from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock
 from dnd.core.modifiers import DamageType
 from dnd.core.base_conditions import BaseCondition, DurationType
-from dnd.core.events import EventPhase
 from dnd.blocks.base_item import BaseItem, EquippableItem, UsableItem, ItemRarity
 from dnd.blocks.inventory import Inventory
-from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
+from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot
@@ -37,7 +36,7 @@ def run_test(name, func):
         func()
         print(f"  PASS: {name}")
         tests_passed += 1
-    except Exception as e:
+    except Exception:
         print(f"  FAIL: {name}")
         traceback.print_exc()
         tests_failed += 1
@@ -248,7 +247,7 @@ def test_blocking_object_vision():
 # Test 5: Senses discovers objects
 # =========================================================================
 def test_senses_objects():
-    grid = create_test_grid()
+    create_test_grid()
     item = create_simple_item(position=(4, 3))
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
@@ -365,10 +364,10 @@ def test_lifecycle_hooks():
         dropped: bool = False
         destroyed: bool = False
 
-        def _on_loot(self):
+        def _on_loot(self, entity_uuid, inventory_uuid):
             self.looted = True
 
-        def _on_drop(self):
+        def _on_drop(self, entity_uuid, position):
             self.dropped = True
 
         def _on_destroy(self):
@@ -398,8 +397,8 @@ def test_lifecycle_hooks():
 # Test 9: PickUpAction via get_available_actions
 # =========================================================================
 def test_pickup_available_actions():
-    grid = create_test_grid()
-    item = create_simple_item(position=(4, 3), name="Gold Coin")
+    create_test_grid()
+    create_simple_item(position=(4, 3), name="Gold Coin")
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
 
@@ -427,8 +426,8 @@ def test_pickup_execute():
 # Test 10: AttackObjectAction via get_available_actions
 # =========================================================================
 def test_attack_object_available_actions():
-    grid = create_test_grid()
-    crate = create_breakable_item(position=(4, 3), name="Crate", hp=20)
+    create_test_grid()
+    create_breakable_item(position=(4, 3), name="Crate", hp=20)
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
 
@@ -439,7 +438,7 @@ def test_attack_object_available_actions():
 
 
 def test_attack_object_execute():
-    grid = create_test_grid()
+    create_test_grid()
     crate = create_breakable_item(position=(4, 3), name="Crate", hp=20)
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
@@ -469,9 +468,9 @@ def test_attack_object_destruction():
 # Test 11: Non-pickable items don't appear as Pick Up targets
 # =========================================================================
 def test_non_pickable_not_in_pickup():
-    grid = create_test_grid()
+    create_test_grid()
     # Non-pickable item
-    wall = create_simple_item(position=(4, 3), name="Wall Fixture", pickable=False)
+    create_simple_item(position=(4, 3), name="Wall Fixture", pickable=False)
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
 
@@ -490,9 +489,9 @@ def test_non_pickable_not_in_pickup():
 # Test 12: Item not in reach is not targetable
 # =========================================================================
 def test_item_out_of_reach():
-    grid = create_test_grid()
+    create_test_grid()
     # Item far away (more than 5ft)
-    item = create_simple_item(position=(8, 8), name="Far Away Gem")
+    create_simple_item(position=(8, 8), name="Far Away Gem")
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
 
@@ -545,11 +544,11 @@ def test_objects_with_conditions():
 def test_no_circular_imports():
     """Verify the dependency chain has no cycles."""
     # These should all import without error (if circular, they'd fail)
-    from dnd.blocks.base_item import BaseItem as _BI
-    from dnd.blocks.inventory import Inventory as _Inv
-    from dnd.entity import Entity as _E
-    from dnd.actions import PickUp as _PU, AttackObject as _AO
-    from dnd.actions_functional import setup_standard_actions as _SSA
+    from dnd.blocks.base_item import BaseItem as _BI  # type: ignore[reportUnusedImport]
+    from dnd.blocks.inventory import Inventory as _Inv  # type: ignore[reportUnusedImport]
+    from dnd.entity import Entity as _E  # type: ignore[reportUnusedImport]
+    from dnd.actions import PickUp as _PU, AttackObject as _AO  # type: ignore[reportUnusedImport]
+    from dnd.actions_functional import setup_standard_actions as _SSA  # type: ignore[reportUnusedImport]
 
 
 # =========================================================================

@@ -17,12 +17,12 @@ from dnd.core.modifiers import DamageType
 from dnd.core.base_conditions import BaseCondition, DurationType
 from dnd.blocks.base_item import BaseItem, EquippableItem, ItemRarity
 from dnd.blocks.inventory import Inventory
-from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
+from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.actions_functional import setup_standard_actions, execute_by_index, execute_drop
+from dnd.actions_functional import setup_standard_actions, execute_drop
 from dnd.items.weapons import create_longsword
 
 tests_passed = 0
@@ -395,7 +395,7 @@ def test_drop_fires_on_drop_hook():
     """Drop action triggers the _on_drop lifecycle hook."""
     class HookItem(BaseItem):
         dropped: bool = False
-        def _on_drop(self):
+        def _on_drop(self, entity_uuid, position):
             self.dropped = True
 
     create_test_grid()

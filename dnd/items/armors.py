@@ -1,7 +1,8 @@
 """Armor factory functions for D&D 5e armors."""
 
 from uuid import UUID
-from dnd.blocks.equipment import BodyArmor, Shield, ArmorType, BodyPart
+from dnd.blocks.equipment import BodyArmor, Shield, ArmorType
+from dnd.core.events import BodyPart
 from dnd.core.values import ModifiableValue
 
 

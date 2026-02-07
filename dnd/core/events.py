@@ -4,7 +4,8 @@ it introduces and Event qeueue which is the source of ground truth information f
 
 __all__ = [
     # Enums
-    "WeaponSlot", "EventType", "SpatialChangeType", "EventPhase", "RangeType",
+    "WeaponSlot", "BodyPart", "RingSlot", "EquipmentSlot",
+    "EventType", "SpatialChangeType", "EventPhase", "RangeType",
     # Type literals
     "AbilityName", "SkillName",
     # Core event classes
@@ -101,6 +102,22 @@ class WeaponSlot(str, Enum):
     MELEE_OFF = "MELEE_OFF"
     RANGED_MAIN = "RANGED_MAIN"
     RANGED_OFF = "RANGED_OFF"
+
+class BodyPart(str, Enum):
+    HEAD = "Head"
+    BODY = "Body"
+    HANDS = "Hands"
+    LEGS = "Legs"
+    FEET = "Feet"
+    AMULET = "Amulet"
+    RING = "Ring"
+    CLOAK = "Cloak"
+
+class RingSlot(str, Enum):
+    LEFT = "Left Ring"
+    RIGHT = "Right Ring"
+
+EquipmentSlot = Union[WeaponSlot, BodyPart, RingSlot]
 
 class EventType(str, Enum):
     # Core events

@@ -4,7 +4,7 @@ BaseItem extends BaseBlock for floor objects, inventory items, and breakable obj
 EquippableItem and UsableItem are thin stubs for future phases.
 """
 
-from typing import Optional, List, Literal, cast
+from typing import Optional, List, Literal, Tuple, cast
 from uuid import UUID
 from enum import Enum
 from pydantic import Field
@@ -12,6 +12,7 @@ from pydantic import Field
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
+from dnd.core.events import EquipmentSlot
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
 
 
@@ -64,8 +65,14 @@ class BaseItem(BaseBlock):
     is_targetable: bool = Field(default=False, description="Can be targeted by attacks")
     health: Optional[Health] = Field(default=None, description="Health block for breakable items")
 
-    # Tracking
+    # Equip tracking
+    is_equipped: bool = Field(default=False, description="Whether this item is currently equipped")
     equipped_slot: Optional[str] = Field(default=None, description="Slot this item is equipped in")
+
+    # Location tracking
+    owner_uuid: Optional[UUID] = Field(default=None, description="UUID of the entity or item (e.g. chest) that owns this item")
+    stored_in_uuid: Optional[UUID] = Field(default=None, description="UUID of the container block (Inventory, Equipment) holding this item")
+    tile_uuid: Optional[UUID] = Field(default=None, description="UUID of tile at this item's grid position (set when on floor)")
 
     # --- Spatial overrides (BaseBlock polymorphism) ---
 
@@ -78,29 +85,60 @@ class BaseItem(BaseBlock):
         """Whether this item blocks line of sight through its grid position."""
         return self.blocks_vision_field
 
+    # --- Location ---
+
+    def get_position(self) -> Optional[Tuple[int, int]]:
+        """Get effective position of this item.
+
+        - Has owner → defer to owner's position
+        - On floor (tile_uuid set) → own position
+        - Nowhere → None
+        """
+        if self.owner_uuid is not None:
+            owner = BaseBlock.get(self.owner_uuid)
+            return owner.position if owner else None
+        if self.tile_uuid is not None:
+            return self.position
+        return None
+
     # --- Lifecycle hooks ---
 
-    def loot(self) -> None:
-        """Called when item is picked up by an entity."""
-        self._on_loot()
+    def loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
+        """Called when item is picked up by an entity.
 
-    def _on_loot(self) -> None:
+        Args:
+            entity_uuid: UUID of the entity picking up the item
+            inventory_uuid: UUID of the inventory receiving the item
+        """
+        self._on_loot(entity_uuid, inventory_uuid)
+
+    def _on_loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
         """Subclass override hook for pickup behavior."""
         pass
 
-    def drop(self) -> None:
-        """Called when item is dropped from inventory."""
-        self._on_drop()
+    def drop(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
+        """Called when item is dropped from inventory.
 
-    def _on_drop(self) -> None:
+        Args:
+            entity_uuid: UUID of the entity dropping the item
+            position: Grid position where the item was dropped
+        """
+        self._on_drop(entity_uuid, position)
+
+    def _on_drop(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
         """Subclass override hook for drop behavior."""
         pass
 
     def destroy(self) -> None:
-        """Destroy this item: clean up conditions, remove from grid, unregister."""
+        """Destroy this item: fire hook, clean up conditions, clear location, unregister."""
         self._on_destroy()
         for cond_name in list(self.active_conditions.keys()):
             self.remove_condition(cond_name)
+        self.owner_uuid = None
+        self.stored_in_uuid = None
+        self.tile_uuid = None
+        self.is_equipped = False
+        self.equipped_slot = None
         gridmap = get_map()
         if gridmap.get_object_position(self.uuid) is not None:
             gridmap.remove_object(self.uuid)
@@ -175,9 +213,49 @@ class BaseItem(BaseBlock):
 
 
 class EquippableItem(BaseItem):
-    """Base class for items that can be equipped. Stub for Phase 2."""
+    """Base class for equippable items. Provides equip/unequip lifecycle hooks."""
     is_equippable: bool = Field(default=True)
     is_pickable: bool = Field(default=True)
+
+    def equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Called by Equipment.equip() after slot assignment.
+
+        Sets equipped tracking fields, clears floor placement if item was on ground,
+        then calls the subclass hook.
+        """
+        self.is_equipped = True
+        self.equipped_slot = slot.value if hasattr(slot, 'value') else str(slot)
+        # Clear floor placement if item was on ground (direct equip from floor)
+        if self.tile_uuid is not None:
+            gridmap = get_map()
+            if gridmap.get_object_position(self.uuid) is not None:
+                gridmap.remove_object(self.uuid)
+            self.tile_uuid = None
+        self._on_equip(slot, entity_uuid)
+
+    def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Override in subclasses for equip behavior.
+
+        Three valid approaches:
+        1. Direct modifiers on entity's ModifiableValues
+        2. Direct action registration on entity
+        3. Condition pattern (for complex effects with auto-cleanup)
+        """
+        pass
+
+    def unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Called by Equipment.unequip() before slot is cleared.
+
+        Calls the subclass hook then clears equipped tracking fields.
+        stored_in_uuid is NOT cleared — the caller decides where the item goes next.
+        """
+        self._on_unequip(slot, entity_uuid)
+        self.is_equipped = False
+        self.equipped_slot = None
+
+    def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Override in subclasses. Clean up everything _on_equip set up."""
+        pass
 
 
 class UsableItem(BaseItem):
