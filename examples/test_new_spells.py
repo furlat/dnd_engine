@@ -111,7 +111,6 @@ def test_ray_of_frost_speed_reduction():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-
     caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), dex=1)
 
@@ -119,9 +118,9 @@ def test_ray_of_frost_speed_reduction():
 
     initial_speed = target.action_economy.movement.normalized_score
 
-    # Force hit
-    hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
-    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
+    # Force hit via AUTOHIT (prevents nat 1 auto-miss)
+    hit_mod = AutoHitModifier(name="Force Hit", value=AutoHitStatus.AUTOHIT, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
+    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_auto_hit_modifier(hit_mod)
 
     ray = RayOfFrost(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
     ray.apply()
@@ -131,7 +130,6 @@ def test_ray_of_frost_speed_reduction():
     final_speed = target.action_economy.movement.normalized_score
     speed_reduction = initial_speed - final_speed
 
-    # Effect condition lives on CASTER (tracks duration until caster's turn)
     assert has_condition(caster, "Ray of Frost Effect"), "Caster should have Ray of Frost Effect condition"
     assert speed_reduction == 10, f"Speed should be reduced by 10, got {speed_reduction}"
     print(f"  Initial speed: {initial_speed}")
@@ -156,9 +154,9 @@ def test_ray_of_frost_duration():
 
     Entity.update_all_entities_senses()
 
-    # Force hit
-    hit_mod = NumericalModifier(name="Force Hit", value=100, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
-    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_value_modifier(hit_mod)
+    # Force hit via AUTOHIT (prevents nat 1 auto-miss)
+    hit_mod = AutoHitModifier(name="Force Hit", value=AutoHitStatus.AUTOHIT, source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid)
+    mod_uuid = caster.spellcasting.spell_attack_bonus.self_static.add_auto_hit_modifier(hit_mod)
 
     ray = RayOfFrost(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
     ray.apply()
@@ -207,63 +205,76 @@ def test_ray_of_frost_duration():
 def test_acid_splash_single_target():
     """Acid Splash works on single target."""
     print("\n=== Test: Acid Splash Single Target ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    # Low DEX = guaranteed fail
-    target = create_test_target("Target", (2, 0), dex=1)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        target = create_test_target("Target", (2, 0), dex=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    initial_hp = get_hp(target)
+        initial_hp = get_hp(target)
 
-    acid = AcidSplash(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
-    _result = acid.apply()
+        acid = AcidSplash(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, caster_level=1)
+        acid.apply()
 
-    final_hp = get_hp(target)
-    damage = initial_hp - final_hp
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    assert damage > 0, f"Should deal damage on failed save, dealt {damage}"
-    print(f"  Damage dealt: {damage}")
-    print("PASS: Acid Splash damages single target")
+        damage = initial_hp - get_hp(target)
+        assert damage > 0, f"Should deal damage on failed save, dealt {damage}"
+        print(f"  Damage dealt: {damage}")
+        print("PASS: Acid Splash damages single target")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 def test_acid_splash_two_targets():
     """Acid Splash can hit two targets within 5ft of each other."""
     print("\n=== Test: Acid Splash Two Targets ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    target1 = create_test_target("Target1", (2, 0), dex=1)  # Adjacent
-    target2 = create_test_target("Target2", (2, 1), dex=1)  # Within 5ft of target1
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        target1 = create_test_target("Target1", (2, 0), dex=1)
+        target2 = create_test_target("Target2", (2, 1), dex=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    initial_hp1 = get_hp(target1)
-    initial_hp2 = get_hp(target2)
+        initial_hp1 = get_hp(target1)
+        initial_hp2 = get_hp(target2)
 
-    acid = AcidSplash(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=target1.uuid,
-        extra_target_entity_uuids=[target2.uuid],
-        caster_level=1
-    )
-    _result = acid.apply()
+        acid = AcidSplash(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target1.uuid,
+            extra_target_entity_uuids=[target2.uuid],
+            caster_level=1
+        )
+        acid.apply()
 
-    damage1 = initial_hp1 - get_hp(target1)
-    damage2 = initial_hp2 - get_hp(target2)
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    assert damage1 > 0, f"Target1 should take damage, got {damage1}"
-    assert damage2 > 0, f"Target2 should take damage, got {damage2}"
-    print(f"  Target1 damage: {damage1}")
-    print(f"  Target2 damage: {damage2}")
-    print("PASS: Acid Splash hits two targets")
+        damage1 = initial_hp1 - get_hp(target1)
+        damage2 = initial_hp2 - get_hp(target2)
+
+        assert damage1 > 0, f"Target1 should take damage, got {damage1}"
+        assert damage2 > 0, f"Target2 should take damage, got {damage2}"
+        print(f"  Target1 damage: {damage1}")
+        print(f"  Target2 damage: {damage2}")
+        print("PASS: Acid Splash hits two targets")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 def test_acid_splash_rejects_distant_targets():
@@ -633,25 +644,31 @@ def test_fear_applies_frightened():
 def test_fear_cone_shape():
     """Fear affects targets in 30ft cone."""
     print("\n=== Test: Fear Cone Shape ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
-    # Targets in cone direction (east)
-    target_in_cone = create_test_target("InCone", (8, 5), wis=1)
-    # Target outside cone (behind caster)
-    target_outside = create_test_target("Outside", (2, 5), wis=1)
+        caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
+        target_in_cone = create_test_target("InCone", (8, 5), wis=1)
+        target_outside = create_test_target("Outside", (2, 5), wis=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    fear = Fear(source_entity_uuid=caster.uuid, end_position=(10, 5), caster_level=5)
-    fear.apply()
+        fear = Fear(source_entity_uuid=caster.uuid, end_position=(10, 5), caster_level=5)
+        fear.apply()
 
-    assert has_condition(target_in_cone, "Fear"), "Target in cone should be affected"
-    assert not has_condition(target_outside, "Fear"), "Target outside cone should not be affected"
-    print("PASS: Fear cone targets correctly")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        assert has_condition(target_in_cone, "Fear"), "Target in cone should be affected"
+        assert not has_condition(target_outside, "Fear"), "Target outside cone should not be affected"
+        print("PASS: Fear cone targets correctly")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 # =============================================================================
@@ -691,30 +708,36 @@ def test_hypnotic_pattern_applies_conditions():
 def test_hypnotic_pattern_concentration_cleanup():
     """Hypnotic Pattern ends when concentration breaks."""
     print("\n=== Test: Hypnotic Pattern Concentration Cleanup ===")
-    reset_combat_state()
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
 
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
+        grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
-    target = create_test_target("Target", (5, 0), wis=1)
+        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        target = create_test_target("Target", (5, 0), wis=1)
 
-    Entity.update_all_entities_senses()
+        Entity.update_all_entities_senses()
 
-    hp = HypnoticPattern(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
-    hp.apply()
+        hp = HypnoticPattern(source_entity_uuid=caster.uuid, end_position=(5, 0), caster_level=5)
+        hp.apply()
 
-    assert has_condition(target, "Hypnotic Pattern"), "Should have Hypnotic Pattern"
-    assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    # Break concentration
-    caster.remove_condition("Concentrating")
+        assert has_condition(target, "Hypnotic Pattern"), "Should have Hypnotic Pattern"
+        assert has_condition(caster, "Concentrating"), "Caster should be concentrating"
 
-    # Effect should be removed via linked_conditions cleanup
-    assert not has_condition(target, "Hypnotic Pattern"), "Hypnotic Pattern should end"
-    assert not has_condition(target, "Charmed"), "Charmed should be removed"
-    assert not has_condition(target, "Incapacitated"), "Incapacitated should be removed"
-    print("PASS: Hypnotic Pattern ends with concentration")
+        caster.remove_condition("Concentrating")
+
+        assert not has_condition(target, "Hypnotic Pattern"), "Hypnotic Pattern should end"
+        assert not has_condition(target, "Charmed"), "Charmed should be removed"
+        assert not has_condition(target, "Incapacitated"), "Incapacitated should be removed"
+        print("PASS: Hypnotic Pattern ends with concentration")
+        break
+    else:
+        raise AssertionError("Got nat 1/20 on all 10 attempts")
 
 
 # =============================================================================
