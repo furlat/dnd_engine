@@ -5,7 +5,7 @@ Reusable functions for setting up combat scenarios, forcing attack outcomes,
 and managing encounters for integration tests.
 """
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.entity import Entity
@@ -263,6 +263,24 @@ def count_conditions(entity: Entity, condition_name: str) -> int:
     return count
 
 
+def get_save_natural_roll(log_data: Dict[str, Any]) -> int:
+    """Extract the natural d20 roll from spell save combat log data.
+
+    Works with the serialized SpellSaveLogData dict stored in CombatLogEntry.data.
+    Returns the d20 value that was actually used (handles advantage/disadvantage).
+    """
+    save_roll = log_data.get('save_roll', {})
+    # d20_used is set when advantage/disadvantage applies
+    d20_used = save_roll.get('d20_used')
+    if d20_used is not None:
+        return d20_used
+    # Fall back to first result
+    results = save_roll.get('results', [])
+    if results:
+        return results[0]
+    return 0
+
+
 def print_combat_state(entity_a: Entity, entity_b: Entity):
     """Print current HP and conditions for both combatants."""
     print(f"\n--- Combat State ---")
@@ -299,5 +317,6 @@ __all__ = [
     "move_entity",
     "has_condition",
     "count_conditions",
+    "get_save_natural_roll",
     "print_combat_state",
 ]

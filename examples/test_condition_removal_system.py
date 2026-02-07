@@ -10,11 +10,8 @@ Tests all types of condition relationships:
 6. Custom _remove() hooks
 """
 
-from uuid import uuid4
 from dnd.entity import Entity
-from dnd.core.base_conditions import BaseCondition
 from dnd.core.gridmap import get_map, GridMap
-from dnd.core.events import EventQueue
 from dnd.utils import reset_combat_state
 from dnd.monsters.bestiary import create_skeleton
 
@@ -116,7 +113,7 @@ def test_external_condition_removal():
     Entity.update_all_entities_senses()
 
     # Create a concentration spell effect manually
-    from dnd.conditions import Concentrating, Paralyzed
+    from dnd.conditions import Concentrating
     from dnd.spells.enchantment import HoldPersonEffect
 
     # Apply spell effect to target

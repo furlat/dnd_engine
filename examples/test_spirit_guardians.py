@@ -15,7 +15,7 @@ Tests:
 10. Zone is removed when concentration breaks
 """
 
-from dnd.utils import reset_combat_state, has_condition, get_hp
+from dnd.utils import reset_combat_state, has_condition, get_hp, set_hp
 from dnd.monsters.bestiary import create_skeleton, create_goblin
 from dnd.entity import Entity
 from dnd.spells.conjuration import SpiritGuardians, SpiritGuardiansZone
@@ -364,6 +364,11 @@ def test_spirit_guardians_speed_restored():
     # Create caster and enemy
     caster = create_skeleton(name="Caster", position=(10, 10), faction="heroes")
     enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")
+    # Boost goblin max HP so it survives 3d8 entry damage (goblin default is 10 HP)
+    enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
+        NumericalModifier.create(source_entity_uuid=enemy.uuid, name="Test HP Boost", value=90)
+    )
+    set_hp(enemy, 100)
     caster.update_entity_senses(max_distance=30)
 
     # Get initial speed

@@ -21,6 +21,7 @@ from dnd.utils.test_utils import (
     move_entity,
     has_condition,
     count_conditions,
+    get_save_natural_roll,
     print_combat_state,
 )
 
@@ -41,5 +42,6 @@ __all__ = [
     "move_entity",
     "has_condition",
     "count_conditions",
+    "get_save_natural_roll",
     "print_combat_state",
 ]
