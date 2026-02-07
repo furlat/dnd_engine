@@ -35,8 +35,10 @@ D&D 5e game engine with event-driven architecture and component-based entities. 
 
 ### Testing Rules
 
+- **NEVER run `pytest` on the entire test suite.** It takes hours and hangs. Always run individual test files: `python examples/test_<feature>.py`
+- **NEVER run server tests** (`examples/server_tests/`) in batch — they require a running server and will hang.
 - **Always run tests** for the feature you're modifying: `python examples/test_<feature>.py`
-- **Run pytest** for broader validation: `pytest`
+- **To validate regressions**, run a few specific related test files individually, NOT `pytest` with no arguments.
 - **When tests fail** on code you didn't touch: don't fix them silently. Document in `KNOWN_ISSUES.md` with the test file, error, and your hypothesis. Dispatch a background sub-agent for this.
 - **Write new tests** for new features using patterns from `claude_docs/IMPLEMENTATION_GUIDE.md` (Section 14)
 

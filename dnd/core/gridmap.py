@@ -52,6 +52,10 @@ class GridMap:
         self._entities_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         self._entity_positions: Dict[UUID, Tuple[int, int]] = {}
 
+        # Object position tracking (items on the grid)
+        self._object_positions: Dict[UUID, Tuple[int, int]] = {}
+        self._objects_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
+
         # Cell subscription system
         # cell -> set of entity UUIDs subscribed to that cell
         self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
@@ -284,6 +288,13 @@ class GridMap:
             block = BaseBlock.get(entity_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 return False
+
+        # Check objects at this position (e.g., large boulder blocks walking)
+        for obj_uuid in self._objects_by_position.get((x, y), set()):
+            block = BaseBlock.get(obj_uuid)
+            if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+                return False
+
         return True
 
     def is_visible(self, x: int, y: int) -> bool:
@@ -292,9 +303,16 @@ class GridMap:
         return tile is not None and not tile.blocks_vision()
 
     def is_blocking(self, x: int, y: int) -> bool:
-        """Check if position blocks line of sight."""
+        """Check if position blocks line of sight (tile or object)."""
         tile = self._tiles.get((x, y))
-        return tile is None or tile.blocks_vision()
+        if tile is None or tile.blocks_vision():
+            return True
+        # Check objects that block vision (e.g., barricade)
+        for obj_uuid in self._objects_by_position.get((x, y), set()):
+            block = BaseBlock.get(obj_uuid)
+            if block is not None and block.blocks_vision():
+                return True
+        return False
 
     # =========================================================================
     # Grid Bounds (cached)
@@ -481,6 +499,45 @@ class GridMap:
         return self._entity_positions.copy()
 
     # =========================================================================
+    # Object Position Management
+    # =========================================================================
+
+    def place_object(self, object_uuid: UUID, position: Tuple[int, int]) -> None:
+        """Place an object on the grid at a position."""
+        self._object_positions[object_uuid] = position
+        self._objects_by_position[position].add(object_uuid)
+        if self._events_enabled:
+            self._fire_spatial_event(SpatialChangeEvent.object_placed(position, object_uuid))
+
+    def remove_object(self, object_uuid: UUID) -> None:
+        """Remove an object from the grid."""
+        position = self._object_positions.pop(object_uuid, None)
+        if position is not None:
+            self._objects_by_position[position].discard(object_uuid)
+            if self._events_enabled:
+                self._fire_spatial_event(SpatialChangeEvent.object_removed(position, object_uuid))
+
+    def get_objects_at(self, position: Tuple[int, int]) -> Set[UUID]:
+        """Get all object UUIDs at a position."""
+        return set(self._objects_by_position.get(position, set()))
+
+    def get_object_position(self, object_uuid: UUID) -> Optional[Tuple[int, int]]:
+        """Get an object's grid position, or None if not placed."""
+        return self._object_positions.get(object_uuid)
+
+    def get_objects_with_conditions(self) -> List[BaseBlock]:
+        """Get placed objects with active conditions (for environment step).
+
+        Returns BaseBlock (not BaseItem) — GridMap stays type-unaware.
+        """
+        result: List[BaseBlock] = []
+        for obj_uuid in self._object_positions:
+            block = BaseBlock.get(obj_uuid)
+            if block is not None and block.active_conditions:
+                result.append(block)
+        return result
+
+    # =========================================================================
     # FOV and Pathfinding
     # =========================================================================
 
@@ -585,11 +642,13 @@ class GridMap:
     # =========================================================================
 
     def clear(self) -> None:
-        """Clear all tiles, entity positions, and subscriptions."""
+        """Clear all tiles, entity positions, object positions, and subscriptions."""
         self._tiles.clear()
         self._tiles_by_uuid.clear()
         self._entities_by_position.clear()
         self._entity_positions.clear()
+        self._object_positions.clear()
+        self._objects_by_position.clear()
         self._cell_subscribers.clear()
         self._entity_subscriptions.clear()
         self._pending_events.clear()
