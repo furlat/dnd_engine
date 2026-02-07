@@ -3,7 +3,8 @@ from dnd.core.values import ModifiableValue
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig)
 from dnd.blocks.health import (HealthConfig,HitDiceConfig)
-from dnd.blocks.equipment import (EquipmentConfig,WeaponSlot,WeaponProperty, Range, Weapon, BodyArmor, ArmorType, BodyPart)
+from dnd.blocks.equipment import (EquipmentConfig,WeaponSlot,WeaponProperty, Range, Weapon, BodyArmor, ArmorType)
+from dnd.core.events import BodyPart
 from dnd.blocks.action_economy import (ActionEconomyConfig)
 from dnd.blocks.skills import (SkillSetConfig,SkillConfig)
 from dnd.core.events import RangeType

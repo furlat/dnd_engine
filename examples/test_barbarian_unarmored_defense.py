@@ -14,7 +14,8 @@ from uuid import uuid4
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig, BodyPart
+from dnd.blocks.equipment import EquipmentConfig
+from dnd.core.events import BodyPart
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.events import EventQueue, WeaponSlot
 from dnd.actions_functional import setup_standard_actions

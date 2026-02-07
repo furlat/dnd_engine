@@ -4,13 +4,14 @@ from pydantic import BaseModel, Field, model_validator
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier, DamageType 
 from dnd.blocks.abilities import  AbilityScores
-from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, Damage
+from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, Damage, BodyPart, RingSlot
 
 from enum import Enum
 
 import copy
 
 from dnd.core.base_block import BaseBlock
+from dnd.blocks.base_item import EquippableItem
 
 # Equipment-specific events
 class EquipmentEvent(Event):
@@ -54,12 +55,6 @@ class ShieldUnequipEvent(EquipmentEvent):
     event_type: EventType = Field(default=EventType.SHIELD_UNEQUIP, description="The type of event")
     shield: 'Shield' = Field(description="The shield being unequipped")
 
-class RingSlot(str, Enum):
-    LEFT = "Left Ring"
-    RIGHT = "Right Ring"
-
-
-
 class UnarmoredAc(str, Enum):
     BARBARIAN = "Barbarian"
     MONK = "Monk"
@@ -84,18 +79,7 @@ class WeaponProperty(str, Enum):
     MARTIAL = "Martial"
     SIMPLE = "Simple"
 
-class BodyPart(str, Enum):
-    HEAD = "Head"
-    BODY = "Body"
-    HANDS = "Hands"
-    LEGS = "Legs"
-    FEET = "Feet"
-    AMULET = "Amulet"
-    RING = "Ring"
-    CLOAK = "Cloak"
-
-
-class Armor(BaseBlock):
+class Armor(EquippableItem):
     name: str = Field(default="Armor")
     description: Optional[str] = Field(
         default=None,
@@ -209,7 +193,7 @@ class Cloak(Armor):
         description="Cloak slot armor"
     )
 
-class Shield(BaseBlock):
+class Shield(EquippableItem):
     name: str = Field(default="Shield",   description="Name of the shield"
     )
     description: Optional[str] = Field(
@@ -221,7 +205,7 @@ class Shield(BaseBlock):
     )
 
 
-class Weapon(BaseBlock):
+class Weapon(EquippableItem):
     name: str = Field(default="Weapon", description="Name of the weapon")
     description: Optional[str] = Field(
         default=None,
@@ -551,6 +535,18 @@ class Equipment(BaseBlock):
             WeaponSlot.RANGED_OFF: self.weapon_ranged_off,
         }.get(slot)
 
+    def get_item_by_slot(self, slot: Union[BodyPart, RingSlot, WeaponSlot]) -> Optional[Union['Armor', 'Weapon', 'Shield']]:
+        """Get the item in any equipment slot."""
+        if isinstance(slot, WeaponSlot):
+            return self._get_weapon_by_slot(slot)
+        elif isinstance(slot, RingSlot):
+            return self.ring_left if slot == RingSlot.LEFT else self.ring_right
+        elif isinstance(slot, BodyPart):
+            if slot not in slot_mapping:
+                return None
+            return getattr(self, slot_mapping[slot], None)
+        return None
+
     def is_unarmed(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> bool:
         weapon = self._get_weapon_by_slot(weapon_slot)
         return weapon is None or isinstance(weapon, Shield)
@@ -712,7 +708,10 @@ class Equipment(BaseBlock):
                 self.ring_left = item
             else:
                 self.ring_right = item
-                
+
+            item.owner_uuid = self.source_entity_uuid
+            item.stored_in_uuid = self.uuid
+            item.equip(slot, self.source_entity_uuid)
             event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
             return
 
@@ -738,6 +737,9 @@ class Equipment(BaseBlock):
                 return
 
             self.weapon_melee_off = item
+            item.owner_uuid = self.source_entity_uuid
+            item.stored_in_uuid = self.uuid
+            item.equip(slot, self.source_entity_uuid)
             event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
             return
 
@@ -790,6 +792,9 @@ class Equipment(BaseBlock):
             elif slot == WeaponSlot.RANGED_OFF:
                 self.weapon_ranged_off = item
 
+            item.owner_uuid = self.source_entity_uuid
+            item.stored_in_uuid = self.uuid
+            item.equip(slot, self.source_entity_uuid)
             event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
             return
 
@@ -820,15 +825,21 @@ class Equipment(BaseBlock):
         assert isinstance(slot, BodyPart)  # Type narrowing - validated at line 680
         attribute_name = slot_mapping[slot]
         setattr(self, attribute_name, item)
-        
+
+        item.owner_uuid = self.source_entity_uuid
+        item.stored_in_uuid = self.uuid
+        item.equip(slot, self.source_entity_uuid)
         event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
 
-    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot], parent_event_uuid: Optional[UUID] = None) -> None:
+    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot], parent_event_uuid: Optional[UUID] = None) -> Optional[Union[Armor, Weapon, Shield]]:
         """
         Unequip the item in the specified slot.
 
         Args:
             slot: The slot to unequip from
+
+        Returns:
+            The unequipped item, or None if slot was empty or event was canceled.
 
         Raises:
             ValueError: If the slot is invalid
@@ -854,7 +865,7 @@ class Equipment(BaseBlock):
         # Get the current item
         current_item = getattr(self, attribute_name)
         if current_item is None:
-            return
+            return None
 
         # Create appropriate unequip event based on item type
         if isinstance(current_item, Weapon):
@@ -887,11 +898,13 @@ class Equipment(BaseBlock):
 
         # Process the unequip event
         if event.phase_to(EventPhase.EXECUTION).canceled:
-            return
+            return None
 
+        current_item.unequip(slot, self.source_entity_uuid)
         setattr(self, attribute_name, None)
-        
+
         event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+        return current_item
     
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Equipped", source_entity_name: Optional[str] = None, 
