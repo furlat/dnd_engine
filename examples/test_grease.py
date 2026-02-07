@@ -10,11 +10,30 @@ Tests:
 5. Zone is removed when concentration breaks
 """
 
+import pytest
+
 from dnd.utils import reset_combat_state, has_condition
 from dnd.monsters.bestiary import create_skeleton
-from dnd.entity import Entity
+from dnd.entity import Entity, get_natural_roll
 from dnd.spells.conjuration import Grease
 from dnd.core.gridmap import get_map, reset_map
+from dnd.core.modifiers import NumericalModifier
+from dnd.core.events import EventQueue
+
+
+def had_critical_d20() -> bool:
+    """Check if any d20 roll in the current EventQueue had a nat 1 or nat 20."""
+    for event in EventQueue._all_events:
+        for attr in ('dice_roll', 'save_roll'):
+            roll = getattr(event, attr, None)
+            if roll is not None:
+                try:
+                    nat = get_natural_roll(roll)
+                    if nat in (1, 20):
+                        return True
+                except Exception:
+                    pass
+    return False
 
 
 def setup_arena(size: int = 20):
@@ -81,50 +100,44 @@ def test_grease_entry_prone():
     print("TEST: Grease Entry Causes Prone")
     print("=" * 60)
 
-    reset_combat_state()
-    setup_arena()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_arena()
 
-    # Create caster and target
-    caster = create_skeleton(name="Caster", position=(0, 0))
-    target = create_skeleton(name="Target", position=(10, 5))  # Outside zone
-    caster.update_entity_senses(max_distance=20)
+        caster = create_skeleton(name="Caster", position=(0, 0))
+        target = create_skeleton(name="Target", position=(10, 5))
+        caster.update_entity_senses(max_distance=20)
 
-    # Give target terrible DEX to ensure fail (use force_attack_miss pattern)
-    # Actually, let's just run the test multiple times - statistically should fail sometimes
-    # For deterministic test, we'll apply -100 to DEX save
-
-    # Cast Grease
-    target_pos = (5, 5)
-    spell = Grease(
-        source_entity_uuid=caster.uuid,
-        end_position=target_pos
-    )
-    spell.apply()
-
-    print(f"\n1. Target initial state: Prone={has_condition(target, 'Prone')}")
-    assert not has_condition(target, "Prone"), "Target should not start prone"
-
-    # Force target to fail DEX save by giving them massive penalty
-    from dnd.core.modifiers import NumericalModifier
-    dex_save = target.saving_throws.get_saving_throw("dexterity")
-    _penalty_uuid = dex_save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=target.uuid,
-            name="Test Penalty",
-            value=-100
+        target_pos = (5, 5)
+        spell = Grease(
+            source_entity_uuid=caster.uuid,
+            end_position=target_pos
         )
-    )
+        spell.apply()
 
-    # Move target into the zone
-    print(f"\n2. Moving target into zone at (5, 5)")
-    Entity.update_entity_position(target, (5, 5))
+        assert not has_condition(target, "Prone"), "Target should not start prone"
 
-    print(f"   Target Prone after entering: {has_condition(target, 'Prone')}")
-    assert has_condition(target, "Prone"), "Target should be prone after failing DEX save"
+        dex_save = target.saving_throws.get_saving_throw("dexterity")
+        dex_save.bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=target.uuid,
+                name="Test Penalty",
+                value=-100
+            )
+        )
 
-    print("\n" + "=" * 60)
-    print("PASS: Grease entry causes prone on failed save!")
-    print("=" * 60)
+        Entity.update_entity_position(target, (5, 5))
+
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
+
+        assert has_condition(target, "Prone"), "Target should be prone after failing DEX save"
+
+        print("PASS: Grease entry causes prone on failed save!")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_grease_turn_start_prone():
@@ -133,61 +146,51 @@ def test_grease_turn_start_prone():
     print("TEST: Grease Turn Start (BG3 Auto-Stand)")
     print("=" * 60)
 
-    reset_combat_state()
-    setup_arena()
+    for attempt in range(10):
+        reset_combat_state()
+        setup_arena()
 
-    # Create caster and target already in zone area
-    caster = create_skeleton(name="Caster", position=(0, 0))
-    target = create_skeleton(name="Target", position=(5, 5))  # In zone area
-    caster.update_entity_senses(max_distance=20)
+        caster = create_skeleton(name="Caster", position=(0, 0))
+        target = create_skeleton(name="Target", position=(5, 5))
+        caster.update_entity_senses(max_distance=20)
 
-    # Cast Grease - target should be affected immediately
-    target_pos = (5, 5)
-    spell = Grease(
-        source_entity_uuid=caster.uuid,
-        end_position=target_pos
-    )
-
-    # Force target to fail DEX save
-    from dnd.core.modifiers import NumericalModifier
-    dex_save = target.saving_throws.get_saving_throw("dexterity")
-    dex_save.bonus.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=target.uuid,
-            name="Test Penalty",
-            value=-100
+        target_pos = (5, 5)
+        spell = Grease(
+            source_entity_uuid=caster.uuid,
+            end_position=target_pos
         )
-    )
 
-    print(f"\n1. Casting Grease - target at (5,5) in zone")
-    result = spell.apply()
-    print(f"   Result: {result.status_message if result else 'None'}")
+        dex_save = target.saving_throws.get_saving_throw("dexterity")
+        dex_save.bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=target.uuid,
+                name="Test Penalty",
+                value=-100
+            )
+        )
 
-    # Target should be prone from initial cast (not their turn yet)
-    print(f"\n2. Target Prone after cast: {has_condition(target, 'Prone')}")
-    assert has_condition(target, "Prone"), "Target should be prone from being in zone on cast"
+        spell.apply()
 
-    # Remove Prone (simulating previous auto-stand)
-    target.remove_condition("Prone")
-    print(f"\n3. Removed Prone. Target Prone: {has_condition(target, 'Prone')}")
-    assert not has_condition(target, "Prone")
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20, retrying...")
+            continue
 
-    # Trigger turn start - BG3 behavior: Grease causes Prone but they immediately stand
-    print(f"\n4. Target starts their turn in the zone")
-    target.on_turn_start()
+        assert has_condition(target, "Prone"), "Target should be prone from being in zone on cast"
 
-    # With BG3 auto-stand: they fall prone but immediately stand (consuming movement)
-    print(f"   Target Prone after turn start: {has_condition(target, 'Prone')}")
-    print(f"   Target movement: {target.action_economy.movement.normalized_score}ft")
+        target.remove_condition("Prone")
+        assert not has_condition(target, "Prone")
 
-    # BG3 style: NOT prone (auto-stood), but movement consumed (30 - 15 = 15)
-    assert not has_condition(target, "Prone"), "Should NOT be prone (BG3 auto-stand)"
-    assert target.action_economy.movement.normalized_score == 15, \
-        f"Should have 15ft movement (30 - 15 auto-stand cost), got {target.action_economy.movement.normalized_score}"
+        target.on_turn_start()
 
-    print("\n" + "=" * 60)
-    print("PASS: Grease turn start triggers prone + auto-stand!")
-    print("=" * 60)
+        # BG3 style: NOT prone (auto-stood), but movement consumed (30 - 15 = 15)
+        assert not has_condition(target, "Prone"), "Should NOT be prone (BG3 auto-stand)"
+        assert target.action_economy.movement.normalized_score == 15, \
+            f"Should have 15ft movement (30 - 15 auto-stand cost), got {target.action_economy.movement.normalized_score}"
+
+        print("PASS: Grease turn start triggers prone + auto-stand!")
+        break
+    else:
+        pytest.fail("Got nat 1/20 on all 10 attempts")
 
 
 def test_grease_turn_start_no_movement():
@@ -211,7 +214,6 @@ def test_grease_turn_start_no_movement():
     )
 
     # Force target to fail DEX save
-    from dnd.core.modifiers import NumericalModifier
     dex_save = target.saving_throws.get_saving_throw("dexterity")
     dex_save.bonus.self_static.add_value_modifier(
         NumericalModifier.create(
@@ -276,7 +278,6 @@ def test_grease_not_own_turn():
     spell.apply()
 
     # Force target to fail DEX save
-    from dnd.core.modifiers import NumericalModifier
     dex_save = target.saving_throws.get_saving_throw("dexterity")
     dex_save.bonus.self_static.add_value_modifier(
         NumericalModifier.create(
