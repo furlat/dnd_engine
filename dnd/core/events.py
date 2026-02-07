@@ -150,6 +150,8 @@ class EventType(str, Enum):
     SPATIAL_ENTITY_ENTERED = "spatial_entity_entered"  # Entity moved into a cell
     SPATIAL_ENTITY_LEFT = "spatial_entity_left"        # Entity left a cell
     SPATIAL_TILE_CHANGED = "spatial_tile_changed"      # Tile properties changed
+    SPATIAL_OBJECT_PLACED = "spatial_object_placed"    # Object placed on grid
+    SPATIAL_OBJECT_REMOVED = "spatial_object_removed"  # Object removed from grid
 
     # Encounter/Turn events
     ENCOUNTER_START = "encounter_start"
@@ -168,6 +170,8 @@ class SpatialChangeType(str, Enum):
     TILE_CHANGED = "tile_changed"
     TILE_CREATED = "tile_created"
     TILE_REMOVED = "tile_removed"
+    OBJECT_PLACED = "object_placed"
+    OBJECT_REMOVED = "object_removed"
 
 
 class EventPhase(str, Enum):
@@ -1467,6 +1471,7 @@ class SpatialChangeEvent(Event):
     change_type: SpatialChangeType = Field(description="Specific type of spatial change")
     position: Tuple[int, int] = Field(description="Grid position where change occurred")
     entity_uuid: Optional[UUID] = Field(default=None, description="UUID of entity involved (if any)")
+    object_uuid: Optional[UUID] = Field(default=None, description="UUID of object involved (if any)")
     old_position: Optional[Tuple[int, int]] = Field(default=None, description="Previous position (for movement)")
     tile_walkable: Optional[bool] = Field(default=None, description="New walkable state (for tile changes)")
     tile_visible: Optional[bool] = Field(default=None, description="New visible state (for tile changes)")
@@ -1550,6 +1555,38 @@ class SpatialChangeEvent(Event):
             tile_visible=visible,
             phase=EventPhase.DECLARATION,
             use_register=False  # GridMap controls registration via _fire_spatial_event
+        )
+
+    @classmethod
+    def object_placed(cls, position: Tuple[int, int], object_uuid: UUID,
+                      source_entity_uuid: Optional[UUID] = None,
+                      parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for an object being placed on the grid."""
+        return cls(
+            source_entity_uuid=source_entity_uuid or uuid4(),
+            event_type=EventType.SPATIAL_OBJECT_PLACED,
+            change_type=SpatialChangeType.OBJECT_PLACED,
+            position=position,
+            object_uuid=object_uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+            parent_event=parent_event
+        )
+
+    @classmethod
+    def object_removed(cls, position: Tuple[int, int], object_uuid: UUID,
+                       source_entity_uuid: Optional[UUID] = None,
+                       parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for an object being removed from the grid."""
+        return cls(
+            source_entity_uuid=source_entity_uuid or uuid4(),
+            event_type=EventType.SPATIAL_OBJECT_REMOVED,
+            change_type=SpatialChangeType.OBJECT_REMOVED,
+            position=position,
+            object_uuid=object_uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+            parent_event=parent_event
         )
 
 

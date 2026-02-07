@@ -6,7 +6,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent
 from dnd.core.gridmap import get_map
-from dnd.core.base_block import MovementMode
+from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
@@ -17,6 +17,7 @@ from pydantic import Field, model_validator
 from typing import Optional, List, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
+from dnd.blocks.base_item import BaseItem
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone
 from collections import OrderedDict
 
@@ -2544,4 +2545,153 @@ def attack_factory(source_entity_uuid: UUID, target_entity_uuid: UUID, weapon_sl
         cost_applier=entity_action_economy_cost_applier
     )
     return attack
+
+
+# =============================================================================
+# OBJECT Actions (Items on Grid)
+# =============================================================================
+
+class PickUp(BaseAction):
+    """Pick up an item from the ground. Free action (no cost).
+
+    Uses target_entity_uuid to hold the item UUID (items are BaseBlocks
+    registered in _registry, so BaseBlock.get(uuid) finds them).
+    """
+    name: str = Field(default="Pick Up")
+    description: str = Field(default="Pick up an item from the ground")
+    target_type: TargetType = Field(default=TargetType.OBJECT)
+    costs: List[Cost] = Field(default_factory=list)  # Free action
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not isinstance(item, BaseItem) or not item.is_pickable:
+            return declaration_event.cancel(status_message="Cannot pick up this object")
+
+        if not entity.inventory.can_add(item):
+            return declaration_event.cancel(status_message="Inventory full")
+
+        item_pos = get_map().get_object_position(item.uuid)
+        if item_pos is None:
+            return declaration_event.cancel(status_message="Item not on the ground")
+        if entity.senses.get_feet_distance(item_pos) > 5:
+            return declaration_event.cancel(status_message="Item too far away")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated Pick Up {item.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent, **kwargs) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not entity or not isinstance(item, BaseItem):
+            return execution_event.cancel(status_message="Entity or item not found")
+
+        entity.loot_item(item)
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Picked up {item.name}"
+        )
+
+
+class AttackObject(BaseAction):
+    """Attack a breakable object. Costs 1 action. Auto-hit, rolls weapon damage.
+
+    Uses target_entity_uuid to hold the item UUID.
+    """
+    name: str = Field(default="Attack Object")
+    description: str = Field(default="Attack a breakable object")
+    target_type: TargetType = Field(default=TargetType.OBJECT)
+    is_attack: bool = Field(default=True)
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Attack Object Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not isinstance(item, BaseItem) or not item.is_targetable or not item.is_breakable():
+            return declaration_event.cancel(status_message="Cannot attack this object")
+
+        item_pos = get_map().get_object_position(item.uuid)
+        if item_pos is None:
+            return declaration_event.cancel(status_message="Object not on the ground")
+        if entity.senses.get_feet_distance(item_pos) > 5:
+            return declaration_event.cancel(status_message="Object too far away")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated Attack Object {item.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent, **kwargs) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not entity or not isinstance(item, BaseItem):
+            return execution_event.cancel(status_message="Entity or item not found")
+
+        # Auto-hit: roll weapon damage directly
+        weapon_slot = WeaponSlot.MELEE_MAIN
+        damages = entity.equipment.get_damages(weapon_slot, entity.ability_scores)
+        total_damage = 0
+        for dmg in damages:
+            dice = dmg.get_dice(AttackOutcome.HIT)
+            total_damage += dice.roll.total
+        main_type = entity.equipment.get_main_damage_type(weapon_slot)
+
+        actual = item.receive_damage(total_damage, main_type, entity.uuid)
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Dealt {actual} {main_type.value} damage to {item.name}"
+        )
+
+
+class Drop(BaseAction):
+    """Drop an item from inventory onto the ground at entity's position.
+
+    Uses target_entity_uuid to hold the item UUID (from inventory).
+    NOT registered as a template — use execute_drop() from actions_functional.
+    """
+    name: str = Field(default="Drop")
+    description: str = Field(default="Drop an item from inventory")
+    target_type: TargetType = Field(default=TargetType.OBJECT)
+    costs: List[Cost] = Field(default_factory=list)  # Free action
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        if self.target_entity_uuid is None:
+            return declaration_event.cancel(status_message="No item specified")
+        if not entity.inventory.has_item(self.target_entity_uuid):
+            return declaration_event.cancel(status_message="Item not in inventory")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message="Validated Drop"
+        )
+
+    def _apply(self, execution_event: ActionEvent, **kwargs) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity or self.target_entity_uuid is None:
+            return execution_event.cancel(status_message="Entity or item not found")
+
+        dropped = entity.drop_item(self.target_entity_uuid)
+        if dropped is None:
+            return execution_event.cancel(status_message="Failed to drop item")
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Dropped {dropped.name}"
+        )
 

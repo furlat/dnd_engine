@@ -24,6 +24,7 @@ class TargetType(str, Enum):
     POSITION_LOS = "position_los"    # Jump, Teleport - visible + range only (uses senses.visible)
     POSITION_AOE = "position_aoe"    # AoE spells - position + affected entities preview
     MULTI_ENTITY = "multi_entity"    # Multi-target spells/abilities - targets list of entities
+    OBJECT = "object"                # Object actions - targets a grid object (item)
 
 CostEvaluator = Callable[[UUID,CostType,int],bool]
 
@@ -194,12 +195,13 @@ class BaseAction(BaseObject):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def set_target_entity(self, target_uuid: UUID) -> None:
-        """Set target entity for ENTITY or MULTI_ENTITY type actions.
+        """Set target entity for ENTITY, MULTI_ENTITY, or OBJECT type actions.
 
         Used with templates to set the target before pre_validate() or instantiate().
         For MULTI_ENTITY, this sets the primary target.
+        For OBJECT, this sets the item UUID (items are BaseBlocks in _registry).
         """
-        if self.target_type not in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
+        if self.target_type not in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.OBJECT):
             raise ValueError(f"Action {self.name} doesn't target entities (target_type={self.target_type})")
         self.target_entity_uuid = target_uuid
 
@@ -784,6 +786,7 @@ class AvailableActionsResult(BaseModel):
     entity_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting entities (Attack)")
     position_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting positions (Move)")
     self_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Self-targeting actions (Dash, Dodge, etc.)")
+    object_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting objects (Pick Up, Attack Object)")
 
     # State info
     remaining_movement: int = Field(default=0, description="Remaining movement in feet")
@@ -791,4 +794,4 @@ class AvailableActionsResult(BaseModel):
     @property
     def all_actions(self) -> List[AvailableActionInfo]:
         """Get all available actions as a flat list."""
-        return self.entity_actions + self.position_actions + self.self_actions
+        return self.entity_actions + self.position_actions + self.self_actions + self.object_actions
