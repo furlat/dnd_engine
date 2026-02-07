@@ -32,6 +32,7 @@ from dnd.core.events import (
     DeathEvent,
 )
 from dnd.core.combat_log import CombatLogEntry
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.controller import Controller, TurnContext
 from dnd.actions_functional import execute_by_index
@@ -425,9 +426,17 @@ class Encounter(BaseObject):
         )
         return event
 
+    def _environment_step(self) -> None:
+        """Advance tile condition durations. Called at end of each round."""
+        grid = get_map()
+        for tile in grid.get_tiles_with_conditions():
+            for cond_name in list(tile.active_conditions.keys()):
+                tile.advance_duration(cond_name)
+
     def _advance_round(self) -> None:
         """Advance to the next round."""
         self._fire_round_end()
+        self._environment_step()
 
         self.round_number += 1
         self.current_turn_index = 0

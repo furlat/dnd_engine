@@ -15,7 +15,7 @@ from dnd.core.events import (
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent, DeathEvent
 )
-from dnd.core.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import HealthConfig, Health
@@ -139,6 +139,9 @@ class Entity(BaseBlock):
 
     # Turn tracking - True during this entity's turn (set by on_turn_start, cleared by on_turn_end)
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
+
+    # Movement blocking - when True, this entity does not block walking (set by death handler, incorporeal, etc.)
+    non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
 
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
@@ -344,95 +347,6 @@ class Entity(BaseBlock):
             self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
         return condition_applied
 
-    def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False, parent_event: Optional[Event] = None) -> None:
-        """Recursively remove a condition and all its dependencies.
-
-        Entity handles ALL cross-object lookups. BaseCondition only cleans up its own state.
-
-        NOTE: This method assumes tracking dicts have already been cleaned up by
-        remove_condition(). It only handles cross-object cleanup and condition state.
-
-        Args:
-            condition: The condition to remove
-            expire: Whether this is an expiration removal
-            parent_event: Parent event for event chain tracking
-        """
-        # 1. Handle sub_conditions (same entity - recurse for cross-object cleanup)
-        # NOTE: Tracking dicts already handled by remove_condition's _collect_all_sub_conditions
-        for sub_uuid in list(condition.sub_conditions):  # Copy list to avoid mutation
-            sub = BaseCondition.get(sub_uuid)
-            if sub is not None and isinstance(sub, BaseCondition):
-                # Recurse for cross-object cleanup on the sub-condition
-                self._remove_condition_tree(sub, expire=expire, parent_event=parent_event)
-
-        # 2. Handle external_conditions (other entities)
-        for target_uuid, cond_uuid in condition.external_conditions:
-            target = Entity.get(target_uuid)
-            if target:
-                target.remove_condition_by_uuid(cond_uuid)
-
-        # 3. Handle terrain_conditions (tiles)
-        # Entity CAN import gridmap - no circular dependency
-        grid = get_map()
-        for tile_uuid, cond_uuid in condition.terrain_conditions:
-            tile = grid.get_tile_by_uuid(tile_uuid)
-            if tile:
-                # Find and remove condition on tile by UUID
-                for cond_name, cond in list(tile.active_conditions.items()):
-                    if cond.uuid == cond_uuid:
-                        tile.remove_condition(cond_name)
-                        break
-
-        # 4. Clean up this condition's OWN state only
-        condition.cleanup_own_state(expire=expire, parent_event=parent_event)
-
-    def remove_condition(self, condition_name: str) -> None:
-        """Remove a condition from this entity with full tree traversal.
-
-        This method handles:
-        - Sub-conditions (same entity - parent/child relationships)
-        - External conditions (other entities - concentration spell cleanup)
-        - Terrain conditions (tiles - zone spell cleanup)
-
-        Args:
-            condition_name: Name of the condition to remove
-        """
-        if condition_name not in self.active_conditions:
-            return
-
-        condition = self.active_conditions.pop(condition_name)
-
-        # Collect and remove sub-conditions from tracking dicts first
-        # This must happen BEFORE _remove_condition_tree to avoid duplicate removals
-        all_sub_conditions = self._collect_all_sub_conditions(condition)
-        for sub_condition in all_sub_conditions:
-            if sub_condition.name is not None and sub_condition.name in self.active_conditions:
-                self.active_conditions.pop(sub_condition.name)
-            # Only remove from dicts if the condition's name is in the source tracking
-            if sub_condition.name in self.active_conditions_by_source.get(sub_condition.source_entity_uuid, []):
-                self._remove_condition_from_dicts(sub_condition)
-
-        # Remove main condition from dicts
-        if condition.name in self.active_conditions_by_source.get(condition.source_entity_uuid, []):
-            self._remove_condition_from_dicts(condition)
-
-        # Now do full tree traversal cleanup (cross-object only, tracking already done)
-        self._remove_condition_tree(condition)
-
-    def remove_condition_by_uuid(self, condition_uuid: UUID) -> None:
-        """Remove a condition from this entity by its UUID.
-
-        This is used for cross-entity cleanup (e.g., when concentration breaks).
-
-        Args:
-            condition_uuid: UUID of the condition to remove
-        """
-        condition = self.active_conditions_by_uuid.get(condition_uuid)
-        if condition is None:
-            return
-        if condition.name is not None:
-            self.remove_condition(condition.name)
-
     def advance_duration_condition(self, condition_name: str, skip_save_throw: bool = False) -> bool:
         """Progress a condition's duration and remove if expired.
 
@@ -460,8 +374,7 @@ class Entity(BaseBlock):
         # Progress duration (just checks expiration, doesn't auto-remove)
         expired = condition.progress()
         if expired:
-            # Entity handles full tree traversal for cleanup
-            self.remove_condition(condition_name)
+            self.remove_condition(condition_name, expire=True)
         return expired
 
     def on_turn_start(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0) -> TurnStartEvent:
@@ -1521,6 +1434,15 @@ class Entity(BaseBlock):
         self.clear_target_entity()
         return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
 
+
+    def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
+                       mode: MovementMode = MovementMode.WALKING) -> bool:
+        """An entity blocks walking unless it is non-blocking or the requester is itself."""
+        if requesting_entity_uuid == self.uuid:
+            return False
+        if self.non_blocking:
+            return False
+        return True
 
     @staticmethod
     def compute_senses_from_position(

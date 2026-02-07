@@ -1,5 +1,6 @@
 from typing import Dict, Optional, Any, List, Self,ClassVar,  Callable, Tuple
 from uuid import UUID, uuid4
+from enum import Enum
 from pydantic import BaseModel, Field, model_validator, computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
@@ -8,6 +9,14 @@ from dnd.core.events import EventHandler, EventQueue, Trigger, Event
 from collections import defaultdict
 
 ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'],Optional[dict]], bool]
+
+
+class MovementMode(str, Enum):
+    """Movement modes for entities."""
+    WALKING = "walking"
+    FLYING = "flying"
+    SWIMMING = "swimming"
+    BURROWING = "burrowing"
 
 
 class BaseBlock(BaseModel):
@@ -316,6 +325,17 @@ class BaseBlock(BaseModel):
         for block in self.blocks.values():
             block.set_position(position)
 
+    def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
+                       mode: 'MovementMode' = MovementMode.WALKING) -> bool:
+        """Whether this block prevents walking through its position.
+        Non-spatial blocks (Equipment, Health, etc.) inherit this default."""
+        return False
+
+    def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
+        """Whether this block prevents vision through its position.
+        Non-spatial blocks inherit this default."""
+        return False
+
     def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
         """
         Set the target entity for all the values and sub-blocks contained in this Block instance.
@@ -552,36 +572,92 @@ class BaseBlock(BaseModel):
                 all_subs.extend(self._collect_all_sub_conditions(sub))
         return all_subs
 
-    def remove_condition(self, condition_name: str) -> None:
-        """Remove a condition from this block.
+    def remove_condition(self, condition_name: str, expire: bool = False,
+                         parent_event: Optional[Event] = None) -> None:
+        """Remove a condition with full cross-block tree traversal.
 
-        For BaseBlock (e.g., Tile), this handles sub-conditions but NOT
-        cross-object cleanup (external_conditions, terrain_conditions).
-        Entity overrides this for full tree traversal.
+        Handles sub-conditions (same block), linked_conditions (other blocks),
+        and own state cleanup via _remove_condition_tree().
 
         Args:
             condition_name: Name of the condition to remove
+            expire: Whether this is an expiration removal (fires _expire hook)
+            parent_event: Parent event for event chain tracking
         """
         if not self.allow_events_conditions:
-            return None
+            return
         if condition_name not in self.active_conditions:
-            return None
+            return
 
         condition = self.active_conditions.pop(condition_name)
 
-        # Recursively collect ALL sub-conditions (not just immediate children)
+        # Collect and remove sub-conditions from tracking dicts FIRST
+        # This must happen BEFORE _remove_condition_tree to avoid duplicate removals
         all_sub_conditions = self._collect_all_sub_conditions(condition)
         for sub_condition in all_sub_conditions:
             if sub_condition.name is not None and sub_condition.name in self.active_conditions:
                 self.active_conditions.pop(sub_condition.name)
-            self._remove_condition_from_dicts(sub_condition)
-            # Clean up sub-condition's own state
-            sub_condition.cleanup_own_state()
+            if sub_condition.name in self.active_conditions_by_source.get(
+                    sub_condition.source_entity_uuid, []):
+                self._remove_condition_from_dicts(sub_condition)
 
-        self._remove_condition_from_dicts(condition)
-        # Clean up the main condition's own state
-        condition.cleanup_own_state()
-    
+        # Remove main condition from dicts
+        if condition.name in self.active_conditions_by_source.get(
+                condition.source_entity_uuid, []):
+            self._remove_condition_from_dicts(condition)
+
+        # Full tree traversal cleanup
+        self._remove_condition_tree(condition, expire=expire, parent_event=parent_event)
+
+    def remove_condition_by_uuid(self, condition_uuid: UUID) -> None:
+        """Remove a condition by UUID. Used for cross-block cleanup."""
+        if not self.allow_events_conditions:
+            return
+        condition = self.active_conditions_by_uuid.get(condition_uuid)
+        if condition is None:
+            return
+        if condition.name is not None:
+            self.remove_condition(condition.name)
+
+    def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
+                               parent_event: Optional[Event] = None) -> None:
+        """Recursively remove condition and all cross-block dependencies.
+
+        Handles sub-conditions (same block), linked_conditions (other blocks),
+        and own state cleanup. Tracking dicts are already cleaned up by
+        remove_condition() before this is called.
+        """
+        # 1. Sub-conditions (same block — recurse for their cross-block deps)
+        for sub_uuid in list(condition.sub_conditions):
+            sub = BaseCondition.get(sub_uuid)
+            if sub is not None and isinstance(sub, BaseCondition):
+                self._remove_condition_tree(sub, expire=expire, parent_event=parent_event)
+
+        # 2. Linked conditions (ANY other BaseBlock)
+        for target_uuid, cond_uuid in condition.linked_conditions:
+            target_block = BaseBlock.get(target_uuid)
+            if target_block is not None:
+                target_block.remove_condition_by_uuid(cond_uuid)
+
+        # 3. Own state cleanup
+        condition.cleanup_own_state(expire=expire, parent_event=parent_event)
+
+    def advance_duration(self, condition_name: str) -> bool:
+        """Progress condition duration, remove if expired. No saving throws.
+
+        For entities, use Entity.advance_duration_condition() which handles saves.
+        Returns True if removed.
+        """
+        if not self.allow_events_conditions:
+            return False
+        condition = self.active_conditions.get(condition_name)
+        if condition is None:
+            return False
+        expired = condition.progress()
+        if expired:
+            self.remove_condition(condition_name, expire=True)
+        return expired
+
     def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
         if not self.allow_events_conditions:
             return None

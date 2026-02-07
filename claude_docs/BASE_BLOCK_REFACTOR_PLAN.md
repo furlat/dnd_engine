@@ -30,6 +30,8 @@ When items arrive on the grid, every predicate needs modification. The algorithm
 
 **Goal**: One polymorphic interface on BaseBlock. GridMap aggregates. Algorithms unchanged.
 
+> **STATUS: IMPLEMENTED** — Phase A complete. Tiles, Entities, and GridMap predicates all use the polymorphic `blocks_walking()`/`blocks_vision()` interface. Entity occupancy blocking unified under the same dispatch — `_non_blocking_entities` set eliminated.
+
 ### 1.2 Import Dependencies
 
 **Current dependency chain:**
@@ -100,7 +102,31 @@ class Tile(BaseBlock):
         return not self.visible
 ```
 
-**Entity** — deferred. Currently GridMap handles entity blocking via `_entities_by_position` + `_non_blocking_entities`. This works and doesn't need to change for the BaseBlock refactor. Entity override can be added later when needed.
+**Entity** (flag-driven, handler sets state):
+```python
+# dnd/entity.py — field declaration (line 144)
+non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
+
+# dnd/entity.py — override (lines 1528-1535)
+class Entity(BaseBlock):
+    def blocks_walking(self, requesting_entity_uuid=None,
+                       mode=MovementMode.WALKING):
+        if requesting_entity_uuid == self.uuid:
+            return False          # Self-avoidance
+        if self.non_blocking:
+            return False          # Dead, incorporeal, etc.
+        return True
+```
+
+**Key design decision**: Entity does NOT check condition names (no `"Dead" in self.active_conditions`). Instead, the death handler sets `entity.non_blocking = True`. This keeps Entity ignorant of specific conditions — any handler can flip the flag:
+
+```python
+# dnd/conditions.py — death_processor (line 936)
+entity.add_condition(dead_condition, check_save_throw=False)
+entity.non_blocking = True  # Handler owns the decision, not Entity
+```
+
+Future handlers (Incorporeal, Gaseous Form, etc.) set the same flag — Entity.blocks_walking() doesn't change.
 
 **Future BaseItem** (delegates to fields):
 ```python
@@ -121,44 +147,43 @@ class BaseItem(BaseBlock):
 GridMap becomes the aggregator. Algorithms stay unchanged — they still receive position-based callbacks. The predicates get richer inside:
 
 ```python
-# GridMap.is_walkable() — currently tile-only, becomes:
+# GridMap.is_walkable() — tile-only, uses polymorphic interface (line 254)
 def is_walkable(self, x, y, mode=MovementMode.WALKING):
     tile = self._tiles.get((x, y))
     if tile is None:
         return False
-    if tile.blocks_walking(mode=mode):
+    return not tile.blocks_walking(mode=mode)
+
+# GridMap.is_walkable_for() — tile + entity blocking via polymorphic dispatch (line 268)
+def is_walkable_for(self, x, y, requesting_entity_uuid=None,
+                    mode=MovementMode.WALKING):
+    if not self.is_walkable(x, y, mode):
         return False
-    # Future: check objects at position
-    # for obj_uuid in self._objects_by_position.get((x, y), set()):
-    #     obj = BaseBlock.get(obj_uuid)
-    #     if obj and obj.blocks_walking(mode=mode):
-    #         return False
+    for entity_uuid in self._entities_by_position.get((x, y), set()):
+        block = BaseBlock.get(entity_uuid)
+        if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+            return False
     return True
 
-# GridMap.is_blocking() — currently tile-only, becomes:
+# GridMap.is_blocking() — vision check, uses polymorphic interface (line 294)
 def is_blocking(self, x, y):
     tile = self._tiles.get((x, y))
-    if tile is None:
-        return True  # No tile = blocks vision
-    if tile.blocks_vision():
-        return True
-    # Future: check objects at position
-    return False
+    return tile is None or tile.blocks_vision()
 ```
+
+**Note**: `is_walkable_for()` now uses polymorphic dispatch — `BaseBlock.get(uuid).blocks_walking()` routes to Entity, Tile, or future item overrides. GridMap stays type-unaware. When the items system adds objects to the grid, the same loop can iterate objects at a position with no predicate changes.
 
 **The algorithms don't change.** `compute_fov(origin, self.is_blocking, ...)` and `dijkstra(start, walkable_check, ...)` keep receiving the same callback signatures. The callbacks internally become polymorphic.
 
 ### 1.6 `requesting_entity_uuid` Parameter
 
-Both methods accept `requesting_entity_uuid: Optional[UUID] = None`. Currently unused — always returns the same answer regardless of who's asking.
+Both methods accept `requesting_entity_uuid: Optional[UUID] = None`. **Now actively used** by `Entity.blocks_walking()` for self-avoidance: an entity at position (5,5) doesn't block itself from occupying (5,5). `GridMap.is_walkable_for()` passes `requesting_entity_uuid` through to `blocks_walking()`, which Entity checks against `self.uuid`.
 
-**Future use cases:**
+**Future use cases** (unchanged):
 - **Invisibility**: Entity A is invisible to Entity B but not to Entity C (has See Invisibility)
 - **Darkvision**: A creature with darkvision can see through dim light that blocks normal vision
 - **Hiding**: A hidden entity doesn't "block" vision for entities that can't detect it
 - **Ethereal**: Ethereal entities pass through solid objects
-
-This parameter is a **future-proofing slot**. Current implementations ignore it.
 
 ### 1.7 Movement Cost Stays Separate
 
@@ -333,7 +358,7 @@ Magic Weapon spell → applies `MagicWeaponCondition` to the Weapon block (not t
 
 ### Phase A: Spatial Blocking
 
-**A.1: Move `MovementMode` enum from `base_tiles.py` to `base_block.py`**
+**A.1: Move `MovementMode` enum from `base_tiles.py` to `base_block.py`** ✓ DONE
 - Cut `MovementMode` class from `dnd/core/base_tiles.py`
 - Paste into `dnd/core/base_block.py` (before `BaseBlock` class, after imports)
 - Update `base_tiles.py` to import: `from dnd.core.base_block import BaseBlock, MovementMode`
@@ -342,20 +367,20 @@ Magic Weapon spell → applies `MagicWeaponCondition` to the Weapon block (not t
 - File targets: `dnd/core/base_block.py`, `dnd/core/base_tiles.py`, `dnd/actions.py`, `dnd/core/gridmap.py`
 - Test: `pytest` — all tests pass, no import errors
 
-**A.2: Add `blocks_walking()`/`blocks_vision()` defaults to BaseBlock**
+**A.2: Add `blocks_walking()`/`blocks_vision()` defaults to BaseBlock** ✓ DONE
 - Add both methods to `BaseBlock` class, both return `False`
 - `blocks_walking` signature: `(self, requesting_entity_uuid=None, mode=MovementMode.WALKING) -> bool`
 - `blocks_vision` signature: `(self, requesting_entity_uuid=None) -> bool`
 - File: `dnd/core/base_block.py`
 - Test: `pytest` — all tests pass (methods are additive, no behavior change)
 
-**A.3: Override in Tile**
+**A.3: Override in Tile** ✓ DONE
 - Add `blocks_walking()` override: `return self.get_movement_cost(mode) <= 0`
 - Add `blocks_vision()` override: `return not self.visible`
 - File: `dnd/core/base_tiles.py`
 - Test: `pytest` + manual verification that Tile overrides match existing behavior
 
-**A.4: Update GridMap predicates to use polymorphic methods**
+**A.4: Update GridMap predicates to use polymorphic methods** ✓ DONE
 - `is_walkable()`: Replace `tile.get_movement_cost(mode) > 0` with `not tile.blocks_walking(mode=mode)`
 - `is_blocking()`: Replace `tile is None or not tile.visible` with `tile is None or tile.blocks_vision()`
 - `is_visible()`: Replace `tile is not None and tile.visible` with `tile is not None and not tile.blocks_vision()`
@@ -363,50 +388,43 @@ Magic Weapon spell → applies `MagicWeaponCondition` to the Weapon block (not t
 - File: `dnd/core/gridmap.py`
 - Test: Full `pytest`. Verify FOV and pathfinding produce identical results.
 
-### Phase B: Condition Management
+**A.5: Entity `blocks_walking()` override + GridMap unification** ✓ DONE
+- Added `non_blocking: bool` field to Entity (default False)
+- Added `blocks_walking()` override: checks self-avoidance + non_blocking flag
+- Rewrote `is_walkable_for()` to use `BaseBlock.get(uuid).blocks_walking()` polymorphic dispatch
+- Removed `_non_blocking_entities` set from GridMap (`__init__`, `unregister_entity`, `clear`)
+- Removed `set_entity_blocking()` method from GridMap
+- Death handler (`conditions.py`) sets `entity.non_blocking = True` instead of `get_map().set_entity_blocking()`
+- Removed `get_map` import from `conditions.py` (was only used for set_entity_blocking)
+- Files: `dnd/entity.py`, `dnd/core/gridmap.py`, `dnd/conditions.py`
+- New test: `examples/test_entity_blocking.py` (6 tests: blocks others, self-avoidance, dead body, pathfinding, polymorphic dispatch, no-requester)
+- Ancillary fix: `EventQueue.reset()` now clears `_on_event_callbacks` (was leaking between tests)
+- Test: `pytest examples/test_entity_blocking.py examples/test_spike_zone.py examples/spatial_events_test.py` — 22/22 pass
 
-Delicate refactor — touches core condition lifecycle. Incremental steps with tests after each.
+### Phase B: Condition Management — DONE
 
-**B.1: Add `remove_condition_by_uuid()` to BaseBlock**
-- Simple method: look up in `active_conditions_by_uuid`, delegate to `self.remove_condition(name)`
-- Verify Entity's version can be replaced by calling `super()`
-- File: `dnd/core/base_block.py`
-- Test: Full `pytest` suite
+Pushed condition management down from Entity to BaseBlock. Entity deletes its overrides and inherits.
 
-**B.2: Move `_remove_condition_tree()` to BaseBlock**
-- Copy from Entity, replace `Entity.get()` with `BaseBlock.get()`, replace tile GridMap lookup with `BaseBlock.get(tile_uuid)`
-- Keep Entity's version as pass-through to `super()`
-- **Danger**: Don't change `BaseBlock.remove_condition()` yet — only `Entity.remove_condition()` should call the tree
-- Files: `dnd/core/base_block.py`, `dnd/entity.py`
-- Test: Full `pytest`. Concentration spell cleanup, zone spell cleanup, sub-condition chains.
-
-**B.3: Upgrade `BaseBlock.remove_condition()` to use `_remove_condition_tree()`**
-- `BaseBlock.remove_condition()` now calls `_remove_condition_tree()` for full cross-object cleanup
-- `Entity.remove_condition()` override still adds Entity-specific logic but delegates tree traversal
-- **Danger**: Avoid double-cleanup — ensure override is clean
-- Files: `dnd/core/base_block.py`, `dnd/entity.py`
-- Test: Full `pytest`. Tile with condition that has `external_conditions` on entity → remove → verify cleanup.
-
-**B.4: Add `advance_duration()` to BaseBlock**
-- Simple duration ticking: decrement, remove if expired. No saving throws.
-- File: `dnd/core/base_block.py`
-- Test: Tile with duration=3 condition, advance 3 times, verify removed.
-
-**B.5: Add Environment Step in Encounter**
-- New `Encounter._environment_step()` called from `_advance_round()` (line 428)
-- Queries GridMap for tiles and floor objects with active conditions
-- Calls `advance_duration()` on each
-- May need new GridMap iterators: `get_all_tiles_with_conditions()`, `get_all_objects_with_conditions()`
-- Files: `dnd/encounter.py`, `dnd/core/gridmap.py`
-- Test: Apply 2-round condition to tile, run 2 full rounds, verify expired after round 2's environment step.
+**What changed:**
+- `external_conditions` + `terrain_conditions` unified into `linked_conditions` on BaseCondition
+- `add_external_condition()` + `add_terrain_condition()` → `add_linked_condition()`
+- `remove_condition_by_uuid()` moved to BaseBlock (Entity deletes override)
+- `_remove_condition_tree()` moved to BaseBlock (Entity deletes override)
+- `remove_condition()` upgraded on BaseBlock with full tree traversal (Entity deletes override)
+- `advance_duration()` added to BaseBlock (no saving throws — Entity keeps `advance_duration_condition()` for saves)
+- `Encounter._environment_step()` advances tile condition durations at round end
+- `GridMap.get_tiles_with_conditions()` added for environment step
+- Test: `examples/test_tile_condition_duration.py`
 
 ### Phase Dependency
 
 ```
-Phase A (Spatial Blocking)     Phase B (Condition Management)
-  A.1 → A.2 → A.3 → A.4        B.1 → B.2 → B.3 → B.4 → B.5
+Phase A (Spatial Blocking) — DONE     Phase B (Condition Management) — DONE
+  A.1 → A.2 → A.3 → A.4               B.1 → B.2 → B.3 → B.4 → B.5 → B.6
 ```
 
-Phases A and B are **independent** — can be done in either order or interleaved. Each step within a phase depends on the previous step.
+Both phases complete. Tiles and entities are now first-class BaseBlock condition hosts with shared cleanup logic.
 
 Both phases must be fully stable before any items system work begins.
+
+**Phase A Status: COMPLETE** — All 5 steps (A.1–A.5) implemented and tested. Tiles and Entities both use polymorphic `blocks_walking()`/`blocks_vision()` via BaseBlock interface. GridMap predicates are fully polymorphic. Ready for items system extension.

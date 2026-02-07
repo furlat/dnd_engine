@@ -67,7 +67,7 @@ def test_1_hold_person_applies_paralyzed():
     Structure when Hold Person lands:
     - Caster: Concentrating(spell_name="Hold Person")
                   │
-                  └── external_conditions ──► Target: HoldPersonEffect ("Hold Person")
+                  └── linked_conditions ──► Target: HoldPersonEffect ("Hold Person")
                                                           │
                                                           └── sub_conditions ──► Paralyzed
 

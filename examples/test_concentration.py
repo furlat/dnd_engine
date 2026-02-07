@@ -156,7 +156,7 @@ def test_5_linked_effect_removed():
     """Test that spell effect is removed when concentration breaks.
 
     This demonstrates the pattern used by concentration spells:
-    - Caster: Concentrating → external_conditions → Target: SpellEffect → sub_conditions → Paralyzed/etc
+    - Caster: Concentrating → linked_conditions → Target: SpellEffect → sub_conditions → Paralyzed/etc
 
     When concentration breaks, the external condition (SpellEffect) is removed,
     which in turn removes its sub-conditions via the existing mechanism.
@@ -180,7 +180,7 @@ def test_5_linked_effect_removed():
     )
     target.add_condition(spell_effect)
 
-    # Now apply concentration and link the spell effect via external_conditions
+    # Now apply concentration and link the spell effect via linked_conditions
     concentration = Concentrating(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=caster.uuid,
@@ -190,7 +190,7 @@ def test_5_linked_effect_removed():
 
     # Link the spell effect as an external condition ("nephew")
     # This enables automatic cleanup when concentration breaks
-    concentration.add_external_condition(target.uuid, spell_effect.uuid)
+    concentration.add_linked_condition(target.uuid, spell_effect.uuid)
 
     # Verify both are active
     assert has_condition(caster, "Concentrating")
