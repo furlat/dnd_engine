@@ -184,11 +184,20 @@ class APIEncounter(BaseModel):
         )
 
 
+class APIFloorObject(BaseModel):
+    """Floor object (item on the ground)."""
+    uuid: str
+    name: str
+    position: List[int]
+    map_char: str = "\u03c6"  # phi fallback
+
+
 class APIGameState(BaseModel):
     """Full state for initial load."""
     grid: APIGrid
     entities: List[APIEntitySummary]
     encounter: Optional[APIEncounter]
+    floor_objects: List[APIFloorObject] = []
 
 
 class APISimulationStatus(BaseModel):

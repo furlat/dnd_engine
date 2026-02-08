@@ -32,6 +32,11 @@ tests_passed = 0
 tests_failed = 0
 
 
+def strip_item_suffix(template_name: str) -> str:
+    """Strip __item_<uuid> suffix from template name for test assertions."""
+    return template_name.split("__item_")[0] if "__item_" in template_name else template_name
+
+
 def run_test(name, func):
     global tests_passed, tests_failed
     reset_combat_state()
@@ -89,7 +94,7 @@ def test_door_a_discovery():
 
     # Closed door: should surface "Open Door"
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Open Door" in use_names, f"Expected 'Open Door', got {use_names}"
     assert "Close Door" not in use_names, f"Should not have 'Close Door' when closed"
 
@@ -100,7 +105,7 @@ def test_door_a_discovery():
 
     # Open door: should surface "Close Door"
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Close Door" in use_names, f"Expected 'Close Door', got {use_names}"
     assert "Open Door" not in use_names, f"Should not have 'Open Door' when open"
 
@@ -171,7 +176,7 @@ def test_door_b_discovery():
 
     # Should always show "Interact Door"
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Interact Door" in use_names, f"Expected 'Interact Door', got {use_names}"
 
 
@@ -264,7 +269,7 @@ def test_lever_discovery():
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Pull Lever" in use_names, f"Expected 'Pull Lever', got {use_names}"
 
 
@@ -330,7 +335,7 @@ def test_lever_one_use():
 
     # No more actions available
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Pull Lever" not in use_names, "Should not have 'Pull Lever' after charges depleted"
 
 
@@ -356,7 +361,7 @@ def test_chest_discovery():
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Loot All" in use_names, f"Expected 'Loot All', got {use_names}"
 
 
@@ -412,7 +417,7 @@ def test_empty_chest_no_action():
 
     # Empty chest: action should not appear
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Loot All" not in use_names, "Should not have 'Loot All' when chest is empty"
 
 
@@ -471,7 +476,7 @@ def test_campfire_multiple_actions():
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Rest" in use_names, f"Expected 'Rest', got {use_names}"
     assert "Cook" in use_names, f"Expected 'Cook', got {use_names}"
 
@@ -527,7 +532,7 @@ def test_out_of_range():
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert len(use_names) == 0, f"Should have no use actions at range, got {use_names}"
 
 
@@ -541,7 +546,7 @@ def test_non_usable_ignored():
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert len(use_names) == 0, f"Regular BaseItem should not generate use actions, got {use_names}"
 
 
@@ -573,7 +578,7 @@ def test_charges_system():
 
     # Still available
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Rest" in use_names, "Should still have 'Rest' with 1 charge"
 
     # Use 2
@@ -582,7 +587,7 @@ def test_charges_system():
 
     # Depleted — no more actions
     result = entity.get_available_actions()
-    use_names = [a.template_name for a in result.self_actions if a.is_item_use]
+    use_names = [strip_item_suffix(a.template_name) for a in result.self_actions if a.is_item_use]
     assert "Rest" not in use_names, "Should not have 'Rest' when charges depleted"
 
 

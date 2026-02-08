@@ -163,6 +163,7 @@ class GameState:
     def __init__(self):
         self.grid: Dict[str, Any] = {}
         self.entities: List[Dict[str, Any]] = []
+        self.floor_objects: List[Dict[str, Any]] = []
         self.turn: Dict[str, Any] = {}
         self.actions: Optional[AvailableActionsState] = None
         self.actions_raw: Dict[str, Any] = {}  # Raw server response for display
@@ -177,6 +178,7 @@ class GameState:
         """Update from /state response."""
         self.grid = state.get("grid", {})
         self.entities = state.get("entities", [])
+        self.floor_objects = state.get("floor_objects", [])
 
     def update_actions(self, actions_data: Dict[str, Any]):
         """Update available actions from server response."""
@@ -502,6 +504,17 @@ def handle_tile_inspect(cmd: ParsedCommand, client: APIClient) -> Optional[str]:
     if entities:
         entity_strs = [f"{e['name']} ({e['hp']} HP)" for e in entities]
         lines.append(f"  Entities: {', '.join(entity_strs)}")
+
+    # Objects at position
+    objects = tile_info.get('objects', [])
+    if objects:
+        for obj in objects:
+            desc = f"  Item: {obj['name']}"
+            if obj.get('is_pickable'):
+                desc += " (pickable)"
+            if obj.get('is_usable'):
+                desc += " (usable)"
+            lines.append(desc)
 
     display.set_output(lines)
     return "preview"
