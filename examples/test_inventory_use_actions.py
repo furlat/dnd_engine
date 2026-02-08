@@ -141,9 +141,9 @@ def find_action(available, name_contains, action_list_attr=None) -> AvailableAct
 
 def test_scroll_fireball_aoe_discovery():
     """Scroll of Fireball in inventory → appears in position_actions with POSITION_AOE."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(4, 0))
+    _ = create_target(position=(4, 0))
     Entity.update_all_entities_senses()
 
     scroll = create_scroll_of_fireball(caster.uuid)
@@ -159,7 +159,7 @@ def test_scroll_fireball_aoe_discovery():
 
 def test_scroll_fireball_execute():
     """Execute Fireball scroll → target takes damage, scroll consumed."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
     target = create_target(position=(4, 0), hp=100)
     Entity.update_all_entities_senses()
@@ -187,9 +187,9 @@ def test_scroll_fireball_execute():
 
 def test_scroll_magic_missile_multi_discovery():
     """Scroll of Magic Missile → appears in entity_actions (MULTI_ENTITY)."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(3, 0))
+    _ = create_target(position=(3, 0))
     Entity.update_all_entities_senses()
 
     scroll = create_scroll_of_magic_missile(caster.uuid)
@@ -205,7 +205,7 @@ def test_scroll_magic_missile_multi_discovery():
 
 def test_scroll_magic_missile_execute():
     """Execute Magic Missile scroll → target takes damage, scroll consumed."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
     target = create_target(position=(3, 0), hp=100)
     Entity.update_all_entities_senses()
@@ -225,9 +225,9 @@ def test_scroll_magic_missile_execute():
 
 def test_scroll_hold_person_entity():
     """Scroll of Hold Person → ENTITY targeting → execute → target gets Paralyzed or saves."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(3, 0), hp=100)
+    _ = create_target(position=(3, 0), hp=100)
     Entity.update_all_entities_senses()
 
     scroll = create_scroll_of_hold_person(caster.uuid)
@@ -247,7 +247,7 @@ def test_scroll_hold_person_entity():
 
 def test_scroll_mage_armor_self():
     """Scroll of Mage Armor → ENTITY targeting with include_self → execute → caster gets AC boost."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
     Entity.update_all_entities_senses()
 
@@ -279,9 +279,9 @@ def test_scroll_mage_armor_self():
 
 def test_scroll_spike_growth_zone():
     """Scroll of Spike Growth → creates zone spatial handler + concentration."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(8, 0))
+    _ = create_target(position=(8, 0))
     Entity.update_all_entities_senses()
 
     scroll = create_scroll_of_spike_growth(caster.uuid)
@@ -305,9 +305,9 @@ def test_scroll_spike_growth_zone():
 
 def test_scroll_fire_bolt_cantrip():
     """Cantrip scroll (cast_level=0) → ENTITY targeting → works without spell slot."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(3, 0), hp=100)
+    _ = create_target(position=(3, 0), hp=100)
     Entity.update_all_entities_senses()
 
     scroll = create_scroll_of_fire_bolt(caster.uuid)
@@ -330,7 +330,7 @@ def test_scroll_fire_bolt_cantrip():
 
 def test_scroll_magic_missile_level_scaling():
     """Level 1 scroll = 3 darts, Level 3 scroll = 5 darts (different damage)."""
-    grid = setup_grid()
+    setup_grid()
     # Test L1 scroll
     caster1 = create_caster(position=(0, 0), name="Caster1")
     target1 = create_target(position=(3, 0), name="Target1", hp=100)
@@ -342,12 +342,12 @@ def test_scroll_magic_missile_level_scaling():
     available1 = get_available_actions(caster1)
     mm_info1 = find_action(available1, "Magic Missile", "entity_actions")
 
-    result1 = execute_use_action(caster1, scroll_l1.uuid, mm_info1.template_name, mm_info1.valid_targets[0])
+    _ = execute_use_action(caster1, scroll_l1.uuid, mm_info1.template_name, mm_info1.valid_targets[0])
     damage_l1 = 100 - get_hp(target1)
 
     # Reset for L3 scroll
     reset_combat_state()
-    grid = setup_grid()
+    setup_grid()
     caster3 = create_caster(position=(0, 0), name="Caster3")
     target3 = create_target(position=(3, 0), name="Target3", hp=100)
     Entity.update_all_entities_senses()
@@ -358,7 +358,7 @@ def test_scroll_magic_missile_level_scaling():
     available3 = get_available_actions(caster3)
     mm_info3 = find_action(available3, "Magic Missile", "entity_actions")
 
-    result3 = execute_use_action(caster3, scroll_l3.uuid, mm_info3.template_name, mm_info3.valid_targets[0])
+    _ = execute_use_action(caster3, scroll_l3.uuid, mm_info3.template_name, mm_info3.valid_targets[0])
     damage_l3 = 100 - get_hp(target3)
 
     # L3 should deal more damage (5 darts vs 3 darts, min 5*2=10 vs 3*2=6)
@@ -367,9 +367,9 @@ def test_scroll_magic_missile_level_scaling():
 
 def test_scroll_no_spell_slot_consumed():
     """Entity with spell slots → uses scroll → spell slot NOT consumed."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(3, 0))
+    _ = create_target(position=(3, 0))
     Entity.update_all_entities_senses()
 
     # Count spell slots before
@@ -383,7 +383,7 @@ def test_scroll_no_spell_slot_consumed():
 
     available = get_available_actions(caster)
     mm_info = find_action(available, "Magic Missile", "entity_actions")
-    result = execute_use_action(caster, scroll.uuid, mm_info.template_name, mm_info.valid_targets[0])
+    _ = execute_use_action(caster, scroll.uuid, mm_info.template_name, mm_info.valid_targets[0])
 
     # All spell slots should be unchanged
     for level in range(1, 4):
@@ -398,7 +398,7 @@ def test_scroll_no_spell_slot_consumed():
 
 def test_potion_heals_and_consumed():
     """Potion heals HP + destroyed + removed from inventory."""
-    grid = setup_grid()
+    setup_grid()
     entity = create_caster(position=(0, 0), hp=50)
     set_hp(entity, 30)  # Damage the entity
     Entity.update_all_entities_senses()
@@ -421,7 +421,7 @@ def test_potion_heals_and_consumed():
 
 def test_weapon_coat_applies_condition():
     """Coat used → FlamingCoat condition applied → weapon gets 1d6 fire extra damage."""
-    grid = setup_grid()
+    setup_grid()
     entity = create_caster(position=(0, 0))
     # Equip a weapon so the coat has something to apply to
     from dnd.items.weapons import create_shortsword
@@ -450,7 +450,7 @@ def test_weapon_coat_applies_condition():
 
 def test_weapon_coat_consumed_after_use():
     """Coat is consumable, destroyed after use."""
-    grid = setup_grid()
+    setup_grid()
     entity = create_caster(position=(0, 0))
     from dnd.items.weapons import create_shortsword
     from dnd.core.events import WeaponSlot
@@ -463,7 +463,7 @@ def test_weapon_coat_consumed_after_use():
 
     available = get_available_actions(entity)
     coat_info = find_action(available, "Coat Main Hand", "self_actions")
-    result = execute_use_action(entity, coat.uuid, coat_info.template_name)
+    _ = execute_use_action(entity, coat.uuid, coat_info.template_name)
 
     assert coat.uuid not in entity.inventory.items, "Coat should be removed from inventory"
     assert BaseBlock.get(coat.uuid) is None, "Coat should be unregistered"
@@ -475,7 +475,7 @@ def test_weapon_coat_consumed_after_use():
 
 def test_scroll_consumed_removed_from_inventory():
     """After use, scroll removed from inventory AND BaseBlock._registry."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
     Entity.update_all_entities_senses()
 
@@ -489,7 +489,7 @@ def test_scroll_consumed_removed_from_inventory():
     armor_info = find_action(available, "Mage Armor", "entity_actions")
     # Target self
     self_target = next(t for t in armor_info.valid_targets if t.target_uuid == caster.uuid)
-    result = execute_use_action(caster, scroll.uuid, armor_info.template_name, self_target)
+    _ = execute_use_action(caster, scroll.uuid, armor_info.template_name, self_target)
 
     assert scroll.uuid not in caster.inventory.items
     assert BaseBlock.get(scroll.uuid) is None
@@ -497,19 +497,19 @@ def test_scroll_consumed_removed_from_inventory():
 
 def test_wand_multi_charge_depletion():
     """Wand of Magic Missiles: use 3 times → charges deplete → no more actions, item stays."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(3, 0))
+    _ = create_target(position=(3, 0))
     Entity.update_all_entities_senses()
 
     wand = create_wand_of_magic_missiles(caster.uuid, charges=3)
     caster.loot_item(wand)
     assert wand.charges == 3
 
-    for i in range(3):
+    for _ in range(3):
         available = get_available_actions(caster)
         mm_info = find_action(available, "Magic Missile", "entity_actions")
-        result = execute_use_action(caster, wand.uuid, mm_info.template_name, mm_info.valid_targets[0])
+        _ = execute_use_action(caster, wand.uuid, mm_info.template_name, mm_info.valid_targets[0])
         # Reset action economy for next use
         caster.action_economy.reset_all_costs()
 
@@ -526,9 +526,9 @@ def test_wand_multi_charge_depletion():
 
 def test_wand_not_destroyed_when_depleted():
     """Wand with is_consumable=False stays in inventory at 0 charges."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(3, 0))
+    _ = create_target(position=(3, 0))
     Entity.update_all_entities_senses()
 
     wand = create_wand_of_magic_missiles(caster.uuid, charges=1)
@@ -536,7 +536,7 @@ def test_wand_not_destroyed_when_depleted():
 
     available = get_available_actions(caster)
     mm_info = find_action(available, "Magic Missile", "entity_actions")
-    result = execute_use_action(caster, wand.uuid, mm_info.template_name, mm_info.valid_targets[0])
+    _ = execute_use_action(caster, wand.uuid, mm_info.template_name, mm_info.valid_targets[0])
 
     assert wand.charges == 0
     assert wand.uuid in caster.inventory.items, "Wand should still be in inventory"
@@ -549,9 +549,9 @@ def test_wand_not_destroyed_when_depleted():
 
 def test_wand_of_fire_multiple_spells():
     """Wand surfaces multiple actions with 7 charges."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(4, 0))
+    _ = create_target(position=(4, 0))
     Entity.update_all_entities_senses()
 
     wand = create_wand_of_fire(caster.uuid, charges=7)
@@ -566,10 +566,10 @@ def test_wand_of_fire_multiple_spells():
 
 def test_wand_of_fire_charge_cost_consumption():
     """Fireball costs 3 charges, Burning Hands costs 1."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(5, 5))
     # Target within 15ft (3 tiles) for Burning Hands cone
-    _target = create_target(position=(7, 5))
+    _ = create_target(position=(7, 5))
     Entity.update_all_entities_senses()
 
     wand = create_wand_of_fire(caster.uuid, charges=7)
@@ -586,7 +586,7 @@ def test_wand_of_fire_charge_cost_consumption():
     # Pick a target position that has affected entities (cone toward the target)
     pos_target = None
     for vt in burning_info.valid_targets:
-        if vt.affected_count > 0:
+        if vt.affected_count is not None and vt.affected_count > 0:
             pos_target = vt
             break
     assert pos_target is not None, "Should find a cone position that hits the target"
@@ -611,10 +611,10 @@ def test_wand_of_fire_charge_cost_consumption():
 
 def test_wand_of_fire_insufficient_charges():
     """With 2 charges remaining, Fireball (cost=3) not shown, Burning Hands (cost=1) shown."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(5, 5))
     # Target within 15ft (3 tiles) for Burning Hands cone
-    _target = create_target(position=(7, 5))
+    _ = create_target(position=(7, 5))
     Entity.update_all_entities_senses()
 
     wand = create_wand_of_fire(caster.uuid, charges=2)
@@ -637,9 +637,9 @@ def test_wand_of_fire_insufficient_charges():
 
 def test_arcane_machine_gun_discovery():
     """Entity ≤5ft from machine gun discovers Magic Missile (MULTI_ENTITY)."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(3, 0))
+    _ = create_target(position=(3, 0))
 
     gun = create_arcane_machine_gun(caster.uuid, position=(1, 0))
     Entity.update_all_entities_senses()
@@ -656,7 +656,7 @@ def test_arcane_machine_gun_discovery():
 
 def test_arcane_machine_gun_execute():
     """Execute → target takes force damage, unlimited charges."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
     target = create_target(position=(3, 0), hp=100)
 
@@ -685,9 +685,9 @@ def test_arcane_machine_gun_execute():
 
 def test_fireball_cannon_discovery():
     """Entity ≤5ft discovers Fireball (POSITION_AOE)."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(8, 0))
+    _ = create_target(position=(8, 0))
 
     cannon = create_fireball_cannon(caster.uuid, position=(1, 0), charges=3)
     Entity.update_all_entities_senses()
@@ -704,9 +704,9 @@ def test_fireball_cannon_discovery():
 
 def test_fireball_cannon_execute_and_charges():
     """Fire 3 shots → charges deplete → no more actions."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
-    target = create_target(position=(8, 0))
+    _ = create_target(position=(8, 0))
 
     cannon = create_fireball_cannon(caster.uuid, position=(1, 0), charges=3)
     Entity.update_all_entities_senses()
@@ -720,7 +720,7 @@ def test_fireball_cannon_execute_and_charges():
                 break
         assert fb_info is not None, f"Should find Fireball action on shot {i+1}"
         pos_target = fb_info.valid_targets[0]
-        result = execute_use_action(caster, cannon.uuid, fb_info.template_name, pos_target)
+        _ = execute_use_action(caster, cannon.uuid, fb_info.template_name, pos_target)
         caster.action_economy.reset_all_costs()
 
     assert cannon.charges == 0
@@ -735,7 +735,7 @@ def test_fireball_cannon_execute_and_charges():
 
 def test_arcane_device_proficiency_required():
     """Entity WITHOUT Arcana proficiency → device action not discovered."""
-    grid = setup_grid()
+    setup_grid()
     entity = create_caster(position=(0, 0))
     # Default entity has no arcana proficiency
     Entity.update_all_entities_senses()
@@ -750,7 +750,7 @@ def test_arcane_device_proficiency_required():
 
 def test_arcane_device_proficiency_met():
     """Entity WITH Arcana proficiency → action discovered and executable."""
-    grid = setup_grid()
+    setup_grid()
     # Create entity with arcana proficiency
     config = EntityConfig(
         ability_scores=AbilityScoresConfig(
@@ -791,7 +791,7 @@ def test_arcane_device_proficiency_met():
 
 def test_environment_out_of_range():
     """Entity >5ft from environment object sees no actions."""
-    grid = setup_grid()
+    setup_grid()
     entity = create_caster(position=(0, 0))
 
     # Place object at (3, 0) = 15ft away
@@ -809,7 +809,7 @@ def test_environment_out_of_range():
 
 def test_execute_by_index_item_routing():
     """execute_by_index() correctly routes is_item_use actions."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
     target = create_target(position=(3, 0), hp=100)
     Entity.update_all_entities_senses()
@@ -867,7 +867,7 @@ def test_scroll_fireball_actual_damage():
 def test_scroll_fireball_save_halves_damage():
     """High DEX target saves and takes half damage from Fireball scroll."""
     # Low DC caster (INT 10, prof 2 → DC 10), high DEX target (DEX 30 → +10 mod)
-    for attempt in range(15):
+    for _attempt in range(15):
         reset_combat_state()
         setup_grid()
         caster = create_caster(position=(0, 0), intelligence=10, proficiency=2)
@@ -993,7 +993,7 @@ def test_wand_burning_hands_cone_direction():
 
 def test_scroll_hold_person_applies_paralyzed():
     """Hold Person scroll → on failed save, target gets Paralyzed + caster Concentrating."""
-    for attempt in range(20):
+    for _attempt in range(20):
         reset_combat_state()
         setup_grid()
         # High DC caster (INT 20, prof 6 → DC 19), low WIS target
@@ -1022,7 +1022,7 @@ def test_scroll_hold_person_applies_paralyzed():
 
 def test_scroll_hold_person_concentration_cleanup():
     """Breaking concentration removes Paralyzed + Hold Person from target."""
-    for attempt in range(20):
+    for _attempt in range(20):
         reset_combat_state()
         setup_grid()
         caster = create_caster(position=(0, 0), intelligence=20, proficiency=6)
@@ -1051,7 +1051,7 @@ def test_scroll_hold_person_concentration_cleanup():
 
 def test_scroll_spike_growth_zone_movement_damage():
     """Spike Growth scroll → zone created → entity entering takes damage."""
-    grid = setup_grid()
+    setup_grid()
     caster = create_caster(position=(0, 0))
     target = create_target(position=(15, 0), hp=100, name="ZoneVictim")
     Entity.update_all_entities_senses()
