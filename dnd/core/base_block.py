@@ -404,7 +404,12 @@ class BaseBlock(BaseModel):
         """
         self.clear_target_entity()
         self.clear_context()
-        
+
+    def remove_contained_item(self, item_uuid: UUID) -> None:
+        """Remove a contained item by UUID. No-op by default.
+        Overridden by Inventory to remove from items dict."""
+        pass
+
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 

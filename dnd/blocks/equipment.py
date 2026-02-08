@@ -526,6 +526,20 @@ class Equipment(BaseBlock):
         value_name="Ranged Critical Extra Dice"
     ))
 
+    def get_all_equipped_items(self) -> List[Union[Weapon, Shield, Armor]]:
+        """Return all equipped items across all slots."""
+        items: List[Union[Weapon, Shield, Armor]] = []
+        for slot_item in [self.weapon_melee_main, self.weapon_melee_off,
+                          self.weapon_ranged_main, self.weapon_ranged_off]:
+            if slot_item is not None:
+                items.append(slot_item)
+        for attr in ['helmet', 'body_armor', 'gauntlets', 'greaves', 'boots',
+                     'amulet', 'ring_left', 'ring_right', 'cloak']:
+            item = getattr(self, attr, None)
+            if item is not None:
+                items.append(item)
+        return items
+
     def _get_weapon_by_slot(self, slot: WeaponSlot) -> Optional[Union[Weapon, Shield]]:
         """Helper to get weapon/shield by slot."""
         return {
