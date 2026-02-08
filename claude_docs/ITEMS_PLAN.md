@@ -8,17 +8,17 @@ This document describes the complete design for items, inventory, and environmen
 
 | Section | Status | Notes |
 |---------|--------|-------|
-| 4. BaseItem | **IMPLEMENTED** | `dnd/blocks/base_item.py`. Location tracking (`tile_uuid`, `stored_in_uuid`, `get_position()`), lifecycle hooks with params, Health delegation, spatial overrides. 85 tests. |
-| 5. EquippableItem | **IMPLEMENTED** | `_on_equip(slot, entity_uuid)`/`_on_unequip(slot, entity_uuid)` hooks. Weapon/Armor/Shield reparented. `owner_uuid`, `stored_in_uuid`, `is_equipped` tracking. 15 tests. |
-| 6. UsableItem | **IMPLEMENTED** | `get_use_actions()`, `consume_charge()`, `use_action_templates` field, charges system. Environment discovery in `get_available_actions()`. 19 tests. |
-| 7. Inventory | **IMPLEMENTED** | `dnd/blocks/inventory.py`. All methods including `get_all_use_actions()`. `transfer_to()` updates `stored_in_uuid`. |
-| 8. Entity Orchestration | **IMPLEMENTED** | `loot_item`/`drop_item` + `equip_item`/`unequip_item` done with full location tracking (`owner_uuid`, `stored_in_uuid`, `is_equipped`). |
-| 9. GridMap/Senses | **IMPLEMENTED** | Object registries, spatial predicates, FOV, `senses.objects`. |
-| 10. Action System | **Partial** | PickUp/AttackObject/Drop done. Environment use action discovery done (source 3). `execute_use_action()` + `execute_by_index()` routing done. Inventory use actions (source 2) = Step d. |
-| 11. Conditions on Items | **Partial** | Infrastructure done (items as condition hosts, linked cleanup). Item condition ticking deferred. |
+| 4. BaseItem | **IMPLEMENTED** | `dnd/blocks/base_item.py`. Location tracking (`owner_uuid`, `stored_in_uuid`, `tile_uuid`, `is_equipped`, `get_position()`), lifecycle hooks with params, Health delegation, spatial overrides, stacking (`stack_id`, `stack_count`, `max_stack`). |
+| 5. EquippableItem | **IMPLEMENTED** | `_on_equip(slot, entity_uuid)`/`_on_unequip(slot, entity_uuid)` hooks. Weapon/Armor/Shield reparented. Location tracking. 15 tests. |
+| 6. UsableItem | **IMPLEMENTED** | `get_use_actions()`, `consume_charge()`, `use_action_templates` field, charges system, stack-aware consumption. Environment + inventory discovery. 19 tests. |
+| 7. Inventory | **IMPLEMENTED** | `dnd/blocks/inventory.py`. All methods including `get_all_use_actions()`. Stack-aware `add_item()` with merge. `transfer_to()` updates location. |
+| 8. Entity Orchestration | **IMPLEMENTED** | `loot_item`/`drop_item` + `equip_item`/`unequip_item`. Stack-aware looting. Full location tracking. |
+| 9. GridMap/Senses | **IMPLEMENTED** | Object registries (`_object_positions`, `_objects_by_position`), spatial predicates, FOV integration, `senses.objects`. |
+| 10. Action System | **IMPLEMENTED** | PickUp/AttackObject/Drop + environment discovery (source 3) + inventory use actions (source 2). Three-source discovery in `get_available_actions()`. `execute_use_action()` + `execute_by_index()` routing. `ActionCategory` enum replaces duck typing. 65+ tests. |
+| 11. Conditions on Items | **IMPLEMENTED** | Items as condition hosts, linked cleanup, WeaponCoat conditions (permanent/concentration/timed). Item condition ticking deferred. |
 | 12. Breakable Objects | **IMPLEMENTED** | Health delegation, `receive_damage`, `destroy`, AttackObject action. |
 | 13. Looting System | Deferred | Entity→body transitions deferred. |
-| 14. Implementation Steps | **Steps a–c DONE** | See restructured section. |
+| 14. Implementation Steps | **Steps a–d DONE** | All implementation steps complete. 138+ tests across 5 test files. |
 
 ---
 
@@ -1068,7 +1068,7 @@ Entity→body transitions (and wall→rubble, etc.) are deferred to a common tra
 
 ## 14. Implementation Steps
 
-> Replaces the original 9-phase plan. Phase 1 core infrastructure (BaseItem, Inventory, GridMap object registries, Senses, PickUp/AttackObject/Drop actions, Breakable) is complete with 85 tests.
+> All implementation steps (a–d) complete. Full items system: BaseItem location tracking, EquippableItem hooks, UsableItem with environment + inventory discovery, three-source action system, ActionCategory enum, spell scrolls/wands/coats, stacking. 138+ tests across 5 test files.
 
 ### Step a: Item Location Tracking + Lifecycle Hooks — **DONE**
 
@@ -1119,13 +1119,40 @@ Entity→body transitions (and wall→rubble, etc.) are deferred to a common tra
 - **Files**: `dnd/blocks/base_item.py`, `dnd/core/base_actions.py`, `dnd/entity.py`, `dnd/actions_functional.py`, `dnd/blocks/inventory.py`, `dnd/items/test_items.py`
 - Dependencies: Step a
 
-### Step d: Full Inventory Use Actions [NOT STARTED]
+### Step d: Full Inventory Use Actions [IMPLEMENTED]
 
-- `Inventory.get_all_use_actions()` for inventory item actions
-- Three-source discovery in `get_available_actions()` (registered → inventory → environment)
-- `execute_by_index()` three-source search
-- Consumable destruction in `BaseAction.apply()` after `_apply_costs()`
-- Test items: Potion of Healing (consumable, SELF), Scroll of Fireball
+- `Inventory.get_all_use_actions()` aggregates actions from all UsableItems in inventory
+- Three-source discovery in `get_available_actions()`: registered → inventory (source 2) → environment (source 3)
+- `execute_by_index()` routes `is_item_use` actions to `execute_use_action()` with target resolution
+- `execute_use_action()` handles all target types: SELF, ENTITY, MULTI_ENTITY, POSITION_AOE
+- Consumable destruction via `consume_charge()` — stack-aware (decrements `stack_count`, resets charges, destroys last)
+- Variable charge costs via `charge_cost` field on BaseAction (e.g., Wand of Fire: Burning Hands=1, Fireball=3)
+- `ActionCategory` enum (`ABILITY`, `ATTACK`, `SPELL`, `MOVEMENT`) replaces duck typing (`_is_attack`/`_is_spell` getattr hacks)
+- Display name formatting: `"Fireball (Scroll of Fireball x3)"` with stack count suffix
+- Pre-validation: items can check prerequisites (e.g., ArcaneDevice requires Arcana proficiency)
+- Test items in `dnd/items/test_items.py`:
+  - **SpellScroll**: Generic scroll factory with `_create_variant()` for spell wrapping. Factories: `create_scroll_of_fireball` (POSITION_AOE), `create_scroll_of_magic_missile` (MULTI_ENTITY), `create_scroll_of_hold_person` (ENTITY + concentration), `create_scroll_of_mage_armor` (ENTITY + include_self), `create_scroll_of_spike_growth` (POSITION zone + concentration), `create_scroll_of_fire_bolt` (ENTITY cantrip)
+  - **HealingPotion**: Consumable, heals fixed HP, single use, stackable
+  - **Wand of Magic Missiles**: Non-consumable, 3 charges per use, depletes but not destroyed
+  - **Wand of Fire**: Multi-spell wand with variable charge costs (Burning Hands=1, Fireball L3=3, Fireball L4=4)
+  - **WeaponCoat**: Consumable that applies elemental damage condition to equipped weapon. Three variants: permanent (`create_weapon_coat`), concentration-based (`create_flaming_weapon_spell_coat`), timed duration (`create_timed_weapon_coat`)
+  - **Arcane Machine Gun**: Environment UsableItem (is_pickable=False), unlimited Magic Missiles
+  - **Fireball Cannon**: Environment UsableItem, 3-shot Fireball
+  - **ArcaneDevice**: Environment UsableItem with skill prerequisite (Arcana proficiency)
+- 65+ tests in `examples/test_inventory_use_actions.py`:
+  - Spell scroll discovery and execution for all 6 targeting types
+  - Concentration cleanup (Hold Person, Spike Growth with linked_conditions)
+  - Save-for-half mechanics, spell level scaling, no spell slot consumed
+  - Wand charge depletion + non-destruction
+  - Variable charge costs (Wand of Fire)
+  - WeaponCoat three variants (permanent, concentration, timed duration)
+  - Environment spell objects (machine gun, cannon)
+  - Prerequisite filtering (ArcaneDevice)
+- 15 tests in `examples/test_stackable_items.py`:
+  - Stack merging by `stack_id`, consumption from stack, action deduplication
+  - Display name with count, stack limits, weight calculation
+  - Non-stackable items (wands), type separation (fire vs lightning coat)
+- **Files**: `dnd/blocks/base_item.py`, `dnd/core/base_actions.py`, `dnd/entity.py`, `dnd/actions.py`, `dnd/actions_functional.py`, `dnd/blocks/inventory.py`, `dnd/items/test_items.py`, `cli/display.py`, `cli/action_model.py`, `server/event_server.py`
 - Dependencies: Step c
 
 ### Deferred (future — entity transitions / spawning)
@@ -1141,7 +1168,7 @@ Entity→body transitions (and wall→rubble, etc.) are deferred to a common tra
 Step a (Location Tracking + Hooks) ← DONE
     ├── Step b (Equip/Unequip Hooks) ← DONE
     ├── Step c (UsableItem + Environment Objects) ← DONE
-    │       └── Step d (Inventory Use Actions)
+    │       └── Step d (Inventory Use Actions + ActionCategory) ← DONE
     └── Deferred (entity transitions, encumbrance)
 ```
 
