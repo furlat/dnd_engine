@@ -25,7 +25,7 @@ from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.base_actions import (
@@ -421,6 +421,15 @@ class Entity(BaseBlock):
         condition_names = list(self.active_conditions.keys())
         for condition_name in condition_names:
             self.advance_duration_condition(condition_name)
+
+        # Advance conditions on all owned items (equipped + inventory)
+        # Items are BaseBlocks with full condition lifecycle
+        for item in self.equipment.get_all_equipped_items():
+            for cond_name in list(item.active_conditions.keys()):
+                item.advance_duration(cond_name)
+        for item in self.inventory.items.values():
+            for cond_name in list(item.active_conditions.keys()):
+                item.advance_duration(cond_name)
 
         # Reset action economy
         self.action_economy.reset_all_costs()
@@ -2084,5 +2093,219 @@ class Entity(BaseBlock):
                     is_attack=template.is_attack,
                     is_spell=False
                 ))
+
+        # USE ACTIONS — from inventory items + nearby environment UsableItems
+        use_sources: list = []  # List of (template, item_uuid, item_name)
+
+        # A) Inventory use actions
+        for use_template in self.inventory.get_all_use_actions(self.uuid):
+            item_uuid = use_template.source_item_uuid
+            item = BaseBlock.get(item_uuid) if item_uuid else None
+            item_name = item.name if item else "Item"
+            use_sources.append((use_template, item_uuid, item_name))
+
+        # B) Environment use actions (≤5ft objects)
+        for obj_uuid, obj_pos in self.senses.objects.items():
+            obj = BaseBlock.get(obj_uuid)
+            if not isinstance(obj, UsableItem):
+                continue
+            if self.senses.get_feet_distance(obj_pos) > 5:
+                continue
+            for use_template in obj.get_use_actions(self.uuid):
+                use_sources.append((use_template, obj_uuid, obj.name))
+
+        # Route each use template by target_type
+        for use_template, item_uuid, item_name in use_sources:
+            template_name = use_template.name or "Use"
+            display_name = f"{template_name} ({item_name})"
+            can_afford = use_template.check_costs()
+            is_spell = hasattr(use_template, 'spell_level')
+            cost_type = use_template.costs[0].cost_type if use_template.costs else "actions"
+            cost_amount = use_template.costs[0].cost if use_template.costs else 0
+
+            if use_template.target_type == TargetType.SELF:
+                if not use_template.pre_validate():
+                    continue
+                result.self_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.SELF,
+                    valid_targets=[AvailableTarget(index=0)],
+                    can_afford=can_afford,
+                    display_name=display_name,
+                    description=use_template.description,
+                    cost_type=cost_type,
+                    cost_amount=cost_amount,
+                    is_item_use=True,
+                    source_item_uuid=item_uuid,
+                    is_spell=is_spell,
+                ))
+
+            elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
+                use_valid_targets: List[AvailableTarget] = []
+                use_idx = 0
+                # Build targets pool (reuse potential_targets computed earlier)
+                use_target_pool = dict(potential_targets)
+                if getattr(use_template, 'include_self', False):
+                    use_target_pool[self.uuid] = self.position
+                for target_uuid, target_pos in use_target_pool.items():
+                    use_template.set_target_entity(target_uuid)
+                    if use_template.pre_validate():
+                        target_entity = Entity.get(target_uuid)
+                        use_valid_targets.append(AvailableTarget(
+                            index=use_idx,
+                            target_uuid=target_uuid,
+                            target_name=target_entity.name if target_entity else None,
+                            distance=self.senses.get_feet_distance(target_pos)
+                        ))
+                        use_idx += 1
+                if use_valid_targets:
+                    result.entity_actions.append(AvailableActionInfo(
+                        template_name=template_name,
+                        target_type=use_template.target_type,
+                        valid_targets=use_valid_targets,
+                        can_afford=can_afford,
+                        display_name=display_name,
+                        description=use_template.description,
+                        cost_type=cost_type,
+                        cost_amount=cost_amount,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        is_attack=use_template.is_attack,
+                        is_spell=is_spell,
+                    ))
+
+            elif use_template.target_type == TargetType.POSITION_AOE:
+                use_shape_template = use_template.aoe_shape
+                if use_shape_template is None:
+                    continue
+                use_valid_pos_list = use_template.get_valid_positions()
+                use_valid_positions: List[AvailableTarget] = []
+                use_idx = 0
+                for pos in use_valid_pos_list:
+                    use_template.set_target_position(pos)
+                    if not use_template.pre_validate():
+                        continue
+                    shape = use_shape_template.model_copy(update={'target': pos})
+                    shape.compute_subjective(self.position, self.senses)
+                    affected_uuids = list(shape.affected_entity_uuids)
+                    if not getattr(use_template, 'include_self', False):
+                        affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
+                    vtf = getattr(use_template, 'valid_target_filter', 'enemies')
+                    if vtf != "all":
+                        filtered = []
+                        for uid in affected_uuids:
+                            ent = Entity.get(uid)
+                            if ent:
+                                if vtf == "enemies" and self.is_enemy(ent):
+                                    filtered.append(uid)
+                                elif vtf == "allies" and self.is_ally(ent):
+                                    filtered.append(uid)
+                                elif vtf == "self_or_allies":
+                                    if uid == self.uuid or self.is_ally(ent):
+                                        filtered.append(uid)
+                        affected_uuids = filtered
+                    template_include_dead = getattr(use_template, 'include_dead', False)
+                    if not template_include_dead and not include_dead:
+                        affected_uuids = [
+                            uid for uid in affected_uuids
+                            if (ent := Entity.get(uid)) and ent.get_hp() > 0
+                        ]
+                    affected_names = []
+                    for uid in affected_uuids:
+                        ent = Entity.get(uid)
+                        if ent:
+                            affected_names.append(ent.name or "Unknown")
+                    use_valid_positions.append(AvailableTarget(
+                        index=use_idx,
+                        position=pos,
+                        distance=self.senses.get_feet_distance(pos),
+                        affected_entity_uuids=affected_uuids,
+                        affected_entity_names=affected_names,
+                        affected_count=len(affected_uuids),
+                        affected_positions=list(shape.affected_positions)
+                    ))
+                    use_idx += 1
+                if use_valid_positions:
+                    result.position_actions.append(AvailableActionInfo(
+                        template_name=template_name,
+                        target_type=TargetType.POSITION_AOE,
+                        valid_targets=use_valid_positions,
+                        can_afford=can_afford,
+                        display_name=display_name,
+                        description=use_template.description,
+                        cost_type=cost_type,
+                        cost_amount=cost_amount,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        is_attack=use_template.is_attack,
+                        is_spell=is_spell,
+                    ))
+
+            elif use_template.target_type == TargetType.POSITION_LOS:
+                use_valid_pos_list = use_template.get_valid_positions()
+                use_valid_positions = []
+                use_idx = 0
+                for pos in use_valid_pos_list:
+                    use_template.set_target_position(pos)
+                    if use_template.pre_validate():
+                        use_valid_positions.append(AvailableTarget(
+                            index=use_idx,
+                            position=pos,
+                            distance=self.senses.get_feet_distance(pos),
+                        ))
+                        use_idx += 1
+                if use_valid_positions:
+                    result.position_actions.append(AvailableActionInfo(
+                        template_name=template_name,
+                        target_type=TargetType.POSITION_LOS,
+                        valid_targets=use_valid_positions,
+                        can_afford=can_afford,
+                        display_name=display_name,
+                        description=use_template.description,
+                        cost_type=cost_type,
+                        cost_amount=cost_amount,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        is_attack=use_template.is_attack,
+                        is_spell=is_spell,
+                    ))
+
+            elif use_template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH):
+                # POSITION type spells (e.g., Spike Growth) — use visible positions within range
+                use_valid_positions = []
+                use_idx = 0
+                action_range = use_template.get_range()
+                max_range = action_range.normal if action_range else 0
+                for pos, is_visible in self.senses.visible.items():
+                    if not is_visible:
+                        continue
+                    if pos == self.senses.position:
+                        continue
+                    dist = self.senses.get_feet_distance(pos)
+                    if max_range > 0 and dist > max_range:
+                        continue
+                    use_template.set_target_position(pos)
+                    if use_template.pre_validate():
+                        use_valid_positions.append(AvailableTarget(
+                            index=use_idx,
+                            position=pos,
+                            distance=dist,
+                        ))
+                        use_idx += 1
+                if use_valid_positions:
+                    result.position_actions.append(AvailableActionInfo(
+                        template_name=template_name,
+                        target_type=use_template.target_type,
+                        valid_targets=use_valid_positions,
+                        can_afford=can_afford,
+                        display_name=display_name,
+                        description=use_template.description,
+                        cost_type=cost_type,
+                        cost_amount=cost_amount,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        is_attack=use_template.is_attack,
+                        is_spell=is_spell,
+                    ))
 
         return result

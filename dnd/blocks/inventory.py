@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import BaseItem, UsableItem
 
 
 class Inventory(BaseBlock):
@@ -60,6 +60,18 @@ class Inventory(BaseBlock):
     def find_items_by_tag(self, tag: str) -> List[BaseItem]:
         """Find all items with a given tag."""
         return [item for item in self.items.values() if tag in item.tags]
+
+    def remove_contained_item(self, item_uuid: UUID) -> None:
+        """Remove item from inventory items dict."""
+        self.items.pop(item_uuid, None)
+
+    def get_all_use_actions(self, owner_uuid: UUID) -> list:
+        """Aggregate use actions from all UsableItems in inventory (Step d)."""
+        actions = []
+        for item in self.items.values():
+            if isinstance(item, UsableItem):
+                actions.extend(item.get_use_actions(owner_uuid))
+        return actions
 
     def transfer_to(self, item_uuid: UUID, target: 'Inventory') -> bool:
         """Transfer item to another inventory. Returns False on failure (rollback).

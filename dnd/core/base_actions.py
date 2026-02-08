@@ -168,6 +168,10 @@ class BaseAction(BaseObject):
     include_self: bool = Field(default=False, description="If True and target_type=ENTITY, self is a valid target (for buff spells like Mage Armor)")
     is_attack: bool = Field(default=False, description="If True, action is a damage-dealing attack (Attack, Extra Attack, FrenziedStrike)")
 
+    # Item source (set by UsableItem.get_use_actions())
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of item providing this action")
+    charge_cost: int = Field(default=1, description="Charges consumed when this action is used from an item")
+
     # For POSITION actions (like Move, Jump), stored separately from target_entity_uuid
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target position for POSITION type actions")
 
@@ -190,6 +194,11 @@ class BaseAction(BaseObject):
     include_dead: bool = Field(
         default=False,
         description="If True, dead entities are valid targets (for resurrection, corpse explosion)"
+    )
+    aoe_require_targets: bool = Field(
+        default=True,
+        description="POSITION_AOE only: if True, action is only valid when at least one entity is in the area. "
+                    "Good for AI (don't waste spells on empty squares). Set False for zone/wall spells targeting positions."
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -484,8 +493,14 @@ class BaseAction(BaseObject):
             all_targets = self.get_all_targets()
 
             # Check: Do we have targets?
+            # MULTI_ENTITY always requires targets (e.g., Magic Missile needs someone to shoot)
+            # POSITION_AOE: controlled by aoe_require_targets flag (default True for AI efficiency,
+            # set False for zone/wall spells that legitimately target empty positions)
             if not all_targets:
-                return declaration_event.cancel(status_message="No targets specified")
+                if self.target_type == TargetType.MULTI_ENTITY:
+                    return declaration_event.cancel(status_message="No targets specified")
+                if self.target_type == TargetType.POSITION_AOE and self.aoe_require_targets:
+                    return declaration_event.cancel(status_message="No targets in area")
 
             # Check: Same-target constraint (only for MULTI_ENTITY - AoE uses set, no duplicates)
             if self.target_type == TargetType.MULTI_ENTITY and not self.allow_same_target:
@@ -772,6 +787,10 @@ class AvailableActionInfo(BaseModel):
     # Attack classification
     is_attack: bool = Field(default=False, description="True if action is a damage-dealing attack")
     is_spell: bool = Field(default=False, description="True if action is a spell (SpellAction)")
+
+    # Item use classification
+    is_item_use: bool = Field(default=False, description="True for use actions from items")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="Item providing this action")
 
 
 class AvailableActionsResult(BaseModel):
