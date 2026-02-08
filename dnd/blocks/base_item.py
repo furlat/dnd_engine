@@ -57,6 +57,9 @@ class BaseItem(BaseBlock):
     max_stack: int = Field(default=1, ge=1)
     stack_id: Optional[str] = Field(default=None, description="Items with same stack_id merge into one stack. None = never stacks.")
 
+    # Display
+    map_char: str = Field(default="\u03c6", description="Character to display on the map grid")
+
     # Tags for filtering/queries
     tags: List[str] = Field(default_factory=list)
 

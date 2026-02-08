@@ -420,6 +420,138 @@ def try_execute_dynamic_spell_action(cmd_str: str, args: List[str], client: APIC
         return "refresh"
 
 
+def try_execute_dynamic_item_use_action(cmd_str: str, args: List[str], client: APIClient, state: GameState) -> Optional[str]:
+    """
+    Try to execute a dynamic item use action (potions, weapon coats, etc.).
+
+    Returns:
+        "refresh" if action was executed or showing targets
+        "encounter_ended" if encounter ended
+        None if command wasn't an item use action
+    """
+    if not state.actions:
+        return None
+
+    registry = get_shortcut_registry()
+    cmd = cmd_str.strip().lower().split()[0] if cmd_str.strip() else ""
+    action = state.actions.get_item_use_action_by_command(cmd, registry)
+
+    if not action:
+        return None
+
+    shortcut = registry.get_or_create_shortcut(action.display_name)
+
+    # Self-targeting items (potions, etc.)
+    if action.target_type == "self":
+        result = safe_execute_action(client, action.template_name, 0)
+        if result is None:
+            return "refresh"
+        display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+        state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name}.")
+        if result.get("encounter_ended"):
+            return "encounter_ended"
+        return "refresh"
+
+    # Entity-targeting items (weapon coats applied to target, etc.)
+    if len(args) < 1:
+        targets = action.valid_targets
+        display.set_output([
+            f"Valid {action.display_name} targets:",
+            *[f"  [{i+1}] {t.target_name or 'Unknown'}" for i, t in enumerate(targets)],
+            f"Enter '{shortcut} N' to use on target N"
+        ])
+        return "refresh"
+
+    try:
+        target_num = int(args[0])
+    except ValueError:
+        display.set_output([f"Invalid target. Usage: {shortcut} N"])
+        return "refresh"
+
+    result = state.actions.get_item_use_target(action.display_name, target_num)
+    if not result:
+        total = len(action.valid_targets)
+        display.set_output([f"Invalid target. Choose 1-{total}."])
+        return "refresh"
+
+    action_obj, target = result
+    api_result = safe_execute_action(client, action_obj.template_name, target.index)
+    if api_result is None:
+        return "refresh"
+    display.show_action_result(api_result, state.turn.get("current_entity_name", "You"))
+    state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name} on {target.target_name}.")
+
+    if api_result.get("encounter_ended"):
+        return "encounter_ended"
+    return "refresh"
+
+
+def try_execute_dynamic_object_action(cmd_str: str, args: List[str], client: APIClient, state: GameState) -> Optional[str]:
+    """
+    Try to execute a dynamic object action (Pick Up, Attack Object, Pull Lever, etc.).
+
+    Returns:
+        "refresh" if action was executed or showing targets
+        "encounter_ended" if encounter ended
+        None if command wasn't an object action
+    """
+    if not state.actions:
+        return None
+
+    registry = get_shortcut_registry()
+    cmd = cmd_str.strip().lower().split()[0] if cmd_str.strip() else ""
+    action = state.actions.get_object_action_by_command(cmd, registry)
+
+    if not action:
+        return None
+
+    shortcut = registry.get_or_create_shortcut(action.template_name)
+
+    # Self-targeting object actions (Pull Lever, etc.)
+    if action.target_type == "self":
+        result = safe_execute_action(client, action.template_name, 0)
+        if result is None:
+            return "refresh"
+        display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+        state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name}.")
+        if result.get("encounter_ended"):
+            return "encounter_ended"
+        return "refresh"
+
+    # Entity/object-targeting actions (Pick Up, Attack Object)
+    if len(args) < 1:
+        targets = action.valid_targets
+        display.set_output([
+            f"Valid {action.display_name} targets:",
+            *[f"  [{i+1}] {t.target_name or 'Unknown'}" for i, t in enumerate(targets)],
+            f"Enter '{shortcut} N' to target N"
+        ])
+        return "refresh"
+
+    try:
+        target_num = int(args[0])
+    except ValueError:
+        display.set_output([f"Invalid target. Usage: {shortcut} N"])
+        return "refresh"
+
+    result = state.actions.get_object_action_target(action.template_name, target_num)
+    if not result:
+        total = len(action.valid_targets)
+        display.set_output([f"Invalid target. Choose 1-{total}."])
+        return "refresh"
+
+    action_obj, target = result
+    api_result = safe_execute_action(client, action_obj.template_name, target.index)
+    if api_result is None:
+        return "refresh"
+    display.show_action_result(api_result, state.turn.get("current_entity_name", "You"))
+    state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} uses {action.display_name} on {target.target_name}.")
+
+    if api_result.get("encounter_ended"):
+        return "encounter_ended"
+    return "refresh"
+
+
 def prompt_with_connection_poll(_client: APIClient, pvp_mode: bool = False, poll_interval: float = 2.0) -> str:
     """
     Prompt for input while polling connection status in PvP mode.
@@ -521,7 +653,8 @@ def render_display(client: APIClient, state: GameState, my_entity_uuid: Optional
         movement_path=state.last_movement_path,
         valid_positions=state.valid_move_positions,
         is_my_turn=is_my_turn,
-        shortcut_registry=get_shortcut_registry()
+        shortcut_registry=get_shortcut_registry(),
+        floor_objects=state.floor_objects,
     )
 
     # Clear transient display state after showing
@@ -797,9 +930,17 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
             # Position actions (Move, Jump) - ONLY path, no fallback
             result = try_execute_dynamic_position_action(cmd_str, cmd.args, client, state)
 
-            # Spell actions (Fireball, Fire Bolt, etc.) - all target types
+            # Spell actions (Fireball, Fire Bolt, scroll spells, etc.) - all target types
             if result is None:
                 result = try_execute_dynamic_spell_action(cmd_str, cmd.args, client, state)
+
+            # Item use actions (potions, weapon coats, etc.)
+            if result is None:
+                result = try_execute_dynamic_item_use_action(cmd_str, cmd.args, client, state)
+
+            # Object actions (Pick Up, Attack Object, Pull Lever)
+            if result is None:
+                result = try_execute_dynamic_object_action(cmd_str, cmd.args, client, state)
 
             # Other entity-targeting actions (Shove, etc.) - ONLY path, no fallback
             if result is None:

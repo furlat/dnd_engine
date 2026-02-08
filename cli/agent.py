@@ -254,8 +254,22 @@ def format_actions(actions: dict, entity_name: str) -> str:
     for action in self_actions:
         action_name = action.get("display_name", action.get("template_name", "???"))
         can_afford = action.get("can_afford", False)
+        is_item = action.get("is_item_use", False)
         status = "READY" if can_afford else "NO ACTION"
-        lines.append(f"  {action_name}: {status}")
+        suffix = " [ITEM]" if is_item else ""
+        lines.append(f"  {action_name}: {status}{suffix}")
+
+    # Object actions (Pick Up, Attack Object)
+    object_actions = actions.get("object_actions", [])
+    if object_actions:
+        lines.append("")
+        lines.append("OBJECT ACTIONS:")
+        for action in object_actions:
+            action_name = action.get("display_name", action.get("template_name", "???"))
+            can_afford = action.get("can_afford", False)
+            valid_targets = action.get("valid_targets", [])
+            status = "READY" if can_afford and valid_targets else "NO TARGETS"
+            lines.append(f"  {action_name}: {len(valid_targets)} targets ({status})")
 
     return "\n".join(lines)
 

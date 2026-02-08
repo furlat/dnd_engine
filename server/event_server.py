@@ -17,7 +17,7 @@ Usage:
 """
 
 import asyncio
-from typing import Set, Optional
+from typing import Dict, Set, Optional
 from uuid import UUID, uuid4
 from contextlib import asynccontextmanager
 
@@ -34,17 +34,22 @@ from dnd.monsters.bestiary import create_goblin, create_skeleton, create_sorcere
 from dnd.classes.fighter_factory import create_fighter, FighterConfig
 from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
 from dnd.items import create_shortsword, create_dagger, create_longbow
+from dnd.items.test_items import (
+    create_scroll_of_magic_missile, create_scroll_of_fireball,
+    create_healing_potion, TrapLever, PullLeverAction,
+)
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
 from dnd.actions import MovementEvent, JumpEvent
-from dnd.core.base_actions import TargetType, AvailableTarget
+from dnd.core.base_actions import TargetType, AvailableTarget, AvailableActionsResult
+from dnd.core.base_block import BaseBlock
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.tiles import create_spike_zone
 from dnd.core.base_tiles import difficult_terrain_factory
 
 from server.api_models import (
-    APIEntitySummary, APIEntityFull, APIGrid, APIEncounter,
+    APIEntitySummary, APIEntityFull, APIGrid, APIEncounter, APIFloorObject,
     APIGameState, APISimulationStatus,
     APICurrentTurn, SimpleActionRequest, ActionResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
@@ -55,6 +60,9 @@ from server.session import (
     SessionManager, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
 )
+
+# Cache available actions per entity UUID (populated by GET, consumed by POST execute)
+_available_actions_cache: Dict[str, AvailableActionsResult] = {}
 
 
 class EventMonitor:
@@ -253,7 +261,7 @@ def setup_arena_combat(
     # ADD: Spike zone in bottom-left corner (opposite the water island)
     # x: 0-4, y: 11-14 (5x4 = 20 tiles, ONE handler)
     spike_positions = {(x, y) for x in range(5) for y in range(11, 15)}
-    spike_tiles, _ = create_spike_zone(spike_positions)
+    spike_tiles, spike_handler = create_spike_zone(spike_positions)
     for tile in spike_tiles:
         grid._tiles[tile.position] = tile
         grid._tiles_by_uuid[tile.uuid] = tile.position
@@ -280,6 +288,33 @@ def setup_arena_combat(
     else:
         # Default to fighter
         player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
+
+    # Add items for sorcerer: spell scrolls in inventory, potions in spikes, lever at spike edge
+    if character_class == "sorcerer":
+        # Spell scrolls → sorcerer's inventory
+        scroll_mm1 = create_scroll_of_magic_missile(player.uuid, cast_level=1)
+        scroll_mm2 = create_scroll_of_magic_missile(player.uuid, cast_level=1)  # Stacks with mm1
+        scroll_fb3 = create_scroll_of_fireball(player.uuid, cast_level=3)
+        scroll_fb5 = create_scroll_of_fireball(player.uuid, cast_level=5)
+        player.loot_item(scroll_mm1)
+        player.loot_item(scroll_mm2)  # Merges into mm1, stack_count=2
+        player.loot_item(scroll_fb3)
+        player.loot_item(scroll_fb5)
+
+        # Healing potions on floor inside the spike zone
+        for pot_pos in [(1, 12), (3, 13)]:
+            potion = create_healing_potion(uuid4(), heal_amount=10)
+            grid.place_object(potion.uuid, pot_pos)
+
+        # Trap lever adjacent to spike zone (deactivates spikes)
+        lever_action = PullLeverAction(
+            source_entity_uuid=uuid4(), trap_handler_uuid=spike_handler.uuid, template=True
+        )
+        lever = TrapLever(
+            source_entity_uuid=uuid4(), use_action_templates=[lever_action], charges=1
+        )
+        lever_pos = (5, 12)
+        grid.place_object(lever.uuid, lever_pos)
 
     # Create 3 Skeletons (monsters faction) at different positions
     skeleton_positions = [(12, 5), (12, 7), (12, 9)]
@@ -614,10 +649,24 @@ async def get_state():
     if sim.encounter:
         encounter_data = APIEncounter.create(sim.encounter)
 
+    # Build floor objects list from GridMap
+    floor_objects = []
+    for obj_uuid, obj_pos in grid._object_positions.items():
+        obj = BaseBlock.get(obj_uuid)
+        if obj:
+            map_char = getattr(obj, 'map_char', '\u03c6')
+            floor_objects.append(APIFloorObject(
+                uuid=str(obj_uuid),
+                name=obj.name or "Object",
+                position=list(obj_pos),
+                map_char=map_char,
+            ))
+
     return APIGameState(
         grid=APIGrid.create(grid),
         entities=[APIEntitySummary.create(e) for e in Entity.get_all_entities()],
-        encounter=encounter_data
+        encounter=encounter_data,
+        floor_objects=floor_objects,
     )
 
 
@@ -694,6 +743,20 @@ async def get_tile_info(x: int, y: int):
                 "is_dead": entity.get_hp() <= 0
             })
 
+    # Get objects at this position
+    object_uuids = grid.get_objects_at((x, y))
+    objects_at = []
+    for obj_uuid in object_uuids:
+        obj = BaseBlock.get(obj_uuid)
+        if obj:
+            objects_at.append({
+                "uuid": str(obj.uuid),
+                "name": obj.name,
+                "is_pickable": getattr(obj, 'is_pickable', False),
+                "is_usable": getattr(obj, 'is_usable', False),
+                "map_char": getattr(obj, 'map_char', '\u03c6'),
+            })
+
     # Get handler names
     handler_names = [h.name for h in tile.event_handlers.values()] if hasattr(tile, 'event_handlers') else []
 
@@ -706,6 +769,7 @@ async def get_tile_info(x: int, y: int):
         "conditions": list(tile.active_conditions.keys()) if hasattr(tile, 'active_conditions') else [],
         "handlers": handler_names,
         "entities": entities_at,
+        "objects": objects_at,
         "height": tile.height if hasattr(tile, 'height') else 0
     }
 
@@ -1237,7 +1301,7 @@ async def get_entity_available_actions(entity_uuid: str):
         return result
 
     def serialize_action(a):
-        return {
+        result = {
             "template_name": a.template_name,
             "target_type": a.target_type.value,
             "valid_targets": [serialize_target(t) for t in a.valid_targets],
@@ -1250,12 +1314,22 @@ async def get_entity_available_actions(entity_uuid: str):
             "weapon_name": a.weapon_name,
             "action_category": a.action_category.value
         }
+        # Item use fields
+        if a.is_item_use:
+            result["is_item_use"] = True
+            result["source_item_uuid"] = str(a.source_item_uuid) if a.source_item_uuid else None
+            result["item_stack_count"] = a.item_stack_count
+        return result
+
+    # Cache for execute endpoint
+    _available_actions_cache[entity_uuid] = actions
 
     return {
         "entity_uuid": str(actions.entity_uuid),
         "entity_actions": [serialize_action(a) for a in actions.entity_actions],
         "position_actions": [serialize_action(a) for a in actions.position_actions],
         "self_actions": [serialize_action(a) for a in actions.self_actions],
+        "object_actions": [serialize_action(a) for a in actions.object_actions],
         "remaining_movement": actions.remaining_movement
     }
 
@@ -1267,6 +1341,9 @@ async def end_human_turn(request: SimpleActionRequest):
 
     if sim.encounter is None:
         raise HTTPException(status_code=400, detail="No active encounter")
+
+    # Invalidate available actions cache (state changes on turn end)
+    _available_actions_cache.clear()
 
     # End turn (fires TurnEndEvent) and advance to next combatant
     sim.encounter.end_turn()
@@ -1500,13 +1577,24 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     """Execute action by template name and target index.
 
     Enables 'attack 0', 'move 3' style commands from the available actions list.
+    Uses cached available actions from the display call to avoid recomputing.
     """
     entity = validate_session_action(request.session_id, request.entity_uuid)
 
-    # Get template to determine action type
-    template = entity.get_action_template(request.template_name)
-    if template is None:
+    # Use cached available actions from display call (avoid recomputing)
+    available = _available_actions_cache.get(request.entity_uuid)
+    if available is None:
+        available = get_available_actions(entity)
+
+    # Find action info to determine target type
+    action_info = next(
+        (a for a in available.all_actions if a.template_name == request.template_name),
+        None
+    )
+    if action_info is None:
         raise HTTPException(status_code=400, detail=f"Unknown action: {request.template_name}")
+
+    target_type = action_info.target_type
 
     # Track combat log length before action to capture all new entries
     log_start_index = len(sim.encounter.combat_log) if sim.encounter else 0
@@ -1516,10 +1604,14 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
             entity,
             request.template_name,
             request.target_index,
-            extra_target_uuids=request.extra_target_uuids
+            extra_target_uuids=request.extra_target_uuids,
+            available=available,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Invalidate cache after execution (state changed)
+    _available_actions_cache.pop(request.entity_uuid, None)
 
     # Check for deaths
     deaths = sim.encounter.check_deaths() if sim.encounter else []
@@ -1533,7 +1625,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     target_hp = None
 
     # Extract event_data for response (callback adds to encounter.combat_log automatically)
-    if template.target_type == TargetType.ENTITY and event and event.combat_log:
+    if target_type == TargetType.ENTITY and event and event.combat_log:
         # Entity-targeting actions (attacks, shove, grapple, etc.)
         event_data = dict(event.combat_log.data)
         # Add target HP for attacks
@@ -1542,7 +1634,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
             target_hp = target.get_hp() if target else None
             event_data["target_hp"] = target_hp
 
-    elif template.target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
+    elif target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         # Movement actions (Move, Jump)
         if event and isinstance(event, (MovementEvent, JumpEvent)):
             if event.combat_log:
@@ -1555,19 +1647,19 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
                     "path": [list(p) for p in event.path] if event.path else []
                 }
 
-    elif template.target_type == TargetType.POSITION_AOE:
+    elif target_type == TargetType.POSITION_AOE:
         # AoE spells (Fireball, Lightning Bolt, etc.)
         if event and event.combat_log:
             event_data = dict(event.combat_log.data)
         # Per-target logs are added by callback via parent_event linkage
 
-    elif template.target_type == TargetType.MULTI_ENTITY:
+    elif target_type == TargetType.MULTI_ENTITY:
         # Multi-target spells (Magic Missile)
         if event and event.combat_log:
             event_data = dict(event.combat_log.data)
         # Per-target logs are added by callback via parent_event linkage
 
-    elif template.target_type == TargetType.SELF:
+    elif target_type == TargetType.SELF:
         # Self action
         if event and event.combat_log:
             event_data = dict(event.combat_log.data)
