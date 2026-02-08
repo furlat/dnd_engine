@@ -36,10 +36,11 @@ The human CLI (`python -m cli play` or `playpvp`) uses a Rich terminal interface
 | `dodge` | `o` | Dodge (attackers have disadvantage) |
 | `disengage` | `i` | Disengage (no opportunity attacks when moving) |
 | `end` | `e` | End turn |
+| `? X Y` | - | Inspect tile at (X, Y) — shows tile info, entities, and floor objects |
 
 ### Display Panels
 
-- **Battlefield**: ASCII map with entities (`@` = player, letters = enemies, `#` = wall, `~` = water)
+- **Battlefield**: ASCII map with entities (`@` = player, letters = enemies, `#` = wall, `~` = water, `θ` = potion, `λ` = lever, `φ` = other items)
 - **Combatants**: Entity table (HP, AC, position, conditions)
 - **Combat Log**: Formatted action history with roll breakdowns
 - **Available Actions**: What you can do (with action economy in title)
@@ -116,6 +117,7 @@ To restart: User restarts `playpvp`, Claude runs `disconnect` -> `connect` -> `w
 | `/state` | GET | Full game state (grid, entities, encounter) |
 | `/visibility` | GET | Entity visibility data |
 | `/entity/{uuid}/available-actions` | GET | Available actions for entity |
+| `/tile/{x}/{y}` | GET | Tile info: terrain, conditions, entities, floor objects |
 | `/combat-log` | GET | Server-side combat log entries |
 | `/pvp/status` | GET | Whose turn, who's connected |
 
