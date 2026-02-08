@@ -10,15 +10,15 @@ This document describes the complete design for items, inventory, and environmen
 |---------|--------|-------|
 | 4. BaseItem | **IMPLEMENTED** | `dnd/blocks/base_item.py`. Location tracking (`tile_uuid`, `stored_in_uuid`, `get_position()`), lifecycle hooks with params, Health delegation, spatial overrides. 85 tests. |
 | 5. EquippableItem | **IMPLEMENTED** | `_on_equip(slot, entity_uuid)`/`_on_unequip(slot, entity_uuid)` hooks. Weapon/Armor/Shield reparented. `owner_uuid`, `stored_in_uuid`, `is_equipped` tracking. 15 tests. |
-| 6. UsableItem | Stub only | Exists as thin subclass. `get_use_actions()` = Step c/d. |
-| 7. Inventory | **IMPLEMENTED** | `dnd/blocks/inventory.py`. All methods except `get_all_use_actions()` (Step d). `transfer_to()` updates `stored_in_uuid`. |
+| 6. UsableItem | **IMPLEMENTED** | `get_use_actions()`, `consume_charge()`, `use_action_templates` field, charges system. Environment discovery in `get_available_actions()`. 19 tests. |
+| 7. Inventory | **IMPLEMENTED** | `dnd/blocks/inventory.py`. All methods including `get_all_use_actions()`. `transfer_to()` updates `stored_in_uuid`. |
 | 8. Entity Orchestration | **IMPLEMENTED** | `loot_item`/`drop_item` + `equip_item`/`unequip_item` done with full location tracking (`owner_uuid`, `stored_in_uuid`, `is_equipped`). |
 | 9. GridMap/Senses | **IMPLEMENTED** | Object registries, spatial predicates, FOV, `senses.objects`. |
-| 10. Action System | **Partial** | PickUp/AttackObject/Drop done. Drop is POSITION_LOS with `item_uuid`. Three-source discovery = Step d. |
+| 10. Action System | **Partial** | PickUp/AttackObject/Drop done. Environment use action discovery done (source 3). `execute_use_action()` + `execute_by_index()` routing done. Inventory use actions (source 2) = Step d. |
 | 11. Conditions on Items | **Partial** | Infrastructure done (items as condition hosts, linked cleanup). Item condition ticking deferred. |
 | 12. Breakable Objects | **IMPLEMENTED** | Health delegation, `receive_damage`, `destroy`, AttackObject action. |
 | 13. Looting System | Deferred | Entity→body transitions deferred. |
-| 14. Implementation Steps | **Step a DONE** | See restructured section. |
+| 14. Implementation Steps | **Steps a–c DONE** | See restructured section. |
 
 ---
 
@@ -564,63 +564,103 @@ Weapon, Armor (all subtypes), Shield reparent from `BaseBlock` → `EquippableIt
 
 ---
 
-## 6. UsableItem — Actions & Environment Objects
+## 6. UsableItem — Actions & Environment Objects — **IMPLEMENTED**
 
-Inherits BaseItem, sets `is_usable = True`.
+**File**: `dnd/blocks/base_item.py`
+
+Inherits BaseItem, sets `is_usable = True`. Two usage patterns supported:
 
 ```python
 class UsableItem(BaseItem):
     is_usable: bool = True
-    is_consumable: bool = False  # Destroyed after use
+    is_consumable: bool = False  # Destroy when charges reach 0
 
-    def get_use_actions(self, owner_uuid: UUID) -> List[BaseAction]:
-        """Return action templates this item provides.
-        Called at query time — can be adaptive (charges, state, conditions).
-        owner_uuid: entity who would use the item."""
-        return []
+    # Charges
+    charges: int = -1       # -1 = unlimited, 0 = depleted
+    max_charges: int = -1   # -1 = unlimited
+
+    # Default pattern: stored action templates
+    use_action_templates: List[BaseAction] = []
+
+    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        """Default: returns stored templates with source_entity_uuid and
+        source_item_uuid injected. Returns [] if charges == 0.
+        Override in subclasses for adaptive behavior."""
+
+    def consume_charge(self) -> bool:
+        """Consume one charge. Returns False if depleted.
+        Destroys item if is_consumable and charges reach 0."""
 ```
 
-### Adaptive Behavior
+### Two Usage Patterns
 
-`get_use_actions()` is called fresh each time `get_available_actions()` runs:
-- **Charge-based**: wand returns `[]` at 0 charges
-- **State-dependent**: locked chest returns LockPickAction; unlocked returns OpenChestAction
-- **Consumed**: `stack_count == 0` → returns `[]`
+**Pattern 1 — Default `use_action_templates` field** (simpler, no subclass override needed):
+```python
+# Create item with action templates in the field:
+lever = TrapLever(
+    use_action_templates=[PullLeverAction(source_entity_uuid=uuid4(), template=True)],
+    charges=1,
+)
+# get_use_actions() auto-injects source_entity_uuid + source_item_uuid via model_copy
+```
 
-### Consumable Destruction
+**Pattern 2 — Override `get_use_actions()`** (for state-dependent action names/types):
+```python
+class Door(UsableItem):
+    is_open: bool = False
 
-Handled centrally in `BaseAction.apply()` after `_apply_costs()` (line ~532 in `base_actions.py`). Check `source_item_uuid` → if `item.is_consumable` and action not canceled → `item.destroy()`. Automatic.
+    def get_use_actions(self, user_entity_uuid):
+        if self.is_open:
+            return [CloseDoorAction(source_entity_uuid=user_entity_uuid,
+                                    source_item_uuid=self.uuid, template=True)]
+        return [OpenDoorAction(source_entity_uuid=user_entity_uuid,
+                               source_item_uuid=self.uuid, template=True)]
+```
 
-For stacks: use action decrements `stack_count`. When `stack_count` reaches 0, item is destroyed.
+Pattern 1 is preferred when the action name doesn't need to change with state. Pattern 2 is for items where different states surface different action classes/names.
+
+### Charge System
+
+- `charges=-1`: unlimited uses (default)
+- `charges=N`: N uses remaining, decremented by `consume_charge()` after successful action execution
+- `charges=0`: depleted — `get_use_actions()` returns `[]`
+- `is_consumable=True`: item destroyed when charges reach 0
+
+Charge consumption is automatic — `execute_use_action()` calls `item.consume_charge()` after a successful apply.
 
 ### Environment Objects = `UsableItem(is_pickable=False)`
 
-No WorldObject class needed:
+No WorldObject class needed. Test items in `dnd/items/test_items.py`:
 
-```python
-class Lever(UsableItem):
-    is_pickable: bool = False
+| Item | Pattern | Key Behavior |
+|------|---------|-------------|
+| TestDoorA | Override | State-dependent action names (Open Door / Close Door) |
+| TestDoorB | Default | Single toggle action (Interact Door) |
+| TrapLever | Default + charges=1 | Removes spatial handler, one-shot |
+| StorageChest | Default + unlimited | LootAllAction transfers items, `_on_destroy` spills contents |
+| Campfire | Default + multi-action | Two templates: RestAction (heal), CookAction (temp HP) |
 
-    def get_use_actions(self, owner_uuid):
-        return [PullLeverAction(source_entity_uuid=owner_uuid, template=True,
-                                source_item_uuid=self.uuid)]
+### Environment Discovery Flow
 
-class Door(UsableItem):
-    is_pickable: bool = False
-    blocks_movement: bool = True   # when closed
-    blocks_vision_field: bool = True  # when closed
-    is_targetable: bool = True     # can be broken
-    is_open: bool = False
+In `Entity.get_available_actions()`, after OBJECT actions section:
+1. Iterate `senses.objects`
+2. Filter to `isinstance(obj, UsableItem)` within 5ft
+3. Call `obj.get_use_actions(self.uuid)` for each
+4. For SELF-target actions: `pre_validate()`, add to `result.self_actions` with `is_item_use=True`
 
-    def get_use_actions(self, owner_uuid):
-        if self.is_open:
-            return [CloseDoorAction(source_entity_uuid=owner_uuid, ...)]
-        return [OpenDoorAction(source_entity_uuid=owner_uuid, ...)]
-```
+### Execution Flow
+
+`execute_use_action(entity, item_uuid, action_name, target)` in `actions_functional.py`:
+1. Get item via `BaseBlock.get()`, verify `UsableItem`
+2. Get templates via `item.get_use_actions(entity.uuid)`
+3. Find matching template by name
+4. `instantiate()` → `apply()` → `item.consume_charge()` on success
+
+`execute_by_index()` routes `is_item_use` actions to `execute_use_action()` automatically.
 
 ### `source_item_uuid` Field
 
-Add `source_item_uuid: Optional[UUID] = None` to `BaseAction`. All use-action templates carry this for consumable cleanup, UI display, and combat log.
+`source_item_uuid: Optional[UUID] = None` on `BaseAction`. Injected by `get_use_actions()`. `is_item_use: bool` + `source_item_uuid: Optional[UUID]` on `AvailableActionInfo` for UI routing.
 
 ---
 
@@ -1059,15 +1099,24 @@ Entity→body transitions (and wall→rubble, etc.) are deferred to a common tra
   - Flaming sword: reparented weapon with extra fire damage in combat
 - Dependencies: Step a
 
-### Step c: UsableItem — Environment Object Discovery [NOT STARTED]
+### Step c: UsableItem — Environment Object Discovery [IMPLEMENTED]
 
-- `UsableItem.get_use_actions()` implementation
-- `source_item_uuid` on BaseAction
-- Environment object discovery: `senses.objects` → `get_use_actions()`, within 5ft
-- Integration with `get_available_actions()` (source 3: environment)
-- Deposit action (inventory → chest/storage) — inventory-to-inventory transfer
-- Loot from storage (chest → entity inventory) — via chest's `get_use_actions()`
-- Test items: Lever (removes terrain), Door (toggles spatial), Chest (storage with own Inventory)
+- `UsableItem.get_use_actions()` with two patterns: default `use_action_templates` field, or override for state-dependent behavior
+- `use_action_templates: List[BaseAction]` field — default `get_use_actions()` returns these with `source_entity_uuid` and `source_item_uuid` injected via `model_copy`
+- Charge system: `charges` (-1=unlimited, 0=depleted), `max_charges`, `consume_charge()`, `is_consumable` (destroy on depletion)
+- `source_item_uuid` on BaseAction, `is_item_use` + `source_item_uuid` on AvailableActionInfo
+- Environment object discovery: `senses.objects` → `isinstance(obj, UsableItem)` → `get_use_actions()`, within 5ft, integrated into `get_available_actions()` after OBJECT actions section
+- `execute_use_action()` in `actions_functional.py` — instantiate + apply + consume_charge on success
+- `execute_by_index()` routes `is_item_use` actions to `execute_use_action()`
+- `Inventory.get_all_use_actions()` ready for Step d
+- Test items in `dnd/items/test_items.py`:
+  - TestDoorA: override pattern — `get_use_actions()` returns OpenDoorAction or CloseDoorAction based on state
+  - TestDoorB: default pattern — `use_action_templates=[InteractDoorAction]`, single toggle action
+  - TrapLever: default pattern + charges=1, PullLeverAction removes spatial handler
+  - StorageChest: unlimited charges, LootAllAction transfers items, `_on_destroy` spills contents
+  - Campfire: plain UsableItem with two action templates (RestAction, CookAction)
+- 19 tests in `examples/test_usable_items.py`, all pass
+- **Files**: `dnd/blocks/base_item.py`, `dnd/core/base_actions.py`, `dnd/entity.py`, `dnd/actions_functional.py`, `dnd/blocks/inventory.py`, `dnd/items/test_items.py`
 - Dependencies: Step a
 
 ### Step d: Full Inventory Use Actions [NOT STARTED]
@@ -1091,7 +1140,7 @@ Entity→body transitions (and wall→rubble, etc.) are deferred to a common tra
 ```
 Step a (Location Tracking + Hooks) ← DONE
     ├── Step b (Equip/Unequip Hooks) ← DONE
-    ├── Step c (UsableItem + Environment Objects)
+    ├── Step c (UsableItem + Environment Objects) ← DONE
     │       └── Step d (Inventory Use Actions)
     └── Deferred (entity transitions, encumbrance)
 ```

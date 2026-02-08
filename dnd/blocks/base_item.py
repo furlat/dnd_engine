@@ -1,11 +1,12 @@
 """Base item classes for the D&D engine items system.
 
 BaseItem extends BaseBlock for floor objects, inventory items, and breakable objects.
-EquippableItem and UsableItem are thin stubs for future phases.
+EquippableItem adds equip/unequip lifecycle hooks.
+UsableItem provides actions via get_use_actions() with charge tracking.
 """
 
 from typing import Optional, List, Literal, Tuple, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 from enum import Enum
 from pydantic import Field
 
@@ -14,6 +15,7 @@ from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.events import EquipmentSlot
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
+from dnd.core.base_actions import BaseAction
 
 
 class ItemRarity(str, Enum):
@@ -130,10 +132,15 @@ class BaseItem(BaseBlock):
         pass
 
     def destroy(self) -> None:
-        """Destroy this item: fire hook, clean up conditions, clear location, unregister."""
+        """Destroy this item: fire hook, clean up conditions, remove from container, clear location, unregister."""
         self._on_destroy()
         for cond_name in list(self.active_conditions.keys()):
             self.remove_condition(cond_name)
+        # Remove from container via proper polymorphism (BaseBlock.remove_contained_item)
+        if self.stored_in_uuid is not None:
+            container = BaseBlock.get(self.stored_in_uuid)
+            if container is not None:
+                container.remove_contained_item(self.uuid)
         self.owner_uuid = None
         self.stored_in_uuid = None
         self.tile_uuid = None
@@ -259,5 +266,51 @@ class EquippableItem(BaseItem):
 
 
 class UsableItem(BaseItem):
-    """Base class for items that can be used/activated. Stub for Phase 2."""
+    """Items that provide actions via get_use_actions().
+
+    Two usage patterns:
+    1. Default: populate use_action_templates field, get_use_actions() returns
+       them with owner_uuid injected. Good for simple items.
+    2. Override: subclass get_use_actions() for state-dependent/adaptive behavior.
+
+    Charges: -1 = unlimited. 0 = depleted (no actions returned).
+    """
     is_usable: bool = Field(default=True)
+
+    # Charges
+    charges: int = Field(default=-1, description="Number of uses remaining (-1 = unlimited, 0 = depleted)")
+    max_charges: int = Field(default=-1, description="Maximum charges (-1 = unlimited)")
+
+    # Stored action templates — default get_use_actions() returns these
+    use_action_templates: List["BaseAction"] = Field(default_factory=list)
+
+    def get_use_actions(self, user_entity_uuid: UUID) -> List["BaseAction"]:
+        """Return action templates this item provides.
+
+        Default: returns stored templates with source_entity_uuid and
+        source_item_uuid injected. Returns [] if charges == 0.
+        Override in subclasses for adaptive behavior.
+        """
+        if self.charges == 0:
+            return []
+        result = []
+        for template in self.use_action_templates:
+            action = template.model_copy(deep=True, update={
+                'uuid': uuid4(),
+                'source_entity_uuid': user_entity_uuid,
+                'source_item_uuid': self.uuid,
+            })
+            result.append(action)
+        return result
+
+    def consume_charge(self, amount: int = 1) -> bool:
+        """Consume charges. Returns False if not enough charges remain.
+        Override for custom charge logic (e.g., recharge on rest)."""
+        if self.charges == -1:
+            return True  # Unlimited
+        if self.charges < amount:
+            return False
+        self.charges -= amount
+        if self.charges == 0 and self.is_consumable:
+            self.destroy()
+        return True

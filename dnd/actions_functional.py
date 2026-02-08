@@ -31,6 +31,8 @@ from dnd.entity import Entity
 from dnd.actions import Move, Dash, Dodge, Disengage, Attack, Jump, Shove, PickUp, AttackObject, Drop
 from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler, create_death_handler
 from dnd.spells import ALL_SPELLS
+from dnd.blocks.base_item import UsableItem
+from dnd.core.base_block import BaseBlock
 
 
 def setup_standard_actions(entity: 'Entity') -> None:
@@ -308,8 +310,21 @@ def execute_by_index(
     if action_info is None:
         raise ValueError(f"Action {template_name} not available")
 
+    # Route item use actions to execute_use_action
+    if action_info.is_item_use and action_info.source_item_uuid:
+        if action_info.target_type == TargetType.SELF:
+            return execute_use_action(entity, action_info.source_item_uuid, template_name)
+        target: Optional[AvailableTarget] = None
+        for t in action_info.valid_targets:
+            if t.index == target_index:
+                target = t
+                break
+        if target is None:
+            raise ValueError(f"Target index {target_index} not valid for {template_name}")
+        return execute_use_action(entity, action_info.source_item_uuid, template_name, target)
+
     # Find the target by index
-    target: Optional[AvailableTarget] = None
+    target = None
     for t in action_info.valid_targets:
         if t.index == target_index:
             target = t
@@ -391,3 +406,69 @@ def execute_drop(entity: 'Entity', item_uuid: UUID, position: Optional[Tuple[int
         template=False
     )
     return action.apply()
+
+
+# =============================================================================
+# Use Item Actions (environment objects / inventory usables)
+# =============================================================================
+
+def execute_use_action(
+    entity: 'Entity',
+    item_uuid: UUID,
+    action_name: str,
+    target: Optional[AvailableTarget] = None
+) -> Optional[Event]:
+    """Execute a use action from a UsableItem.
+
+    Args:
+        entity: The entity using the item
+        item_uuid: UUID of the UsableItem
+        action_name: Name of the action to execute
+        target: Optional target for non-SELF actions
+
+    Returns:
+        The resulting event, or None if the action failed
+    """
+    item = BaseBlock.get(item_uuid)
+    if not isinstance(item, UsableItem):
+        raise ValueError("Item does not support use actions")
+
+    templates = item.get_use_actions(entity.uuid)
+    template = next((a for a in templates if a.name == action_name), None)
+    if template is None:
+        raise ValueError(f"Use action '{action_name}' not found on item")
+
+    # Instantiate based on target type
+    if template.target_type == TargetType.SELF:
+        instance = template.instantiate()
+    elif template.target_type == TargetType.ENTITY:
+        if target is None or target.target_uuid is None:
+            raise ValueError("ENTITY use action requires target")
+        instance = template.instantiate(target_entity_uuid=target.target_uuid)
+    elif template.target_type in (TargetType.POSITION, TargetType.POSITION_LOS, TargetType.POSITION_PATH):
+        if target is None or target.position is None:
+            raise ValueError("POSITION use action requires position")
+        instance = template.instantiate(end_position=target.position)
+    elif template.target_type == TargetType.POSITION_AOE:
+        if target is None or target.position is None:
+            raise ValueError("POSITION_AOE use action requires position")
+        instance = template.instantiate(end_position=target.position)
+    elif template.target_type == TargetType.MULTI_ENTITY:
+        if target is None or target.target_uuid is None:
+            raise ValueError("MULTI_ENTITY use action requires target_uuid")
+        extra = target.extra_target_uuids or []
+        instance = template.instantiate(
+            target_entity_uuid=target.target_uuid,
+            extra_target_entity_uuids=extra
+        )
+    else:
+        instance = template.instantiate()
+
+    result = instance.apply()
+
+    # Consume charge on successful execution
+    if result and not getattr(result, 'canceled', False):
+        charge_cost = getattr(template, 'charge_cost', 1)
+        item.consume_charge(charge_cost)
+
+    return result
