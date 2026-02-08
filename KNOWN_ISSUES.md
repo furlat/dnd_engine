@@ -14,5 +14,3 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 ```
 
 ## Open Issues
-
-(none yet)
