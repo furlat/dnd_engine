@@ -124,8 +124,9 @@ Entity
 ├── saving_throws: SavingThrowSet     # 6 saves, linked to abilities
 ├── health: Health                    # HP, hit dice, temp HP, damage resistances
 ├── equipment: Equipment              # Weapons (4 slots: MELEE_MAIN/OFF, RANGED_MAIN/OFF), armor, shield, AC
+├── inventory: Inventory              # Item storage (slots, weight capacity, find/transfer)
 ├── action_economy: ActionEconomy     # actions, bonus_actions, reactions, movement
-├── senses: Senses                    # position, visible cells, paths, visible entities
+├── senses: Senses                    # position, visible cells, paths, visible entities, visible objects
 ├── proficiency_bonus: ModifiableValue
 ├── weight: int                       # Weight in pounds (default 150, used for Shove weight limit)
 ├── faction: Optional[str]            # Faction name for ally/enemy detection (None = enemy to all)
@@ -137,6 +138,37 @@ Entity
 - `passive_skill(skill_name)` - Returns `10 + skill bonus + advantage modifier` (for contested checks like Shove)
 - `is_ally(other)` / `is_enemy(other)` - Faction-based relationship checks
 - `get_visible_enemies()` / `get_visible_allies()` - Filtered visibility by faction
+- `loot_item(item)` / `drop_item(item_uuid)` - Pick up / drop items (with lifecycle hooks)
+- `equip_item(item_uuid, slot)` / `unequip_item(slot)` - Move items between inventory and equipment
+
+### Item Hierarchy
+
+```
+BaseBlock
+└── BaseItem (dnd/blocks/base_item.py)
+    │   Location tracking: owner_uuid, stored_in_uuid, tile_uuid, is_equipped
+    │   Lifecycle hooks: _on_loot(), _on_drop(), _on_destroy()
+    │   Health/damage for breakable items, GridMap integration
+    │
+    ├── EquippableItem
+    │   │   Equip/unequip hooks: _on_equip(slot, entity_uuid), _on_unequip(slot, entity_uuid)
+    │   │   is_equippable=True, is_pickable=True
+    │   │
+    │   ├── Weapon (dnd/blocks/equipment.py)
+    │   ├── Armor (+ subtypes: BodyArmor, Helmet, Gloves, Boots, Cloak, Amulet)
+    │   └── Shield
+    │
+    └── UsableItem (stub — for Use action, future)
+```
+
+**Location tracking fields on BaseItem:**
+- `owner_uuid` — Entity or item (e.g. chest) that owns this; position defers to owner
+- `stored_in_uuid` — Container block UUID (Inventory block or Equipment block)
+- `tile_uuid` — Tile UUID when on floor (item has its own position)
+- `is_equipped` — Boolean flag
+- `equipped_slot` — String value of the slot enum when equipped
+
+**Slot enums** (`dnd/core/events.py`): `WeaponSlot`, `BodyPart`, `RingSlot`, `EquipmentSlot` (union of all three)
 
 ### Global Registries
 
@@ -454,7 +486,8 @@ Actions are registered as templates on entities with `template=True`:
 Entity.action_templates → get_available_actions() → AvailableActionsResult
     ├── entity_actions (attacks with valid_targets)
     ├── position_actions (Move, Jump - position-based actions)
-    └── self_actions (dash, dodge, disengage)
+    ├── self_actions (dash, dodge, disengage)
+    └── object_actions (Pick Up, Attack Object - targeting floor items)
 ```
 
 **Functional API** (`dnd/actions_functional.py`):
@@ -715,7 +748,9 @@ See `claude_docs/AOE_TARGETING_REFERENCE.md` for full implementation guide.
 - `RangeType` is in `dnd/core/events.py`, not `dnd/blocks/equipment.py`
 - Always use bestiary factories (`create_goblin`, `create_skeleton`) as reference for entity creation
 - **Bestiary factories use keyword args**: `create_goblin(name="Name", position=(0,0))` NOT `create_goblin("Name", ...)`
-- **Weapon slots**: Use `entity.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)` to get weapons. 4 slots: `MELEE_MAIN`, `MELEE_OFF` (can hold shield), `RANGED_MAIN`, `RANGED_OFF`
+- **Weapon slots**: Use `entity.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)` to get weapons. 4 slots: `MELEE_MAIN`, `MELEE_OFF` (can hold shield), `RANGED_MAIN`, `RANGED_OFF`. Use `entity.equipment.get_item_by_slot(slot)` for any slot type (WeaponSlot, BodyPart, RingSlot).
+- **Slot enums**: `WeaponSlot`, `BodyPart`, `RingSlot`, `EquipmentSlot` are ALL in `dnd/core/events.py` (not equipment.py)
+- **Weapon/Armor/Shield inherit from EquippableItem** (not BaseBlock). They have location tracking and equip hooks.
 - **Ability modifier is int**: `entity.ability_scores.strength.modifier` returns `int`, not `ModifiableValue`
 - **Always call `Entity.update_all_entities_senses()`** after creating entities for LOS to work
 - **EventHandler registration**: Only call `entity.add_event_handler(handler)` - it auto-registers with EventQueue. Do NOT also call `EventQueue.add_event_handler()` or handler fires twice!
@@ -976,10 +1011,13 @@ GridMap (get_map())
 ├── _tiles: Dict[pos, Tile]              # Tile objects (can have conditions)
 ├── _entity_positions: Dict[UUID, pos]   # Entity → position
 ├── _entities_by_position: Dict[pos, Set[UUID]]
+├── _object_positions: Dict[UUID, pos]   # Object (item) → position
+├── _objects_by_position: Dict[pos, Set[UUID]]
 └── compute_fov(), compute_paths()       # Shadowcast + Dijkstra
 ```
 
 **Key methods**: `is_walkable()`, `is_walkable_for()`, `get_entities_at()`, `move_entity()`, `compute_fov()`, `compute_paths()`
+**Object methods**: `place_object()`, `remove_object()`, `get_object_position()`, `get_objects_at()`, `get_objects_with_conditions()`
 
 **Spatial events**: `SPATIAL_ENTITY_ENTERED`, `SPATIAL_ENTITY_LEFT`, `SPATIAL_TILE_CHANGED` - fired automatically by GridMap.
 
@@ -1000,6 +1038,7 @@ Entity.update_all_entities_senses()            # Updates all entities
 
 # After update:
 entity.senses.entities      # Dict[UUID, position] - visible entities
+entity.senses.objects       # Dict[UUID, position] - visible objects (items on floor)
 entity.senses.visible       # Dict[position, bool] - visible cells
 entity.senses.paths         # Dict[position, List[position]] - paths to reachable cells
 entity.senses.get_feet_distance(target.position)  # Distance in feet (1 grid = 5ft)
@@ -1160,8 +1199,14 @@ Polls server every 2s, shows opponent actions, blocks until Claude's turn, detec
 | Dice processor utilities | `dnd/classes/dice_processor_utils.py` |
 | Class module exports | `dnd/classes/__init__.py` |
 | **Items** | |
+| BaseItem, EquippableItem, UsableItem | `dnd/blocks/base_item.py` |
+| Inventory block | `dnd/blocks/inventory.py` |
 | Weapon factories (WEAPONS dict) | `dnd/items/weapons.py` |
 | Armor factories (ARMORS, SHIELDS dicts) | `dnd/items/armors.py` |
+| Items Phase 1 tests (27) | `examples/test_items_phase1.py` |
+| Items Phase 1 advanced tests (36) | `examples/test_items_phase1_advanced.py` |
+| Items lifecycle hooks tests (22) | `examples/test_items_lifecycle_hooks.py` |
+| Items equip/unequip hooks tests (15) | `examples/test_items_equip_hooks.py` |
 | **Spells** | |
 | Spell module exports + dicts | `dnd/spells/__init__.py` |
 | SpellAction, SpellEvent base (in actions.py) | `dnd/actions.py` |
@@ -1222,7 +1267,7 @@ Contains focused implementation guides:
 | `CLI_GUIDE.md` | How to use CLI and Agent commands |
 | `IMPLEMENTATION_GUIDE.md` | **READ FIRST** - How to implement conditions, actions, event handlers |
 | `CLASS_SYSTEM.md` | Class system patterns, Fighter/Barbarian/Sorcerer, spellcasting infrastructure |
-| `ITEMS_INVENTORY_SYSTEM.md` | Items, inventory, Use action, equip hooks, environment objects, looting design |
+| `ITEMS_PLAN.md` | Items system implementation plan (phases a-e), current status |
 | ~~`EXAMPLE_PATTERNS.md`~~ | Merged into `IMPLEMENTATION_GUIDE.md` (Section 14) |
 | `archive/` | Completed planning docs (historical reference) |
 
