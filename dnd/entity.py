@@ -1469,18 +1469,25 @@ class Entity(BaseBlock):
 
         Sets location tracking fields and calls lifecycle hook with entity context.
         Returns False if inventory is full.
+
+        Stack-aware: if add_item merges the item into an existing stack, skips
+        location tracking and lifecycle hook (the item object was consumed).
         """
         if not self.inventory.can_add(item):
             return False
+        item_uuid = item.uuid
         item.source_entity_uuid = self.uuid
         self.inventory.add_item(item)
-        item.owner_uuid = self.uuid
-        item.stored_in_uuid = self.inventory.uuid
+        merged = item_uuid not in self.inventory.items
+        # Remove from grid regardless of merge (item is leaving the floor)
         item.tile_uuid = None
         gridmap = get_map()
-        if gridmap.get_object_position(item.uuid) is not None:
-            gridmap.remove_object(item.uuid)  # fires SPATIAL_OBJECT_REMOVED
-        item.loot(entity_uuid=self.uuid, inventory_uuid=self.inventory.uuid)
+        if gridmap.get_object_position(item_uuid) is not None:
+            gridmap.remove_object(item_uuid)
+        if not merged:
+            item.owner_uuid = self.uuid
+            item.stored_in_uuid = self.inventory.uuid
+            item.loot(entity_uuid=self.uuid, inventory_uuid=self.inventory.uuid)
         return True
 
     def drop_item(self, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[BaseItem]:
@@ -1803,8 +1810,6 @@ class Entity(BaseBlock):
             # Include action if it's valid OR if it just can't be afforded
             # This allows UI to show grayed-out actions that exist but can't be used
             if is_valid or not can_afford:
-                # SpellAction has spell_level attribute
-                is_spell = hasattr(template, 'spell_level')
                 result.self_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.SELF,
@@ -1814,8 +1819,7 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=template.costs[0].cost_type if template.costs else "actions",
                     cost_amount=template.costs[0].cost if template.costs else 0,
-                    is_attack=template.is_attack,
-                    is_spell=is_spell
+                    action_category=template.action_category,
                 ))
 
         # ENTITY actions - filter targets based on target_filter
@@ -1873,8 +1877,6 @@ class Entity(BaseBlock):
                         weapon_name = weapon.name
                         display_name = weapon_name  # Use weapon name as display name
 
-                # SpellAction has spell_level attribute
-                is_spell = hasattr(template, 'spell_level')
                 result.entity_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=template.target_type,  # Use actual target type (ENTITY or MULTI_ENTITY)
@@ -1886,8 +1888,7 @@ class Entity(BaseBlock):
                     cost_amount=template.costs[0].cost if template.costs else 0,
                     weapon_slot=weapon_slot_str,
                     weapon_name=weapon_name,
-                    is_attack=template.is_attack,
-                    is_spell=is_spell
+                    action_category=template.action_category,
                 ))
 
         # POSITION_PATH actions (Move) - validate for each reachable position via path
@@ -1917,8 +1918,6 @@ class Entity(BaseBlock):
 
             if valid_positions:
                 template_name = template.name or "Unknown"
-                # SpellAction has spell_level attribute
-                is_spell = hasattr(template, 'spell_level')
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=template.target_type,
@@ -1928,8 +1927,7 @@ class Entity(BaseBlock):
                     description=f"{result.remaining_movement}ft remaining",
                     cost_type="movement",
                     cost_amount=0,
-                    is_attack=template.is_attack,
-                    is_spell=is_spell
+                    action_category=template.action_category,
                 ))
 
         # POSITION_LOS actions (Jump, Teleport) - use action's get_valid_positions()
@@ -1956,8 +1954,6 @@ class Entity(BaseBlock):
                 template_name = template.name or "Unknown"
                 cost_type = template.costs[0].cost_type if template.costs else "bonus_actions"
                 cost_amount = template.costs[0].cost if template.costs else 1
-                # SpellAction has spell_level attribute
-                is_spell = hasattr(template, 'spell_level')
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.POSITION_LOS,
@@ -1967,8 +1963,7 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=cost_type,
                     cost_amount=cost_amount,
-                    is_attack=template.is_attack,
-                    is_spell=is_spell
+                    action_category=template.action_category,
                 ))
 
         # POSITION_AOE actions - compute affected entities for each valid position
@@ -2043,8 +2038,6 @@ class Entity(BaseBlock):
             if valid_positions:
                 template_name = template.name or "Unknown"
                 cost_type = template.costs[0].cost_type if template.costs else "actions"
-                # SpellAction has spell_level attribute
-                is_spell = hasattr(template, 'spell_level')
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.POSITION_AOE,
@@ -2054,8 +2047,7 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=cost_type,
                     cost_amount=template.costs[0].cost if template.costs else 1,
-                    is_attack=template.is_attack,
-                    is_spell=is_spell
+                    action_category=template.action_category,
                 ))
 
         # OBJECT actions - discover from templates + nearby visible objects
@@ -2090,21 +2082,21 @@ class Entity(BaseBlock):
                     description=template.description,
                     cost_type=template.costs[0].cost_type if template.costs else "actions",
                     cost_amount=template.costs[0].cost if template.costs else 0,
-                    is_attack=template.is_attack,
-                    is_spell=False
+                    action_category=template.action_category,
                 ))
 
         # USE ACTIONS — from inventory items + nearby environment UsableItems
-        use_sources: list = []  # List of (template, item_uuid, item_name)
+        use_sources: list = []  # List of (template, item_uuid, item_name, item_stack)
 
         # A) Inventory use actions
         for use_template in self.inventory.get_all_use_actions(self.uuid):
             item_uuid = use_template.source_item_uuid
             item = BaseBlock.get(item_uuid) if item_uuid else None
             item_name = item.name if item else "Item"
-            use_sources.append((use_template, item_uuid, item_name))
+            item_stack = getattr(item, 'stack_count', None) if item else None
+            use_sources.append((use_template, item_uuid, item_name, item_stack))
 
-        # B) Environment use actions (≤5ft objects)
+        # B) Environment use actions (≤5ft objects, no stacking)
         for obj_uuid, obj_pos in self.senses.objects.items():
             obj = BaseBlock.get(obj_uuid)
             if not isinstance(obj, UsableItem):
@@ -2112,14 +2104,15 @@ class Entity(BaseBlock):
             if self.senses.get_feet_distance(obj_pos) > 5:
                 continue
             for use_template in obj.get_use_actions(self.uuid):
-                use_sources.append((use_template, obj_uuid, obj.name))
+                use_sources.append((use_template, obj_uuid, obj.name, None))
 
         # Route each use template by target_type
-        for use_template, item_uuid, item_name in use_sources:
+        for use_template, item_uuid, item_name, item_stack in use_sources:
             template_name = use_template.name or "Use"
-            display_name = f"{template_name} ({item_name})"
+            stack_suffix = f" x{item_stack}" if item_stack and item_stack > 1 else ""
+            display_name = f"{template_name} ({item_name}{stack_suffix})"
+            stack_count_field = item_stack if item_stack and item_stack > 1 else None
             can_afford = use_template.check_costs()
-            is_spell = hasattr(use_template, 'spell_level')
             cost_type = use_template.costs[0].cost_type if use_template.costs else "actions"
             cost_amount = use_template.costs[0].cost if use_template.costs else 0
 
@@ -2137,7 +2130,8 @@ class Entity(BaseBlock):
                     cost_amount=cost_amount,
                     is_item_use=True,
                     source_item_uuid=item_uuid,
-                    is_spell=is_spell,
+                    action_category=use_template.action_category,
+                    item_stack_count=stack_count_field,
                 ))
 
             elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
@@ -2170,8 +2164,8 @@ class Entity(BaseBlock):
                         cost_amount=cost_amount,
                         is_item_use=True,
                         source_item_uuid=item_uuid,
-                        is_attack=use_template.is_attack,
-                        is_spell=is_spell,
+                        action_category=use_template.action_category,
+                        item_stack_count=stack_count_field,
                     ))
 
             elif use_template.target_type == TargetType.POSITION_AOE:
@@ -2237,8 +2231,8 @@ class Entity(BaseBlock):
                         cost_amount=cost_amount,
                         is_item_use=True,
                         source_item_uuid=item_uuid,
-                        is_attack=use_template.is_attack,
-                        is_spell=is_spell,
+                        action_category=use_template.action_category,
+                        item_stack_count=stack_count_field,
                     ))
 
             elif use_template.target_type == TargetType.POSITION_LOS:
@@ -2266,8 +2260,8 @@ class Entity(BaseBlock):
                         cost_amount=cost_amount,
                         is_item_use=True,
                         source_item_uuid=item_uuid,
-                        is_attack=use_template.is_attack,
-                        is_spell=is_spell,
+                        action_category=use_template.action_category,
+                        item_stack_count=stack_count_field,
                     ))
 
             elif use_template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH):
@@ -2304,8 +2298,8 @@ class Entity(BaseBlock):
                         cost_amount=cost_amount,
                         is_item_use=True,
                         source_item_uuid=item_uuid,
-                        is_attack=use_template.is_attack,
-                        is_spell=is_spell,
+                        action_category=use_template.action_category,
+                        item_stack_count=stack_count_field,
                     ))
 
         return result

@@ -11,7 +11,7 @@ Contains all rage/frenzy related code:
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_actions import (
-    BaseAction, ActionEvent, Cost, TargetType, BaseCost
+    BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
 from dnd.core.events import (
     Event, EventPhase, EventType,
@@ -782,7 +782,7 @@ class FrenziedStrike(BaseAction):
     description: str = "Make a bonus action melee attack while frenzied"
     target_type: TargetType = TargetType.ENTITY
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
-    is_attack: bool = True
+    action_category: ActionCategory = ActionCategory.ATTACK
 
     costs: List[Cost] = []
 

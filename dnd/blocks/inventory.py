@@ -30,7 +30,14 @@ class Inventory(BaseBlock):
         return len(self.items)
 
     def can_add(self, item: BaseItem) -> bool:
-        """Check if item can be added (slot and weight limits)."""
+        """Check if item can be added (slot and weight limits).
+
+        Stack-aware: if item can merge into an existing stack, bypasses slot limit.
+        """
+        if item.stack_id is not None:
+            for existing in self.items.values():
+                if existing.stack_id == item.stack_id and existing.stack_count < existing.max_stack:
+                    return True  # Can merge without needing a free slot
         if self.max_slots is not None and self.item_count >= self.max_slots:
             return False
         if self.weight_capacity is not None:
@@ -39,7 +46,25 @@ class Inventory(BaseBlock):
         return True
 
     def add_item(self, item: BaseItem) -> bool:
-        """Add item to inventory. Returns False if capacity exceeded."""
+        """Add item to inventory. Tries stack merge before insert.
+
+        Returns False if capacity exceeded. If fully merged, the consumed item
+        is unregistered from BaseBlock._registry.
+        """
+        # Try to merge into existing stack
+        if item.stack_id is not None:
+            for existing in self.items.values():
+                if existing.stack_id == item.stack_id and existing.stack_count < existing.max_stack:
+                    space = existing.max_stack - existing.stack_count
+                    transfer = min(space, item.stack_count)
+                    existing.stack_count += transfer
+                    item.stack_count -= transfer
+                    if item.stack_count == 0:
+                        # Fully merged — unregister consumed item
+                        BaseBlock._registry.pop(item.uuid, None)
+                        return True
+                    break  # Partial merge — fall through to insert remainder
+        # No merge or partial: insert as new entry
         if not self.can_add(item):
             return False
         self.items[item.uuid] = item

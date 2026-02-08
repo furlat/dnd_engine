@@ -1,4 +1,4 @@
-from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost, BaseCost, ActionEvent, TargetType
+from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost, BaseCost, ActionEvent, TargetType, ActionCategory
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -158,6 +158,7 @@ class Move(BaseAction):
     name: str = Field(default="Move", description="A movement action")
     description: str = Field(default="Move to a position", description="A description of the movement action")
     target_type: TargetType = Field(default=TargetType.POSITION_PATH, description="Move targets a position via path")
+    action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT)
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="The end position of the movement")
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="The path of the movement")
     use_movement_cost: bool = Field(default=True, description="Whether to use the movement cost")
@@ -722,7 +723,7 @@ class Attack(BaseAction):
     description: str = Field(default="Attack a target", description="A description of the attack action")
     target_type: TargetType = Field(default=TargetType.ENTITY, description="Attack targets an entity")
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
-    is_attack: bool = Field(default=True, description="Attack is a damage-dealing attack action")
+    action_category: ActionCategory = Field(default=ActionCategory.ATTACK)
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="A list of costs for the action")
 
     @model_validator(mode="after")
@@ -1506,6 +1507,7 @@ class Jump(BaseAction):
     name: str = Field(default="Jump", description="A jump action")
     description: str = Field(default="Jump to a visible position", description="Description")
     target_type: TargetType = Field(default=TargetType.POSITION_LOS, description="Jump uses LOS targeting")
+    action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT)
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Landing position")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
@@ -2390,6 +2392,8 @@ class SpellAction(BaseAction):
     Attack spells should borrow the pattern from Attack._apply() for set_from_target().
     """
 
+    action_category: ActionCategory = Field(default=ActionCategory.SPELL)
+
     # Spell metadata
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
@@ -2607,7 +2611,7 @@ class AttackObject(BaseAction):
     name: str = Field(default="Attack Object")
     description: str = Field(default="Attack a breakable object")
     target_type: TargetType = Field(default=TargetType.OBJECT)
-    is_attack: bool = Field(default=True)
+    action_category: ActionCategory = Field(default=ActionCategory.ATTACK)
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Attack Object Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ])

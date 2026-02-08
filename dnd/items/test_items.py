@@ -21,7 +21,7 @@ from dnd.blocks.base_item import UsableItem
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
-from dnd.actions import entity_action_economy_cost_evaluator
+from dnd.actions import entity_action_economy_cost_evaluator, SpellAction
 
 
 # =============================================================================
@@ -317,12 +317,16 @@ class SpellScroll(UsableItem):
     For scrolls: charges=1, is_consumable=True (destroyed after use).
     For wands: charges=N, is_consumable=False (stays at 0 charges).
     For unlimited: charges=-1 (environment objects).
+
+    Scrolls stack up to 20 by default (same spell + level = same stack_id).
+    Wands don't stack (stack_id=None).
     """
     name: str = Field(default="Spell Scroll")
     is_pickable: bool = Field(default=True)
     is_consumable: bool = Field(default=True)
     charges: int = Field(default=1)
     max_charges: int = Field(default=1)
+    max_stack: int = Field(default=20)
     scroll_cast_level: int = Field(default=1)
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
@@ -336,9 +340,9 @@ class SpellScroll(UsableItem):
             if self.charges != -1 and self.charges < template_charge_cost:
                 continue
 
-            if hasattr(template, '_create_variant'):
+            if isinstance(template, SpellAction):
                 # SpellAction — create variant with action-only cost, no spell slot
-                cast_level = getattr(template, 'spell_level', self.scroll_cast_level)
+                cast_level = template.spell_level
                 if cast_level == 0:
                     cast_level = 0  # Cantrip
                 else:
@@ -372,42 +376,48 @@ def create_scroll_of_fireball(owner_uuid: UUID, cast_level: int = 3) -> SpellScr
     from dnd.spells.evocation import Fireball
     spell = Fireball(source_entity_uuid=uuid4(), caster_level=5, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Fireball",
-        scroll_cast_level=cast_level, use_action_templates=[spell])
+        scroll_cast_level=cast_level, use_action_templates=[spell],
+        stack_id=f"scroll_fireball_l{cast_level}")
 
 
 def create_scroll_of_magic_missile(owner_uuid: UUID, cast_level: int = 1) -> SpellScroll:
     from dnd.spells.evocation import MagicMissile
     spell = MagicMissile(source_entity_uuid=uuid4(), caster_level=1, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Magic Missile",
-        scroll_cast_level=cast_level, use_action_templates=[spell])
+        scroll_cast_level=cast_level, use_action_templates=[spell],
+        stack_id=f"scroll_magic_missile_l{cast_level}")
 
 
 def create_scroll_of_hold_person(owner_uuid: UUID, cast_level: int = 2) -> SpellScroll:
     from dnd.spells.enchantment import HoldPerson
     spell = HoldPerson(source_entity_uuid=uuid4(), caster_level=3, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Hold Person",
-        scroll_cast_level=cast_level, use_action_templates=[spell])
+        scroll_cast_level=cast_level, use_action_templates=[spell],
+        stack_id=f"scroll_hold_person_l{cast_level}")
 
 
 def create_scroll_of_mage_armor(owner_uuid: UUID, cast_level: int = 1) -> SpellScroll:
     from dnd.spells.abjuration import MageArmor
     spell = MageArmor(source_entity_uuid=uuid4(), caster_level=1, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Mage Armor",
-        scroll_cast_level=cast_level, use_action_templates=[spell])
+        scroll_cast_level=cast_level, use_action_templates=[spell],
+        stack_id=f"scroll_mage_armor_l{cast_level}")
 
 
 def create_scroll_of_spike_growth(owner_uuid: UUID, cast_level: int = 2) -> SpellScroll:
     from dnd.spells.transmutation import SpikeGrowth
     spell = SpikeGrowth(source_entity_uuid=uuid4(), caster_level=3, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Spike Growth",
-        scroll_cast_level=cast_level, use_action_templates=[spell])
+        scroll_cast_level=cast_level, use_action_templates=[spell],
+        stack_id=f"scroll_spike_growth_l{cast_level}")
 
 
 def create_scroll_of_fire_bolt(owner_uuid: UUID, caster_level: int = 5) -> SpellScroll:
     from dnd.spells.evocation import FireBolt
     spell = FireBolt(source_entity_uuid=uuid4(), caster_level=caster_level, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Fire Bolt",
-        scroll_cast_level=0, use_action_templates=[spell])
+        scroll_cast_level=0, use_action_templates=[spell],
+        stack_id=f"scroll_fire_bolt_cl{caster_level}")
 
 
 def create_wand_of_magic_missiles(owner_uuid: UUID, charges: int = 3) -> SpellScroll:
@@ -496,12 +506,13 @@ class DrinkPotionAction(BaseAction):
 
 
 class HealingPotion(UsableItem):
-    """Potion of Healing. Single use, consumable."""
+    """Potion of Healing. Single use, consumable. Stacks up to 10."""
     name: str = Field(default="Potion of Healing")
     is_pickable: bool = Field(default=True)
     is_consumable: bool = Field(default=True)
     charges: int = Field(default=1)
     max_charges: int = Field(default=1)
+    max_stack: int = Field(default=10)
 
 
 def create_healing_potion(owner_uuid: UUID, heal_amount: int = 7) -> HealingPotion:
@@ -509,7 +520,8 @@ def create_healing_potion(owner_uuid: UUID, heal_amount: int = 7) -> HealingPoti
         source_entity_uuid=uuid4(), source_item_uuid=uuid4(),
         heal_amount=heal_amount, template=True,
     )
-    return HealingPotion(source_entity_uuid=owner_uuid, use_action_templates=[action])
+    return HealingPotion(source_entity_uuid=owner_uuid, use_action_templates=[action],
+        stack_id=f"healing_potion_{heal_amount}")
 
 
 # =============================================================================
@@ -517,13 +529,15 @@ def create_healing_potion(owner_uuid: UUID, heal_amount: int = 7) -> HealingPoti
 # Three variations: permanent, concentration, timed
 # =============================================================================
 
-class FlamingCoatCondition(BaseCondition):
-    """Adds 1d6 fire damage to a specific weapon's extra_damage lists.
+class WeaponCoatCondition(BaseCondition):
+    """Adds 1d6 elemental damage to a specific weapon's extra_damage lists.
 
-    Applied on the ENTITY. Tracks which weapon it coated and cleans up on removal.
+    Applied on the ENTITY. Tracks which weapon it coated and the damage type,
+    cleans up on removal. Supports any DamageType (fire, lightning, etc.).
     """
-    name: str = "Flaming Coat"
+    name: str = "Weapon Coat"
     coated_weapon_uuid: Optional[UUID] = Field(default=None)
+    coat_damage_type: DamageType = Field(default=DamageType.FIRE)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -537,34 +551,37 @@ class FlamingCoatCondition(BaseCondition):
         if not weapon or not isinstance(weapon, Weapon):
             return [], [], [], [], declaration_event.cancel(status_message="Weapon not found")
 
-        # Add 1d6 fire to weapon's extra damage lists
+        # Add 1d6 elemental damage to weapon's extra damage lists
         bonus_mv = ModifiableValue.create(
             source_entity_uuid=self.target_entity_uuid,
-            base_value=0, value_name="Flaming Coat Bonus"
+            base_value=0, value_name=f"{self.name} Bonus"
         )
         weapon.extra_damage_dices.append(6)
         weapon.extra_damage_dices_numbers.append(1)
         weapon.extra_damage_bonus.append(bonus_mv)
-        weapon.extra_damage_type.append(DamageType.FIRE)
+        weapon.extra_damage_type.append(self.coat_damage_type)
 
         effect = declaration_event.phase_to(EventPhase.EFFECT,
-            update={"condition": self}, status_message="Weapon coated with flames")
+            update={"condition": self}, status_message=f"Weapon coated with {self.coat_damage_type.value}")
         return [], [], [], [], effect
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up fire dice from the coated weapon."""
+        """Clean up elemental dice from the coated weapon."""
         if self.coated_weapon_uuid:
             weapon = BaseBlock.get(self.coated_weapon_uuid)
             if weapon and isinstance(weapon, Weapon):
-                # Find and remove the fire damage entry we added
                 for i in range(len(weapon.extra_damage_type) - 1, -1, -1):
-                    if weapon.extra_damage_type[i] == DamageType.FIRE:
+                    if weapon.extra_damage_type[i] == self.coat_damage_type:
                         weapon.extra_damage_dices.pop(i)
                         weapon.extra_damage_dices_numbers.pop(i)
                         weapon.extra_damage_bonus.pop(i)
                         weapon.extra_damage_type.pop(i)
                         break
         return super()._remove(event)
+
+
+# Backward-compatible alias
+FlamingCoatCondition = WeaponCoatCondition
 
 
 class ApplyCoatAction(BaseAction):
@@ -576,6 +593,7 @@ class ApplyCoatAction(BaseAction):
     weapon_slot: str = Field(default="MELEE_MAIN")
     coat_duration: Optional[int] = Field(default=None, description="Duration in rounds (None=permanent)")
     use_concentration: bool = Field(default=False)
+    coat_damage_type: DamageType = Field(default=DamageType.FIRE)
 
     def pre_validate(self) -> bool:
         """Only show action if a weapon is equipped in the target slot."""
@@ -619,10 +637,22 @@ class ApplyCoatAction(BaseAction):
                 target_entity_uuid=self.source_entity_uuid,
             )
 
-        coat = FlamingCoatCondition(
+        # Derive condition name from damage type (e.g., "Flaming Coat", "Lightning Coat")
+        damage_name_map = {
+            DamageType.FIRE: "Flaming Coat",
+            DamageType.LIGHTNING: "Lightning Coat",
+            DamageType.COLD: "Frost Coat",
+            DamageType.ACID: "Acid Coat",
+            DamageType.POISON: "Poison Coat",
+        }
+        coat_name = damage_name_map.get(self.coat_damage_type, f"{self.coat_damage_type.value.title()} Coat")
+
+        coat = WeaponCoatCondition(
+            name=coat_name,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             coated_weapon_uuid=weapon.uuid,
+            coat_damage_type=self.coat_damage_type,
             duration=duration,
         )
         entity.add_condition(coat)
@@ -633,35 +663,57 @@ class ApplyCoatAction(BaseAction):
             concentration = Concentrating(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.source_entity_uuid,
-                spell_name="Flaming Weapon",
+                spell_name=f"{coat_name} Weapon",
             )
             entity.add_condition(concentration)
             concentration.add_linked_condition(entity.uuid, coat.uuid)
 
-        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Applied fire coat")
-        return effect.phase_to(EventPhase.COMPLETION, status_message="Weapon coated with flames")
+        effect = execution_event.phase_to(EventPhase.EFFECT, status_message=f"Applied {coat_name.lower()}")
+        return effect.phase_to(EventPhase.COMPLETION, status_message=f"Weapon coated with {self.coat_damage_type.value}")
 
 
 class WeaponCoat(UsableItem):
-    """Weapon Coat of Flame. Single use, consumable."""
+    """Weapon Coat. Single use, consumable. Stacks up to 10 by damage type."""
     name: str = Field(default="Weapon Coat of Flame")
     is_pickable: bool = Field(default=True)
     is_consumable: bool = Field(default=True)
     charges: int = Field(default=1)
     max_charges: int = Field(default=1)
+    max_stack: int = Field(default=10)
 
 
 def create_weapon_coat(owner_uuid: UUID) -> WeaponCoat:
-    """Variation B: Permanent coating (no duration). Consumable, destroyed on use."""
+    """Fire weapon coat. Permanent coating (no duration). Consumable, destroyed on use."""
     coat_main = ApplyCoatAction(
         source_entity_uuid=uuid4(), source_item_uuid=uuid4(),
-        name="Coat Main Hand", weapon_slot="MELEE_MAIN", template=True,
+        name="Coat Main Hand", weapon_slot="MELEE_MAIN",
+        coat_damage_type=DamageType.FIRE, template=True,
     )
     coat_off = ApplyCoatAction(
         source_entity_uuid=uuid4(), source_item_uuid=uuid4(),
-        name="Coat Off Hand", weapon_slot="MELEE_OFF", template=True,
+        name="Coat Off Hand", weapon_slot="MELEE_OFF",
+        coat_damage_type=DamageType.FIRE, template=True,
     )
-    return WeaponCoat(source_entity_uuid=owner_uuid, use_action_templates=[coat_main, coat_off])
+    return WeaponCoat(source_entity_uuid=owner_uuid, name="Weapon Coat of Flame",
+        use_action_templates=[coat_main, coat_off],
+        stack_id="weapon_coat_fire")
+
+
+def create_lightning_weapon_coat(owner_uuid: UUID) -> WeaponCoat:
+    """Lightning weapon coat. Permanent coating. Consumable, destroyed on use."""
+    coat_main = ApplyCoatAction(
+        source_entity_uuid=uuid4(), source_item_uuid=uuid4(),
+        name="Coat Main Hand", weapon_slot="MELEE_MAIN",
+        coat_damage_type=DamageType.LIGHTNING, template=True,
+    )
+    coat_off = ApplyCoatAction(
+        source_entity_uuid=uuid4(), source_item_uuid=uuid4(),
+        name="Coat Off Hand", weapon_slot="MELEE_OFF",
+        coat_damage_type=DamageType.LIGHTNING, template=True,
+    )
+    return WeaponCoat(source_entity_uuid=owner_uuid, name="Weapon Coat of Lightning",
+        use_action_templates=[coat_main, coat_off],
+        stack_id="weapon_coat_lightning")
 
 
 def create_flaming_weapon_spell_coat(owner_uuid: UUID) -> WeaponCoat:

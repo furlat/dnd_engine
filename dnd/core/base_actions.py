@@ -15,6 +15,14 @@ CostType = Literal[
 ]
 
 
+class ActionCategory(str, Enum):
+    """Classification of action types."""
+    ABILITY = "ability"
+    ATTACK = "attack"
+    SPELL = "spell"
+    MOVEMENT = "movement"
+
+
 class TargetType(str, Enum):
     """What kind of target an action requires."""
     SELF = "self"                    # Dash, Dodge, Disengage - no target needed
@@ -166,7 +174,19 @@ class BaseAction(BaseObject):
     target_type: TargetType = Field(default=TargetType.SELF, description="What kind of target this action requires")
     template: bool = Field(default=False, description="If True, this is a template that cannot be applied directly - use instantiate()")
     include_self: bool = Field(default=False, description="If True and target_type=ENTITY, self is a valid target (for buff spells like Mage Armor)")
-    is_attack: bool = Field(default=False, description="If True, action is a damage-dealing attack (Attack, Extra Attack, FrenziedStrike)")
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Classification of this action: ABILITY (default), ATTACK, SPELL, or MOVEMENT")
+
+    @property
+    def is_attack(self) -> bool:
+        return self.action_category == ActionCategory.ATTACK
+
+    @property
+    def is_spell(self) -> bool:
+        return self.action_category == ActionCategory.SPELL
+
+    @property
+    def is_movement(self) -> bool:
+        return self.action_category == ActionCategory.MOVEMENT
 
     # Item source (set by UsableItem.get_use_actions())
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of item providing this action")
@@ -784,13 +804,21 @@ class AvailableActionInfo(BaseModel):
     weapon_slot: Optional[str] = Field(default=None, description="Weapon slot for attacks")
     weapon_name: Optional[str] = Field(default=None, description="Weapon name for display (e.g., 'Scimitar')")
 
-    # Attack classification
-    is_attack: bool = Field(default=False, description="True if action is a damage-dealing attack")
-    is_spell: bool = Field(default=False, description="True if action is a spell (SpellAction)")
+    # Action classification
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Classification of this action")
+
+    @property
+    def is_attack(self) -> bool:
+        return self.action_category == ActionCategory.ATTACK
+
+    @property
+    def is_spell(self) -> bool:
+        return self.action_category == ActionCategory.SPELL
 
     # Item use classification
     is_item_use: bool = Field(default=False, description="True for use actions from items")
     source_item_uuid: Optional[UUID] = Field(default=None, description="Item providing this action")
+    item_stack_count: Optional[int] = Field(default=None, description="Stack count of source item (for display, only set when > 1)")
 
 
 class AvailableActionsResult(BaseModel):

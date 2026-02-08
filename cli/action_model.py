@@ -185,8 +185,7 @@ class AvailableAction:
     description: str = ""
     weapon_slot: Optional[str] = None
     weapon_name: Optional[str] = None
-    _is_attack: bool = False        # True for Attack, Extra Attack, Frenzied Strike
-    _is_spell: bool = False         # True for SpellAction (Fire Bolt, Fireball, etc.)
+    action_category: str = "ability"  # "ability", "attack", "spell", "movement"
 
     @property
     def command_name(self) -> str:
@@ -202,13 +201,18 @@ class AvailableAction:
 
     @property
     def is_attack(self) -> bool:
-        """Check if this is an attack action (uses server-provided is_attack field)."""
-        return self._is_attack
+        """Check if this is an attack action."""
+        return self.action_category == "attack"
 
     @property
     def is_spell(self) -> bool:
-        """Check if this is a spell action (uses server-provided is_spell field)."""
-        return self._is_spell
+        """Check if this is a spell action."""
+        return self.action_category == "spell"
+
+    @property
+    def is_movement(self) -> bool:
+        """Check if this is a movement action."""
+        return self.action_category == "movement"
 
     @property
     def is_bonus_action(self) -> bool:
@@ -230,8 +234,7 @@ class AvailableAction:
             description=data.get("description", ""),
             weapon_slot=data.get("weapon_slot"),
             weapon_name=data.get("weapon_name"),
-            _is_attack=data.get("is_attack", False),
-            _is_spell=data.get("is_spell", False)
+            action_category=data.get("action_category", "ability")
         )
 
 
