@@ -14,7 +14,7 @@ from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.events import Event, EventPhase, EventQueue, WeaponSlot
-from dnd.core.modifiers import NumericalModifier, DamageType
+from dnd.core.modifiers import  DamageType
 from dnd.core.values import ModifiableValue
 from dnd.core.gridmap import get_map
 from dnd.blocks.base_item import UsableItem

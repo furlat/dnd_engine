@@ -26,6 +26,7 @@ from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.actions_functional import (
     setup_standard_actions, get_available_actions, execute_use_action,
 )
+from dnd.blocks.base_item import UsableItem
 from dnd.items.test_items import (
     create_scroll_of_fireball, create_scroll_of_magic_missile,
     create_healing_potion, create_weapon_coat, create_lightning_weapon_coat,
@@ -187,6 +188,7 @@ def test_consume_from_stack():
 
     assert stacked.stack_count == 2, f"Expected stack_count=2 after use, got {stacked.stack_count}"
     assert entity.inventory.item_count == 1, "Item should still be in inventory"
+    assert isinstance(stacked, UsableItem), f"Expected UsableItem, got {type(stacked)}"
     assert stacked.charges == 1, f"Charges should reset to 1, got {stacked.charges}"
 
 
@@ -214,7 +216,7 @@ def test_consume_last_in_stack():
 def test_action_appears_once():
     """3 stacked scrolls -> Fireball shows once in available_actions."""
     entity = create_entity()
-    target = create_target()
+    create_target()
     Entity.update_all_entities_senses()
 
     for _ in range(3):
@@ -229,7 +231,7 @@ def test_action_appears_once():
 def test_display_name_includes_count():
     """Stack of 3 -> display_name contains 'x3'."""
     entity = create_entity()
-    target = create_target()
+    create_target()
     Entity.update_all_entities_senses()
 
     for _ in range(3):
@@ -364,7 +366,7 @@ def test_fire_vs_lightning_no_merge():
 def test_lightning_coat_applies_damage():
     """Apply lightning coat, attack -> target takes lightning extra damage."""
     entity = create_entity()
-    target = create_target()
+    _ = create_target()
     Entity.update_all_entities_senses()
 
     # Equip a weapon
