@@ -898,7 +898,7 @@ def render_available_actions_panel(
     # Position-based actions (Move, Jump, etc.) - iterate ALL position_actions
     # Filter out spells (is_spell=True) - those go in SPELLS section
     position_actions = actions.get("position_actions", [])
-    movement_actions = [a for a in position_actions if not a.get("is_spell", False)]
+    movement_actions = [a for a in position_actions if a.get("action_category", "ability") != "spell"]
 
     for action in movement_actions:
         template_name = action.get("template_name", "Unknown")
@@ -939,9 +939,9 @@ def render_available_actions_panel(
     all_self_actions = actions.get("self_actions", [])
 
     # Filter spells from all sources
-    spell_actions_from_entity = [a for a in all_entity_actions if a.get("is_spell", False)]
-    spell_actions_from_position = [a for a in position_actions if a.get("is_spell", False)]
-    spell_actions_from_self = [a for a in all_self_actions if a.get("is_spell", False)]
+    spell_actions_from_entity = [a for a in all_entity_actions if a.get("action_category", "ability") == "spell"]
+    spell_actions_from_position = [a for a in position_actions if a.get("action_category", "ability") == "spell"]
+    spell_actions_from_self = [a for a in all_self_actions if a.get("action_category", "ability") == "spell"]
     all_spell_actions = spell_actions_from_entity + spell_actions_from_position + spell_actions_from_self
     valid_spells = [a for a in all_spell_actions if a.get("valid_targets") and a.get("can_afford")]
 
@@ -952,10 +952,10 @@ def render_available_actions_panel(
         Examples: Attack, Extra Attack, Frenzied Strike.
         NOT included: "Reckless Attack" (self-buff that enables advantage).
         """
-        return action.get("is_attack", False)
+        return action.get("action_category", "ability") == "attack"
 
     # Non-spell entity actions
-    non_spell_entity_actions = [a for a in all_entity_actions if not a.get("is_spell", False)]
+    non_spell_entity_actions = [a for a in all_entity_actions if a.get("action_category", "ability") != "spell"]
     attacks = [a for a in non_spell_entity_actions if is_attack_action(a)]
     other_entity_actions = [a for a in non_spell_entity_actions if not is_attack_action(a)]
 
@@ -1089,7 +1089,7 @@ def render_available_actions_panel(
                 content.append(f" (self)\n", style="dim")
 
     # Self-actions - fully dynamic using registry (filter out spells)
-    other = [a for a in all_self_actions if not a.get("is_spell", False)]
+    other = [a for a in all_self_actions if a.get("action_category", "ability") != "spell"]
     other_items = []
 
     for act in other:

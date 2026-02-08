@@ -15,7 +15,7 @@ Level 18: Champion - Survivor (DEFERRED)
 
 from dnd.core.base_conditions import BaseCondition, DurationType
 from dnd.core.base_actions import (
-    BaseAction, ActionEvent, Cost, TargetType, BaseCost
+    BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
 from dnd.core.events import (
     Event, EventPhase, EventType, EventQueue,
@@ -1260,7 +1260,7 @@ class ExtraAttack(BaseAction):
     description: str = "Make an additional weapon attack"
     target_type: TargetType = TargetType.ENTITY
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
-    is_attack: bool = True
+    action_category: ActionCategory = ActionCategory.ATTACK
 
     # Cost: only resource, no action cost
     costs: List[Cost] = []

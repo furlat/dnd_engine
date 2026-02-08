@@ -55,6 +55,7 @@ class BaseItem(BaseBlock):
     # Stacking
     stack_count: int = Field(default=1, ge=1)
     max_stack: int = Field(default=1, ge=1)
+    stack_id: Optional[str] = Field(default=None, description="Items with same stack_id merge into one stack. None = never stacks.")
 
     # Tags for filtering/queries
     tags: List[str] = Field(default_factory=list)
@@ -305,12 +306,20 @@ class UsableItem(BaseItem):
 
     def consume_charge(self, amount: int = 1) -> bool:
         """Consume charges. Returns False if not enough charges remain.
-        Override for custom charge logic (e.g., recharge on rest)."""
+
+        Stack-aware: when stack_count > 1 and charges deplete, pops one from
+        the stack (decrement count, reset charges) instead of destroying.
+        Override for custom charge logic (e.g., recharge on rest).
+        """
         if self.charges == -1:
             return True  # Unlimited
         if self.charges < amount:
             return False
         self.charges -= amount
         if self.charges == 0 and self.is_consumable:
-            self.destroy()
+            if self.stack_count > 1:
+                self.stack_count -= 1
+                self.charges = self.max_charges  # reset for next copy in stack
+            else:
+                self.destroy()
         return True
