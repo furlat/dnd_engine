@@ -149,16 +149,27 @@ BaseBlock
     │   Location tracking: owner_uuid, stored_in_uuid, tile_uuid, is_equipped
     │   Lifecycle hooks: _on_loot(), _on_drop(), _on_destroy()
     │   Health/damage for breakable items, GridMap integration
+    │   Stacking: stack_id, stack_count, max_stack
     │
     ├── EquippableItem
     │   │   Equip/unequip hooks: _on_equip(slot, entity_uuid), _on_unequip(slot, entity_uuid)
     │   │   is_equippable=True, is_pickable=True
+    │   │   Three hook approaches: direct modifiers, action registration, conditions
     │   │
     │   ├── Weapon (dnd/blocks/equipment.py)
     │   ├── Armor (+ subtypes: BodyArmor, Helmet, Gloves, Boots, Cloak, Amulet)
     │   └── Shield
     │
-    └── UsableItem (stub — for Use action, future)
+    └── UsableItem (dnd/blocks/base_item.py)
+        │   is_usable=True, provides actions via get_use_actions(user_entity_uuid)
+        │   Two patterns: use_action_templates field (default) or override get_use_actions()
+        │   Charges: charges (-1=unlimited, 0=depleted), consume_charge(), is_consumable
+        │   Stack-aware consumption: pops from stack_count before destroying
+        │
+        ├── SpellScroll (dnd/items/test_items.py) — consumable, wraps SpellAction
+        ├── HealingPotion — consumable, SELF target, stackable
+        ├── WeaponCoat — consumable, applies condition to equipped weapon
+        └── Environment objects (is_pickable=False): doors, levers, chests, cannons
 ```
 
 **Location tracking fields on BaseItem:**
@@ -468,6 +479,20 @@ When concentration breaks, `BaseBlock._remove_condition_tree()` traverses the en
 
 Actions (`dnd/core/base_actions.py`, `dnd/actions.py`) modify game state through events.
 
+### ActionCategory Enum
+
+Every action has an `action_category` field that classifies it. Replaces the old duck-typing pattern (`_is_attack`/`_is_spell` getattr hacks).
+
+```python
+class ActionCategory(str, Enum):
+    ABILITY = "ability"      # Default: Dash, Dodge, Disengage, etc.
+    ATTACK = "attack"        # Attack, Extra Attack, Retaliation, Frenzied Strike
+    SPELL = "spell"          # SpellAction (Fire Bolt, Fireball, etc.)
+    MOVEMENT = "movement"    # Move, Jump
+```
+
+Properties on BaseAction: `is_attack`, `is_spell`, `is_movement` — type-safe checks.
+
 ### BaseAction Flow
 
 ```
@@ -490,9 +515,22 @@ Entity.action_templates → get_available_actions() → AvailableActionsResult
     └── object_actions (Pick Up, Attack Object - targeting floor items)
 ```
 
+### Three-Source Action Discovery
+
+`get_available_actions()` gathers actions from three sources:
+
+| Source | Mechanism | Discovery Time |
+|--------|-----------|----------------|
+| 1. Registered | `entity.registered_actions` (templates) | At registration |
+| 2. Inventory | `entity.inventory.get_all_use_actions(uuid)` | Query time |
+| 3. Environment | `senses.objects` → `obj.get_use_actions(uuid)`, ≤5ft | Query time |
+
+Use actions have `is_item_use=True` and `source_item_uuid` on `AvailableActionInfo`. They are routed by `execute_by_index()` to `execute_use_action()` automatically.
+
 **Functional API** (`dnd/actions_functional.py`):
 - `setup_standard_actions(entity)` - Registers Move, Jump, Dash, Dodge, Disengage + weapon attacks
-- `execute_by_index(entity, name, idx)` - Execute by target index
+- `execute_by_index(entity, name, idx)` - Execute by target index (routes item use actions automatically)
+- `execute_use_action(entity, item_uuid, action_name, target)` - Execute a use action from a UsableItem
 
 ### Attack Action
 
@@ -754,6 +792,10 @@ See `claude_docs/AOE_TARGETING_REFERENCE.md` for full implementation guide.
 - **Ability modifier is int**: `entity.ability_scores.strength.modifier` returns `int`, not `ModifiableValue`
 - **Always call `Entity.update_all_entities_senses()`** after creating entities for LOS to work
 - **EventHandler registration**: Only call `entity.add_event_handler(handler)` - it auto-registers with EventQueue. Do NOT also call `EventQueue.add_event_handler()` or handler fires twice!
+- **ActionCategory enum**: Use `action_category=ActionCategory.ATTACK` (not `_is_attack=True`). Duck typing removed. Enum values: `ABILITY`, `ATTACK`, `SPELL`, `MOVEMENT`.
+- **UsableItem actions**: `get_use_actions()` returns fresh copies with `source_entity_uuid` injected. Never modify templates in place.
+- **Item use routing**: `execute_by_index()` auto-routes `is_item_use` actions to `execute_use_action()`. Don't call both.
+- **SpellScroll pattern**: Uses `_create_variant()` to wrap SpellAction with item costs (action only, no spell slot). Set `charge_cost` for variable charge consumption.
 
 **For writing examples and tests**, see `claude_docs/IMPLEMENTATION_GUIDE.md` (Section 14) for complete patterns.
 
@@ -1203,10 +1245,14 @@ Polls server every 2s, shows opponent actions, blocks until Claude's turn, detec
 | Inventory block | `dnd/blocks/inventory.py` |
 | Weapon factories (WEAPONS dict) | `dnd/items/weapons.py` |
 | Armor factories (ARMORS, SHIELDS dicts) | `dnd/items/armors.py` |
+| Test items (scrolls, potions, wands, coats, doors, etc.) | `dnd/items/test_items.py` |
 | Items Phase 1 tests (27) | `examples/test_items_phase1.py` |
 | Items Phase 1 advanced tests (36) | `examples/test_items_phase1_advanced.py` |
 | Items lifecycle hooks tests (22) | `examples/test_items_lifecycle_hooks.py` |
 | Items equip/unequip hooks tests (15) | `examples/test_items_equip_hooks.py` |
+| Usable items tests (19) | `examples/test_usable_items.py` |
+| Inventory use actions tests (65+) | `examples/test_inventory_use_actions.py` |
+| Stackable items tests (15) | `examples/test_stackable_items.py` |
 | **Spells** | |
 | Spell module exports + dicts | `dnd/spells/__init__.py` |
 | SpellAction, SpellEvent base (in actions.py) | `dnd/actions.py` |
@@ -1267,7 +1313,7 @@ Contains focused implementation guides:
 | `CLI_GUIDE.md` | How to use CLI and Agent commands |
 | `IMPLEMENTATION_GUIDE.md` | **READ FIRST** - How to implement conditions, actions, event handlers |
 | `CLASS_SYSTEM.md` | Class system patterns, Fighter/Barbarian/Sorcerer, spellcasting infrastructure |
-| `ITEMS_PLAN.md` | Items system implementation plan (phases a-e), current status |
+| `ITEMS_PLAN.md` | Items system design & implementation (steps a-d DONE). BaseItem, EquippableItem, UsableItem, inventory use actions, ActionCategory. |
 | ~~`EXAMPLE_PATTERNS.md`~~ | Merged into `IMPLEMENTATION_GUIDE.md` (Section 14) |
 | `archive/` | Completed planning docs (historical reference) |
 
