@@ -186,6 +186,9 @@ class AvailableAction:
     weapon_slot: Optional[str] = None
     weapon_name: Optional[str] = None
     action_category: str = "ability"  # "ability", "attack", "spell", "movement"
+    is_item_use: bool = False
+    source_item_uuid: Optional[str] = None
+    item_stack_count: Optional[int] = None
 
     @property
     def command_name(self) -> str:
@@ -234,7 +237,10 @@ class AvailableAction:
             description=data.get("description", ""),
             weapon_slot=data.get("weapon_slot"),
             weapon_name=data.get("weapon_name"),
-            action_category=data.get("action_category", "ability")
+            action_category=data.get("action_category", "ability"),
+            is_item_use=data.get("is_item_use", False),
+            source_item_uuid=data.get("source_item_uuid"),
+            item_stack_count=data.get("item_stack_count"),
         )
 
 
@@ -251,12 +257,14 @@ class AvailableActionsState:
     movement: List[AvailableAction] = field(default_factory=list)
     spell_actions: List[AvailableAction] = field(default_factory=list)  # All spells (any target type)
     self_actions: List[AvailableAction] = field(default_factory=list)
+    item_use_actions: List[AvailableAction] = field(default_factory=list)  # Non-spell item use (potions, coats)
+    object_actions: List[AvailableAction] = field(default_factory=list)  # Pick Up, Attack Object, Pull Lever
     remaining_movement: int = 0
 
     @property
     def all_actions(self) -> List[AvailableAction]:
         """Get all available actions as a flat list."""
-        return self.attacks + self.other_entity + self.movement + self.spell_actions + self.self_actions
+        return self.attacks + self.other_entity + self.movement + self.spell_actions + self.self_actions + self.item_use_actions + self.object_actions
 
     @property
     def affordable_attacks(self) -> List[AvailableAction]:
@@ -321,8 +329,19 @@ class AvailableActionsState:
         for action in self.other_entity:
             registry.get_or_create_shortcut(action.template_name)
 
-        # Register spell actions
+        # Register spell actions (scroll spells use display_name to avoid collision with native spells)
         for action in self.spell_actions:
+            if action.is_item_use:
+                registry.get_or_create_shortcut(action.display_name)
+            else:
+                registry.get_or_create_shortcut(action.template_name)
+
+        # Register item use actions by display_name (includes item name for uniqueness)
+        for action in self.item_use_actions:
+            registry.get_or_create_shortcut(action.display_name)
+
+        # Register object actions
+        for action in self.object_actions:
             registry.get_or_create_shortcut(action.template_name)
 
     def get_self_action_by_command(
@@ -452,17 +471,21 @@ class AvailableActionsState:
         cmd = command.lower().replace(" ", "").replace("_", "")
 
         # Check shortcut registry first
-        template = registry.get_action_by_shortcut(cmd)
-        if template:
+        registered_name = registry.get_action_by_shortcut(cmd)
+        if registered_name:
+            # Match by template_name (native spells) or display_name (scroll spells)
             return next(
-                (a for a in self.spell_actions if a.template_name == template and a.can_afford),
+                (a for a in self.spell_actions
+                 if (a.template_name == registered_name or a.display_name == registered_name)
+                 and a.can_afford),
                 None
             )
 
-        # Check full template_name (no spaces/underscores)
+        # Check full template_name or display_name (no spaces/underscores)
         for action in self.spell_actions:
-            normalized_name = action.template_name.lower().replace(" ", "").replace("_", "")
-            if action.can_afford and normalized_name == cmd:
+            normalized_template = action.template_name.lower().replace(" ", "").replace("_", "")
+            normalized_display = action.display_name.lower().replace(" ", "").replace("_", "")
+            if action.can_afford and (normalized_template == cmd or normalized_display == cmd):
                 return action
 
         return None
@@ -544,6 +567,79 @@ class AvailableActionsState:
         """Get total number of attack targets across all attacks."""
         return sum(len(a.valid_targets) for a in self.affordable_attacks)
 
+    def get_item_use_action_by_command(
+        self, command: str, registry: ShortcutRegistry
+    ) -> Optional[AvailableAction]:
+        """Find item use action by shortcut or display_name.
+
+        Item use actions are registered by display_name (e.g., "Healing Potion (Potion of Healing)").
+        """
+        cmd = command.lower().replace(" ", "").replace("_", "")
+
+        # Check shortcut registry first
+        registered_name = registry.get_action_by_shortcut(cmd)
+        if registered_name:
+            return next(
+                (a for a in self.item_use_actions
+                 if (a.template_name == registered_name or a.display_name == registered_name)
+                 and a.can_afford),
+                None
+            )
+
+        # Check display_name or template_name directly
+        for action in self.item_use_actions:
+            normalized_display = action.display_name.lower().replace(" ", "").replace("_", "")
+            normalized_template = action.template_name.lower().replace(" ", "").replace("_", "")
+            if action.can_afford and (normalized_display == cmd or normalized_template == cmd):
+                return action
+
+        return None
+
+    def get_item_use_target(self, action_display_name: str, index: int) -> Optional[Tuple[AvailableAction, ActionTarget]]:
+        """Get item use action and target by display_name and 1-based index."""
+        for action in self.item_use_actions:
+            if action.display_name == action_display_name and action.can_afford:
+                current_idx = 1
+                for target in action.valid_targets:
+                    if current_idx == index:
+                        return (action, target)
+                    current_idx += 1
+        return None
+
+    def get_object_action_by_command(
+        self, command: str, registry: ShortcutRegistry
+    ) -> Optional[AvailableAction]:
+        """Find object action by shortcut or template_name."""
+        cmd = command.lower().replace(" ", "").replace("_", "")
+
+        # Check shortcut registry first
+        registered_name = registry.get_action_by_shortcut(cmd)
+        if registered_name:
+            return next(
+                (a for a in self.object_actions
+                 if a.template_name == registered_name and a.can_afford),
+                None
+            )
+
+        # Check template_name directly
+        for action in self.object_actions:
+            normalized_name = action.template_name.lower().replace(" ", "").replace("_", "")
+            if action.can_afford and normalized_name == cmd:
+                return action
+
+        return None
+
+    def get_object_action_target(self, template_name: str, index: int) -> Optional[Tuple[AvailableAction, ActionTarget]]:
+        """Get object action and target by template_name and 1-based index."""
+        for action in self.object_actions:
+            if action.template_name == template_name and action.can_afford:
+                current_idx = 1
+                for target in action.valid_targets:
+                    if current_idx == index:
+                        return (action, target)
+                    current_idx += 1
+        return None
+
     def get_valid_commands(self) -> set:
         """Get set of valid command names based on available actions."""
         valid = {"end"}  # Always can end turn
@@ -572,22 +668,29 @@ class AvailableActionsState:
         all_entity_actions = [AvailableAction.from_server(a) for a in data.get("entity_actions", [])]
         all_position_actions = [AvailableAction.from_server(a) for a in data.get("position_actions", [])]
         all_self_actions = [AvailableAction.from_server(a) for a in data.get("self_actions", [])]
+        all_object_actions = [AvailableAction.from_server(a) for a in data.get("object_actions", [])]
 
-        # Spells go to spell_actions regardless of target_type
+        # Spells go to spell_actions regardless of target_type (includes scroll spells)
         spell_actions: List[AvailableAction] = []
         for a in all_entity_actions + all_position_actions + all_self_actions:
             if a.is_spell:
                 spell_actions.append(a)
 
-        # Non-spell entity actions
-        attacks = [a for a in all_entity_actions if a.is_attack and not a.is_spell]
-        other_entity = [a for a in all_entity_actions if not a.is_attack and not a.is_spell]
+        # Non-spell item use actions go to item_use_actions (potions, weapon coats, etc.)
+        item_use_actions: List[AvailableAction] = []
+        for a in all_entity_actions + all_self_actions:
+            if a.is_item_use and not a.is_spell:
+                item_use_actions.append(a)
+
+        # Non-spell, non-item-use entity actions
+        attacks = [a for a in all_entity_actions if a.is_attack and not a.is_spell and not a.is_item_use]
+        other_entity = [a for a in all_entity_actions if not a.is_attack and not a.is_spell and not a.is_item_use]
 
         # Non-spell position actions = movement
         movement = [a for a in all_position_actions if not a.is_spell]
 
-        # Non-spell self actions
-        self_actions = [a for a in all_self_actions if not a.is_spell]
+        # Non-spell, non-item-use self actions
+        self_actions = [a for a in all_self_actions if not a.is_spell and not a.is_item_use]
 
         return cls(
             entity_uuid=data.get("entity_uuid", ""),
@@ -596,5 +699,7 @@ class AvailableActionsState:
             movement=movement,
             spell_actions=spell_actions,
             self_actions=self_actions,
+            item_use_actions=item_use_actions,
+            object_actions=all_object_actions,
             remaining_movement=data.get("remaining_movement", 0)
         )

@@ -165,6 +165,7 @@ class TestDoorB(UsableItem):
 class PullLeverAction(BaseAction):
     """Pulls a lever to remove a spatial handler (deactivate a trap)."""
     name: str = Field(default="Pull Lever")
+    description: str = Field(default="Deactivates a trap")
     target_type: TargetType = Field(default=TargetType.SELF)
     costs: List[Cost] = Field(default_factory=list)
     source_item_uuid: Optional[UUID] = Field(default=None)
@@ -186,6 +187,7 @@ class TrapLever(UsableItem):
     """A lever that deactivates a trap. Uses default use_action_templates with charges=1."""
     name: str = Field(default="Trap Lever")
     is_pickable: bool = Field(default=False)
+    map_char: str = Field(default="\u03bb")
 
 
 # =============================================================================
@@ -233,6 +235,7 @@ class StorageChest(UsableItem):
     """A chest that can be looted. Optionally breakable."""
     name: str = Field(default="Chest")
     is_pickable: bool = Field(default=False)
+    map_char: str = Field(default="\u03a9")
     is_targetable: bool = Field(default=False)
     chest_inventory: Inventory = Field(
         default_factory=lambda: Inventory(source_entity_uuid=uuid4(), name="Chest Storage"))
@@ -323,6 +326,7 @@ class SpellScroll(UsableItem):
     """
     name: str = Field(default="Spell Scroll")
     is_pickable: bool = Field(default=True)
+    map_char: str = Field(default="\u03c3")
     is_consumable: bool = Field(default=True)
     charges: int = Field(default=1)
     max_charges: int = Field(default=1)
@@ -483,6 +487,7 @@ def create_fireball_cannon(owner_uuid: UUID, position: Tuple[int, int] = (0, 0),
 class DrinkPotionAction(BaseAction):
     """Drink a potion to heal."""
     name: str = Field(default="Drink Potion")
+    description: str = Field(default="Drinks a healing potion")
     target_type: TargetType = Field(default=TargetType.SELF)
     costs: List[Cost] = Field(default_factory=list)
     source_item_uuid: Optional[UUID] = Field(default=None)
@@ -509,6 +514,7 @@ class HealingPotion(UsableItem):
     """Potion of Healing. Single use, consumable. Stacks up to 10."""
     name: str = Field(default="Potion of Healing")
     is_pickable: bool = Field(default=True)
+    map_char: str = Field(default="\u03b8")
     is_consumable: bool = Field(default=True)
     charges: int = Field(default=1)
     max_charges: int = Field(default=1)

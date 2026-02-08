@@ -280,7 +280,8 @@ def execute_by_index(
     entity: 'Entity',
     template_name: str,
     target_index: int,
-    extra_target_uuids: Optional[List[str]] = None
+    extra_target_uuids: Optional[List[str]] = None,
+    available: Optional[AvailableActionsResult] = None,
 ) -> Optional[Event]:
     """Execute action by template name and target index.
 
@@ -291,6 +292,7 @@ def execute_by_index(
         template_name: Name of the action template to execute
         target_index: Index of the target in the valid_targets list
         extra_target_uuids: Additional target UUIDs for multi-target spells (Magic Missile)
+        available: Pre-computed available actions (avoids recomputation if caller already has them)
 
     Returns:
         The resulting event, or None if the action failed
@@ -298,7 +300,8 @@ def execute_by_index(
     Raises:
         ValueError: If action or target index not found
     """
-    available = get_available_actions(entity)
+    if available is None:
+        available = get_available_actions(entity)
 
     # Find the action info
     action_info: Optional[AvailableActionInfo] = None
@@ -312,8 +315,10 @@ def execute_by_index(
 
     # Route item use actions to execute_use_action
     if action_info.is_item_use and action_info.source_item_uuid:
+        # Strip __item_<uuid> suffix to get the action's real name
+        action_name = template_name.split("__item_")[0] if "__item_" in template_name else template_name
         if action_info.target_type == TargetType.SELF:
-            return execute_use_action(entity, action_info.source_item_uuid, template_name)
+            return execute_use_action(entity, action_info.source_item_uuid, action_name)
         target: Optional[AvailableTarget] = None
         for t in action_info.valid_targets:
             if t.index == target_index:
@@ -321,7 +326,7 @@ def execute_by_index(
                 break
         if target is None:
             raise ValueError(f"Target index {target_index} not valid for {template_name}")
-        return execute_use_action(entity, action_info.source_item_uuid, template_name, target)
+        return execute_use_action(entity, action_info.source_item_uuid, action_name, target)
 
     # Find the target by index
     target = None
@@ -433,8 +438,11 @@ def execute_use_action(
     if not isinstance(item, UsableItem):
         raise ValueError("Item does not support use actions")
 
+    # Strip __item_<uuid> suffix if present (template names have this for uniqueness)
+    clean_name = action_name.split("__item_")[0] if "__item_" in action_name else action_name
+
     templates = item.get_use_actions(entity.uuid)
-    template = next((a for a in templates if a.name == action_name), None)
+    template = next((a for a in templates if a.name == clean_name), None)
     if template is None:
         raise ValueError(f"Use action '{action_name}' not found on item")
 

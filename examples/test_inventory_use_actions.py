@@ -1328,8 +1328,8 @@ def test_weapon_coat_two_actions_available():
     available = get_available_actions(entity)
     coat_actions = [a for a in available.self_actions if a.is_item_use and "Coat" in a.template_name]
     names = [a.template_name for a in coat_actions]
-    assert "Coat Main Hand" in names, f"Should have Coat Main Hand: {names}"
-    assert "Coat Off Hand" in names, f"Should have Coat Off Hand: {names}"
+    assert any(n.startswith("Coat Main Hand") for n in names), f"Should have Coat Main Hand: {names}"
+    assert any(n.startswith("Coat Off Hand") for n in names), f"Should have Coat Off Hand: {names}"
 
 
 # --- 2i. Weapon Coat Variation A — Concentration Spell ---

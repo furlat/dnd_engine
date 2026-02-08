@@ -301,13 +301,17 @@ def get_terminal_size() -> Tuple[int, int]:
     return size.columns, size.lines
 
 
+ITEM_DEFAULT_CHAR = "\u03c6"      # phi fallback for items without map_char
+
+
 def render_map_content(
     grid: Dict[str, Any],
     entities: List[Dict[str, Any]],
     current_entity_uuid: Optional[str] = None,
     valid_positions: Optional[List[Tuple[int, int]]] = None,
     visibility: Optional[Dict[str, Any]] = None,
-    movement_path: Optional[List[Tuple[int, int]]] = None
+    movement_path: Optional[List[Tuple[int, int]]] = None,
+    floor_objects: Optional[List[Dict[str, Any]]] = None
 ) -> Text:
     """Render ASCII map with Rich formatting."""
     tiles = {(t["x"], t["y"]): t for t in grid.get("tiles", [])}
@@ -321,6 +325,14 @@ def render_map_content(
         existing = entity_at.get(pos)
         if existing is None or (existing.get("is_dead") and not e.get("is_dead")):
             entity_at[pos] = e
+
+    # Build floor object position lookup
+    object_at: Dict[Tuple[int, int], Dict[str, Any]] = {}
+    if floor_objects:
+        for obj in floor_objects:
+            pos = tuple(obj["position"])
+            if pos not in object_at:  # First object wins
+                object_at[pos] = obj
 
     valid_set = set(tuple(p) for p in valid_positions) if valid_positions else set()
     path_set = set(tuple(p) for p in movement_path) if movement_path else set()
@@ -382,6 +394,10 @@ def render_map_content(
                         char = letter
                     # Yellow background if enemy is in AoE
                     style = "bold red on yellow" if in_aoe else "bold red"
+            elif pos in object_at:
+                obj = object_at[pos]
+                char = obj.get("map_char", ITEM_DEFAULT_CHAR)
+                style = "bold cyan"
             elif pos in path_set:
                 char, style = "+", "bold magenta"
             elif pos in valid_set:
@@ -458,6 +474,9 @@ def render_map_content(
     result.append("Slow  ")
     result.append("^ ", style="bold red")
     result.append("Spikes  ")
+    if object_at:
+        result.append(f"{ITEM_DEFAULT_CHAR} ", style="bold cyan")
+        result.append("Item  ")
     result.append("+ ", style="bold magenta")
     result.append("Path")
 
@@ -1088,8 +1107,93 @@ def render_available_actions_panel(
                 content.append(f"{display_name}", style="bold")
                 content.append(f" (self)\n", style="dim")
 
-    # Self-actions - fully dynamic using registry (filter out spells)
-    other = [a for a in all_self_actions if a.get("action_category", "ability") != "spell"]
+    # ITEMS section - non-spell item use actions (potions, levers, weapon coats)
+    item_use_self = [a for a in all_self_actions if a.get("is_item_use") and a.get("action_category", "ability") != "spell"]
+    item_use_entity = [a for a in all_entity_actions if a.get("is_item_use") and a.get("action_category", "ability") != "spell"]
+    valid_item_use = [a for a in item_use_self + item_use_entity if a.get("can_afford")]
+
+    if valid_item_use:
+        content.append("ITEMS:", style="bold cyan")
+        content.append("\n", style="dim")
+        for act in valid_item_use:
+            template_name = act.get("template_name", "Unknown")
+            display_name = act.get("display_name", template_name)
+            target_type = act.get("target_type", "self")
+            cost_type = act.get("cost_type", "actions")
+            stack_count = act.get("item_stack_count")
+
+            if registry:
+                cmd = registry.get_or_create_shortcut(template_name)
+            else:
+                cmd = template_name[:2].lower()
+
+            # Cost label
+            if cost_type == "bonus_actions":
+                cost_label = ("BONUS", "magenta")
+            elif cost_type == "free" or act.get("cost_amount", 1) == 0:
+                cost_label = ("FREE", "green")
+            else:
+                cost_label = ("ACTION", "cyan")
+
+            # Stack count suffix
+            stack_str = f" x{stack_count}" if stack_count and stack_count > 1 else ""
+
+            if target_type == "self":
+                content.append(f"  [", style="dim")
+                content.append(f"{cmd}", style="bold cyan")
+                content.append(f"] ", style="dim")
+                content.append(f"{cost_label[0]} ", style=cost_label[1])
+                content.append(f"{display_name}", style="bold")
+                content.append(f"{stack_str}\n", style="dim")
+            else:
+                targets = act.get("valid_targets", [])
+                for i, target in enumerate(targets):
+                    target_name = target.get("target_name") or entity_lookup.get(target.get("target_uuid"), {}).get("name", "?")
+                    content.append(f"  [", style="dim")
+                    content.append(f"{cmd} {i+1}", style="bold cyan")
+                    content.append(f"] ", style="dim")
+                    content.append(f"{cost_label[0]} ", style=cost_label[1])
+                    content.append(f"{display_name}", style="bold")
+                    content.append(f"{stack_str}", style="dim")
+                    content.append(f" -> {target_name}\n", style="dim")
+
+    # OBJECTS section - Pick Up, Attack Object (targeting floor items)
+    object_actions = actions.get("object_actions", [])
+    valid_objects = [a for a in object_actions if a.get("valid_targets") and a.get("can_afford")]
+
+    if valid_objects:
+        content.append("OBJECTS:", style="bold cyan")
+        content.append("\n", style="dim")
+        for act in valid_objects:
+            template_name = act.get("template_name", "Unknown")
+            display_name = act.get("display_name", template_name)
+            cost_type = act.get("cost_type", "free")
+            targets = act.get("valid_targets", [])
+
+            if registry:
+                cmd = registry.get_or_create_shortcut(template_name)
+            else:
+                cmd = template_name[:2].lower()
+
+            # Cost label
+            if cost_type == "free" or act.get("cost_amount", 1) == 0:
+                cost_label = ("FREE", "green")
+            elif cost_type == "bonus_actions":
+                cost_label = ("BONUS", "magenta")
+            else:
+                cost_label = ("ACTION", "cyan")
+
+            for i, target in enumerate(targets):
+                target_name = target.get("target_name", "Unknown")
+                content.append(f"  [", style="dim")
+                content.append(f"{cmd} {i+1}", style="bold cyan")
+                content.append(f"] ", style="dim")
+                content.append(f"{cost_label[0]} ", style=cost_label[1])
+                content.append(f"{display_name}", style="bold")
+                content.append(f" {target_name}\n", style="dim")
+
+    # Self-actions - fully dynamic using registry (filter out spells and item use)
+    other = [a for a in all_self_actions if a.get("action_category", "ability") != "spell" and not a.get("is_item_use")]
     other_items = []
 
     for act in other:
@@ -1259,7 +1363,8 @@ def render_full_screen(
     movement_path: Optional[List[Tuple[int, int]]] = None,
     valid_positions: Optional[List[Tuple[int, int]]] = None,
     is_my_turn: bool = True,
-    shortcut_registry: Optional["ShortcutRegistry"] = None
+    shortcut_registry: Optional["ShortcutRegistry"] = None,
+    floor_objects: Optional[List[Dict[str, Any]]] = None
 ):
     """Render the full screen layout.
 
@@ -1274,6 +1379,7 @@ def render_full_screen(
         valid_positions: Valid move positions to highlight
         is_my_turn: Whether it's the player's turn
         shortcut_registry: Session-stable shortcut registry for actions
+        floor_objects: List of floor object dicts from server state
     """
     clear()
 
@@ -1282,7 +1388,8 @@ def render_full_screen(
 
     # 2. Battlefield panel (map)
     map_content = render_map_content(
-        grid, entities, current_entity_uuid, valid_positions, visibility, movement_path
+        grid, entities, current_entity_uuid, valid_positions, visibility, movement_path,
+        floor_objects=floor_objects
     )
     map_panel = Panel(map_content, title="Battlefield", box=box.ROUNDED, border_style="cyan")
 

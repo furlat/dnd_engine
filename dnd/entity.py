@@ -1845,7 +1845,7 @@ class Entity(BaseBlock):
 
             # Build targets for THIS template (may include self if include_self=True)
             template_targets = dict(potential_targets)
-            if getattr(template, 'include_self', False):
+            if template.include_self:
                 template_targets[self.uuid] = self.position
 
             for target_uuid, target_pos in template_targets.items():
@@ -1991,11 +1991,11 @@ class Entity(BaseBlock):
                 affected_uuids = list(shape.affected_entity_uuids)
 
                 # Apply include_self filter (match get_all_targets behavior)
-                if not getattr(template, 'include_self', False):
+                if not template.include_self:
                     affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
 
                 # Apply valid_target_filter (match _validate behavior)
-                target_filter = getattr(template, 'valid_target_filter', 'enemies')
+                target_filter = template.valid_target_filter
                 if target_filter != "all":
                     filtered = []
                     for uid in affected_uuids:
@@ -2011,7 +2011,7 @@ class Entity(BaseBlock):
                     affected_uuids = filtered
 
                 # Filter dead entities (unless include_dead=True on template)
-                template_include_dead = getattr(template, 'include_dead', False)
+                template_include_dead = template.include_dead
                 if not template_include_dead and not include_dead:
                     affected_uuids = [
                         uid for uid in affected_uuids
@@ -2108,9 +2108,10 @@ class Entity(BaseBlock):
 
         # Route each use template by target_type
         for use_template, item_uuid, item_name, item_stack in use_sources:
-            template_name = use_template.name or "Use"
+            base_name = use_template.name or "Use"
+            template_name = f"{base_name}__item_{item_uuid}"
             stack_suffix = f" x{item_stack}" if item_stack and item_stack > 1 else ""
-            display_name = f"{template_name} ({item_name}{stack_suffix})"
+            display_name = f"{base_name} ({item_name}{stack_suffix})"
             stack_count_field = item_stack if item_stack and item_stack > 1 else None
             can_afford = use_template.check_costs()
             cost_type = use_template.costs[0].cost_type if use_template.costs else "actions"
@@ -2139,7 +2140,7 @@ class Entity(BaseBlock):
                 use_idx = 0
                 # Build targets pool (reuse potential_targets computed earlier)
                 use_target_pool = dict(potential_targets)
-                if getattr(use_template, 'include_self', False):
+                if use_template.include_self:
                     use_target_pool[self.uuid] = self.position
                 for target_uuid, target_pos in use_target_pool.items():
                     use_template.set_target_entity(target_uuid)
@@ -2182,9 +2183,9 @@ class Entity(BaseBlock):
                     shape = use_shape_template.model_copy(update={'target': pos})
                     shape.compute_subjective(self.position, self.senses)
                     affected_uuids = list(shape.affected_entity_uuids)
-                    if not getattr(use_template, 'include_self', False):
+                    if not use_template.include_self:
                         affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
-                    vtf = getattr(use_template, 'valid_target_filter', 'enemies')
+                    vtf = use_template.valid_target_filter
                     if vtf != "all":
                         filtered = []
                         for uid in affected_uuids:
@@ -2198,7 +2199,7 @@ class Entity(BaseBlock):
                                     if uid == self.uuid or self.is_ally(ent):
                                         filtered.append(uid)
                         affected_uuids = filtered
-                    template_include_dead = getattr(use_template, 'include_dead', False)
+                    template_include_dead = use_template.include_dead
                     if not template_include_dead and not include_dead:
                         affected_uuids = [
                             uid for uid in affected_uuids
