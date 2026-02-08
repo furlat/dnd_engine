@@ -45,8 +45,9 @@ Entity
 ├── saving_throws: SavingThrowSet     # 6 saves
 ├── health: Health                    # HP, temp HP, damage
 ├── equipment: Equipment              # Weapons, armor, AC
+├── inventory: Inventory              # Item storage (slots, weight, stacking, use actions)
 ├── action_economy: ActionEconomy     # actions, bonus_actions, reactions, movement
-├── senses: Senses                    # position, FOV, paths
+├── senses: Senses                    # position, FOV, paths, visible entities, visible objects
 ├── active_conditions: Dict[str, BaseCondition]
 └── action_templates: Dict[str, BaseAction]
 ```
@@ -663,7 +664,19 @@ completion_event = execution_event.phase_to(
 )
 ```
 
-### 6c. Cost System
+### 6c. ActionCategory & Cost System
+
+Every action has an `action_category` field (`dnd/core/base_actions.py`):
+
+```python
+class ActionCategory(str, Enum):
+    ABILITY = "ability"      # Default: Dash, Dodge, Disengage, etc.
+    ATTACK = "attack"        # Attack, Extra Attack, Retaliation, Frenzied Strike
+    SPELL = "spell"          # SpellAction (Fire Bolt, Fireball, etc.)
+    MOVEMENT = "movement"    # Move, Jump
+```
+
+Set `action_category=ActionCategory.ATTACK` on your action class. Properties `is_attack`, `is_spell`, `is_movement` are available for checks. Do NOT use `_is_attack` or `_is_spell` private attributes (removed).
 
 Actions have dual costs: turn-based (action economy) and resource-based:
 
@@ -2144,3 +2157,275 @@ target.clear_target_entity()
 | 20 | Primal Champion | Condition | +4 STR and CON |
 
 Use these as reference patterns for implementing similar features.
+
+---
+
+## Section 17: Items System — UsableItem, Equip Hooks, Inventory Actions
+
+The items system is fully implemented. This section covers how to create new items using the existing patterns.
+
+### 17a. Item Class Hierarchy
+
+```
+BaseItem (dnd/blocks/base_item.py)
+│   Foundation: location tracking, lifecycle hooks, health/damage, stacking
+│
+├── EquippableItem — Gear occupying equipment slots
+│   Hook: _on_equip(slot, entity_uuid) / _on_unequip(slot, entity_uuid)
+│   Subclasses: Weapon, Armor (BodyArmor, Helmet, Boots, etc.), Shield
+│
+└── UsableItem — Items providing actions via get_use_actions()
+    Charges: charges (-1=unlimited), consume_charge(), is_consumable
+    Patterns: use_action_templates field OR override get_use_actions()
+```
+
+**Key rule**: An item is NEVER both equippable AND usable. If an equipped item needs to grant actions, it does so through `_on_equip` (direct action registration or condition).
+
+### 17b. Creating a UsableItem — Template Pattern (Simplest)
+
+For items where the action name doesn't change with state:
+
+```python
+from dnd.blocks.base_item import UsableItem
+
+class HealingPotion(UsableItem):
+    name: str = "Healing Potion"
+    is_consumable: bool = True  # Destroyed after use
+    is_pickable: bool = True
+    charges: int = 1
+    max_charges: int = 1
+    stack_id: Optional[str] = "healing_potion"  # Same stack_id = merge in inventory
+    max_stack: int = 10
+
+# Factory function
+def create_healing_potion(source_uuid: UUID) -> HealingPotion:
+    return HealingPotion(
+        source_entity_uuid=source_uuid,
+        use_action_templates=[
+            DrinkPotionAction(
+                source_entity_uuid=source_uuid,
+                name="Drink Potion",
+                template=True,
+                target_type=TargetType.SELF,
+                costs=[Cost(name="Use Item", cost_type="actions", cost=1)],
+            )
+        ],
+    )
+```
+
+`get_use_actions()` default implementation:
+1. Returns `[]` if `charges == 0`
+2. Returns `model_copy()` of each template with `source_entity_uuid` and `source_item_uuid` injected
+
+### 17c. Creating a UsableItem — Override Pattern (State-Dependent)
+
+For items where different states surface different action classes:
+
+```python
+class Door(UsableItem):
+    is_pickable: bool = False  # Environment object
+    is_open: bool = False
+    blocks_movement: bool = True
+    blocks_vision_field: bool = True
+
+    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        if self.charges == 0:
+            return []
+        if self.is_open:
+            return [CloseDoorAction(
+                source_entity_uuid=user_entity_uuid,
+                source_item_uuid=self.uuid, template=True,
+            )]
+        return [OpenDoorAction(
+            source_entity_uuid=user_entity_uuid,
+            source_item_uuid=self.uuid, template=True,
+        )]
+```
+
+### 17d. SpellScroll Pattern — Wrapping Existing Spells
+
+SpellScroll (`dnd/items/test_items.py`) wraps any SpellAction as a consumable item:
+
+```python
+class SpellScroll(UsableItem):
+    is_consumable: bool = True
+    is_pickable: bool = True
+    scroll_cast_level: int = 0
+
+    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        if self.charges == 0:
+            return []
+        result = []
+        for template in self.use_action_templates:
+            if isinstance(template, SpellAction):
+                variant = template._create_variant(
+                    cast_at_level=self.scroll_cast_level,
+                    costs=[Cost(name="Use Item", cost_type="actions", cost=1)],
+                    source_item_uuid=self.uuid,
+                )
+                variant.source_entity_uuid = user_entity_uuid
+                result.append(variant)
+            else:
+                # Non-spell actions
+                action = template.model_copy(deep=True, update={...})
+                result.append(action)
+        return result
+```
+
+Key: No spell slot consumed — costs are `[Cost("actions", 1)]` only. Spell level set by `scroll_cast_level`.
+
+### 17e. Variable Charge Costs — Wand Pattern
+
+Wands use `charge_cost` on the action template:
+
+```python
+def create_wand_of_fire(source_uuid: UUID) -> SpellScroll:
+    return SpellScroll(
+        source_entity_uuid=source_uuid,
+        name="Wand of Fire",
+        is_consumable=False,  # Not destroyed when depleted
+        charges=7, max_charges=7,
+        use_action_templates=[
+            BurningHands(source_entity_uuid=source_uuid, template=True,
+                         charge_cost=1),   # 1 charge
+            Fireball(source_entity_uuid=source_uuid, template=True,
+                     charge_cost=3),       # 3 charges
+        ],
+    )
+```
+
+`execute_use_action()` reads `charge_cost` from the template and passes to `consume_charge()`.
+
+### 17f. WeaponCoat Pattern — Conditions on Items
+
+WeaponCoat applies a condition to an equipped weapon:
+
+```python
+class WeaponCoatCondition(BaseCondition):
+    """Applied to the WEAPON (not the entity). Adds extra damage dice."""
+    weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
+    damage_dice: int = 6
+    damage_type: DamageType = DamageType.FIRE
+
+    def _apply(self, declaration_event):
+        weapon = BaseBlock.get(self.target_entity_uuid)  # target is a weapon
+        weapon.extra_damage_dices.append(self.damage_dice)
+        weapon.extra_damage_type.append(self.damage_type)
+        # ... return modifiers tuple
+```
+
+Three coat variants exist: permanent, concentration-based, and timed duration.
+
+### 17g. EquippableItem Hooks — Three Approaches
+
+All hooks receive `(slot: EquipmentSlot, entity_uuid: UUID)`:
+
+**Approach 1 — Direct modifiers** (simplest, static bonuses):
+```python
+class DefenderSword(Weapon):
+    _ac_modifier_uuid: Optional[UUID] = None
+
+    def _on_equip(self, slot, entity_uuid):
+        entity = Entity.get(entity_uuid)
+        self._ac_modifier_uuid = entity.equipment.ac_bonus.self_static.add_value_modifier(
+            NumericalModifier(name="Defender AC", value=1, ...)
+        )
+
+    def _on_unequip(self, slot, entity_uuid):
+        entity = Entity.get(entity_uuid)
+        if self._ac_modifier_uuid:
+            entity.equipment.ac_bonus.self_static.remove_modifier(self._ac_modifier_uuid)
+```
+
+**Approach 2 — Direct action registration** (for granted actions):
+```python
+class WandOfFireBolt(EquippableItem):
+    def _on_equip(self, slot, entity_uuid):
+        entity = Entity.get(entity_uuid)
+        entity.register_action(FireBolt(source_entity_uuid=entity.uuid, template=True, name="Fire Bolt (Wand)"))
+
+    def _on_unequip(self, slot, entity_uuid):
+        entity = Entity.get(entity_uuid)
+        entity.unregister_action("Fire Bolt (Wand)")
+```
+
+**Approach 3 — Condition pattern** (complex effects, many modifiers):
+```python
+class CloakOfProtection(EquippableItem):
+    def _on_equip(self, slot, entity_uuid):
+        entity = Entity.get(entity_uuid)
+        entity.add_condition(CloakOfProtectionCondition(
+            source_entity_uuid=entity_uuid, target_entity_uuid=entity_uuid))
+
+    def _on_unequip(self, slot, entity_uuid):
+        entity = Entity.get(entity_uuid)
+        if "CloakOfProtectionCondition" in entity.active_conditions:
+            entity.remove_condition("CloakOfProtectionCondition")
+```
+
+### 17h. When Equip Hooks Are NOT Needed
+
+- **Weapon attack/damage bonus**: Use `weapon.attack_bonus` / `weapon.damage_bonus` at creation (`base_value=1` for +1). Automatic Level 1 scoping.
+- **Standard armor AC**: `BodyArmor.ac` already consumed by `Entity.ac_bonus()`.
+- **Standard shield AC**: `Shield.ac_bonus` already consumed by `Entity.ac_bonus()`.
+
+### 17i. Stacking System
+
+Items merge in inventory when they share the same `stack_id`:
+
+```python
+# Same stack_id → merge when looted
+scroll1 = create_scroll_of_fireball(entity.uuid)  # stack_id="scroll_fireball_3"
+scroll2 = create_scroll_of_fireball(entity.uuid)  # stack_id="scroll_fireball_3"
+entity.loot_item(scroll1)  # stack_count=1
+entity.loot_item(scroll2)  # merged → stack_count=2, scroll2 unregistered
+```
+
+Stack consumption (`consume_charge()`):
+- `stack_count > 1`: decrement `stack_count`, reset `charges = max_charges`
+- `stack_count == 1`: destroy item (if `is_consumable`)
+
+Action deduplication: 3 stacked scrolls show 1 "Fireball" action, display name includes "x3".
+
+### 17j. Environment Objects
+
+Non-pickable UsableItems placed on GridMap:
+
+```python
+machine_gun = SpellScroll(
+    name="Arcane Machine Gun",
+    is_pickable=False,  # Environment object
+    charges=-1,         # Unlimited
+    use_action_templates=[MagicMissile(...)],
+)
+gridmap.place_object(machine_gun.uuid, (5, 5))
+```
+
+Discovered via `senses.objects` → `isinstance(obj, UsableItem)` → within 5ft → `get_use_actions()`.
+
+### 17k. Three-Source Action Discovery
+
+`Entity.get_available_actions()` gathers use actions from three sources:
+
+| Source | Method | Items |
+|--------|--------|-------|
+| 1. Registered | `entity.registered_actions` | Static templates (Move, Attack, etc.) |
+| 2. Inventory | `entity.inventory.get_all_use_actions(uuid)` | Potions, scrolls, wands in inventory |
+| 3. Environment | `senses.objects` filtered to UsableItem, ≤5ft | Doors, levers, chests, cannons on floor |
+
+All three sources merge into `AvailableActionsResult`. Use actions have:
+- `is_item_use=True` on `AvailableActionInfo`
+- `source_item_uuid` pointing to the providing item
+- `item_stack_count` for display (inventory items only)
+
+`execute_by_index()` auto-routes `is_item_use` actions to `execute_use_action()`.
+
+### 17l. Test Files Reference
+
+| File | Tests | Coverage |
+|------|-------|---------|
+| `examples/test_usable_items.py` | 19 | Doors (2 patterns), lever, chest, campfire, charges, vision/movement blocking |
+| `examples/test_inventory_use_actions.py` | 65+ | Spell scrolls (all target types), potions, wands, weapon coats (3 variants), environment objects, prerequisites |
+| `examples/test_items_equip_hooks.py` | 15 | DefenderSword, CloakOfProtection, Flaming sword, location tracking, reparenting |
+| `examples/test_items_lifecycle_hooks.py` | 22 | OilBarrel, CursedGem, AuraStone, HealingHerb, hook parameters |
+| `examples/test_stackable_items.py` | 15 | Merge, consumption, deduplication, limits, weight, non-stackable |
