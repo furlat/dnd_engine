@@ -933,6 +933,7 @@ class Attack(BaseAction):
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid)
             attack_event = attack_event.phase_to(
                 EventPhase.EFFECT,
+                is_last=False,  # More EFFECT events coming (post-damage)
                 status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.damage_bonus.normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
                 damages=damages
             )
@@ -989,6 +990,7 @@ class Attack(BaseAction):
 
                 attack_event = attack_event.phase_to(
                     new_phase=EventPhase.EFFECT,
+                    is_first=False,  # Not the first EFFECT (post-damage)
                     damage_rolls=damage_rolls,
                     status_message=f"Damages taken: {[damage.total for damage in damage_rolls]}"
                 )

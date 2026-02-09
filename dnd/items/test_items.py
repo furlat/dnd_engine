@@ -828,7 +828,7 @@ class DrinkGreaterInvisibilityPotionAction(BaseAction):
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         )
-        entity.add_condition(invis_effect)
+        entity.add_condition(invis_effect, parent_event=execution_event)
 
         effect = execution_event.phase_to(EventPhase.EFFECT,
             status_message=f"{entity.name} becomes invisible")

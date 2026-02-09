@@ -29,10 +29,11 @@ from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock
 from dnd.conditions import Invisible, Hidden, Incapacitated, InvisibilityEffect, GreaterInvisibilityEffect
 from dnd.blocks.sensory import SensesType
-from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index, register_spell
+from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index, execute_use_action, register_spell
 from dnd.actions import Hide
 from dnd.items.armors import create_chain_mail, create_leather_armor
 from dnd.items.weapons import create_assassin_dagger
+from dnd.items.test_items import create_potion_of_greater_invisibility
 from dnd.spells.illusion import Invisibility, GreaterInvisibility
 from dnd.spells.evocation import FireBolt, Fireball
 from dnd.core.events import BodyPart, WeaponSlot
@@ -1130,6 +1131,211 @@ def test_greater_invisibility_concentration_break():
     check("Enemy can see ally again", ally.uuid in enemy.senses.entities)
 
 
+def test_greater_invisibility_potion_consumption():
+    """Potion of Greater Invisibility is consumed after use (single charge)."""
+    print("\n" + "=" * 60)
+    print("TEST: Greater Invisibility Potion Consumption")
+    print("=" * 60)
+
+    reset_combat_state()
+    grid = get_map()
+    for x in range(5):
+        for y in range(3):
+            grid.set_tile(x, y, walkable=True, name="Floor")
+
+    entity = create_skeleton(name="Drinker", position=(0, 0))
+    setup_standard_actions(entity)
+
+    potion = create_potion_of_greater_invisibility(entity.uuid)
+    entity.loot_item(potion)
+
+    Entity.update_all_entities_senses()
+
+    # Verify potion is in inventory with stack_count=1
+    check("Potion in inventory", entity.inventory.item_count == 1)
+    item = list(entity.inventory.items.values())[0]
+    check("Stack count is 1", item.stack_count == 1)
+    print(f"  Charges: {item.charges}")
+
+    # Use the potion via execute_use_action
+    execute_use_action(entity, item.uuid, "Drink Greater Invisibility Potion")
+
+    # Verify entity is invisible
+    check("Entity is invisible", entity.is_invisible is True)
+    check("Has Invisible condition", has_condition(entity, "Invisible"))
+
+    # Verify potion was consumed (destroyed, removed from inventory)
+    check("Potion consumed from inventory", entity.inventory.item_count == 0)
+
+
+def test_greater_invisibility_potion_stacking():
+    """Two Greater Invisibility potions stack and can be used twice."""
+    print("\n" + "=" * 60)
+    print("TEST: Greater Invisibility Potion Stacking")
+    print("=" * 60)
+
+    reset_combat_state()
+    grid = get_map()
+    for x in range(5):
+        for y in range(3):
+            grid.set_tile(x, y, walkable=True, name="Floor")
+
+    entity = create_skeleton(name="Drinker", position=(0, 0))
+    setup_standard_actions(entity)
+
+    # Loot two potions — they should stack
+    potion1 = create_potion_of_greater_invisibility(entity.uuid)
+    entity.loot_item(potion1)
+    potion2 = create_potion_of_greater_invisibility(entity.uuid)
+    entity.loot_item(potion2)
+
+    Entity.update_all_entities_senses()
+
+    check("1 inventory slot used", entity.inventory.item_count == 1)
+    item = list(entity.inventory.items.values())[0]
+    check("Stack count is 2", item.stack_count == 2)
+
+    # Use first potion
+    execute_use_action(entity, item.uuid, "Drink Greater Invisibility Potion")
+    check("Invisible after first potion", entity.is_invisible is True)
+
+    # Potion still in inventory (stack_count decremented)
+    check("Potion still in inventory", entity.inventory.item_count == 1)
+    check("Stack count is 1 after first use", item.stack_count == 1)
+    print(f"  Charges after first use: {item.charges}")
+    check("Charges reset to 1", item.charges == 1)
+
+    # Remove invisibility to use second potion
+    entity.remove_condition("Invisible")
+    check("No longer invisible", entity.is_invisible is False)
+
+    # Use second potion
+    execute_use_action(entity, item.uuid, "Drink Greater Invisibility Potion")
+    check("Invisible after second potion", entity.is_invisible is True)
+
+    # Now both consumed — inventory empty
+    check("Potions fully consumed", entity.inventory.item_count == 0)
+
+
+def test_invisibility_spell_self_cast_not_self_trigger():
+    """Casting Invisibility on self should NOT immediately break the invisibility."""
+    print("\n" + "=" * 60)
+    print("TEST: Invisibility Self-Cast Does Not Self-Trigger")
+    print("=" * 60)
+
+    reset_combat_state()
+    grid = get_map()
+    for x in range(10):
+        for y in range(5):
+            grid.set_tile(x, y, walkable=True, name="Floor")
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    observer = create_skeleton(name="Observer", position=(5, 0), faction="monsters")
+    setup_standard_actions(observer)
+    Entity.update_all_entities_senses()
+
+    from dnd.encounter import Encounter
+    from dnd.controller import HumanController
+    encounter = Encounter(name="Test", source_entity_uuid=uuid4())
+    encounter.add_combatant(caster, HumanController(source_entity_uuid=caster.uuid))
+    encounter.add_combatant(observer, HumanController(source_entity_uuid=observer.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+    encounter.start_turn()
+
+    # Cast Invisibility on SELF
+    spell = Invisibility(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=caster.uuid,
+        cast_at_level=2
+    )
+    result = spell.apply()
+
+    check("Spell completed", result is not None and not result.canceled)
+    # The key check: invisibility should NOT have been removed by self-trigger
+    check("Caster is invisible after self-cast", caster.is_invisible is True)
+    check("InvisibilityEffect still applied", has_condition(caster, "Invisible"))
+    check("Condition is InvisibilityEffect", isinstance(caster.active_conditions.get("Invisible"), InvisibilityEffect))
+    check("Caster is concentrating", has_condition(caster, "Concentrating"))
+
+
+def test_greater_invisibility_spell_self_cast_not_self_trigger():
+    """Casting Greater Invisibility on self should NOT trigger the stealth check."""
+    print("\n" + "=" * 60)
+    print("TEST: Greater Invisibility Self-Cast Does Not Self-Trigger")
+    print("=" * 60)
+
+    reset_combat_state()
+    grid = get_map()
+    for x in range(10):
+        for y in range(5):
+            grid.set_tile(x, y, walkable=True, name="Floor")
+
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    observer = create_skeleton(name="Observer", position=(5, 0), faction="monsters")
+    setup_standard_actions(observer)
+    Entity.update_all_entities_senses()
+
+    from dnd.encounter import Encounter
+    from dnd.controller import HumanController
+    encounter = Encounter(name="Test", source_entity_uuid=uuid4())
+    encounter.add_combatant(caster, HumanController(source_entity_uuid=caster.uuid))
+    encounter.add_combatant(observer, HumanController(source_entity_uuid=observer.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+    encounter.start_turn()
+
+    # Cast Greater Invisibility on SELF
+    spell = GreaterInvisibility(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=caster.uuid,
+        cast_at_level=4
+    )
+    result = spell.apply()
+
+    check("Spell completed", result is not None and not result.canceled)
+    # The key check: invisibility should NOT have been removed or checked by self-trigger
+    check("Caster is invisible after self-cast", caster.is_invisible is True)
+    check("GreaterInvisibilityEffect still applied", isinstance(caster.active_conditions.get("Invisible"), GreaterInvisibilityEffect))
+    # Check count should be 0 — no stealth check should have fired
+    condition = caster.active_conditions.get("Invisible")
+    if isinstance(condition, GreaterInvisibilityEffect):
+        check("Check count is 0 (no stealth check fired)", condition.check_count == 0)
+    check("Caster is concentrating", has_condition(caster, "Concentrating"))
+
+
+def test_greater_invisibility_potion_not_self_trigger():
+    """Drinking Greater Invisibility potion should NOT trigger the stealth check."""
+    print("\n" + "=" * 60)
+    print("TEST: Greater Invisibility Potion Does Not Self-Trigger")
+    print("=" * 60)
+
+    reset_combat_state()
+    grid = get_map()
+    for x in range(5):
+        for y in range(3):
+            grid.set_tile(x, y, walkable=True, name="Floor")
+
+    entity = create_skeleton(name="Drinker", position=(0, 0))
+    setup_standard_actions(entity)
+
+    potion = create_potion_of_greater_invisibility(entity.uuid)
+    entity.loot_item(potion)
+
+    Entity.update_all_entities_senses()
+
+    # Use the potion
+    item = list(entity.inventory.items.values())[0]
+    execute_use_action(entity, item.uuid, "Drink Greater Invisibility Potion")
+
+    # The key check: invisibility should still be active (handler didn't self-trigger)
+    check("Entity is invisible after potion", entity.is_invisible is True)
+    check("Has Invisible condition", has_condition(entity, "Invisible"))
+    condition = entity.active_conditions.get("Invisible")
+    if isinstance(condition, GreaterInvisibilityEffect):
+        check("Check count is 0 (no stealth check fired)", condition.check_count == 0)
+
+
 def test_assassin_dagger_unseen_strike():
     """Assassin's Dagger deals +1d6 when attacker is unseen."""
     print("\n" + "=" * 60)
@@ -1171,6 +1377,7 @@ def test_assassin_dagger_unseen_strike():
 
     # Attack with the dagger — retry up to 5 times to avoid nat 1 crit miss
     mod_uuid = force_attack_hit(attacker)
+    from dnd.utils import set_hp, get_max_hp
     damage_dealt = 0
     for _ in range(5):
         hp_before = target.get_hp()
@@ -1186,9 +1393,9 @@ def test_assassin_dagger_unseen_strike():
         damage_dealt = hp_before - hp_after
         if damage_dealt > 0:
             break
-        # Heal target back and retry (nat 1 crit miss)
-        from dnd.utils import set_hp, get_max_hp
+        # Heal target back and reset action economy for retry (nat 1 crit miss)
         set_hp(target, get_max_hp(target))
+        attacker.action_economy.reset_all_costs()
 
     print(f"  Damage dealt (unseen): {damage_dealt}")
     # Base dagger: 1d4 + DEX(+2) = 3-6, plus unseen strike 1d6 = 1-6, total 4-12
@@ -1328,6 +1535,15 @@ if __name__ == "__main__":
     test_greater_invisibility_stealth_check_on_attack()
     test_greater_invisibility_escalating_dc()
     test_greater_invisibility_concentration_break()
+
+    # New tests: Self-trigger prevention
+    test_invisibility_spell_self_cast_not_self_trigger()
+    test_greater_invisibility_spell_self_cast_not_self_trigger()
+    test_greater_invisibility_potion_not_self_trigger()
+
+    # New tests: Greater Invisibility Potion consumption
+    test_greater_invisibility_potion_consumption()
+    test_greater_invisibility_potion_stacking()
 
     # New tests: Assassin's Dagger
     test_assassin_dagger_unseen_strike()
