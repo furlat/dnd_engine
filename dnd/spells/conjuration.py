@@ -1050,7 +1050,7 @@ class EscapeWebAction(BaseAction):
 
         if success:
             # Escape! Remove Web Restrained
-            entity.remove_condition("Web Restrained")
+            entity.remove_condition("Web Restrained", parent_event=execution_event)
             return execution_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{entity.name} breaks free from the web!"
@@ -1645,7 +1645,7 @@ class SpiritGuardiansTriggered(BaseCondition):
 
             entity = Entity.get(target_uuid)
             if entity and "Spirit Guardians Triggered" in entity.active_conditions:
-                entity.remove_condition("Spirit Guardians Triggered")
+                entity.remove_condition("Spirit Guardians Triggered", parent_event=event)
 
             return None
 
@@ -1907,7 +1907,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
 
             # Remove speed debuff
             if "Spirit Guardians Slowed" in entity.active_conditions:
-                entity.remove_condition("Spirit Guardians Slowed")
+                entity.remove_condition("Spirit Guardians Slowed", parent_event=event)
 
             return None
 

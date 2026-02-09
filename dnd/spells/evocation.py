@@ -1913,20 +1913,21 @@ class SunburstBlindedEffect(BaseCondition):
             caster = Entity.get(caster_uuid)
             if not caster:
                 # Caster gone, end the effect
-                target.remove_condition("Sunburst Blindness")
+                target.remove_condition("Sunburst Blindness", parent_event=event)
                 return None
 
             # Repeat CON save
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution",
-                dc=dc
+                dc=dc,
+                parent_event=event.uuid
             )
             _, _, success = target.saving_throw(save_request)
 
             if success:
                 # Remove this condition (Blinded auto-removes as sub-condition)
-                target.remove_condition("Sunburst Blindness")
+                target.remove_condition("Sunburst Blindness", parent_event=event)
             return None
 
         return EventHandler(
@@ -2353,7 +2354,7 @@ class GuidingBoltMarked(BaseCondition):
                 return None
 
             # Remove the condition (advantage was already applied via to_target_static)
-            target.remove_condition("Guiding Bolt")
+            target.remove_condition("Guiding Bolt", parent_event=event)
             return None
 
         return EventHandler(

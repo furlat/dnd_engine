@@ -192,7 +192,7 @@ class FearEffect(BaseCondition):
             caster = Entity.get(caster_uuid)
             if not caster:
                 # Caster gone, end the effect
-                target.remove_condition("Fear")
+                target.remove_condition("Fear", parent_event=event)
                 return None
 
             # Only save if target CAN'T see caster
@@ -210,7 +210,7 @@ class FearEffect(BaseCondition):
             _roll, _outcome, success = target.saving_throw(save_request)
 
             if success:
-                target.remove_condition("Fear")
+                target.remove_condition("Fear", parent_event=event)
             return None
 
         return EventHandler(
@@ -417,7 +417,7 @@ class HypnoticPatternEffect(BaseCondition):
                 return None
 
             # Break the effect
-            target.remove_condition("Hypnotic Pattern")
+            target.remove_condition("Hypnotic Pattern", parent_event=event)
             return None
 
         return EventHandler(
