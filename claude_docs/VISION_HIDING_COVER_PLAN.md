@@ -1,358 +1,587 @@
-# Vision, Hiding, and Cover Systems - Design Plan
+# Vision, Hiding & Cover — Layered Design
 
-This document covers 4 interconnected systems that all feed into the Senses pipeline: **lighting/obscurement**, **invisibility integration**, **hiding/stealth**, and **cover**.
+Three systems, each building on the previous. Same polymorphic pattern as Dijkstra/walking.
 
 ```
-Light System → Obscurement → Hiding → Cover
-     │              │           │        │
-     ▼              ▼           ▼        ▼
- Tile property  FOV filter   Entity    Attack/save
- (per tile)     (visibility) state     modifier
-                     │
-                     └──► All feed into Entity.update_entity_senses()
+Layer 1: Stealth      Pure LOS + stealth vs perception. No light.
+Layer 2: Light         Per-tile obscurement. Extends stealth detection.
+Layer 3: Cover         Raycast partial cover. AC/DEX save mods. Cover enables hiding.
 ```
-
-The core architectural challenge: all 4 systems need to interact with the Senses pipeline, which is a low-level routine that wants to be ignorant of high-level game concepts. The key question is: *where does the filtering logic live?*
 
 ---
 
-## Section 1: Current Visibility Pipeline
+## Architecture: Same Pattern as Dijkstra
 
-### Existing Flow
+Walking uses this pipeline:
+```
+BaseBlock.blocks_walking(requesting_uuid)        ← polymorphic, base_block.py:328
+GridMap.is_walkable_for(x, y, requesting_uuid)    ← calls BaseBlock.get(uuid).blocks_walking()  gridmap.py:272
+Entity.compute_senses_from_position(entity_uuid)  ← grid.compute_paths(entity_uuid)  entity.py:1561
+```
+
+New perception pipeline, same shape:
+```
+BaseBlock.is_perceivable_by(observer_uuid)              ← polymorphic, base_block.py, default True
+GridMap.get_perceivable_entities(origin, dist, observer) ← calls BaseBlock.get(uuid).is_perceivable_by()
+Entity.compute_senses_from_position(entity_uuid)         ← grid.get_perceivable_entities()  entity.py:1597-1602
+```
+
+**No new import paths.** Only extensions of existing imports from same modules:
 
 ```
-Tile.visible (bool) → GridMap.is_blocking(x,y) → shadowcast compute_fov()
-  → visible_positions → Entity.compute_senses_from_position()
-  → Senses.update_senses(entities, visible, walkable, paths)
+base_block.py  ← add ObscurementLevel, CoverType enums + is_perceivable_by(), provides_cover()
+    ↑ (already imported by entity.py:18, base_tiles.py)
+base_tiles.py  ← extend import to include ObscurementLevel, CoverType
+gridmap.py     ← no new imports, add get_perceivable_entities()
+sensory.py     ← no changes (SensesType already defined: line 15-19)
+    ↑ (already imported by entity.py:25)
+entity.py      ← extend 'from sensory import Senses' to include SensesType
+               ← extend 'from base_block import ...' to include ObscurementLevel
+               ← override is_perceivable_by()
 ```
-
-### Existing Infrastructure
-
-| Component | File | Line | Status |
-|-----------|------|------|--------|
-| `SensesType` enum | `dnd/blocks/sensory.py` | 15-19 | Declared: BLINDSIGHT, DARKVISION, TREMORSENSE, TRUESIGHT |
-| `Senses.extra_senses` | `dnd/blocks/sensory.py` | 27 | `List[SensesType]`, populated manually |
-| `Invisible.can_see_invisible()` | `dnd/conditions.py` | 509-511 | Static method, checks TRUESIGHT + TREMORSENSE |
-| `Tile.visible` | `dnd/core/base_tiles.py` | 54 | Binary (wall/not wall), no gradations |
-| `Armor.stealth_disadvantage` | `dnd/blocks/equipment.py` | 151-154 | `Optional[bool]` field, never applied as modifier |
-| `GridMap.is_blocking()` | `dnd/core/gridmap.py` | 304-307 | Binary, checks `Tile.visible` |
-| `Entity.update_entity_senses()` | `dnd/entity.py` | 1590-1617 | Full FOV + paths recompute |
-| `Entity.update_entity_visibility()` | `dnd/entity.py` | 1625-1645 | FOV-only (during movement) |
-| `Entity.passive_skill()` | `dnd/entity.py` | - | `10 + skill bonus + advantage modifier` (exists) |
-
-**Key observations:**
-- `Invisible` condition adds contextual advantage/disadvantage to attack/AC modifiers but is **not connected to senses** - an invisible entity still appears in `senses.entities`
-- `TileEffectCondition` in `dnd/tile_conditions.py` does NOT have `heavily_obscured`/`lightly_obscured` fields (contrary to original plan notes - these need to be added)
-- `Tile.visible` is purely binary (wall vs. not wall) - no light/obscurement gradations exist
 
 ---
 
-## Section 2: D&D 5e SRD Rules Reference
+## Existing Infrastructure
 
-### 2a. Light Levels (3 tiers)
+| Component | File : Line | Status |
+|-----------|-------------|--------|
+| `SensesType` enum (BLINDSIGHT, DARKVISION, TREMORSENSE, TRUESIGHT) | `sensory.py:15-19` | Declared, populated manually |
+| `Senses.extra_senses: List[SensesType]` | `sensory.py:27` | Used by Invisible checks |
+| `BaseBlock.blocks_walking(requesting_uuid)` | `base_block.py:328-332` | Polymorphic, default False |
+| `BaseBlock.blocks_vision(requesting_uuid)` | `base_block.py:334-337` | Polymorphic, default False |
+| `Tile.blocks_vision()` | `base_tiles.py:105-107` | Returns `not self.visible` |
+| `GridMap.is_blocking(x, y)` | `gridmap.py:305-315` | Checks tile + objects for LOS |
+| `GridMap.get_visible_entities(origin, max_dist)` | `gridmap.py:615-625` | FOV → entity dict, no filtering |
+| `GridMap.is_walkable_for(x, y, uuid)` | `gridmap.py:272-298` | Entity + object occupancy check |
+| `Entity.compute_senses_from_position()` | `entity.py:1561-1613` | FOV + paths + entity collection |
+| `Entity.update_entity_visibility()` | `entity.py:1668-1698` | FOV-only (during movement) |
+| `Entity.passive_skill(skill)` | `entity.py` | Returns `10 + skill bonus + advantage mod` |
+| `Invisible.can_see_invisible()` | `conditions.py:507-510` | Checks TRUESIGHT + TREMORSENSE (missing BLINDSIGHT) |
+| `Armor.stealth_disadvantage: Optional[bool]` | `equipment.py:135-138` | Field exists, never applied |
+| `bresenham_line(start, end)` | `geometry.py:49-82` | Returns `List[Tuple[int,int]]` |
 
-| Level | Obscurement | Effect |
-|-------|-------------|--------|
+**Key gaps:**
+- Invisible condition adds attack advantage/disadvantage but is **not connected to senses** — invisible entities still appear in `senses.entities`
+- Tile has binary `visible` flag (wall/not wall) — no obscurement gradations
+- `Armor.stealth_disadvantage` exists but is never wired to a modifier
+
+---
+
+## Layer 1: Stealth (no light)
+
+Pure LOS + senses range. If entity is in your FOV, you see them — UNLESS they have stealth/invisibility flags set.
+
+### Design Principle: Flags on BaseBlock, Not Condition Knowledge
+
+The perceivability system uses **condition-agnostic flags** on BaseBlock. Conditions (Hidden, Invisible, or future effects) set/unset these flags. The perception pipeline reads them without knowing what set them. This means items can also be hidden/invisible (a trap with `_stealth_dc=15`, an invisible chest).
+
+```
+Condition layer (conditions.py)          BaseBlock flags (base_block.py)
+┌──────────────────────┐                ┌─────────────────────────┐
+│ Hidden._apply()      │───sets────────►│ _stealth_dc: int = 15   │
+│ Hidden.cleanup()     │───unsets──────►│ _stealth_dc: None       │
+│ Invisible._apply()   │───sets────────►│ _is_invisible: True     │
+│ Invisible.cleanup()  │───unsets──────►│ _is_invisible: False    │
+│ (future conditions)  │───sets────────►│ (same flags)            │
+└──────────────────────┘                └─────────────────────────┘
+                                                    │
+                                                    ▼ read by
+                                        ┌─────────────────────────┐
+                                        │ is_perceivable_by(      │
+                                        │   passive_perception,   │
+                                        │   extra_senses          │
+                                        │ )                       │
+                                        └─────────────────────────┘
+```
+
+No Entity importing conditions. No conditions importing Entity. Flags are the interface.
+
+### 1a. BaseBlock Perceivability Fields + Method
+
+Add to `base_block.py` next to `blocks_walking()` and `blocks_vision()`:
+
+```python
+# Fields
+_stealth_dc: Optional[int] = Field(default=None, exclude=True)
+_is_invisible: bool = Field(default=False, exclude=True)
+
+# Method
+def is_perceivable_by(self,
+                      passive_perception: int = 0,
+                      extra_senses: Optional[List['SensesType']] = None) -> bool:
+    """Whether this block can be perceived by an observer with given perception.
+    Reads _stealth_dc and _is_invisible flags. Conditions set these flags."""
+    senses = extra_senses or []
+
+    if self._is_invisible:
+        if not (SensesType.TRUESIGHT in senses or
+                SensesType.BLINDSIGHT in senses or
+                SensesType.TREMORSENSE in senses):
+            return False
+
+    if self._stealth_dc is not None:
+        if self._stealth_dc > passive_perception:
+            return False
+
+    return True
+```
+
+**Key**: The method takes observer data as parameters, not an observer UUID. The caller extracts its own perception data and passes it down. BaseBlock never looks up the observer.
+
+### 1b. No GridMap Changes
+
+GridMap does NOT need a new method. The existing entity collection loops in `Entity.compute_senses_from_position()` and `Entity.update_entity_visibility()` add the perception filter directly. GridMap stays unchanged.
+
+### 1c. Entity Senses Integration
+
+Add perception filter to the two methods that collect visible entities:
+
+**`compute_senses_from_position()`** (entity.py:1597-1602):
+
+```python
+# Replace the entity collection loop with:
+visible_entities: Dict[UUID, Tuple[int, int]] = {}
+
+# Get observer perception data (if entity_uuid provided)
+obs_perception = 0
+obs_senses: List[SensesType] = []
+if entity_uuid:
+    observer = Entity.get(entity_uuid)
+    if observer and isinstance(observer, Entity):
+        obs_perception = observer.passive_skill("perception")
+        obs_senses = observer.senses.extra_senses
+
+for pos in visible_positions:
+    entities = Entity.get_all_entities_at_position(pos)
+    for entity in entities:
+        if entity_uuid and entity.uuid == entity_uuid:
+            continue  # Skip self
+        if entity.is_perceivable_by(obs_perception, obs_senses):
+            visible_entities[entity.uuid] = pos
+```
+
+**`update_entity_visibility()`** (entity.py:1691-1696):
+
+```python
+# Replace the entity collection loop with:
+visible_entities: Dict[UUID, Tuple[int, int]] = {}
+my_perception = self.passive_skill("perception")
+my_senses = self.senses.extra_senses
+
+for pos in visible_positions:
+    for ent_uuid in grid.get_entities_at(pos):
+        if ent_uuid != self.uuid:
+            block = BaseBlock.get(ent_uuid)
+            if block and block.is_perceivable_by(my_perception, my_senses):
+                visible_entities[ent_uuid] = pos
+```
+
+Senses are now always subjective — each entity gets a different `senses.entities` dict based on their own perception.
+
+Import addition in entity.py: `from dnd.blocks.sensory import Senses, SensesType`
+
+### 1d. Invisible Condition Changes
+
+`Invisible._apply()` gains one line: `target._is_invisible = True`
+`Invisible` cleanup (or a custom `_on_remove` callback): `target._is_invisible = False`
+
+- Fix `can_see_invisible()` (conditions.py:507-510): add BLINDSIGHT to the check
+- Keep existing attack advantage/disadvantage contextual modifiers (these still matter for combat rolls even when invisible entity is perceived via special senses)
+- After applying/removing Invisible: `Entity.update_all_entities_senses()`
+
+### 1e. Hidden Condition
+
+New in `dnd/conditions.py`:
+
+```python
+class Hidden(BaseCondition):
+    name: str = "Hidden"
+    description: str = "Hidden from observers via Stealth"
+    stealth_result: int = 0  # From Stealth check at Hide time
+```
+
+**`_apply()`**:
+1. Set flag: `target._stealth_dc = self.stealth_result`
+2. Unseen Attacker advantage: `self_contextual` AdvantageModifier on `attack_bonus` — callable checks `self.uuid not in target.senses.entities` (if the target can't see the attacker in their senses, attacker gets advantage). This naturally captures ALL perceivability effects since `senses.entities` is already filtered by `is_perceivable_by()`.
+3. Register removal handlers (see below)
+
+**Cleanup**: `target._stealth_dc = None` + `Entity.update_all_entities_senses()`
+
+**Removal triggers**:
+- EventHandler on ATTACK at EFFECT phase (self as source) → remove Hidden
+- EventHandler on TAKE_DAMAGE at EFFECT phase (self as target) → remove Hidden
+- EventHandler on CONDITION_APPLICATION at EFFECT phase (self as target, condition name == "Incapacitated") → remove Hidden
+
+**Detection is per-observer, removal is global:**
+- `is_perceivable_by()` is checked per-observer (Entity A with perception 15 sees you, Entity B with perception 8 doesn't) — this is just senses filtering, not removal
+- Hidden condition removal (attack/damage/condition received) removes it for everyone
+- Passive perception only — no Search action for now
+
+### 1f. Hide Action
+
+New in `dnd/actions.py`:
+
+- Cost: 1 action
+- Target: SELF
+- Execution: Roll Stealth skill check → apply Hidden condition with `stealth_result` = roll result
+- After: `Entity.update_all_entities_senses()`
+- Register in `setup_standard_actions()` (actions_functional.py)
+
+### 1g. Armor Stealth Disadvantage
+
+Wire up `Armor.stealth_disadvantage` field (equipment.py:135-138):
+- In `Armor._on_equip()`: if `stealth_disadvantage`, add DISADVANTAGE modifier to the entity's Stealth skill via `self_static`
+- In `Armor._on_unequip()`: remove the modifier
+- Track modifier UUID for cleanup (same pattern as other equip hooks)
+
+### 1h. Implementation Steps
+
+1. Add `_stealth_dc`, `_is_invisible` fields + `is_perceivable_by()` to BaseBlock
+2. Add perception filter to `compute_senses_from_position()` entity loop
+3. Add perception filter to `update_entity_visibility()` entity loop
+4. Extend entity.py import: `from dnd.blocks.sensory import Senses, SensesType`
+5. Update `Invisible._apply()` to set `_is_invisible` flag + cleanup to unset
+6. Fix `Invisible.can_see_invisible()` to include BLINDSIGHT
+7. Add Hidden condition (sets `_stealth_dc`, handlers for attack/damage removal)
+8. Add Hide action + register in `setup_standard_actions()`
+9. Wire up `Armor.stealth_disadvantage`
+
+**Files**: `dnd/core/base_block.py`, `dnd/entity.py`, `dnd/conditions.py`, `dnd/actions.py`, `dnd/actions_functional.py`, `dnd/blocks/equipment.py`
+**Tests**: `examples/test_stealth_system.py`
+
+---
+
+## Layer 2: Light / Obscurement
+
+Extends Layer 1. Adds per-tile obscurement that affects stealth detection.
+
+### 2a. ObscurementLevel Enum
+
+Add to `base_block.py` (next to `MovementMode`):
+
+```python
+class ObscurementLevel(str, Enum):
+    NONE = "none"              # Bright light, clear area
+    LIGHTLY_OBSCURED = "light" # Dim light, patchy fog
+    HEAVILY_OBSCURED = "heavy" # Darkness, opaque fog
+```
+
+### 2b. Tile Fields
+
+Add to Tile in `base_tiles.py`:
+
+```python
+obscurement: ObscurementLevel = Field(default=ObscurementLevel.NONE)
+is_magical_darkness: bool = Field(default=False)
+```
+
+### 2c. GridMap
+
+Add default obscurement field:
+
+```python
+default_obscurement: ObscurementLevel = ObscurementLevel.NONE  # Per-map (dungeon=HEAVY, outdoor=NONE)
+```
+
+### 2d. TileEffectCondition
+
+Add to `TileEffectCondition` in `tile_conditions.py`:
+
+```python
+sets_obscurement: Optional[ObscurementLevel] = None
+sets_magical_darkness: bool = False
+```
+
+On `_apply()`: set `tile.obscurement` (and `is_magical_darkness` if flagged).
+On removal: reset to `GridMap.default_obscurement`.
+
+### 2e. Entity.is_perceivable_by() — Layer 2 extension
+
+The Hidden check gains obscurement awareness. Insert between the existing Hidden check and the return:
+
+```python
+# Hidden check (extends Layer 1)
+hidden = self.active_conditions.get("Hidden")
+if hidden:
+    observer = Entity.get(observer_uuid)
+    if observer and isinstance(observer, Entity):
+        tile = get_map().get_tile(*self.position)
+        tile_obs = tile.obscurement if tile else ObscurementLevel.NONE
+
+        # Compute effective obscurement (senses can downgrade it)
+        effective_obs = self._compute_effective_obscurement(
+            tile_obs, tile.is_magical_darkness if tile else False, observer
+        )
+
+        if effective_obs == ObscurementLevel.HEAVILY_OBSCURED:
+            return False  # Auto-hidden in heavy obscurement
+        elif effective_obs == ObscurementLevel.LIGHTLY_OBSCURED:
+            # Lightly obscured: stealth vs perception still applies
+            return hidden.stealth_result <= observer.passive_skill("perception")
+        else:
+            # No obscurement: stealth vs perception
+            return hidden.stealth_result <= observer.passive_skill("perception")
+
+return True
+```
+
+**Helper on Entity:**
+
+```python
+@staticmethod
+def _compute_effective_obscurement(
+    tile_obs: ObscurementLevel,
+    is_magical: bool,
+    observer: 'Entity'
+) -> ObscurementLevel:
+    extra = observer.senses.extra_senses
+
+    # Truesight/Blindsight: ignore all obscurement
+    if SensesType.TRUESIGHT in extra or SensesType.BLINDSIGHT in extra:
+        return ObscurementLevel.NONE
+
+    # Magical darkness: Darkvision doesn't help
+    if is_magical:
+        return tile_obs
+
+    # Normal obscurement: Darkvision downgrades by 1
+    if SensesType.DARKVISION in extra:
+        if tile_obs == ObscurementLevel.HEAVILY_OBSCURED:
+            return ObscurementLevel.LIGHTLY_OBSCURED
+        elif tile_obs == ObscurementLevel.LIGHTLY_OBSCURED:
+            return ObscurementLevel.NONE
+    return tile_obs
+```
+
+Layer 1 behavior preserved: when `tile_obs` is NONE, no obscurement effect.
+
+### 2f. Heavily Obscured Without Hidden
+
+Entities in heavily obscured tiles are auto-hidden even without the Hidden condition. Add to `is_perceivable_by()` before the Hidden check:
+
+```python
+# Heavily obscured tile: auto-hidden (even without Hidden condition)
+tile = get_map().get_tile(*self.position)
+if tile:
+    effective_obs = self._compute_effective_obscurement(
+        tile.obscurement, tile.is_magical_darkness, observer
+    )
+    if effective_obs == ObscurementLevel.HEAVILY_OBSCURED:
+        return False
+```
+
+This is the SRD rule: "A creature in a heavily obscured area effectively can't be seen" — you don't need to take the Hide action.
+
+### 2g. Zone Spells
+
+**Fog Cloud** (conjuration.py): Zone spell, concentration.
+- Heavily obscured zone within sphere radius
+- Uses `ZoneControlCondition` pattern
+- `TileEffectCondition` with `sets_obscurement=ObscurementLevel.HEAVILY_OBSCURED`
+
+**Darkness** (conjuration.py): Zone spell, concentration.
+- Heavily obscured + `sets_magical_darkness=True`
+- Darkvision doesn't help, only Truesight/Blindsight bypass
+
+### 2h. Light Sources — DEFERRED
+
+No dynamic light computation yet. Obscurement set manually on tiles or via zone spells. Future light source system would use mini-shadowcast from light position (compute FOV, set bright/dim tiles within radii).
+
+### 2i. Implementation Steps
+
+1. Add `ObscurementLevel` enum to `base_block.py`
+2. Add `obscurement` + `is_magical_darkness` fields to Tile
+3. Add `default_obscurement` to GridMap
+4. Add `sets_obscurement` / `sets_magical_darkness` to `TileEffectCondition`
+5. Extend entity.py import to include `ObscurementLevel`
+6. Add `_compute_effective_obscurement()` helper to Entity
+7. Extend `Entity.is_perceivable_by()` with obscurement logic (heavy = auto-hidden)
+8. Implement Fog Cloud and Darkness spells
+
+**Files**: `dnd/core/base_block.py`, `dnd/core/base_tiles.py`, `dnd/core/gridmap.py`, `dnd/tile_conditions.py`, `dnd/entity.py`, `dnd/spells/conjuration.py`
+**Tests**: `examples/test_obscurement_system.py`
+
+---
+
+## Layer 3: Cover
+
+Extends Layer 2. Raycast-based partial cover provides AC/DEX save bonuses.
+
+### 3a. CoverType Enum
+
+Add to `base_block.py` (next to `ObscurementLevel`):
+
+```python
+class CoverType(str, Enum):
+    NONE = "none"
+    HALF = "half"                       # +2 AC, +2 DEX saves
+    THREE_QUARTERS = "three_quarters"   # +5 AC, +5 DEX saves
+    TOTAL = "total"                     # Can't be targeted (= LOS block, already handled by blocks_vision)
+```
+
+### 3b. BaseBlock.provides_cover() → CoverType
+
+Polymorphic, default NONE. Same pattern as `blocks_walking()`, `blocks_vision()`:
+
+```python
+def provides_cover(self) -> 'CoverType':
+    """What level of cover this block provides. Default NONE."""
+    return CoverType.NONE
+```
+
+Override points:
+- **Tile**: NONE by default (walls already block vision entirely via `blocks_vision`)
+- **BaseItem**: New `provides_cover_type: CoverType` field (for barricades, low walls, furniture)
+- **Entity**: HALF cover (alive entity between attacker and target)
+
+### 3c. Cover Computation
+
+New utility function (in `dnd/core/geometry.py` or `dnd/actions.py`):
+
+```python
+def compute_cover(attacker_pos: Tuple[int, int],
+                  target_pos: Tuple[int, int],
+                  attacker_uuid: UUID,
+                  target_uuid: UUID) -> CoverType:
+    """Compute best cover between attacker and target using Bresenham raycast."""
+    grid = get_map()
+    cells = bresenham_line(attacker_pos, target_pos)
+    best_cover = CoverType.NONE
+
+    for cell in cells[1:-1]:  # Exclude endpoints
+        # Check tile cover
+        tile = grid.get_tile(*cell)
+        if tile:
+            tile_cover = tile.provides_cover()
+            best_cover = max(best_cover, tile_cover)
+
+        # Check object cover
+        for obj_uuid in grid.get_objects_at(cell):
+            block = BaseBlock.get(obj_uuid)
+            if block:
+                best_cover = max(best_cover, block.provides_cover())
+
+        # Check entity cover (alive entity = HALF)
+        for ent_uuid in grid.get_entities_at(cell):
+            if ent_uuid != attacker_uuid and ent_uuid != target_uuid:
+                best_cover = max(best_cover, CoverType.HALF)
+
+        if best_cover == CoverType.TOTAL:
+            break  # Can't get worse
+
+    return best_cover
+```
+
+Uses existing `bresenham_line()` from `geometry.py:49-82`.
+
+### 3d. Cover Modifiers
+
+| Cover | AC Bonus | DEX Save Bonus |
+|-------|----------|----------------|
+| Half | +2 | +2 |
+| Three-Quarters | +5 | +5 |
+| Total | Can't target | N/A |
+
+Applied as temporary `NumericalModifier` during attack/save resolution:
+
+**Attack** (`dnd/actions.py` in `attack_consequences()`):
+- Compute cover between attacker and target
+- If TOTAL: attack auto-fails (can't target)
+- If HALF/THREE_QUARTERS: add NumericalModifier to target's `ac_bonus` during resolution
+- Clean up modifier after attack resolves
+
+**Saving throws** (`entity.py` in `saving_throw()`):
+- For DEX saves with a source position: compute cover, add bonus
+- Only applies to saves that have a spatial origin (spell caster position)
+
+### 3e. Cover + Hiding Interaction
+
+Cover from an enemy satisfies the "not clearly visible" requirement for hiding:
+- Hide action prerequisites: has cover from at least one enemy, OR in obscured tile, OR invisible
+- `is_perceivable_by()` can also check cover: if observer has no clear line to target (TOTAL cover), target is not perceivable
+
+### 3f. Cover + Light Interaction (FUTURE)
+
+When light source system is implemented:
+- THREE_QUARTERS cover dims light passing through → LIGHTLY_OBSCURED behind it
+- TOTAL cover blocks light → HEAVILY_OBSCURED behind (already via shadowcast blocking)
+- HALF cover → no dimming
+
+### 3g. Implementation Steps
+
+1. Add `CoverType` enum to `base_block.py`
+2. Add `provides_cover()` to BaseBlock (default NONE)
+3. Override in Tile (default NONE), Entity (HALF for alive entities)
+4. Add `provides_cover_type: CoverType` field to BaseItem
+5. Add `compute_cover()` utility using `bresenham_line()`
+6. Integrate into `Attack.attack_consequences()` (AC bonus)
+7. Integrate into `Entity.saving_throw()` (DEX save bonus, requires source position)
+
+**Files**: `dnd/core/base_block.py`, `dnd/core/base_tiles.py`, `dnd/blocks/base_item.py`, `dnd/core/geometry.py`, `dnd/actions.py`, `dnd/entity.py`
+**Tests**: `examples/test_cover_system.py`
+
+---
+
+## D&D 5e SRD Rules Reference
+
+### Obscurement
+
+| Light Level | Obscurement | Effect |
+|-------------|-------------|--------|
 | Bright Light | None | Normal vision |
 | Dim Light | Lightly Obscured | Disadvantage on Perception (sight) |
 | Darkness | Heavily Obscured | Effectively Blinded |
 
-### 2b. Obscurement (2 tiers)
+- **Lightly Obscured**: Disadvantage on Perception checks relying on sight
+- **Heavily Obscured**: Blocks vision entirely — creature effectively has Blinded condition for seeing into area
 
-- **Lightly Obscured** (dim light, patchy fog, moderate foliage): Disadvantage on Perception checks relying on sight
-- **Heavily Obscured** (darkness, opaque fog, dense foliage): Blocks vision entirely - creature effectively has Blinded condition for seeing into/through area
-
-### 2c. Special Senses
+### Special Senses
 
 | Sense | Bypasses | Limitation |
 |-------|----------|------------|
-| Darkvision | Darkness → dim light, dim light → bright light | Still disadvantage on Perception in what was darkness (now treated as dim) |
+| Darkvision | Darkness → dim, dim → bright | Still disadvantage in former darkness |
 | Blindsight | All visual obscurement | Specific radius only |
 | Tremorsense | All visual obscurement | Must share ground, can't detect flying |
-| Truesight | Everything (darkness, magical darkness, invisibility, illusions) | Specific radius |
+| Truesight | Everything (darkness, magical, invisibility, illusions) | Specific radius |
 
-### 2d. Hiding (Stealth vs Perception)
+### Hiding
 
-- Requires: not clearly visible to observer (obscurement, cover, etc.)
-- Dexterity (Stealth) check vs Wisdom (Perception) check or passive Perception
-- Invisible creatures can always try to hide
+- Requires: not clearly visible (obscurement, cover, or invisible)
+- Stealth check vs passive Perception (or active Perception check)
 - Attacking (hit or miss) reveals location
 - Unseen attacker: advantage on attacks
-- Attacking unseen target: disadvantage on attacks
+- Invisible creatures can always try to hide
 
-### 2e. Cover
+### Cover
 
 | Type | AC Bonus | DEX Save Bonus | Notes |
 |------|----------|----------------|-------|
-| Half Cover | +2 | +2 | Low wall, creature, tree trunk |
+| Half | +2 | +2 | Low wall, creature, tree trunk |
 | Three-Quarters | +5 | +5 | Portcullis, arrow slit |
-| Total Cover | Can't be targeted | N/A | Full wall, fully concealed |
+| Total | Can't target | N/A | Full wall, fully concealed |
 
-- Another creature (ally or enemy) provides half cover
+- Another creature provides half cover
 - Only highest cover applies (don't stack)
 
-### 2f. Invisibility (SRD)
+### Invisibility
 
 - Impossible to see without magic/special sense
 - For hiding: treated as heavily obscured
 - Attack rolls against: disadvantage
 - Invisible creature's attacks: advantage
 - Can always try to hide
-- Still detectable by noise/tracks
 
 ---
 
-## Section 3: Obscurement System
-
-### Core Concept
-
-Add **per-tile obscurement level** that feeds into the visibility pipeline.
-
-```python
-class ObscurementLevel(str, Enum):
-    NONE = "none"              # Bright light, clear
-    LIGHTLY_OBSCURED = "light" # Dim light, patchy fog
-    HEAVILY_OBSCURED = "heavy" # Darkness, opaque fog, Fog Cloud
-```
-
-### 3a. Tile-Level Changes
-
-- Add `obscurement: ObscurementLevel = ObscurementLevel.NONE` to Tile
-- Zone spells (Fog Cloud, Darkness, Cloudkill) set this via tile conditions
-- TileEffectCondition gets `heavily_obscured: bool` and `lightly_obscured: bool` fields that set tile obscurement on apply
-
-### 3b. Light Sources - Two Design Options
-
-How do light sources (torches, Light cantrip, Daylight spell) set tile obscurement?
-
-**Option A: AoE zone pattern** (like existing zone spells)
-- Light = ZoneControlCondition with a sphere shape
-- Spatial handlers fire on entry/exit to update tile conditions
-- Pro: reuses existing pattern
-- Con: heavy for something as common as light, event-driven overhead
-
-**Option B: Mini-shadowcast from light position** (preferred)
-- Light source computes its own FOV via `compute_fov(light_position, light_radius)`
-- All tiles in that FOV get `obscurement` set to NONE (bright) or LIGHTLY_OBSCURED (dim, at edge)
-- Runs at GridMap level, not event-driven
-- Pro: naturally handles walls blocking light, efficient, low-level
-- Con: needs to track light sources for cleanup/movement
-
-**Why Option B feels right**: Light is fundamentally a spatial property - it follows LOS rules (walls block it). A light source is not a "zone effect on entry" - it's a property of tiles computed from a point. The shadowcast infrastructure already exists. The light source would:
-1. On creation: run `compute_fov(position, radius)` → set tiles to bright/dim
-2. On movement: re-run from new position, clean up old tiles
-3. On removal: reset tiles to default obscurement
-4. This could be a lightweight GridMap-level system, not condition/event-driven
-
-### 3c. GridMap Changes - Two-Tier Visibility
-
-- `is_blocking(x, y)` stays binary (walls block LOS completely)
-- NEW: `get_obscurement(x, y) -> ObscurementLevel` for post-FOV filtering
-- Shadowcast still computes raw FOV (what tiles you CAN see through)
-- Post-FOV: each visible tile's obscurement level determines HOW you see it
-
-### 3d. Entity.update_entity_senses() Integration
-
-This is the key integration point. The filtering lives at Entity level, not Senses level.
-
-```
-1. compute_fov() → raw visible positions (unchanged)
-2. NEW: For each visible position, check obscurement level
-3. NEW: Apply entity's special senses to override obscurement:
-   - Darkvision: heavily_obscured (darkness) → lightly_obscured within range
-   - Blindsight: ignore all obscurement within range
-   - Truesight: ignore all obscurement within range
-   - Tremorsense: ignore obscurement for grounded entities within range
-4. NEW: Filter entities by obscurement:
-   - Entity in heavily_obscured tile AND no bypass sense → NOT in senses.entities
-   - Entity in lightly_obscured tile → still visible but flagged
-5. Result: senses.entities only contains entities you can actually perceive
-```
-
-### 3e. Invisible Condition Integration
-
-Current `Invisible` condition adds contextual advantage/disadvantage to attack/AC modifiers.
-Problem: It's **not connected to senses at all** - an invisible entity still appears in `senses.entities`.
-
-Proposed fix:
-- Invisible entities treated as "heavily obscured" for visibility purposes
-- `Entity.update_entity_senses()` checks: does the observed entity have Invisible condition?
-  - If yes AND observer lacks TRUESIGHT/BLINDSIGHT/TREMORSENSE → exclude from senses.entities
-  - The advantage/disadvantage modifiers on attacks remain as-is (for when you know location via other means)
-
-**Note**: This means `Entity.update_entity_senses()` needs to check conditions on OTHER entities. Currently it only queries GridMap. This is where the integration lives - Entity level, not Senses level.
-
----
-
-## Section 4: Hiding System
-
-### 4a. Hidden State
-
-- New condition: `Hidden` (marker condition like HasAttacked)
-- Applied via `Hide` action (uses Dexterity Stealth check)
-- Stores stealth roll result on the condition
-- Ends when: attack (hit or miss), no longer obscured/behind cover, or detected
-
-### 4b. Detection
-
-- Passive Perception: `10 + WIS modifier + Perception proficiency` (already exists as `Entity.passive_skill("perception")`)
-- If `stealth_result > passive_perception` → hidden
-- Active search: Perception check vs stealth roll (uses existing `skill_check` system)
-
-### 4c. Requirements to Hide
-
-- Must be in lightly/heavily obscured area, OR behind cover, OR invisible
-- Can't hide from creature that can see you clearly
-
-### 4d. Combat Effects
-
-Already partially handled by Unseen Attacker/Target rules:
-- Hidden + attacking: advantage (then reveal location)
-- Attacking hidden creature: disadvantage (or auto-miss if wrong position)
-
-### 4e. Armor Stealth Disadvantage
-
-- `Armor.stealth_disadvantage` field exists (`dnd/blocks/equipment.py:151-154`) but isn't applied
-- When armor is equipped with `stealth_disadvantage=True`: add disadvantage modifier to Stealth skill via `self_static` channel
-
----
-
-## Section 5: Cover System
-
-### 5a. Cover Calculation
-
-- Raycasting from attacker to target through grid
-- Check obstacles between attacker and target position
-- Another creature in path → half cover
-
-### 5b. Implementation Options
-
-**Option A: Simple creature-based cover only**
-- Check if any creature occupies a cell between attacker and target
-- Quick to implement, covers common tactical case
-- No terrain geometry needed
-
-**Option B: Full raycasting cover**
-- Tile property: `provides_cover: CoverType` (NONE, HALF, THREE_QUARTERS, TOTAL)
-- Ray from attacker center to target corners (SRD: check at least 1 corner unblocked for any targeting)
-- More complex but complete
-
-### 5c. Total Cover = LOS Block for Targeting
-
-- Total cover functions like a non-visible tile: entity CANNOT be targeted
-- This means total cover should remove the entity from valid_targets in `get_available_actions`
-- Implementation: either exclude from `senses.entities` (like heavily obscured) or filter in targeting
-
-### 5d. Modifier Application (Half/Three-Quarters)
-
-- Cover provides AC bonus → target's `ac_bonus` gets numerical modifier
-- Cover provides DEX save bonus → target's DEX save gets numerical modifier
-- Computed at attack time (like cross-entity propagation) or cached in senses
-
-### 5e. Integration with Attack Action
-
-- Attack action already does cross-entity modifier propagation
-- Cover would add to `ac_bonus.from_target_static` channel (like other target-based modifiers)
-- Or: computed during `_validate()` and added as temporary modifier
-
----
-
-## Section 6: Impact on get_available_actions / Targeting
-
-Currently `get_available_actions()` builds valid_targets from `senses.entities` (what you can see). Every system here affects this:
-
-| System | Effect on Targeting |
-|--------|-------------------|
-| **Obscurement** | Heavily obscured entities excluded from `senses.entities` → not valid targets |
-| **Invisibility** | Invisible entities excluded from `senses.entities` (unless observer has bypass sense) → not valid targets |
-| **Total Cover** | Entity behind total cover excluded from valid targets (can't be targeted at all) |
-| **Half/Three-Quarters Cover** | Entity IS a valid target, but AC/DEX save modifiers apply during attack resolution |
-| **Hiding** | Hidden entity not in `senses.entities` → not valid target |
-
-**Key insight**: Most of this filtering happens **upstream** in `Entity.update_entity_senses()`, so `get_available_actions` doesn't need to change much - it already depends on `senses.entities` for targeting. The exceptions are:
-- Cover modifiers: applied during attack, not during targeting
-- AoE spells: may still affect entities you can't directly target (SRD: "total cover can't be targeted directly, but some spells can reach by including in area of effect")
-
----
-
-## Section 7: Light Source Design
-
-### Mini-Shadowcast Approach (Option B from Section 3b)
-
-Light sources compute their own FOV to determine which tiles they illuminate.
-
-### Light Source Tracking
-
-- Registry on GridMap: `Dict[UUID, LightSource]` mapping source UUID → light data
-- `LightSource` data: position, bright_radius, dim_radius, is_magical, source_uuid
-- GridMap methods: `add_light_source()`, `remove_light_source()`, `move_light_source()`
-
-### How It Works
-
-1. **Creation**: `compute_fov(position, bright_radius + dim_radius)` → set tiles
-   - Tiles within `bright_radius`: `obscurement = NONE`
-   - Tiles between `bright_radius` and `bright_radius + dim_radius`: `obscurement = LIGHTLY_OBSCURED`
-2. **Movement** (entity carrying torch): re-run from new position, reset old tiles to default
-3. **Removal**: reset all illuminated tiles to default obscurement
-4. **Default obscurement**: configurable per-map (dungeon = HEAVILY_OBSCURED, outdoors = NONE)
-
-### Conflicting Light Sources
-
-- Multiple sources can overlap - **brightest wins**
-- Track light contributions per tile (list of source UUIDs) for cleanup
-- When a source is removed, recalculate affected tiles from remaining sources
-
-### Magical Darkness
-
-- Flag on obscurement: `is_magical_darkness: bool` on tile
-- Normal light sources cannot override magical darkness
-- Magical darkness overrides normal light
-- Only Truesight/Blindsight bypass magical darkness (Darkvision does NOT)
-- Spells: Darkness (15ft radius magical darkness), Daylight (counters Darkness if ≥3rd level)
-
-### Light Spells
-
-| Spell | Bright Radius | Dim Radius | Notes |
-|-------|--------------|------------|-------|
-| Light (cantrip) | 20ft | 20ft | Attached to object |
-| Dancing Lights (cantrip) | 10ft | 10ft | Up to 4 sources, concentration |
-| Daylight (3rd level) | 60ft | 60ft | Dispels darkness ≤3rd level |
-| Continual Flame (2nd level) | 20ft | 20ft | Permanent, not sunlight |
-
----
-
-## Section 8: Spells Requiring These Systems
-
-| Spell | Systems Needed | Notes |
-|-------|---------------|-------|
-| **Fog Cloud** | Obscurement (heavily obscured zone) | ZoneControlCondition pattern, no damage, just obscurement |
-| **Darkness** | Obscurement + magical darkness flag | Darkvision doesn't help, only Truesight/Blindsight |
-| **Faerie Fire** | Anti-invisibility + advantage | Outlined creatures can't benefit from invisibility, attacks have advantage |
-| **Light** (cantrip) | Light source system | Bright light in 20ft radius, dim light 20ft beyond |
-| **See Invisibility** | Senses interaction | Grant ability to see invisible creatures (add to extra_senses or similar) |
-| **Daylight** | Light source + darkness counter | Bright 60ft, dim 60ft, dispels Darkness |
-
----
-
-## Section 9: Implementation Priority
-
-Recommended order (each builds on previous):
-
-1. **Obscurement on tiles** - Add `ObscurementLevel` to Tile, add fields to TileEffectCondition
-2. **Senses integration** - `Entity.update_entity_senses()` checks obscurement + special senses
-3. **Light sources** - Mini-shadowcast approach to illuminate tiles
-4. **Invisible → Senses hookup** - Remove invisible entities from `senses.entities` when not perceivable
-5. **Fog Cloud + Darkness spells** - First consumers of obscurement system
-6. **Cover system** - Independent of above, can be done in parallel after step 1
-7. **Hiding system** - Builds on obscurement + cover (needs both to determine "where can you hide")
-8. **Armor stealth disadvantage** - Small, wire up existing field
-
----
-
-## Section 10: Open Design Questions
-
-1. **Where does cover live?** Cached in senses (recomputed on position changes) or computed at attack time?
-2. **AoE and total cover**: Should AoE spells check cover per-target? SRD says yes for some spells.
-3. **Hiding and AoE**: Can you target a hidden creature's known position with an AoE spell?
-4. **Light source tracking**: Per-tile contribution list vs. full recompute on any light change?
-5. **Default map lighting**: Per-map setting (dungeon vs. outdoor) or per-tile default?
+## Verification Checklist
+
+- [ ] No new import paths (only extensions of existing imports from same modules)
+- [ ] Perception pattern mirrors Dijkstra pattern (BaseBlock polymorphism → GridMap dispatch → Entity passes UUID)
+- [ ] GridMap stays type-unaware (only uses `BaseBlock.get()`)
+- [ ] Each layer independently testable and doesn't break previous layers
+- [ ] Entity.is_perceivable_by() handles: Invisible, Hidden, Obscurement (layered)
+- [ ] Cover computed at attack/save time (not cached in senses)
+- [ ] Armor.stealth_disadvantage wired to actual modifier
+- [ ] Hidden reveals on attack via EventHandler
+- [ ] update_all_entities_senses() called after Invisible/Hidden state changes
