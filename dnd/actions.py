@@ -18,7 +18,7 @@ from typing import Optional, List, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
-from dnd.conditions import Dashing, Dodging, Disengaging, Prone
+from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden
 from collections import OrderedDict
 
 
@@ -1275,6 +1275,80 @@ class Disengage(BaseAction):
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message="Applied Disengaging - movement won't provoke OAs"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+# =============================================================================
+# Hide Action
+# =============================================================================
+
+class Hide(BaseAction):
+    """Take the Hide action - roll Stealth to become Hidden.
+
+    Applies the Hidden condition with stealth_result = d20 + Stealth bonus.
+    Hidden entities are not perceivable by observers with passive perception
+    below the stealth result. Hidden also grants Unseen Attacker advantage.
+
+    Hidden is removed automatically when the entity attacks, takes damage,
+    or becomes incapacitated.
+    """
+    name: str = Field(default="Hide")
+    description: str = Field(default="Attempt to hide (Stealth check)")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Hide targets self")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Hide Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+
+        return ActionEvent(
+            name=self.name or "Hide",
+            description=self.description,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register,
+            source_entity_name=source_name
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity or not isinstance(entity, Entity):
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Roll Stealth check (d20 + stealth bonus, fires D20RollResultEvent for handlers)
+        skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
+        stealth_roll = entity.roll_d20(skill_bonus, RollType.CHECK, skill_name="stealth")
+        stealth_result = stealth_roll.total
+
+        # Apply Hidden condition (no duration — removed by triggers)
+        hidden = Hidden(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid,
+            stealth_result=stealth_result
+        )
+        entity.add_condition(hidden)
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Applied Hidden (Stealth DC {stealth_result})"
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:

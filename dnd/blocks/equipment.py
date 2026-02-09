@@ -2,7 +2,7 @@ from typing import Optional, List, Self, Literal, Union, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import NumericalModifier, DamageType 
+from dnd.core.modifiers import NumericalModifier, DamageType
 from dnd.blocks.abilities import  AbilityScores
 from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, Damage, BodyPart, RingSlot
 

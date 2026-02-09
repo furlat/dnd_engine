@@ -164,6 +164,7 @@ class SpatialSensesCallback:
         EventType.SPATIAL_TILE_CHANGED,
         EventType.SPATIAL_OBJECT_PLACED,
         EventType.SPATIAL_OBJECT_REMOVED,
+        EventType.SPATIAL_PERCEIVABILITY_CHANGED,
     )
 
     def __init__(
@@ -194,8 +195,12 @@ class SpatialSensesCallback:
         if position is None:
             return
 
-        # Handle self-movement events (we moved to a new cell)
+        # Skip self-perceivability events (our own hiding doesn't affect our own senses)
         entity_uuid = getattr(event, 'entity_uuid', None)
+        if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
+            return
+
+        # Handle self-movement events (we moved to a new cell)
         if entity_uuid == self.owner_uuid:
             # Check is_moving flag on senses (set by Move action)
             if self.senses.is_moving:

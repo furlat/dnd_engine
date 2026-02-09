@@ -1,3 +1,4 @@
+from pydantic import Field
 from dnd.core.base_conditions import BaseCondition, DurationType
 
 from dnd.entity import Entity
@@ -12,6 +13,7 @@ from dnd.blocks.sensory import SensesType
 from uuid import UUID
 from functools import partial
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent
+from dnd.core.base_block import BaseBlock
 from enum import Enum
 
 
@@ -492,41 +494,51 @@ class Invisible(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            #add conditional advantage to all attacks from this creature against creature that can not see invisible
-            self_contextual_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.target_can_not_see_invisible_advantage))
+            # Set invisibility flag (fires perceivability event to update observer senses)
+            target_entity.set_invisible(True)
+            # Unseen attacker advantage (uses senses-based check)
+            self_contextual_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_attacker_advantage))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_contextual_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible self to others advantage modifier to {target_entity.name}")
-            #add conditional disadvantage to all attacks against this creature if the observer can not see invisible
-            to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.target_can_not_see_invisible_disadvantage))
+            # Unseen target disadvantage (uses senses-based check)
+            to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_target_disadvantage))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible to target disadvantage modifier to {target_entity.name}")
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clear invisibility flag when condition is removed."""
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            target.set_invisible(False)
+        return super()._remove(event)
+
     @staticmethod
     def can_see_invisible(observer: Entity) -> bool:
         """ returns true if the observer can see invisible"""
         return SensesType.TRUESIGHT in observer.senses.extra_senses or SensesType.TREMORSENSE in observer.senses.extra_senses
 
-    @staticmethod
-    def target_can_not_see_invisible_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
-        """ if the target creature does not have neither truesight nor tremorsense it returns an advantage modifier used for self contextual of the invisible creature"""
-        if target_entity_uuid:
-            target_entity = Entity.get(target_entity_uuid)
-            if isinstance(target_entity,Entity) and not Invisible.can_see_invisible(target_entity):
-                return AdvantageModifier(name="Invisible",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=source_entity_uuid,target_entity_uuid=target_entity_uuid)
-        return None
-    
-    @staticmethod
-    def target_can_not_see_invisible_disadvantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
-        """ if the target creature does not have neither truesight nor tremorsense it returns a disadvantage modifier
-        used in the to_target_contextual of the invisible creature this condition wil lbe triggered by the attacker so source entity wil lbe the target of the invisible condition which will transfer its self to other during attack computation"""
-        if target_entity_uuid:
-            target_entity = Entity.get(target_entity_uuid)
-            if isinstance(target_entity,Entity) and not Invisible.can_see_invisible(target_entity):
-                return AdvantageModifier(name="Invisible",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=source_entity_uuid,target_entity_uuid=target_entity_uuid)
-        return None
+
+def unseen_attacker_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
+    """Advantage if attacker is NOT in target's senses. Used by both Hidden and Invisible."""
+    if target_entity_uuid:
+        target_entity = Entity.get(target_entity_uuid)
+        if isinstance(target_entity, Entity) and source_entity_uuid not in target_entity.senses.entities:
+            return AdvantageModifier(name="Unseen Attacker", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
+    return None
+
+
+def unseen_target_disadvantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
+    """Disadvantage for attacker if defender is NOT in attacker's senses.
+    source_entity_uuid is the invisible/hidden entity, target_entity_uuid is the attacker
+    (via to_target_contextual propagation during attack computation)."""
+    if target_entity_uuid:
+        attacker = Entity.get(target_entity_uuid)
+        if isinstance(attacker, Entity) and source_entity_uuid not in attacker.senses.entities:
+            return AdvantageModifier(name="Unseen Target", value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
+    return None
 
 
 class Paralyzed(BaseCondition):
@@ -1130,6 +1142,94 @@ class NoReactions(BaseCondition):
         return outs, [], [], [], effect_event
 
 
+class Hidden(BaseCondition):
+    """Hidden from observers via Stealth. Entity cannot be perceived by observers
+    whose passive perception is below the stealth result.
+
+    Removed automatically when the entity:
+    - Makes an attack
+    - Takes damage
+    - Becomes incapacitated
+
+    While hidden, the entity has advantage on attacks (Unseen Attacker).
+    """
+    name: str = "Hidden"
+    description: str = "Hidden from observers via Stealth"
+    stealth_result: int = Field(default=0, description="Stealth check result used as perception DC")
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity:
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+        elif isinstance(target_entity, Entity):
+            outs: List[Tuple[UUID, UUID]] = []
+            handler_uuids: List[UUID] = []
+
+            # Set stealth DC flag (fires perceivability event to update observer senses)
+            target_entity.set_stealth_dc(self.stealth_result)
+
+            # Unseen Attacker advantage (shared callable with Invisible)
+            adv_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
+                modifier=ContextualAdvantageModifier(
+                    name="Hidden (Unseen Attacker)",
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid,
+                    callable=unseen_attacker_advantage
+                )
+            )
+            outs.append((target_entity.equipment.attack_bonus.uuid, adv_uuid))
+
+            effect_event = declaration_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Hidden to {target_entity.name} (Stealth DC {self.stealth_result})"
+            )
+
+            # Reveal handler: removes Hidden on attack, damage, or incapacitated
+            handler = EventHandler(
+                name="Hidden: Reveal",
+                source_entity_uuid=target_entity.uuid,
+                trigger_conditions=[
+                    Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.TAKE_DAMAGE, event_phase=EventPhase.EFFECT,
+                            event_target_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.CONDITION_APPLICATION, event_phase=EventPhase.EFFECT,
+                            event_target_entity_uuid=target_entity.uuid),
+                ],
+                event_processor=hidden_reveal_processor
+            )
+            target_entity.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+            return outs, handler_uuids, [], [], effect_event
+        else:
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clear stealth DC flag when condition is removed."""
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            target.set_stealth_dc(None)
+        return super()._remove(event)
+
+
+def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """Remove Hidden on attack, damage, or incapacitated condition application."""
+    # For CONDITION_APPLICATION: only break on Incapacitated
+    if event.event_type == EventType.CONDITION_APPLICATION:
+        condition = getattr(event, 'condition', None)
+        if condition is None or getattr(condition, 'name', None) != "Incapacitated":
+            return None
+
+    entity = Entity.get(source_entity_uuid)
+    if entity and isinstance(entity, Entity) and "Hidden" in entity.active_conditions:
+        entity.remove_condition("Hidden")
+    return None
+
+
 class ConditionType(str, Enum):
     # NOTE: Fighter-specific conditions (HasAttacked, ActionSurging) moved to dnd/classes/fighter.py
     BLINDED = "BLINDED"
@@ -1141,6 +1241,7 @@ class ConditionType(str, Enum):
     DODGING = "DODGING"
     FRIGHTENED = "FRIGHTENED"
     GRAPPLED = "GRAPPLED"
+    HIDDEN = "HIDDEN"
     INCAPACITATED = "INCAPACITATED"
     INVISIBLE = "INVISIBLE"
     PARALYZED = "PARALYZED"
@@ -1161,6 +1262,7 @@ CONDITION_MAP: Dict[ConditionType, Type[BaseCondition]] = {
     ConditionType.DODGING: Dodging,
     ConditionType.FRIGHTENED: Frightened,
     ConditionType.GRAPPLED: Grappled,
+    ConditionType.HIDDEN: Hidden,
     ConditionType.INCAPACITATED: Incapacitated,
     ConditionType.INVISIBLE: Invisible,
     ConditionType.PARALYZED: Paralyzed,

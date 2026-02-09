@@ -564,7 +564,8 @@ All conditions in `dnd/conditions.py`:
 | **HasAttacked** | Marker for rage maintenance (tracks ANY attack) | - | - |
 | **HasTakenDamage** | Marker for rage maintenance (tracks damage taken) | - | - |
 | **Incapacitated** | All action economy = 0 | - | - |
-| **Invisible** | Advantage attacks (contextual) | Disadvantage (contextual) | - |
+| **Hidden** | Stealth DC on perceivability, unseen attacker advantage | - | - |
+| **Invisible** | Sets is_invisible flag, unseen attacker advantage (senses-based) | Unseen target disadvantage (senses-based) | - |
 | **Paralyzed** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft | Incapacitated |
 | **Poisoned** | Disadvantage all attacks/checks | - | - |
 | **Prone** | Disadvantage attacks | ≤5ft: advantage, >5ft: disadvantage | - |
@@ -762,10 +763,24 @@ AoE spells use `TargetType.POSITION_AOE` with an `aoe_shape` field.
 
 See `claude_docs/AOE_TARGETING_REFERENCE.md` for full implementation guide.
 
+#### Stealth System (Layer 1)
+
+Perceivability filtering on senses. See `claude_docs/VISION_HIDING_COVER_PLAN.md` for full details.
+
+- **BaseBlock flags**: `stealth_dc`, `is_invisible` — condition-agnostic, set by Hidden/Invisible conditions
+- **`is_perceivable_by(requesting_entity_uuid)`** — polymorphic on BaseBlock, delegates to `get_passive_perception()` / `can_bypass_invisibility()` overrides
+- **SPATIAL_PERCEIVABILITY_CHANGED event** — lightweight event that triggers senses re-evaluation without firing SpatialHandlers
+- **Hidden condition** — sets `stealth_dc` flag, grants unseen attacker advantage, removed on attack/damage/incapacitated
+- **Hide action** — costs 1 action, rolls Stealth check, applies Hidden condition
+- **Invisible condition** — sets `is_invisible` flag, senses-based advantage/disadvantage (shared `unseen_attacker_advantage`/`unseen_target_disadvantage` callables)
+- **Armor stealth disadvantage** — `StealthDisadvantageBodyArmor` subclass in `armors.py` applies DISADVANTAGE to stealth skill on equip
+
 #### Not Yet Implemented
 
 - **Spell duration/expiration** - Long rest, short rest, timed durations
 - **Terrain effects** - Fog Cloud, Wall of Fire (see `claude_docs/VISION_HIDING_COVER_PLAN.md`)
+- **Light/Obscurement** - Layer 2 of stealth system (see `claude_docs/VISION_HIDING_COVER_PLAN.md`)
+- **Cover** - Layer 3 of stealth system (see `claude_docs/VISION_HIDING_COVER_PLAN.md`)
 
 ## Code Quality
 
@@ -1292,6 +1307,7 @@ Polls server every 2s, shows opponent actions, blocks until Claude's turn, detec
 | Jump action tests | `examples/test_jump.py` |
 | Jump API tests | `examples/test_jump_api.py` |
 | Shove action tests | `examples/test_shove.py` |
+| Stealth system tests (44) | `examples/test_stealth_system.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
 | Session management | `server/session.py` |
