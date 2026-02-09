@@ -1,10 +1,18 @@
 """Weapon factory functions for D&D 5e weapons."""
 
-from uuid import UUID
+import random
+from typing import Optional
+from uuid import UUID, uuid4
+
 from dnd.blocks.equipment import Weapon, WeaponProperty, Range
+from dnd.core.dice import DiceRoll, RollType, AdvantageStatus, CriticalStatus, AutoHitStatus
+from dnd.core.events import (
+    RangeType, Event, EventType, EventPhase, EventHandler, Trigger,
+    DamageRollResultEvent, EquipmentSlot
+)
 from dnd.core.modifiers import DamageType
 from dnd.core.values import ModifiableValue
-from dnd.core.events import RangeType
+from dnd.entity import Entity
 
 
 # =============================================================================
@@ -376,6 +384,98 @@ def create_heavy_crossbow(source_id: UUID) -> Weapon:
         damage_type=DamageType.PIERCING,
         properties=[WeaponProperty.RANGED, WeaponProperty.TWO_HANDED, WeaponProperty.HEAVY, WeaponProperty.MARTIAL],
         range=Range(type=RangeType.RANGE, normal=100, long=400),
+        attack_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Attack Bonus"),
+        extra_damage_dices=[],
+        extra_damage_dices_numbers=[],
+        extra_damage_bonus=[],
+        extra_damage_type=[]
+    )
+
+
+# =============================================================================
+# SPECIAL WEAPONS
+# =============================================================================
+
+def unseen_strike_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """Add 1d6 piercing damage when attacker is unseen by target."""
+    if not isinstance(event, DamageRollResultEvent):
+        return None
+    if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+    if not target or not isinstance(target, Entity):
+        return None
+
+    # Check if attacker is unseen by target (not in target's senses.entities)
+    if source_entity_uuid in target.senses.entities:
+        return None  # Attacker is visible — no bonus
+
+    # Roll 1d6 extra piercing damage
+    result = random.randint(1, 6)
+    extra_roll = DiceRoll(
+        dice_uuid=uuid4(),
+        roll_type=RollType.DAMAGE,
+        results=[result],
+        total=result,
+        bonus=0,
+        advantage_status=AdvantageStatus.NONE,
+        critical_status=CriticalStatus.NONE,
+        auto_hit_status=AutoHitStatus.NONE,
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=event.target_entity_uuid
+    )
+    event.final_rolls.append(extra_roll)
+    event.roll_modifications.append(
+        ("Unseen Strike", len(event.final_rolls) - 1, 0, result, "1d6 piercing (unseen attacker)")
+    )
+    return event
+
+
+class UnseenStrikeDagger(Weapon):
+    """Assassin's Dagger — deals +1d6 piercing when attacker is unseen by target.
+    Uses DAMAGE_ROLL_RESULT event handler to conditionally add extra dice."""
+    _handler_uuid: Optional[UUID] = None
+
+    def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        entity = Entity.get(entity_uuid)
+        if entity and isinstance(entity, Entity):
+            handler = EventHandler(
+                name="Unseen Strike",
+                source_entity_uuid=entity_uuid,
+                trigger_conditions=[
+                    Trigger(
+                        event_type=EventType.DAMAGE_ROLL_RESULT,
+                        event_phase=EventPhase.EFFECT,
+                        event_source_entity_uuid=entity_uuid
+                    )
+                ],
+                event_processor=unseen_strike_processor
+            )
+            entity.add_event_handler(handler)
+            self._handler_uuid = handler.uuid
+
+    def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        if self._handler_uuid:
+            handler = EventHandler.get(self._handler_uuid)
+            if handler and isinstance(handler, EventHandler):
+                entity = Entity.get(entity_uuid)
+                if entity and isinstance(entity, Entity):
+                    entity.remove_event_handler(handler)
+            self._handler_uuid = None
+
+
+def create_assassin_dagger(source_id: UUID) -> UnseenStrikeDagger:
+    """Assassin's Dagger - 1d4 piercing, finesse, light, +1d6 when unseen"""
+    return UnseenStrikeDagger(
+        source_entity_uuid=source_id,
+        name="Assassin's Dagger",
+        description="A shadowy blade that strikes harder when the target can't see you coming. +1d6 piercing when unseen.",
+        damage_dice=4,
+        dice_numbers=1,
+        damage_type=DamageType.PIERCING,
+        properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT],
+        range=Range(type=RangeType.REACH, normal=5),
         attack_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Attack Bonus"),
         extra_damage_dices=[],
         extra_damage_dices_numbers=[],

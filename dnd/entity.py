@@ -1864,8 +1864,30 @@ class Entity(BaseBlock):
             valid_targets: List[AvailableTarget] = []
             idx = 0
 
-            # Build targets for THIS template (may include self if include_self=True)
-            template_targets = dict(potential_targets)
+            # Build targets for THIS template
+            # Use the template's valid_target_filter to compute per-action targets
+            action_filter = getattr(template, 'valid_target_filter', 'enemies')
+            if action_filter == "all" or action_filter == "self_or_allies":
+                # Action wants broader targeting — compute its own pool
+                template_targets: Dict[UUID, Tuple[int, int]] = {}
+                if action_filter == "all":
+                    for k, v in self.senses.entities.items():
+                        if k == self.uuid:
+                            continue
+                        if not include_dead:
+                            other = Entity.get(k)
+                            if other and other.get_hp() <= 0:
+                                continue
+                        template_targets[k] = v
+                elif action_filter == "self_or_allies":
+                    for k, v in self.get_visible_allies(include_dead=include_dead).items():
+                        template_targets[k] = v
+                elif action_filter == "allies":
+                    for k, v in self.get_visible_allies(include_dead=include_dead).items():
+                        template_targets[k] = v
+            else:
+                template_targets = dict(potential_targets)
+
             if template.include_self:
                 template_targets[self.uuid] = self.position
 
