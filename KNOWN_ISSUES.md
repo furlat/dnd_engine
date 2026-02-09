@@ -21,3 +21,4 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Why it matters**: Bypasses the type system entirely. If the callback receives an unexpected event type, these silently return `None` instead of failing loudly, masking bugs. Pylance/Pyright cannot verify correctness.
 - **Fix**: Use `isinstance` checks to narrow to the specific event type, then access typed fields directly.
 - **Status**: OPEN
+

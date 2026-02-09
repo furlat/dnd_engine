@@ -1159,6 +1159,7 @@ class Hidden(BaseCondition):
     name: str = "Hidden"
     description: str = "Hidden from observers via Stealth"
     stealth_result: int = Field(default=0, description="Stealth check result used as perception DC")
+    creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1189,6 +1190,11 @@ class Hidden(BaseCondition):
                 update={"condition": self},
                 status_message=f"Applied Hidden to {target_entity.name} (Stealth DC {self.stealth_result})"
             )
+
+            # Store creation lineage to avoid self-triggering reveal handler
+            # Use parent action's lineage if available (e.g. potion/item actions add condition before EFFECT)
+            parent = declaration_event.get_parent_event()
+            self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
 
             # Reveal handler: removes Hidden on attack, damage, incapacitated, spell cast, or shove
             handler = EventHandler(
@@ -1223,21 +1229,35 @@ class Hidden(BaseCondition):
         return super()._remove(event)
 
 
+# Actions that do NOT break stealth (everything else reveals)
+NON_REVEALING_ACTIONS = {"Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone"}
+
+
 def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """Remove Hidden on attack, damage, incapacitated, spell cast, or shove."""
+    """Remove Hidden on attack, damage, incapacitated, spell cast, or revealing action."""
+    # Only reveal on the last EFFECT event (after damage is fully applied)
+    if not event.is_last:
+        return None
+
     # For CONDITION_APPLICATION: only break on Incapacitated
     if event.event_type == EventType.CONDITION_APPLICATION:
         condition = getattr(event, 'condition', None)
         if condition is None or getattr(condition, 'name', None) != "Incapacitated":
             return None
 
-    # For BASE_ACTION: only break on Shove (not Dash, Dodge, Disengage, etc.)
+    # For BASE_ACTION: only break on revealing actions (not Dash, Dodge, etc.)
     if event.event_type == EventType.BASE_ACTION:
-        if not isinstance(event, ActionEvent) or event.name != "Shove":
+        if not isinstance(event, ActionEvent):
+            return None
+        if event.name in NON_REVEALING_ACTIONS:
             return None
 
     entity = Entity.get(source_entity_uuid)
     if entity and isinstance(entity, Entity) and "Hidden" in entity.active_conditions:
+        condition = entity.active_conditions.get("Hidden")
+        # Skip if this event is from the same lineage that created the condition
+        if isinstance(condition, Hidden) and condition.creation_lineage_uuid == event.lineage_uuid:
+            return None
         entity.remove_condition("Hidden")
     return None
 
@@ -1247,6 +1267,7 @@ class InvisibilityEffect(BaseCondition):
     Removed automatically when the entity attacks or casts a spell."""
     name: str = "Invisible"
     description: str = "Invisible until attacking or casting a spell"
+    creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1289,7 +1310,12 @@ class InvisibilityEffect(BaseCondition):
                 status_message=f"Applied Invisibility to {target_entity.name}"
             )
 
-            # Self-removal handler: attack or spell cast breaks invisibility
+            # Store creation lineage to avoid self-triggering reveal handler
+            # Use parent action's lineage if available (e.g. potion/item actions add condition before EFFECT)
+            parent = declaration_event.get_parent_event()
+            self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
+
+            # Self-removal handler: attack, spell cast, or revealing action breaks invisibility
             handler = EventHandler(
                 name="Invisibility: Reveal",
                 source_entity_uuid=target_entity.uuid,
@@ -1297,6 +1323,8 @@ class InvisibilityEffect(BaseCondition):
                     Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
                     Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
                 ],
                 event_processor=invisibility_reveal_processor
@@ -1317,11 +1345,25 @@ class InvisibilityEffect(BaseCondition):
 
 
 def invisibility_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """Remove Invisible (InvisibilityEffect) when entity attacks or casts a spell."""
+    """Remove Invisible (InvisibilityEffect) when entity attacks, casts a spell, or performs a revealing action."""
+    # Only reveal on the last EFFECT event (after damage is fully applied)
+    if not event.is_last:
+        return None
+
+    # For BASE_ACTION: only break on revealing actions (not Dash, Dodge, etc.)
+    if event.event_type == EventType.BASE_ACTION:
+        if not isinstance(event, ActionEvent):
+            return None
+        if event.name in NON_REVEALING_ACTIONS:
+            return None
+
     entity = Entity.get(source_entity_uuid)
     if entity and isinstance(entity, Entity) and "Invisible" in entity.active_conditions:
         condition = entity.active_conditions.get("Invisible")
         if isinstance(condition, InvisibilityEffect):
+            # Skip if this event is from the same lineage that created the condition
+            if condition.creation_lineage_uuid == event.lineage_uuid:
+                return None
             entity.remove_condition("Invisible")
     return None
 
@@ -1334,7 +1376,7 @@ class GreaterInvisibilityEffect(BaseCondition):
     description: str = "Greater Invisibility - Stealth check to maintain"
     check_count: int = Field(default=0, description="Number of successful stealth checks")
     base_dc: int = Field(default=15, description="Starting DC for stealth check")
-    last_checked_lineage: Optional[UUID] = Field(default=None, description="Lineage UUID of last processed event (dedup)")
+    creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1377,7 +1419,12 @@ class GreaterInvisibilityEffect(BaseCondition):
                 status_message=f"Applied Greater Invisibility to {target_entity.name}"
             )
 
-            # Stealth check handler: rolls stealth vs escalating DC on attack/cast
+            # Store creation lineage to avoid self-triggering stealth check handler
+            # Use parent action's lineage if available (e.g. potion/item actions add condition before EFFECT)
+            parent = declaration_event.get_parent_event()
+            self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
+
+            # Stealth check handler: rolls stealth vs escalating DC on attack/cast/revealing action
             handler = EventHandler(
                 name="Greater Invisibility: Stealth Check",
                 source_entity_uuid=target_entity.uuid,
@@ -1385,6 +1432,8 @@ class GreaterInvisibilityEffect(BaseCondition):
                     Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
                     Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
                 ],
                 event_processor=greater_invisibility_check_processor
@@ -1406,6 +1455,17 @@ class GreaterInvisibilityEffect(BaseCondition):
 
 def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """Stealth check to maintain Greater Invisibility. DC = base_dc + check_count."""
+    # Only check on the last EFFECT event (after damage is fully applied)
+    if not event.is_last:
+        return None
+
+    # For BASE_ACTION: only break on revealing actions (not Dash, Dodge, etc.)
+    if event.event_type == EventType.BASE_ACTION:
+        if not isinstance(event, ActionEvent):
+            return None
+        if event.name in NON_REVEALING_ACTIONS:
+            return None
+
     entity = Entity.get(source_entity_uuid)
     if not entity or not isinstance(entity, Entity):
         return None
@@ -1413,11 +1473,9 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
     if not condition or not isinstance(condition, GreaterInvisibilityEffect):
         return None
 
-    # Deduplicate: Attack events fire EFFECT twice (pre-damage and post-damage).
-    # Only process once per lineage.
-    if condition.last_checked_lineage == event.lineage_uuid:
+    # Skip if this event is from the same lineage that created the condition
+    if condition.creation_lineage_uuid == event.lineage_uuid:
         return None
-    condition.last_checked_lineage = event.lineage_uuid
 
     dc = condition.base_dc + condition.check_count
     skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")

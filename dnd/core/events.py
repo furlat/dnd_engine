@@ -225,6 +225,10 @@ class Event(BaseObject):
     canceled: bool = Field(default=False,description="Flag to indicate if event should be canceled")
     parent_event: Optional[UUID] = Field(default=None,description="The parent event of the current event")
     status_message: Optional[str] = Field(default=None,description="A status message for the event")
+
+    # Phase repetition flags (for events like Attack that fire EFFECT twice)
+    is_first: bool = Field(default=True, description="True if this is the first event of this phase in this lineage")
+    is_last: bool = Field(default=True, description="True if this is the last event of this phase in this lineage")
     
     # Track children events differently
     lineage_children_events: List[UUID] = Field(default_factory=list,description="All children events that happened throughout this event's lifetime")
@@ -290,6 +294,12 @@ class Event(BaseObject):
         # Add any additional updates
         phase_updates.update(updates)
         
+        # Reset is_first/is_last to defaults unless explicitly overridden
+        if 'is_first' not in phase_updates:
+            phase_updates['is_first'] = True
+        if 'is_last' not in phase_updates:
+            phase_updates['is_last'] = True
+
         # Preserve lineage_children_events but clear children_events for new phase
         phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
         phase_updates['children_events'] = []
