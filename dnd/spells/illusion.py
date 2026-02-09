@@ -1,6 +1,6 @@
 """Illusion spells - deceiving the senses and mind.
 
-Contains: Blur, Fear, HypnoticPattern, ColorSpray
+Contains: Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility
 """
 import random
 from typing import Optional, List, Tuple
@@ -16,7 +16,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
-from dnd.conditions import Concentrating, Frightened, Charmed, Incapacitated, Blinded
+from dnd.conditions import Concentrating, Frightened, Charmed, Incapacitated, Blinded, InvisibilityEffect, GreaterInvisibilityEffect
 
 
 class BlurEffect(BaseCondition):
@@ -749,4 +749,169 @@ class ColorSpray(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{target.name} is blinded by Color Spray ({target.get_hp()} HP)"
+        )
+
+
+class Invisibility(SpellAction):
+    """Invisibility - 2nd level Illusion (Concentration)
+
+    A creature you touch becomes invisible until the spell ends.
+    Anything the target is wearing or carrying is invisible as long as it
+    is on the target's person. The spell ends for a target that attacks
+    or casts a spell.
+
+    Duration: Concentration, up to 1 hour.
+    Range: Touch (5ft).
+    """
+    name: str = Field(default="Invisibility")
+    description: str = Field(default="Concentration. Touch target becomes invisible until attacking or casting.")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="illusion")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="all")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate touch range (5ft)."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return declaration_event.cancel(status_message="Target not found")
+
+        # Self-cast is always valid
+        if target.uuid != caster.uuid:
+            distance = caster.senses.get_feet_distance(target.position)
+            if distance > self.spell_range.normal:
+                return declaration_event.cancel(
+                    status_message=f"Target out of range ({distance}ft, max {self.spell_range.normal}ft)"
+                )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply Invisibility to target."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not target or not isinstance(target, Entity):
+            return execution_event.cancel(status_message="Target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Invisibility on {target.name}"
+        )
+
+        # Apply InvisibilityEffect condition (breaks on attack/cast)
+        invis_effect = InvisibilityEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(invis_effect, parent_event=effect_event)
+
+        # Apply Concentrating condition on caster
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Invisibility"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+
+        # Link effect to concentration for cleanup
+        concentration.add_linked_condition(target.uuid, invis_effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{caster.name} casts Invisibility on {target.name} (concentration)"
+        )
+
+
+class GreaterInvisibility(SpellAction):
+    """Greater Invisibility - 4th level Illusion (Concentration)
+
+    BG3-style: A creature you touch becomes invisible. On attack or spell cast,
+    rolls a Stealth check vs escalating DC to maintain invisibility
+    (DC 15, +1 per success).
+
+    Duration: Concentration, up to 10 rounds.
+    Range: Touch (5ft).
+    """
+    name: str = Field(default="Greater Invisibility")
+    description: str = Field(default="Concentration. Touch target becomes invisible, Stealth check to maintain on attack/cast.")
+    spell_level: int = Field(default=4)
+    spell_school: str = Field(default="illusion")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="all")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate touch range (5ft)."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return declaration_event.cancel(status_message="Target not found")
+
+        # Self-cast is always valid
+        if target.uuid != caster.uuid:
+            distance = caster.senses.get_feet_distance(target.position)
+            if distance > self.spell_range.normal:
+                return declaration_event.cancel(
+                    status_message=f"Target out of range ({distance}ft, max {self.spell_range.normal}ft)"
+                )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply Greater Invisibility to target."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not target or not isinstance(target, Entity):
+            return execution_event.cancel(status_message="Target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Greater Invisibility on {target.name}"
+        )
+
+        # Apply GreaterInvisibilityEffect condition (stealth check to maintain)
+        invis_effect = GreaterInvisibilityEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(invis_effect, parent_event=effect_event)
+
+        # Apply Concentrating condition on caster
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Greater Invisibility"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+
+        # Link effect to concentration for cleanup
+        concentration.add_linked_condition(target.uuid, invis_effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{caster.name} casts Greater Invisibility on {target.name} (concentration)"
         )

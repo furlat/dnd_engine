@@ -1323,6 +1323,19 @@ class Hide(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
+        # Cannot hide while visible to any enemy
+        grid = get_map()
+        subscribers = grid.get_subscribers_at(entity.position)
+        for sub_uuid in subscribers:
+            if sub_uuid == entity.uuid:
+                continue
+            sub = Entity.get(sub_uuid)
+            if sub and isinstance(sub, Entity) and entity.is_enemy(sub):
+                if entity.uuid in sub.senses.entities:
+                    return declaration_event.cancel(
+                        status_message="Cannot hide - visible to enemies"
+                    )
+
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
             status_message=f"Validated {self.name}"

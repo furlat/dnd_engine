@@ -372,23 +372,22 @@ def test_6_concentration_broken_by_damage():
     print(f"  {caster.name} concentrating on Call Lightning")
 
     # Deal massive damage to caster - DC 25 (50 damage / 2)
-    # With +0 CON, needs natural 20+ which is impossible
+    # With +0 CON, maximum save roll is nat 20 + 0 = 20 < 25
+    # This CANNOT be passed — concentration MUST break
     from dnd.utils import deal_damage_to
     from dnd.core.modifiers import DamageType
 
     deal_damage_to(caster, 50, DamageType.FIRE)
 
-    # Most likely lost concentration
-    if not has_condition(caster, "Concentrating"):
-        # Check strike action removed
-        strike = caster.get_action_template("Call Lightning Strike")
-        assert strike is None, "Strike action should be removed when concentration breaks"
-        print(f"  {caster.name} lost concentration (failed CON save)")
-        print(f"  Call Lightning Strike action removed")
-        print("  PASSED: Damage breaks concentration and cleans up")
-    else:
-        print(f"  {caster.name} kept concentration (rolled 20!) - rare but valid")
-        print("  PASSED: (caster got lucky)")
+    assert not has_condition(caster, "Concentrating"), \
+        "Concentration must break on DC 25 save with +0 CON (impossible to pass)"
+
+    # Check strike action removed
+    strike = caster.get_action_template("Call Lightning Strike")
+    assert strike is None, "Strike action should be removed when concentration breaks"
+    print(f"  {caster.name} lost concentration (failed CON save)")
+    print(f"  Call Lightning Strike action removed")
+    print("  PASSED: Damage breaks concentration and cleans up")
 
 
 def test_7_immunity_to_hold_person_effect():

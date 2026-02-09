@@ -36,7 +36,8 @@ from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, Pri
 from dnd.items import create_shortsword, create_dagger, create_longbow
 from dnd.items.test_items import (
     create_scroll_of_magic_missile, create_scroll_of_fireball,
-    create_healing_potion, TrapLever, PullLeverAction,
+    create_healing_potion, create_potion_of_greater_invisibility,
+    TrapLever, PullLeverAction,
 )
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
@@ -288,6 +289,10 @@ def setup_arena_combat(
     else:
         # Default to fighter
         player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
+
+    # Add Greater Invisibility potion to all heroes for stealth testing
+    potion = create_potion_of_greater_invisibility(player.uuid)
+    player.loot_item(potion)
 
     # Add items for sorcerer: spell scrolls in inventory, potions in spikes, lever at spike edge
     if character_class == "sorcerer":

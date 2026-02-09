@@ -86,30 +86,34 @@ def test_2_concentration_check_pass():
 def test_3_concentration_check_fail_high_damage():
     """Test that high damage makes concentration harder to maintain."""
     print("\n=== Test 3: High Damage Concentration Check ===")
-    reset_combat_state()
 
-    caster = create_skeleton(name="Fragile Mage", position=(0, 0))
-    set_hp(caster, 100)  # High HP so damage doesn't kill
+    # DC = max(10, 40/2) = 20 with +0 CON → need nat 20 (5% chance to pass)
+    # Run 5 trials — probability of passing ALL 5: 0.05^5 ≈ 0.00003%
+    broke_at_least_once = False
+    for _ in range(5):
+        reset_combat_state()
+        caster = create_skeleton(name="Fragile Mage", position=(0, 0))
+        set_hp(caster, 100)
 
-    # Apply concentration
-    concentration = Concentrating(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=caster.uuid,
-        spell_name="Haste"
-    )
-    caster.add_condition(concentration)
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Haste"
+        )
+        caster.add_condition(concentration)
 
-    # Deal massive damage - DC = max(10, 40/2) = 20
-    # With +0 CON, need natural 20 to pass (5% chance)
-    deal_damage_to(caster, 40, DamageType.FIRE)
+        deal_damage_to(caster, 40, DamageType.FIRE)
 
-    # Most likely lost concentration
-    still_concentrating = has_condition(caster, "Concentrating")
-    if still_concentrating:
-        print("  Mage rolled natural 20 and kept concentration!")
-    else:
+        if not has_condition(caster, "Concentrating"):
+            broke_at_least_once = True
+            break
+
+    if broke_at_least_once:
         print("  Mage lost concentration on Haste (high DC)")
+    else:
+        print("  WARNING: Mage kept concentration all 5 trials (extremely unlikely)")
 
+    assert broke_at_least_once, "Concentration should break on high damage (DC 20 with +0 CON) in at least 1 of 5 trials"
     print("  PASSED: High damage concentration check works")
 
 

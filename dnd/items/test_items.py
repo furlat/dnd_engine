@@ -22,6 +22,7 @@ from dnd.blocks.equipment import Weapon
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
 from dnd.actions import entity_action_economy_cost_evaluator, SpellAction
+from dnd.conditions import GreaterInvisibilityEffect
 
 
 # =============================================================================
@@ -797,3 +798,61 @@ def create_arcane_device(owner_uuid: UUID, position: Tuple[int, int] = (0, 0)) -
     grid = get_map()
     grid.place_object(device.uuid, position)
     return device
+
+
+# =============================================================================
+# Potion of Greater Invisibility — Applies BG3-style Greater Invisibility
+# =============================================================================
+
+class DrinkGreaterInvisibilityPotionAction(BaseAction):
+    """Drink a potion to become invisible (BG3-style Greater Invisibility)."""
+    name: str = Field(default="Drink Greater Invisibility Potion")
+    description: str = Field(default="Drink to become invisible (Stealth check to maintain on attack/cast)")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    costs: List[Cost] = Field(default_factory=list)
+    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity or not isinstance(entity, Entity):
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Apply Greater Invisibility effect (no concentration — it's a potion)
+        invis_effect = GreaterInvisibilityEffect(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid
+        )
+        entity.add_condition(invis_effect)
+
+        effect = execution_event.phase_to(EventPhase.EFFECT,
+            status_message=f"{entity.name} becomes invisible")
+        return effect.phase_to(EventPhase.COMPLETION,
+            status_message=f"Drank Potion of Greater Invisibility")
+
+
+class PotionOfGreaterInvisibility(UsableItem):
+    """Potion of Greater Invisibility. Single use, consumable."""
+    name: str = Field(default="Potion of Greater Invisibility")
+    is_pickable: bool = Field(default=True)
+    map_char: str = Field(default="\u03b8")
+    is_consumable: bool = Field(default=True)
+    charges: int = Field(default=1)
+    max_charges: int = Field(default=1)
+    max_stack: int = Field(default=5)
+
+
+def create_potion_of_greater_invisibility(owner_uuid: UUID) -> PotionOfGreaterInvisibility:
+    action = DrinkGreaterInvisibilityPotionAction(
+        source_entity_uuid=uuid4(), source_item_uuid=uuid4(), template=True,
+    )
+    return PotionOfGreaterInvisibility(
+        source_entity_uuid=owner_uuid,
+        use_action_templates=[action],
+        stack_id="potion_of_greater_invisibility"
+    )
