@@ -13,7 +13,7 @@ from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing
-from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray
+from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility
 from dnd.spells.transmutation import SpikeGrowth
 
 # Lookup dictionaries (like dnd/items/__init__.py)
@@ -49,6 +49,7 @@ LEVEL_2_SPELLS = {
     "Blindness/Deafness": BlindnessDeafness,
     "Spike Growth": SpikeGrowth,
     "Web": Web,
+    "Invisibility": Invisibility,
 }
 
 LEVEL_3_SPELLS = {
@@ -64,6 +65,7 @@ LEVEL_3_SPELLS = {
 LEVEL_4_SPELLS = {
     "Blight": Blight,
     "Stoneskin": Stoneskin,
+    "Greater Invisibility": GreaterInvisibility,
 }
 
 LEVEL_5_SPELLS = {
@@ -133,6 +135,7 @@ __all__ = [
     "BlindnessDeafness",
     "SpikeGrowth",
     "Web",
+    "Invisibility",
     # Level 3
     "CallLightning",
     "CallLightningStrike",
@@ -145,6 +148,7 @@ __all__ = [
     # Level 4
     "Blight",
     "Stoneskin",
+    "GreaterInvisibility",
     # Level 5
     "HoldMonster",
     "ConeOfCold",

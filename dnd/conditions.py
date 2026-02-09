@@ -13,6 +13,8 @@ from dnd.blocks.sensory import SensesType
 from uuid import UUID
 from functools import partial
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent
+from dnd.core.base_actions import ActionEvent
+from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
 from enum import Enum
 
@@ -1070,7 +1072,8 @@ class Concentrating(BaseCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.TAKE_DAMAGE,
-                    event_phase=EventPhase.COMPLETION  # After damage is finalized
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=self.target_entity_uuid
                 )
             ],
             event_processor=concentration_break_processor
@@ -1187,7 +1190,7 @@ class Hidden(BaseCondition):
                 status_message=f"Applied Hidden to {target_entity.name} (Stealth DC {self.stealth_result})"
             )
 
-            # Reveal handler: removes Hidden on attack, damage, or incapacitated
+            # Reveal handler: removes Hidden on attack, damage, incapacitated, spell cast, or shove
             handler = EventHandler(
                 name="Hidden: Reveal",
                 source_entity_uuid=target_entity.uuid,
@@ -1198,6 +1201,10 @@ class Hidden(BaseCondition):
                             event_target_entity_uuid=target_entity.uuid),
                     Trigger(event_type=EventType.CONDITION_APPLICATION, event_phase=EventPhase.EFFECT,
                             event_target_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
                 ],
                 event_processor=hidden_reveal_processor
             )
@@ -1217,16 +1224,209 @@ class Hidden(BaseCondition):
 
 
 def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """Remove Hidden on attack, damage, or incapacitated condition application."""
+    """Remove Hidden on attack, damage, incapacitated, spell cast, or shove."""
     # For CONDITION_APPLICATION: only break on Incapacitated
     if event.event_type == EventType.CONDITION_APPLICATION:
         condition = getattr(event, 'condition', None)
         if condition is None or getattr(condition, 'name', None) != "Incapacitated":
             return None
 
+    # For BASE_ACTION: only break on Shove (not Dash, Dodge, Disengage, etc.)
+    if event.event_type == EventType.BASE_ACTION:
+        if not isinstance(event, ActionEvent) or event.name != "Shove":
+            return None
+
     entity = Entity.get(source_entity_uuid)
     if entity and isinstance(entity, Entity) and "Hidden" in entity.active_conditions:
         entity.remove_condition("Hidden")
+    return None
+
+
+class InvisibilityEffect(BaseCondition):
+    """Applied by Invisibility spell. Sets is_invisible flag and unseen attacker/target modifiers.
+    Removed automatically when the entity attacks or casts a spell."""
+    name: str = "Invisible"
+    description: str = "Invisible until attacking or casting a spell"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity:
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+        elif isinstance(target_entity, Entity):
+            outs: List[Tuple[UUID, UUID]] = []
+            handler_uuids: List[UUID] = []
+
+            # Set invisibility flag
+            target_entity.set_invisible(True)
+
+            # Unseen attacker advantage (shared callable with Invisible/Hidden)
+            self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
+                modifier=ContextualAdvantageModifier(
+                    name="Invisible (Unseen Attacker)",
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid,
+                    callable=unseen_attacker_advantage
+                )
+            )
+            outs.append((target_entity.equipment.attack_bonus.uuid, self_ctx_uuid))
+
+            # Unseen target disadvantage
+            to_target_ctx_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(
+                modifier=ContextualAdvantageModifier(
+                    name="Invisible (Unseen Target)",
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid,
+                    callable=unseen_target_disadvantage
+                )
+            )
+            outs.append((target_entity.equipment.ac_bonus.uuid, to_target_ctx_uuid))
+
+            effect_event = declaration_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Invisibility to {target_entity.name}"
+            )
+
+            # Self-removal handler: attack or spell cast breaks invisibility
+            handler = EventHandler(
+                name="Invisibility: Reveal",
+                source_entity_uuid=target_entity.uuid,
+                trigger_conditions=[
+                    Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                ],
+                event_processor=invisibility_reveal_processor
+            )
+            target_entity.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+            return outs, handler_uuids, [], [], effect_event
+        else:
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity")
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clear invisibility flag when condition is removed."""
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            target.set_invisible(False)
+        return super()._remove(event)
+
+
+def invisibility_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """Remove Invisible (InvisibilityEffect) when entity attacks or casts a spell."""
+    entity = Entity.get(source_entity_uuid)
+    if entity and isinstance(entity, Entity) and "Invisible" in entity.active_conditions:
+        condition = entity.active_conditions.get("Invisible")
+        if isinstance(condition, InvisibilityEffect):
+            entity.remove_condition("Invisible")
+    return None
+
+
+class GreaterInvisibilityEffect(BaseCondition):
+    """BG3-style Greater Invisibility. Sets is_invisible flag.
+    On attack or spell cast, rolls Stealth check vs escalating DC to maintain.
+    DC starts at base_dc and increases by 1 per successful check."""
+    name: str = "Invisible"
+    description: str = "Greater Invisibility - Stealth check to maintain"
+    check_count: int = Field(default=0, description="Number of successful stealth checks")
+    base_dc: int = Field(default=15, description="Starting DC for stealth check")
+    last_checked_lineage: Optional[UUID] = Field(default=None, description="Lineage UUID of last processed event (dedup)")
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            raise ValueError("Target entity UUID is not set")
+        target_entity = Entity.get(self.target_entity_uuid)
+        if not target_entity:
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+        elif isinstance(target_entity, Entity):
+            outs: List[Tuple[UUID, UUID]] = []
+            handler_uuids: List[UUID] = []
+
+            # Set invisibility flag
+            target_entity.set_invisible(True)
+
+            # Unseen attacker advantage
+            self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
+                modifier=ContextualAdvantageModifier(
+                    name="Greater Invisibility (Unseen Attacker)",
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid,
+                    callable=unseen_attacker_advantage
+                )
+            )
+            outs.append((target_entity.equipment.attack_bonus.uuid, self_ctx_uuid))
+
+            # Unseen target disadvantage
+            to_target_ctx_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(
+                modifier=ContextualAdvantageModifier(
+                    name="Greater Invisibility (Unseen Target)",
+                    source_entity_uuid=self.target_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid,
+                    callable=unseen_target_disadvantage
+                )
+            )
+            outs.append((target_entity.equipment.ac_bonus.uuid, to_target_ctx_uuid))
+
+            effect_event = declaration_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Greater Invisibility to {target_entity.name}"
+            )
+
+            # Stealth check handler: rolls stealth vs escalating DC on attack/cast
+            handler = EventHandler(
+                name="Greater Invisibility: Stealth Check",
+                source_entity_uuid=target_entity.uuid,
+                trigger_conditions=[
+                    Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                ],
+                event_processor=greater_invisibility_check_processor
+            )
+            target_entity.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
+
+            return outs, handler_uuids, [], [], effect_event
+        else:
+            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity")
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clear invisibility flag when condition is removed."""
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            target.set_invisible(False)
+        return super()._remove(event)
+
+
+def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """Stealth check to maintain Greater Invisibility. DC = base_dc + check_count."""
+    entity = Entity.get(source_entity_uuid)
+    if not entity or not isinstance(entity, Entity):
+        return None
+    condition = entity.active_conditions.get("Invisible")
+    if not condition or not isinstance(condition, GreaterInvisibilityEffect):
+        return None
+
+    # Deduplicate: Attack events fire EFFECT twice (pre-damage and post-damage).
+    # Only process once per lineage.
+    if condition.last_checked_lineage == event.lineage_uuid:
+        return None
+    condition.last_checked_lineage = event.lineage_uuid
+
+    dc = condition.base_dc + condition.check_count
+    skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
+    stealth_roll = entity.roll_d20(skill_bonus, RollType.CHECK, skill_name="stealth")
+
+    if stealth_roll.total >= dc:
+        condition.check_count += 1  # Harder next time
+    else:
+        entity.remove_condition("Invisible")  # Failed — invisibility breaks
     return None
 
 

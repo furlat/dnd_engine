@@ -35,9 +35,11 @@ from dnd.items import (
 # Import spellcasting and spells for sorcerer
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.spells.evocation import (
-    Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
+    FireBolt, Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
 )
 from dnd.actions_functional import register_spell
+from dnd.spells.illusion import Invisibility, GreaterInvisibility
+from dnd.items.test_items import create_potion_of_greater_invisibility
 
 
 def create_armor_scraps(source_id: UUID) -> BodyArmor:
@@ -404,9 +406,9 @@ def create_sorcerer(
         )]
     )
 
-    # Action economy with spell slots for level 5
+    # Action economy with spell slots for level 7
     action_economy_config = ActionEconomyConfig(
-        spell_slots={1: 4, 2: 3, 3: 2}  # Level 5 sorcerer spell slots
+        spell_slots={1: 4, 2: 3, 3: 3, 4: 1}  # Level 7 sorcerer spell slots
     )
 
     # Equipment config (base values)
@@ -435,13 +437,24 @@ def create_sorcerer(
     # Set up action templates (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
 
-    # Register spells - both multi-entity and AoE
+    # Register spells - cantrips and AoE
+    register_spell(entity, FireBolt, caster_level=level)      # Cantrip attack
     register_spell(entity, MagicMissile, caster_level=level)  # Multi-entity
     register_spell(entity, Fireball, caster_level=level)      # AoE sphere
     register_spell(entity, BurningHands, caster_level=level)  # AoE cone
     register_spell(entity, LightningBolt, caster_level=level) # AoE line
     register_spell(entity, Shatter, caster_level=level)       # AoE sphere
     register_spell(entity, Thunderwave, caster_level=level)   # AoE cube + push
+    register_spell(entity, Invisibility, caster_level=level)          # Stealth utility (L2)
+    register_spell(entity, GreaterInvisibility, caster_level=level)  # BG3-style (L4)
+
+    # Equip a dagger for melee
+    dagger = create_dagger(entity.uuid)
+    entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
+
+    # Add Greater Invisibility potions to inventory
+    potion = create_potion_of_greater_invisibility(entity.uuid)
+    entity.loot_item(potion)
 
     return entity
 

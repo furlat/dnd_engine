@@ -645,14 +645,20 @@ class BaseAction(BaseObject):
             # Restore original target
             self.target_entity_uuid = original_target
 
-            # Parent completion - _collect_child_combat_logs() will find per-target children
-            # via parent_event relationship (no target_results field needed)
-            completion_event = execution_event.phase_to(
-                EventPhase.COMPLETION,
+            # EFFECT phase for the parent event — handlers (invisibility reveal, etc.) fire here
+            effect_event = execution_event.phase_to(
+                EventPhase.EFFECT,
                 total_targets=len(all_target_uuids),
                 total_damage=total_damage,
-                aoe_position=self.end_position,  # Pass AoE center for combat log
+                aoe_position=self.end_position,
                 status_message=f"{self.name} affected {len(all_target_uuids)} targets for {total_damage} total damage"
+            )
+
+            # Parent completion - _collect_child_combat_logs() will find per-target children
+            # via parent_event relationship (no target_results field needed)
+            completion_event = effect_event.phase_to(
+                EventPhase.COMPLETION,
+                status_message=f"{self.name} completed"
             )
         else:
             # Existing single-target flow
