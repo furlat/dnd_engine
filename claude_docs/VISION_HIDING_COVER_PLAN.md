@@ -22,8 +22,8 @@ Entity.compute_senses_from_position(entity_uuid)  <- grid.compute_paths(entity_u
 Perception pipeline, same shape:
 ```
 BaseBlock.is_perceivable_by(requesting_entity_uuid)   <- polymorphic, base_block.py:388-407
-Entity.compute_senses_from_position(entity_uuid)       <- filters entities/objects via is_perceivable_by()  entity.py:1607-1624
-Entity.update_entity_visibility()                       <- filters entities/objects via is_perceivable_by()  entity.py:1707-1723
+Entity.compute_senses_from_position(entity_uuid)       <- filters entities/objects via is_perceivable_by()  entity.py:1674-1691
+Entity.update_entity_visibility()                       <- filters entities/objects via is_perceivable_by()  entity.py:1774-1789
 ```
 
 **No GridMap changes needed.** The perception filter is applied directly in Entity's senses methods, not in GridMap. GridMap stays type-unaware.
@@ -56,10 +56,12 @@ armors.py      <- add Entity, AdvantageModifier, AdvantageStatus imports
 | `GridMap.is_blocking(x, y)` | `gridmap.py:305-315` | Checks tile + objects for LOS |
 | `GridMap.get_visible_entities(origin, max_dist)` | `gridmap.py:615-625` | FOV -> entity dict, no filtering |
 | `GridMap.is_walkable_for(x, y, uuid)` | `gridmap.py:272-298` | Entity + object occupancy check |
-| `Entity.compute_senses_from_position()` | `entity.py:1561-1624` | FOV + paths + entity/object collection (now filtered) |
-| `Entity.update_entity_visibility()` | `entity.py:1668-1723` | FOV-only during movement (now filtered) |
+| `Entity.compute_senses_from_position()` | `entity.py:1561-1691` | FOV + paths + entity/object collection (now filtered) |
+| `Entity.update_entity_visibility()` | `entity.py:1751-1830` | FOV-only during movement (now filtered, + newly-spotted detection) |
 | `Entity.passive_skill(skill)` | `entity.py` | Returns `10 + skill bonus + advantage mod` |
-| `Invisible.can_see_invisible()` | `conditions.py:518-521` | Checks TRUESIGHT + TREMORSENSE (BLINDSIGHT handled by senses filtering) |
+| `EventType.CAST_SPELL` | `events.py:135` | Used by Hidden/Invisible reveal handlers |
+| `EventType.BASE_ACTION` | `events.py:124` | Used by Hidden/Invisible reveal handlers (non-whitelisted actions) |
+| `Invisible.can_see_invisible()` | `conditions.py:522` | Checks TRUESIGHT + TREMORSENSE (BLINDSIGHT handled by senses filtering) |
 | `Armor.stealth_disadvantage: Optional[bool]` | `equipment.py:135-138` | **DONE** — wired via `StealthDisadvantageBodyArmor` in armors.py |
 | `bresenham_line(start, end)` | `geometry.py:49-82` | Returns `List[Tuple[int,int]]` |
 
@@ -111,10 +113,10 @@ No Entity importing conditions. No conditions importing Entity (conditions impor
 **`dnd/core/events.py`:**
 - `EventType.SPATIAL_PERCEIVABILITY_CHANGED` — events.py:172
 - `SpatialChangeType.PERCEIVABILITY_CHANGED` — events.py:193
-- `SpatialChangeEvent.perceivability_changed()` factory — events.py:1611-1627
+- `SpatialChangeEvent.perceivability_changed()` factory — events.py:1642-1650
 
 ```python
-# events.py:1611-1627
+# events.py:1642-1650
 @classmethod
 def perceivability_changed(cls, position: Tuple[int, int], entity_uuid: UUID,
                            source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
@@ -190,7 +192,7 @@ def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bo
 
 **Import** (entity.py:25): `from dnd.blocks.sensory import Senses, SensesType`
 
-**Observer overrides** (entity.py:678-686):
+**Observer overrides** (entity.py:685-693):
 ```python
 def get_passive_perception(self) -> int:
     return self.passive_skill("perception")
@@ -201,9 +203,9 @@ def can_bypass_invisibility(self) -> bool:
             SensesType.TREMORSENSE in self.senses.extra_senses)
 ```
 
-**Perception filter in `compute_senses_from_position()`** (entity.py:1607-1624):
+**Perception filter in `compute_senses_from_position()`** (entity.py:1674-1691):
 ```python
-# Entities (entity.py:1607-1615)
+# Entities (entity.py:1674-1682)
 visible_entities: Dict[UUID, Tuple[int, int]] = {}
 for pos in visible_positions:
     entities = Entity.get_all_entities_at_position(pos)
@@ -213,7 +215,7 @@ for pos in visible_positions:
         if entity.is_perceivable_by(entity_uuid):
             visible_entities[entity.uuid] = pos
 
-# Objects (entity.py:1617-1624)
+# Objects (entity.py:1684-1691)
 visible_objects: Dict[UUID, Tuple[int, int]] = {}
 for pos in visible_positions:
     for obj_uuid in grid.get_objects_at(pos):
@@ -223,29 +225,29 @@ for pos in visible_positions:
         visible_objects[obj_uuid] = pos
 ```
 
-**Perception filter in `update_entity_visibility()`** (entity.py:1707-1723):
+**Perception filter in `update_entity_visibility()`** (entity.py:1774-1789):
 Same pattern using `block.is_perceivable_by(self.uuid)` for both entities and objects.
 
 Senses are now always subjective — each entity gets a different `senses.entities` dict based on their own perception.
 
 ### 1d. Invisible Condition Changes
 
-**`Invisible._apply()`** (conditions.py:489-509):
+**`Invisible._apply()`** (conditions.py:492-512):
 - Calls `target_entity.set_invisible(True)` (line 498) — sets flag + fires perceivability event
 - Uses shared `unseen_attacker_advantage()` callable for self_contextual attack advantage
 - Uses shared `unseen_target_disadvantage()` callable for to_target_contextual AC disadvantage
 
-**`Invisible._remove()`** (conditions.py:511-516):
+**`Invisible._remove()`** (conditions.py:514-519):
 - Calls `target.set_invisible(False)` (line 515) — clears flag + fires perceivability event
 - Uses `BaseBlock.get()` (not Entity.get()) since we only need `set_invisible()`
 
-**`can_see_invisible()`** (conditions.py:518-521):
+**`can_see_invisible()`** (conditions.py:522):
 - Kept as-is: checks TRUESIGHT + TREMORSENSE
 - BLINDSIGHT not added here because senses filtering via `can_bypass_invisibility()` handles it. The `can_see_invisible()` method may still be used elsewhere for non-senses checks.
 
-**Shared advantage functions** (conditions.py:524-541):
+**Shared advantage functions** (conditions.py:527-544):
 ```python
-# conditions.py:524-530
+# conditions.py:527-533
 def unseen_attacker_advantage(source_entity_uuid, target_entity_uuid=None, context=None):
     """Advantage if attacker is NOT in target's senses. Used by both Hidden and Invisible."""
     if target_entity_uuid:
@@ -254,7 +256,7 @@ def unseen_attacker_advantage(source_entity_uuid, target_entity_uuid=None, conte
             return AdvantageModifier(name="Unseen Attacker", value=AdvantageStatus.ADVANTAGE, ...)
     return None
 
-# conditions.py:533-541
+# conditions.py:536-544
 def unseen_target_disadvantage(source_entity_uuid, target_entity_uuid=None, context=None):
     """Disadvantage for attacker if defender is NOT in attacker's senses."""
     if target_entity_uuid:
@@ -268,38 +270,120 @@ def unseen_target_disadvantage(source_entity_uuid, target_entity_uuid=None, cont
 
 ### 1e. Hidden Condition
 
-New in `dnd/conditions.py:1145-1230`.
+New in `dnd/conditions.py:1150-1231`.
 
 ```python
-# conditions.py:1145-1158
+# conditions.py:1150-1163
 class Hidden(BaseCondition):
     name: str = "Hidden"
     description: str = "Hidden from observers via Stealth"
     stealth_result: int = Field(default=0, description="Stealth check result used as perception DC")
+    creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition")
 ```
 
-**`_apply()`** (conditions.py:1160-1209):
-1. Sets flag: `target_entity.set_stealth_dc(self.stealth_result)` (line 1171) — fires perceivability event
-2. Adds Unseen Attacker advantage via shared `unseen_attacker_advantage` callable on `attack_bonus.self_contextual` (lines 1174-1182)
-3. Registers reveal handler with 3 triggers (lines 1191-1205):
-   - `EventType.ATTACK` at EFFECT phase (self as source)
-   - `EventType.TAKE_DAMAGE` at EFFECT phase (self as target)
-   - `EventType.CONDITION_APPLICATION` at EFFECT phase (self as target)
+**`_apply()`** (conditions.py:1166-1222):
+1. Sets flag: `target_entity.set_stealth_dc(self.stealth_result)` (line 1178) — fires perceivability event
+2. Adds Unseen Attacker advantage via shared `unseen_attacker_advantage` callable on `attack_bonus.self_contextual` (lines 1181-1189)
+3. Registers reveal handler with 5 triggers (lines 1198-1216):
+   - `EventType.ATTACK` at EFFECT phase (self as source) — attacking reveals
+   - `EventType.TAKE_DAMAGE` at EFFECT phase (self as target) — taking damage reveals
+   - `EventType.CONDITION_APPLICATION` at EFFECT phase (self as target) — becoming Incapacitated reveals
+   - `EventType.CAST_SPELL` at EFFECT phase (self as source) — casting a spell reveals
+   - `EventType.BASE_ACTION` at EFFECT phase (self as source) — non-whitelisted actions reveal
 
-**`_remove()`** (conditions.py:1211-1216):
-- Calls `target.set_stealth_dc(None)` (line 1215) — clears flag + fires perceivability event
+**`_remove()`** (conditions.py:1226-1231):
+- Calls `target.set_stealth_dc(None)` (line 1230) — clears flag + fires perceivability event
 - Uses `BaseBlock.get()` (not Entity.get())
 
-**`hidden_reveal_processor()`** (conditions.py:1219-1230):
+**`hidden_reveal_processor()`** (conditions.py:1238-1264):
+- Checks `creation_lineage_uuid` to avoid self-triggering (the Hide action applying Hidden doesn't immediately reveal)
 - For CONDITION_APPLICATION: only breaks on Incapacitated (other conditions don't reveal)
-- Calls `entity.remove_condition("Hidden")`
+- For BASE_ACTION: checks against `NON_REVEALING_ACTIONS` set — Dash, Dodge, Disengage, Hide, Stand Up, Drop Prone don't reveal
+- For CAST_SPELL: always reveals
+- Calls `entity.remove_condition("Hidden", parent_event=event)` — threads parent_event for combat log hierarchy
 
-**ConditionType.HIDDEN** added at conditions.py:1244.
+**ConditionType.HIDDEN** added at conditions.py:1558.
 
 **Detection is per-observer, removal is global:**
 - `is_perceivable_by()` is checked per-observer (Entity A with perception 15 sees you, Entity B with perception 8 doesn't) — this is just senses filtering, not removal
 - Hidden condition removal (attack/damage/condition received) removes it for everyone
 - Passive perception only — no Search action for now
+
+### 1e-bis. NON_REVEALING_ACTIONS
+
+Defined at `conditions.py:1235`:
+```python
+NON_REVEALING_ACTIONS = {"Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone"}
+```
+
+Used by all three reveal processors (`hidden_reveal_processor`, `invisibility_reveal_processor`, `greater_invisibility_check_processor`) to whitelist safe actions that don't break stealth/invisibility when triggered via `EventType.BASE_ACTION`.
+
+### 1e-ter. InvisibilityEffect (Spell-Based Invisibility)
+
+New in `dnd/conditions.py:1267-1346`. Spell-based variant of Invisible that auto-removes on action.
+
+```python
+# conditions.py:1267-1280
+class InvisibilityEffect(BaseCondition):
+    name: str = "Invisible"  # Same name as base Invisible — overloaded condition name
+    description: str = "Invisible (spell effect) - ends on attack or spell cast"
+    creation_lineage_uuid: Optional[UUID] = Field(default=None)
+```
+
+**Key differences from basic `Invisible`:**
+- Has `creation_lineage_uuid` field to avoid self-triggering
+- Registers EventHandler with 3 triggers (conditions.py:1324-1331):
+  - `EventType.ATTACK` at EFFECT phase (self as source) — attacking reveals
+  - `EventType.CAST_SPELL` at EFFECT phase (self as source) — casting a spell reveals
+  - `EventType.BASE_ACTION` at EFFECT phase (self as source) — non-whitelisted actions reveal
+- **NO `TAKE_DAMAGE` trigger** (unlike Hidden) — taking damage does NOT break spell invisibility
+- **NO `CONDITION_APPLICATION` trigger** — becoming incapacitated doesn't break it either
+- Uses `invisibility_reveal_processor` (conditions.py:1349-1370)
+- Same `name: str = "Invisible"` — uses overloaded condition name so `remove_condition("Invisible")` removes it
+
+**`invisibility_reveal_processor()`** (conditions.py:1349-1370):
+- Checks `creation_lineage_uuid` to avoid self-triggering
+- For BASE_ACTION: checks against `NON_REVEALING_ACTIONS` set
+- Calls `entity.remove_condition("Invisible", parent_event=event)`
+
+### 1e-quater. GreaterInvisibilityEffect (BG3-Style)
+
+New in `dnd/conditions.py:1373-1455`. BG3-style invisibility that rolls Stealth check to maintain.
+
+```python
+# conditions.py:1373-1392
+class GreaterInvisibilityEffect(BaseCondition):
+    name: str = "Invisible"  # Same overloaded name
+    description: str = "Greater Invisibility (BG3-style) - Stealth check to maintain on action"
+    creation_lineage_uuid: Optional[UUID] = Field(default=None)
+    check_count: int = Field(default=0, description="Number of successful Stealth checks")
+    base_dc: int = Field(default=15, description="Base DC for Stealth check")
+```
+
+**Key features:**
+- Instead of auto-removing on action, rolls Stealth check vs escalating DC
+- DC = `base_dc + check_count` (escalates by 1 per successful check)
+- Same 3 triggers as InvisibilityEffect (ATTACK, CAST_SPELL, BASE_ACTION) at conditions.py:1433-1440
+- Uses `greater_invisibility_check_processor` (conditions.py:1458-1527)
+- On success: `check_count += 1`, stays invisible
+- On failure: removes "Invisible" condition
+- Generates its own combat log entry with stealth check roll display
+
+**`greater_invisibility_check_processor()`** (conditions.py:1458-1527):
+- Same `creation_lineage_uuid` and `NON_REVEALING_ACTIONS` checks
+- Rolls Stealth skill check vs current DC
+- On success: increments `check_count`, invisible persists
+- On failure: calls `entity.remove_condition("Invisible", parent_event=event)`
+
+**Three Invisible variants summary:**
+
+| Variant | Class | Trigger | Behavior |
+|---------|-------|---------|----------|
+| `Invisible` | Basic permanent | None | Must be manually removed |
+| `InvisibilityEffect` | Spell, auto-remove | ATTACK, CAST_SPELL, BASE_ACTION | Auto-removed on action |
+| `GreaterInvisibilityEffect` | Spell, Stealth check | ATTACK, CAST_SPELL, BASE_ACTION | Rolls Stealth vs DC to maintain |
+
+All three share `name="Invisible"` and use the same BaseBlock `is_invisible` flag.
 
 ### 1f. Hide Action
 
@@ -349,7 +433,15 @@ class StealthDisadvantageBodyArmor(BodyArmor):
 
 **7 armor factories** use `StealthDisadvantageBodyArmor`: padded (L46), scale mail (L116), half plate (L143), ring mail (L161), chain mail (L175), splint (L190), plate (L205).
 
-### 1h. Tests
+### 1h. "Newly Spotted" Combat Log
+
+When `update_entity_visibility()` detects a hidden enemy that becomes newly visible (entity appears in updated senses but wasn't in previous senses), it generates `ENTITY_SPOTTED` combat log entries (entity.py:1792-1820).
+
+This fires when an entity's passive perception exceeds a hidden entity's stealth DC — e.g., the hidden entity moves closer to an observer with high Perception, or the observer updates senses after gaining a perception bonus.
+
+Uses `CombatLogEntryType.ENTITY_SPOTTED` with `EntitySpottedLogData` (combat_log.py:178).
+
+### 1i. Tests
 
 All in `examples/test_stealth_system.py` — 44 tests, all passing.
 
@@ -368,7 +460,7 @@ All in `examples/test_stealth_system.py` — 44 tests, all passing.
 | `test_armor_no_stealth_disadvantage` | 1: leather armor has no disadvantage |
 | `test_object_perceivability` | 3: BaseItem with stealth_dc filtered from observer senses |
 
-### 1i. Files Modified
+### 1j. Files Modified
 
 | File | Changes |
 |------|---------|
@@ -376,13 +468,13 @@ All in `examples/test_stealth_system.py` — 44 tests, all passing.
 | `dnd/blocks/sensory.py` | +SPATIAL_EVENTS entry, +self-perceivability early return |
 | `dnd/core/base_block.py` | +fields, +setter methods, +observer queries, +is_perceivable_by() |
 | `dnd/entity.py` | +SensesType import, +overrides, +perception filter in senses methods |
-| `dnd/conditions.py` | +Field/BaseBlock imports, refactored Invisible, +Hidden, +shared functions |
+| `dnd/conditions.py` | +Field/BaseBlock imports, refactored Invisible, +Hidden, +InvisibilityEffect, +GreaterInvisibilityEffect, +NON_REVEALING_ACTIONS, +shared functions, +reveal processors |
 | `dnd/actions.py` | +Hidden import, +Hide action class |
 | `dnd/actions_functional.py` | +Hide import, +registration |
 | `dnd/items/armors.py` | +StealthDisadvantageBodyArmor, +imports, updated 7 factories |
 | `examples/test_stealth_system.py` | New: 44 tests |
 
-### 1j. Design Decisions (Divergences from Original Plan)
+### 1k. Design Decisions (Divergences from Original Plan)
 
 | Original Plan | Actual Implementation | Reason |
 |---------------|----------------------|--------|
@@ -712,7 +804,7 @@ When light source system is implemented:
 - [x] `is_perceivable_by()` handles both Invisible and Hidden flags
 - [x] Senses filtering applied to both entities AND objects in both senses methods
 - [x] Armor.stealth_disadvantage wired via StealthDisadvantageBodyArmor subclass (armors.py:12-39)
-- [x] Hidden reveals on attack/damage/incapacitated via EventHandler (conditions.py:1191-1205)
+- [x] Hidden reveals on attack/damage/incapacitated/spell/action via EventHandler (conditions.py:1198-1216)
 - [x] SPATIAL_PERCEIVABILITY_CHANGED event triggers senses re-evaluation (not update_all_entities_senses)
 - [x] 44 tests passing (examples/test_stealth_system.py)
 

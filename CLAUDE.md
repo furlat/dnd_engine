@@ -218,7 +218,11 @@ Each `phase_to()` creates new event with same `lineage_uuid`. EventQueue notifie
 | `SAVING_THROW` | Save requested/resolved |
 | `SKILL_CHECK` | Skill check (e.g., Athletics contest for Shove) |
 | `CONDITION_APPLICATION` | Condition added |
+| `CONDITION_REMOVAL` | Condition removed |
+| `CAST_SPELL` | Spell cast (triggers Hidden/Invisible reveal) |
+| `BASE_ACTION` | Any action execution (triggers Hidden/Invisible reveal for non-whitelisted actions) |
 | `SPATIAL_ENTITY_ENTERED` | Entity moved into cell |
+| `SPATIAL_PERCEIVABILITY_CHANGED` | Entity's perceivability changed (hidden/revealed/invisible) — triggers senses re-evaluation, NOT zone effects |
 
 ### EventHandlers
 
@@ -313,7 +317,9 @@ The convolution loop in `BaseAction.apply()` creates a child event per target (e
 - `verbose`: Adds roll details: `"Attack: d20(15) +4 = 19 vs AC 13 → HIT"`
 - `detailed`: Full modifier breakdowns: `"[Prof +2, DEX +2]"`
 
-**Entry types**: `ATTACK`, `MOVEMENT`, `ACTION`, `SAVING_THROW`, `SKILL_CHECK`, `CONDITION_APPLIED`/`REMOVED`, `DAMAGE_TAKEN`, `HEAL`, `DEATH`, `TURN_START`/`END`, `MULTI_ENTITY_ACTION`, `SPELL_SAVE`, `SPELL_DAMAGE`
+**parent_event threading**: All `add_condition()`/`remove_condition()` calls pass `parent_event=event` so condition logs appear as nested sub-entries of the action that triggered them (not standalone top-level entries). `ConditionApplicationEvent` and `ConditionRemovalEvent` both implement `generate_combat_log()`.
+
+**Entry types**: `ATTACK`, `MOVEMENT`, `ACTION`, `SAVING_THROW`, `SKILL_CHECK`, `CONDITION_APPLIED`/`REMOVED`, `DAMAGE_TAKEN`, `HEAL`, `DEATH`, `TURN_START`/`END`, `MULTI_ENTITY_ACTION`, `SPELL_SAVE`, `SPELL_DAMAGE`, `ENTITY_SPOTTED`
 
 **Typed data models** in `data` field: `AttackLogData`, `MovementLogData`, `SavingThrowLogData`, `SpellSaveLogData`, `MultiEntityLogData`, etc.
 
@@ -564,7 +570,7 @@ All conditions in `dnd/conditions.py`:
 | **HasAttacked** | Marker for rage maintenance (tracks ANY attack) | - | - |
 | **HasTakenDamage** | Marker for rage maintenance (tracks damage taken) | - | - |
 | **Incapacitated** | All action economy = 0 | - | - |
-| **Hidden** | Stealth DC on perceivability, unseen attacker advantage | - | - |
+| **Hidden** | Stealth DC on perceivability, unseen attacker advantage, removed on attack/damage/spell/action | - | - |
 | **Invisible** | Sets is_invisible flag, unseen attacker advantage (senses-based) | Unseen target disadvantage (senses-based) | - |
 | **Paralyzed** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft | Incapacitated |
 | **Poisoned** | Disadvantage all attacks/checks | - | - |
@@ -582,6 +588,8 @@ All conditions in `dnd/conditions.py`:
 | **Concentrating** | Tracks spell being concentrated on | CON save on damage (DC = max(10, dmg/2)), one-spell limit, uses `linked_conditions` for cleanup |
 | **MageArmorCondition** | AC = 13 + DEX when unarmored | Ends if armor equipped |
 | **HoldPersonEffect** | Spell effect for Hold Person | Has Paralyzed as sub-condition, allows spell-specific immunity (in `dnd/spells/enchantment.py`) |
+| **InvisibilityEffect** | Spell-based invisibility, auto-removed on attack/spell/action | Same `name="Invisible"`, has reveal handler + `creation_lineage_uuid` (in `dnd/conditions.py`) |
+| **GreaterInvisibilityEffect** | BG3-style invisibility with Stealth check to maintain | Escalating DC (base 15 + check_count), rolls Stealth on action (in `dnd/conditions.py`) |
 
 ### Fighter Conditions (in `dnd/classes/fighter.py`)
 
@@ -774,6 +782,12 @@ Perceivability filtering on senses. See `claude_docs/VISION_HIDING_COVER_PLAN.md
 - **Hide action** — costs 1 action, rolls Stealth check, applies Hidden condition
 - **Invisible condition** — sets `is_invisible` flag, senses-based advantage/disadvantage (shared `unseen_attacker_advantage`/`unseen_target_disadvantage` callables)
 - **Armor stealth disadvantage** — `StealthDisadvantageBodyArmor` subclass in `armors.py` applies DISADVANTAGE to stealth skill on equip
+- **InvisibilityEffect** — spell-based `Invisible`, auto-removed on attack/spell/revealing action via `invisibility_reveal_processor`
+- **GreaterInvisibilityEffect** — BG3-style, rolls Stealth check vs escalating DC (base 15) to maintain invisibility on action
+- **NON_REVEALING_ACTIONS** — `{"Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone"}` — whitelisted actions that don't break Hidden/Invisible
+- **Three Invisible variants**: `Invisible` (basic permanent), `InvisibilityEffect` (spell, auto-remove), `GreaterInvisibilityEffect` (spell, Stealth check) — all share `name="Invisible"` and use same BaseBlock `is_invisible` flag
+- **creation_lineage_uuid** — Hidden/InvisibilityEffect/GreaterInvisibilityEffect store the lineage UUID of the event that created them, preventing self-triggering (e.g., Hide action applying Hidden doesn't immediately reveal)
+- **Reveal handler pattern** — EventHandler with triggers on ATTACK/CAST_SPELL/BASE_ACTION at EFFECT phase, processor checks `NON_REVEALING_ACTIONS`, verifies lineage, calls `remove_condition` with `parent_event=event`
 
 #### Not Yet Implemented
 
