@@ -16,6 +16,7 @@ from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger,
 from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay
 from enum import Enum
 
 
@@ -113,7 +114,7 @@ def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[E
         )
         has_attacked.duration.duration_type = DurationType.ROUNDS
         has_attacked.duration.duration = 1
-        entity.add_condition(has_attacked)
+        entity.add_condition(has_attacked, parent_event=event)
 
     return None  # Don't modify the attack event
 
@@ -140,7 +141,7 @@ def has_taken_damage_processor(event: Event, source_entity_uuid: UUID) -> Option
         )
         has_taken_damage.duration.duration_type = DurationType.ROUNDS
         has_taken_damage.duration.duration = 1
-        entity.add_condition(has_taken_damage)
+        entity.add_condition(has_taken_damage, parent_event=event)
 
     return None  # Don't modify the damage event
 
@@ -944,7 +945,7 @@ def death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
         source_entity_uuid=source_entity_uuid,
         target_entity_uuid=source_entity_uuid
     )
-    entity.add_condition(dead_condition, check_save_throw=False)
+    entity.add_condition(dead_condition, parent_event=event, check_save_throw=False)
 
     # Mark entity as non-blocking so corpses don't prevent movement
     entity.non_blocking = True
@@ -1046,7 +1047,8 @@ class Concentrating(BaseCondition):
                 ability_name="constitution",
                 dc=dc,
                 source_entity_name=entity.name,
-                use_register=False  # Don't register in global registry
+                use_register=False,  # Don't register in global registry
+                parent_event=event.uuid  # Link to damage event
             )
 
             _, _, success = entity.saving_throw(save_request)
@@ -1058,7 +1060,7 @@ class Concentrating(BaseCondition):
                 if conc is not None and isinstance(conc, Concentrating):
                     spell_name = conc.spell_name
 
-                entity.remove_condition("Concentrating")
+                entity.remove_condition("Concentrating", parent_event=event)
                 return event.model_copy(update={
                     "concentration_broken": True,
                     "status_message": f"{entity.name} lost concentration on {spell_name} (failed DC {dc} CON save)"
@@ -1258,7 +1260,7 @@ def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[
         # Skip if this event is from the same lineage that created the condition
         if isinstance(condition, Hidden) and condition.creation_lineage_uuid == event.lineage_uuid:
             return None
-        entity.remove_condition("Hidden")
+        entity.remove_condition("Hidden", parent_event=event)
     return None
 
 
@@ -1364,7 +1366,7 @@ def invisibility_reveal_processor(event: Event, source_entity_uuid: UUID) -> Opt
             # Skip if this event is from the same lineage that created the condition
             if condition.creation_lineage_uuid == event.lineage_uuid:
                 return None
-            entity.remove_condition("Invisible")
+            entity.remove_condition("Invisible", parent_event=event)
     return None
 
 
@@ -1479,12 +1481,66 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
 
     dc = condition.base_dc + condition.check_count
     skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
-    stealth_roll = entity.roll_d20(skill_bonus, RollType.CHECK, skill_name="stealth")
+    stealth_roll, check_event = entity.roll_d20_event(skill_bonus, RollType.CHECK, skill_name="stealth")
+    success = stealth_roll.total >= dc
 
-    if stealth_roll.total >= dc:
+    if success:
         condition.check_count += 1  # Harder next time
     else:
-        entity.remove_condition("Invisible")  # Failed — invisibility breaks
+        entity.remove_condition("Invisible", parent_event=check_event)
+
+    # Build combat log for the stealth check event
+    entity_name = entity.name
+    # Extract d20 result from DiceRoll.results
+    roll_results = stealth_roll.results if isinstance(stealth_roll.results, list) else [stealth_roll.results]
+    d20_used = roll_results[0] if roll_results else 0
+    adv_status = None
+    if stealth_roll.advantage_status == AdvantageStatus.ADVANTAGE:
+        adv_status = "advantage"
+    elif stealth_roll.advantage_status == AdvantageStatus.DISADVANTAGE:
+        adv_status = "disadvantage"
+
+    roll_display = DiceRollDisplay(
+        dice_str="d20",
+        results=roll_results,
+        bonus=stealth_roll.bonus,
+        total=stealth_roll.total,
+        all_d20_rolls=roll_results if len(roll_results) > 1 else None,
+        d20_used=d20_used,
+        advantage_status=adv_status
+    )
+
+    if success:
+        compact = f"{{cyan:{entity_name}}} maintains invisibility (Stealth {stealth_roll.total} vs DC {dc})"
+    else:
+        compact = f"{{cyan:{entity_name}}} loses invisibility! (Stealth {stealth_roll.total} vs DC {dc})"
+
+    verbose = f"{{cyan:{entity_name}}} Stealth check: d20({d20_used}) +{stealth_roll.bonus} = {stealth_roll.total} vs DC {dc}"
+    if success:
+        verbose += " → maintains invisibility"
+    else:
+        verbose += " → {{red:loses invisibility!}}"
+
+    check_event.combat_log = CombatLogEntry(
+        entry_type=CombatLogEntryType.SKILL_CHECK,
+        source_name=entity_name,
+        source_uuid=str(entity.uuid),
+        compact=compact,
+        verbose=verbose,
+        detailed=verbose,
+        success=success,
+        data=SkillCheckLogData(
+            entity_name=entity_name,
+            entity_uuid=str(entity.uuid),
+            skill="stealth",
+            dc=dc,
+            roll=roll_display,
+            success=success
+        ).model_dump()
+    )
+
+    # Complete the event — collects child logs (removal event) as sub_entries
+    check_event.phase_to(EventPhase.COMPLETION)
     return None
 
 

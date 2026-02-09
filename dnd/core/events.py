@@ -243,13 +243,13 @@ class Event(BaseObject):
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate a combat log entry for this event.
 
-        Default implementation returns None. Subclasses that want combat log
-        generation should override this method.
+        Default implementation returns self.combat_log (pre-set if any).
+        Subclasses that want combat log generation should override this method.
 
         Returns:
             CombatLogEntry if this event type supports combat logging, None otherwise.
         """
-        return None
+        return self.combat_log
 
     def get_trigger(self) -> 'Trigger':
         """ get the trigger for the event """
@@ -635,6 +635,25 @@ class EventQueue:
         top-level events (parent_event=None) when they complete with a combat_log.
         """
         cls._combat_log_callback = callback
+
+    @classmethod
+    def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
+        """Push a standalone combat log entry to the encounter.
+
+        Used for informational logs (like "entity spotted") that don't correspond
+        to a normal event lifecycle. Creates a lightweight Event just to carry the
+        combat_log to the callback.
+        """
+        if cls._combat_log_callback is None:
+            return
+        event = Event(
+            source_entity_uuid=source_entity_uuid,
+            event_type=EventType.CONDITION_APPLICATION,
+            phase=EventPhase.COMPLETION,
+            use_register=False,
+            combat_log=entry
+        )
+        cls._combat_log_callback(event)
 
     @classmethod
     def add_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:

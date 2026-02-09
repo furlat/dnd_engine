@@ -28,6 +28,7 @@ class CombatLogEntryType(str, Enum):
     MULTI_ENTITY_ACTION = "multi_entity_action"  # Fireball, Magic Missile, etc.
     SPELL_SAVE = "spell_save"  # Save-based spell effect on single target
     SPELL_DAMAGE = "spell_damage"  # Auto-hit spell damage (Magic Missile dart)
+    ENTITY_SPOTTED = "entity_spotted"  # Observer spots a hiding entity
 
 
 class CombatLogVerbosity(str, Enum):
@@ -172,6 +173,17 @@ class SkillCheckLogData(BaseModel):
     roll: DiceRollDisplay
     bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
     success: Optional[bool] = None  # Only set if there's a DC
+
+
+class EntitySpottedLogData(BaseModel):
+    """Structured data for when an observer spots a hiding entity."""
+    observer_name: str
+    observer_uuid: str
+    target_name: str
+    target_uuid: str
+    target_position: Tuple[int, int]
+    passive_perception: int
+    stealth_dc: int
 
 
 class SelfActionLogData(BaseModel):

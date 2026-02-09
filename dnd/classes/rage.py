@@ -128,7 +128,7 @@ def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Option
 
     if not has_attacked and not has_taken_damage:
         # No attack or damage this turn - rage ends
-        entity.remove_condition("Raging")
+        entity.remove_condition("Raging", parent_event=event)
         return event.model_copy(update={
             "modified": True,
             "status_message": f"{entity.name}'s rage ends (no attack or damage)"
@@ -161,7 +161,7 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
     armor_event = event if isinstance(event, ArmorEquipEvent) else None
     if armor_event and armor_event.armor is not None:
         if armor_event.armor.type == ArmorType.HEAVY:
-            entity.remove_condition("Raging")
+            entity.remove_condition("Raging", parent_event=event)
             return event.model_copy(update={
                 "modified": True,
                 "status_message": f"{entity.name}'s rage ends (equipped heavy armor)"
@@ -231,9 +231,9 @@ def rage_death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
 
     # End rage - remove Frenzied first if present (cascades to Raging)
     if "Frenzied" in entity.active_conditions:
-        entity.remove_condition("Frenzied")
+        entity.remove_condition("Frenzied", parent_event=event)
     elif "Raging" in entity.active_conditions:
-        entity.remove_condition("Raging")
+        entity.remove_condition("Raging", parent_event=event)
 
     return event.model_copy(update={
         "modified": True,
@@ -495,7 +495,7 @@ class Rage(BaseAction):
             target_entity_uuid=self.source_entity_uuid,
             rage_damage=self.rage_damage
         )
-        entity.add_condition(raging)
+        entity.add_condition(raging, parent_event=execution_event)
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,
@@ -591,7 +591,7 @@ class EndRage(BaseAction):
 
         # Remove Raging - this cascades to remove Frenzied (sub-condition)
         if "Raging" in entity.active_conditions:
-            entity.remove_condition("Raging")
+            entity.remove_condition("Raging", parent_event=execution_event)
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,
@@ -693,7 +693,7 @@ class RageFeature(BaseCondition):
 
             # Also remove Raging if active
             if "Raging" in target.active_conditions:
-                target.remove_condition("Raging")
+                target.remove_condition("Raging", parent_event=event)
 
         return super()._remove(event)
 
@@ -990,7 +990,7 @@ class Frenzy(BaseAction):
             target_entity_uuid=self.source_entity_uuid,
             rage_damage=self.rage_damage
         )
-        entity.add_condition(raging)
+        entity.add_condition(raging, parent_event=execution_event)
 
         # 2. Apply Frenzied as sub-condition of Raging
         # KEY: Frenzied is child of Raging, so when rage maintenance removes
@@ -1001,7 +1001,7 @@ class Frenzy(BaseAction):
             rage_damage=self.rage_damage,
             parent_condition=raging.uuid  # Frenzied is child of Raging
         )
-        entity.add_condition(frenzied)
+        entity.add_condition(frenzied, parent_event=execution_event)
 
         # 3. Link parent-child: add Frenzied to Raging's sub_conditions list
         # This enables cascade removal when Raging is removed by rage maintenance
@@ -1075,6 +1075,6 @@ class FrenzyFeature(BaseCondition):
 
             # Also remove Frenzied if active
             if "Frenzied" in target.active_conditions:
-                target.remove_condition("Frenzied")
+                target.remove_condition("Frenzied", parent_event=event)
 
         return super()._remove(event)

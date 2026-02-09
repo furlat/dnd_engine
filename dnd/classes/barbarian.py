@@ -347,7 +347,7 @@ class RecklessAttack(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid
         )
-        entity.add_condition(reckless)
+        entity.add_condition(reckless, parent_event=execution_event)
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,
@@ -1321,7 +1321,7 @@ def intimidating_presence_end_check_processor(
 
     if should_end:
         # Remove Frightened condition
-        creature.remove_condition("Frightened")
+        creature.remove_condition("Frightened", parent_event=event)
         reason = "out of range" if distance > 60 else "out of line of sight"
         return event.model_copy(update={
             "modified": True,
@@ -1481,7 +1481,7 @@ class IntimidatingPresence(BaseAction):
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid
             )
-            target.add_condition(immunity)
+            target.add_condition(immunity, parent_event=execution_event)
 
             return execution_event.phase_to(
                 EventPhase.COMPLETION,
@@ -1498,7 +1498,7 @@ class IntimidatingPresence(BaseAction):
             frightened.duration.duration_type = DurationType.ROUNDS
             frightened.duration.duration = 1
 
-            target.add_condition(frightened)
+            target.add_condition(frightened, parent_event=execution_event)
 
             # Register handler to end Frightened if target moves >60ft or breaks LOS (SRD)
             # Handler checks at target's TURN_END if they should no longer be frightened

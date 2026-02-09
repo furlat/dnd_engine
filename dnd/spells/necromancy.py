@@ -620,7 +620,7 @@ class BlindnessDeafnessEffect(BaseCondition):
             caster = Entity.get(caster_uuid)
             if not caster:
                 # Caster gone, end the effect
-                target.remove_condition("Blindness/Deafness")
+                target.remove_condition("Blindness/Deafness", parent_event=event)
                 return None
 
             # Repeat CON save (child of triggering turn end event)
@@ -633,7 +633,7 @@ class BlindnessDeafnessEffect(BaseCondition):
             _roll, _outcome, success = target.saving_throw(save_request)
 
             if success:
-                target.remove_condition("Blindness/Deafness")
+                target.remove_condition("Blindness/Deafness", parent_event=event)
             return None
 
         return EventHandler(
