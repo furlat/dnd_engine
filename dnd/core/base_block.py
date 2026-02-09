@@ -4,7 +4,7 @@ from enum import Enum
 from pydantic import BaseModel, Field, model_validator, computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import EventHandler, EventQueue, Trigger, Event
+from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
 
 from collections import defaultdict
 
@@ -137,6 +137,12 @@ class BaseBlock(BaseModel):
     )
 
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0))
+
+    # Perceivability flags (set by conditions, read by senses pipeline)
+    stealth_dc: Optional[int] = Field(default=None, exclude=True,
+        description="Stealth DC required to perceive. Set by Hidden condition.")
+    is_invisible: bool = Field(default=False, exclude=True,
+        description="Whether invisible. Set by Invisible condition.")
 
     active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition name")
     active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition UUID")
@@ -335,6 +341,70 @@ class BaseBlock(BaseModel):
         """Whether this block prevents vision through its position.
         Non-spatial blocks inherit this default."""
         return False
+
+    # --- Perceivability system ---
+
+    def set_stealth_dc(self, value: Optional[int]) -> None:
+        """Set stealth DC and notify observers. Called by Hidden condition."""
+        self.stealth_dc = value
+        self._notify_perceivability_changed()
+
+    def set_invisible(self, value: bool) -> None:
+        """Set invisibility flag and notify observers. Called by Invisible condition."""
+        self.is_invisible = value
+        self._notify_perceivability_changed()
+
+    def _notify_perceivability_changed(self) -> None:
+        """Fire a SPATIAL_PERCEIVABILITY_CHANGED event at this block's position.
+
+        Entities subscribed to this cell via SpatialSensesCallback will
+        re-evaluate their senses. Does not trigger SpatialHandlers (zone effects).
+        """
+        event = SpatialChangeEvent.perceivability_changed(self.position, self.uuid)
+        current = EventQueue.register(event)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.EXECUTION)
+        current = EventQueue.register(current)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.EFFECT)
+        current = EventQueue.register(current)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.COMPLETION)
+        EventQueue.register(current)
+
+    def get_passive_perception(self) -> int:
+        """Passive perception of this block as an observer. Default 0.
+        Entity overrides with passive_skill('perception')."""
+        return 0
+
+    def can_bypass_invisibility(self) -> bool:
+        """Whether this block can see invisible things. Default False.
+        Entity overrides by checking extra_senses for TRUESIGHT/BLINDSIGHT/TREMORSENSE."""
+        return False
+
+    def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
+        """Whether this block can be perceived by the requesting entity.
+        Same signature pattern as blocks_walking(requesting_entity_uuid).
+        Reads stealth_dc and is_invisible flags set by conditions."""
+        if requesting_entity_uuid is None:
+            return True
+
+        observer = BaseBlock.get(requesting_entity_uuid)
+        if observer is None:
+            return True
+
+        if self.is_invisible:
+            if not observer.can_bypass_invisibility():
+                return False
+
+        if self.stealth_dc is not None:
+            if self.stealth_dc > observer.get_passive_perception():
+                return False
+
+        return True
 
     def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
         """

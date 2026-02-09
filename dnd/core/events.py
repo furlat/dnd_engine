@@ -169,6 +169,7 @@ class EventType(str, Enum):
     SPATIAL_TILE_CHANGED = "spatial_tile_changed"      # Tile properties changed
     SPATIAL_OBJECT_PLACED = "spatial_object_placed"    # Object placed on grid
     SPATIAL_OBJECT_REMOVED = "spatial_object_removed"  # Object removed from grid
+    SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"  # Entity's perceivability changed (hidden/invisible)
 
     # Encounter/Turn events
     ENCOUNTER_START = "encounter_start"
@@ -189,6 +190,7 @@ class SpatialChangeType(str, Enum):
     TILE_REMOVED = "tile_removed"
     OBJECT_PLACED = "object_placed"
     OBJECT_REMOVED = "object_removed"
+    PERCEIVABILITY_CHANGED = "perceivability_changed"
 
 
 class EventPhase(str, Enum):
@@ -1604,6 +1606,24 @@ class SpatialChangeEvent(Event):
             phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event
+        )
+
+    @classmethod
+    def perceivability_changed(cls, position: Tuple[int, int], entity_uuid: UUID,
+                               source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for an entity's perceivability changing (hidden/invisible).
+
+        This is a lightweight event that only triggers senses re-evaluation
+        on observers subscribed to this cell. Does NOT trigger SpatialHandlers (zone effects).
+        """
+        return cls(
+            source_entity_uuid=source_entity_uuid or entity_uuid,
+            event_type=EventType.SPATIAL_PERCEIVABILITY_CHANGED,
+            change_type=SpatialChangeType.PERCEIVABILITY_CHANGED,
+            position=position,
+            entity_uuid=entity_uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
         )
 
 

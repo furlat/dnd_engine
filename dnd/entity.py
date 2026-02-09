@@ -22,7 +22,7 @@ from dnd.blocks.health import HealthConfig, Health
 from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage, Armor, Weapon
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
-from dnd.blocks.sensory import Senses
+from dnd.blocks.sensory import Senses, SensesType
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import BaseItem, UsableItem
@@ -674,6 +674,16 @@ class Entity(BaseBlock):
             base -= 5
 
         return base
+
+    def get_passive_perception(self) -> int:
+        """Entity's passive perception from skill system."""
+        return self.passive_skill("perception")
+
+    def can_bypass_invisibility(self) -> bool:
+        """Entity can bypass invisibility with special senses."""
+        return (SensesType.TRUESIGHT in self.senses.extra_senses or
+                SensesType.BLINDSIGHT in self.senses.extra_senses or
+                SensesType.TREMORSENSE in self.senses.extra_senses)
 
     def skill_bonus_cross(self, target_entity_uuid: UUID, skill_name: SkillName) -> Tuple[ModifiableValue, ModifiableValue]:
         should_clear_target = False
@@ -1594,17 +1604,23 @@ class Entity(BaseBlock):
             if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
                 filtered_paths[pos] = path
 
-        # Get entities at visible positions
+        # Get entities at visible positions (filtered by perceivability)
         visible_entities: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
             entities = Entity.get_all_entities_at_position(pos)
             for entity in entities:
-                visible_entities[entity.uuid] = pos
+                if entity_uuid and entity.uuid == entity_uuid:
+                    continue
+                if entity.is_perceivable_by(entity_uuid):
+                    visible_entities[entity.uuid] = pos
 
-        # Get objects at visible positions
+        # Get objects at visible positions (filtered by perceivability)
         visible_objects: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
             for obj_uuid in grid.get_objects_at(pos):
+                obj = BaseBlock.get(obj_uuid)
+                if obj and not obj.is_perceivable_by(entity_uuid):
+                    continue
                 visible_objects[obj_uuid] = pos
 
         # Build walkable dict from grid
@@ -1688,17 +1704,22 @@ class Entity(BaseBlock):
         # Convert to dict format expected by Senses
         visible_dict: Dict[Tuple[int, int], bool] = {pos: True for pos in visible_positions}
 
-        # Find entities in visible cells
+        # Find entities in visible cells (filtered by perceivability)
         visible_entities: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
             for ent_uuid in grid.get_entities_at(pos):
                 if ent_uuid != self.uuid:
-                    visible_entities[ent_uuid] = pos
+                    block = BaseBlock.get(ent_uuid)
+                    if block and block.is_perceivable_by(self.uuid):
+                        visible_entities[ent_uuid] = pos
 
-        # Find objects in visible cells
+        # Find objects in visible cells (filtered by perceivability)
         visible_objects: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
             for obj_uuid in grid.get_objects_at(pos):
+                obj = BaseBlock.get(obj_uuid)
+                if obj and not obj.is_perceivable_by(self.uuid):
+                    continue
                 visible_objects[obj_uuid] = pos
 
         # Update visibility, entities, and objects (keep existing paths)
