@@ -47,7 +47,8 @@ def markdown_to_rich(text: str) -> str:
     - ~~text~~ -> [strike]text[/strike]
     """
     # Color syntax: {color:text} -> [color]text[/color]
-    text = re.sub(r'\{([^}:]+):([^}]+)\}', r'[\1]\2[/\1]', text)
+    # Note: [^{}:] excludes { from color names to prevent {{color:text} producing [{color]
+    text = re.sub(r'\{([^{}:]+):([^}]+)\}', r'[\1]\2[/\1]', text)
     # Bold: **text** -> [bold]text[/bold]
     text = re.sub(r'\*\*([^*]+)\*\*', r'[bold]\1[/bold]', text)
     # Italic: *text* -> [italic]text[/italic]
@@ -1630,12 +1631,17 @@ def show_action_result(result: Dict[str, Any], player_entity_name: str = "You"):
 
 def show_error(message: str):
     """Display an error message."""
-    console.print(f"[red]Error: {message}[/red]")
+    from rich.text import Text
+    error_text = Text("Error: ", style="red")
+    error_text.append(message, style="red")
+    console.print(error_text)
 
 
 def show_info(message: str):
     """Display an info message."""
-    console.print(f"[cyan]{message}[/cyan]")
+    from rich.text import Text
+    info_text = Text(message, style="cyan")
+    console.print(info_text)
 
 
 def show_available_actions(actions: Dict[str, Any], entities: List[Dict[str, Any]]):

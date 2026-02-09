@@ -1138,7 +1138,7 @@ class Dash(BaseAction):
         dashing.duration.duration_type = DurationType.ROUNDS
         dashing.duration.duration = 1
 
-        entity.add_condition(dashing)
+        entity.add_condition(dashing, parent_event=execution_event)
 
         base_movement = entity.action_economy.get_base_value("movement")
         return execution_event.phase_to(
@@ -1207,7 +1207,7 @@ class Dodge(BaseAction):
         dodging.duration.duration_type = DurationType.ROUNDS
         dodging.duration.duration = 1
 
-        entity.add_condition(dodging)
+        entity.add_condition(dodging, parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1272,7 +1272,7 @@ class Disengage(BaseAction):
         disengaging.duration.duration_type = DurationType.ROUNDS
         disengaging.duration.duration = 1
 
-        entity.add_condition(disengaging)
+        entity.add_condition(disengaging, parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1359,7 +1359,7 @@ class Hide(BaseAction):
             target_entity_uuid=entity.uuid,
             stealth_result=stealth_result
         )
-        entity.add_condition(hidden)
+        entity.add_condition(hidden, parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1443,7 +1443,7 @@ class StandUp(BaseAction):
             return execution_event.cancel(status_message="Entity not found")
 
         # Remove Prone condition
-        entity.remove_condition("Prone")
+        entity.remove_condition("Prone", parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1507,7 +1507,7 @@ class DropProne(BaseAction):
             target_entity_uuid=self.source_entity_uuid
         )
         # Prone is permanent (no duration) - removed by StandUp action
-        entity.add_condition(prone)
+        entity.add_condition(prone, parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2188,7 +2188,7 @@ class Shove(BaseAction):
                 source_entity_uuid=source.uuid,
                 target_entity_uuid=target.uuid
             )
-            target.add_condition(prone_condition)
+            target.add_condition(prone_condition, parent_event=execution_event)
 
             return execution_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
@@ -2289,12 +2289,13 @@ class SpellEvent(ActionEvent):
         if self.save_dc is not None and self.save_success is not None:
             return self._generate_save_spell_log()
 
+        # Attack spell (has attack_outcome) - Fire Bolt, Guiding Bolt, etc.
+        if self.attack_outcome is not None:
+            return self._generate_attack_spell_log()
+
         # Auto-hit spell with damage (Magic Missile darts)
         if self.damage_rolls and self.target_entity_name:
             return self._generate_autohit_spell_log()
-
-        # Attack spell (has attack_outcome) - use generic action log for now
-        # Could add _generate_attack_spell_log() following AttackEvent pattern
 
         # Fallback to generic action log
         parent_log = super().generate_combat_log()
@@ -2409,6 +2410,166 @@ class SpellEvent(ActionEvent):
             detailed=detailed,
             data=data.model_dump(),
             success=not success  # Spell "succeeds" when target fails save
+        )
+
+    def _generate_attack_spell_log(self) -> CombatLogEntry:
+        """Generate combat log for attack-based spell (Fire Bolt, Guiding Bolt, etc.).
+
+        Follows AttackEvent.generate_combat_log() pattern but uses spell name
+        instead of weapon name.
+        """
+        source_name = self.source_entity_name or "Unknown"
+        target_name = self.target_entity_name or "Unknown"
+        spell_name = self.name or "Spell"
+
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        # Build attack roll display
+        attack_roll = DiceRollDisplay(dice_str="d20", results=[], bonus=0, total=0)
+        if self.dice_roll:
+            results = self.dice_roll.results
+            if isinstance(results, list):
+                attack_roll.results = list(results)
+                attack_roll.all_d20_rolls = list(results)
+                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                if adv_status:
+                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    attack_roll.advantage_status = adv_value
+                    if len(results) >= 2:
+                        if adv_value == "advantage":
+                            attack_roll.d20_used = max(results)
+                        elif adv_value == "disadvantage":
+                            attack_roll.d20_used = min(results)
+                        else:
+                            attack_roll.d20_used = results[0]
+                    elif len(results) == 1:
+                        attack_roll.d20_used = results[0]
+                else:
+                    attack_roll.d20_used = results[0] if results else 0
+            elif isinstance(results, int):
+                attack_roll.results = [results]
+                attack_roll.d20_used = results
+            attack_roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            attack_roll.total = self.dice_roll.total
+
+        # Build attack breakdown from ModifiableValue
+        attack_breakdown: List[ModifierBreakdown] = []
+        if self.attack_bonus and hasattr(self.attack_bonus, 'get_breakdown'):
+            for mod in self.attack_bonus.get_breakdown():
+                attack_breakdown.append(ModifierBreakdown(
+                    name=mod.get('name', 'Unknown'),
+                    value=mod.get('value', 0),
+                    source=mod.get('source', 'self')
+                ))
+
+        # Get target AC
+        target_ac = 0
+        if self.ac:
+            target_ac = self.ac.normalized_score
+        elif target_entity:
+            target_ac = target_entity.ac_bonus().normalized_score
+
+        # Build AC breakdown
+        ac_breakdown: List[ModifierBreakdown] = []
+        if self.ac and hasattr(self.ac, 'get_breakdown'):
+            for mod in self.ac.get_breakdown():
+                ac_breakdown.append(ModifierBreakdown(
+                    name=mod.get('name', 'Unknown'),
+                    value=mod.get('value', 0),
+                    source=mod.get('source', 'self')
+                ))
+
+        # Determine outcome
+        outcome = "unknown"
+        is_hit = False
+        is_crit = False
+        if self.attack_outcome:
+            outcome_value = self.attack_outcome.value if hasattr(self.attack_outcome, 'value') else str(self.attack_outcome)
+            outcome = outcome_value.lower()
+            is_hit = outcome in ("hit", "crit")
+            is_crit = outcome == "crit"
+
+        # Build damage roll displays
+        damage_roll_displays: List[DamageRollDisplay] = []
+        total_damage = 0
+        if self.damage_rolls and self.damages:
+            for i, dr in enumerate(self.damage_rolls):
+                damage = self.damages[i] if i < len(self.damages) else None
+                damage_type = damage.damage_type.value if damage and hasattr(damage.damage_type, 'value') else "unknown"
+                dice_results = []
+                if hasattr(dr, 'results'):
+                    if isinstance(dr.results, list):
+                        dice_results = list(dr.results)
+                    elif isinstance(dr.results, int):
+                        dice_results = [dr.results]
+                damage_bonus_breakdown: List[ModifierBreakdown] = []
+                if damage and damage.damage_bonus and hasattr(damage.damage_bonus, 'get_breakdown'):
+                    for mod in damage.damage_bonus.get_breakdown():
+                        damage_bonus_breakdown.append(ModifierBreakdown(
+                            name=mod.get('name', 'Unknown'),
+                            value=mod.get('value', 0),
+                            source=mod.get('source', 'self')
+                        ))
+                num_dice = len(dice_results)
+                dice_size = damage.damage_dice if damage else 6
+                dice_str = f"{num_dice}d{dice_size}"
+                damage_roll_displays.append(DamageRollDisplay(
+                    dice_str=dice_str,
+                    dice_results=dice_results,
+                    bonus=dr.bonus if hasattr(dr, 'bonus') else 0,
+                    total=dr.total,
+                    damage_type=damage_type,
+                    bonus_breakdown=damage_bonus_breakdown
+                ))
+                total_damage += dr.total
+
+        # Build formatted text using shared attack formatters
+        compact_text = format_attack_compact(
+            source_name, target_name, outcome, total_damage
+        )
+        verbose_text = format_attack_verbose(
+            source_name, target_name, spell_name,
+            attack_roll, target_ac, outcome,
+            damage_roll_displays, total_damage
+        )
+        detailed_text = format_attack_detailed(
+            source_name, target_name, spell_name,
+            attack_roll, attack_breakdown,
+            target_ac, ac_breakdown, outcome,
+            damage_roll_displays, total_damage
+        )
+
+        # Build structured data (reuse AttackLogData with spell name as weapon)
+        target_hp = target_entity.get_hp() if target_entity else None
+        data = AttackLogData(
+            attacker_name=source_name,
+            attacker_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+            weapon_name=spell_name,
+            attack_roll=attack_roll,
+            attack_breakdown=attack_breakdown,
+            target_ac=target_ac,
+            ac_breakdown=ac_breakdown,
+            outcome=outcome,
+            is_hit=is_hit,
+            is_crit=is_crit,
+            damage_rolls=damage_roll_displays,
+            total_damage=total_damage,
+            target_hp=target_hp
+        )
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ATTACK,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            compact=compact_text,
+            verbose=verbose_text,
+            detailed=detailed_text,
+            data=data.model_dump(),
+            success=is_hit
         )
 
     def _generate_autohit_spell_log(self) -> CombatLogEntry:

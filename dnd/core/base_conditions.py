@@ -8,6 +8,11 @@ from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+
+# Internal marker conditions that should never generate combat logs
+INTERNAL_MARKER_CONDITIONS = {"HasAttacked", "HasTakenDamage"}
+
 class DurationType(str,Enum):
     ROUNDS = "rounds"
     PERMANENT = "permanent"
@@ -84,6 +89,46 @@ class ConditionApplicationEvent(Event):
     name: str = Field(default="Condition Application",description="A condition application event")
     condition: 'BaseCondition' = Field(description="The condition that is being applied")
     event_type: EventType = Field(default=EventType.CONDITION_APPLICATION,description="The type of event")
+    source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
+    target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
+
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
+        """Generate combat log for condition application."""
+        cond = self.condition
+        condition_name = cond.name or "Unknown"
+
+        # Suppress combat logs for internal marker conditions
+        if condition_name in INTERNAL_MARKER_CONDITIONS:
+            return None
+
+        target_name = self.target_entity_name or "Unknown"
+        source_name = self.source_entity_name or "Unknown"
+
+        # Build condition-specific compact text
+        if condition_name == "Hidden":
+            stealth_dc = getattr(cond, 'stealth_result', 0)
+            compact = f"{{cyan:{target_name}}} gains **Hidden** (Stealth DC {stealth_dc})"
+        elif condition_name == "Invisible":
+            compact = f"{{cyan:{target_name}}} becomes **invisible**"
+        else:
+            compact = f"{{cyan:{target_name}}} gains **{condition_name}**"
+
+        # Verbose adds source info when source != target
+        verbose = compact
+        if self.source_entity_uuid != self.target_entity_uuid and source_name != target_name:
+            verbose = compact + f" from {{yellow:{source_name}}}"
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.CONDITION_APPLIED,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            compact=compact,
+            verbose=verbose,
+            detailed=verbose,
+            success=True,
+        )
 
 
 class ConditionRemovalEvent(Event):
@@ -92,6 +137,38 @@ class ConditionRemovalEvent(Event):
     condition: 'BaseCondition' = Field(description="The condition that is being removed")
     expired: bool = Field(default=False, description="Whether the condition was removed due to expiration")
     event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="The type of event")
+    source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
+    target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
+
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
+        """Generate combat log for condition removal."""
+        cond = self.condition
+        condition_name = cond.name or "Unknown"
+
+        # Suppress combat logs for internal marker conditions
+        if condition_name in INTERNAL_MARKER_CONDITIONS:
+            return None
+
+        target_name = self.target_entity_name or "Unknown"
+        source_name = self.source_entity_name or "Unknown"
+
+        compact = f"{{cyan:{target_name}}} is no longer **{condition_name}**"
+
+        verbose = compact
+        if self.expired:
+            verbose = compact + " (expired)"
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.CONDITION_REMOVED,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else None,
+            compact=compact,
+            verbose=verbose,
+            detailed=verbose,
+            success=True,
+        )
 
 
 class BaseCondition(BaseObject):
@@ -100,6 +177,8 @@ class BaseCondition(BaseObject):
     application_saving_throw: Optional[SavingThrowEvent] = None
     removal_saving_throw: Optional[SavingThrowEvent] = None
     applied:bool = Field(default=False)
+    source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity (populated by Entity.add_condition)")
+    target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity (populated by Entity.add_condition)")
     modifers_uuids: Dict[UUID,List[UUID]] = Field(default_factory=dict,description="keys are ModifiableValues UUID and values are list of modifiers UUIDs applied to those blocks")
     parent_condition: Optional[UUID] = Field(default=None,description="the UUID of the parent condition, if it exists")
     sub_conditions: List[UUID] = Field(default_factory=list,description="list of condition UUIDs that are sub conditions of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the sub conditions will triget sub events ")
@@ -138,7 +217,16 @@ class BaseCondition(BaseObject):
         """ Declare the event """
         if not self.name:
             raise ValueError("Condition name is not set")
-        return ConditionApplicationEvent(name=self.name,condition=self,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, phase=EventPhase.DECLARATION, parent_event=parent_event.uuid if parent_event else None)
+        return ConditionApplicationEvent(
+            name=self.name,
+            condition=self,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            phase=EventPhase.DECLARATION,
+            parent_event=parent_event.uuid if parent_event else None,
+            source_entity_name=self.source_entity_name,
+            target_entity_name=self.target_entity_name
+        )
 
     def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
         """Declare the removal event"""
@@ -149,7 +237,9 @@ class BaseCondition(BaseObject):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             phase=EventPhase.DECLARATION,
-            parent_event=parent_event.uuid if parent_event else None
+            parent_event=parent_event.uuid if parent_event else None,
+            source_entity_name=self.source_entity_name,
+            target_entity_name=self.target_entity_name
         )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:

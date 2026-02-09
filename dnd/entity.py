@@ -28,6 +28,7 @@ from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData
 from dnd.core.base_actions import (
     BaseAction, TargetType,
     AvailableTarget, AvailableActionInfo, AvailableActionsResult
@@ -329,7 +330,13 @@ class Entity(BaseBlock):
             condition.target_entity_uuid = self.uuid
         if context is not None:
             condition.set_context(context)
-        
+
+        # Populate entity names for combat log generation
+        condition.target_entity_name = self.name
+        source = Entity.get(condition.source_entity_uuid)
+        if source and isinstance(source, Entity):
+            condition.source_entity_name = source.name
+
         declaration_event = condition.declare_event(parent_event)
 
         if self.check_condition_immunity(condition.name):
@@ -1311,8 +1318,68 @@ class Entity(BaseBlock):
 
         # 5. Return effective roll (possibly modified)
         return event.get_effective_roll()
-        
-    
+
+    def roll_d20_event(
+        self,
+        bonus: ModifiableValue,
+        roll_type: RollType = RollType.CHECK,
+        context: Optional[Dict[str, Any]] = None,
+        ability_name: Optional[AbilityName] = None,
+        skill_name: Optional[SkillName] = None,
+        weapon_slot: Optional[WeaponSlot] = None
+    ) -> Tuple[DiceRoll, D20RollResultEvent]:
+        """Like roll_d20 but returns (DiceRoll, event_at_EFFECT_phase).
+
+        Caller is responsible for calling event.phase_to(EventPhase.COMPLETION).
+        This allows adding child events (e.g., condition removal) before completion,
+        so they appear as sub-entries in the combat log.
+        """
+        # 1. Create the actual roll
+        dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
+        initial_roll = dice.roll
+
+        # 2. Create appropriate event subclass based on roll_type
+        common_fields = {
+            "source_entity_uuid": self.uuid,
+            "target_entity_uuid": bonus.target_entity_uuid,
+            "roll": initial_roll,
+            "original_roll": initial_roll,
+            "bonus": bonus,
+            "context": context or {},
+            "phase": EventPhase.DECLARATION,
+            "roll_type": roll_type
+        }
+
+        if roll_type == RollType.ATTACK:
+            event: D20RollResultEvent = AttackD20RollResultEvent(
+                **common_fields,
+                weapon_slot=weapon_slot
+            )
+        elif roll_type == RollType.SAVE:
+            if ability_name is None:
+                event = D20RollResultEvent(**common_fields)
+            else:
+                event = SavingThrowD20RollResultEvent(
+                    **common_fields,
+                    ability_name=ability_name
+                )
+        elif roll_type == RollType.CHECK:
+            if skill_name is None:
+                event = D20RollResultEvent(**common_fields)
+            else:
+                event = SkillCheckD20RollResultEvent(
+                    **common_fields,
+                    skill_name=skill_name
+                )
+        else:
+            event = D20RollResultEvent(**common_fields)
+
+        # 3. Transition to EFFECT phase - handlers intercept here
+        event = event.phase_to(EventPhase.EFFECT, status_message="D20 rolled, handlers may modify")
+
+        # 4. Return effective roll and event (NOT completed — caller completes)
+        return event.get_effective_roll(), event
+
     def create_saving_throw_request(
         self,
         target_entity_uuid: UUID,
@@ -1721,6 +1788,36 @@ class Entity(BaseBlock):
                 if obj and not obj.is_perceivable_by(self.uuid):
                     continue
                 visible_objects[obj_uuid] = pos
+
+        # Detect newly spotted hiding enemies
+        old_entities = set(self.senses.entities.keys())
+        newly_spotted = set(visible_entities.keys()) - old_entities
+        for spotted_uuid in newly_spotted:
+            spotted = Entity.get(spotted_uuid)
+            if (spotted and isinstance(spotted, Entity)
+                    and spotted.stealth_dc is not None
+                    and self.is_enemy(spotted)):
+                pp = self.get_passive_perception()
+                log_entry = CombatLogEntry(
+                    entry_type=CombatLogEntryType.ENTITY_SPOTTED,
+                    source_name=self.name,
+                    source_uuid=str(self.uuid),
+                    target_name=spotted.name,
+                    target_uuid=str(spotted.uuid),
+                    compact=f"{{cyan:{self.name}}} spots {{yellow:{spotted.name}}} (Perception {pp} vs Stealth DC {spotted.stealth_dc})",
+                    verbose=f"{{cyan:{self.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {pp} vs Stealth DC {spotted.stealth_dc})",
+                    detailed=f"{{cyan:{self.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {pp} vs Stealth DC {spotted.stealth_dc})",
+                    data=EntitySpottedLogData(
+                        observer_name=self.name,
+                        observer_uuid=str(self.uuid),
+                        target_name=spotted.name,
+                        target_uuid=str(spotted.uuid),
+                        target_position=spotted.position,
+                        passive_perception=pp,
+                        stealth_dc=spotted.stealth_dc
+                    ).model_dump()
+                )
+                EventQueue.push_combat_log(log_entry, self.uuid)
 
         # Update visibility, entities, and objects (keep existing paths)
         self.senses.visible = visible_dict

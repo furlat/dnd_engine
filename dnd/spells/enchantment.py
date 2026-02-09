@@ -295,7 +295,7 @@ class HoldPersonEffect(BaseCondition):
             caster = Entity.get(caster_uuid)
             if not caster:
                 # Caster gone, end the spell by removing the effect
-                target.remove_condition("Hold Person")
+                target.remove_condition("Hold Person", parent_event=event)
                 return None
 
             # Repeat WIS save (child of triggering turn end event)
@@ -313,7 +313,7 @@ class HoldPersonEffect(BaseCondition):
                 if "Concentrating" in caster.active_conditions:
                     conc = caster.active_conditions.get("Concentrating")
                     if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Person":
-                        caster.remove_condition("Concentrating")
+                        caster.remove_condition("Concentrating", parent_event=event)
 
             return None
 
@@ -540,7 +540,7 @@ class HoldMonsterEffect(BaseCondition):
 
             caster = Entity.get(caster_uuid)
             if not caster:
-                target.remove_condition("Hold Monster")
+                target.remove_condition("Hold Monster", parent_event=event)
                 return None
 
             # Repeat WIS save (child of triggering turn end event)
@@ -557,7 +557,7 @@ class HoldMonsterEffect(BaseCondition):
                 if "Concentrating" in caster.active_conditions:
                     conc = caster.active_conditions.get("Concentrating")
                     if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Monster":
-                        caster.remove_condition("Concentrating")
+                        caster.remove_condition("Concentrating", parent_event=event)
             return None
 
         return EventHandler(
@@ -939,7 +939,7 @@ class SleepEffect(BaseCondition):
                 return None
 
             # Wake up - remove Sleep condition (removes Unconscious sub-condition automatically)
-            target.remove_condition("Sleep")
+            target.remove_condition("Sleep", parent_event=event)
             return None
 
         return EventHandler(
@@ -1189,7 +1189,7 @@ class PowerWordStunEffect(BaseCondition):
             caster = Entity.get(caster_uuid)
             if not caster:
                 # Caster gone, end the effect
-                target.remove_condition("Power Word Stun")
+                target.remove_condition("Power Word Stun", parent_event=event)
                 return None
 
             # Repeat CON save (child of triggering turn end event)
@@ -1202,7 +1202,7 @@ class PowerWordStunEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if success:
-                target.remove_condition("Power Word Stun")
+                target.remove_condition("Power Word Stun", parent_event=event)
             return None
 
         return EventHandler(

@@ -85,7 +85,7 @@ class MageArmorCondition(BaseCondition):
             # Check if armor was equipped (not a shield)
             if isinstance(event, ArmorEquipEvent):
                 # Remove Mage Armor
-                entity.remove_condition("Mage Armor")
+                entity.remove_condition("Mage Armor", parent_event=event)
                 return event.model_copy(update={
                     "modified": True,
                     "status_message": f"{entity.name}'s Mage Armor ends (equipped armor)"
