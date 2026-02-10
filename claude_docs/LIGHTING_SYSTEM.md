@@ -242,13 +242,21 @@ visible_entities dict            → final result
 
 **Key**: `senses.visible` (geometric FOV) is unchanged by normal light — dark tiles are still "known" for movement/map awareness. Only entity/object **filtering** is affected by DARKNESS/DIM_LIGHT.
 
-### SpatialSensesCallback (`sensory.py:155-280`)
+### SpatialSensesCallback (`sensory.py:157-392`)
 
-Registered as `EventQueue.add_on_event_callback()`. Fires for ALL events, filters to:
+Registered as `EventQueue.add_on_event_callback()`. Fires for ALL events, filters to spatial events at **COMPLETION phase only**. Uses the **incremental senses update system** — callbacks NEVER run Dijkstra. All updates are lightweight:
 
-- `SPATIAL_LIGHT_CHANGED` (+ other spatial events) at **COMPLETION phase only**
-- Checks subscription: only observers subscribed to the affected cell update
-- Calls `update_senses_func()` (full: FOV + Dijkstra + entity filter) or `update_visibility_func()` (during movement: FOV + entity filter only)
+- **Self-movement** (any `SPATIAL_ENTITY_ENTERED`/`LEFT` where `entity_uuid == owner_uuid`): calls `update_visibility_func()` (FOV only) + sets `_paths_dirty = True`
+- **Other spatial events**: reads `SensesUpdateHint` from the event and applies targeted updates:
+  - `requires_fov`: recompute FOV via `update_visibility_func()` (for magical darkness, door vision blocking)
+  - `requires_paths`: set `_paths_dirty = True` (deferred to turn start or movement end)
+  - `entity_entered`/`entity_left`: O(1) dict add/remove on `senses.entities`
+  - `light_changed_positions`: re-filter entities at changed positions only (light + perceivability check)
+  - `perceivability_entity`: re-check one entity's visibility
+  - `object_placed`/`object_removed`: O(1) dict add/remove on `senses.objects`
+- **Fallback** (events without hints): check position subscription, visibility-only + `_paths_dirty = True`
+
+See [Incremental Senses Update System](#incremental-senses-update-system) section below for full details.
 
 ---
 
