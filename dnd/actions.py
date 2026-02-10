@@ -1,4 +1,4 @@
-from dnd.core.base_actions import BaseAction, StructuredAction, CostType, Cost, BaseCost, ActionEvent, TargetType, ActionCategory
+from dnd.core.base_actions import BaseAction, CostType, Cost, BaseCost, ActionEvent, TargetType, ActionCategory
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -20,7 +20,6 @@ from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden
-from collections import OrderedDict
 
 
 #here we create event processors for the validation of the attack
@@ -2803,27 +2802,6 @@ class SpellAction(BaseAction):
             return 2
         return 1
 
-
-#factories, these are redundant examples to create the same actions using the structured action approach
-# used for prompting LLMs that most likely will use the StructuredAction approach when implementing Content
-
-def attack_factory(source_entity_uuid: UUID, target_entity_uuid: UUID, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Optional[BaseAction]:
-    attack = StructuredAction(
-        source_entity_uuid=source_entity_uuid,
-        target_entity_uuid=target_entity_uuid,
-        name="Attack",
-        description="An attack action",
-        costs=[Cost(name="Attack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
-        prerequisites=OrderedDict({
-            "validate_range": Attack.validate_range,
-            "validate_line_of_sight": validate_line_of_sight
-        }),
-        consequences=OrderedDict({
-            "attack_consequences": Attack.attack_consequences
-        }),
-        cost_applier=entity_action_economy_cost_applier
-    )
-    return attack
 
 
 # =============================================================================

@@ -81,7 +81,7 @@ def test_fireball_combat_log_hierarchy():
     # Register and cast Fireball at position (10, 7) - center of target cluster
     fireball = Fireball(
         source_entity_uuid=caster.uuid,
-        spell_slot_level=3,
+        cast_at_level=3,
         caster_level=5,
     )
     fireball.end_position = (10, 5)  # Center of target cluster

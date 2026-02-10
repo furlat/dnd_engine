@@ -1942,6 +1942,7 @@ class Damage(BaseObject):
     )
     
     def get_dice(self, attack_outcome: AttackOutcome, crit_extra_dice: int = 0) -> Dice:
+        assert self.damage_bonus is not None, "Damage requires damage_bonus to be set"
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
 
 
