@@ -31,7 +31,8 @@
       "Bash(do python examples/test_tier1_spells.py)",
       "Bash(.venv/bin/python -m pytest:*)",
       "Bash(for i in 1 2 3 4 5)",
-      "Bash(do echo \"=== Run $i ===\")"
+      "Bash(do echo \"=== Run $i ===\")",
+      "Bash(timeout 15 .venv/bin/python:*)"
     ]
   }
 }

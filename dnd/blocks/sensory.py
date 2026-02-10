@@ -2,21 +2,14 @@ from typing import Dict, Optional, List, Self, Tuple, Set, DefaultDict, Callable
 from uuid import UUID
 from pydantic import Field
 
-
-from enum import Enum
-
 import math
 from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import Event, EventType, SpatialChangeType
+from dnd.core.events import Event, EventType, EventPhase, SpatialChangeType
+from dnd.core.base_tiles import SensesType, SenseMode
 
-class SensesType(str, Enum):
-    BLINDSIGHT = "Blindsight"
-    DARKVISION = "Darkvision"
-    TREMORSENSE = "Tremorsense"
-    TRUESIGHT = "Truesight"
 
 class Senses(BaseBlock):
     """ A block that contains the senses of a creature"""
@@ -25,11 +18,32 @@ class Senses(BaseBlock):
     visible: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     walkable: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=lambda: defaultdict(list))
-    extra_senses: List[SensesType] = Field(default_factory=list)
+    sense_modes: List[SenseMode] = Field(default_factory=list, description="Special sense modes (Darkvision, Blindsight, etc.) with ranges")
     seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
     is_moving: bool = Field(default=False, description="True while entity is actively moving (for senses callback optimization)")
 
 
+    def has_sense(self, sense_type: SensesType) -> bool:
+        """Check if entity has a sense type (any range)."""
+        return any(sm.sense_type == sense_type for sm in self.sense_modes)
+
+    def has_sense_in_range(self, sense_type: SensesType, distance_feet: int) -> bool:
+        """Check if a sense type covers a specific distance."""
+        for sm in self.sense_modes:
+            if sm.sense_type == sense_type:
+                return sm.range_feet == 0 or distance_feet <= sm.range_feet
+        return False
+
+    def get_sense_range(self, sense_type: SensesType) -> int:
+        """Returns range in feet. -1 = not present, 0 = unlimited."""
+        for sm in self.sense_modes:
+            if sm.sense_type == sense_type:
+                return sm.range_feet
+        return -1
+
+    def get_sense_modes(self) -> List[SenseMode]:
+        """Return this block's sense modes. Override of BaseBlock.get_sense_modes()."""
+        return self.sense_modes
 
     def add_entity(self,entity_uuid: UUID,position: Tuple[int,int]):
         """ add an entity to the senses"""
@@ -38,11 +52,11 @@ class Senses(BaseBlock):
     def get_distance(self,position: Tuple[int,int]) -> int:
         """ get the euclidean distance between the position and the position of the senses"""
         return int(math.sqrt((self.position[0] - position[0])**2 + (self.position[1] - position[1])**2))
-    
+
     def get_feet_distance(self,position: Tuple[int,int]) -> int:
         """ get the euclidean distance in feet between the position and the position of the senses and then multiply by 5 to obtain the distance in feet"""
         return self.get_distance(position) * 5
-    
+
     def get_path_to_entity(self,entity_uuid: UUID, max_path_length: Optional[int] = None) -> List[Tuple[int,int]]:
         """ Get the path to the entity"""
         if entity_uuid not in self.entities:
@@ -52,13 +66,13 @@ class Senses(BaseBlock):
             return path
         else:
             return []
-    
+
     def update_seen(self, visible: Dict[Tuple[int,int],bool]):
         """ update the seen list"""
         visible_positions = set([key for key,value in visible.items() if value])
         self.seen.update(visible_positions)
 
-    
+
     def update_senses(self, entities: Dict[UUID,Tuple[int,int]], visible: Dict[Tuple[int,int],bool], walkable: Dict[Tuple[int,int],bool], paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]], objects: Optional[Dict[UUID,Tuple[int,int]]] = None):
         #sets all to empty dicts
         self.entities = {}
@@ -100,7 +114,7 @@ class Senses(BaseBlock):
         visible_set = set(self.visible.keys())
         walkable_set = set(pos for pos, is_walkable in self.walkable.items() if is_walkable)
         return list(neighbors & visible_set & walkable_set)
-        
+
 
     @classmethod
     def create(cls,source_entity_uuid: UUID,name: str = "Senses", source_entity_name: Optional[str] = None, target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, position: Tuple[int,int] = (0,0)) -> Self:
@@ -165,6 +179,7 @@ class SpatialSensesCallback:
         EventType.SPATIAL_OBJECT_PLACED,
         EventType.SPATIAL_OBJECT_REMOVED,
         EventType.SPATIAL_PERCEIVABILITY_CHANGED,
+        EventType.SPATIAL_LIGHT_CHANGED,
     )
 
     def __init__(
@@ -188,6 +203,13 @@ class SpatialSensesCallback:
 
         # Handle spatial events
         if event.event_type not in self.SPATIAL_EVENTS:
+            return
+
+        # Senses callback fires on ALL phases, but we only need to update senses
+        # once per event. For most events, COMPLETION is the right phase.
+        # Exception: self-movement events are handled separately below.
+        phase = getattr(event, 'phase', None)
+        if phase != EventPhase.COMPLETION:
             return
 
         # Get position from event
@@ -255,4 +277,3 @@ class SpatialSensesCallback:
             else:
                 # Fallback: just remove from entities dict
                 self.senses.entities.pop(dead_uuid, None)
-    

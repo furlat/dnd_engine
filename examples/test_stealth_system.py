@@ -28,7 +28,7 @@ from dnd.entity import Entity
 from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock
 from dnd.conditions import Invisible, Hidden, Incapacitated, InvisibilityEffect, GreaterInvisibilityEffect
-from dnd.blocks.sensory import SensesType
+from dnd.core.base_tiles import SensesType, SenseMode
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index, execute_use_action, register_spell
 from dnd.actions import Hide
 from dnd.items.armors import create_chain_mail, create_leather_armor
@@ -86,7 +86,7 @@ def test_invisible_flag():
     target = create_skeleton(name="Target", position=(2, 0))
     observer = create_skeleton(name="Observer", position=(0, 0))
     truesight_observer = create_skeleton(name="Truesight Observer", position=(4, 0))
-    truesight_observer.senses.extra_senses = [SensesType.TRUESIGHT]
+    truesight_observer.senses.sense_modes = [SenseMode(sense_type=SensesType.TRUESIGHT)]
 
     # Set invisible directly via flag
     target.set_invisible(True)
@@ -96,12 +96,12 @@ def test_invisible_flag():
 
     # Test BLINDSIGHT bypass
     blindsight_observer = create_skeleton(name="Blindsight Observer", position=(3, 0))
-    blindsight_observer.senses.extra_senses = [SensesType.BLINDSIGHT]
+    blindsight_observer.senses.sense_modes = [SenseMode(sense_type=SensesType.BLINDSIGHT)]
     check("Perceivable by BLINDSIGHT observer", target.is_perceivable_by(blindsight_observer.uuid) is True)
 
     # Test TREMORSENSE bypass
     tremorsense_observer = create_skeleton(name="Tremorsense Observer", position=(1, 0))
-    tremorsense_observer.senses.extra_senses = [SensesType.TREMORSENSE]
+    tremorsense_observer.senses.sense_modes = [SenseMode(sense_type=SensesType.TREMORSENSE)]
     check("Perceivable by TREMORSENSE observer", target.is_perceivable_by(tremorsense_observer.uuid) is True)
 
     # Clear flag
@@ -218,12 +218,12 @@ def test_invisible_condition_senses():
     check("Target NOT visible to normal observer", target.uuid not in observer.senses.entities)
 
     # Observer with TRUESIGHT should still see target
-    observer.senses.extra_senses = [SensesType.TRUESIGHT]
+    observer.senses.sense_modes = [SenseMode(sense_type=SensesType.TRUESIGHT)]
     Entity.update_all_entities_senses()
     check("Target visible to TRUESIGHT observer", target.uuid in observer.senses.entities)
 
     # Remove Invisible
-    observer.senses.extra_senses = []
+    observer.senses.sense_modes = []
     target.remove_condition("Invisible")
     check("is_invisible flag cleared", target.is_invisible is False)
 

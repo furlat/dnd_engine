@@ -13,11 +13,24 @@ from typing import Dict, List, Optional, Tuple, Set, DefaultDict, cast
 from uuid import UUID, uuid4
 from collections import defaultdict
 
+from pydantic import BaseModel, Field
+
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
-from dnd.core.base_tiles import Tile
+from dnd.core.base_tiles import Tile, LightLevel
 from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.events import SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue
+from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType
+
+
+class LightSourceData(BaseModel):
+    """Tracks a light source and its affected tiles."""
+    uuid: UUID = Field(default_factory=uuid4)
+    position: Tuple[int, int] = Field(description="Current position of the light source")
+    bright_radius_feet: int = Field(description="Radius of bright light in feet")
+    dim_radius_feet: int = Field(description="Radius of dim light in feet (extends beyond bright)")
+    anchor_uuid: Optional[UUID] = Field(default=None, description="BaseBlock this light is attached to (follows its movement)")
+    affected_tiles: Dict[Tuple[int, int], LightLevel] = Field(default_factory=dict, description="pos -> level applied")
+    is_active: bool = Field(default=True)
 
 
 class GridMap:
@@ -62,11 +75,17 @@ class GridMap:
         # entity -> set of cells it's subscribed to
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
 
+        # Light source tracking
+        self._light_sources: Dict[UUID, LightSourceData] = {}
+
         # Event firing enabled flag (can be disabled during batch operations)
         self._events_enabled: bool = True
 
         # Pending events (when events are disabled, queue them here)
         self._pending_events: List['SpatialChangeEvent'] = []
+
+        # Callback for light source movement (registered once)
+        self._light_callback_registered: bool = False
 
     @classmethod
     def get_instance(cls) -> 'GridMap':
@@ -302,15 +321,16 @@ class GridMap:
         tile = self._tiles.get((x, y))
         return tile is not None and not tile.blocks_vision()
 
-    def is_blocking(self, x: int, y: int) -> bool:
-        """Check if position blocks line of sight (tile or object)."""
+    def is_blocking(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None) -> bool:
+        """Check if position blocks line of sight (tile or object).
+        Magical darkness blocks vision unless observer has TRUESIGHT/DEVILS_SIGHT."""
         tile = self._tiles.get((x, y))
-        if tile is None or tile.blocks_vision():
+        if tile is None or tile.blocks_vision(requesting_entity_uuid):
             return True
         # Check objects that block vision (e.g., barricade)
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
-            if block is not None and block.blocks_vision():
+            if block is not None and block.blocks_vision(requesting_entity_uuid):
                 return True
         return False
 
@@ -541,9 +561,15 @@ class GridMap:
     # FOV and Pathfinding
     # =========================================================================
 
-    def compute_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
+    def compute_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None,
+                    observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
         """
         Compute field of view from a position using shadowcasting.
+
+        Args:
+            origin: Position to compute FOV from
+            max_distance: Maximum view distance
+            observer_uuid: If provided, magical darkness is checked per-observer
 
         Returns list of visible positions.
         """
@@ -552,7 +578,10 @@ class GridMap:
         def mark_visible(x: int, y: int) -> None:
             visible_positions.append((x, y))
 
-        compute_fov(origin, self.is_blocking, mark_visible, max_distance)
+        def is_blocking_for(x: int, y: int) -> bool:
+            return self.is_blocking(x, y, requesting_entity_uuid=observer_uuid)
+
+        compute_fov(origin, is_blocking_for, mark_visible, max_distance)
         return visible_positions
 
     def compute_paths(self, start: Tuple[int, int], max_distance: Optional[int] = None,
@@ -638,11 +667,241 @@ class GridMap:
         return distances.get(end)
 
     # =========================================================================
+    # Light Source Management
+    # =========================================================================
+
+    def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
+                         dim_radius_feet: int, anchor_uuid: Optional[UUID] = None) -> UUID:
+        """Add a light source at a position.
+
+        Computes illuminated area via FOV from position.
+        Bright radius -> BRIGHT_LIGHT, dim annulus -> DIM_LIGHT.
+
+        Args:
+            position: Center of the light source
+            bright_radius_feet: Radius of bright light in feet
+            dim_radius_feet: Radius of dim light in feet (total radius = bright + dim)
+            anchor_uuid: If set, light follows this BaseBlock's movement
+
+        Returns:
+            UUID of the light source
+        """
+        source = LightSourceData(
+            position=position,
+            bright_radius_feet=bright_radius_feet,
+            dim_radius_feet=dim_radius_feet,
+            anchor_uuid=anchor_uuid
+        )
+        self._light_sources[source.uuid] = source
+
+        # Attach to anchor if provided
+        if anchor_uuid:
+            anchor = BaseBlock.get(anchor_uuid)
+            if anchor:
+                anchor.attach_light_source(source.uuid)
+
+        # Apply illumination to tiles
+        self._apply_light_source(source)
+
+        # Register movement callback if not already done
+        self._ensure_light_callback()
+
+        return source.uuid
+
+    def remove_light_source(self, light_uuid: UUID) -> None:
+        """Remove a light source and clean up tile modifiers."""
+        source = self._light_sources.pop(light_uuid, None)
+        if source is None:
+            return
+
+        # Remove tile illumination
+        self._remove_light_source_tiles(source)
+
+        # Detach from anchor
+        if source.anchor_uuid:
+            anchor = BaseBlock.get(source.anchor_uuid)
+            if anchor:
+                anchor.detach_light_source(light_uuid)
+
+    def move_light_source(self, light_uuid: UUID, new_position: Tuple[int, int]) -> None:
+        """Move a light source to a new position using delta computation.
+
+        Only touches tiles that actually change — tiles in the overlap area
+        with the same light level are left untouched (no events fired).
+        For a 1-tile move, this typically touches ~10% of affected tiles.
+        """
+        source = self._light_sources.get(light_uuid)
+        if source is None:
+            return
+
+        old_affected = dict(source.affected_tiles)
+
+        # Compute new affected tiles at new position
+        new_affected = self._compute_light_tiles(source, new_position)
+
+        # Delta: only modify tiles that actually change
+        changed_positions: List[Tuple[int, int]] = []
+        all_positions = set(old_affected) | set(new_affected)
+        for pos in all_positions:
+            old_level = old_affected.get(pos)
+            new_level = new_affected.get(pos)
+            if old_level == new_level:
+                continue  # No change for this tile — skip entirely
+
+            tile = self._tiles.get(pos)
+            if tile is None:
+                continue
+
+            if old_level is not None and new_level is None:
+                # Tile leaving light range — remove illumination
+                if tile.remove_light_modifier(source.uuid, fire_event=False):
+                    changed_positions.append(pos)
+            elif new_level is not None:
+                # Tile entering range or level changed — add/update illumination
+                if tile.add_illumination(source.uuid, new_level, fire_event=False):
+                    changed_positions.append(pos)
+
+        # Update source state
+        source.position = new_position
+        source.affected_tiles = new_affected
+
+        # Fire events for changed tiles
+        self._fire_light_batch_events(changed_positions)
+
+    def toggle_light_source(self, light_uuid: UUID, active: bool) -> None:
+        """Toggle a light source on/off without destroying it."""
+        source = self._light_sources.get(light_uuid)
+        if source is None:
+            return
+        if source.is_active == active:
+            return
+
+        if active:
+            source.is_active = True
+            self._apply_light_source(source)
+        else:
+            self._remove_light_source_tiles(source)
+            source.is_active = False
+
+    def _compute_light_tiles(self, source: LightSourceData,
+                             position: Optional[Tuple[int, int]] = None) -> Dict[Tuple[int, int], LightLevel]:
+        """Compute which tiles a light source would affect and at what level.
+
+        Pure computation — does NOT modify any tiles.
+        Uses FOV from position so light doesn't go through walls.
+        """
+        import math
+        pos = position or source.position
+        total_radius_feet = source.bright_radius_feet + source.dim_radius_feet
+        total_radius_tiles = max(total_radius_feet // 5, 1)
+        bright_radius_tiles = max(source.bright_radius_feet // 5, 1)
+
+        visible_positions = self.compute_fov(pos, total_radius_tiles)
+        result: Dict[Tuple[int, int], LightLevel] = {}
+        for tile_pos in visible_positions:
+            if tile_pos not in self._tiles:
+                continue
+            dx = tile_pos[0] - pos[0]
+            dy = tile_pos[1] - pos[1]
+            dist_tiles = math.sqrt(dx * dx + dy * dy)
+            if dist_tiles <= bright_radius_tiles:
+                result[tile_pos] = LightLevel.BRIGHT_LIGHT
+            else:
+                result[tile_pos] = LightLevel.DIM_LIGHT
+        return result
+
+    def _apply_light_source(self, source: LightSourceData) -> None:
+        """Compute and apply illumination from a light source to tiles.
+        Suppresses per-tile events and fires a single senses update after."""
+        source.affected_tiles = self._compute_light_tiles(source)
+        changed_positions: List[Tuple[int, int]] = []
+        for pos, level in source.affected_tiles.items():
+            tile = self._tiles.get(pos)
+            if tile is not None:
+                if tile.add_illumination(source.uuid, level, fire_event=False):
+                    changed_positions.append(pos)
+        self._fire_light_batch_events(changed_positions)
+
+    def _remove_light_source_tiles(self, source: LightSourceData) -> None:
+        """Remove illumination from all tiles affected by this light source.
+        Suppresses per-tile events and fires a single senses update after."""
+        changed_positions: List[Tuple[int, int]] = []
+        for pos in source.affected_tiles:
+            tile = self._tiles.get(pos)
+            if tile:
+                if tile.remove_light_modifier(source.uuid, fire_event=False):
+                    changed_positions.append(pos)
+        source.affected_tiles.clear()
+        self._fire_light_batch_events(changed_positions)
+
+    def _fire_light_batch_events(self, changed_positions: List[Tuple[int, int]]) -> None:
+        """Fire efficient events after a batch light change.
+
+        Two-tier approach:
+        1. Positions with entities: fire full SPATIAL_LIGHT_CHANGED event lifecycle
+           (needed for Hidden reveal handler at EFFECT phase). Very rare.
+        2. Single COMPLETION event at one representative position to trigger
+           senses re-evaluation. Entities subscribed to that cell will update.
+           Other entities update on their next senses refresh.
+        """
+        if not changed_positions:
+            return
+
+        # Tier 1: Full lifecycle for positions with entities (Hidden reveal handler)
+        handled_positions: Set[Tuple[int, int]] = set()
+        for pos in changed_positions:
+            entity_uuids = self._entities_by_position.get(pos, set())
+            if entity_uuids:
+                handled_positions.add(pos)
+                tile = self._tiles.get(pos)
+                if tile:
+                    event = SpatialChangeEvent.light_changed(pos, tile.uuid)
+                    self._fire_spatial_event(event)
+
+        # Tier 2: Single COMPLETION event for senses refresh
+        # Pick any unhandled position, or first position if all handled
+        senses_pos = None
+        for pos in changed_positions:
+            if pos not in handled_positions:
+                senses_pos = pos
+                break
+        if senses_pos is None and changed_positions:
+            senses_pos = changed_positions[0]
+        if senses_pos is not None:
+            tile = self._tiles.get(senses_pos)
+            if tile:
+                event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid)
+                event = event.phase_to(EventPhase.COMPLETION)
+                EventQueue.register(event)
+
+    def _ensure_light_callback(self) -> None:
+        """Register the movement callback for light source tracking (once)."""
+        if self._light_callback_registered:
+            return
+        self._light_callback_registered = True
+        EventQueue.add_on_event_callback(self._on_light_movement_event)
+
+    def _on_light_movement_event(self, event: Event) -> None:
+        """Move light sources when their anchor entity moves."""
+        if event.event_type != EventType.SPATIAL_ENTITY_ENTERED:
+            return
+        entity_uuid = getattr(event, 'entity_uuid', None)
+        new_pos = getattr(event, 'position', None)
+        if entity_uuid is None or new_pos is None:
+            return
+        anchor = BaseBlock.get(entity_uuid)
+        if anchor is None:
+            return
+        for light_uuid in anchor.get_attached_light_sources():
+            if light_uuid in self._light_sources:
+                self.move_light_source(light_uuid, new_pos)
+
+    # =========================================================================
     # Utility Methods
     # =========================================================================
 
     def clear(self) -> None:
-        """Clear all tiles, entity positions, object positions, and subscriptions."""
+        """Clear all tiles, entity positions, object positions, subscriptions, and light sources."""
         self._tiles.clear()
         self._tiles_by_uuid.clear()
         self._entities_by_position.clear()
@@ -651,6 +910,7 @@ class GridMap:
         self._objects_by_position.clear()
         self._cell_subscribers.clear()
         self._entity_subscriptions.clear()
+        self._light_sources.clear()
         self._pending_events.clear()
         self._bounds_dirty = True
 
