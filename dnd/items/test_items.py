@@ -13,8 +13,8 @@ from pydantic import Field
 from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
-from dnd.core.events import Event, EventPhase, EventQueue, WeaponSlot
-from dnd.core.modifiers import  DamageType
+from dnd.core.events import Event, EventPhase, EventQueue, WeaponSlot, SkillName
+from dnd.core.modifiers import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.core.gridmap import get_map
 from dnd.blocks.base_item import UsableItem
@@ -22,7 +22,11 @@ from dnd.blocks.equipment import Weapon
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
 from dnd.actions import entity_action_economy_cost_evaluator, SpellAction
-from dnd.conditions import GreaterInvisibilityEffect
+from dnd.conditions import Concentrating, GreaterInvisibilityEffect
+from dnd.spells.evocation import BurningHands, FireBolt, Fireball, MagicMissile
+from dnd.spells.enchantment import HoldPerson
+from dnd.spells.abjuration import MageArmor
+from dnd.spells.transmutation import SpikeGrowth
 
 
 # =============================================================================
@@ -347,7 +351,7 @@ class SpellScroll(UsableItem):
         result = []
         for template in self.use_action_templates:
             # Check if item has enough charges for this action's charge_cost
-            template_charge_cost = getattr(template, 'charge_cost', 1)
+            template_charge_cost = template.charge_cost
             if self.charges != -1 and self.charges < template_charge_cost:
                 continue
 
@@ -384,7 +388,6 @@ class SpellScroll(UsableItem):
 
 
 def create_scroll_of_fireball(owner_uuid: UUID, cast_level: int = 3) -> SpellScroll:
-    from dnd.spells.evocation import Fireball
     spell = Fireball(source_entity_uuid=uuid4(), caster_level=5, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Fireball",
         scroll_cast_level=cast_level, use_action_templates=[spell],
@@ -392,7 +395,6 @@ def create_scroll_of_fireball(owner_uuid: UUID, cast_level: int = 3) -> SpellScr
 
 
 def create_scroll_of_magic_missile(owner_uuid: UUID, cast_level: int = 1) -> SpellScroll:
-    from dnd.spells.evocation import MagicMissile
     spell = MagicMissile(source_entity_uuid=uuid4(), caster_level=1, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Magic Missile",
         scroll_cast_level=cast_level, use_action_templates=[spell],
@@ -400,7 +402,6 @@ def create_scroll_of_magic_missile(owner_uuid: UUID, cast_level: int = 1) -> Spe
 
 
 def create_scroll_of_hold_person(owner_uuid: UUID, cast_level: int = 2) -> SpellScroll:
-    from dnd.spells.enchantment import HoldPerson
     spell = HoldPerson(source_entity_uuid=uuid4(), caster_level=3, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Hold Person",
         scroll_cast_level=cast_level, use_action_templates=[spell],
@@ -408,7 +409,6 @@ def create_scroll_of_hold_person(owner_uuid: UUID, cast_level: int = 2) -> Spell
 
 
 def create_scroll_of_mage_armor(owner_uuid: UUID, cast_level: int = 1) -> SpellScroll:
-    from dnd.spells.abjuration import MageArmor
     spell = MageArmor(source_entity_uuid=uuid4(), caster_level=1, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Mage Armor",
         scroll_cast_level=cast_level, use_action_templates=[spell],
@@ -416,7 +416,6 @@ def create_scroll_of_mage_armor(owner_uuid: UUID, cast_level: int = 1) -> SpellS
 
 
 def create_scroll_of_spike_growth(owner_uuid: UUID, cast_level: int = 2) -> SpellScroll:
-    from dnd.spells.transmutation import SpikeGrowth
     spell = SpikeGrowth(source_entity_uuid=uuid4(), caster_level=3, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Spike Growth",
         scroll_cast_level=cast_level, use_action_templates=[spell],
@@ -424,7 +423,6 @@ def create_scroll_of_spike_growth(owner_uuid: UUID, cast_level: int = 2) -> Spel
 
 
 def create_scroll_of_fire_bolt(owner_uuid: UUID, caster_level: int = 5) -> SpellScroll:
-    from dnd.spells.evocation import FireBolt
     spell = FireBolt(source_entity_uuid=uuid4(), caster_level=caster_level, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Scroll of Fire Bolt",
         scroll_cast_level=0, use_action_templates=[spell],
@@ -432,7 +430,6 @@ def create_scroll_of_fire_bolt(owner_uuid: UUID, caster_level: int = 5) -> Spell
 
 
 def create_wand_of_magic_missiles(owner_uuid: UUID, charges: int = 3) -> SpellScroll:
-    from dnd.spells.evocation import MagicMissile
     spell = MagicMissile(source_entity_uuid=uuid4(), caster_level=1, template=True)
     return SpellScroll(source_entity_uuid=owner_uuid, name="Wand of Magic Missiles",
         scroll_cast_level=1, charges=charges, max_charges=charges,
@@ -441,7 +438,6 @@ def create_wand_of_magic_missiles(owner_uuid: UUID, charges: int = 3) -> SpellSc
 
 def create_wand_of_fire(owner_uuid: UUID, charges: int = 7) -> SpellScroll:
     """Wand with Burning Hands (1 charge), Fireball (3 charges), Fireball L4 (4 charges)."""
-    from dnd.spells.evocation import BurningHands, Fireball
     burning = BurningHands(source_entity_uuid=uuid4(), caster_level=1, template=True, charge_cost=1)
     fireball = Fireball(source_entity_uuid=uuid4(), caster_level=5, template=True, charge_cost=3)
     fireball_l4 = Fireball(source_entity_uuid=uuid4(), caster_level=7, template=True, charge_cost=4)
@@ -459,7 +455,6 @@ def create_wand_of_fire(owner_uuid: UUID, charges: int = 7) -> SpellScroll:
 
 def create_arcane_machine_gun(owner_uuid: UUID, position: Tuple[int, int] = (0, 0)) -> SpellScroll:
     """Environment object: unlimited Magic Missile (MULTI_ENTITY)."""
-    from dnd.spells.evocation import MagicMissile
     spell = MagicMissile(source_entity_uuid=uuid4(), caster_level=1, template=True)
     item = SpellScroll(
         source_entity_uuid=owner_uuid, name="Arcane Machine Gun",
@@ -474,7 +469,6 @@ def create_arcane_machine_gun(owner_uuid: UUID, position: Tuple[int, int] = (0, 
 
 def create_fireball_cannon(owner_uuid: UUID, position: Tuple[int, int] = (0, 0), charges: int = 3) -> SpellScroll:
     """Environment object: 3-shot Fireball cannon (POSITION_AOE)."""
-    from dnd.spells.evocation import Fireball
     spell = Fireball(source_entity_uuid=uuid4(), caster_level=5, template=True)
     item = SpellScroll(
         source_entity_uuid=owner_uuid, name="Fireball Cannon",
@@ -672,7 +666,6 @@ class ApplyCoatAction(BaseAction):
 
         # If concentration variant, apply Concentrating and link
         if self.use_concentration:
-            from dnd.conditions import Concentrating
             concentration = Concentrating(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.source_entity_uuid,
@@ -766,7 +759,6 @@ class ActivateDeviceAction(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return False
-        from dnd.core.events import SkillName
         skill = entity.skill_set.get_skill(type_cast(SkillName, "arcana"))
         return skill.proficiency
 
@@ -947,7 +939,7 @@ class Torch(UsableItem):
     is_lit: bool = Field(default=False)
     _light_source_uuid: Optional[UUID] = None
 
-    def get_use_actions(self, user_entity_uuid: UUID) -> List["BaseAction"]:
+    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         if not self.is_lit:
             return [IgniteTorchAction(
                 source_entity_uuid=user_entity_uuid,

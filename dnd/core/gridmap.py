@@ -9,6 +9,7 @@ Manages:
 - Cell subscriptions for spatial events
 """
 
+import math
 from typing import Dict, List, Optional, Tuple, Set, DefaultDict, cast
 from uuid import UUID, uuid4
 from collections import defaultdict
@@ -806,7 +807,6 @@ class GridMap:
         Pure computation — does NOT modify any tiles.
         Uses FOV from position so light doesn't go through walls.
         """
-        import math
         pos = position or source.position
         total_radius_feet = source.bright_radius_feet + source.dim_radius_feet
         total_radius_tiles = max(total_radius_feet // 5, 1)
@@ -924,13 +924,12 @@ class GridMap:
         if event.event_type != EventType.SPATIAL_ENTITY_ENTERED:
             return
         # Only fire once per event lifecycle (at COMPLETION)
-        phase = getattr(event, 'phase', None)
-        if phase != EventPhase.COMPLETION:
+        if event.phase != EventPhase.COMPLETION:
             return
-        entity_uuid = getattr(event, 'entity_uuid', None)
-        new_pos = getattr(event, 'position', None)
-        if entity_uuid is None or new_pos is None:
+        if not isinstance(event, SpatialChangeEvent) or event.entity_uuid is None:
             return
+        entity_uuid = event.entity_uuid
+        new_pos = event.position
         anchor = BaseBlock.get(entity_uuid)
         if anchor is None:
             return

@@ -35,7 +35,7 @@ from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
 
 
-def setup_standard_actions(entity: 'Entity') -> None:
+def setup_standard_actions(entity: Entity) -> None:
     """Register standard D&D 5e actions for an entity.
 
     This sets up the base actions available to all entities:
@@ -128,7 +128,7 @@ def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
     )
 
 
-def _setup_weapon_event_handlers(entity: 'Entity') -> None:
+def _setup_weapon_event_handlers(entity: Entity) -> None:
     """Set up event handlers to auto-update attack templates on weapon changes.
 
     Args:
@@ -170,7 +170,7 @@ def _setup_weapon_event_handlers(entity: 'Entity') -> None:
     EventQueue.add_event_handler(unequip_handler)
 
 
-def update_weapon_template(entity: 'Entity', slot: WeaponSlot) -> None:
+def update_weapon_template(entity: Entity, slot: WeaponSlot) -> None:
     """Update the attack template for a single weapon slot.
 
     Called when a weapon is equipped or unequipped.
@@ -194,7 +194,7 @@ def update_weapon_template(entity: 'Entity', slot: WeaponSlot) -> None:
         ))
 
 
-def update_weapon_templates(entity: 'Entity') -> None:
+def update_weapon_templates(entity: Entity) -> None:
     """Update attack templates for all weapon slots.
 
     Args:
@@ -205,7 +205,7 @@ def update_weapon_templates(entity: 'Entity') -> None:
         update_weapon_template(entity, slot)
 
 
-def get_available_actions(entity: 'Entity') -> AvailableActionsResult:
+def get_available_actions(entity: Entity) -> AvailableActionsResult:
     """Get all available actions for an entity.
 
     Wrapper around Entity.get_available_actions() for functional API consistency.
@@ -219,7 +219,7 @@ def get_available_actions(entity: 'Entity') -> AvailableActionsResult:
     return entity.get_available_actions()
 
 
-def execute_action(entity: 'Entity', template_name: str, target: AvailableTarget) -> Optional[Event]:
+def execute_action(entity: Entity, template_name: str, target: AvailableTarget) -> Optional[Event]:
     """Execute an action from template + target.
 
     This is the main execution API that creates an instance and applies it.
@@ -249,7 +249,7 @@ def execute_action(entity: 'Entity', template_name: str, target: AvailableTarget
         if target.target_uuid is None:
             raise ValueError("MULTI_ENTITY action requires target_uuid")
         # Extra targets come from target.extra_target_uuids if provided
-        extra = getattr(target, 'extra_target_uuids', None) or []
+        extra = target.extra_target_uuids or []
         instance = template.instantiate(
             target_entity_uuid=target.target_uuid,
             extra_target_entity_uuids=extra
@@ -278,7 +278,7 @@ def execute_action(entity: 'Entity', template_name: str, target: AvailableTarget
 
 
 def execute_by_index(
-    entity: 'Entity',
+    entity: Entity,
     template_name: str,
     target_index: int,
     extra_target_uuids: Optional[List[str]] = None,
@@ -351,7 +351,7 @@ def execute_by_index(
 # Spell Registration Utilities
 # =============================================================================
 
-def register_spell(entity: 'Entity', spell_class: type, caster_level: int = 1) -> None:
+def register_spell(entity: Entity, spell_class: type, caster_level: int = 1) -> None:
     """Register a spell template on an entity.
 
     Args:
@@ -367,7 +367,7 @@ def register_spell(entity: 'Entity', spell_class: type, caster_level: int = 1) -
     entity.register_action(spell)
 
 
-def register_spells_by_name(entity: 'Entity', spell_names: list, caster_level: int = 1) -> None:
+def register_spells_by_name(entity: Entity, spell_names: list, caster_level: int = 1) -> None:
     """Register multiple spells by name from ALL_SPELLS dict.
 
     Args:
@@ -389,7 +389,7 @@ def register_spells_by_name(entity: 'Entity', spell_names: list, caster_level: i
 # Drop Item (API-only, not registered as template)
 # =============================================================================
 
-def execute_drop(entity: 'Entity', item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[Event]:
+def execute_drop(entity: Entity, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[Event]:
     """Drop an item from entity's inventory onto the ground.
 
     Creates a bound Drop action for the specific item and executes it.
@@ -419,7 +419,7 @@ def execute_drop(entity: 'Entity', item_uuid: UUID, position: Optional[Tuple[int
 # =============================================================================
 
 def execute_use_action(
-    entity: 'Entity',
+    entity: Entity,
     item_uuid: UUID,
     action_name: str,
     target: Optional[AvailableTarget] = None
@@ -476,8 +476,8 @@ def execute_use_action(
     result = instance.apply()
 
     # Consume charge on successful execution
-    if result and not getattr(result, 'canceled', False):
-        charge_cost = getattr(template, 'charge_cost', 1)
+    if result and not result.canceled:
+        charge_cost = template.charge_cost
         item.consume_charge(charge_cost)
 
     return result

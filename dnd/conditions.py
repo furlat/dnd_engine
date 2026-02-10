@@ -1,5 +1,5 @@
 from pydantic import Field
-from dnd.core.base_conditions import BaseCondition, DurationType
+from dnd.core.base_conditions import BaseCondition, DurationType, ConditionApplicationEvent
 
 from dnd.entity import Entity
 from typing import Dict, Any, Optional, List, Tuple, Type
@@ -13,7 +13,7 @@ from dnd.core.base_tiles import SensesType, LightLevel
 from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent, DeathEvent, SpatialChangeEvent
 from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
@@ -934,8 +934,7 @@ def death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """
 
     # Only process for our entity (DeathEvent has entity_uuid)
-    event_entity_uuid = getattr(event, 'entity_uuid', None)
-    if event_entity_uuid != source_entity_uuid:
+    if not isinstance(event, DeathEvent) or event.entity_uuid != source_entity_uuid:
         return None
 
     entity = Entity.get(source_entity_uuid)
@@ -1252,8 +1251,7 @@ def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[
     if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
         entity = Entity.get(source_entity_uuid)
         if entity and isinstance(entity, Entity) and "Hidden" in entity.active_conditions:
-            event_position = getattr(event, 'position', None)
-            if event_position and event_position == entity.position:
+            if isinstance(event, SpatialChangeEvent) and event.position == entity.position:
                 tile = get_map().get_tile(*entity.position)
                 if tile and tile.resolved_light_level == LightLevel.VERY_BRIGHT:
                     entity.remove_condition("Hidden", parent_event=event)
@@ -1270,8 +1268,7 @@ def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[
 
     # For CONDITION_APPLICATION: only break on Incapacitated
     if event.event_type == EventType.CONDITION_APPLICATION:
-        condition = getattr(event, 'condition', None)
-        if condition is None or getattr(condition, 'name', None) != "Incapacitated":
+        if not isinstance(event, ConditionApplicationEvent) or event.condition.name != "Incapacitated":
             return None
 
     # For BASE_ACTION: only break on revealing actions (not Dash, Dodge, etc.)

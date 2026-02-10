@@ -650,7 +650,7 @@ class HoldMonster(SpellAction):
 
         # Apply Concentrating ONCE (check if already concentrating on this spell)
         existing_conc = caster.active_conditions.get("Concentrating")
-        if not existing_conc or getattr(existing_conc, 'spell_name', '') != "Hold Monster":
+        if not existing_conc or not isinstance(existing_conc, Concentrating) or existing_conc.spell_name != "Hold Monster":
             concentration = Concentrating(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=caster.uuid,

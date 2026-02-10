@@ -258,7 +258,7 @@ class EquippableItem(BaseItem):
         then calls the subclass hook.
         """
         self.is_equipped = True
-        self.equipped_slot = slot.value if hasattr(slot, 'value') else str(slot)
+        self.equipped_slot = slot.value
         # Clear floor placement if item was on ground (direct equip from floor)
         if self.tile_uuid is not None:
             gridmap = get_map()
@@ -309,9 +309,9 @@ class UsableItem(BaseItem):
     max_charges: int = Field(default=-1, description="Maximum charges (-1 = unlimited)")
 
     # Stored action templates — default get_use_actions() returns these
-    use_action_templates: List["BaseAction"] = Field(default_factory=list)
+    use_action_templates: List[BaseAction] = Field(default_factory=list)
 
-    def get_use_actions(self, user_entity_uuid: UUID) -> List["BaseAction"]:
+    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return action templates this item provides.
 
         Default: returns stored templates with source_entity_uuid and

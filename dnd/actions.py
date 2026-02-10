@@ -555,7 +555,7 @@ class AttackEvent(ActionEvent):
                 # Determine advantage status and which d20 was used
                 adv_status = getattr(self.dice_roll, 'advantage_status', None)
                 if adv_status:
-                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    adv_value = adv_status.value.lower()
                     attack_roll.advantage_status = adv_value
                     if len(results) >= 2:
                         if adv_value == "advantage":
@@ -577,7 +577,7 @@ class AttackEvent(ActionEvent):
 
         # Build attack breakdown from ModifiableValue
         attack_breakdown: List[ModifierBreakdown] = []
-        if self.attack_bonus and hasattr(self.attack_bonus, 'get_breakdown'):
+        if self.attack_bonus:
             for mod in self.attack_bonus.get_breakdown():
                 attack_breakdown.append(ModifierBreakdown(
                     name=mod.get('name', 'Unknown'),
@@ -594,7 +594,7 @@ class AttackEvent(ActionEvent):
 
         # Build AC breakdown
         ac_breakdown: List[ModifierBreakdown] = []
-        if self.ac and hasattr(self.ac, 'get_breakdown'):
+        if self.ac:
             for mod in self.ac.get_breakdown():
                 ac_breakdown.append(ModifierBreakdown(
                     name=mod.get('name', 'Unknown'),
@@ -607,7 +607,7 @@ class AttackEvent(ActionEvent):
         is_hit = False
         is_crit = False
         if self.attack_outcome:
-            outcome_value = self.attack_outcome.value if hasattr(self.attack_outcome, 'value') else str(self.attack_outcome)
+            outcome_value = self.attack_outcome.value
             outcome = outcome_value.lower()
             is_hit = outcome in ("hit", "crit")
             is_crit = outcome == "crit"
@@ -619,11 +619,11 @@ class AttackEvent(ActionEvent):
         if self.damage_rolls and self.damages:
             for i, dr in enumerate(self.damage_rolls):
                 damage = self.damages[i] if i < len(self.damages) else None
-                damage_type = damage.damage_type.value if damage and hasattr(damage.damage_type, 'value') else "unknown"
+                damage_type = damage.damage_type.value if damage else "unknown"
 
                 # Get dice results
                 dice_results = []
-                if hasattr(dr, 'results'):
+                if dr.results is not None:
                     if isinstance(dr.results, list):
                         dice_results = list(dr.results)
                     elif isinstance(dr.results, int):
@@ -631,7 +631,7 @@ class AttackEvent(ActionEvent):
 
                 # Get damage bonus breakdown
                 damage_bonus_breakdown: List[ModifierBreakdown] = []
-                if damage and damage.damage_bonus and hasattr(damage.damage_bonus, 'get_breakdown'):
+                if damage and damage.damage_bonus:
                     for mod in damage.damage_bonus.get_breakdown():
                         damage_bonus_breakdown.append(ModifierBreakdown(
                             name=mod.get('name', 'Unknown'),
@@ -647,7 +647,7 @@ class AttackEvent(ActionEvent):
                 damage_roll_displays.append(DamageRollDisplay(
                     dice_str=dice_str,
                     dice_results=dice_results,
-                    bonus=dr.bonus if hasattr(dr, 'bonus') else 0,
+                    bonus=dr.bonus,
                     total=dr.total,
                     damage_type=damage_type,
                     bonus_breakdown=damage_bonus_breakdown
@@ -1032,7 +1032,7 @@ class Attack(BaseAction):
         weapon_name = None
         if source_entity:
             weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
-            weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+            weapon_name = weapon.name if weapon else "Unarmed"
 
         return AttackEvent(
             name=f"{self.name}",
@@ -2000,12 +2000,12 @@ class Shove(BaseAction):
     ])
 
     @staticmethod
-    def get_max_shove_weight(entity: 'Entity') -> int:
+    def get_max_shove_weight(entity: Entity) -> int:
         """Calculate max weight entity can shove (STR × 12)."""
         return entity.ability_scores.strength.ability_score.score * 12
 
     @staticmethod
-    def get_push_distance(entity: 'Entity') -> int:
+    def get_push_distance(entity: Entity) -> int:
         """Calculate push distance based on STR.
 
         Base: 5ft
@@ -2458,7 +2458,7 @@ class SpellEvent(ActionEvent):
                 attack_roll.all_d20_rolls = list(results)
                 adv_status = getattr(self.dice_roll, 'advantage_status', None)
                 if adv_status:
-                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    adv_value = adv_status.value.lower()
                     attack_roll.advantage_status = adv_value
                     if len(results) >= 2:
                         if adv_value == "advantage":
@@ -2479,7 +2479,7 @@ class SpellEvent(ActionEvent):
 
         # Build attack breakdown from ModifiableValue
         attack_breakdown: List[ModifierBreakdown] = []
-        if self.attack_bonus and hasattr(self.attack_bonus, 'get_breakdown'):
+        if self.attack_bonus:
             for mod in self.attack_bonus.get_breakdown():
                 attack_breakdown.append(ModifierBreakdown(
                     name=mod.get('name', 'Unknown'),
@@ -2496,7 +2496,7 @@ class SpellEvent(ActionEvent):
 
         # Build AC breakdown
         ac_breakdown: List[ModifierBreakdown] = []
-        if self.ac and hasattr(self.ac, 'get_breakdown'):
+        if self.ac:
             for mod in self.ac.get_breakdown():
                 ac_breakdown.append(ModifierBreakdown(
                     name=mod.get('name', 'Unknown'),
@@ -2509,7 +2509,7 @@ class SpellEvent(ActionEvent):
         is_hit = False
         is_crit = False
         if self.attack_outcome:
-            outcome_value = self.attack_outcome.value if hasattr(self.attack_outcome, 'value') else str(self.attack_outcome)
+            outcome_value = self.attack_outcome.value
             outcome = outcome_value.lower()
             is_hit = outcome in ("hit", "crit")
             is_crit = outcome == "crit"
@@ -2520,15 +2520,15 @@ class SpellEvent(ActionEvent):
         if self.damage_rolls and self.damages:
             for i, dr in enumerate(self.damage_rolls):
                 damage = self.damages[i] if i < len(self.damages) else None
-                damage_type = damage.damage_type.value if damage and hasattr(damage.damage_type, 'value') else "unknown"
+                damage_type = damage.damage_type.value if damage else "unknown"
                 dice_results = []
-                if hasattr(dr, 'results'):
+                if dr.results is not None:
                     if isinstance(dr.results, list):
                         dice_results = list(dr.results)
                     elif isinstance(dr.results, int):
                         dice_results = [dr.results]
                 damage_bonus_breakdown: List[ModifierBreakdown] = []
-                if damage and damage.damage_bonus and hasattr(damage.damage_bonus, 'get_breakdown'):
+                if damage and damage.damage_bonus:
                     for mod in damage.damage_bonus.get_breakdown():
                         damage_bonus_breakdown.append(ModifierBreakdown(
                             name=mod.get('name', 'Unknown'),
@@ -2541,7 +2541,7 @@ class SpellEvent(ActionEvent):
                 damage_roll_displays.append(DamageRollDisplay(
                     dice_str=dice_str,
                     dice_results=dice_results,
-                    bonus=dr.bonus if hasattr(dr, 'bonus') else 0,
+                    bonus=dr.bonus,
                     total=dr.total,
                     damage_type=damage_type,
                     bonus_breakdown=damage_bonus_breakdown
@@ -2697,7 +2697,7 @@ class SpellAction(BaseAction):
         """Get levels above base spell level (for upcast scaling)."""
         return max(0, self.cast_at_level - self.spell_level)
 
-    def generate_variants(self, entity: 'Entity') -> List['SpellAction']:
+    def generate_variants(self, entity: Entity) -> List['SpellAction']:
         """Generate spell variants for available spell slots.
 
         For cantrips: returns a single variant with cast_at_level=0
