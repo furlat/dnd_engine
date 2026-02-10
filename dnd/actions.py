@@ -374,9 +374,6 @@ class Move(BaseAction):
         total_path_length = len(path)
         actual_end_position = source_entity.position  # Track where we actually end up
 
-        # Set is_moving flag on senses so SpatialSensesCallback does visibility-only updates per step
-        source_entity.senses.is_moving = True
-
         try:
             for i in range(1, total_path_length):
                 from_pos = path[i - 1]
@@ -437,11 +434,11 @@ class Move(BaseAction):
                 source_entity.action_economy.consume("movement", step_cost_feet)
 
         finally:
-            # ALWAYS clear flag and do full senses update, regardless of how loop exits:
+            # ALWAYS do full senses update at movement end, regardless of how loop exits:
             # - Normal completion
             # - break (step canceled, path invalid, not enough movement, death)
             # - Exception
-            source_entity.senses.is_moving = False
+            # This clears _paths_dirty and gives fresh Dijkstra for subsequent actions.
             source_entity.update_entity_senses(max_distance=20)
 
         # Determine final result

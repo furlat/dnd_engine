@@ -6,7 +6,7 @@ Tests for spike zone bug fixes:
 2. Paths updated after move (Bug #2)
 3. Spike damage in combat log (Bug #3)
 4. Death during movement stops movement (Bug #4)
-5. is_moving flag cleared on early exit
+5. _paths_dirty flag cleared on early exit
 """
 
 from uuid import uuid4
@@ -103,11 +103,11 @@ def test_paths_updated_after_move():
         else:
             # Entity might be out of movement
             print("  INFO: No more movement available (expected after long move)")
-            # Check if is_moving flag is cleared
-            if not skeleton.senses.is_moving:
-                print("  PASS: is_moving flag is cleared")
+            # Check if _paths_dirty flag is cleared
+            if not skeleton.senses._paths_dirty:
+                print("  PASS: _paths_dirty flag is cleared")
             else:
-                print("  FAIL: is_moving should be False")
+                print("  FAIL: _paths_dirty should be False")
     else:
         print("  SKIP: Target (3,5) not reachable")
 
@@ -156,18 +156,18 @@ def test_death_stops_movement():
             print(f"  Entity survived with {final_hp} HP")
             print("  INFO: RNG may have rolled low damage")
 
-        # CRITICAL: is_moving flag should be cleared even after death
-        if not skeleton.senses.is_moving:
-            print("  PASS: is_moving flag cleared after death")
+        # CRITICAL: _paths_dirty flag should be cleared even after death
+        if not skeleton.senses._paths_dirty:
+            print("  PASS: _paths_dirty flag cleared after death")
         else:
-            print("  FAIL: is_moving should be False after movement ends")
+            print("  FAIL: _paths_dirty should be False after movement ends")
     else:
         print("  SKIP: Target not reachable")
 
 
-def test_is_moving_cleared_on_early_exit():
-    """is_moving flag must be cleared even if movement ends early."""
-    print("\n=== Test: is_moving Flag Cleared ===")
+def test_paths_dirty_cleared_on_early_exit():
+    """_paths_dirty flag must be cleared even if movement ends early."""
+    print("\n=== Test: _paths_dirty Flag Cleared ===")
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 10)
@@ -175,8 +175,8 @@ def test_is_moving_cleared_on_early_exit():
     skeleton = create_skeleton(name='Test', position=(0, 5))
     Entity.update_all_entities_senses()
 
-    print(f"  Initial is_moving: {skeleton.senses.is_moving}")
-    assert not skeleton.senses.is_moving, "Should start with is_moving=False"
+    print(f"  Initial _paths_dirty: {skeleton.senses._paths_dirty}")
+    assert not skeleton.senses._paths_dirty, "Should start with _paths_dirty=False"
 
     # Move normally
     actions = get_available_actions(skeleton)
@@ -186,12 +186,12 @@ def test_is_moving_cleared_on_early_exit():
 
     if target:
         execute_action(skeleton, "Move", target)
-        print(f"  After move, is_moving: {skeleton.senses.is_moving}")
+        print(f"  After move, _paths_dirty: {skeleton.senses._paths_dirty}")
 
-        if not skeleton.senses.is_moving:
-            print("  PASS: is_moving cleared after normal move")
+        if not skeleton.senses._paths_dirty:
+            print("  PASS: _paths_dirty cleared after normal move")
         else:
-            print("  FAIL: is_moving should be False after move")
+            print("  FAIL: _paths_dirty should be False after move")
     else:
         print("  SKIP: Target not reachable")
 
@@ -300,7 +300,7 @@ if __name__ == "__main__":
     print("SPIKE ZONE BUG TESTS")
     print("=" * 60)
 
-    test_is_moving_cleared_on_early_exit()
+    test_paths_dirty_cleared_on_early_exit()
     test_paths_updated_after_move()
     test_damage_per_step_through_zone()
     test_death_stops_movement()

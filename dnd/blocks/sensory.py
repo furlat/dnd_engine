@@ -1,14 +1,14 @@
 from typing import Dict, Optional, List, Self, Tuple, Set, DefaultDict, Callable
 from uuid import UUID
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 import math
 from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import Event, EventType, EventPhase, SpatialChangeType
-from dnd.core.base_tiles import SensesType, SenseMode
+from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint
+from dnd.core.base_tiles import SensesType, SenseMode, LightLevel, Tile
 
 
 class Senses(BaseBlock):
@@ -20,7 +20,7 @@ class Senses(BaseBlock):
     paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=lambda: defaultdict(list))
     sense_modes: List[SenseMode] = Field(default_factory=list, description="Special sense modes (Darkvision, Blindsight, etc.) with ranges")
     seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
-    is_moving: bool = Field(default=False, description="True while entity is actively moving (for senses callback optimization)")
+    _paths_dirty: bool = PrivateAttr(default=False)
 
 
     def has_sense(self, sense_type: SensesType) -> bool:
@@ -130,8 +130,9 @@ class Senses(BaseBlock):
 
         Uses closure to access the senses instance without importing Entity.
         The callback fires on SPATIAL events and triggers appropriate updates:
-        - During movement (is_moving=True): visibility-only update
-        - Otherwise: full senses update (visibility + paths)
+        - Self-movement: visibility-only update per step + mark paths dirty
+        - Other changes: apply incremental hint (no Dijkstra)
+        - Dijkstra runs only at turn start and movement end (explicit calls)
 
         This uses the passive callback system (EventQueue._on_event_callbacks)
         instead of EventHandlers because spatial events fire at COMPLETION phase
@@ -140,9 +141,10 @@ class Senses(BaseBlock):
         Args:
             owner_uuid: UUID of the entity that owns this Senses block
             update_senses_func: Optional callable to trigger full senses update
-                (visibility + paths). Used when not moving.
+                (visibility + paths). Not called from callbacks — only stored
+                for potential explicit use.
             update_visibility_func: Optional callable to trigger visibility-only
-                update. Used during movement for efficiency.
+                update (FOV + entity filter, no Dijkstra).
 
         Returns:
             SpatialSensesCallback that should be registered with EventQueue
@@ -157,13 +159,13 @@ class SpatialSensesCallback:
 
     This is registered with EventQueue.add_on_event_callback() and fires
     for ALL events. It filters to events that affect senses and triggers
-    appropriate updates:
-    - Entity movement: recompute paths (entities block movement)
-    - Tile changes: recompute FOV + paths (tiles block vision and movement)
-    - Entity death: recompute paths (dead bodies no longer block movement)
+    targeted incremental updates using SensesUpdateHint carried by each event.
 
-    When the owner entity is moving (is_moving=True), only visibility is updated
-    per step for efficiency. Full path recomputation happens at movement end.
+    Key design principle: Callbacks NEVER run Dijkstra (update_senses_func).
+    All paths go through update_visibility_func (FOV only, no paths) plus
+    _paths_dirty flag. Full Dijkstra only happens at:
+    - Turn start (Encounter.start_turn → update_entity_senses)
+    - Movement end (Move._apply finally → update_entity_senses)
 
     Using callbacks instead of EventHandlers because:
     - Spatial events fire at COMPLETION phase
@@ -178,6 +180,7 @@ class SpatialSensesCallback:
         EventType.SPATIAL_TILE_CHANGED,
         EventType.SPATIAL_OBJECT_PLACED,
         EventType.SPATIAL_OBJECT_REMOVED,
+        EventType.SPATIAL_OBJECT_CHANGED,
         EventType.SPATIAL_PERCEIVABILITY_CHANGED,
         EventType.SPATIAL_LIGHT_CHANGED,
     )
@@ -195,19 +198,21 @@ class SpatialSensesCallback:
         self.update_visibility_func = update_visibility_func
 
     def __call__(self, event: "Event") -> None:
-        """Process any event, filtering to events that affect our senses."""
+        """Process any event, filtering to events that affect our senses.
+
+        NEVER calls update_senses_func (no Dijkstra). All paths through
+        the callback use only update_visibility_func + _paths_dirty.
+        """
         # Handle DEATH events - dead entity no longer blocks paths
         if event.event_type == EventType.DEATH:
             self._handle_death_event(event)
             return
 
-        # Handle spatial events
+        # Handle spatial events only
         if event.event_type not in self.SPATIAL_EVENTS:
             return
 
-        # Senses callback fires on ALL phases, but we only need to update senses
-        # once per event. For most events, COMPLETION is the right phase.
-        # Exception: self-movement events are handled separately below.
+        # Only process at COMPLETION phase (one update per event lifecycle)
         phase = getattr(event, 'phase', None)
         if phase != EventPhase.COMPLETION:
             return
@@ -217,50 +222,101 @@ class SpatialSensesCallback:
         if position is None:
             return
 
-        # Skip self-perceivability events (our own hiding doesn't affect our own senses)
         entity_uuid = getattr(event, 'entity_uuid', None)
+
+        # Skip self-perceivability events (our own hiding doesn't affect our own senses)
         if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
             return
 
-        # Handle self-movement events (we moved to a new cell)
-        if entity_uuid == self.owner_uuid:
-            # Check is_moving flag on senses (set by Move action)
-            if self.senses.is_moving:
-                # During movement: visibility-only update per step
-                # Paths are recomputed once at end of Move._apply()
-                if self.update_visibility_func:
-                    self.update_visibility_func()
-            else:
-                # Not moving (e.g., teleport, forced movement): full update
-                if self.update_senses_func:
-                    self.update_senses_func()
+        # Self-movement events: visibility-only + paths dirty
+        # Uniform for walking, teleport, and forced movement (no is_moving flag)
+        if entity_uuid == self.owner_uuid and event.event_type in (
+            EventType.SPATIAL_ENTITY_ENTERED, EventType.SPATIAL_ENTITY_LEFT
+        ):
+            if self.update_visibility_func:
+                self.update_visibility_func()
+            self.senses._paths_dirty = True
             return
 
-        # Check if owner is subscribed to the affected cell
-        grid = get_map()
-        subscribers = grid.get_subscribers_at(position)
-        if self.owner_uuid not in subscribers:
-            return  # Not watching this cell, ignore
-
-        # Trigger senses update (other entity moved in our FOV)
-        if self.update_senses_func is not None:
-            # Full senses update - recalculates FOV, paths, and entities
-            # This is the proper behavior for real-time updates
-            self.update_senses_func()
+        # For all other events: use hint if available
+        hint: Optional[SensesUpdateHint] = getattr(event, 'senses_hint', None)
+        if hint is not None:
+            self._apply_hint(hint, event)
         else:
-            # Fallback: incremental entity dict update only (legacy behavior)
-            # This only tracks "who is where" without recalculating paths
-            change_type = getattr(event, 'change_type', None)
-            if change_type == SpatialChangeType.ENTITY_ENTERED:
-                if entity_uuid is not None:
-                    self.senses.entities[entity_uuid] = position
-            elif change_type == SpatialChangeType.ENTITY_LEFT:
-                if entity_uuid is not None:
-                    self.senses.entities.pop(entity_uuid, None)
+            # Fallback for events without hints: check subscription, visibility-only + paths dirty
+            grid = get_map()
+            subscribers = grid.get_subscribers_at(position)
+            if self.owner_uuid not in subscribers:
+                return
+            if self.update_visibility_func:
+                self.update_visibility_func()
+            self.senses._paths_dirty = True
+
+    def _apply_hint(self, hint: SensesUpdateHint, _event: "Event") -> None:
+        """Apply targeted update based on event hint.
+
+        NEVER calls update_senses_func — no Dijkstra.
+        All path changes set _paths_dirty for deferred recomputation at turn start.
+        """
+        grid = get_map()
+
+        # FOV change (magical darkness, wall, door vision blocking) → recompute FOV
+        if hint.requires_fov:
+            if self.update_visibility_func:
+                self.update_visibility_func()
+            if hint.requires_paths:
+                self.senses._paths_dirty = True
+            return  # FOV recompute subsumes entity re-filtering
+
+        # Light changes: check subscription overlap, re-filter at affected positions
+        if hint.light_changed_positions:
+            my_subs = grid.get_entity_subscriptions(self.owner_uuid)
+            overlap = hint.light_changed_positions & my_subs
+            if not overlap:
+                return  # No tiles in our FOV changed
+            for pos in overlap:
+                self._refilter_entities_at(pos)
+            return  # Light changes don't affect paths
+
+        # Entity entered: add to visible dict if perceivable + lit
+        if hint.entity_entered:
+            uuid, pos = hint.entity_entered
+            if uuid != self.owner_uuid:
+                subs = grid.get_entity_subscriptions(self.owner_uuid)
+                if pos in subs:
+                    self._try_add_visible_entity(uuid, pos)
+
+        # Entity left: remove from visible dict
+        if hint.entity_left:
+            uuid, _ = hint.entity_left
+            self.senses.entities.pop(uuid, None)
+
+        # Entity died: remove from visible + mark paths dirty
+        if hint.entity_died:
+            uuid, _ = hint.entity_died
+            self.senses.entities.pop(uuid, None)
+
+        # Perceivability changed: re-check one entity
+        if hint.perceivability_entity:
+            if hint.perceivability_entity != self.owner_uuid:
+                self._recheck_entity_perceivability(hint.perceivability_entity)
+
+        # Object updates
+        if hint.object_placed:
+            uuid, pos = hint.object_placed
+            subs = grid.get_entity_subscriptions(self.owner_uuid)
+            if pos in subs:
+                self._try_add_visible_object(uuid, pos)
+        if hint.object_removed:
+            uuid, _ = hint.object_removed
+            self.senses.objects.pop(uuid, None)
+
+        # Mark paths dirty (deferred to turn start)
+        if hint.requires_paths:
+            self.senses._paths_dirty = True
 
     def _handle_death_event(self, event: "Event") -> None:
-        """Handle entity death - dead entities no longer block paths."""
-        # Get the dead entity's UUID
+        """Handle entity death — remove from visible + mark paths dirty."""
         dead_uuid = getattr(event, 'entity_uuid', None)
         if dead_uuid is None:
             return
@@ -269,11 +325,67 @@ class SpatialSensesCallback:
         if dead_uuid == self.owner_uuid:
             return
 
-        # Check if the dead entity was in our visible entities
-        # If so, we need to recalculate paths (dead body no longer blocks)
+        # Remove dead entity from visible entities and mark paths dirty
         if dead_uuid in self.senses.entities:
-            if self.update_senses_func is not None:
-                self.update_senses_func()
-            else:
-                # Fallback: just remove from entities dict
-                self.senses.entities.pop(dead_uuid, None)
+            self.senses.entities.pop(dead_uuid, None)
+            self.senses._paths_dirty = True
+
+    def _try_add_visible_entity(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
+        """Check light + perceivability, add to senses.entities if visible."""
+        grid = get_map()
+        tile = grid.get_tile(*position)
+        if tile:
+            effective_light = tile.get_effective_light_for(self.owner_uuid, self.senses.position)
+            if effective_light.value <= LightLevel.DARKNESS.value:
+                return  # Too dark to see
+        block = BaseBlock.get(entity_uuid)
+        if block and block.is_perceivable_by(self.owner_uuid):
+            self.senses.entities[entity_uuid] = position
+
+    def _refilter_entities_at(self, position: Tuple[int, int]) -> None:
+        """Re-check all entities at position. Add/remove from senses.entities."""
+        grid = get_map()
+        # Remove entities currently tracked at this position
+        to_remove = [uuid for uuid, pos in self.senses.entities.items() if pos == position]
+        for uuid in to_remove:
+            del self.senses.entities[uuid]
+        # Re-add entities that pass light + perceivability check
+        for ent_uuid in grid.get_entities_at(position):
+            if ent_uuid != self.owner_uuid:
+                self._try_add_visible_entity(ent_uuid, position)
+
+    def _recheck_entity_perceivability(self, entity_uuid: UUID) -> None:
+        """Re-check if a specific entity should be in visible set."""
+        block = BaseBlock.get(entity_uuid)
+        if block is None:
+            self.senses.entities.pop(entity_uuid, None)
+            return
+        position = block.position
+        if position is None:
+            self.senses.entities.pop(entity_uuid, None)
+            return
+        # Check subscription
+        grid = get_map()
+        if position not in grid.get_entity_subscriptions(self.owner_uuid):
+            self.senses.entities.pop(entity_uuid, None)
+            return
+        # Check light + perceivability
+        if block.is_perceivable_by(self.owner_uuid):
+            tile = grid.get_tile(*position)
+            if tile:
+                eff = tile.get_effective_light_for(self.owner_uuid, self.senses.position)
+                if eff.value > LightLevel.DARKNESS.value:
+                    self.senses.entities[entity_uuid] = position
+                    return
+        # Failed checks → remove
+        self.senses.entities.pop(entity_uuid, None)
+
+    def _try_add_visible_object(self, object_uuid: UUID, position: Tuple[int, int]) -> None:
+        """Add object to senses.objects if in visible area."""
+        grid = get_map()
+        tile = grid.get_tile(*position)
+        if tile:
+            effective_light = tile.get_effective_light_for(self.owner_uuid, self.senses.position)
+            if effective_light.value <= LightLevel.DARKNESS.value:
+                return  # Too dark to see
+        self.senses.objects[object_uuid] = position

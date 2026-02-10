@@ -20,7 +20,7 @@ __all__ = [
     "SkillCheckD20RollResultEvent",
     "DamageRollResultEvent",
     # Spatial events
-    "SpatialChangeEvent", "ForcedMovementEvent",
+    "SensesUpdateHint", "SpatialChangeEvent", "ForcedMovementEvent",
     # Combat events
     "DamageRolledEvent", "TakeDamageEvent",  # DamageRolledEvent is DEPRECATED
     # Combat data
@@ -171,6 +171,7 @@ class EventType(str, Enum):
     SPATIAL_OBJECT_REMOVED = "spatial_object_removed"  # Object removed from grid
     SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"  # Entity's perceivability changed (hidden/invisible)
     SPATIAL_LIGHT_CHANGED = "spatial_light_changed"  # Tile's resolved light level changed
+    SPATIAL_OBJECT_CHANGED = "spatial_object_changed"  # Object blocking state changed (door open/close)
 
     # Encounter/Turn events
     ENCOUNTER_START = "encounter_start"
@@ -193,6 +194,7 @@ class SpatialChangeType(str, Enum):
     OBJECT_REMOVED = "object_removed"
     PERCEIVABILITY_CHANGED = "perceivability_changed"
     LIGHT_CHANGED = "light_changed"
+    OBJECT_CHANGED = "object_changed"
 
 
 class EventPhase(str, Enum):
@@ -1504,6 +1506,38 @@ class SkillCheckEvent(D20Event):
         )
 
 
+class SensesUpdateHint(BaseModel):
+    """Carried by spatial events — tells observers what to update incrementally.
+
+    Encodes which of the three independent senses layers changed:
+    - FOV (geometric visibility): walls, magical darkness, vision-blocking objects
+    - Paths (movement routes): entities moving, walkability changes, movement-blocking objects
+    - Entity filter (who's seen): light levels, perceivability, entity presence
+    """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    # Which senses layers need recomputing
+    requires_fov: bool = False       # Vision geometry changed (magical darkness, wall, door vision blocking)
+    requires_paths: bool = False     # Path topology changed (entity moved, walkability changed, door movement blocking)
+
+    # Entity dict updates (O(1) per entry)
+    entity_entered: Optional[Tuple[UUID, Tuple[int, int]]] = None
+    entity_left: Optional[Tuple[UUID, Tuple[int, int]]] = None
+
+    # Light-based re-filtering at specific positions
+    light_changed_positions: Optional[Set[Tuple[int, int]]] = None
+
+    # Perceivability re-check for one entity
+    perceivability_entity: Optional[UUID] = None
+
+    # Object dict updates
+    object_placed: Optional[Tuple[UUID, Tuple[int, int]]] = None
+    object_removed: Optional[Tuple[UUID, Tuple[int, int]]] = None
+
+    # Death: entity stopped blocking
+    entity_died: Optional[Tuple[UUID, Tuple[int, int]]] = None
+
+
 class SpatialChangeEvent(Event):
     """
     Event fired when something changes at a grid position.
@@ -1525,6 +1559,7 @@ class SpatialChangeEvent(Event):
     old_position: Optional[Tuple[int, int]] = Field(default=None, description="Previous position (for movement)")
     tile_walkable: Optional[bool] = Field(default=None, description="New walkable state (for tile changes)")
     tile_visible: Optional[bool] = Field(default=None, description="New visible state (for tile changes)")
+    senses_hint: Optional[SensesUpdateHint] = Field(default=None, description="Hint for incremental senses updates")
 
     @classmethod
     def entity_entered(cls, position: Tuple[int, int], entity_uuid: UUID,
@@ -1546,6 +1581,10 @@ class SpatialChangeEvent(Event):
             source_entity_uuid: Source entity for event (defaults to entity_uuid)
             parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
         """
+        hint = SensesUpdateHint(
+            requires_paths=True,
+            entity_entered=(entity_uuid, position),
+        )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
             event_type=EventType.SPATIAL_ENTITY_ENTERED,
@@ -1555,7 +1594,8 @@ class SpatialChangeEvent(Event):
             old_position=old_position,
             phase=EventPhase.DECLARATION,
             use_register=False,  # GridMap controls registration via _fire_spatial_event
-            parent_event=parent_event
+            parent_event=parent_event,
+            senses_hint=hint,
         )
 
     @classmethod
@@ -1577,6 +1617,10 @@ class SpatialChangeEvent(Event):
             source_entity_uuid: Source entity for event (defaults to entity_uuid)
             parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
         """
+        hint = SensesUpdateHint(
+            requires_paths=True,
+            entity_left=(entity_uuid, position),
+        )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
             event_type=EventType.SPATIAL_ENTITY_LEFT,
@@ -1586,16 +1630,25 @@ class SpatialChangeEvent(Event):
             old_position=new_position,  # Store new position in old_position field for reference
             phase=EventPhase.DECLARATION,
             use_register=False,  # GridMap controls registration via _fire_spatial_event
-            parent_event=parent_event
+            parent_event=parent_event,
+            senses_hint=hint,
         )
 
     @classmethod
     def tile_changed(cls, position: Tuple[int, int], walkable: bool, visible: bool,
-                     source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                     source_entity_uuid: Optional[UUID] = None,
+                     senses_hint: Optional['SensesUpdateHint'] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile property change.
 
         Event starts at DECLARATION phase to allow full lifecycle.
+        If no senses_hint is provided, one is auto-generated from walkable/visible flags
+        requiring FOV if visible changed and paths if walkable changed.
         """
+        if senses_hint is None:
+            senses_hint = SensesUpdateHint(
+                requires_fov=True,    # Tile change may affect vision
+                requires_paths=True,  # Tile change may affect walkability
+            )
         return cls(
             source_entity_uuid=source_entity_uuid or uuid4(),
             event_type=EventType.SPATIAL_TILE_CHANGED,
@@ -1604,14 +1657,22 @@ class SpatialChangeEvent(Event):
             tile_walkable=walkable,
             tile_visible=visible,
             phase=EventPhase.DECLARATION,
-            use_register=False  # GridMap controls registration via _fire_spatial_event
+            use_register=False,  # GridMap controls registration via _fire_spatial_event
+            senses_hint=senses_hint,
         )
 
     @classmethod
     def object_placed(cls, position: Tuple[int, int], object_uuid: UUID,
                       source_entity_uuid: Optional[UUID] = None,
-                      parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                      parent_event: Optional[UUID] = None,
+                      blocks_vision: bool = False,
+                      blocks_walking: bool = False) -> 'SpatialChangeEvent':
         """Create an event for an object being placed on the grid."""
+        hint = SensesUpdateHint(
+            requires_fov=blocks_vision,
+            requires_paths=blocks_walking,
+            object_placed=(object_uuid, position),
+        )
         return cls(
             source_entity_uuid=source_entity_uuid or uuid4(),
             event_type=EventType.SPATIAL_OBJECT_PLACED,
@@ -1620,14 +1681,22 @@ class SpatialChangeEvent(Event):
             object_uuid=object_uuid,
             phase=EventPhase.DECLARATION,
             use_register=False,
-            parent_event=parent_event
+            parent_event=parent_event,
+            senses_hint=hint,
         )
 
     @classmethod
     def object_removed(cls, position: Tuple[int, int], object_uuid: UUID,
                        source_entity_uuid: Optional[UUID] = None,
-                       parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                       parent_event: Optional[UUID] = None,
+                       blocks_vision: bool = False,
+                       blocks_walking: bool = False) -> 'SpatialChangeEvent':
         """Create an event for an object being removed from the grid."""
+        hint = SensesUpdateHint(
+            requires_fov=blocks_vision,
+            requires_paths=blocks_walking,
+            object_removed=(object_uuid, position),
+        )
         return cls(
             source_entity_uuid=source_entity_uuid or uuid4(),
             event_type=EventType.SPATIAL_OBJECT_REMOVED,
@@ -1636,7 +1705,8 @@ class SpatialChangeEvent(Event):
             object_uuid=object_uuid,
             phase=EventPhase.DECLARATION,
             use_register=False,
-            parent_event=parent_event
+            parent_event=parent_event,
+            senses_hint=hint,
         )
 
     @classmethod
@@ -1647,6 +1717,9 @@ class SpatialChangeEvent(Event):
         This is a lightweight event that only triggers senses re-evaluation
         on observers subscribed to this cell. Does NOT trigger SpatialHandlers (zone effects).
         """
+        hint = SensesUpdateHint(
+            perceivability_entity=entity_uuid,
+        )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
             event_type=EventType.SPATIAL_PERCEIVABILITY_CHANGED,
@@ -1655,16 +1728,22 @@ class SpatialChangeEvent(Event):
             entity_uuid=entity_uuid,
             phase=EventPhase.DECLARATION,
             use_register=False,
+            senses_hint=hint,
         )
 
     @classmethod
     def light_changed(cls, position: Tuple[int, int], tile_uuid: UUID,
-                      source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                      source_entity_uuid: Optional[UUID] = None,
+                      senses_hint: Optional['SensesUpdateHint'] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile's resolved light level changing.
 
         Triggers senses re-evaluation on observers subscribed to this cell.
         Does NOT trigger SpatialHandlers (zone effects).
         """
+        if senses_hint is None:
+            senses_hint = SensesUpdateHint(
+                light_changed_positions={position},
+            )
         return cls(
             source_entity_uuid=source_entity_uuid or tile_uuid,
             event_type=EventType.SPATIAL_LIGHT_CHANGED,
@@ -1673,6 +1752,32 @@ class SpatialChangeEvent(Event):
             entity_uuid=tile_uuid,  # Tile UUID stored in entity_uuid field
             phase=EventPhase.DECLARATION,
             use_register=False,
+            senses_hint=senses_hint,
+        )
+
+    @classmethod
+    def object_changed(cls, position: Tuple[int, int], object_uuid: UUID,
+                       blocks_vision_changed: bool = False,
+                       blocks_walking_changed: bool = False,
+                       source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for an object's blocking state changing (door open/close).
+
+        Fires when an object's blocks_movement or blocks_vision_field changes
+        while on the grid. Carries hint indicating which senses layers are affected.
+        """
+        hint = SensesUpdateHint(
+            requires_fov=blocks_vision_changed,
+            requires_paths=blocks_walking_changed,
+        )
+        return cls(
+            source_entity_uuid=source_entity_uuid or object_uuid,
+            event_type=EventType.SPATIAL_OBJECT_CHANGED,
+            change_type=SpatialChangeType.OBJECT_CHANGED,
+            position=position,
+            object_uuid=object_uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+            senses_hint=hint,
         )
 
 

@@ -13,7 +13,7 @@ from pydantic import Field
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
-from dnd.core.events import EquipmentSlot
+from dnd.core.events import EquipmentSlot, SpatialChangeEvent
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
 from dnd.core.base_actions import BaseAction
 
@@ -90,6 +90,29 @@ class BaseItem(BaseBlock):
     def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
         """Whether this item blocks line of sight through its grid position."""
         return self.blocks_vision_field
+
+    def _notify_blocking_changed(self, old_blocks_movement: bool, old_blocks_vision: bool) -> None:
+        """Fire SPATIAL_OBJECT_CHANGED if blocking state changed while on grid.
+
+        Called after modifying blocks_movement or blocks_vision_field on an item
+        that is placed on the grid. Fires an event with hint indicating which
+        senses layers are affected, replacing brute-force update_all_entities_senses().
+        """
+        if self.tile_uuid is None:
+            return  # Not on grid
+        grid = get_map()
+        position = grid.get_object_position(self.uuid)
+        if position is None:
+            return
+        vision_changed = self.blocks_vision_field != old_blocks_vision
+        walking_changed = self.blocks_movement != old_blocks_movement
+        if vision_changed or walking_changed:
+            event = SpatialChangeEvent.object_changed(
+                position, self.uuid,
+                blocks_vision_changed=vision_changed,
+                blocks_walking_changed=walking_changed,
+            )
+            grid._fire_spatial_event(event)
 
     # --- Location ---
 
