@@ -482,9 +482,9 @@ def protection_processor(
     # All checks passed - apply Protection!
 
     # Get the attack_bonus from the event
-    attack_bonus = getattr(event, 'attack_bonus', None)
-    if not attack_bonus:
+    if not isinstance(event, AttackEvent) or not event.attack_bonus:
         return None  # No attack_bonus to modify
+    attack_bonus = event.attack_bonus
 
     # Check if Protection disadvantage already exists (prevent multiple protectors stacking)
     for modifier in attack_bonus.self_static.advantage_modifiers:
@@ -1186,13 +1186,12 @@ def extra_attack_resource_processor(
         return None
 
     # Check if this attack cost an action (not OA reaction, not bonus action)
-    costs = getattr(event, 'costs', [])
-    if not costs:
+    if not isinstance(event, ActionEvent) or not event.costs:
         return None
 
     action_cost_attack = any(
         c.cost_type == "actions" and c.cost > 0
-        for c in costs
+        for c in event.costs
     )
     if not action_cost_attack:
         return None  # Skip OA (reaction) and bonus action attacks
@@ -1204,7 +1203,7 @@ def extra_attack_resource_processor(
     if not extra_attack_resource or not extra_attack_feature:
         return None  # No Extra Attack feature
 
-    num_extra = getattr(extra_attack_feature, 'extra_attacks', 1)
+    num_extra = extra_attack_feature.extra_attacks if isinstance(extra_attack_feature, ExtraAttackFeature) else 1
 
     # Check ExtraAttacksGranted to determine first vs subsequent Attack action
     # This marker is applied BY THIS PROCESSOR after granting extras

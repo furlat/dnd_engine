@@ -547,9 +547,7 @@ class EventHandler(BaseHandler):
         EventQueue.remove_event_handler(self)
         entity = BaseObject.get(self.source_entity_uuid)
 
-        if entity is not None and hasattr(entity, "event_handlers"):
-            # Use the Protocol to ensure type safety
-            if isinstance(entity, EntityWithEventHandlers):
+        if entity is not None and isinstance(entity, EntityWithEventHandlers):
                 entity.remove_event_handler_from_dicts(self)
 
         return True
@@ -1310,7 +1308,7 @@ class SavingThrowEvent(D20Event):
                 # Check for advantage/disadvantage
                 adv_status = getattr(self.dice_roll, 'advantage_status', None)
                 if adv_status:
-                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    adv_value = adv_status.value.lower()
                     roll.advantage_status = adv_value
                     if len(results) >= 2:
                         if adv_value == "advantage":
@@ -1326,7 +1324,7 @@ class SavingThrowEvent(D20Event):
 
         # Build bonus breakdown
         bonus_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue) and hasattr(self.bonus, 'get_breakdown'):
+        if self.bonus and isinstance(self.bonus, ModifiableValue):
             for mod in self.bonus.get_breakdown():
                 bonus_breakdown.append(ModifierBreakdown(
                     name=mod.get('name', 'Unknown'),
@@ -1422,7 +1420,7 @@ class SkillCheckEvent(D20Event):
                 # Check for advantage/disadvantage
                 adv_status = getattr(self.dice_roll, 'advantage_status', None)
                 if adv_status:
-                    adv_value = adv_status.value.lower() if hasattr(adv_status, 'value') else str(adv_status).lower()
+                    adv_value = adv_status.value.lower()
                     roll.advantage_status = adv_value
                     if len(results) >= 2:
                         if adv_value == "advantage":
@@ -1438,7 +1436,7 @@ class SkillCheckEvent(D20Event):
 
         # Build bonus breakdown
         bonus_breakdown: List[ModifierBreakdown] = []
-        if self.bonus and isinstance(self.bonus, ModifiableValue) and hasattr(self.bonus, 'get_breakdown'):
+        if self.bonus and isinstance(self.bonus, ModifiableValue):
             for mod in self.bonus.get_breakdown():
                 bonus_breakdown.append(ModifierBreakdown(
                     name=mod.get('name', 'Unknown'),
@@ -2213,7 +2211,7 @@ class TakeDamageEvent(Event):
         if self.damage_rolls:
             roll_strs = []
             for roll in self.damage_rolls:
-                if hasattr(roll, 'results') and roll.results:
+                if roll.results:
                     roll_strs.append(f"{roll.results}")
             if roll_strs:
                 detailed_text += f"\n  Rolls: {', '.join(roll_strs)}"

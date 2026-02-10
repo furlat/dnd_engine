@@ -10,7 +10,7 @@ from pydantic import Field
 
 from dnd.core.base_actions import TargetType, Cost
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType
+    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent
 )
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity
@@ -50,11 +50,10 @@ class SpikeGrowthZone(ZoneControlCondition):
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             # Get entity from the spatial event
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if not entity_uuid:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
                 return None
 
-            entity = Entity.get(entity_uuid)
+            entity = Entity.get(event.entity_uuid)
             if not entity:
                 return None
 

@@ -3,15 +3,15 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web
 """
 import random
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, BaseCost
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent
 from dnd.core.dice import AttackOutcome
-from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent
+from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent, SpatialChangeEvent
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.base_tiles import LightLevel
 from dnd.core.gridmap import get_map
@@ -293,17 +293,13 @@ class CallLightning(SpellAction):
                 return None
 
             # Check if this is the Concentrating condition for Call Lightning
-            if not hasattr(event, 'condition'):
+            if not isinstance(event, ConditionRemovalEvent):
                 return None
 
-            condition = getattr(event, 'condition', None)
-            if not condition:
+            if not isinstance(event.condition, Concentrating):
                 return None
 
-            if not isinstance(condition, Concentrating):
-                return None
-
-            if condition.spell_name != "Call Lightning":
+            if event.condition.spell_name != "Call Lightning":
                 return None
 
             # Remove the Call Lightning Strike action
@@ -498,7 +494,6 @@ class AcidSplash(SpellAction):
                 )
 
         # Call parent validation
-        from typing import cast as type_cast
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -704,11 +699,10 @@ class GreaseZone(ZoneControlCondition):
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
 
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if not entity_uuid:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
                 return None
 
-            entity = Entity.get(entity_uuid)
+            entity = Entity.get(event.entity_uuid)
             if not entity:
                 return None
 
@@ -1095,11 +1089,10 @@ class WebZone(ZoneControlCondition):
         dc = self.spell_dc
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if not entity_uuid:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
                 return None
 
-            entity = Entity.get(entity_uuid)
+            entity = Entity.get(event.entity_uuid)
             if not entity:
                 return None
 
@@ -1331,11 +1324,10 @@ class CloudkillZone(ZoneControlCondition):
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
 
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if not entity_uuid:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
                 return None
 
-            entity = Entity.get(entity_uuid)
+            entity = Entity.get(event.entity_uuid)
             if not entity:
                 return None
 
@@ -1759,11 +1751,10 @@ class SpiritGuardiansZone(ZoneControlCondition):
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
 
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if not entity_uuid:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
                 return None
 
-            entity = Entity.get(entity_uuid)
+            entity = Entity.get(event.entity_uuid)
             if not entity:
                 return None
 
@@ -1898,11 +1889,10 @@ class SpiritGuardiansZone(ZoneControlCondition):
         source_uuid = self.source_entity_uuid
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if not entity_uuid:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
                 return None
 
-            entity = Entity.get(entity_uuid)
+            entity = Entity.get(event.entity_uuid)
             if not entity:
                 return None
 
@@ -1929,8 +1919,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             # SPATIAL_ENTITY_ENTERED uses entity_uuid, not source_entity_uuid
-            entity_uuid = getattr(event, 'entity_uuid', None)
-            if entity_uuid != caster_uuid:
+            if not isinstance(event, SpatialChangeEvent) or event.entity_uuid != caster_uuid:
                 return None
 
             caster = Entity.get(caster_uuid)

@@ -1977,7 +1977,7 @@ class Entity(BaseBlock):
 
             # Build targets for THIS template
             # Use the template's valid_target_filter to compute per-action targets
-            action_filter = getattr(template, 'valid_target_filter', 'enemies')
+            action_filter = template.valid_target_filter
             if action_filter == "all" or action_filter == "self_or_allies":
                 # Action wants broader targeting — compute its own pool
                 template_targets: Dict[UUID, Tuple[int, int]] = {}
@@ -2025,9 +2025,9 @@ class Entity(BaseBlock):
                 # Check if template has weapon_slot (Attack actions)
                 weapon_slot_attr = getattr(template, 'weapon_slot', None)
                 if weapon_slot_attr is not None:
-                    weapon_slot_str = weapon_slot_attr.value if hasattr(weapon_slot_attr, 'value') else str(weapon_slot_attr)
+                    weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
                     weapon = self.equipment._get_weapon_by_slot(weapon_slot_attr)
-                    if weapon and hasattr(weapon, 'name'):
+                    if weapon:
                         weapon_name = weapon.name
                         display_name = weapon_name  # Use weapon name as display name
 

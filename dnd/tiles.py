@@ -14,12 +14,13 @@ for N tiles causes O(N) event processing overhead.
 """
 
 import random
+import warnings
 from typing import List, Set, Tuple
 from uuid import UUID, uuid4
 
 from dnd.core.base_tiles import Tile
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, EventQueue
+    Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, SpatialChangeEvent
 )
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity
@@ -61,11 +62,10 @@ def create_spike_zone(positions: Set[Tuple[int, int]]) -> Tuple[List[Tile], Even
 
     def damage_processor(event: Event, _: UUID) -> Event | None:
         """Deal 2d4 piercing damage when entity enters any spike tile."""
-        entity_uuid = getattr(event, 'entity_uuid', None)
-        if not entity_uuid:
+        if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
             return None
 
-        entity = Entity.get(entity_uuid)
+        entity = Entity.get(event.entity_uuid)
         if not entity:
             return None
 
@@ -73,8 +73,7 @@ def create_spike_zone(positions: Set[Tuple[int, int]]) -> Tuple[List[Tile], Even
         damage = sum(random.randint(1, 4) for _ in range(2))
 
         # Pass the spatial event's parent (StepMovement) so TakeDamage links to it
-        parent = getattr(event, 'parent_event', None)
-        entity.receive_damage(damage, DamageType.PIERCING, zone_uuid, parent_event=parent)
+        entity.receive_damage(damage, DamageType.PIERCING, zone_uuid, parent_event=event.parent_event)
 
         return None
 
@@ -119,7 +118,6 @@ def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
     Returns:
         Configured Tile with entry damage handler registered
     """
-    import warnings
     warnings.warn(
         "spikes_terrain_factory() creates one handler per tile. "
         "Use create_spike_zone() for better performance with multiple tiles.",
@@ -138,11 +136,10 @@ def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
     # Create the entry damage handler
     def damage_processor(event: Event, _: UUID) -> Event | None:
         """Deal 2d4 piercing damage when entity enters."""
-        entity_uuid = getattr(event, 'entity_uuid', None)
-        if not entity_uuid:
+        if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
             return None
 
-        entity = Entity.get(entity_uuid)
+        entity = Entity.get(event.entity_uuid)
         if not entity:
             return None
 
@@ -150,8 +147,7 @@ def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
         damage = sum(random.randint(1, 4) for _ in range(2))
 
         # Pass the spatial event's parent (StepMovement) so TakeDamage links to it
-        parent = getattr(event, 'parent_event', None)
-        entity.receive_damage(damage, DamageType.PIERCING, tile.uuid, parent_event=parent)
+        entity.receive_damage(damage, DamageType.PIERCING, tile.uuid, parent_event=event.parent_event)
 
         return None
 

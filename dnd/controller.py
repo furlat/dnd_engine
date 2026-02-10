@@ -88,9 +88,9 @@ class Controller(BaseObject):
 
     def get_next_action(
         self,
-        entity: 'Entity',
+        entity: Entity,
         context: TurnContext
-    ) -> Optional['BaseAction']:
+    ) -> Optional[BaseAction]:
         """
         Get the next action for the entity to take.
 
@@ -108,23 +108,23 @@ class Controller(BaseObject):
         """
         return None
 
-    def on_turn_start(self, entity: 'Entity', context: TurnContext) -> None:
+    def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
         """Called when the entity's turn starts."""
         pass
 
-    def on_turn_end(self, entity: 'Entity', context: TurnContext) -> None:
+    def on_turn_end(self, entity: Entity, context: TurnContext) -> None:
         """Called when the entity's turn ends."""
         pass
 
-    def on_encounter_start(self, entities: List['Entity']) -> None:
+    def on_encounter_start(self, entities: List[Entity]) -> None:
         """Called when an encounter starts with entities this controller manages."""
         pass
 
-    def on_encounter_end(self, entities: List['Entity']) -> None:
+    def on_encounter_end(self, entities: List[Entity]) -> None:
         """Called when an encounter ends."""
         pass
 
-    def can_continue_turn(self, entity: 'Entity', context: TurnContext) -> bool:
+    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         """
         Check if the controller wants to continue the turn.
 
@@ -141,12 +141,12 @@ class PassController(Controller):
 
     def get_next_action(
         self,
-        entity: 'Entity',
+        entity: Entity,
         context: TurnContext
-    ) -> Optional['BaseAction']:
+    ) -> Optional[BaseAction]:
         return None
 
-    def can_continue_turn(self, entity: 'Entity', context: TurnContext) -> bool:
+    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         return False
 
 
@@ -164,13 +164,13 @@ class HumanController(Controller):
 
     def get_next_action(
         self,
-        entity: 'Entity',
+        entity: Entity,
         context: TurnContext
-    ) -> Optional['BaseAction']:
+    ) -> Optional[BaseAction]:
         # Never returns actions - humans provide actions via API
         return None
 
-    def can_continue_turn(self, entity: 'Entity', context: TurnContext) -> bool:
+    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         # Always return False to exit run_turn loop immediately
         # Server will handle human turn via API endpoints
         return False
@@ -189,13 +189,13 @@ class ClaudeController(Controller):
 
     def get_next_action(
         self,
-        entity: 'Entity',
+        entity: Entity,
         context: TurnContext
-    ) -> Optional['BaseAction']:
+    ) -> Optional[BaseAction]:
         # Actions come via API, not from this method
         return None
 
-    def can_continue_turn(self, entity: 'Entity', context: TurnContext) -> bool:
+    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         # Return False to exit run_turn loop - server handles via API
         return False
 
@@ -215,9 +215,9 @@ class MeleeAIController(Controller):
 
     def get_next_action(
         self,
-        entity: 'Entity',
+        entity: Entity,
         context: TurnContext
-    ) -> Optional['BaseAction']:
+    ) -> Optional[BaseAction]:
         """Pick the next action based on available options."""
         available = get_available_actions(entity)
 
