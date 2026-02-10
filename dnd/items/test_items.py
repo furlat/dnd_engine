@@ -52,10 +52,12 @@ class OpenDoorAction(BaseAction):
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, TestDoorA):
             return execution_event.cancel(status_message="Door not found")
+        old_blocks_movement = door.blocks_movement
+        old_blocks_vision = door.blocks_vision_field
         door.is_open = True
         door.blocks_movement = False
         door.blocks_vision_field = False
-        Entity.update_all_entities_senses()
+        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door opened")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Door opened")
 
@@ -83,10 +85,12 @@ class CloseDoorAction(BaseAction):
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, TestDoorA):
             return execution_event.cancel(status_message="Door not found")
+        old_blocks_movement = door.blocks_movement
+        old_blocks_vision = door.blocks_vision_field
         door.is_open = False
         door.blocks_movement = True
         door.blocks_vision_field = True
-        Entity.update_all_entities_senses()
+        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door closed")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Door closed")
 
@@ -139,10 +143,12 @@ class InteractDoorAction(BaseAction):
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, TestDoorB):
             return execution_event.cancel(status_message="Door not found")
+        old_blocks_movement = door.blocks_movement
+        old_blocks_vision = door.blocks_vision_field
         door.is_open = not door.is_open
         door.blocks_movement = not door.is_open
         door.blocks_vision_field = not door.is_open
-        Entity.update_all_entities_senses()
+        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision)
         status = "opened" if door.is_open else "closed"
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message=f"Door {status}")
         return effect.phase_to(EventPhase.COMPLETION, status_message=f"Door {status}")

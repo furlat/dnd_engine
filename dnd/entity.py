@@ -23,7 +23,7 @@ from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponP
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses
-from dnd.core.base_tiles import SensesType, SenseMode, LightLevel
+from dnd.core.base_tiles import SensesType, LightLevel
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import BaseItem, UsableItem

@@ -19,7 +19,7 @@ from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
 from dnd.core.base_tiles import Tile, LightLevel
 from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType
+from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint
 
 
 class LightSourceData(BaseModel):
@@ -527,15 +527,31 @@ class GridMap:
         self._object_positions[object_uuid] = position
         self._objects_by_position[position].add(object_uuid)
         if self._events_enabled:
-            self._fire_spatial_event(SpatialChangeEvent.object_placed(position, object_uuid))
+            # Check object blocking properties for hint
+            obj = BaseBlock.get(object_uuid)
+            blocks_vision = obj.blocks_vision() if obj else False
+            blocks_walking = obj.blocks_walking() if obj else False
+            self._fire_spatial_event(SpatialChangeEvent.object_placed(
+                position, object_uuid,
+                blocks_vision=blocks_vision,
+                blocks_walking=blocks_walking,
+            ))
 
     def remove_object(self, object_uuid: UUID) -> None:
         """Remove an object from the grid."""
+        # Check blocking properties BEFORE removing (for hint)
+        obj = BaseBlock.get(object_uuid)
+        blocks_vision = obj.blocks_vision() if obj else False
+        blocks_walking = obj.blocks_walking() if obj else False
         position = self._object_positions.pop(object_uuid, None)
         if position is not None:
             self._objects_by_position[position].discard(object_uuid)
             if self._events_enabled:
-                self._fire_spatial_event(SpatialChangeEvent.object_removed(position, object_uuid))
+                self._fire_spatial_event(SpatialChangeEvent.object_removed(
+                    position, object_uuid,
+                    blocks_vision=blocks_vision,
+                    blocks_walking=blocks_walking,
+                ))
 
     def get_objects_at(self, position: Tuple[int, int]) -> Set[UUID]:
         """Get all object UUIDs at a position."""
@@ -841,11 +857,28 @@ class GridMap:
         1. Positions with entities: fire full SPATIAL_LIGHT_CHANGED event lifecycle
            (needed for Hidden reveal handler at EFFECT phase). Very rare.
         2. Single COMPLETION event at one representative position to trigger
-           senses re-evaluation. Entities subscribed to that cell will update.
-           Other entities update on their next senses refresh.
+           senses re-evaluation via batch hint with ALL changed positions.
+
+        The Tier 2 event carries a SensesUpdateHint with light_changed_positions
+        containing all changed positions. If any position has magical darkness,
+        requires_fov is set to True.
         """
         if not changed_positions:
             return
+
+        # Detect magical darkness for requires_fov
+        has_magical_darkness = False
+        for pos in changed_positions:
+            tile = self._tiles.get(pos)
+            if tile and tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS:
+                has_magical_darkness = True
+                break
+
+        # Build batch hint with all changed positions
+        batch_hint = SensesUpdateHint(
+            requires_fov=has_magical_darkness,
+            light_changed_positions=set(changed_positions),
+        )
 
         # Tier 1: Full lifecycle for positions with entities (Hidden reveal handler)
         handled_positions: Set[Tuple[int, int]] = set()
@@ -855,7 +888,12 @@ class GridMap:
                 handled_positions.add(pos)
                 tile = self._tiles.get(pos)
                 if tile:
-                    event = SpatialChangeEvent.light_changed(pos, tile.uuid)
+                    # Per-position hint for individual entity events
+                    per_pos_hint = SensesUpdateHint(
+                        requires_fov=has_magical_darkness,
+                        light_changed_positions={pos},
+                    )
+                    event = SpatialChangeEvent.light_changed(pos, tile.uuid, senses_hint=per_pos_hint)
                     self._fire_spatial_event(event)
 
         # Tier 2: Single COMPLETION event for senses refresh
@@ -870,7 +908,7 @@ class GridMap:
         if senses_pos is not None:
             tile = self._tiles.get(senses_pos)
             if tile:
-                event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid)
+                event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid, senses_hint=batch_hint)
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)
 
@@ -884,6 +922,10 @@ class GridMap:
     def _on_light_movement_event(self, event: Event) -> None:
         """Move light sources when their anchor entity moves."""
         if event.event_type != EventType.SPATIAL_ENTITY_ENTERED:
+            return
+        # Only fire once per event lifecycle (at COMPLETION)
+        phase = getattr(event, 'phase', None)
+        if phase != EventPhase.COMPLETION:
             return
         entity_uuid = getattr(event, 'entity_uuid', None)
         new_pos = getattr(event, 'position', None)
