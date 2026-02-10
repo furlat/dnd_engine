@@ -6,15 +6,77 @@ As a BaseBlock, tiles can have conditions attached (fire, traps, difficult terra
 
 GridMap handles all spatial computation (FOV, pathfinding).
 Tiles are stored in GridMap and provide the data/state for each cell.
+
+Also defines LightLevel, SensesType, and SenseMode — tile-level types used by
+the lighting and vision systems. These live here (not in sensory.py) to avoid
+circular imports: base_tiles -> sensory -> entity is fine, reverse is not.
 """
 
-from typing import Optional, Tuple
+import math
+from enum import Enum
+from typing import Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
-from pydantic import Field
+from pydantic import BaseModel, Field, PrivateAttr
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
+from dnd.core.events import SpatialChangeEvent, EventQueue, EventPhase
 
+
+# =========================================================================
+# Light Level
+# =========================================================================
+
+class LightLevel(int, Enum):
+    """Light levels for tiles. Int values are for ordering comparisons only.
+    Darkvision shifting uses explicit mapping (NOT arithmetic)."""
+    MAGICAL_DARKNESS = 0   # Darkness spell - darkvision blocked
+    DARKNESS = 1           # No light at all
+    DIM_LIGHT = 2          # Shadows, edge of torchlight
+    BRIGHT_LIGHT = 3       # Normal daylight, close to torch
+    VERY_BRIGHT = 4        # Intense sunlight, Daylight spell
+
+
+# =========================================================================
+# Sense Types (moved from sensory.py to avoid circular imports)
+# =========================================================================
+
+class SensesType(str, Enum):
+    BLINDSIGHT = "Blindsight"
+    DARKVISION = "Darkvision"
+    TREMORSENSE = "Tremorsense"
+    TRUESIGHT = "Truesight"
+    DEVILS_SIGHT = "Devils Sight"
+
+
+class SenseMode(BaseModel):
+    """A sense type with its effective range in feet. 0 = unlimited."""
+    sense_type: SensesType
+    range_feet: int = 0
+
+
+# =========================================================================
+# Darkvision shift map (explicit, NOT arithmetic)
+# =========================================================================
+
+_DARKVISION_SHIFT: Dict[LightLevel, LightLevel] = {
+    LightLevel.DARKNESS: LightLevel.DIM_LIGHT,
+    LightLevel.DIM_LIGHT: LightLevel.BRIGHT_LIGHT,
+}
+
+
+# =========================================================================
+# Helpers
+# =========================================================================
+
+def _tile_distance_feet(a: Tuple[int, int], b: Tuple[int, int]) -> int:
+    """Euclidean distance between two tile positions, in feet (1 tile = 5ft)."""
+    return int(math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)) * 5
+
+
+# =========================================================================
+# Tile
+# =========================================================================
 
 class Tile(BaseBlock):
     """
@@ -38,6 +100,13 @@ class Tile(BaseBlock):
 
     Height:
     - Elevation in 5ft increments (0 = ground level)
+
+    Lighting:
+    - default_light: base light level (BRIGHT_LIGHT for outdoors, DARKNESS for dungeons)
+    - _illuminations: light sources brightening this tile (torch, Light spell)
+    - _obscurements: darkness effects dimming this tile (Fog Cloud, Darkness spell)
+    - resolved_light_level: objective result = MAX(default, illuminations) then MIN(result, obscurements)
+    - get_effective_light_for(observer_uuid): subjective light considering darkvision, truesight, etc.
     """
     name: str = Field(default="Floor", description="The name of the tile")
     walkable: bool = Field(default=True, description="Whether the tile can be walked on (legacy, use walking_cost)")
@@ -87,6 +156,16 @@ class Tile(BaseBlock):
     # Elevation (0 = ground level, each unit = 5ft)
     height: int = Field(default=0, description="Tile elevation in 5ft increments")
 
+    # Lighting
+    default_light: LightLevel = Field(default=LightLevel.BRIGHT_LIGHT,
+                                      description="Base light level for this tile")
+    _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
+    _obscurements: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
+
+    # =========================================================================
+    # Movement
+    # =========================================================================
+
     def get_movement_cost(self, mode: MovementMode) -> float:
         """Get the movement cost for a specific mode."""
         cost_map = {
@@ -103,8 +182,155 @@ class Tile(BaseBlock):
         return self.get_movement_cost(mode) <= 0
 
     def blocks_vision(self, requesting_entity_uuid: Optional['UUID'] = None) -> bool:
-        """A tile blocks vision if it is not visible (e.g., walls)."""
-        return not self.visible
+        """A tile blocks vision if it is not visible (e.g., walls).
+        Magical darkness also blocks vision unless observer has TRUESIGHT or DEVILS_SIGHT."""
+        if not self.visible:
+            return True  # Wall
+        # Magical darkness blocks vision unless observer can pierce it
+        if self.resolved_light_level == LightLevel.MAGICAL_DARKNESS:
+            if requesting_entity_uuid is None:
+                return True
+            observer = BaseBlock.get(requesting_entity_uuid)
+            if observer is None:
+                return True
+            sense_modes: list = observer.get_sense_modes()
+            if not any(sm.sense_type in (SensesType.TRUESIGHT, SensesType.DEVILS_SIGHT)
+                       for sm in sense_modes):
+                return True
+        return False
+
+    # =========================================================================
+    # Lighting
+    # =========================================================================
+
+    def add_illumination(self, source_uuid: UUID, level: LightLevel,
+                         fire_event: bool = True) -> bool:
+        """Add a light source (torch, Light spell).
+        Returns True if resolved light level changed.
+        Fires SPATIAL_LIGHT_CHANGED event if fire_event=True and level changed."""
+        old = self.resolved_light_level
+        self._illuminations[source_uuid] = level
+        changed = self.resolved_light_level != old
+        if changed and fire_event:
+            self._notify_light_changed()
+        return changed
+
+    def add_obscurement(self, source_uuid: UUID, level: LightLevel,
+                        fire_event: bool = True) -> bool:
+        """Add darkness/fog effect.
+        Returns True if resolved light level changed.
+        Fires SPATIAL_LIGHT_CHANGED event if fire_event=True and level changed."""
+        old = self.resolved_light_level
+        self._obscurements[source_uuid] = level
+        changed = self.resolved_light_level != old
+        if changed and fire_event:
+            self._notify_light_changed()
+        return changed
+
+    def remove_light_modifier(self, source_uuid: UUID,
+                              fire_event: bool = True) -> bool:
+        """Remove any modifier by UUID (from either dict).
+        Returns True if resolved light level changed.
+        Fires SPATIAL_LIGHT_CHANGED event if fire_event=True and level changed."""
+        old = self.resolved_light_level
+        self._illuminations.pop(source_uuid, None)
+        self._obscurements.pop(source_uuid, None)
+        changed = self.resolved_light_level != old
+        if changed and fire_event:
+            self._notify_light_changed()
+        return changed
+
+    @property
+    def resolved_light_level(self) -> LightLevel:
+        """Objective light level (no observer). Lights brighten, darkness overrides."""
+        brightest = self.default_light
+        for level in self._illuminations.values():
+            if level.value > brightest.value:
+                brightest = level
+        if not self._obscurements:
+            return brightest
+        darkest = min(self._obscurements.values(), key=lambda x: x.value)
+        return LightLevel(min(brightest.value, darkest.value))
+
+    def get_effective_light_for(
+        self,
+        observer_uuid: Optional[UUID] = None,
+        observer_position: Optional[Tuple[int, int]] = None,
+    ) -> LightLevel:
+        """Subjective light level seen by a specific observer.
+        Resolves from observer's sense_modes (darkvision, truesight, etc.)."""
+        base = self.resolved_light_level
+        if observer_uuid is None:
+            return base
+
+        observer = BaseBlock.get(observer_uuid)
+        if observer is None:
+            return base
+
+        sense_modes: list = observer.get_sense_modes()
+        if not sense_modes:
+            return self._apply_adjacent_rule(base, observer_position)
+
+        # Truesight/Blindsight: see through everything
+        for sm in sense_modes:
+            if sm.sense_type in (SensesType.TRUESIGHT, SensesType.BLINDSIGHT):
+                in_range = (sm.range_feet == 0)
+                if not in_range and observer_position is not None and self.position is not None:
+                    in_range = _tile_distance_feet(self.position, observer_position) <= sm.range_feet
+                if in_range:
+                    return max(base, LightLevel.BRIGHT_LIGHT)
+
+        # Devil's Sight: pierces magical darkness -> treat as non-magical DARKNESS
+        if base == LightLevel.MAGICAL_DARKNESS:
+            if any(sm.sense_type == SensesType.DEVILS_SIGHT for sm in sense_modes):
+                base = LightLevel.DARKNESS  # Downgrade, darkvision can now help
+
+        # Darkvision: explicit upgrade within range (NOT magical darkness)
+        if base in _DARKVISION_SHIFT:
+            for sm in sense_modes:
+                if sm.sense_type == SensesType.DARKVISION:
+                    in_range = (sm.range_feet == 0)
+                    if not in_range and observer_position is not None and self.position is not None:
+                        in_range = _tile_distance_feet(self.position, observer_position) <= sm.range_feet
+                    if in_range:
+                        base = _DARKVISION_SHIFT[base]
+                    break
+
+        # Adjacent cell rule (LAST): minimum DIM_LIGHT at distance <= 1
+        return self._apply_adjacent_rule(base, observer_position)
+
+    def _apply_adjacent_rule(self, level: LightLevel,
+                             observer_position: Optional[Tuple[int, int]]) -> LightLevel:
+        """Minimum DIM_LIGHT at distance <= 1 from observer.
+        Only applies to natural DARKNESS, NOT magical darkness."""
+        if observer_position is not None and self.position is not None:
+            dx = abs(self.position[0] - observer_position[0])
+            dy = abs(self.position[1] - observer_position[1])
+            if max(dx, dy) <= 1 and level == LightLevel.DARKNESS:
+                return LightLevel.DIM_LIGHT
+        return level
+
+    def _notify_light_changed(self) -> None:
+        """Fire a SPATIAL_LIGHT_CHANGED event at this tile's position.
+        Same pattern as BaseBlock._notify_perceivability_changed()."""
+        event = SpatialChangeEvent.light_changed(self.position, self.uuid)
+        current = EventQueue.register(event)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.EXECUTION)
+        current = EventQueue.register(current)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.EFFECT)
+        current = EventQueue.register(current)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.COMPLETION)
+        EventQueue.register(current)
+
+    # =========================================================================
+    # Borders
+    # =========================================================================
 
     def can_enter_from(self, from_position: Tuple[int, int]) -> bool:
         """
@@ -144,13 +370,18 @@ class Tile(BaseBlock):
 
         return True  # Same position or non-adjacent
 
+    # =========================================================================
+    # Factory
+    # =========================================================================
+
     @classmethod
     def create(cls, position: Tuple[int, int],
                walkable: bool = True,
                visible: bool = True,
                name: str = "Floor",
                sprite_name: Optional[str] = None,
-               height: int = 0) -> 'Tile':
+               height: int = 0,
+               default_light: LightLevel = LightLevel.BRIGHT_LIGHT) -> 'Tile':
         """Create a new tile at position."""
         tile_uuid = uuid4()
 
@@ -216,14 +447,24 @@ class Tile(BaseBlock):
             flying_cost=flying_cost,
             swimming_cost=swimming_cost,
             burrowing_cost=burrowing_cost,
-            height=height
+            height=height,
+            default_light=default_light
         )
 
 
+# =========================================================================
 # Factory functions for common tile types
+# =========================================================================
+
 def floor_factory(position: Tuple[int, int]) -> Tile:
-    """Create a floor tile."""
+    """Create a floor tile (bright light, outdoor default)."""
     return Tile.create(position, walkable=True, visible=True, name="Floor", sprite_name="floor.png")
+
+
+def dark_floor_factory(position: Tuple[int, int]) -> Tile:
+    """Create a dark floor tile (darkness, dungeon default)."""
+    return Tile.create(position, walkable=True, visible=True, name="Floor", sprite_name="floor.png",
+                       default_light=LightLevel.DARKNESS)
 
 
 def wall_factory(position: Tuple[int, int]) -> Tile:

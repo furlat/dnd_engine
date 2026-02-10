@@ -13,6 +13,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent
 from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.base_tiles import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Concentrating, Prone, Restrained
@@ -2090,4 +2091,334 @@ class SpiritGuardians(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"Spirit Guardians active: 15ft sphere around {caster.name}, {damage_count} enemies damaged"
+        )
+
+
+# =============================================================================
+# Fog Cloud Spell
+# =============================================================================
+
+class FogCloudZone(ZoneControlCondition):
+    """Zone control condition for Fog Cloud spell.
+
+    Creates a 20ft radius sphere of heavily obscured area (DARKNESS).
+    Uses obscurement so darkvision cannot see through it.
+    """
+    name: str = "Fog Cloud Zone"
+    description: str = "Heavily obscured fog — blocks vision including darkvision"
+
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=20)
+
+    # Light: DARKNESS as obscurement (blocks darkvision)
+    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS)
+    light_is_obscurement: bool = Field(default=True)
+
+
+class FogCloud(SpellAction):
+    """Fog Cloud - 1st level Conjuration (Concentration)
+
+    You create a 20-foot-radius sphere of fog centered on a point within range.
+    The sphere spreads around corners, and its area is heavily obscured. It
+    lasts for the duration or until a wind of moderate or greater speed (at
+    least 10 miles per hour) disperses it.
+
+    At Higher Levels: The radius increases by 20 feet for each slot level
+    above 1st.
+
+    Duration: Concentration, up to 1 hour
+    """
+    name: str = Field(default="Fog Cloud")
+    description: str = Field(default="20ft sphere heavily obscured fog (blocks darkvision)")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="conjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.POSITION)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+    )
+
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Fog Cloud Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position specified")
+
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
+
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return execution_event.cancel(status_message="No target position")
+
+        # Radius scales: 20ft base + 20ft per upcast level
+        radius = 20 + self.get_upcast_bonus() * 20
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Fog Cloud at {target_pos}"
+        )
+
+        zone = FogCloudZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=target_pos,
+            zone_radius_feet=radius
+        )
+        caster.add_condition(zone, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Fog Cloud"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Fog Cloud active: {radius}ft radius sphere at {target_pos}"
+        )
+
+
+# =============================================================================
+# Darkness Spell
+# =============================================================================
+
+class DarknessZone(ZoneControlCondition):
+    """Zone control condition for Darkness spell.
+
+    Creates a 15ft radius sphere of magical darkness.
+    Magical darkness blocks all vision including darkvision.
+    Only Truesight and Devil's Sight can see through it.
+    """
+    name: str = "Darkness Zone"
+    description: str = "Magical darkness — blocks all vision including darkvision"
+
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=15)
+
+    # Light: MAGICAL_DARKNESS as obscurement
+    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.MAGICAL_DARKNESS)
+    light_is_obscurement: bool = Field(default=True)
+
+
+class Darkness(SpellAction):
+    """Darkness - 2nd level Evocation (Concentration)
+
+    Magical darkness spreads from a point you choose within range to fill a
+    15-foot-radius sphere for the duration. The darkness spreads around corners.
+    A creature with darkvision can't see through this darkness, and nonmagical
+    light can't illuminate it.
+
+    If the point you choose is on an object you are holding or one that isn't
+    being worn or carried, the darkness emanates from the object and moves with
+    it. Completely covering the source of the darkness with an opaque object,
+    such as a bowl or a helm, blocks the darkness.
+
+    Duration: Concentration, up to 10 minutes
+    """
+    name: str = Field(default="Darkness")
+    description: str = Field(default="15ft sphere magical darkness (blocks darkvision)")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="evocation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.POSITION)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+    )
+
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Darkness Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position specified")
+
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
+
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return execution_event.cancel(status_message="No target position")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Darkness at {target_pos}"
+        )
+
+        zone = DarknessZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=target_pos
+        )
+        caster.add_condition(zone, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Darkness"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Darkness active: 15ft sphere at {target_pos}"
+        )
+
+
+# =============================================================================
+# Daylight Spell
+# =============================================================================
+
+class DaylightZone(ZoneControlCondition):
+    """Zone control condition for Daylight spell.
+
+    Creates a 60ft radius sphere of very bright light.
+    Dispels any magical darkness in the area.
+    Entities hidden in the zone are revealed.
+    """
+    name: str = "Daylight Zone"
+    description: str = "Very bright light — reveals hidden creatures"
+
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=60)
+
+    # Light: VERY_BRIGHT as illumination (not obscurement)
+    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.VERY_BRIGHT)
+    light_is_obscurement: bool = Field(default=False)
+
+
+class Daylight(SpellAction):
+    """Daylight - 3rd level Evocation (not actually Concentration per SRD, but
+    we use Concentration for cleanup convenience in our system)
+
+    A 60-foot-radius sphere of light spreads out from a point you choose
+    within range. The sphere is bright light and sheds dim light for an
+    additional 60 feet.
+
+    If you chose a point on an object you are holding or one that isn't being
+    worn or carried, the light shines from the object with and moves with it.
+
+    If any of this spell's area overlaps with an area of darkness created by a
+    spell of 3rd level or lower, the spell that created the darkness is
+    dispelled.
+
+    Duration: 1 hour (using Concentration for cleanup)
+    """
+    name: str = Field(default="Daylight")
+    description: str = Field(default="60ft sphere very bright light, reveals hidden, dispels darkness")
+    spell_level: int = Field(default=3)
+    spell_school: str = Field(default="evocation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.POSITION)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+    )
+
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Daylight Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position specified")
+
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
+
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return execution_event.cancel(status_message="No target position")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Daylight at {target_pos}"
+        )
+
+        zone = DaylightZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=target_pos
+        )
+        caster.add_condition(zone, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Daylight"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Daylight active: 60ft sphere at {target_pos}"
         )

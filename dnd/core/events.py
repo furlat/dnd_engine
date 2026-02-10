@@ -170,6 +170,7 @@ class EventType(str, Enum):
     SPATIAL_OBJECT_PLACED = "spatial_object_placed"    # Object placed on grid
     SPATIAL_OBJECT_REMOVED = "spatial_object_removed"  # Object removed from grid
     SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"  # Entity's perceivability changed (hidden/invisible)
+    SPATIAL_LIGHT_CHANGED = "spatial_light_changed"  # Tile's resolved light level changed
 
     # Encounter/Turn events
     ENCOUNTER_START = "encounter_start"
@@ -191,6 +192,7 @@ class SpatialChangeType(str, Enum):
     OBJECT_PLACED = "object_placed"
     OBJECT_REMOVED = "object_removed"
     PERCEIVABILITY_CHANGED = "perceivability_changed"
+    LIGHT_CHANGED = "light_changed"
 
 
 class EventPhase(str, Enum):
@@ -1651,6 +1653,24 @@ class SpatialChangeEvent(Event):
             change_type=SpatialChangeType.PERCEIVABILITY_CHANGED,
             position=position,
             entity_uuid=entity_uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        )
+
+    @classmethod
+    def light_changed(cls, position: Tuple[int, int], tile_uuid: UUID,
+                      source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for a tile's resolved light level changing.
+
+        Triggers senses re-evaluation on observers subscribed to this cell.
+        Does NOT trigger SpatialHandlers (zone effects).
+        """
+        return cls(
+            source_entity_uuid=source_entity_uuid or tile_uuid,
+            event_type=EventType.SPATIAL_LIGHT_CHANGED,
+            change_type=SpatialChangeType.LIGHT_CHANGED,
+            position=position,
+            entity_uuid=tile_uuid,  # Tile UUID stored in entity_uuid field
             phase=EventPhase.DECLARATION,
             use_register=False,
         )

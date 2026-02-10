@@ -22,7 +22,8 @@ from dnd.blocks.health import HealthConfig, Health
 from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage, Armor, Weapon
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
-from dnd.blocks.sensory import Senses, SensesType
+from dnd.blocks.sensory import Senses
+from dnd.core.base_tiles import SensesType, SenseMode, LightLevel
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import BaseItem, UsableItem
@@ -688,9 +689,13 @@ class Entity(BaseBlock):
 
     def can_bypass_invisibility(self) -> bool:
         """Entity can bypass invisibility with special senses."""
-        return (SensesType.TRUESIGHT in self.senses.extra_senses or
-                SensesType.BLINDSIGHT in self.senses.extra_senses or
-                SensesType.TREMORSENSE in self.senses.extra_senses)
+        return (self.senses.has_sense(SensesType.TRUESIGHT) or
+                self.senses.has_sense(SensesType.BLINDSIGHT) or
+                self.senses.has_sense(SensesType.TREMORSENSE))
+
+    def get_sense_modes(self) -> list:
+        """Entity relays to its Senses block for sense modes."""
+        return self.senses.get_sense_modes()
 
     def skill_bonus_cross(self, target_entity_uuid: UUID, skill_name: SkillName) -> Tuple[ModifiableValue, ModifiableValue]:
         should_clear_target = False
@@ -1655,8 +1660,8 @@ class Entity(BaseBlock):
         """
         grid = get_map()
 
-        # Get visible cells using shadowcast
-        visible_positions = grid.compute_fov(position, max_distance)
+        # Get visible cells using shadowcast (observer_uuid for magical darkness)
+        visible_positions = grid.compute_fov(position, max_distance, observer_uuid=entity_uuid)
         visible_dict = {pos: True for pos in visible_positions}
 
         # Get walkable paths using dijkstra (with occupancy check if entity_uuid provided)
@@ -1671,9 +1676,15 @@ class Entity(BaseBlock):
             if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
                 filtered_paths[pos] = path
 
-        # Get entities at visible positions (filtered by perceivability)
+        # Get entities at visible positions (filtered by light then perceivability)
         visible_entities: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
+            # Light pre-check: can observer see into this tile?
+            tile = grid.get_tile(pos[0], pos[1])
+            if tile and entity_uuid:
+                effective_light = tile.get_effective_light_for(entity_uuid, observer_position=position)
+                if effective_light.value <= LightLevel.DARKNESS.value:
+                    continue  # Too dark - entities at this tile not visible
             entities = Entity.get_all_entities_at_position(pos)
             for entity in entities:
                 if entity_uuid and entity.uuid == entity_uuid:
@@ -1681,9 +1692,15 @@ class Entity(BaseBlock):
                 if entity.is_perceivable_by(entity_uuid):
                     visible_entities[entity.uuid] = pos
 
-        # Get objects at visible positions (filtered by perceivability)
+        # Get objects at visible positions (filtered by light then perceivability)
         visible_objects: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
+            # Light pre-check for objects too
+            tile = grid.get_tile(pos[0], pos[1])
+            if tile and entity_uuid:
+                effective_light = tile.get_effective_light_for(entity_uuid, observer_position=position)
+                if effective_light.value <= LightLevel.DARKNESS.value:
+                    continue
             for obj_uuid in grid.get_objects_at(pos):
                 obj = BaseBlock.get(obj_uuid)
                 if obj and not obj.is_perceivable_by(entity_uuid):
@@ -1765,24 +1782,35 @@ class Entity(BaseBlock):
             max_distance: Maximum view distance (default 10)
         """
         grid = get_map()
-        # Compute FOV only - returns list of visible positions
-        visible_positions = grid.compute_fov(self.position, max_distance)
+        # Compute FOV only - returns list of visible positions (observer_uuid for magical darkness)
+        visible_positions = grid.compute_fov(self.position, max_distance, observer_uuid=self.uuid)
 
         # Convert to dict format expected by Senses
         visible_dict: Dict[Tuple[int, int], bool] = {pos: True for pos in visible_positions}
 
-        # Find entities in visible cells (filtered by perceivability)
+        # Find entities in visible cells (filtered by light then perceivability)
         visible_entities: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
+            # Light pre-check
+            tile = grid.get_tile(pos[0], pos[1])
+            if tile:
+                effective_light = tile.get_effective_light_for(self.uuid, observer_position=self.position)
+                if effective_light.value <= LightLevel.DARKNESS.value:
+                    continue
             for ent_uuid in grid.get_entities_at(pos):
                 if ent_uuid != self.uuid:
                     block = BaseBlock.get(ent_uuid)
                     if block and block.is_perceivable_by(self.uuid):
                         visible_entities[ent_uuid] = pos
 
-        # Find objects in visible cells (filtered by perceivability)
+        # Find objects in visible cells (filtered by light then perceivability)
         visible_objects: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_positions:
+            tile = grid.get_tile(pos[0], pos[1])
+            if tile:
+                effective_light = tile.get_effective_light_for(self.uuid, observer_position=self.position)
+                if effective_light.value <= LightLevel.DARKNESS.value:
+                    continue
             for obj_uuid in grid.get_objects_at(pos):
                 obj = BaseBlock.get(obj_uuid)
                 if obj and not obj.is_perceivable_by(self.uuid):

@@ -20,8 +20,8 @@ Event Handling:
 import re
 from typing import List, Optional, Tuple, Type, Set, Dict
 
-from dnd.core.base_tiles import Tile
-from uuid import UUID
+from dnd.core.base_tiles import Tile, LightLevel
+from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
 
 from dnd.core.base_conditions import BaseCondition
@@ -116,6 +116,10 @@ class ZoneControlCondition(BaseCondition):
     # Terrain effects
     adds_difficult_terrain: bool = Field(default=False, description="If True, adds +1 to walking cost")
 
+    # Light effects
+    sets_light_level: Optional[LightLevel] = Field(default=None, description="Light level to apply to zone tiles")
+    light_is_obscurement: bool = Field(default=False, description="If True, uses add_obscurement(); else add_illumination()")
+
     # Track affected positions as a set for efficient operations
     affected_positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Currently affected tile positions")
 
@@ -127,6 +131,10 @@ class ZoneControlCondition(BaseCondition):
     # Terrain modifier tracking (separate from handlers)
     # Maps tile.walking_cost.uuid -> [modifier_uuid, ...]
     _terrain_modifier_uuids: Dict[UUID, List[UUID]] = PrivateAttr(default_factory=dict)
+
+    # Light modifier tracking (separate from handlers)
+    # Maps tile position -> light modifier UUID used with add_illumination/add_obscurement
+    _light_modifier_uuids: Dict[Tuple[int, int], UUID] = PrivateAttr(default_factory=dict)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -248,6 +256,35 @@ class ZoneControlCondition(BaseCondition):
         self._terrain_modifier_uuids.clear()
 
     # =========================================================================
+    # Light Modifiers (separate from terrain modifiers)
+    # =========================================================================
+
+    def _apply_light_modifiers(self) -> None:
+        """Apply light level modifiers to affected tiles."""
+        if self.sets_light_level is None:
+            return
+
+        grid = get_map()
+        for pos in self.affected_positions:
+            tile = grid.get_tile(*pos)
+            if tile:
+                modifier_uuid = uuid4()
+                if self.light_is_obscurement:
+                    tile.add_obscurement(modifier_uuid, self.sets_light_level)
+                else:
+                    tile.add_illumination(modifier_uuid, self.sets_light_level)
+                self._light_modifier_uuids[pos] = modifier_uuid
+
+    def _remove_light_modifiers(self) -> None:
+        """Remove light level modifiers from affected tiles."""
+        grid = get_map()
+        for pos, modifier_uuid in self._light_modifier_uuids.items():
+            tile = grid.get_tile(*pos)
+            if tile:
+                tile.remove_light_modifier(modifier_uuid)
+        self._light_modifier_uuids.clear()
+
+    # =========================================================================
     # Core Apply / Remove / Move
     # =========================================================================
 
@@ -293,6 +330,9 @@ class ZoneControlCondition(BaseCondition):
         # Apply terrain modifiers and get modifier pairs for tracking
         terrain_modifiers = self._apply_terrain_modifiers()
 
+        # Apply light modifiers to zone tiles
+        self._apply_light_modifiers()
+
         if declaration_event is not None:
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
         else:
@@ -322,6 +362,9 @@ class ZoneControlCondition(BaseCondition):
         # Remove terrain modifiers
         self._remove_terrain_modifiers()
 
+        # Remove light modifiers
+        self._remove_light_modifiers()
+
         # Call parent _remove for standard event progression
         return super()._remove(event)
 
@@ -336,8 +379,9 @@ class ZoneControlCondition(BaseCondition):
 
         Returns True on success.
         """
-        # Remove old terrain modifiers
+        # Remove old terrain modifiers and light modifiers
         self._remove_terrain_modifiers()
+        self._remove_light_modifiers()
 
         # Compute new positions
         self.zone_center = new_center
@@ -362,8 +406,9 @@ class ZoneControlCondition(BaseCondition):
 
         self.affected_positions = new_positions
 
-        # Apply terrain modifiers to new positions
+        # Apply terrain modifiers and light modifiers to new positions
         self._apply_terrain_modifiers()
+        self._apply_light_modifiers()
 
         return True
 
