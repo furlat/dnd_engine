@@ -111,7 +111,7 @@ Fires full `SPATIAL_LIGHT_CHANGED` event lifecycle (DECLARATION → EXECUTION �
 
 1. Start with `resolved_light_level` (objective)
 2. **Truesight/Blindsight** (within range): upgrade to at least BRIGHT_LIGHT
-3. **Devil's Sight**: MAGICAL_DARKNESS → DARKNESS (darkvision can then help)
+3. **Devil's Sight** (within range): MAGICAL_DARKNESS/DARKNESS → BRIGHT_LIGHT (see normally)
 4. **Darkvision** (within range): DARKNESS → DIM_LIGHT, DIM_LIGHT → BRIGHT_LIGHT
 5. **Adjacent rule** (last): minimum DIM_LIGHT at Chebyshev distance ≤ 1, natural DARKNESS only (not magical)
 
@@ -333,18 +333,12 @@ Methods: `_apply_light_modifiers()`, `_remove_light_modifiers()`. Wired into `_a
 
 ---
 
-## Performance Problems
+## Incremental Senses Update System — IMPLEMENTED
 
-### Measured Performance (20x20 dark grid, torch 20ft bright + 40ft dim)
+### Performance Results (20x20 dark grid, torch 20ft bright + 40ft dim)
 
-**Single observer:**
-| Operation | Time |
-|---|---|
-| add_light_source (266 tiles) | 0.044s |
-| move_light_source (delta, ~73 tiles change) | 0.023s |
-| Entity.update_entity_position (move + light + senses) | 0.072s |
+**Before (full recompute per observer per event):**
 
-**Multi-observer scaling (linear):**
 | Observers | add_light | move_light | entity_move |
 |-----------|-----------|------------|-------------|
 | 1 | 0.044s | 0.023s | 0.072s |
@@ -352,133 +346,108 @@ Methods: `_apply_light_modifiers()`, `_remove_light_modifiers()`. Wired into `_a
 | 5 | 0.595s | 0.297s | 0.305s |
 | 10 | 1.851s | 0.584s | 0.590s |
 
-### Root Cause: Full Recomputation Per Observer
+**After (incremental hint-based updates, no Dijkstra in callbacks):**
 
-When a `SPATIAL_LIGHT_CHANGED` event fires at COMPLETION phase, **every subscribed observer runs a full senses recompute**:
+| Scenario | Before | After | Improvement |
+|----------|--------|-------|-------------|
+| 10 observers, add_light_source | 1.851s | 0.0072s | **257x** |
+| 10 observers, move_light_source | 0.584s | 0.0044s | **133x** |
+| 10 observers, entity_move with torch | 0.590s | 0.0148s | **40x** |
 
-```
-SPATIAL_LIGHT_CHANGED (COMPLETION)
-    → SpatialSensesCallback fires for each subscribed observer
-        → update_senses_func()
-            → compute_senses_from_position()
-                → grid.compute_fov()          ← Shadowcast FOV (medium cost)
-                → grid.compute_paths()        ← Dijkstra pathfinding (HIGH cost)
-                → entity/object filtering     ← Light + perceivability (low cost)
-                → subscribe_to_cells()        ← Subscription update (low cost)
-```
+### Root Cause (Fixed)
 
-**The problem**: A normal light change (torch moved) doesn't affect FOV geometry or walkability. Only entity visibility filtering changes. But every observer recomputes everything from scratch.
+Every spatial event triggered a **full senses recompute** (FOV + Dijkstra + entity filter) for every subscribed observer. Normal light changes don't affect FOV geometry or walkability — only entity visibility filtering changes. 10 observers × 3 events per step = 30 Dijkstra runs per movement tile.
 
-### Three Categories of Spatial Change
+### Architecture: SensesUpdateHint (`events.py`)
 
-| Change Type | Affects FOV? | Affects Paths? | Affects Entity Visibility? | Example |
-|---|---|---|---|---|
-| **Normal light** (DARKNESS↔DIM↔BRIGHT↔VERY_BRIGHT) | No | No | Yes | Torch lit, Fog Cloud |
-| **Magical darkness** (MAGICAL_DARKNESS added/removed) | **Yes** (blocks vision like wall) | No | Yes | Darkness spell |
-| **Entity/tile movement** | No | **Yes** (entities block paths) | Yes | Entity moved, wall placed |
-
-Currently ALL three trigger the same full recompute. This is the core architectural problem.
-
-### Cascade Problem During Entity Movement
-
-When an entity carrying a torch moves one tile, the event cascade is:
-
-```
-Entity.update_entity_position(carrier, new_pos)
-    → SPATIAL_ENTITY_LEFT (old_pos)          ← Other observers: full senses recompute
-    → SPATIAL_ENTITY_ENTERED (new_pos)       ← Other observers: full senses recompute
-        → _on_light_movement_event()
-            → move_light_source(delta)
-                → _fire_light_batch_events()
-                    → SPATIAL_LIGHT_CHANGED   ← Other observers: full senses recompute (AGAIN)
-```
-
-That's potentially **3 full senses recomputes per observer per tile of movement**. For a 6-tile move with 5 observers, that's 90 Dijkstra runs.
-
-### The Single COMPLETION Event Limitation
-
-`_fire_light_batch_events()` fires one COMPLETION event at a single position. Only observers subscribed to THAT specific position get triggered. Observers subscribed to OTHER changed tiles (but not this one) may miss the update entirely. This is a correctness concern — some observers might have stale entity visibility until their next senses refresh.
-
----
-
-## Proposed Architecture: Event-Carried Incremental Updates
-
-### Core Insight
-
-The current system uses events as **triggers for full recomputation**. The event says "something changed at position X" and the observer throws away all cached state and recomputes from scratch.
-
-Instead, events should **carry the information needed for incremental updates**. The event already knows what changed — it should tell observers exactly what to update, so they don't need to recompute anything.
-
-### Design Direction
-
-**Events carry delta information:**
+Every spatial event now carries a `SensesUpdateHint` telling observers exactly what to update:
 
 ```python
-# Instead of: "light changed at (5,3)" → observer recomputes everything
-# Do: "light changed at (5,3): DARKNESS → DIM_LIGHT" → observer updates entity filter for (5,3)
+class SensesUpdateHint(BaseModel):
+    """Carried by spatial events — tells observers what to update incrementally."""
+    requires_fov: bool = False       # Vision geometry changed (magical darkness, wall, door)
+    requires_paths: bool = False     # Path topology changed (entity moved, walkability changed)
 
-class SensesUpdatePayload:
-    """Carried by spatial events — tells observers exactly what to update."""
-    # For light changes:
-    light_changes: Dict[pos, Tuple[LightLevel, LightLevel]]  # pos → (old, new)
+    entity_entered: Optional[Tuple[UUID, Tuple[int,int]]] = None   # O(1) dict add
+    entity_left: Optional[Tuple[UUID, Tuple[int,int]]] = None      # O(1) dict remove
+    entity_died: Optional[Tuple[UUID, Tuple[int,int]]] = None      # Dict remove + paths dirty
 
-    # For entity movement:
-    entity_entered: Optional[Tuple[UUID, pos]]
-    entity_left: Optional[Tuple[UUID, pos]]
+    light_changed_positions: Optional[Set[Tuple[int,int]]] = None  # Re-filter entities here
+    perceivability_entity: Optional[UUID] = None                    # Re-check one entity
 
-    # For FOV-affecting changes (magical darkness, wall placed):
-    requires_fov_recompute: bool = False
-
-    # For path-affecting changes (entity moved, wall placed):
-    requires_path_recompute: bool = False
+    object_placed: Optional[Tuple[UUID, Tuple[int,int]]] = None    # O(1) dict add
+    object_removed: Optional[Tuple[UUID, Tuple[int,int]]] = None   # O(1) dict remove
 ```
 
-**Observer processes delta instead of recomputing:**
+The `senses_hint` field on `SpatialChangeEvent` is populated by ALL factory methods: `entity_entered()`, `entity_left()`, `tile_changed()`, `light_changed()`, `perceivability_changed()`, `object_placed()`, `object_removed()`, `object_changed()`.
+
+### Three Separated Concerns
+
+```
+FOV (geometry)     — only recompute when requires_fov=True (magical darkness, wall, door vision blocking)
+Paths (movement)   — only set _paths_dirty when requires_paths=True (deferred to turn start/movement end)
+Entity filtering   — only re-filter at specific positions (light_changed_positions, entity entered/left)
+```
+
+### The _paths_dirty Pattern
+
+Dijkstra is the most expensive operation (~30-50ms). Callbacks **NEVER** run Dijkstra — they only set `_paths_dirty = True` on the Senses block. Full Dijkstra runs only when actually needed:
+
+1. **Turn start**: `Encounter.start_turn()` → `entity.update_entity_senses()` (clears flag)
+2. **Movement end**: `Move._apply()` finally block → `entity.update_entity_senses()` (clears flag)
+3. **On-demand**: Reactions that need walkability check `grid.is_walkable_for()` per cell (O(1) per cell, no Dijkstra)
+
+### Hint Per Event Type
+
+| Event / Change | Hint | Cost |
+|----------------|------|------|
+| Entity enters cell | `requires_paths=True, entity_entered=(uuid, pos)` | O(1) dict add |
+| Entity leaves cell | `requires_paths=True, entity_left=(uuid, pos)` | O(1) dict remove |
+| Light changed (batch) | `light_changed_positions={changed positions}` | O(changed × entities_per_tile) |
+| Light changed (magical darkness) | `requires_fov=True, light_changed_positions={...}` | O(visible_cells) FOV |
+| Perceivability changed | `perceivability_entity=uuid` | O(1) re-check |
+| Object placed (blocks vision) | `requires_fov=True, object_placed=(uuid, pos)` | O(visible_cells) FOV |
+| Object placed (blocks walking) | `requires_paths=True, object_placed=(uuid, pos)` | O(1) + paths dirty |
+| Object changed (door open/close) | `requires_fov=True/False, requires_paths=True/False` | FOV + paths dirty |
+| Tile changed (walkable) | `requires_paths=True` | Paths dirty |
+| Tile changed (visible) | `requires_fov=True` | O(visible_cells) FOV |
+| Entity death | `entity_died=(uuid, pos), requires_paths=True` | O(1) + paths dirty |
+
+### SPATIAL_OBJECT_CHANGED Event
+
+New event type for objects changing blocking state (doors opening/closing):
 
 ```python
-# In SpatialSensesCallback:
-def _process_light_delta(self, light_changes):
-    """Update entity visibility at changed tiles only."""
-    for pos, (old_level, new_level) in light_changes.items():
-        if new_level <= DARKNESS:
-            # Remove entities at this tile from visible set
-            self.senses.entities = {k:v for k,v in self.senses.entities.items() if v != pos}
-        elif old_level <= DARKNESS and new_level > DARKNESS:
-            # Tile became visible — check entities at this tile
-            for entity in Entity.get_all_entities_at_position(pos):
-                if entity.is_perceivable_by(self.owner_uuid):
-                    self.senses.entities[entity.uuid] = pos
+# events.py
+EventType.SPATIAL_OBJECT_CHANGED = "spatial_object_changed"
+SpatialChangeType.OBJECT_CHANGED = "object_changed"
+
+# Factory: SpatialChangeEvent.object_changed(position, object_uuid,
+#            blocks_vision_changed=False, blocks_walking_changed=False)
 ```
 
-### What Each Change Type Needs
+Used by `BaseItem._notify_blocking_changed()` — standard pattern for items to notify blocking state changes. Door actions (OpenDoorAction, CloseDoorAction, InteractDoorAction) call this instead of `Entity.update_all_entities_senses()`.
 
-| Change | Observer Update | Cost |
-|---|---|---|
-| **Normal light change** | Re-filter entities at changed tiles only | O(changed_tiles × entities_per_tile) |
-| **Magical darkness added** | Full FOV recompute (geometry changed) | O(visible_cells) for FOV, then re-filter |
-| **Magical darkness removed** | Full FOV recompute | Same as above |
-| **Entity entered tile** | Add to visible entities if perceivable + light OK | O(1) |
-| **Entity left tile** | Remove from visible entities | O(1) |
-| **Entity moved (own movement)** | FOV from new position + entity filter | O(visible_cells) — no paths during movement |
-| **Tile walkability changed** | Path recompute only | O(cells × log cells) for Dijkstra |
+### Bug Fixes Applied
 
-### Key Principle: Separate the Three Concerns
+1. **Light callback phase filter** (`gridmap.py`): `_on_light_movement_event()` returns early if `phase != EventPhase.COMPLETION`. Reduces `move_light_source()` from 4x to 1x per movement step.
+2. **Removed `is_moving` flag**: No more mutable state on Senses. Self-movement detected by UUID comparison in callbacks. All movement types (walking, teleport, forced) handled uniformly.
+3. **Batch light hint**: `_fire_light_batch_events()` builds `SensesUpdateHint` with `light_changed_positions` from batch, detects magical darkness for `requires_fov`.
+4. **Object blocking hints**: `place_object()`/`remove_object()` look up object blocking properties and populate hints.
 
-```
-FOV (geometry)     — only recompute when vision-blocking changes (walls, magical darkness)
-Paths (movement)   — only recompute when walkability changes (entities move, walls placed)
-Entity filtering   — only re-filter when light or perceivability changes at specific tiles
-```
+### Zone Light/Terrain Batching
 
-Currently all three are bundled in `update_entity_senses()`. Splitting them allows each spatial event to trigger only the minimal work needed.
+- `ZoneControlCondition._apply_terrain_modifiers()` fires batched `SPATIAL_TILE_CHANGED` with `requires_paths=True` hint after modifying tiles
+- `ZoneControlCondition._apply_light_modifiers()` uses `fire_event=False` per tile + `grid._fire_light_batch_events(changed_positions)` batch after
 
-### Coalescing During Movement
+### Files Modified (Incremental Senses)
 
-When an entity with a torch moves 6 tiles, instead of 3 events × 6 tiles × N observers = 18N recomputes, the system should:
-
-1. **Batch the movement**: carrier's `is_moving` flag already exists
-2. **Accumulate deltas**: collect all light changes across the 6-tile movement
-3. **Single update at end**: apply the accumulated delta to each observer once
-4. **FOV only during movement**: for the moving entity (already implemented via `update_visibility_func`)
-
-This reduces 18N recomputes to N incremental updates + 1 FOV per moving entity step.
+| File | Changes |
+|------|---------|
+| `dnd/core/events.py` | +SensesUpdateHint model, +senses_hint on SpatialChangeEvent, +SPATIAL_OBJECT_CHANGED, hints on all factories |
+| `dnd/blocks/sensory.py` | Remove `is_moving` field, +_paths_dirty flag, refactor SpatialSensesCallback (no Dijkstra, _apply_hint + helpers) |
+| `dnd/core/gridmap.py` | Fix light callback phase filter, populate hints in _fire_light_batch_events, detect magical darkness |
+| `dnd/actions.py` | Remove `is_moving` flag set/clear from Move._apply() |
+| `dnd/blocks/base_item.py` | +_notify_blocking_changed() method |
+| `dnd/items/test_items.py` | Door actions: use _notify_blocking_changed() instead of update_all_entities_senses() |
+| `dnd/tile_conditions.py` | Zone terrain: fire batched path event. Zone light: batch pattern. |

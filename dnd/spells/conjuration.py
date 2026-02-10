@@ -48,7 +48,7 @@ class CallLightningStrike(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             event_type=EventType.CAST_SPELL,
-            event_phase=EventPhase.DECLARATION,
+            phase=EventPhase.DECLARATION,
             **kwargs
         )
 

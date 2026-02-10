@@ -206,11 +206,23 @@ def get_max_hp(entity: Entity) -> int:
 def set_hp(entity: Entity, hp: int):
     """
     Set entity's HP to a specific value.
+    If hp exceeds current max HP, boosts max HP first via a modifier.
 
     Args:
         entity: Entity to modify
         hp: Target HP value
     """
+    max_hp = get_max_hp(entity)
+    if hp > max_hp:
+        # Boost max HP so heal can reach the target value
+        entity.health.max_hit_points_bonus.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=entity.uuid,
+                name="Test HP Boost",
+                value=hp - max_hp
+            )
+        )
+
     current = entity.get_hp()
     if hp < current:
         # Need to deal damage

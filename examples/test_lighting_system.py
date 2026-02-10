@@ -7,18 +7,16 @@ light sources, zone spell light integration, and stealth interactions.
 import sys
 from uuid import uuid4
 
-from dnd.utils import reset_combat_state, setup_combat_arena, get_hp, set_hp, has_condition
+from dnd.utils import reset_combat_state, setup_combat_arena
 from dnd.entity import Entity
 from dnd.core.base_tiles import LightLevel, SensesType, SenseMode, Tile, dark_floor_factory
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import EventQueue
-from dnd.monsters.bestiary import create_skeleton, create_goblin
+from dnd.monsters.bestiary import create_skeleton
 from dnd.actions_functional import setup_standard_actions, register_spell
-from dnd.conditions import Hidden
 from dnd.actions import Hide
 from dnd.spells.conjuration import FogCloud, Darkness, Daylight
-from dnd.items.test_items import create_torch, Torch
+from dnd.items.test_items import create_torch
 
 # Test tracking
 passed = 0
@@ -40,6 +38,14 @@ def section(title: str):
     print(f"{'='*60}")
 
 
+def tile_at(x: int, y: int) -> Tile:
+    """Get tile with assertion — test convenience wrapper."""
+    grid = get_map()
+    t = grid.get_tile(x, y)
+    assert t is not None, f"No tile at ({x}, {y})"
+    return t
+
+
 # =============================================================================
 # Test: LightLevel resolution
 # =============================================================================
@@ -48,7 +54,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
-tile = grid.get_tile(3, 3)
+tile = tile_at(3, 3)
 check("Default tile is BRIGHT_LIGHT", tile.resolved_light_level == LightLevel.BRIGHT_LIGHT)
 
 # Add an illumination (torch)
@@ -84,7 +90,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
-tile = grid.get_tile(5, 5)
+tile = tile_at(5, 5)
 torch_uuid = uuid4()
 tile.add_illumination(torch_uuid, LightLevel.BRIGHT_LIGHT)
 darkness_uuid = uuid4()
@@ -105,7 +111,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
-tile = grid.get_tile(4, 4)
+tile = tile_at(4, 4)
 # Track if event fires by checking tile state changes
 old_level = tile.resolved_light_level
 fog_uuid = uuid4()
@@ -190,7 +196,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
-tile = grid.get_tile(3, 3)
+tile = tile_at(3, 3)
 tile.add_obscurement(uuid4(), LightLevel.MAGICAL_DARKNESS)
 check("Tile is MAGICAL_DARKNESS", tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS)
 
@@ -201,9 +207,41 @@ ds_observer.senses.sense_modes = [
     SenseMode(sense_type=SensesType.DARKVISION, range_feet=60),
 ]
 
-# Devil's Sight downgrades MAGICAL_DARKNESS to DARKNESS, then darkvision lifts to DIM
+# Devil's Sight: see normally in all darkness (magical and non-magical) → BRIGHT_LIGHT
 effective = tile.get_effective_light_for(ds_observer.uuid, observer_position=(2, 3))
-check("Devil's Sight + Darkvision sees through magical darkness (at least DIM)", effective.value >= LightLevel.DIM_LIGHT.value)
+check("Devil's Sight sees magical darkness as BRIGHT_LIGHT", effective == LightLevel.BRIGHT_LIGHT)
+
+# Devil's Sight alone (no Darkvision) — still sees normally
+ds_only_observer = create_skeleton(name="DS Only", position=(2, 3))
+ds_only_observer.senses.sense_modes = [
+    SenseMode(sense_type=SensesType.DEVILS_SIGHT, range_feet=120),
+]
+effective_ds_only = tile.get_effective_light_for(ds_only_observer.uuid, observer_position=(2, 3))
+check("Devil's Sight alone sees magical darkness as BRIGHT_LIGHT", effective_ds_only == LightLevel.BRIGHT_LIGHT)
+
+# Devil's Sight in normal DARKNESS (non-magical)
+dark_tile = tile_at(4, 4)
+dark_tile.add_obscurement(uuid4(), LightLevel.DARKNESS)
+check("Tile is DARKNESS", dark_tile.resolved_light_level == LightLevel.DARKNESS)
+effective_normal_dark = dark_tile.get_effective_light_for(ds_only_observer.uuid, observer_position=(2, 3))
+check("Devil's Sight sees normal darkness as BRIGHT_LIGHT", effective_normal_dark == LightLevel.BRIGHT_LIGHT)
+
+# Devil's Sight out of range — no effect
+ds_short = create_skeleton(name="DS Short", position=(0, 0))
+ds_short.senses.sense_modes = [
+    SenseMode(sense_type=SensesType.DEVILS_SIGHT, range_feet=10),  # 10ft = 2 cells
+]
+# tile at (3,3) is ~4.24 cells = 21ft from (0,0), outside 10ft range
+effective_out_range = tile.get_effective_light_for(ds_short.uuid, observer_position=(0, 0))
+check("Devil's Sight out of range sees MAGICAL_DARKNESS", effective_out_range == LightLevel.MAGICAL_DARKNESS)
+
+# Devil's Sight in DIM_LIGHT — no change (DIM is not darkness)
+dim_tile = tile_at(5, 3)
+dim_uuid = uuid4()
+dim_tile.add_obscurement(dim_uuid, LightLevel.DIM_LIGHT)
+effective_dim = dim_tile.get_effective_light_for(ds_only_observer.uuid, observer_position=(2, 3))
+check("Devil's Sight in DIM_LIGHT leaves it as DIM_LIGHT", effective_dim == LightLevel.DIM_LIGHT)
+dim_tile.remove_light_modifier(dim_uuid)
 
 
 # =============================================================================
@@ -214,7 +252,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
-dark_tile = grid.get_tile(5, 5)
+dark_tile = tile_at(5, 5)
 dark_tile.add_obscurement(uuid4(), LightLevel.MAGICAL_DARKNESS)
 
 ts_observer = create_skeleton(name="TS Observer", position=(5, 4))
@@ -238,7 +276,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
-dark_tile = grid.get_tile(5, 5)
+dark_tile = tile_at(5, 5)
 dark_tile.add_obscurement(uuid4(), LightLevel.DARKNESS)
 check("Dark tile is DARKNESS objectively", dark_tile.resolved_light_level == LightLevel.DARKNESS)
 
@@ -268,7 +306,7 @@ Entity.update_all_entities_senses()
 check("Target visible in BRIGHT_LIGHT", target.uuid in observer.senses.entities)
 
 # Make target's tile dark
-target_tile = grid.get_tile(5, 0)
+target_tile = tile_at(5, 0)
 fog_uuid = uuid4()
 target_tile.add_obscurement(fog_uuid, LightLevel.DARKNESS)
 
@@ -300,16 +338,16 @@ setup_standard_actions(observer)
 
 # Create a wall of magical darkness between observer and target
 for y in range(-2, 3):
-    t = grid.get_tile(3, 5 + y)
+    t = tile_at(3, 5 + y)
     if t:
         t.add_obscurement(uuid4(), LightLevel.MAGICAL_DARKNESS)
 
 target = create_skeleton(name="Target Behind Darkness", position=(6, 5))
 Entity.update_all_entities_senses()
 
-check("Tile at (3,5) is MAGICAL_DARKNESS", grid.get_tile(3, 5).resolved_light_level == LightLevel.MAGICAL_DARKNESS)
+check("Tile at (3,5) is MAGICAL_DARKNESS", tile_at(3, 5).resolved_light_level == LightLevel.MAGICAL_DARKNESS)
 # Magical darkness should block vision through it (like a wall)
-check("blocks_vision is True for MAGICAL_DARKNESS", grid.get_tile(3, 5).blocks_vision(observer.uuid))
+check("blocks_vision is True for MAGICAL_DARKNESS", tile_at(3, 5).blocks_vision(observer.uuid))
 
 
 # =============================================================================
@@ -360,7 +398,7 @@ result = hide_action.apply()
 check("Cannot hide in BRIGHT_LIGHT with enemy watching", "Hidden" not in hider.active_conditions)
 
 # Make tile DIM_LIGHT
-hider_tile = grid.get_tile(3, 3)
+hider_tile = tile_at(3, 3)
 dim_uuid = uuid4()
 hider_tile.add_obscurement(dim_uuid, LightLevel.DIM_LIGHT)
 check("Hider tile is DIM_LIGHT", hider_tile.resolved_light_level == LightLevel.DIM_LIGHT)
@@ -385,7 +423,7 @@ hider = create_skeleton(name="Hider", position=(5, 5), faction="heroes")
 setup_standard_actions(hider)
 Entity.update_all_entities_senses()
 
-hider_tile = grid.get_tile(5, 5)
+hider_tile = tile_at(5, 5)
 bright_uuid = uuid4()
 hider_tile.add_illumination(bright_uuid, LightLevel.VERY_BRIGHT)
 check("Tile is VERY_BRIGHT", hider_tile.resolved_light_level == LightLevel.VERY_BRIGHT)
@@ -410,7 +448,7 @@ setup_standard_actions(hider)
 Entity.update_all_entities_senses()
 
 # Make tile dim so we can hide
-hider_tile = grid.get_tile(3, 3)
+hider_tile = tile_at(3, 3)
 dim_uuid = uuid4()
 hider_tile.add_obscurement(dim_uuid, LightLevel.DIM_LIGHT)
 
@@ -437,7 +475,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 20, 20)
 
-caster = create_skeleton(name="Caster", position=(0, 0), faction="heroes")
+caster = create_skeleton(name="Caster", position=(5, 5), faction="heroes")
 setup_standard_actions(caster)
 register_spell(caster, FogCloud, caster_level=5)
 
@@ -454,16 +492,15 @@ fog_spell = FogCloud(source_entity_uuid=caster.uuid, end_position=(10, 10))
 fog_spell.apply()
 
 # Check tiles in the fog are DARKNESS
-center_tile = grid.get_tile(10, 10)
+center_tile = tile_at(10, 10)
 check("Fog Cloud center tile is DARKNESS", center_tile.resolved_light_level == LightLevel.DARKNESS)
 
 # Check a tile at radius edge (4 tiles = 20ft)
-edge_tile = grid.get_tile(14, 10)
-if edge_tile:
-    check("Fog Cloud edge tile affected", edge_tile.resolved_light_level == LightLevel.DARKNESS)
+edge_tile = tile_at(14, 10)
+check("Fog Cloud edge tile affected", edge_tile.resolved_light_level == LightLevel.DARKNESS)
 
 # Check a tile outside the fog
-outside_tile = grid.get_tile(0, 0)
+outside_tile = tile_at(0, 0)
 check("Tile outside fog is still BRIGHT", outside_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT)
 
 
@@ -490,7 +527,7 @@ encounter.start_turn()
 dark_spell = Darkness(source_entity_uuid=caster.uuid, end_position=(8, 0))
 dark_spell.apply()
 
-center_tile = grid.get_tile(8, 0)
+center_tile = tile_at(8, 0)
 check("Darkness center tile is MAGICAL_DARKNESS", center_tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS)
 check("Magical darkness blocks vision", center_tile.blocks_vision(caster.uuid))
 
@@ -524,7 +561,7 @@ encounter.start_turn()
 daylight_spell = Daylight(source_entity_uuid=caster.uuid, end_position=(8, 0))
 daylight_spell.apply()
 
-center_tile = grid.get_tile(8, 0)
+center_tile = tile_at(8, 0)
 check("Daylight center tile is VERY_BRIGHT", center_tile.resolved_light_level == LightLevel.VERY_BRIGHT)
 
 
@@ -539,11 +576,11 @@ grid.create_rectangle(0, 0, 20, 20)
 # Place dark tiles in a 10x10 area
 for x in range(5, 15):
     for y in range(5, 15):
-        t = grid.get_tile(x, y)
+        t = tile_at(x, y)
         if t:
             t.default_light = LightLevel.DARKNESS
 
-center_tile = grid.get_tile(10, 10)
+center_tile = tile_at(10, 10)
 check("Center tile dark before torch", center_tile.resolved_light_level == LightLevel.DARKNESS)
 
 # Add light source (20ft bright, 40ft dim)
@@ -569,7 +606,7 @@ grid.create_rectangle(0, 0, 20, 20)
 # Make all tiles dark
 for x in range(20):
     for y in range(20):
-        t = grid.get_tile(x, y)
+        t = tile_at(x, y)
         if t:
             t.default_light = LightLevel.DARKNESS
 
@@ -585,10 +622,10 @@ ls_uuid = grid.add_light_source(
     anchor_uuid=carrier.uuid
 )
 
-tile_at_origin = grid.get_tile(5, 5)
+tile_at_origin = tile_at(5, 5)
 check("Carrier's tile is BRIGHT", tile_at_origin.resolved_light_level == LightLevel.BRIGHT_LIGHT)
 
-tile_at_dest = grid.get_tile(10, 5)
+tile_at_dest = tile_at(10, 5)
 # Depending on whether 10,5 is within bright radius (5 tiles = 25ft > 20ft)
 # It could be DIM or DARKNESS. Let's check it's not BRIGHT
 check("Far tile not BRIGHT before move", tile_at_dest.resolved_light_level != LightLevel.BRIGHT_LIGHT or True)
@@ -597,12 +634,12 @@ check("Far tile not BRIGHT before move", tile_at_dest.resolved_light_level != Li
 Entity.update_entity_position(carrier, (10, 5))
 
 # Light should have followed
-tile_at_new_pos = grid.get_tile(10, 5)
+tile_at_new_pos = tile_at(10, 5)
 check("New position is BRIGHT after entity move", tile_at_new_pos.resolved_light_level == LightLevel.BRIGHT_LIGHT)
 
 # Old position should revert (if no longer in bright range)
 # 5 tiles away = 25ft, which is > 20ft bright but < 40ft dim
-old_tile = grid.get_tile(5, 5)
+old_tile = tile_at(5, 5)
 # Could be DIM_LIGHT or DARKNESS depending on exact range
 check("Old position no longer BRIGHT after move", old_tile.resolved_light_level != LightLevel.BRIGHT_LIGHT or old_tile.resolved_light_level == LightLevel.DIM_LIGHT)
 
@@ -618,7 +655,7 @@ grid.create_rectangle(0, 0, 20, 20)
 # Make tiles dark
 for x in range(20):
     for y in range(20):
-        t = grid.get_tile(x, y)
+        t = tile_at(x, y)
         if t:
             t.default_light = LightLevel.DARKNESS
 
@@ -639,7 +676,7 @@ check("Has Ignite action", len(actions) == 1 and actions[0].name == "Ignite Torc
 torch.ignite(carrier.uuid)
 check("Torch is now lit", torch.is_lit)
 
-carrier_tile = grid.get_tile(10, 10)
+carrier_tile = tile_at(10, 10)
 check("Carrier tile BRIGHT after igniting torch", carrier_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT)
 
 # Get use actions when lit
@@ -661,7 +698,7 @@ grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
 # Dark dungeon + torch = BRIGHT
-tile = grid.get_tile(5, 5)
+tile = tile_at(5, 5)
 tile.default_light = LightLevel.DARKNESS
 check("Dark tile", tile.resolved_light_level == LightLevel.DARKNESS)
 

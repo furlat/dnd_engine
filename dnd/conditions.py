@@ -182,7 +182,8 @@ def create_has_taken_damage_handler(source_entity_uuid: UUID) -> EventHandler:
 class Blinded(BaseCondition):
     name: str = "Blinded"
     description: str = "A blinded creature can't see and automatically fails any ability check that requires sight. Attack rolls against the creature have advantage, and the creature's attack rolls have disadvantage."
-    
+
+
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -214,7 +215,7 @@ class Blinded(BaseCondition):
 class Charmed(BaseCondition):
     name: str = "Charmed"
     description: str = "A charmed creature can't attack the charmer or target the charmer with harmful abilities or magical effects."
-    
+
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
@@ -546,12 +547,12 @@ def unseen_target_disadvantage(source_entity_uuid: UUID, target_entity_uuid: Opt
 
 
 class Paralyzed(BaseCondition):
-    """A paralyzed creature is incapacitated (see the condition) and can’t move or speak.
+    """A paralyzed creature is incapacitated (see the condition) and can't move or speak.
     The creature automatically fails Strength and Dexterity saving throws.
     Attack rolls against the creature have advantage.
     Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature."""
     name: str = "Paralyzed"
-    description: str = "A paralyzed creature is incapacitated (see the condition) and can’t move or speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage. Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature."
+    description: str = "A paralyzed creature is incapacitated (see the condition) and can't move or speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage. Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature."
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:

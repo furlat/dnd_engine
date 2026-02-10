@@ -361,8 +361,9 @@ def test_scroll_magic_missile_level_scaling():
     _ = execute_use_action(caster3, scroll_l3.uuid, mm_info3.template_name, mm_info3.valid_targets[0])
     damage_l3 = 100 - get_hp(target3)
 
-    # L3 should deal more damage (5 darts vs 3 darts, min 5*2=10 vs 3*2=6)
-    assert damage_l3 > damage_l1, f"L3 scroll should deal more damage than L1: L1={damage_l1}, L3={damage_l3}"
+    # L1 = 3 darts * (1d4+1) = 6-15, L3 = 5 darts * (1d4+1) = 10-25
+    assert 6 <= damage_l1 <= 15, f"L1 scroll (3 darts) should deal 6-15 damage, got {damage_l1}"
+    assert 10 <= damage_l3 <= 25, f"L3 scroll (5 darts) should deal 10-25 damage, got {damage_l3}"
 
 
 def test_scroll_no_spell_slot_consumed():

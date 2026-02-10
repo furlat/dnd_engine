@@ -26,7 +26,7 @@ from dnd.utils import (
 from dnd.monsters.bestiary import create_skeleton, create_sorcerer
 from dnd.entity import Entity
 from dnd.core.gridmap import get_map
-from dnd.core.base_block import BaseBlock
+from dnd.blocks.base_item import UsableItem
 from dnd.conditions import Invisible, Hidden, Incapacitated, InvisibilityEffect, GreaterInvisibilityEffect
 from dnd.core.base_tiles import SensesType, SenseMode
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index, execute_use_action, register_spell
@@ -35,7 +35,7 @@ from dnd.items.armors import create_chain_mail, create_leather_armor
 from dnd.items.weapons import create_assassin_dagger
 from dnd.items.test_items import create_potion_of_greater_invisibility
 from dnd.spells.illusion import Invisibility, GreaterInvisibility
-from dnd.spells.evocation import FireBolt, Fireball
+from dnd.spells.evocation import FireBolt
 from dnd.core.events import BodyPart, WeaponSlot
 from dnd.core.modifiers import DamageType
 
@@ -1155,6 +1155,7 @@ def test_greater_invisibility_potion_consumption():
     check("Potion in inventory", entity.inventory.item_count == 1)
     item = list(entity.inventory.items.values())[0]
     check("Stack count is 1", item.stack_count == 1)
+    assert isinstance(item, UsableItem)
     print(f"  Charges: {item.charges}")
 
     # Use the potion via execute_use_action
@@ -1202,6 +1203,7 @@ def test_greater_invisibility_potion_stacking():
     # Potion still in inventory (stack_count decremented)
     check("Potion still in inventory", entity.inventory.item_count == 1)
     check("Stack count is 1 after first use", item.stack_count == 1)
+    assert isinstance(item, UsableItem)
     print(f"  Charges after first use: {item.charges}")
     check("Charges reset to 1", item.charges == 1)
 
@@ -1488,7 +1490,7 @@ def test_assassin_dagger_equip_unequip():
     check("Dagger equipped", dagger.is_equipped)
     check("Handler UUID stored", dagger._handler_uuid is not None)
 
-    handler_uuid = dagger._handler_uuid
+    _handler_uuid = dagger._handler_uuid
 
     # Unequip
     entity.unequip_item(WeaponSlot.MELEE_MAIN)

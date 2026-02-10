@@ -776,7 +776,6 @@ Movement processes the path cell-by-cell, not as a single transaction:
 
 ```python
 # In Move._apply(), simplified:
-source_entity.senses.is_moving = True
 try:
     for i in range(1, total_path_length):
         from_pos = path[i - 1]
@@ -805,20 +804,23 @@ try:
         if processed_step.canceled:
             break
 
-        # 5. Actually move the entity
+        # 5. Re-check walkability (handlers may have changed the map, e.g. Intercept)
+        if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
+            break
+
+        # 6. Actually move the entity
         Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
 
-        # 6. Complete step (generates combat log)
+        # 7. Complete step (generates combat log)
         processed_step.phase_to(EventPhase.COMPLETION)
 
-        # 7. Deduct movement cost
+        # 8. Deduct movement cost
         source_entity.action_economy.consume("movement", step_cost_feet)
 
-        # 8. Check death during movement
+        # 9. Check death during movement
         if "Dead" in source_entity.active_conditions:
             break
 finally:
-    source_entity.senses.is_moving = False
     source_entity.update_entity_senses(max_distance=20)
 ```
 
@@ -832,8 +834,8 @@ class SecondWind(BaseAction):
     target_type: TargetType = TargetType.SELF
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Second Wind Cost",

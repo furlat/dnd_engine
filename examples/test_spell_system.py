@@ -17,6 +17,7 @@ reset_combat_state()
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig, SpellcastingBlock
 from dnd.core.modifiers import NumericalModifier, DamageType
 
@@ -713,6 +714,7 @@ def test_magic_missile_combat():
 
     target_config = EntityConfig(
         ability_scores=AbilityScoresConfig(),
+        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=10, mode="maximums")]),
         proficiency_bonus=2,
         position=(1, 0),
         faction="enemies",  # Target must be enemy
@@ -788,6 +790,7 @@ def test_spell_slot_consumption():
 
     target_config = EntityConfig(
         ability_scores=AbilityScoresConfig(),
+        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=10, mode="maximums")]),
         position=(1, 0),
     )
     target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)

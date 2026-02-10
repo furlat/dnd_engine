@@ -1,7 +1,7 @@
 from typing import Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from enum import Enum
-from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
@@ -161,8 +161,7 @@ class BaseBlock(BaseModel):
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
 
-    class Config:
-        validate_assignment = False
+    model_config = ConfigDict(validate_assignment=False)
 
     def _set_values_and_blocks_source(self, block: 'BaseBlock') -> None:
         """
@@ -248,14 +247,8 @@ class BaseBlock(BaseModel):
                 
         return self
 
-    def __init__(self, **data):
-        """
-        Initialize the BaseBlock and register it in the class registry.
-
-        Args:
-            **data: Keyword arguments to initialize the BaseBlock attributes.
-        """
-        super().__init__(**data)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.__class__._registry[self.uuid] = self
 
     @classmethod

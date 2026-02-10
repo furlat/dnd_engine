@@ -4,8 +4,8 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           LightningBolt, Thunderwave, Shatter, Sunburst, RayOfFrost, ScorchingRay,
           ShockingGrasp, GuidingBolt
 """
-from typing import Optional, List, Tuple
-from uuid import UUID, uuid4
+from typing import Any, Optional, List, Tuple
+from uuid import UUID
 
 from pydantic import Field
 
@@ -780,17 +780,14 @@ class Fireball(SpellAction):
     # Damage configuration
     base_damage_dice: int = Field(default=8)  # 8d6 at level 3
 
-    def __init__(self, **kwargs):
-
-        # Set up shape before super().__init__ if not provided
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Sphere(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (0, 0)),
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Sphere(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0),
                 radius_feet=20
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         """Return spell range for POSITION_AOE target resolution."""
@@ -929,17 +926,14 @@ class BurningHands(SpellAction):
     # Damage configuration
     base_damage_dice: int = Field(default=3)  # 3d6 at level 1
 
-    def __init__(self, **kwargs):
-
-        # Set up cone shape if not provided
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Cone(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (1, 0)),  # Direction target
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cone(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
                 length_feet=15
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         """Return spell range for POSITION_AOE target resolution."""
@@ -1065,18 +1059,15 @@ class LightningBolt(SpellAction):
     # Damage configuration
     base_damage_dice: int = Field(default=8)  # 8d6 at level 3
 
-    def __init__(self, **kwargs):
-
-        # Set up line shape if not provided
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Line(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (1, 0)),  # Direction target
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Line(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
                 length_feet=100,
                 width_feet=5
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         """Return spell range for POSITION_AOE target resolution."""
@@ -1202,18 +1193,15 @@ class Thunderwave(SpellAction):
     base_damage_dice: int = Field(default=2)  # 2d8 at level 1
     push_distance_feet: int = Field(default=10)  # Push 10ft on failed save
 
-    def __init__(self, **kwargs):
-
-        # Set up cube shape if not provided
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Cube(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (1, 0)),  # Direction target
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cube(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
                 size_feet=15,
-                centered=False  # Extends from caster toward direction
+                centered=False
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         """Return spell range for POSITION_AOE target resolution."""
@@ -1434,17 +1422,14 @@ class Shatter(SpellAction):
     # Damage configuration
     base_damage_dice: int = Field(default=3)  # 3d8 at level 2
 
-    def __init__(self, **kwargs):
-
-        # Set up sphere shape if not provided
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Sphere(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (0, 0)),
-                radius_feet=10  # Smaller than Fireball
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Sphere(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0),
+                radius_feet=10
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         """Return spell range for POSITION_AOE target resolution."""
@@ -1583,17 +1568,14 @@ class CircleOfDeath(SpellAction):
     # Damage configuration
     base_damage_dice: int = Field(default=8)  # 8d6 at level 6
 
-    def __init__(self, **kwargs):
-
-        # Set up sphere shape if not provided
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Sphere(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (0, 0)),
-                radius_feet=60  # Large radius
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Sphere(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0),
+                radius_feet=60
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         """Return spell range for POSITION_AOE target resolution."""
@@ -1731,17 +1713,14 @@ class ConeOfCold(SpellAction):
     # Damage configuration
     base_damage_dice: int = Field(default=8)  # 8d8 at level 5
 
-    def __init__(self, **kwargs):
-
-        # Set up cone shape if not provided
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Cone(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (1, 0)),  # Direction target
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cone(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
                 length_feet=60
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         """Return spell range for POSITION_AOE target resolution."""
@@ -1967,16 +1946,14 @@ class Sunburst(SpellAction):
     # Damage configuration
     base_damage_dice: int = Field(default=12)  # 12d6
 
-    def __init__(self, **kwargs):
-
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Sphere(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (0, 0)),
-                radius_feet=60  # 60ft radius
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Sphere(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0),
+                radius_feet=60
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         return self.spell_range
