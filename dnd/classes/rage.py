@@ -16,7 +16,7 @@ from dnd.core.base_actions import (
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
-    WeaponSlot,
+    WeaponSlot, DeathEvent,
 )
 from dnd.core.modifiers import (
     NumericalModifier, AdvantageModifier, AdvantageStatus,
@@ -217,8 +217,7 @@ def rage_death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
     Triggers on DEATH at EXECUTION phase (when entity dies).
     """
     # Get the dead entity UUID from the event
-    entity_uuid = getattr(event, 'entity_uuid', None)
-    if entity_uuid != source_entity_uuid:
+    if not isinstance(event, DeathEvent) or event.entity_uuid != source_entity_uuid:
         return None
 
     entity = Entity.get(source_entity_uuid)

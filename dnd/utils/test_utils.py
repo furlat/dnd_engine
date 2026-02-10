@@ -14,7 +14,8 @@ from dnd.controller import HumanController
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap
 from dnd.core.modifiers import (
-    NumericalModifier, CriticalModifier, CriticalStatus, DamageType
+    NumericalModifier, CriticalModifier, CriticalStatus, DamageType,
+    AutoHitModifier, AutoHitStatus
 )
 
 
@@ -62,7 +63,7 @@ def setup_combat_arena(
 
 def force_attack_hit(entity: Entity) -> UUID:
     """
-    Add +100 attack bonus to guarantee hits (barring auto-miss).
+    Add AUTOHIT modifier to guarantee hits (overrides natural 1).
 
     Args:
         entity: The attacker entity
@@ -70,12 +71,13 @@ def force_attack_hit(entity: Entity) -> UUID:
     Returns:
         UUID of the modifier for later cleanup via remove_attack_modifier()
     """
-    modifier = NumericalModifier.create(
-        source_entity_uuid=entity.uuid,
+    modifier = AutoHitModifier(
         name="Forced Hit",
-        value=100
+        value=AutoHitStatus.AUTOHIT,
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_value_modifier(modifier)
+    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
     return mod_uuid
 
 

@@ -343,7 +343,7 @@ class BaseAction(BaseObject):
         targets.extend(self.extra_target_entity_uuids)
         return targets
 
-    def _filter_targets_by_faction(self, source_entity: "BaseBlock", targets: List[UUID]) -> List[UUID]:
+    def _filter_targets_by_faction(self, source_entity: BaseBlock, targets: List[UUID]) -> List[UUID]:
         """Filter targets based on valid_target_filter for AoE spells.
 
         For POSITION_AOE actions, this filters which entities in the area are affected.

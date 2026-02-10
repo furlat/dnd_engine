@@ -2,7 +2,7 @@
 
 Contains: Blight, BlindnessDeafness, FalseLife, ChillTouch
 """
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -718,7 +718,6 @@ class BlindnessDeafness(SpellAction):
                 )
 
         # Call parent validation
-        from typing import cast as type_cast
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 

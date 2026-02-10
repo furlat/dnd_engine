@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint
+from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent, DeathEvent
 from dnd.core.base_tiles import SensesType, SenseMode, LightLevel
 
 
@@ -197,7 +197,7 @@ class SpatialSensesCallback:
         self.update_senses_func = update_senses_func
         self.update_visibility_func = update_visibility_func
 
-    def __call__(self, event: "Event") -> None:
+    def __call__(self, event: Event) -> None:
         """Process any event, filtering to events that affect our senses.
 
         NEVER calls update_senses_func (no Dijkstra). All paths through
@@ -213,16 +213,15 @@ class SpatialSensesCallback:
             return
 
         # Only process at COMPLETION phase (one update per event lifecycle)
-        phase = getattr(event, 'phase', None)
-        if phase != EventPhase.COMPLETION:
+        if event.phase != EventPhase.COMPLETION:
             return
 
-        # Get position from event
-        position = getattr(event, 'position', None)
-        if position is None:
+        # Spatial events are always SpatialChangeEvent
+        if not isinstance(event, SpatialChangeEvent):
             return
 
-        entity_uuid = getattr(event, 'entity_uuid', None)
+        position = event.position
+        entity_uuid = event.entity_uuid
 
         # Skip self-perceivability events (our own hiding doesn't affect our own senses)
         if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
@@ -239,7 +238,7 @@ class SpatialSensesCallback:
             return
 
         # For all other events: use hint if available
-        hint: Optional[SensesUpdateHint] = getattr(event, 'senses_hint', None)
+        hint = event.senses_hint
         if hint is not None:
             self._apply_hint(hint, event)
         else:
@@ -252,7 +251,7 @@ class SpatialSensesCallback:
                 self.update_visibility_func()
             self.senses._paths_dirty = True
 
-    def _apply_hint(self, hint: SensesUpdateHint, _event: "Event") -> None:
+    def _apply_hint(self, hint: SensesUpdateHint, _event: Event) -> None:
         """Apply targeted update based on event hint.
 
         NEVER calls update_senses_func — no Dijkstra.
@@ -315,11 +314,11 @@ class SpatialSensesCallback:
         if hint.requires_paths:
             self.senses._paths_dirty = True
 
-    def _handle_death_event(self, event: "Event") -> None:
+    def _handle_death_event(self, event: Event) -> None:
         """Handle entity death — remove from visible + mark paths dirty."""
-        dead_uuid = getattr(event, 'entity_uuid', None)
-        if dead_uuid is None:
+        if not isinstance(event, DeathEvent):
             return
+        dead_uuid = event.entity_uuid
 
         # Ignore if WE died
         if dead_uuid == self.owner_uuid:

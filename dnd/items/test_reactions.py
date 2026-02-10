@@ -21,7 +21,7 @@ from dnd.core.events import (
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.actions import Attack, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
+from dnd.actions import Attack, AttackEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 
 
 # =============================================================================
@@ -318,8 +318,8 @@ def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
 
     if moved_cells > 0:
         # Impose disadvantage on the attack
-        attack_bonus = getattr(event, 'attack_bonus', None)
-        if attack_bonus is not None:
+        if isinstance(event, AttackEvent) and event.attack_bonus is not None:
+            attack_bonus = event.attack_bonus
             attack_bonus.self_static.add_advantage_modifier(
                 AdvantageModifier(
                     name="Dodge Roll",

@@ -384,9 +384,11 @@ def test_intercept_with_2_reactions_also_oa():
                 f"1 reaction remaining after intercept ({reactions_after_intercept})")
 
     # Enemy moves away from interceptor → should trigger OA (1 reaction left)
+    hit_mod = force_attack_hit(interceptor)
     enemy_hp_after_intercept = enemy.get_hp()
     move2 = Move(source_entity_uuid=enemy.uuid, end_position=(8, 2))
     move2.apply()
+    remove_attack_modifier(interceptor, hit_mod)
 
     # OA should have fired and consumed the remaining reaction
     assert_test(interceptor.action_economy.reactions.normalized_score == 0,
