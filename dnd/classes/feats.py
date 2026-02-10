@@ -49,6 +49,7 @@ def lucky_processor(
     entity.action_economy.consume_resource("luck_points", 1)
 
     # Reroll the d20
+    assert event.bonus is not None, "Lucky reroll requires a bonus on the event"
     dice = Dice(count=1, value=20, bonus=event.bonus, roll_type=event.roll_type)
     new_roll = dice.roll
 

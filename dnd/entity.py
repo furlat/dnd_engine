@@ -44,16 +44,17 @@ def get_natural_roll(roll: DiceRoll) -> int:
     For advantage, returns the higher roll.
     For disadvantage, returns the lower roll.
     """
-    if isinstance(roll.results, int):
-        return roll.results
+    results = roll.results
+    if isinstance(results, int):
+        return results
     # For advantage/disadvantage, determine which die was used
     if roll.advantage_status == AdvantageStatus.ADVANTAGE:
-        return max(roll.results)
+        return max(results)
     elif roll.advantage_status == AdvantageStatus.DISADVANTAGE:
-        return min(roll.results)
+        return min(results)
     else:
         # No advantage, first roll
-        return roll.results[0] if roll.results else 0
+        return results[0] if results else 0
     
 
 def determine_attack_outcome(
