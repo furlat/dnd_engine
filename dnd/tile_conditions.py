@@ -25,7 +25,7 @@ from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
 
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQueue
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQueue, SpatialChangeEvent, SensesUpdateHint
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
@@ -230,6 +230,7 @@ class ZoneControlCondition(BaseCondition):
             return outs
 
         grid = get_map()
+        modified_positions: List[Tuple[int, int]] = []
         for pos in self.affected_positions:
             tile = grid.get_tile(*pos)
             if tile:
@@ -241,10 +242,26 @@ class ZoneControlCondition(BaseCondition):
                 mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
                 self._terrain_modifier_uuids[tile.walking_cost.uuid] = [mod_uuid]
                 outs.append((tile.walking_cost.uuid, mod_uuid))
+                modified_positions.append(pos)
+
+        # Fire batched path notification for all modified tiles
+        if modified_positions:
+            hint = SensesUpdateHint(requires_paths=True)
+            representative_pos = modified_positions[0]
+            tile = grid.get_tile(*representative_pos)
+            if tile:
+                event = SpatialChangeEvent.tile_changed(
+                    representative_pos, walkable=True, visible=True,
+                    senses_hint=hint,
+                )
+                event = event.phase_to(EventPhase.COMPLETION)
+                EventQueue.register(event)
+
         return outs
 
     def _remove_terrain_modifiers(self) -> None:
         """Remove terrain modifiers before zone move or removal."""
+        had_modifiers = bool(self._terrain_modifier_uuids)
         for value_uuid, mod_uuids in self._terrain_modifier_uuids.items():
             value = ModifiableValue.get(value_uuid)
             if value is not None:
@@ -255,34 +272,66 @@ class ZoneControlCondition(BaseCondition):
                         pass  # Modifier already removed
         self._terrain_modifier_uuids.clear()
 
+        # Fire batched path notification if terrain modifiers were removed
+        if had_modifiers and self.affected_positions:
+            hint = SensesUpdateHint(requires_paths=True)
+            representative_pos = next(iter(self.affected_positions))
+            grid = get_map()
+            tile = grid.get_tile(*representative_pos)
+            if tile:
+                event = SpatialChangeEvent.tile_changed(
+                    representative_pos, walkable=True, visible=True,
+                    senses_hint=hint,
+                )
+                event = event.phase_to(EventPhase.COMPLETION)
+                EventQueue.register(event)
+
     # =========================================================================
     # Light Modifiers (separate from terrain modifiers)
     # =========================================================================
 
     def _apply_light_modifiers(self) -> None:
-        """Apply light level modifiers to affected tiles."""
+        """Apply light level modifiers to affected tiles.
+
+        Uses fire_event=False per tile + batch event after, same pattern
+        as GridMap._apply_light_source().
+        """
         if self.sets_light_level is None:
             return
 
         grid = get_map()
+        changed_positions: List[Tuple[int, int]] = []
         for pos in self.affected_positions:
             tile = grid.get_tile(*pos)
             if tile:
                 modifier_uuid = uuid4()
                 if self.light_is_obscurement:
-                    tile.add_obscurement(modifier_uuid, self.sets_light_level)
+                    if tile.add_obscurement(modifier_uuid, self.sets_light_level, fire_event=False):
+                        changed_positions.append(pos)
                 else:
-                    tile.add_illumination(modifier_uuid, self.sets_light_level)
+                    if tile.add_illumination(modifier_uuid, self.sets_light_level, fire_event=False):
+                        changed_positions.append(pos)
                 self._light_modifier_uuids[pos] = modifier_uuid
 
+        # Batch event for all actually-changed positions
+        grid._fire_light_batch_events(changed_positions)
+
     def _remove_light_modifiers(self) -> None:
-        """Remove light level modifiers from affected tiles."""
+        """Remove light level modifiers from affected tiles.
+
+        Uses fire_event=False per tile + batch event after.
+        """
         grid = get_map()
+        changed_positions: List[Tuple[int, int]] = []
         for pos, modifier_uuid in self._light_modifier_uuids.items():
             tile = grid.get_tile(*pos)
             if tile:
-                tile.remove_light_modifier(modifier_uuid)
+                if tile.remove_light_modifier(modifier_uuid, fire_event=False):
+                    changed_positions.append(pos)
         self._light_modifier_uuids.clear()
+
+        # Batch event for all actually-changed positions
+        grid._fire_light_batch_events(changed_positions)
 
     # =========================================================================
     # Core Apply / Remove / Move
