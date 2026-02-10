@@ -8,7 +8,7 @@ from collections import defaultdict
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
 from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint
-from dnd.core.base_tiles import SensesType, SenseMode, LightLevel, Tile
+from dnd.core.base_tiles import SensesType, SenseMode, LightLevel
 
 
 class Senses(BaseBlock):

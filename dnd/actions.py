@@ -395,6 +395,10 @@ class Move(BaseAction):
                     break
 
                 # Fire StepMovementEvent (OA and terrain handlers see this)
+                # use_register=False prevents __init__ from registering (which would
+                # fire handlers with the return value discarded). post(use_register=True)
+                # is the single registration point where handlers fire and cancellation
+                # propagates correctly through the return value.
                 step_event = StepMovementEvent(
                     source_entity_uuid=self.source_entity_uuid,
                     source_entity_name=source_entity.name,
@@ -404,13 +408,21 @@ class Move(BaseAction):
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
                     phase=EventPhase.EFFECT,
-                    parent_event=effect_event.uuid
+                    parent_event=effect_event.uuid,
+                    use_register=False
                 )
                 # post() returns the processed event (which may have been canceled by handlers)
-                processed_step = step_event.post()
+                processed_step = step_event.post(use_register=True)
 
                 # Check if step was canceled (e.g., by a reaction or trap)
                 if processed_step.canceled:
+                    break
+
+                # Re-check walkability after step event processing.
+                # Handlers may have changed the map (e.g., an interceptor charged into to_pos,
+                # a door was closed, an object was placed). The pre-step check (line 384) may
+                # now be stale.
+                if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
                     break
 
                 # Actually move the entity - pass step event UUID so terrain damage links to it

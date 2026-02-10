@@ -14,7 +14,7 @@ circular imports: base_tiles -> sensory -> entity is fine, reverse is not.
 
 import math
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr
 from dnd.core.base_block import BaseBlock, MovementMode

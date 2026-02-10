@@ -15,6 +15,7 @@ from dnd.utils import reset_combat_state, set_hp, has_condition, get_hp
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.conditions import Concentrating
 from dnd.spells import HoldPerson, CallLightning
 from dnd.actions_functional import setup_standard_actions
@@ -49,6 +50,9 @@ def create_target(name: str, position: tuple) -> Entity:
             wisdom=AbilityConfig(ability_score=8),  # -1 to make WIS saves harder
             dexterity=AbilityConfig(ability_score=8),  # -1 to make DEX saves harder
         ),
+        health=HealthConfig(hit_dices=[HitDiceConfig(
+            hit_dice_value=10, hit_dice_count=20, mode="maximums"
+        )]),  # 200 HP so target survives multiple spell hits
         proficiency_bonus=2,
         position=position
     )
