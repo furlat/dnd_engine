@@ -487,7 +487,7 @@ def protection_processor(
     attack_bonus = event.attack_bonus
 
     # Check if Protection disadvantage already exists (prevent multiple protectors stacking)
-    for modifier in attack_bonus.self_static.advantage_modifiers:
+    for modifier in attack_bonus.self_static.advantage_modifiers.values():
         if modifier.name == "Protection":
             return None  # Another protector already used Protection
 
