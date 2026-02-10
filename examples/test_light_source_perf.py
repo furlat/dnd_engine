@@ -7,7 +7,7 @@ import time
 from uuid import uuid4
 from dnd.utils import reset_combat_state
 from dnd.entity import Entity
-from dnd.core.base_tiles import LightLevel, Tile
+from dnd.core.base_tiles import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.core.events import EventQueue
 from dnd.monsters.bestiary import create_skeleton
@@ -79,7 +79,7 @@ def profile_light_source_move():
     # Check how many tiles actually CHANGED between old and new position
     # For a 1-tile move, most tiles overlap
     print("\n--- Delta analysis for 1-tile move ---")
-    old_pos = (7, 5)
+    _old_pos = (7, 5)
     new_pos = (8, 5)
     old_tiles = set(source.affected_tiles.keys())
 
@@ -121,10 +121,11 @@ def profile_notify_light_changed():
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 10)
 
-    carrier = create_skeleton(name="Observer", position=(5, 5))
+    _carrier = create_skeleton(name="Observer", position=(5, 5))
     Entity.update_all_entities_senses()
 
     tile = grid.get_tile(3, 3)
+    assert tile is not None
     tile.default_light = LightLevel.DARKNESS
 
     # Time a single light change

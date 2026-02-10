@@ -18,6 +18,7 @@ from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
 from dnd.classes.fighter import ExtraAttackFeature, ActionSurgeFeature, ExtraAttack, ActionSurge
 from dnd.core.events import WeaponSlot, EventQueue
+from dnd.utils import force_attack_miss
 
 
 def setup_test():
@@ -285,6 +286,9 @@ def test_integration_with_extra_attack():
     fighter = create_fighter_with_both_features("Fighter", (5, 5), extra_attacks=1, action_surge_uses=1)
     target = create_goblin(name="Target", position=(5, 6))
     Entity.update_all_entities_senses(max_distance=20)
+
+    # Force all attacks to miss so target survives all 4 attacks
+    force_attack_miss(fighter)
 
     # Reset action economy
     fighter.action_economy.reset_all_costs()

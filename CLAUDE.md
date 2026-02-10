@@ -789,11 +789,13 @@ Perceivability filtering on senses. See `claude_docs/VISION_HIDING_COVER_PLAN.md
 - **creation_lineage_uuid** — Hidden/InvisibilityEffect/GreaterInvisibilityEffect store the lineage UUID of the event that created them, preventing self-triggering (e.g., Hide action applying Hidden doesn't immediately reveal)
 - **Reveal handler pattern** — EventHandler with triggers on ATTACK/CAST_SPELL/BASE_ACTION at EFFECT phase, processor checks `NON_REVEALING_ACTIONS`, verifies lineage, calls `remove_condition` with `parent_event=event`
 
+#### Lighting System (Layer 2) — IMPLEMENTED
+
+Per-tile light levels with dynamic light sources, sense modes (Darkvision, Truesight, etc.), zone spell light effects, and incremental senses updates. See `claude_docs/LIGHTING_SYSTEM.md` for full documentation.
+
 #### Not Yet Implemented
 
 - **Spell duration/expiration** - Long rest, short rest, timed durations
-- **Terrain effects** - Fog Cloud, Wall of Fire (see `claude_docs/VISION_HIDING_COVER_PLAN.md`)
-- **Light/Obscurement** - Layer 2 of stealth system (see `claude_docs/VISION_HIDING_COVER_PLAN.md`)
 - **Cover** - Layer 3 of stealth system (see `claude_docs/VISION_HIDING_COVER_PLAN.md`)
 
 ## Code Quality
@@ -847,23 +849,31 @@ This project uses **Pylance** (VS Code's Python language server) with strict typ
 | `reportUnusedImport` | Import not used in file | Remove the import (but verify it's truly unused first!) |
 | `reportArgumentType` | Wrong type passed to function | Use `cast()`, add type narrowing with `isinstance()`, or fix the type |
 | `reportAssignmentType` | Assigning wrong type to typed variable | Use `cast()` or fix the assignment |
-| `reportCallIssue: No parameter named X` | Pydantic inheritance not recognized | Explicitly redeclare the field in subclass |
+| `reportCallIssue: No parameter named X` | Custom `__init__(self, **kwargs)` hides Pydantic's field-aware signature | Use `model_post_init` instead of `__init__` (see below) |
 
-#### Pydantic + Pylance Gotchas
+#### Pydantic + Pylance: Use `model_post_init`, NEVER `__init__`
 
-Pylance sometimes doesn't understand Pydantic model inheritance. If you get "No parameter named X" when X is inherited:
+**CRITICAL**: Never define `def __init__(self, **kwargs)` on Pydantic models. This overrides Pydantic's auto-generated `__init__`, making Pylance see `(**kwargs)` instead of named field parameters — causing "No parameter named X" errors everywhere.
+
+Instead, use `model_post_init` — Pydantic v2's official post-init hook:
 
 ```python
-# BAD: Pylance may not see inherited `costs` field
-class MovementEvent(ActionEvent):
-    name: str = Field(...)
-    # costs is inherited from ActionEvent but Pylance complains
+# BAD: Overrides Pydantic's __init__, breaks Pylance
+class MyAction(BaseAction):
+    costs: List[Cost] = []
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.costs = [Cost(...)]
 
-# GOOD: Explicitly redeclare for Pylance
-class MovementEvent(ActionEvent):
-    name: str = Field(...)
-    costs: List[BaseCost] = Field(default_factory=list)  # Redeclare for Pylance
+# GOOD: Preserves Pydantic's field-aware __init__
+class MyAction(BaseAction):
+    costs: List[Cost] = []
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        self.costs = [Cost(...)]
 ```
+
+All base classes (`BaseObject`, `BaseBlock`, `Event`, `Entity`) use `model_post_init` for registry registration. Subclasses that need post-init logic MUST also use `model_post_init` and call `super().model_post_init(__context)`.
 
 #### Type Narrowing Patterns
 
@@ -1090,7 +1100,7 @@ GridMap (get_map())
 **Key methods**: `is_walkable()`, `is_walkable_for()`, `get_entities_at()`, `move_entity()`, `compute_fov()`, `compute_paths()`
 **Object methods**: `place_object()`, `remove_object()`, `get_object_position()`, `get_objects_at()`, `get_objects_with_conditions()`
 
-**Spatial events**: `SPATIAL_ENTITY_ENTERED`, `SPATIAL_ENTITY_LEFT`, `SPATIAL_TILE_CHANGED` - fired automatically by GridMap.
+**Spatial events**: `SPATIAL_ENTITY_ENTERED`, `SPATIAL_ENTITY_LEFT`, `SPATIAL_TILE_CHANGED`, `SPATIAL_LIGHT_CHANGED`, `SPATIAL_OBJECT_PLACED`, `SPATIAL_OBJECT_REMOVED`, `SPATIAL_OBJECT_CHANGED`, `SPATIAL_PERCEIVABILITY_CHANGED` - fired automatically by GridMap and BaseBlock. All carry `SensesUpdateHint` for incremental senses updates.
 
 **Tiles** are `BaseBlock` objects that can have conditions (fire, traps, difficult terrain).
 
@@ -1114,6 +1124,55 @@ entity.senses.visible       # Dict[position, bool] - visible cells
 entity.senses.paths         # Dict[position, List[position]] - paths to reachable cells
 entity.senses.get_feet_distance(target.position)  # Distance in feet (1 grid = 5ft)
 ```
+
+### Incremental Senses Update System
+
+Senses are updated incrementally via the `SensesUpdateHint` system (40-257x faster than full recompute). See `claude_docs/LIGHTING_SYSTEM.md` for full details.
+
+**Core design**: Every spatial event carries a `SensesUpdateHint` on its `senses_hint` field, telling observers exactly what to update. The `SpatialSensesCallback` (registered on `EventQueue`) reads hints and applies targeted updates.
+
+**Three separated concerns**:
+- **FOV (geometry)**: Recomputed only when `requires_fov=True` (magical darkness, door vision blocking)
+- **Paths (movement)**: NEVER recomputed from callbacks. `_paths_dirty = True` flag set, cleared at turn start and movement end
+- **Entity filtering**: Re-filter at specific positions only (`light_changed_positions`, `entity_entered`/`entity_left`)
+
+**Key rule**: Callbacks NEVER run Dijkstra. All callback paths use `update_visibility_func()` (FOV only) + `_paths_dirty = True`. Full Dijkstra only runs at:
+1. Turn start (`Encounter.start_turn()` → `entity.update_entity_senses()`)
+2. Movement end (`Move._apply()` finally → `entity.update_entity_senses()`)
+
+**New event type**: `SPATIAL_OBJECT_CHANGED` — fired when objects change blocking state (doors). Carries `requires_fov` and `requires_paths` hints.
+
+**BaseItem._notify_blocking_changed()**: Standard method for items to fire `SPATIAL_OBJECT_CHANGED` when blocking properties change. Used by door actions instead of `Entity.update_all_entities_senses()`.
+
+### StepMovementEvent and the use_register Pattern
+
+In `Move._apply()`, each movement step fires a `StepMovementEvent` that handlers (OA, Intercept, terrain effects) can react to. **Critical implementation detail**:
+
+```python
+# StepMovementEvent created with use_register=False (no model_post_init auto-registration)
+step_event = StepMovementEvent(..., use_register=False)
+# post() is the SINGLE registration point where handlers fire and cancellation propagates
+processed_step = step_event.post(use_register=True)
+```
+
+**Why**: `Event.model_post_init` normally auto-registers with `EventQueue.register()`, and `post()` creates a copy and registers again — causing handlers to fire **twice** with the first cancellation discarded. The `use_register=False` pattern prevents this double-registration.
+
+After step event processing, a **walkability re-check** catches map changes by handlers (e.g., an interceptor charged into `to_pos`, a door closed):
+
+```python
+if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
+    break  # Map changed during step event — stop movement
+```
+
+### Reactions
+
+**`dnd/reactions.py`**: Contains the opportunity attack handler (fires on `STEP_MOVEMENT` at `EFFECT` phase).
+
+**`dnd/items/test_reactions.py`**: Homebrew reaction definitions proving the `_paths_dirty` incremental senses pattern works:
+- **Intercept** (action-setup reaction): Player spends 1 action + movement to declare a charge destination. When an enemy steps into that cell, interceptor charges there first, occupies the cell (blocking enemy path), and makes a melee attack. Uses per-cell `is_walkable_for()` checks at reaction time.
+- **Dodge Roll** (passive reaction): When attacked, moves up to 2 cells away from attacker and imposes disadvantage. Uses per-cell `is_walkable_for()` checks.
+
+Both validate that environment changes (door open/close) correctly propagate through `_paths_dirty` to affect reaction-time walkability checks. Tests: `examples/test_intercept_dodge_roll.py` (52 assertions).
 
 ## CLI and Server Architecture
 
@@ -1249,6 +1308,7 @@ Polls server every 2s, shows opponent actions, blocks until Claude's turn, detec
 | Attack, Move, Jump, Shove, Dash, Dodge, etc. | `dnd/actions.py` |
 | Functional API (setup, execute) | `dnd/actions_functional.py` |
 | Opportunity attack handler | `dnd/reactions.py` |
+| Homebrew reactions (Intercept, Dodge Roll) | `dnd/items/test_reactions.py` |
 | **Conditions** | |
 | Base condition class | `dnd/core/base_conditions.py` |
 | All D&D conditions | `dnd/conditions.py` |
@@ -1321,7 +1381,10 @@ Polls server every 2s, shows opponent actions, blocks until Claude's turn, detec
 | Jump action tests | `examples/test_jump.py` |
 | Jump API tests | `examples/test_jump_api.py` |
 | Shove action tests | `examples/test_shove.py` |
-| Stealth system tests (44) | `examples/test_stealth_system.py` |
+| Stealth system tests (130) | `examples/test_stealth_system.py` |
+| Lighting system tests (77) | `examples/test_lighting_system.py` |
+| Light source performance benchmark | `examples/test_light_source_perf.py` |
+| Intercept + Dodge Roll tests (52 assertions) | `examples/test_intercept_dodge_roll.py` |
 | **Server & CLI** | |
 | FastAPI server | `server/event_server.py` |
 | Session management | `server/session.py` |
@@ -1344,6 +1407,8 @@ Contains focused implementation guides:
 | `IMPLEMENTATION_GUIDE.md` | **READ FIRST** - How to implement conditions, actions, event handlers |
 | `CLASS_SYSTEM.md` | Class system patterns, Fighter/Barbarian/Sorcerer, spellcasting infrastructure |
 | `ITEMS_PLAN.md` | Items system design & implementation (steps a-d DONE). BaseItem, EquippableItem, UsableItem, inventory use actions, ActionCategory. |
+| `LIGHTING_SYSTEM.md` | Layer 2 lighting: LightLevel, sense modes, light sources, zone light, incremental senses (SensesUpdateHint) |
+| `VISION_HIDING_COVER_PLAN.md` | Layers 1-3 plan: Stealth [DONE], Light [DONE], Cover [TODO] |
 | ~~`EXAMPLE_PATTERNS.md`~~ | Merged into `IMPLEMENTATION_GUIDE.md` (Section 14) |
 | `archive/` | Completed planning docs (historical reference) |
 

@@ -18,6 +18,7 @@ from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
 from dnd.classes.fighter import ExtraAttackFeature, ExtraAttack
 from dnd.core.events import WeaponSlot, EventQueue
+from dnd.utils import set_hp
 
 
 def setup_test():
@@ -173,6 +174,7 @@ def test_resource_recharges_at_turn_start():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=2)
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying mid-test
     Entity.update_all_entities_senses(max_distance=20)
 
     # Use all extra attacks
@@ -216,6 +218,7 @@ def test_full_combat_round_l5():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=1)
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying mid-test
     Entity.update_all_entities_senses(max_distance=20)
 
     initial_hp = target.get_hp()
@@ -269,6 +272,7 @@ def test_full_combat_round_l11():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=2)
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying mid-test
     Entity.update_all_entities_senses(max_distance=20)
 
     attacks_made = 0

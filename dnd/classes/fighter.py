@@ -33,7 +33,7 @@ from dnd.actions import (
     AttackEvent,
     Attack
 )
-from typing import Optional, List, Tuple, cast
+from typing import Any, Optional, List, Tuple, cast
 from uuid import UUID
 import random
 
@@ -711,8 +711,8 @@ class SecondWind(BaseAction):
     # Cost: 1 bonus action + 1 second_wind resource
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Second Wind Cost",
@@ -922,8 +922,8 @@ class ActionSurge(BaseAction):
     # Free action - only costs the resource
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Action Surge",
@@ -1265,8 +1265,8 @@ class ExtraAttack(BaseAction):
     # Cost: only resource, no action cost
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Extra Attack",

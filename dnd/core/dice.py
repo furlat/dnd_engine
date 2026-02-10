@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, computed_field, model_validator
-from typing import List, Optional, Union, Tuple, Self, ClassVar, Dict, Literal
+from typing import Any, List, Optional, Union, Tuple, Self, ClassVar, Dict, Literal
 import random
 from dnd.core.values import ModifiableValue, AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue,NumericalModifier, ContextualValue
 from enum import Enum
@@ -100,8 +100,7 @@ class DiceRoll(BaseModel):
         description="The outcome of an attack roll, if applicable."
     )
 
-    def __init__(self, **data):
-        super().__init__(**data)
+    def model_post_init(self, __context: Any) -> None:
         self.__class__._registry[self.roll_uuid] = self
 
     @classmethod
@@ -186,8 +185,7 @@ class Dice(BaseModel):
         description="Extra dice to roll on critical hits (e.g., Brutal Critical). Added on top of doubled dice."
     )
 
-    def __init__(self, **data):
-        super().__init__(**data)
+    def model_post_init(self, __context: Any) -> None:
         self.__class__._registry[self.uuid] = self
 
     @classmethod

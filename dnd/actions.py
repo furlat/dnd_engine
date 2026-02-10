@@ -15,7 +15,7 @@ from dnd.core.combat_log import (
     md_color
 )
 from pydantic import Field, model_validator
-from typing import Optional, List, TypeVar, Tuple, Self, cast
+from typing import Any, Optional, List, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
@@ -164,8 +164,8 @@ class Move(BaseAction):
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="The path of the movement")
     use_movement_cost: bool = Field(default=True, description="Whether to use the movement cost")
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         # Only compute path and costs if we have an end_position (not a template)
         if self.end_position is not None and not self.template:
             self._setup_path()
@@ -1410,8 +1410,8 @@ class StandUp(BaseAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Stand Up targets self")
     # Cost is set dynamically based on entity's base movement
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         # Calculate cost based on entity's base movement
         entity = Entity.get(self.source_entity_uuid)
         if entity:

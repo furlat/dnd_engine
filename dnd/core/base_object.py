@@ -74,14 +74,7 @@ class BaseObject(BaseModel):
         description="Whether to register this object in the class registry."
     )
 
-    def __init__(self, **data):
-        """
-        Initialize the BaseModifier and register it in the class registry if use_register is True.
-
-        Args:
-            **data: Keyword arguments to initialize the BaseModifier attributes.
-        """
-        super().__init__(**data)
+    def model_post_init(self, __context: Any) -> None:
         if self.use_register:
             self.__class__._registry[self.uuid] = self
 

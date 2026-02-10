@@ -280,10 +280,17 @@ class Tile(BaseBlock):
                 if in_range:
                     return max(base, LightLevel.BRIGHT_LIGHT)
 
-        # Devil's Sight: pierces magical darkness -> treat as non-magical DARKNESS
-        if base == LightLevel.MAGICAL_DARKNESS:
-            if any(sm.sense_type == SensesType.DEVILS_SIGHT for sm in sense_modes):
-                base = LightLevel.DARKNESS  # Downgrade, darkvision can now help
+        # Devil's Sight: see normally in all darkness (magical and nonmagical) within range
+        # SRD: "You can see normally in darkness, both magical and nonmagical, to a distance of 120 feet."
+        if base in (LightLevel.MAGICAL_DARKNESS, LightLevel.DARKNESS):
+            for sm in sense_modes:
+                if sm.sense_type == SensesType.DEVILS_SIGHT:
+                    in_range = (sm.range_feet == 0)
+                    if not in_range and observer_position is not None and self.position is not None:
+                        in_range = _tile_distance_feet(self.position, observer_position) <= sm.range_feet
+                    if in_range:
+                        base = LightLevel.BRIGHT_LIGHT
+                    break
 
         # Darkvision: explicit upgrade within range (NOT magical darkness)
         if base in _DARKVISION_SHIFT:

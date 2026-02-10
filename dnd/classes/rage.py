@@ -31,7 +31,7 @@ from dnd.actions import (
     entity_action_economy_cost_applier,
     Attack, AttackEvent,
 )
-from typing import Optional, List, Tuple, cast
+from typing import Any, Optional, List, Tuple, cast
 from uuid import UUID
 
 
@@ -406,8 +406,8 @@ class Rage(BaseAction):
 
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Rage",
@@ -526,8 +526,8 @@ class EndRage(BaseAction):
 
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="End Rage",
@@ -786,8 +786,8 @@ class FrenziedStrike(BaseAction):
 
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Frenzied Strike",
@@ -908,8 +908,8 @@ class Frenzy(BaseAction):
 
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Frenzy",
