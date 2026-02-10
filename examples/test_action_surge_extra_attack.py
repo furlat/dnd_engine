@@ -16,6 +16,7 @@ from dnd.actions import Attack
 from dnd.classes.fighter import ExtraAttackFeature, ExtraAttack
 from dnd.core.events import WeaponSlot, EventQueue
 from dnd.core.modifiers import NumericalModifier
+from dnd.utils import set_hp
 
 
 def setup_test():
@@ -79,6 +80,7 @@ def test_normal_turn_two_attacks():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=1)
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying mid-test
     Entity.update_all_entities_senses(max_distance=20)
 
     attacks_made = 0
@@ -123,6 +125,7 @@ def test_action_surge_interleaved():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=1)
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying mid-test
     Entity.update_all_entities_senses(max_distance=20)
 
     attacks_made = 0
@@ -195,6 +198,7 @@ def test_action_surge_first():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=1)
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying mid-test
     Entity.update_all_entities_senses(max_distance=20)
 
     attacks_made = 0
@@ -257,6 +261,7 @@ def test_level_11_with_action_surge():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=2)  # Level 11
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying mid-test
     Entity.update_all_entities_senses(max_distance=20)
 
     attacks_made = 0

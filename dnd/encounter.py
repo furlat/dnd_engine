@@ -9,7 +9,7 @@ The Encounter class orchestrates combat:
 - Integrates with action economy and conditions
 """
 
-from typing import Optional, Dict, List, ClassVar, Tuple
+from typing import Any, Optional, Dict, List, ClassVar, Tuple
 
 __all__ = [
     "EncounterState",
@@ -149,8 +149,8 @@ class Encounter(BaseObject):
     # Combat log - unified log for all players
     combat_log: List[CombatLogEntry] = Field(default_factory=list)
 
-    def __init__(self, **data):
-        super().__init__(**data)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.__class__._encounter_registry[self.uuid] = self
 
     @classmethod

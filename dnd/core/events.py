@@ -259,8 +259,8 @@ class Event(BaseObject):
         """ get the trigger for the event """
         return Trigger(event_type=self.event_type, event_phase=self.phase,event_source_entity_uuid=self.source_entity_uuid,event_target_entity_uuid=self.target_entity_uuid)
     
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         if self.use_register:
             EventQueue.register(self)
     
@@ -513,7 +513,7 @@ class BaseHandler(BaseObject):
         return Event(
             name=self.name,
             event_type=EventType.TRIGGER_EVENT,
-            event_phase=EventPhase.DECLARATION,
+            phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             status_message=f"Triggering handler {self.name}",
             parent_event=parent_event.uuid if parent_event else None

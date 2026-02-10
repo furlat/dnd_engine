@@ -44,7 +44,7 @@ from dnd.actions import (
     Attack,
 )
 from dnd.conditions import Frightened
-from typing import Optional, List, Tuple
+from typing import Any, Optional, List, Tuple
 from uuid import UUID
 from functools import partial
 
@@ -1376,8 +1376,8 @@ class IntimidatingPresence(BaseAction):
 
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Intimidating Presence",
@@ -1535,8 +1535,8 @@ class ExtendIntimidatingPresence(BaseAction):
 
     costs: List[Cost] = []
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.costs = [
             Cost(
                 name="Extend Intimidating Presence",

@@ -8,7 +8,7 @@ Subclass this for different control modes:
 - ScriptedController: Follows a predefined action sequence
 """
 
-from typing import Optional, Dict, List, ClassVar
+from typing import Any, Optional, Dict, List, ClassVar
 
 __all__ = [
     "TurnContext",
@@ -67,8 +67,8 @@ class Controller(BaseObject):
     name: str = Field(default="Controller", description="Name of this controller")
     controller_type: str = Field(default="base", description="Type identifier")
 
-    def __init__(self, **data):
-        super().__init__(**data)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.__class__._controller_registry[self.uuid] = self
 
     @classmethod

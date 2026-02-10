@@ -154,29 +154,15 @@ class Entity(BaseBlock):
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
     _entity_by_position: ClassVar[DefaultDict[Tuple[int, int], List['Entity']]] = defaultdict(list)
 
-    def __init__(self, **data):
-        """
-        Initialize the BaseBlock and register it in the class registry.
-
-        Args:
-            **data: Keyword arguments to initialize the BaseBlock attributes.
-        """
-        super().__init__(**data)
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         self.__class__._entity_registry[self.uuid] = self
         self.__class__._entity_by_position[self.position].append(self)
         # Also register with GridMap for spatial queries
         get_map().register_entity(self.uuid, self.position)
-        # Note: Action templates are set up via actions_functional.setup_standard_actions()
-        # Called from entity factories (e.g., bestiary.py) after entity creation
 
         # Register spatial callback for reactive senses updates
-        # This callback fires on SPATIAL events (entity movement, tile changes)
-        # and triggers full senses recalculation for real-time FOV/paths updates
-        # Using callbacks instead of EventHandlers because spatial events
-        # fire at COMPLETION phase and handlers don't fire for COMPLETION events
         if self.senses is not None:
-            # Pass update functions so callback can trigger appropriate updates
-            # Using lambda to capture self and provide default max_distance
             update_senses_func = lambda: self.update_entity_senses(max_distance=20)
             update_visibility_func = lambda: self.update_entity_visibility(max_distance=20)
             spatial_callback = self.senses.create_spatial_callback(

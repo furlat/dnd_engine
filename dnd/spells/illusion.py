@@ -3,8 +3,8 @@
 Contains: Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility
 """
 import random
-from typing import Optional, List, Tuple
-from uuid import UUID, uuid4
+from typing import Any, Optional, List, Tuple
+from uuid import UUID
 
 from pydantic import Field
 from typing import cast as type_cast
@@ -251,16 +251,14 @@ class Fear(SpellAction):
     include_self: bool = Field(default=False)
     valid_target_filter: str = Field(default="all")
 
-    def __init__(self, **kwargs):
-
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Cone(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (1, 0)),
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cone(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
                 length_feet=30
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         return self.spell_range
@@ -457,17 +455,15 @@ class HypnoticPattern(SpellAction):
     include_self: bool = Field(default=False)  # Caster can be hit if in area
     valid_target_filter: str = Field(default="all")
 
-    def __init__(self, **kwargs):
-
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Cube(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (0, 0)),
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cube(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0),
                 size_feet=30,
-                centered=True  # Centered on target point
+                centered=True
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         return self.spell_range
@@ -619,16 +615,14 @@ class ColorSpray(SpellAction):
     hp_pool_rolled: int = Field(default=0)
     hp_pool_remaining: int = Field(default=0)
 
-    def __init__(self, **kwargs):
-
-        if 'aoe_shape' not in kwargs or kwargs['aoe_shape'] is None:
-            source_uuid = kwargs.get('source_entity_uuid') or uuid4()
-            kwargs['aoe_shape'] = Cone(
-                source_entity_uuid=source_uuid,
-                target=kwargs.get('end_position', (1, 0)),  # Direction target
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cone(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
                 length_feet=15
             )
-        super().__init__(**kwargs)
 
     def get_range(self) -> Range:
         return self.spell_range

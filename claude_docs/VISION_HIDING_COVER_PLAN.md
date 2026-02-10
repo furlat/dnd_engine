@@ -4,7 +4,7 @@ Three systems, each building on the previous. Same polymorphic pattern as Dijkst
 
 ```
 Layer 1: Stealth      Pure LOS + stealth vs perception. No light.     [DONE]
-Layer 2: Light         Per-tile obscurement. Extends stealth detection.
+Layer 2: Light         Per-tile light levels. Entity visibility filtering. [DONE]
 Layer 3: Cover         Raycast partial cover. AC/DEX save mods. Cover enables hiding.
 ```
 
@@ -487,139 +487,45 @@ All in `examples/test_stealth_system.py` — 44 tests, all passing.
 
 ---
 
-## Layer 2: Light / Obscurement
+## Layer 2: Light / Obscurement — DONE
 
-Extends Layer 1. Adds per-tile obscurement that affects stealth detection.
+Fully implemented. See `claude_docs/LIGHTING_SYSTEM.md` for complete documentation.
 
-### 2a. ObscurementLevel Enum
+**What was built** (different from original plan above — implemented as a per-tile lighting system instead of ObscurementLevel enum):
 
-Add to `base_block.py` (next to `MovementMode`):
+- **LightLevel enum**: MAGICAL_DARKNESS (0) → DARKNESS (1) → DIM_LIGHT (2) → BRIGHT_LIGHT (3) → VERY_BRIGHT (4)
+- **Tile light storage**: Two modifier dicts (`_illuminations`, `_obscurements`) + resolution logic (MAX illuminations, MIN obscurements)
+- **Observer-subjective light**: `Tile.get_effective_light_for(observer_uuid)` — applies Darkvision, Truesight, Devil's Sight, Blindsight, adjacent rule
+- **Magical darkness blocks FOV**: `blocks_vision()` checks MAGICAL_DARKNESS, threaded through GridMap/Shadowcast
+- **Light sources on GridMap**: `add_light_source()`, `remove_light_source()`, `move_light_source()` (delta-based), `toggle_light_source()`, anchored light movement
+- **Zone spell light**: `ZoneControlCondition` has `sets_light_level` + `light_is_obscurement` fields. Fog Cloud (DARKNESS), Darkness spell (MAGICAL_DARKNESS), Daylight (VERY_BRIGHT)
+- **Torch item**: UsableItem with Ignite/Extinguish actions, auto-extinguish on drop
+- **Stealth interactions**: Hide fails in VERY_BRIGHT, Hidden auto-revealed when entering VERY_BRIGHT
+- **Incremental senses updates**: SensesUpdateHint-based system — 40-257x faster than original full-recompute approach
+
+**77 tests** in `examples/test_lighting_system.py`, 130 stealth tests pass (no regressions).
+
+### Original Plan Below (Kept for Reference)
+
+The original plan proposed `ObscurementLevel` enum approach. The actual implementation uses `LightLevel` enum with per-tile illumination/obscurement modifier stacks, which is more flexible and supports dynamic light sources.
+
+<details>
+<summary>Original Layer 2 plan (superseded)</summary>
+
+#### 2a. ObscurementLevel Enum
 
 ```python
 class ObscurementLevel(str, Enum):
-    NONE = "none"              # Bright light, clear area
-    LIGHTLY_OBSCURED = "light" # Dim light, patchy fog
-    HEAVILY_OBSCURED = "heavy" # Darkness, opaque fog
+    NONE = "none"
+    LIGHTLY_OBSCURED = "light"
+    HEAVILY_OBSCURED = "heavy"
 ```
 
-### 2b. Tile Fields
+#### 2b-2i. (See LIGHTING_SYSTEM.md for actual implementation)
 
-Add to Tile in `base_tiles.py`:
+The original plan envisioned static obscurement on tiles set by zone spells. The actual implementation uses a full dynamic lighting system with light sources, anchored movement, batch events, and incremental senses updates.
 
-```python
-obscurement: ObscurementLevel = Field(default=ObscurementLevel.NONE)
-is_magical_darkness: bool = Field(default=False)
-```
-
-### 2c. GridMap
-
-Add default obscurement field:
-
-```python
-default_obscurement: ObscurementLevel = ObscurementLevel.NONE  # Per-map (dungeon=HEAVY, outdoor=NONE)
-```
-
-### 2d. TileEffectCondition
-
-Add to `TileEffectCondition` in `tile_conditions.py`:
-
-```python
-sets_obscurement: Optional[ObscurementLevel] = None
-sets_magical_darkness: bool = False
-```
-
-On `_apply()`: set `tile.obscurement` (and `is_magical_darkness` if flagged).
-On removal: reset to `GridMap.default_obscurement`.
-
-### 2e. Entity.is_perceivable_by() — Layer 2 extension
-
-The `is_perceivable_by()` method on Entity (which overrides BaseBlock's version) would add obscurement awareness. The obscurement check happens between the existing invisible/stealth checks:
-
-```python
-# Check tile obscurement at this block's position
-tile = get_map().get_tile(*self.position)
-if tile:
-    effective_obs = self._compute_effective_obscurement(
-        tile.obscurement, tile.is_magical_darkness, observer
-    )
-    if effective_obs == ObscurementLevel.HEAVILY_OBSCURED:
-        return False  # Auto-hidden in heavy obscurement
-```
-
-**Helper on Entity:**
-
-```python
-@staticmethod
-def _compute_effective_obscurement(
-    tile_obs: ObscurementLevel,
-    is_magical: bool,
-    observer: 'Entity'
-) -> ObscurementLevel:
-    extra = observer.senses.extra_senses
-
-    # Truesight/Blindsight: ignore all obscurement
-    if SensesType.TRUESIGHT in extra or SensesType.BLINDSIGHT in extra:
-        return ObscurementLevel.NONE
-
-    # Magical darkness: Darkvision doesn't help
-    if is_magical:
-        return tile_obs
-
-    # Normal obscurement: Darkvision downgrades by 1
-    if SensesType.DARKVISION in extra:
-        if tile_obs == ObscurementLevel.HEAVILY_OBSCURED:
-            return ObscurementLevel.LIGHTLY_OBSCURED
-        elif tile_obs == ObscurementLevel.LIGHTLY_OBSCURED:
-            return ObscurementLevel.NONE
-    return tile_obs
-```
-
-Layer 1 behavior preserved: when `tile_obs` is NONE, no obscurement effect.
-
-### 2f. Heavily Obscured Without Hidden
-
-Entities in heavily obscured tiles are auto-hidden even without the Hidden condition. Add to `is_perceivable_by()` before the Hidden check:
-
-```python
-# Heavily obscured tile: auto-hidden (even without Hidden condition)
-tile = get_map().get_tile(*self.position)
-if tile:
-    effective_obs = self._compute_effective_obscurement(
-        tile.obscurement, tile.is_magical_darkness, observer
-    )
-    if effective_obs == ObscurementLevel.HEAVILY_OBSCURED:
-        return False
-```
-
-This is the SRD rule: "A creature in a heavily obscured area effectively can't be seen" — you don't need to take the Hide action.
-
-### 2g. Zone Spells
-
-**Fog Cloud** (conjuration.py): Zone spell, concentration.
-- Heavily obscured zone within sphere radius
-- Uses `ZoneControlCondition` pattern
-- `TileEffectCondition` with `sets_obscurement=ObscurementLevel.HEAVILY_OBSCURED`
-
-**Darkness** (conjuration.py): Zone spell, concentration.
-- Heavily obscured + `sets_magical_darkness=True`
-- Darkvision doesn't help, only Truesight/Blindsight bypass
-
-### 2h. Light Sources — DEFERRED
-
-No dynamic light computation yet. Obscurement set manually on tiles or via zone spells. Future light source system would use mini-shadowcast from light position (compute FOV, set bright/dim tiles within radii).
-
-### 2i. Implementation Steps
-
-1. Add `ObscurementLevel` enum to `base_block.py`
-2. Add `obscurement` + `is_magical_darkness` fields to Tile
-3. Add `default_obscurement` to GridMap
-4. Add `sets_obscurement` / `sets_magical_darkness` to `TileEffectCondition`
-5. Override `is_perceivable_by()` on Entity with obscurement logic
-6. Add `_compute_effective_obscurement()` helper to Entity
-7. Implement Fog Cloud and Darkness spells
-
-**Files**: `dnd/core/base_block.py`, `dnd/core/base_tiles.py`, `dnd/core/gridmap.py`, `dnd/tile_conditions.py`, `dnd/entity.py`, `dnd/spells/conjuration.py`
-**Tests**: `examples/test_obscurement_system.py`
+</details>
 
 ---
 
@@ -808,9 +714,11 @@ When light source system is implemented:
 - [x] SPATIAL_PERCEIVABILITY_CHANGED event triggers senses re-evaluation (not update_all_entities_senses)
 - [x] 44 tests passing (examples/test_stealth_system.py)
 
-### Layer 2 (Light/Obscurement)
-- [ ] Each layer independently testable and doesn't break previous layers
-- [ ] Entity.is_perceivable_by() handles: Invisible, Hidden, Obscurement (layered)
+### Layer 2 (Light/Obscurement) — DONE
+- [x] Each layer independently testable and doesn't break previous layers (77 lighting tests + 130 stealth tests)
+- [x] Entity visibility filtered by light level via `Tile.get_effective_light_for()` in senses pipeline
+- [x] SensesUpdateHint incremental system: 40-257x performance improvement over full recompute
+- [x] See `claude_docs/LIGHTING_SYSTEM.md` for full documentation
 
 ### Layer 3 (Cover)
 - [ ] Cover computed at attack/save time (not cached in senses)
