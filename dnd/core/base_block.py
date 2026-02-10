@@ -1,7 +1,7 @@
-from typing import Dict, Optional, Any, List, Self,ClassVar,  Callable, Tuple
+from typing import Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from enum import Enum
-from pydantic import BaseModel, Field, model_validator, computed_field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
@@ -143,6 +143,9 @@ class BaseBlock(BaseModel):
         description="Stealth DC required to perceive. Set by Hidden condition.")
     is_invisible: bool = Field(default=False, exclude=True,
         description="Whether invisible. Set by Invisible condition.")
+
+    # Light source tracking (UUIDs of light sources attached to this block)
+    _attached_light_sources: Set[UUID] = PrivateAttr(default_factory=set)
 
     active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition name")
     active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition UUID")
@@ -382,8 +385,28 @@ class BaseBlock(BaseModel):
 
     def can_bypass_invisibility(self) -> bool:
         """Whether this block can see invisible things. Default False.
-        Entity overrides by checking extra_senses for TRUESIGHT/BLINDSIGHT/TREMORSENSE."""
+        Entity overrides by checking sense_modes for TRUESIGHT/BLINDSIGHT/TREMORSENSE."""
         return False
+
+    def get_sense_modes(self) -> list:
+        """Sense modes of this block as an observer. Default empty.
+        Entity overrides to relay to self.senses.get_sense_modes().
+        Returns untyped list to avoid importing SenseMode here."""
+        return []
+
+    # --- Light source tracking ---
+
+    def attach_light_source(self, light_source_uuid: UUID) -> None:
+        """Track a light source attached to this block (for cleanup)."""
+        self._attached_light_sources.add(light_source_uuid)
+
+    def detach_light_source(self, light_source_uuid: UUID) -> None:
+        """Stop tracking a light source."""
+        self._attached_light_sources.discard(light_source_uuid)
+
+    def get_attached_light_sources(self) -> Set[UUID]:
+        """Get all light sources attached to this block."""
+        return self._attached_light_sources.copy()
 
     def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
         """Whether this block can be perceived by the requesting entity.

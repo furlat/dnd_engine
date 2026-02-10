@@ -856,3 +856,134 @@ def create_potion_of_greater_invisibility(owner_uuid: UUID) -> PotionOfGreaterIn
         use_action_templates=[action],
         stack_id="potion_of_greater_invisibility"
     )
+
+
+# =============================================================================
+# Torch — Light Source Item
+# =============================================================================
+
+class IgniteTorchAction(BaseAction):
+    """Ignite a torch — creates a light source that follows the carrier."""
+    name: str = Field(default="Ignite Torch")
+    description: str = Field(default="Light the torch")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    costs: List[Cost] = Field(default_factory=list)
+    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return declaration_event.cancel(status_message="No torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not torch or not isinstance(torch, Torch):
+            return declaration_event.cancel(status_message="Torch not found")
+        if torch.is_lit:
+            return declaration_event.cancel(status_message="Torch already lit")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return execution_event.cancel(status_message="No torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not isinstance(torch, Torch):
+            return execution_event.cancel(status_message="Torch not found")
+
+        torch.ignite(self.source_entity_uuid)
+
+        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Torch ignited")
+        return effect.phase_to(EventPhase.COMPLETION, status_message="Torch ignited")
+
+
+class ExtinguishTorchAction(BaseAction):
+    """Extinguish a lit torch — removes the light source."""
+    name: str = Field(default="Extinguish Torch")
+    description: str = Field(default="Put out the torch")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    costs: List[Cost] = Field(default_factory=list)
+    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return declaration_event.cancel(status_message="No torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not torch or not isinstance(torch, Torch):
+            return declaration_event.cancel(status_message="Torch not found")
+        if not torch.is_lit:
+            return declaration_event.cancel(status_message="Torch not lit")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return execution_event.cancel(status_message="No torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not isinstance(torch, Torch):
+            return execution_event.cancel(status_message="Torch not found")
+
+        torch.extinguish()
+
+        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Torch extinguished")
+        return effect.phase_to(EventPhase.COMPLETION, status_message="Torch extinguished")
+
+
+class Torch(UsableItem):
+    """A torch that provides light when ignited.
+
+    Bright light in 20ft radius, dim light in additional 20ft.
+    When ignited, creates a light source anchored to the carrying entity.
+    Light follows the entity as they move.
+    """
+    name: str = Field(default="Torch")
+    description: str = Field(default="A torch that provides bright light in 20ft and dim light in 40ft")
+    is_equippable: bool = Field(default=False)
+    is_pickable: bool = Field(default=True)
+
+    bright_radius_feet: int = Field(default=20)
+    dim_radius_feet: int = Field(default=40)
+    is_lit: bool = Field(default=False)
+    _light_source_uuid: Optional[UUID] = None
+
+    def get_use_actions(self, user_entity_uuid: UUID) -> List["BaseAction"]:
+        if not self.is_lit:
+            return [IgniteTorchAction(
+                source_entity_uuid=user_entity_uuid,
+                source_item_uuid=self.uuid,
+            )]
+        else:
+            return [ExtinguishTorchAction(
+                source_entity_uuid=user_entity_uuid,
+                source_item_uuid=self.uuid,
+            )]
+
+    def ignite(self, carrier_entity_uuid: UUID) -> None:
+        """Light the torch — creates a light source on the GridMap."""
+        if self.is_lit:
+            return
+        self.is_lit = True
+        grid = get_map()
+        entity = Entity.get(carrier_entity_uuid)
+        if entity:
+            self._light_source_uuid = grid.add_light_source(
+                position=entity.position,
+                bright_radius_feet=self.bright_radius_feet,
+                dim_radius_feet=self.dim_radius_feet,
+                anchor_uuid=carrier_entity_uuid
+            )
+
+    def extinguish(self) -> None:
+        """Put out the torch — removes the light source."""
+        if not self.is_lit:
+            return
+        self.is_lit = False
+        if self._light_source_uuid:
+            grid = get_map()
+            grid.remove_light_source(self._light_source_uuid)
+            self._light_source_uuid = None
+
+    def _on_drop(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
+        """Auto-extinguish when dropped."""
+        self.extinguish()
+        super()._on_drop(entity_uuid, position)
+
+
+def create_torch(owner_uuid: UUID) -> Torch:
+    """Create a torch item."""
+    return Torch(source_entity_uuid=owner_uuid)

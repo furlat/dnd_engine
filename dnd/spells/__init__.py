@@ -11,7 +11,7 @@ from dnd.spells.evocation import (
 )
 from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
-from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians
+from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility
 from dnd.spells.transmutation import SpikeGrowth
@@ -38,6 +38,7 @@ LEVEL_1_SPELLS = {
     "Color Spray": ColorSpray,
     "Guiding Bolt": GuidingBolt,
     "Grease": Grease,
+    "Fog Cloud": FogCloud,
 }
 
 LEVEL_2_SPELLS = {
@@ -50,6 +51,7 @@ LEVEL_2_SPELLS = {
     "Spike Growth": SpikeGrowth,
     "Web": Web,
     "Invisibility": Invisibility,
+    "Darkness": Darkness,
 }
 
 LEVEL_3_SPELLS = {
@@ -60,6 +62,7 @@ LEVEL_3_SPELLS = {
     "Fear": Fear,
     "Hypnotic Pattern": HypnoticPattern,
     "Spirit Guardians": SpiritGuardians,
+    "Daylight": Daylight,
 }
 
 LEVEL_4_SPELLS = {
@@ -126,6 +129,7 @@ __all__ = [
     "ColorSpray",
     "GuidingBolt",
     "Grease",
+    "FogCloud",
     # Level 2
     "HoldPerson",
     "Shatter",
@@ -136,6 +140,7 @@ __all__ = [
     "SpikeGrowth",
     "Web",
     "Invisibility",
+    "Darkness",
     # Level 3
     "CallLightning",
     "CallLightningStrike",
@@ -145,6 +150,7 @@ __all__ = [
     "Fear",
     "HypnoticPattern",
     "SpiritGuardians",
+    "Daylight",
     # Level 4
     "Blight",
     "Stoneskin",

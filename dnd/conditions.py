@@ -9,7 +9,8 @@ from dnd.core.modifiers import (  AdvantageModifier, ContextAwareAdvantage,
                                    ContextualCriticalModifier, CriticalModifier, CriticalStatus,
                                    ContextAwareNumerical, ContextAwareAutoHit, ContextualAutoHitModifier, ContextualAdvantageModifier)
 from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiring_hearing, skills_social
-from dnd.blocks.sensory import SensesType
+from dnd.core.base_tiles import SensesType, LightLevel
+from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent
@@ -521,7 +522,7 @@ class Invisible(BaseCondition):
     @staticmethod
     def can_see_invisible(observer: Entity) -> bool:
         """ returns true if the observer can see invisible"""
-        return SensesType.TRUESIGHT in observer.senses.extra_senses or SensesType.TREMORSENSE in observer.senses.extra_senses
+        return observer.senses.has_sense(SensesType.TRUESIGHT) or observer.senses.has_sense(SensesType.TREMORSENSE)
 
 
 def unseen_attacker_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
@@ -1198,7 +1199,8 @@ class Hidden(BaseCondition):
             parent = declaration_event.get_parent_event()
             self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
 
-            # Reveal handler: removes Hidden on attack, damage, incapacitated, spell cast, or shove
+            # Reveal handler: removes Hidden on attack, damage, incapacitated, spell cast, shove,
+            # or when tile light changes to VERY_BRIGHT / entity moves into VERY_BRIGHT tile
             handler = EventHandler(
                 name="Hidden: Reveal",
                 source_entity_uuid=target_entity.uuid,
@@ -1212,6 +1214,9 @@ class Hidden(BaseCondition):
                     Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
                     Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EFFECT,
+                            event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.SPATIAL_LIGHT_CHANGED, event_phase=EventPhase.EFFECT),
+                    Trigger(event_type=EventType.SPATIAL_ENTITY_ENTERED, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
                 ],
                 event_processor=hidden_reveal_processor
@@ -1236,9 +1241,30 @@ NON_REVEALING_ACTIONS = {"Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop
 
 
 def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """Remove Hidden on attack, damage, incapacitated, spell cast, or revealing action."""
+    """Remove Hidden on attack, damage, incapacitated, spell cast, revealing action,
+    or when tile becomes VERY_BRIGHT (light change or movement)."""
     # Only reveal on the last EFFECT event (after damage is fully applied)
     if not event.is_last:
+        return None
+
+    # For SPATIAL_LIGHT_CHANGED: check if tile under hidden entity became VERY_BRIGHT
+    if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
+        entity = Entity.get(source_entity_uuid)
+        if entity and isinstance(entity, Entity) and "Hidden" in entity.active_conditions:
+            event_position = getattr(event, 'position', None)
+            if event_position and event_position == entity.position:
+                tile = get_map().get_tile(*entity.position)
+                if tile and tile.resolved_light_level == LightLevel.VERY_BRIGHT:
+                    entity.remove_condition("Hidden", parent_event=event)
+        return None
+
+    # For SPATIAL_ENTITY_ENTERED: check if entity moved into VERY_BRIGHT tile
+    if event.event_type == EventType.SPATIAL_ENTITY_ENTERED:
+        entity = Entity.get(source_entity_uuid)
+        if entity and isinstance(entity, Entity) and "Hidden" in entity.active_conditions:
+            tile = get_map().get_tile(*entity.position)
+            if tile and tile.resolved_light_level == LightLevel.VERY_BRIGHT:
+                entity.remove_condition("Hidden", parent_event=event)
         return None
 
     # For CONDITION_APPLICATION: only break on Incapacitated

@@ -7,6 +7,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent
 from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_tiles import LightLevel
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
@@ -1325,8 +1326,23 @@ class Hide(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Cannot hide while visible to any enemy
+        # Check tile light level at entity's position
         grid = get_map()
+        tile = grid.get_tile(*entity.position)
+        if tile:
+            light = tile.resolved_light_level
+            if light == LightLevel.VERY_BRIGHT:
+                return declaration_event.cancel(
+                    status_message="Cannot hide in very bright light"
+                )
+            if light.value <= LightLevel.DIM_LIGHT.value:
+                # Can attempt hide even with enemies watching in dim light or darker
+                return declaration_event.phase_to(
+                    new_phase=EventPhase.EXECUTION,
+                    status_message=f"Validated {self.name}"
+                )
+
+        # BRIGHT_LIGHT: cannot hide while visible to any enemy (existing logic)
         subscribers = grid.get_subscribers_at(entity.position)
         for sub_uuid in subscribers:
             if sub_uuid == entity.uuid:
