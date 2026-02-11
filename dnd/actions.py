@@ -22,6 +22,14 @@ from dnd.blocks.base_item import BaseItem
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden
 
 
+def entity_resource_cost_evaluator(entity_uuid: UUID, resource_name: str, resource_cost: int) -> bool:
+    """Evaluate resource costs via Entity.action_economy."""
+    entity = Entity.get(entity_uuid)
+    if entity is None or not isinstance(entity, Entity):
+        return False
+    return entity.action_economy.can_afford_resource(resource_name, resource_cost)
+
+
 #here we create event processors for the validation of the attack
 def entity_action_economy_cost_evaluator(source_entity_uuid: UUID,cost_type: CostType,cost: int) -> bool:
         """Evaluate the costs of the action"""
@@ -552,7 +560,7 @@ class AttackEvent(ActionEvent):
                 attack_roll.all_d20_rolls = list(results)
 
                 # Determine advantage status and which d20 was used
-                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                adv_status = self.dice_roll.advantage_status
                 if adv_status:
                     adv_value = adv_status.value.lower()
                     attack_roll.advantage_status = adv_value
@@ -571,7 +579,7 @@ class AttackEvent(ActionEvent):
                 attack_roll.results = [results]
                 attack_roll.d20_used = results
 
-            attack_roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            attack_roll.bonus = self.dice_roll.bonus
             attack_roll.total = self.dice_roll.total
 
         # Build attack breakdown from ModifiableValue
@@ -2455,7 +2463,7 @@ class SpellEvent(ActionEvent):
             if isinstance(results, list):
                 attack_roll.results = list(results)
                 attack_roll.all_d20_rolls = list(results)
-                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                adv_status = self.dice_roll.advantage_status
                 if adv_status:
                     adv_value = adv_status.value.lower()
                     attack_roll.advantage_status = adv_value
@@ -2473,7 +2481,7 @@ class SpellEvent(ActionEvent):
             elif isinstance(results, int):
                 attack_roll.results = [results]
                 attack_roll.d20_used = results
-            attack_roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            attack_roll.bonus = self.dice_roll.bonus
             attack_roll.total = self.dice_roll.total
 
         # Build attack breakdown from ModifiableValue

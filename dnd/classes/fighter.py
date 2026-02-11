@@ -30,6 +30,7 @@ from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_action_economy_cost_applier,
+    entity_resource_cost_evaluator,
     AttackEvent,
     Attack
 )
@@ -720,7 +721,8 @@ class SecondWind(BaseAction):
                 cost=1,
                 evaluator=entity_action_economy_cost_evaluator,
                 resource_name="second_wind",
-                resource_cost=1
+                resource_cost=1,
+                resource_evaluator=entity_resource_cost_evaluator
             )
         ]
 
@@ -931,7 +933,8 @@ class ActionSurge(BaseAction):
                 cost=0,  # No action cost
                 resource_name="action_surge",
                 resource_cost=1,
-                evaluator=None
+                evaluator=None,
+                resource_evaluator=entity_resource_cost_evaluator
             )
         ]
 
@@ -1273,7 +1276,8 @@ class ExtraAttack(BaseAction):
                 cost=0,  # No action cost - already spent on first Attack
                 resource_name="extra_attacks",
                 resource_cost=1,
-                evaluator=None
+                evaluator=None,
+                resource_evaluator=entity_resource_cost_evaluator
             )
         ]
 
