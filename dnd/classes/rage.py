@@ -29,6 +29,7 @@ from dnd.entity import Entity
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_action_economy_cost_applier,
+    entity_resource_cost_evaluator,
     Attack, AttackEvent,
 )
 from typing import Any, Optional, List, Tuple, cast
@@ -65,7 +66,7 @@ def rage_damage_check(
 
     # Must be raging
     raging = entity.active_conditions.get("Raging")
-    if not raging:
+    if not isinstance(raging, Raging):
         return None
 
     # No bonus if wearing heavy armor (Rage Impeded per BG3)
@@ -74,7 +75,7 @@ def rage_damage_check(
         return None
 
     # Get rage damage from the Raging condition
-    rage_damage = getattr(raging, 'rage_damage', 2)
+    rage_damage = raging.rage_damage
 
     return NumericalModifier.create(
         source_entity_uuid=source_entity_uuid,
@@ -414,7 +415,8 @@ class Rage(BaseAction):
                 cost=1,
                 resource_name="rage",
                 resource_cost=1,
-                evaluator=entity_action_economy_cost_evaluator
+                evaluator=entity_action_economy_cost_evaluator,
+                resource_evaluator=entity_resource_cost_evaluator
             )
         ]
 
@@ -916,7 +918,8 @@ class Frenzy(BaseAction):
                 cost=1,
                 resource_name="rage",
                 resource_cost=1,
-                evaluator=entity_action_economy_cost_evaluator
+                evaluator=entity_action_economy_cost_evaluator,
+                resource_evaluator=entity_resource_cost_evaluator
             )
         ]
 

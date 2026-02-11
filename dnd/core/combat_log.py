@@ -226,44 +226,6 @@ class MultiEntityLogData(BaseModel):
     aoe_shape: Optional[str] = None  # "Sphere", "Cone", "Line", "Cube"
     aoe_center: Optional[Tuple[int, int]] = None
 
-    @classmethod
-    def from_target_results(
-        cls,
-        action_name: str,
-        caster_name: str,
-        target_results: List[Any],  # List of ActionEvent
-        total_damage: int = 0,
-        aoe_center: Optional[Tuple[int, int]] = None
-    ) -> "MultiEntityLogData":
-        """Build aggregate data from per-target events."""
-        target_names: List[str] = []
-        per_target_damage: List[int] = []
-        per_target_logs: List[Optional[Dict[str, Any]]] = []
-        saves_succeeded = 0
-        saves_failed = 0
-
-        for tr in target_results:
-            target_names.append(getattr(tr, 'target_entity_name', None) or "Unknown")
-            per_target_damage.append(getattr(tr, 'total_damage', 0) or 0)
-            combat_log = getattr(tr, 'combat_log', None)
-            per_target_logs.append(combat_log.model_dump() if combat_log else None)
-            if getattr(tr, 'save_success', None) is True:
-                saves_succeeded += 1
-            elif getattr(tr, 'save_success', None) is False:
-                saves_failed += 1
-
-        return cls(
-            action_name=action_name,
-            caster_name=caster_name,
-            total_targets=len(target_results),
-            target_names=target_names,
-            total_damage=total_damage,
-            per_target_damage=per_target_damage,
-            per_target_logs=per_target_logs,
-            saves_succeeded=saves_succeeded,
-            saves_failed=saves_failed,
-            aoe_center=aoe_center
-        )
 
 
 class CombatLogEntry(BaseModel):
