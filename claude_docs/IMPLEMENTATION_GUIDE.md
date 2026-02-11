@@ -2431,3 +2431,257 @@ All three sources merge into `AvailableActionsResult`. Use actions have:
 | `examples/test_items_equip_hooks.py` | 15 | DefenderSword, CloakOfProtection, Flaming sword, location tracking, reparenting |
 | `examples/test_items_lifecycle_hooks.py` | 22 | OilBarrel, CursedGem, AuraStone, HealingHerb, hook parameters |
 | `examples/test_stackable_items.py` | 15 | Merge, consumption, deduplication, limits, weight, non-stackable |
+
+---
+
+## Section 18: Test Setup Patterns and Encounter Lifecycle
+
+This section documents the correct patterns for setting up tests, managing encounter turns, and working with spatial systems. Getting these wrong causes silent failures, confusing state, or `ValueError` crashes.
+
+### 18a. Standard Test Setup Boilerplate
+
+Every test MUST start with a clean state. Here is the canonical pattern:
+
+```python
+from dnd.utils import reset_combat_state
+from dnd.entity import Entity
+from dnd.core.gridmap import get_map
+from dnd.monsters.bestiary import create_skeleton
+from dnd.actions_functional import setup_standard_actions
+
+def test_my_feature():
+    print("\n=== Test: My Feature ===")
+    result = TestResult()
+
+    # 1. ALWAYS first: reset all global state
+    reset_combat_state()
+
+    # 2. Create grid (bright tiles by default)
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    # 3. Create entities using factory functions (keyword args!)
+    attacker = create_skeleton(name="Attacker", position=(3, 3), faction="heroes")
+    target = create_skeleton(name="Target", position=(4, 3), faction="monsters")
+
+    # 4. MANDATORY: Update senses after ALL entities are created
+    Entity.update_all_entities_senses()
+
+    # 5. Now test logic...
+    result.check(attacker.get_hp() > 0, "Attacker has HP")
+    return result.summary()
+```
+
+**Why each step matters:**
+- `reset_combat_state()` clears EventQueue, Entity registries, GridMap, and BaseObject registry. Without this, state from previous tests leaks.
+- `create_rectangle()` creates tiles. Without tiles, entities cannot see each other and pathfinding returns empty.
+- `Entity.update_all_entities_senses()` populates `senses.entities`, `senses.visible`, and `senses.paths`. Without this, targeting fails silently (entities report no valid targets).
+
+### 18b. Encounter Turn Lifecycle (CRITICAL)
+
+The correct sequence for setting up and running encounters:
+
+```python
+from uuid import uuid4
+from dnd.encounter import Encounter
+from dnd.controller import HumanController, PassController
+
+# --- Setup ---
+encounter = Encounter(name="Test", source_entity_uuid=uuid4())
+encounter.add_combatant(entity_a, PassController(source_entity_uuid=entity_a.uuid))
+encounter.add_combatant(entity_b, PassController(source_entity_uuid=entity_b.uuid))
+encounter.roll_initiative()
+
+# --- Start ---
+encounter.start_encounter()  # Sets state to ACTIVE, fires round start
+                             # Does NOT start a turn!
+encounter.start_turn()       # Starts first entity's turn
+                             # MUST call after start_encounter()
+```
+
+**Advancing turns:**
+
+```python
+# CORRECT: next_turn() handles everything
+encounter.next_turn()  # Internally: end_turn() + advance index + start_turn()
+
+# WRONG: manual end + next + start causes double start_turn
+encounter.end_turn()      # Ends current turn
+encounter.next_turn()     # This calls end_turn() AGAIN (harmless) then start_turn()
+encounter.start_turn()    # CRASH: "Turn already in progress, call end_turn first"
+```
+
+**Key rule**: `next_turn()` does three things atomically:
+1. Calls `end_turn()` if turn is in progress
+2. Advances `current_turn_index` (handles round rollover)
+3. Calls `start_turn()` for the new entity
+
+Never call `end_turn()` then `start_turn()` manually when `next_turn()` exists.
+
+**Getting the current entity:**
+
+```python
+current = encounter.get_current_entity()    # Returns Optional[Entity]
+combatant = encounter.get_current_combatant()  # Returns Optional[CombatantState]
+
+# There is no encounter.current_entity_uuid attribute - use get_current_entity()
+```
+
+**Ensuring a specific entity's turn:**
+
+```python
+encounter.start_turn()
+current = encounter.get_current_entity()
+if current is None or current.uuid != desired_entity.uuid:
+    encounter.next_turn()  # Advances to next entity, auto starts their turn
+```
+
+**Method behaviors:**
+
+| Method | Precondition | On Bad State |
+|--------|-------------|--------------|
+| `start_encounter()` | State must be `NOT_STARTED` | `ValueError` |
+| `start_turn()` | No turn in progress | `ValueError` if turn already in progress |
+| `end_turn()` | Turn in progress | Returns `None` silently if no turn |
+| `next_turn()` | Encounter is ACTIVE | Calls `end_turn()` if needed, then advances |
+
+### 18c. GridMap Light Source API
+
+Light sources illuminate tiles using FOV (blocked by walls).
+
+```python
+grid = get_map()
+light_uuid = grid.add_light_source(
+    position=(5, 5),
+    bright_radius_feet=20,
+    dim_radius_feet=20,
+    anchor_uuid=entity.uuid  # Optional: light follows this entity
+)
+```
+
+**CRITICAL: `dim_radius_feet` is ADDITIVE on top of `bright_radius_feet`.** The total illuminated range is `bright + dim`, not just `dim`.
+
+| bright_radius_feet | dim_radius_feet | Bright Range | Total Range |
+|-------------------|-----------------|-------------|-------------|
+| 20 | 20 | 20ft (4 tiles) | 40ft (8 tiles) |
+| 20 | 40 | 20ft (4 tiles) | 60ft (12 tiles) |
+| 30 | 10 | 30ft (6 tiles) | 40ft (8 tiles) |
+
+**Distance conversion**: 1 tile = 5 feet. So `bright_radius_feet=20` illuminates tiles within 4 tiles of the source.
+
+Light uses FOV computation, so walls block light propagation. The `anchor_uuid` parameter makes the light source follow an entity when it moves.
+
+### 18d. Dark Tile Creation
+
+`GridMap.create_rectangle()` creates `BRIGHT_LIGHT` tiles by default (outdoor/well-lit). For dungeon scenarios or lighting tests, create dark tiles manually:
+
+```python
+from dnd.core.base_tiles import dark_floor_factory
+from dnd.core.gridmap import get_map
+
+grid = get_map()
+for x in range(width):
+    for y in range(height):
+        tile = dark_floor_factory((x, y))
+        grid.set_tile(x, y, tile=tile, fire_event=False)
+```
+
+**Helper pattern** (copy into test files that need it):
+
+```python
+def create_dark_grid(width: int, height: int) -> None:
+    """Create an all-dark tile grid."""
+    grid = get_map()
+    for x in range(width):
+        for y in range(height):
+            tile = dark_floor_factory((x, y))
+            grid.set_tile(x, y, tile=tile, fire_event=False)
+```
+
+`dark_floor_factory()` creates a walkable floor tile with `default_light=LightLevel.DARKNESS`. Without a light source, entities cannot see tiles or other entities in darkness (unless they have darkvision or truesight).
+
+### 18e. Melee vs Ranged Range for Attack Tests
+
+When testing attacks, entity placement matters:
+
+| Weapon Type | Range | Required Spacing |
+|-------------|-------|-----------------|
+| Melee (most) | 5ft reach | 1 tile apart (adjacent) |
+| Melee (reach) | 10ft reach | 1-2 tiles apart |
+| Ranged (shortbow) | 80/320ft | Within 16/64 tiles |
+| Ranged (longbow) | 150/600ft | Within 30/120 tiles |
+
+**Example**: Skeleton has a Shortsword with `Range(type=RangeType.REACH, normal=5)`. For melee tests, place attacker and target 1 tile apart:
+
+```python
+attacker = create_skeleton(name="Attacker", position=(3, 3))
+target = create_skeleton(name="Target", position=(4, 3))  # 1 tile = 5ft
+```
+
+If entities are too far apart, `get_available_actions()` returns no valid targets for melee attacks, and `Attack.apply()` fails validation silently.
+
+### 18f. Reactive Senses Pipeline
+
+The senses system updates incrementally via events. You do NOT need to call `Entity.update_all_entities_senses()` for these changes --- they propagate automatically:
+
+| Change | Mechanism | Automatic? |
+|--------|-----------|-----------|
+| Hidden condition applied | `set_stealth_dc()` fires `SPATIAL_PERCEIVABILITY_CHANGED` | Yes |
+| Invisible condition applied | `set_invisible()` fires `SPATIAL_PERCEIVABILITY_CHANGED` | Yes |
+| Light source added/removed | `grid.add_light_source()` fires batch `SPATIAL_LIGHT_CHANGED` | Yes |
+| Tile obscurement/illumination | `tile.add_obscurement()`/`add_illumination()` fires `SPATIAL_LIGHT_CHANGED` | Yes |
+| Entity enters/leaves cell | GridMap fires `SPATIAL_ENTITY_ENTERED`/`SPATIAL_ENTITY_LEFT` | Yes |
+| Door opened/closed | `BaseItem._notify_blocking_changed()` fires `SPATIAL_OBJECT_CHANGED` | Yes |
+
+**Testing reactive updates**: To verify the reactive pipeline works, explicitly do NOT call `update_all_entities_senses()` after the change, then check that senses updated:
+
+```python
+# Apply Hidden - should reactively update observers
+target.add_condition(Hidden(source_entity_uuid=target.uuid, target_entity_uuid=target.uuid))
+
+# Do NOT call Entity.update_all_entities_senses() here!
+
+# Verify observer can no longer see target (if stealth DC > passive perception)
+result.check(
+    target.uuid not in observer.senses.entities,
+    "Observer lost sight of hidden target via reactive pipeline"
+)
+```
+
+**When you MUST call `update_all_entities_senses()` manually:**
+
+| Change | Why Manual Required |
+|--------|-------------------|
+| Sense mode added (darkvision, truesight) | No event exists for sense mode changes |
+| After entity creation | New entity needs initial senses populated |
+| After grid topology changes (walls added/removed) | FOV geometry changed fundamentally |
+
+### 18g. setup_combat_arena Shortcut
+
+For simple two-entity tests, use the shortcut:
+
+```python
+from dnd.utils import setup_combat_arena
+
+encounter = setup_combat_arena(entity_a, entity_b)
+# This does: create Encounter, add both as HumanController, roll initiative
+# Does NOT start the encounter!
+encounter.start_encounter()
+encounter.start_turn()
+```
+
+**For multi-entity or custom controller scenarios**, build the encounter manually as shown in Section 18b.
+
+### 18h. Common Test Mistakes
+
+| Mistake | Symptom | Fix |
+|---------|---------|-----|
+| Forgot `reset_combat_state()` | State from previous test leaks, entities appear in wrong places | Always call first |
+| Forgot `create_rectangle()` | Entities can't see each other, no paths, targeting returns empty | Create grid before entities |
+| Forgot `Entity.update_all_entities_senses()` | `senses.entities` is empty, all attacks fail validation | Call after ALL entities created |
+| Called `start_turn()` after `next_turn()` | `ValueError: Turn already in progress` | `next_turn()` already calls `start_turn()` |
+| Called `end_turn()` then `next_turn()` then `start_turn()` | `ValueError: Turn already in progress` | Just call `next_turn()` |
+| Placed entities too far apart for melee | Attack returns no valid targets | Place 1 tile apart for 5ft reach |
+| Created dark grid, forgot light source | Entities can't see each other in darkness | Add light source or use bright grid |
+| Used `encounter.current_entity_uuid` | `AttributeError` | Use `encounter.get_current_entity()` |
+| Called `update_all_entities_senses()` expecting paths to update after terrain change mid-turn | Paths not updated (only `_paths_dirty` flag set) | Paths recompute at turn start or movement end, not mid-turn |
