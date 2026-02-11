@@ -137,6 +137,7 @@ class BaseBlock(BaseModel):
     )
 
     position: Tuple[int,int] = Field(default_factory=lambda: (0,0))
+    faction: Optional[str] = Field(default=None, description="Faction for ally/enemy detection. None = no faction.")
 
     # Perceivability flags (set by conditions, read by senses pipeline)
     stealth_dc: Optional[int] = Field(default=None, exclude=True,
@@ -386,6 +387,16 @@ class BaseBlock(BaseModel):
         Entity overrides to relay to self.senses.get_sense_modes().
         Returns untyped list to avoid importing SenseMode here."""
         return []
+
+    # --- Virtual methods for Entity features (overridden by Entity) ---
+
+    def get_senses(self) -> Optional[Self]:
+        """Override in Entity to return Senses block for subjective perception."""
+        return None
+
+    def get_hp(self) -> int:
+        """Override in Entity to return current HP. Default: 1 (alive)."""
+        return 1
 
     # --- Light source tracking ---
 

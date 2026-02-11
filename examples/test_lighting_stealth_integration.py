@@ -289,7 +289,7 @@ def test_hidden_in_darkness_darkvision_observer() -> None:
     (DARKNESS -> DIM) but target's stealth_dc > observer's PP -> NOT visible."""
     section("Hidden in darkness + darkvision observer")
     reset_combat_state()
-    grid = get_map()
+    _grid = get_map()
     create_dark_grid(10, 3)
 
     observer = create_skeleton(name="DarkvisionObserver", position=(0, 1), faction="heroes")
@@ -403,7 +403,7 @@ def test_invisible_entity_in_darkness_truesight_observer() -> None:
     """Target is Invisible + in DARKNESS tile. Observer with TRUESIGHT bypasses both."""
     section("Invisible in darkness + TRUESIGHT observer")
     reset_combat_state()
-    grid = get_map()
+    _grid = get_map()
     create_dark_grid(10, 3)
 
     observer = create_skeleton(name="TruesightObserver", position=(0, 1), faction="heroes")
@@ -434,7 +434,7 @@ def test_hide_in_darkness_succeeds() -> None:
     """Entity alone in DARKNESS tile can hide (no enemies see them)."""
     section("Hide in darkness succeeds")
     reset_combat_state()
-    grid = get_map()
+    _grid = get_map()
     create_dark_grid(10, 3)
 
     entity = create_skeleton(name="Hider", position=(5, 1), faction="heroes")

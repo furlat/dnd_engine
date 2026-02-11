@@ -139,7 +139,6 @@ class Entity(BaseBlock):
     )
     allow_events_conditions: bool = Field(default=True, description="If True, events and conditions will be allowed to be added to the block")
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the entity")
-    faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
 
@@ -930,11 +929,15 @@ class Entity(BaseBlock):
 
         return actual_damage
 
+    def get_senses(self) -> Senses:
+        """Override BaseBlock virtual — returns Senses block for subjective perception."""
+        return self.senses
+
     def get_hp(self) -> int:
         """ total health of the entity """
         con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
-    
+
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
         """
         Get the range of a weapon without calculating attack bonuses.

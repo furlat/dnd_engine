@@ -772,9 +772,8 @@ class EventQueue:
             EventType.SPATIAL_TILE_CHANGED
         )
         if event.event_type in spatial_event_types:
-            position = getattr(event, 'position', None)
-            if position is not None:
-                return cls._get_handlers_for_spatial_event(event, position)
+            if isinstance(event, SpatialChangeEvent) and event.position is not None:
+                return cls._get_handlers_for_spatial_event(event, event.position)
 
         # Non-spatial events: use existing lookup logic
         return cls._get_handlers_for_non_spatial_event(event)
@@ -1306,7 +1305,7 @@ class SavingThrowEvent(D20Event):
                 roll.d20_used = results[0] if results else 0
 
                 # Check for advantage/disadvantage
-                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                adv_status = self.dice_roll.advantage_status
                 if adv_status:
                     adv_value = adv_status.value.lower()
                     roll.advantage_status = adv_value
@@ -1319,7 +1318,7 @@ class SavingThrowEvent(D20Event):
                 roll.results = [results]
                 roll.d20_used = results
 
-            roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
         # Build bonus breakdown
@@ -1418,7 +1417,7 @@ class SkillCheckEvent(D20Event):
                 roll.d20_used = results[0] if results else 0
 
                 # Check for advantage/disadvantage
-                adv_status = getattr(self.dice_roll, 'advantage_status', None)
+                adv_status = self.dice_roll.advantage_status
                 if adv_status:
                     adv_value = adv_status.value.lower()
                     roll.advantage_status = adv_value
@@ -1431,7 +1430,7 @@ class SkillCheckEvent(D20Event):
                 roll.results = [results]
                 roll.d20_used = results
 
-            roll.bonus = getattr(self.dice_roll, 'bonus', 0)
+            roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
         # Build bonus breakdown

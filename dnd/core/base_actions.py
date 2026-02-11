@@ -4,6 +4,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData, MultiEntityLogData, md_color
 from dnd.core.aoe import AoEShape
+from dnd.blocks.sensory import Senses
 from typing import Optional, Callable, OrderedDict, List, Literal, Tuple, cast
 from uuid import UUID, uuid4
 from enum import Enum
@@ -35,6 +36,7 @@ class TargetType(str, Enum):
     OBJECT = "object"                # Object actions - targets a grid object (item)
 
 CostEvaluator = Callable[[UUID,CostType,int],bool]
+ResourceCostEvaluator = Callable[[UUID,str,int],bool]
 
 class BaseCost(BaseModel):
     """Cost for an action - can include both turn-based and resource costs."""
@@ -48,6 +50,7 @@ class BaseCost(BaseModel):
 
 class Cost(BaseCost):
     evaluator: Optional[CostEvaluator] = Field(default=None, description="The evaluator for the cost")
+    resource_evaluator: Optional[ResourceCostEvaluator] = Field(default=None, description="Evaluator for resource cost checks")
 
 class ActionEvent(Event):
     costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
@@ -271,20 +274,19 @@ class BaseAction(BaseObject):
         if entity is None:
             return []
 
-        # Need senses attribute
-        senses = getattr(entity, 'senses', None)
-        if senses is None:
+        # Need senses block (Entity overrides get_senses() to return Senses)
+        senses_block = entity.get_senses()
+        if not isinstance(senses_block, Senses):
             return []
 
         action_range = self.get_range()
         max_range = action_range.normal if action_range else 0
 
         valid: List[Tuple[int, int]] = []
-        visible = getattr(senses, 'visible', {})
-        position = getattr(senses, 'position', None)
-        get_feet_distance = getattr(senses, 'get_feet_distance', None)
+        visible = senses_block.visible
+        position = senses_block.position
 
-        if not visible or position is None or get_feet_distance is None:
+        if not visible:
             return []
 
         for pos, is_visible in visible.items():
@@ -293,7 +295,7 @@ class BaseAction(BaseObject):
             if pos == position:
                 continue
             if max_range > 0:
-                distance = get_feet_distance(pos)
+                distance = senses_block.get_feet_distance(pos)
                 if distance > max_range:
                     continue
             valid.append(pos)
@@ -314,26 +316,23 @@ class BaseAction(BaseObject):
         # POSITION_AOE: compute targets from shape
         if self.target_type == TargetType.POSITION_AOE:
             if self.aoe_shape and self.end_position:
-                entity = BaseBlock.get(self.source_entity_uuid)
-                if entity:
-                    position = getattr(entity, 'position', None)
-                    if position:
-                        shape = self.aoe_shape.model_copy(update={'target': self.end_position})
-                        shape.compute_objective(position)
-                        # Return as list, using include_self to control caster inclusion
-                        targets = list(shape.affected_entity_uuids)
-                        if not self.include_self:  # Default False = exclude caster
-                            targets = [uid for uid in targets if uid != self.source_entity_uuid]
-                        # Apply valid_target_filter for AoE (filter, not validate)
-                        # AoE targets a position - filter determines which entities are affected
-                        targets = self._filter_targets_by_faction(entity, targets)
-                        # Filter dead entities (unless include_dead=True)
-                        if not self.include_dead:
-                            targets = [
-                                uid for uid in targets
-                                if (ent := BaseBlock.get(uid)) and getattr(ent, 'get_hp', lambda: 1)() > 0
-                            ]
-                        return targets
+                source_block = BaseBlock.get(self.source_entity_uuid)
+                if source_block:
+                    shape = self.aoe_shape.model_copy(update={'target': self.end_position})
+                    shape.compute_objective(source_block.position)
+                    # Return as list, using include_self to control caster inclusion
+                    targets = list(shape.affected_entity_uuids)
+                    if not self.include_self:  # Default False = exclude caster
+                        targets = [uid for uid in targets if uid != self.source_entity_uuid]
+                    # Apply valid_target_filter for AoE (filter, not validate)
+                    targets = self._filter_targets_by_faction(source_block, targets)
+                    # Filter dead entities (unless include_dead=True)
+                    if not self.include_dead:
+                        targets = [
+                            uid for uid in targets
+                            if (block := BaseBlock.get(uid)) and block.get_hp() > 0
+                        ]
+                    return targets
             return []
 
         # MULTI_ENTITY: explicit targets (primary + extras)
@@ -343,30 +342,17 @@ class BaseAction(BaseObject):
         targets.extend(self.extra_target_entity_uuids)
         return targets
 
-    def _filter_targets_by_faction(self, source_entity: BaseBlock, targets: List[UUID]) -> List[UUID]:
+    def _filter_targets_by_faction(self, source_block: BaseBlock, targets: List[UUID]) -> List[UUID]:
         """Filter targets based on valid_target_filter for AoE spells.
 
-        For POSITION_AOE actions, this filters which entities in the area are affected.
-        Unlike _validate_target_filter (which fails on non-matching targets),
-        this removes non-matching targets from the list.
-
-        Args:
-            source_entity: The caster/source of the action
-            targets: List of potential target UUIDs
-
-        Returns:
-            Filtered list of target UUIDs that match the filter criteria.
+        Uses BaseBlock.faction directly for ally/enemy logic:
+        - is_ally: same uuid OR (both factions non-None and equal)
+        - is_enemy: different uuid AND (either faction None OR factions differ)
         """
-        # "all" means no filtering
         if self.valid_target_filter == "all":
             return targets
 
-        # Get faction methods
-        is_ally = getattr(source_entity, 'is_ally', None)
-        is_enemy = getattr(source_entity, 'is_enemy', None)
-
-        if is_ally is None or is_enemy is None:
-            return targets  # Can't filter without faction methods
+        source_faction = source_block.faction
 
         filtered: List[UUID] = []
         for target_uuid in targets:
@@ -374,17 +360,20 @@ class BaseAction(BaseObject):
             if target is None:
                 continue
 
+            same = target_uuid == self.source_entity_uuid
+            ally = same or (source_faction is not None and target.faction is not None and source_faction == target.faction)
+            enemy = not same and (source_faction is None or target.faction is None or source_faction != target.faction)
+
             if self.valid_target_filter == "enemies":
-                if is_enemy(target):
+                if enemy:
                     filtered.append(target_uuid)
             elif self.valid_target_filter == "allies":
-                if target_uuid != self.source_entity_uuid and is_ally(target):
+                if not same and ally:
                     filtered.append(target_uuid)
             elif self.valid_target_filter == "self_or_allies":
-                if target_uuid == self.source_entity_uuid or is_ally(target):
+                if ally:
                     filtered.append(target_uuid)
             else:
-                # Unknown filter, include target
                 filtered.append(target_uuid)
 
         return filtered
@@ -405,34 +394,30 @@ class BaseAction(BaseObject):
         if self.target_type == TargetType.POSITION_AOE:
             return None
 
-        # Import Entity locally to avoid circular import
-        entity = BaseBlock.get(self.source_entity_uuid)
-        if entity is None:
+        source_block = BaseBlock.get(self.source_entity_uuid)
+        if source_block is None:
             return "Source entity not found"
 
-        # Need is_ally, is_enemy methods
-        is_ally = getattr(entity, 'is_ally', None)
-        is_enemy = getattr(entity, 'is_enemy', None)
-
-        if is_ally is None or is_enemy is None:
-            return None  # Can't validate without faction methods, skip check
+        source_faction = source_block.faction
 
         for target_uuid in all_targets:
             target = BaseBlock.get(target_uuid)
             if target is None:
                 return f"Target {target_uuid} not found"
 
-            target_name = getattr(target, 'name', str(target_uuid))
+            same = target_uuid == self.source_entity_uuid
+            ally = same or (source_faction is not None and target.faction is not None and source_faction == target.faction)
+            enemy = not same and (source_faction is None or target.faction is None or source_faction != target.faction)
 
             if self.valid_target_filter == "enemies":
-                if not is_enemy(target):
-                    return f"{target_name} is not an enemy"
+                if not enemy:
+                    return f"{target.name} is not an enemy"
             elif self.valid_target_filter == "allies":
-                if target_uuid == self.source_entity_uuid or not is_ally(target):
-                    return f"{target_name} is not an ally"
+                if same or not ally:
+                    return f"{target.name} is not an ally"
             elif self.valid_target_filter == "self_or_allies":
-                if target_uuid != self.source_entity_uuid and not is_ally(target):
-                    return f"{target_name} is not self or an ally"
+                if not ally:
+                    return f"{target.name} is not self or an ally"
             # "all" allows any target
 
         return None  # Validation passed
@@ -472,18 +457,11 @@ class BaseAction(BaseObject):
             # Check turn-based cost via evaluator
             if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid, cost.cost_type, cost.cost):
                 return False
-            # Check resource cost if present
+            # Check resource cost via callback
             if cost.resource_cost > 0 and cost.resource_name:
-                # Use BaseBlock.get() since Entity registers in BaseBlock._registry
-                entity = BaseBlock.get(self.source_entity_uuid)
-                if entity is None:
-                    return False
-                # Entity has action_economy, use getattr for type safety
-                action_economy = getattr(entity, 'action_economy', None)
-                if action_economy is None:
-                    return False
-                if not action_economy.can_afford_resource(cost.resource_name, cost.resource_cost):
-                    return False
+                if cost.resource_evaluator is not None:
+                    if not cost.resource_evaluator(self.source_entity_uuid, cost.resource_name, cost.resource_cost):
+                        return False
         return True
 
     def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
@@ -493,9 +471,9 @@ class BaseAction(BaseObject):
         event.name = self.name or "Action"
         event.description = self.description
         # Populate source entity name if available
-        entity = BaseBlock.get(self.source_entity_uuid)
-        if entity is not None:
-            event.source_entity_name = getattr(entity, 'name', None)
+        source_block = BaseBlock.get(self.source_entity_uuid)
+        if source_block is not None:
+            event.source_entity_name = source_block.name
         return event
 
     
@@ -619,8 +597,8 @@ class BaseAction(BaseObject):
                 self.target_entity_uuid = target_uuid
 
                 # Get target entity name for combat log
-                target_entity = BaseBlock.get(target_uuid)
-                target_entity_name = getattr(target_entity, 'name', None) if target_entity else None
+                target_block = BaseBlock.get(target_uuid)
+                target_entity_name = target_block.name if target_block else None
 
                 # Create CHILD event for this target (not a phase of execution_event)
                 # Key: parent_event is set, and lineage_uuid is NEW (not shared)
@@ -639,7 +617,7 @@ class BaseAction(BaseObject):
                 result_event = self._apply(per_target_event)
                 if result_event:
                     # CONTRACT: _apply() must set total_damage if it deals damage
-                    damage = getattr(result_event, 'total_damage', 0) or 0
+                    damage = result_event.total_damage or 0
                     total_damage += damage
 
             # Restore original target
