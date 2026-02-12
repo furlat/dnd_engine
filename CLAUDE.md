@@ -75,24 +75,10 @@ BaseObject, BaseBlock (base classes)
 ## Common Commands
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install package in development mode
-pip install -e .
-
-# Run tests
-pytest
-
-# Run combat examples (for quick local testing without server)
-python examples/combat_basic.py        # Basic attack exchange
-python examples/combat_conditions.py   # All condition effects tested
-
-# Type checking
-pyright
+source .venv/bin/activate              # Activate venv
+pip install -e .                        # Install dev mode
+python examples/test_<feature>.py      # Run specific test (NEVER use pytest on full suite)
+pyright                                 # Type checking
 ```
 
 ## Architecture Overview
@@ -133,13 +119,6 @@ Entity
 ├── active_conditions: Dict[str, BaseCondition]
 └── active_conditions_by_uuid / by_source (lookup dicts)
 ```
-
-**Key Entity Methods:**
-- `passive_skill(skill_name)` - Returns `10 + skill bonus + advantage modifier` (for contested checks like Shove)
-- `is_ally(other)` / `is_enemy(other)` - Faction-based relationship checks
-- `get_visible_enemies()` / `get_visible_allies()` - Filtered visibility by faction
-- `loot_item(item)` / `drop_item(item_uuid)` - Pick up / drop items (with lifecycle hooks)
-- `equip_item(item_uuid, slot)` / `unequip_item(slot)` - Move items between inventory and equipment
 
 ### Item Hierarchy
 
@@ -553,191 +532,33 @@ Attack validates range and LOS, then:
 
 ## Implemented Features
 
-### Conditions
+### Conditions & Class Features
 
-All conditions in `dnd/conditions.py`:
+All D&D conditions are in `dnd/conditions.py` — read the class definitions for effect details (self effects, attacker effects, sub-conditions).
 
-| Condition | Self Effects | Effects on Attackers | Sub-conditions |
-|-----------|--------------|---------------------|----------------|
-| **Blinded** | Disadvantage attacks, auto-fail sight skills | Advantage | - |
-| **Charmed** | Auto-miss vs charmer | Charmer: advantage social skills | - |
-| **Dashing** | +movement = base speed | - | - |
-| **Deafened** | Auto-fail hearing skills | - | - |
-| **Disengaging** | Movement doesn't provoke OA | - | - |
-| **Dodging** | Advantage DEX saves | Disadvantage | - |
-| **Frightened** | Disadvantage attacks/checks (contextual), speed=0 | - | - |
-| **Grappled** | Speed max = 0 | - | - |
-| **HasAttacked** | Marker for rage maintenance (tracks ANY attack) | - | - |
-| **HasTakenDamage** | Marker for rage maintenance (tracks damage taken) | - | - |
-| **Incapacitated** | All action economy = 0 | - | - |
-| **Hidden** | Stealth DC on perceivability, unseen attacker advantage, removed on attack/damage/spell/action | - | - |
-| **Invisible** | Sets is_invisible flag, unseen attacker advantage (senses-based) | Unseen target disadvantage (senses-based) | - |
-| **Paralyzed** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft | Incapacitated |
-| **Poisoned** | Disadvantage all attacks/checks | - | - |
-| **Prone** | Disadvantage attacks | ≤5ft: advantage, >5ft: disadvantage | - |
-| **Restrained** | Speed=0, disadvantage attacks, fail DEX | Advantage | - |
-| **Stunned** | Auto-fail STR/DEX saves | Advantage | Incapacitated |
-| **Unconscious** | Auto-fail STR/DEX saves | Advantage, auto-crit ≤5ft, prone-like | Incapacitated |
-| **Dead** | Entity is dead | - | - |
-| **NoReactions** | Reactions = 0 | - | - |
+Fighter features (L1-18 + Champion): `dnd/classes/fighter.py`, `dnd/classes/fighter_factory.py`. Barbarian features (L1-20 + Berserker): `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`, `dnd/classes/rage.py`.
 
-### Spell Conditions (in `dnd/conditions.py` and `dnd/spells/`)
-
-| Condition | Effect | Notes |
-|-----------|--------|-------|
-| **Concentrating** | Tracks spell being concentrated on | CON save on damage (DC = max(10, dmg/2)), one-spell limit, uses `linked_conditions` for cleanup |
-| **MageArmorCondition** | AC = 13 + DEX when unarmored | Ends if armor equipped |
-| **HoldPersonEffect** | Spell effect for Hold Person | Has Paralyzed as sub-condition, allows spell-specific immunity (in `dnd/spells/enchantment.py`) |
-| **InvisibilityEffect** | Spell-based invisibility, auto-removed on attack/spell/action | Same `name="Invisible"`, has reveal handler + `creation_lineage_uuid` (in `dnd/conditions.py`) |
-| **GreaterInvisibilityEffect** | BG3-style invisibility with Stealth check to maintain | Escalating DC (base 15 + check_count), rolls Stealth on action (in `dnd/conditions.py`) |
-
-### Fighter Conditions (in `dnd/classes/fighter.py`)
-
-| Condition | Effect | Notes |
-|-----------|--------|-------|
-| **ActionSurging** | +1 action this turn (1 round duration) | Applied by Action Surge |
-| **FightingStyleArchery** | +2 ranged attack bonus | Modifier on attack rolls |
-| **FightingStyleDefense** | +1 AC when wearing armor | AC modifier |
-| **FightingStyleDueling** | +2 damage with one-handed weapon | Damage modifier |
-| **GreatWeaponFighting** | Reroll 1s and 2s on damage dice | EventHandler on DAMAGE_ROLL_RESULT |
-| **FightingStyleProtection** | Impose disadvantage on attacks vs allies | EventHandler, uses reaction |
-| **FightingStyleTwoWeaponFighting** | Add ability mod to off-hand damage | Damage modifier |
-| **SecondWindFeature** | Grants Second Wind action + resource | Level-based healing |
-| **ActionSurgeFeature** | Grants Action Surge action + resource | Once per turn enforcement |
-| **ExtraAttackFeature** | Grants Extra Attack actions + resource | 1/2/3 at L5/L11/L20 |
-| **ExtraAttacksGranted** | Marker for Extra Attack (action-cost attacks only) | Applied by extra_attack_resource_processor |
-| **ImprovedCritical** | Crit on 19-20 | Critical modifier |
-| **SuperiorCritical** | Crit on 18-20 | Critical modifier |
-| **Indomitable** | Reroll failed saves | EventHandler on SAVING_THROW |
-| **Survivor** | Heal 5+CON at turn start when HP ≤ 50% | EventHandler on TURN_START |
-
-### Barbarian Conditions (in `dnd/classes/barbarian.py` and `dnd/classes/rage.py`)
-
-| Condition | Effect | Notes |
-|-----------|--------|-------|
-| **RageFeature** | Grants Rage + End Rage actions, rage resource | Level-scaled uses and damage |
-| **Raging** | STR adv, rage damage, B/P/S resistance | Maintained by HasAttacked/HasTakenDamage |
-| **UnarmoredDefense** | AC = 10 + DEX + CON when unarmored | Contextual modifier |
-| **RecklessAttackFeature** | Grants Reckless Attack action | Free action |
-| **RecklessAttacking** | Adv on melee attacks, attackers have adv | 1-round duration |
-| **DangerSense** | Adv on DEX saves vs visible effects | Contextual, disabled when blind/deaf/incap |
-| **FrenzyFeature** | Grants Frenzy action | Berserker L3 |
-| **Frenzied** | Rage + bonus action melee attacks | BG3-style, no exhaustion |
-| **FastMovement** | +10 speed when not in heavy armor | Contextual modifier |
-| **MindlessRage** | Immune to charm/frighten while raging | Contextual immunity |
-| **FeralInstinct** | Advantage on initiative | Modifier |
-| **BrutalCritical** | +1/2/3 extra melee crit dice | L9/13/17 |
-| **IntimidatingPresenceFeature** | Grants Intimidating Presence actions | Berserker L10 |
-| **IntimidatingPresenceImmunity** | 24h immunity after successful save | Applied on save success |
-| **RelentlessRage** | CON save to drop to 1 HP instead of 0 | Escalating DC |
-| **Retaliation** | Reaction melee attack when hit | Berserker L14 |
-| **PersistentRage** | Rage doesn't end from inactivity | Marker condition |
-| **IndomitableMight** | STR checks can't be below STR score | EventHandler |
-| **PrimalChampion** | +4 STR and CON | L20 capstone |
-
-### Class System
-
-Two character classes are fully implemented:
-
-- **Fighter** (L1-L18) + Champion archetype: `dnd/classes/fighter.py`, `dnd/classes/fighter_factory.py`
-- **Barbarian** (L1-L20) + Berserker path: `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`
-
-See `claude_docs/CLASS_SYSTEM.md` for feature details and `claude_docs/IMPLEMENTATION_GUIDE.md` for implementation patterns.
+See `claude_docs/CLASS_SYSTEM.md` for complete feature tables, the `_remove()` cleanup pattern, and implementation examples.
 
 ### Spell System
 
-Generic spell infrastructure supporting attack spells, save spells, and buff spells.
+40+ spells across 7 schools. See `dnd/spells/__init__.py` for `CANTRIPS` through `LEVEL_9_SPELLS` dictionaries and `ALL_SPELLS` lookup.
 
-#### Architecture
+**Base classes**: `SpellAction(BaseAction)` and `SpellEvent(ActionEvent)` in `dnd/actions.py`.
 
-```
-dnd/spells/
-├── __init__.py      # Exports + CANTRIPS through LEVEL_9_SPELLS + ALL_SPELLS dicts
-├── base.py          # Re-exports SpellAction, SpellEvent from actions.py
-├── evocation.py     # FireBolt, Fireball, LightningBolt, Thunderwave, etc.
-├── abjuration.py    # MageArmor, ProtectionFromEnergy, Stoneskin
-├── enchantment.py   # HoldPerson, HoldMonster, CharmPerson, Sleep, etc.
-├── conjuration.py   # CallLightning, Grease, Web, Cloudkill, SpiritGuardians, etc.
-├── necromancy.py    # ChillTouch, FalseLife, Blight, BlindnessDeafness
-├── illusion.py      # Blur, Fear, HypnoticPattern, ColorSpray
-└── transmutation.py # SpikeGrowth
-```
-
-**Base classes in `dnd/actions.py`:**
-- `SpellEvent(ActionEvent)` - Event for spell casting with spell-specific fields
-- `SpellAction(BaseAction)` - Base class with variant generation for upcasting
-
-#### Entity Spell Methods
-
-Entity provides helper methods for spell calculations:
-
-```python
-# Attack/DC calculation
-entity.spell_attack_bonus(target_uuid) -> ModifiableValue  # prof + ability + bonuses
-entity.spell_save_dc() -> int                               # 8 + prof + ability + bonuses
-
-# Crit handling (stacks with equipment)
-entity.get_spell_crit_threshold() -> int      # Default 20
-entity.get_spell_crit_extra_dice() -> int     # Extra dice on crit
-
-# Damage and slots
-entity.get_spell_damage_bonus() -> ModifiableValue
-entity.has_spell_slot(level) -> bool
-entity.get_lowest_spell_slot(min_level) -> int | None
-entity.is_spellcaster -> bool  # Property
-```
-
-#### Spell Registration
+**Registration**:
 
 ```python
 from dnd.actions_functional import register_spell, register_spells_by_name
-from dnd.spells import FireBolt, ALL_SPELLS
-
-# Register individual spell
 register_spell(entity, FireBolt, caster_level=5)
-
-# Register multiple by name
 register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
 ```
 
-#### Implemented Spells (40+ total)
+**Entity spell API**: `spell_attack_bonus(target_uuid)`, `spell_save_dc()`, `has_spell_slot(level)`, `is_spellcaster`. See `dnd/entity.py` for full list.
 
-See `dnd/spells/__init__.py` for complete spell dictionaries (`CANTRIPS` through `LEVEL_9_SPELLS`).
+**SpellcastingBlock** (`dnd/blocks/spellcasting.py`): Holds `spell_attack_bonus`, `spell_damage_bonus`, `spell_dc_bonus`, `spell_crit_threshold`, `spellcasting_ability`.
 
-**Representative spells by school:**
-
-| Spell | Level | School | Type | Effect |
-|-------|-------|--------|------|--------|
-| Fire Bolt | Cantrip | Evocation | Attack | 1d10 fire, scales with level |
-| Sacred Flame | Cantrip | Evocation | DEX Save | 1d8 radiant, scales with level |
-| Chill Touch | Cantrip | Necromancy | Attack | 1d8 necrotic, no healing 1 round |
-| Magic Missile | 1 | Evocation | Auto-hit | 3 darts (1d4+1 each), +1 dart/upcast |
-| Mage Armor | 1 | Abjuration | Buff | AC = 13 + DEX (ends on armor equip) |
-| Sleep | 1 | Enchantment | Auto | 5d8 HP pool, lowest HP first |
-| False Life | 1 | Necromancy | Buff | 1d4+4 temp HP |
-| Burning Hands | 1 | Evocation | DEX Save + AoE | 3d6 fire in 15ft cone |
-| Grease | 1 | Conjuration | DEX Save + Zone | Prone on fail, difficult terrain |
-| Hold Person | 2 | Enchantment | WIS Save + Conc. | Paralyzed, repeat save each turn |
-| Blur | 2 | Illusion | Buff + Conc. | Attackers have disadvantage |
-| Spike Growth | 2 | Transmutation | Zone + Conc. | 2d4 piercing per 5ft moved |
-| Web | 2 | Conjuration | DEX Save + Zone | Restrained, repeat save each turn |
-| Fireball | 3 | Evocation | DEX Save + AoE | 8d6 fire in 20ft sphere |
-| Call Lightning | 3 | Conjuration | DEX Save + Conc. | 3d10 lightning, grants strike each turn |
-| Fear | 3 | Illusion | WIS Save + Conc. | Frightened, 30ft cone |
-| Blight | 4 | Necromancy | CON Save | 8d8 necrotic |
-| Cone of Cold | 5 | Evocation | CON Save + AoE | 8d8 cold in 60ft cone |
-| Power Word Stun | 8 | Enchantment | Auto | Stunned if ≤150 HP |
-| Power Word Kill | 9 | Enchantment | Auto | Instant death if ≤100 HP |
-
-#### SpellcastingBlock
-
-`dnd/blocks/spellcasting.py` provides spell-specific modifiers:
-- `spell_attack_bonus` - Wand of War Mage, etc.
-- `spell_damage_bonus` - Elemental Affinity, etc.
-- `spell_dc_bonus` - Robe of Archmagi, etc.
-- `spell_crit_threshold` - Spell Sniper, etc.
-- `spell_crit_extra_dice` - Custom features
-- `spellcasting_ability` - "intelligence", "wisdom", or "charisma"
+**AoE**: `TargetType.POSITION_AOE` + `aoe_shape` (Sphere, Cone, Line, Cube). See `claude_docs/archive/AOE_TARGETING_REFERENCE.md`.
 
 #### Concentration System
 
@@ -748,28 +569,6 @@ Concentration spells are fully implemented:
 - **Spell-specific effects**: Each concentration spell creates a spell-specific condition (e.g., `HoldPersonEffect`) with the actual effect (e.g., `Paralyzed`) as a sub-condition
 
 See `examples/test_concentration.py` and `examples/test_concentration_spells.py` for tests.
-
-#### AoE System
-
-AoE spells use `TargetType.POSITION_AOE` with an `aoe_shape` field.
-
-**Implemented Shapes** (`dnd/core/aoe.py`):
-
-| Shape | Origin | Example |
-|-------|--------|---------|
-| Sphere | target position | Fireball (20ft) |
-| Cone | caster position | Burning Hands (15ft) |
-| Line | caster position | Lightning Bolt (100ft×5ft) |
-| Cube | varies | Thunderwave (15ft) |
-
-**Target Filtering:**
-- `include_self`: Caster affected? (default False for most spells)
-- `valid_target_filter`: `"all"`, `"enemies"`, `"allies"`
-- `include_dead`: Target dead entities? (default False)
-
-**Implemented AoE Spells:** Fireball, Burning Hands, Lightning Bolt, Thunderwave, Shatter
-
-See `claude_docs/AOE_TARGETING_REFERENCE.md` for full implementation guide.
 
 #### Stealth System (Layer 1)
 
@@ -911,81 +710,26 @@ The rule from the Dependency Direction section applies fully: dependencies flow 
 
 ## Creating Entities & Running Tests
 
-### Factory Function Pattern (`dnd/monsters/bestiary.py`)
+### Factory Function Pattern
+
+**Key pattern**: EntityConfig → `Entity.create()` → `setup_standard_actions()` → create & equip items. See `dnd/monsters/bestiary.py` for full examples.
 
 ```python
-def create_goblin(
-    source_id: Optional[UUID] = None,
-    name: str = "Goblin",
-    position: Tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-    weight: int = 40
-) -> Entity:
-    if source_id is None:
-        source_id = uuid4()
-
-    # 1. Create config with ability scores and health
-    entity_config = EntityConfig(
-        ability_scores=AbilityScoresConfig(
-            strength=AbilityConfig(ability_score=8),
-            dexterity=AbilityConfig(ability_score=14),
-            constitution=AbilityConfig(ability_score=10),
-            intelligence=AbilityConfig(ability_score=10),
-            wisdom=AbilityConfig(ability_score=8),
-            charisma=AbilityConfig(ability_score=8)
-        ),
-        health=HealthConfig(hit_dices=[HitDiceConfig(
-            hit_dice_value=6, hit_dice_count=2, mode="average"
-        )]),
-        equipment=EquipmentConfig(),
-        action_economy=ActionEconomyConfig(),
-        proficiency_bonus=2,
-        position=position
-    )
-
-    # 2. Create entity
-    entity = Entity.create(name=name, source_entity_uuid=source_id, config=entity_config)
-
-    # 3. Set up action templates (Move, Dash, Dodge, etc.)
-    setup_standard_actions(entity)
-
-    # 4. Create and equip weapons/armor
-    scimitar = create_scimitar(entity.uuid)  # Helper function
-    leather_armor = create_leather_armor(entity.uuid)
-    shield = create_wooden_shield(entity.uuid)
-
-    entity.equipment.equip(leather_armor)
-    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
-
-    return entity
+# 1. EntityConfig with AbilityScoresConfig(AbilityConfig), HealthConfig, etc.
+entity = Entity.create(name=name, source_entity_uuid=source_id, config=entity_config)
+# 2. Register standard actions (Move, Dash, Dodge, etc.)
+setup_standard_actions(entity)
+# 3. Create and equip items
+scimitar = create_scimitar(entity.uuid)
+entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
 ```
-
-**Key pattern**: Create entity first, then equip weapons via `entity.equipment.equip(item, slot)`.
 
 ### Available Factories
 
-All factories use **keyword args** and share this signature pattern:
+All factories use **keyword args**: `create_goblin(name="Name", position=(0,0), faction=None)`
 
-```python
-def create_skeleton(
-    source_id: Optional[UUID] = None,   # Auto-generated if None
-    name: str = "Skeleton",
-    position: Tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,      # None = enemy to everyone
-    weight: int = 120
-) -> Entity:
-```
-
-**Bestiary factories** in `dnd/monsters/bestiary.py`:
-- `create_goblin(weight=40)` - CR 1/4, AC 15 (leather+shield), Scimitar 1d6+2
-- `create_skeleton(weight=120)` - CR 1/4, AC 13, Shortsword 1d6+2, undead
-- `create_goblin_archer(weight=40)` - Dual wield + shortbow
-- `create_sorcerer(level=5)` - CHA 18 caster with Fireball, Magic Missile, etc.
-
-**Character class factories** in `dnd/classes/`:
-- `create_fighter(level, name, position, faction)` - Fighter with Champion archetype
-- `create_barbarian(level, name, position, faction)` - Barbarian with Berserker path
+**Bestiary** (`dnd/monsters/bestiary.py`): `create_goblin`, `create_skeleton`, `create_goblin_archer`, `create_sorcerer(level=5)`
+**Classes** (`dnd/classes/`): `create_fighter(level, name, position, faction)`, `create_barbarian(level, name, position, faction)`
 
 ### Setting Up Tests
 
@@ -1176,270 +920,50 @@ Both validate that environment changes (door open/close) correctly propagate thr
 
 ## CLI and Server Architecture
 
-### Overview
+Two CLIs connect to a FastAPI server (`server/event_server.py`) with session-based authority (`server/session.py`):
+- **Human CLI** (`cli/main.py`): Rich terminal interface — `python -m cli play` (vs AI) or `python -m cli playpvp` (vs Claude)
+- **Agent CLI** (`cli/agent.py`): Claude's command interface for PvP
 
-The D&D Engine uses a terminal-based CLI for gameplay. Two CLIs are provided:
-- **Human CLI** (`cli/main.py`): Rich terminal interface for human players
-- **Agent CLI** (`cli/agent.py`): Simple command interface for Claude to play as opponent
+**PvP Quick Start**: Start server (`uvicorn server.event_server:app --reload`), user runs `python -m cli playpvp`, Claude connects via agent CLI.
 
-Both connect to a FastAPI server that manages game state, sessions, and combat.
-
-### Game Modes
-
-| Mode | Command | Description |
-|------|---------|-------------|
-| Human vs AI | `python -m cli play` | Human controls heroes faction, AI controls monsters faction |
-| Human vs Claude PvP | `python -m cli playpvp` | Human controls heroes, Claude controls monsters via agent CLI |
-
-**Multi-Entity Combat**: Both modes support multi-entity encounters (e.g., 2 heroes vs 3 monsters). Entities are assigned to players by faction.
-
-### Session-Based Authority System
-
-PvP mode uses session-based authentication (`server/session.py`):
-
-- **PlayerSession**: A connected client (HUMAN, CLAUDE, or AI) that controls entities
-- **GameSession**: Active game with players and entity ownership mappings
-- **SessionManager**: Singleton managing all sessions and games
-
-Key endpoints:
-- `POST /session/create` - Create player session
-- `POST /game/join` - Join game with session, get assigned entities
-- `POST /action/*` - All actions require `session_id` + `entity_uuid`
-- `GET /pvp/status` - Check whose turn, who's connected
-- `GET /combat-log?since=N` - Get server-side combat log entries
-
-### PvP CLI Loop (PRIMARY WORKFLOW)
-
-The primary way to develop and test features is through **live PvP combat** between the user and Claude. This provides immediate feedback and allows testing specific scenarios.
-
-#### Quick Start
-
-```bash
-# Terminal 1: Start server
-source .venv/bin/activate
-uvicorn server.event_server:app --reload
-
-# Terminal 2: User plays as Hero
-python -m cli playpvp
-
-# Claude connects and plays as Skeleton (see Agent Commands below)
-```
-
-#### Claude Agent Commands
-
-```bash
-# Connect to game (creates session, joins as Skeleton)
-python -m cli.agent connect
-
-# Watch for your turn (BLOCKS until it's your turn, shows opponent actions)
-python -m cli.agent watch
-
-# View current state
-python -m cli.agent state
-
-# View available actions
-python -m cli.agent actions
-
-# Take actions
-python -m cli.agent move X Y      # Move to position
-python -m cli.agent attack 0      # Attack target by index
-python -m cli.agent dash          # Dash action (double movement)
-python -m cli.agent dodge         # Dodge action
-python -m cli.agent disengage     # Disengage action
-python -m cli.agent end           # End turn
-
-# Disconnect (clear session for new game)
-python -m cli.agent disconnect
-```
-
-#### Turn Flow
-
-**CRITICAL**: After `end`, you MUST run `watch` again to stay connected!
+**Agent turn flow** — **CRITICAL**: After `end`, you MUST run `watch` again!
 
 ```bash
 connect → watch → [state/actions/move/attack/end] → watch → repeat
 ```
 
-`watch` blocks until your turn, shows opponent actions, detects game end.
-
 To restart: User restarts `playpvp`, Claude runs `disconnect` → `connect` → `watch`
 
-### Agent CLI Session Persistence
-
-Session stored in `/tmp/dnd_agent_session.txt`, persists between commands. `connect` creates it, `disconnect` removes it.
-
-### Agent CLI: The `watch` Command
-
-Polls server every 2s, shows opponent actions, blocks until Claude's turn, detects game end. Flow: `connect` → `watch` → take actions → `end` → `watch` → repeat
-
-### CLI Files
-
-| File | Purpose |
-|------|---------|
-| `cli/main.py` | Human player CLI with `play` and `playpvp` commands, position action routing |
-| `cli/agent.py` | Claude agent CLI (connect, watch, state, actions, move, attack, jump, end) |
-| `cli/api_client.py` | HTTP client wrapper with session management |
-| `cli/display.py` | Rich terminal rendering (map, entities, combat log, action results) |
-| `cli/commands.py` | Command parsing and execution for human CLI |
+See `claude_docs/CLI_GUIDE.md` for full agent command reference and session details.
 
 ## Reference
 
-### Key Files Reference
+### Key Files
 
-| Purpose | Location |
-|---------|----------|
-| **Core** | |
-| Entity (main game object) | `dnd/entity.py` |
-| ModifiableValue system | `dnd/core/values.py` |
-| Modifiers (Advantage, Critical, etc.) | `dnd/core/modifiers.py` |
-| Base classes | `dnd/core/base_object.py`, `base_block.py` |
-| Event system | `dnd/core/events.py` |
-| Combat log (CombatLogEntry, verbosity, markdown) | `dnd/core/combat_log.py` |
-| Dice rolling | `dnd/core/dice.py` |
-| **Spatial System** | |
-| GridMap (central spatial manager) | `dnd/core/gridmap.py` |
-| Tile class (BaseBlock, can have conditions) | `dnd/core/base_tiles.py` |
-| Shadowcast FOV algorithm | `dnd/core/shadowcast.py` |
-| Dijkstra pathfinding | `dnd/core/dijkstra.py` |
-| **Encounter & Combat** | |
-| Encounter/turn management | `dnd/encounter.py` |
-| **Actions & Registry** | |
-| Base action class + data models | `dnd/core/base_actions.py` |
-| Attack, Move, Jump, Shove, Dash, Dodge, etc. | `dnd/actions.py` |
-| Functional API (setup, execute) | `dnd/actions_functional.py` |
-| Opportunity attack handler | `dnd/reactions.py` |
-| Homebrew reactions (Intercept, Dodge Roll) | `dnd/items/test_reactions.py` |
-| **Conditions** | |
-| Base condition class | `dnd/core/base_conditions.py` |
-| All D&D conditions | `dnd/conditions.py` |
-| **Entity Blocks** | |
-| Ability scores | `dnd/blocks/abilities.py` |
-| Skills | `dnd/blocks/skills.py` |
-| Saving throws | `dnd/blocks/saving_throws.py` |
-| Health/HP | `dnd/blocks/health.py` |
-| Equipment (weapons, armor) | `dnd/blocks/equipment.py` |
-| Action economy | `dnd/blocks/action_economy.py` |
-| Senses (vision, position) | `dnd/blocks/sensory.py` |
-| **Character Classes** | |
-| Fighter class (all features + Champion) | `dnd/classes/fighter.py` |
-| Fighter factory (create L1-20 fighters) | `dnd/classes/fighter_factory.py` |
-| Barbarian class (all features + Berserker) | `dnd/classes/barbarian.py` |
-| Barbarian factory (create L1-20 barbarians) | `dnd/classes/barbarian_factory.py` |
-| Rage system (Raging, RageFeature, Frenzied) | `dnd/classes/rage.py` |
-| Feats (Lucky) | `dnd/classes/feats.py` |
-| Dice processor utilities | `dnd/classes/dice_processor_utils.py` |
-| Class module exports | `dnd/classes/__init__.py` |
-| **Items** | |
-| BaseItem, EquippableItem, UsableItem | `dnd/blocks/base_item.py` |
-| Inventory block | `dnd/blocks/inventory.py` |
-| Weapon factories (WEAPONS dict) | `dnd/items/weapons.py` |
-| Armor factories (ARMORS, SHIELDS dicts) | `dnd/items/armors.py` |
-| Test items (scrolls, potions, wands, coats, doors, etc.) | `dnd/items/test_items.py` |
-| Items Phase 1 tests (27) | `examples/test_items_phase1.py` |
-| Items Phase 1 advanced tests (36) | `examples/test_items_phase1_advanced.py` |
-| Items lifecycle hooks tests (22) | `examples/test_items_lifecycle_hooks.py` |
-| Items equip/unequip hooks tests (15) | `examples/test_items_equip_hooks.py` |
-| Usable items tests (19) | `examples/test_usable_items.py` |
-| Inventory use actions tests (65+) | `examples/test_inventory_use_actions.py` |
-| Stackable items tests (15) | `examples/test_stackable_items.py` |
-| **Spells** | |
-| Spell module exports + dicts | `dnd/spells/__init__.py` |
-| SpellAction, SpellEvent base (in actions.py) | `dnd/actions.py` |
-| Evocation spells (FireBolt, SacredFlame, MagicMissile) | `dnd/spells/evocation.py` |
-| Abjuration spells (MageArmor) | `dnd/spells/abjuration.py` |
-| Enchantment spells (HoldPerson, HoldPersonEffect) | `dnd/spells/enchantment.py` |
-| Conjuration spells (CallLightning, Grease, Web, etc.) | `dnd/spells/conjuration.py` |
-| Necromancy spells (ChillTouch, Blight, etc.) | `dnd/spells/necromancy.py` |
-| Illusion spells (Blur, Fear, HypnoticPattern, etc.) | `dnd/spells/illusion.py` |
-| Transmutation spells (SpikeGrowth) | `dnd/spells/transmutation.py` |
-| Spellcasting block | `dnd/blocks/spellcasting.py` |
-| Spell system tests | `examples/test_spell_system.py` |
-| **Utilities** | |
-| Test/debug utilities | `dnd/utils/test_utils.py` |
-| **Monsters & Examples** | |
-| Creature factories (create_goblin, create_skeleton, create_goblin_archer, create_sorcerer) | `dnd/monsters/bestiary.py` |
-| Complex creature example | `dnd/monsters/circus_fighter.py` |
-| Circus fighter custom conditions | `dnd/monsters/circus_fighter_conditions.py` |
-| Basic combat demo | `examples/combat_basic.py` |
-| Condition tests | `examples/combat_conditions.py` |
-| Spatial events test | `examples/spatial_events_test.py` |
-| Dice processor tests | `examples/test_dice_processors.py` |
-| Great Weapon Fighting tests | `examples/test_great_weapon_fighting.py` |
-| Second Wind tests | `examples/test_second_wind.py` |
-| Action Surge tests | `examples/test_action_surge.py` |
-| Extra Attack tests | `examples/test_extra_attack.py` |
-| Indomitable tests | `examples/test_indomitable.py` |
-| Protection tests | `examples/test_protection.py` |
-| Survivor tests | `examples/test_survivor.py` |
-| Barbarian rage tests | `examples/test_barbarian_rage.py` |
-| Barbarian frenzy tests | `examples/test_barbarian_frenzy.py` |
-| Barbarian features tests | `examples/test_barbarian_srd_features.py` |
-| Faction system tests | `examples/test_faction_system.py` |
-| Barbarian vs Fighter combat | `examples/test_barbarian_fighter_combat.py` |
-| Concentration system tests | `examples/test_concentration.py` |
-| Concentration spells tests | `examples/test_concentration_spells.py` |
-| Jump action tests | `examples/test_jump.py` |
-| Jump API tests | `examples/test_jump_api.py` |
-| Shove action tests | `examples/test_shove.py` |
-| Stealth system tests (130) | `examples/test_stealth_system.py` |
-| Lighting system tests (77) | `examples/test_lighting_system.py` |
-| Light source performance benchmark | `examples/test_light_source_perf.py` |
-| Intercept + Dodge Roll tests (52 assertions) | `examples/test_intercept_dodge_roll.py` |
-| **Server & CLI** | |
-| FastAPI server | `server/event_server.py` |
-| Session management | `server/session.py` |
-| Human CLI (play/playpvp) | `cli/main.py` |
-| Claude agent CLI | `cli/agent.py` |
-| API client | `cli/api_client.py` |
-| Display/rendering | `cli/display.py` |
-| Command parsing | `cli/commands.py` |
+**Core**: `dnd/core/` — `base_object.py`, `base_block.py`, `events.py`, `values.py`, `modifiers.py`, `dice.py`, `gridmap.py`, `base_actions.py`, `combat_log.py`
+**Entity & Blocks**: `dnd/entity.py`, `dnd/blocks/` (abilities, skills, saving_throws, health, equipment, inventory, action_economy, sensory, spellcasting, base_item)
+**Actions**: `dnd/actions.py`, `dnd/actions_functional.py`, `dnd/reactions.py`
+**Conditions**: `dnd/conditions.py`, `dnd/core/base_conditions.py`
+**Classes**: `dnd/classes/` (fighter, barbarian, rage, feats, dice_processor_utils + factories)
+**Items**: `dnd/items/` (weapons, armors, test_items, test_reactions)
+**Spells**: `dnd/spells/` (evocation, abjuration, enchantment, conjuration, necromancy, illusion, transmutation)
+**Spatial**: `dnd/core/gridmap.py`, `dnd/core/shadowcast.py`, `dnd/core/dijkstra.py`, `dnd/tiles.py`, `dnd/tile_conditions.py`
+**Monsters**: `dnd/monsters/bestiary.py` (create_goblin, create_skeleton, create_goblin_archer, create_sorcerer)
+**Server/CLI**: `server/event_server.py`, `server/session.py`, `cli/agent.py`, `cli/display.py`, `cli/commands.py`
+**Tests**: `examples/test_*.py` — named by feature (e.g., `test_barbarian_rage.py`, `test_fireball.py`)
 
-### Documentation Folders
+### Documentation
 
-#### claude_docs/
+| Doc | Read when... |
+|-----|-------------|
+| `claude_docs/IMPLEMENTATION_GUIDE.md` | Implementing any condition, action, or event handler (**read first**) |
+| `claude_docs/CLASS_SYSTEM.md` | Working on Fighter/Barbarian features or adding a new class |
+| `claude_docs/LIGHTING_SYSTEM.md` | Working on lighting, darkvision, or incremental senses updates |
+| `claude_docs/VISION_HIDING_COVER_PLAN.md` | Working on stealth, invisibility, or cover |
+| `claude_docs/TERRAIN_MOVEMENT_SYSTEM.md` | Working on terrain, movement costs, or zone spells |
+| `claude_docs/CLI_GUIDE.md` | Using or modifying the CLI or agent commands |
+| `claude_docs/archive/MASTER_SUMMARY.md` | Project status, what's implemented, roadmap |
 
-Contains focused implementation guides:
+**SRD reference**: `interactive_ruleset/` contains D&D 5e rules with `*_NOTES.md` gap analysis files.
 
-| File | Purpose |
-|------|---------|
-| `MASTER_SUMMARY.md` | Project status, what's implemented, roadmap |
-| `CLI_GUIDE.md` | How to use CLI and Agent commands |
-| `IMPLEMENTATION_GUIDE.md` | **READ FIRST** - How to implement conditions, actions, event handlers |
-| `CLASS_SYSTEM.md` | Class system patterns, Fighter/Barbarian/Sorcerer, spellcasting infrastructure |
-| `ITEMS_PLAN.md` | Items system design & implementation (steps a-d DONE). BaseItem, EquippableItem, UsableItem, inventory use actions, ActionCategory. |
-| `LIGHTING_SYSTEM.md` | Layer 2 lighting: LightLevel, sense modes, light sources, zone light, incremental senses (SensesUpdateHint) |
-| `VISION_HIDING_COVER_PLAN.md` | Layers 1-3 plan: Stealth [DONE], Light [DONE], Cover [TODO] |
-| ~~`EXAMPLE_PATTERNS.md`~~ | Merged into `IMPLEMENTATION_GUIDE.md` (Section 14) |
-| `archive/` | Completed planning docs (historical reference) |
-
-#### interactive_ruleset/
-
-Contains D&D 5e SRD markdown (cloned from OldManUmby/DND.SRD.Wiki) with `*_NOTES.md` analysis files:
-
-```
-interactive_ruleset/
-├── Gameplay/
-│   ├── Abilities.md + Abilities_NOTES.md    # Ability system analysis
-│   ├── Combat.md + Combat_NOTES.md          # Combat mechanics gaps
-│   └── Adventuring.md + Adventuring_NOTES.md # Turn structure needed
-├── Equipment/
-│   └── Equipment_NOTES.md                   # ARPG-style already done
-├── Gamemastering/
-│   └── Gamemastering_NOTES.md               # Conditions, traps, objects
-└── (other SRD folders: Spells, Monsters, etc.)
-```
-
-The `*_NOTES.md` files compare SRD rules against our implementation, identifying gaps and implementation approaches.
-
-### Dependencies
-
-- **pydantic**: Validation and serialization for all models
-- **pytest**: Testing framework
-- **pyright**: Type checking
-- **fastapi/uvicorn**: API server
-- **websockets**: WebSocket client library
-- **httpx**: HTTP client for testing
-
-### Project Status
-
-See `claude_docs/MASTER_SUMMARY.md` for current state and roadmap.
+**Dependencies**: pydantic, pytest, pyright, fastapi/uvicorn, websockets, httpx
