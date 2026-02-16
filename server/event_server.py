@@ -745,7 +745,8 @@ async def get_visibility():
             "name": entity.name,
             "position": list(entity.position),
             "visible_cells": visible_positions,
-            "visible_entities": [str(uuid) for uuid in entity.senses.entities.keys()]
+            "visible_entities": [str(uuid) for uuid in entity.senses.entities.keys()],
+            "seen_cells": [list(pos) for pos in entity.senses.seen],
         }
     return result
 

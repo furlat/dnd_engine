@@ -2143,6 +2143,9 @@ class Entity(BaseBlock):
         # FOV cache shared across all AoE spells (registered + use-template)
         # to avoid redundant compute_fov calls for same origin+radius
         fov_cache: dict = {}
+        # Pre-compute barrier positions once for fast-path: if no barriers in
+        # blast radius, skip shadowcast entirely (most common case in open arenas)
+        barrier_positions = get_map().get_barrier_positions()
 
         for template in self.position_actions:
             if template.target_type != TargetType.POSITION_AOE:
@@ -2182,7 +2185,7 @@ class Entity(BaseBlock):
                 # Compute shape directly — no pre_validate needed for POSITION_AOE
                 # pre_validate's only useful check (aoe_require_targets) is done after filtering
                 shape = shape_template.model_copy(update={'target': pos})
-                shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache)
+                shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache, barrier_positions=barrier_positions)
 
                 affected_uuids = list(shape.affected_entity_uuids)
 
@@ -2397,7 +2400,7 @@ class Entity(BaseBlock):
                 for pos in use_valid_pos_list:
                     # Compute shape directly — no pre_validate needed for POSITION_AOE
                     shape = use_shape_template.model_copy(update={'target': pos})
-                    shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache)
+                    shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache, barrier_positions=barrier_positions)
                     affected_uuids = list(shape.affected_entity_uuids)
                     if not use_template.include_self:
                         affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]

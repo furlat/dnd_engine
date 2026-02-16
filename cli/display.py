@@ -456,9 +456,10 @@ def render_map_content(
     if visibility:
         for uuid, data in visibility.items():
             cells = set(tuple(c) for c in data.get("visible_cells", []))
+            seen = set(tuple(c) for c in data.get("seen_cells", []))
             per_entity_visible[uuid] = cells
-            # Accumulate seen tiles for memory
-            update_seen_tiles(uuid, cells)
+            # Use engine's senses.seen (includes intermediate movement steps)
+            update_seen_tiles(uuid, seen)
             if uuid == current_entity_uuid:
                 hero_visible = cells
             else:
