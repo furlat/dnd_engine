@@ -1034,6 +1034,57 @@ class GridMap:
             self._fire_light_batch_events(changed_positions)
 
     # =========================================================================
+    # AoE Propagation (physical barriers only, ignores magical darkness)
+    # =========================================================================
+
+    def is_blocking_propagation(self, x: int, y: int) -> bool:
+        """Check if position blocks AoE propagation (physical barriers only).
+
+        Unlike is_blocking(), this ignores magical darkness — AoE spreads
+        through darkness but not through walls/closed doors."""
+        tile = self._tiles.get((x, y))
+        if tile is None or not tile.visible:  # Wall or out-of-bounds
+            return True
+        for obj_uuid in self._objects_by_position.get((x, y), set()):
+            block = BaseBlock.get(obj_uuid)
+            if block is not None and block.blocks_vision():  # Closed door, barricade
+                return True
+        return False
+
+    def compute_propagation_fov(self, origin: Tuple[int, int],
+                                max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
+        """Compute FOV for AoE propagation (physical barriers only).
+
+        Unlike compute_fov(), ignores magical darkness — AoE spreads through
+        darkness but not through walls/closed doors."""
+        visible_positions: List[Tuple[int, int]] = []
+
+        def mark_visible(x: int, y: int) -> None:
+            visible_positions.append((x, y))
+
+        def is_blocking_for(x: int, y: int) -> bool:
+            return self.is_blocking_propagation(x, y)
+
+        compute_fov(origin, is_blocking_for, mark_visible, max_distance)
+        return visible_positions
+
+    def get_barrier_positions(self) -> Set[Tuple[int, int]]:
+        """Return all positions that block AoE propagation.
+
+        Used for fast-path: if geometric_shape & barrier_positions is empty,
+        skip shadowcast entirely."""
+        barriers: Set[Tuple[int, int]] = set()
+        for pos, tile in self._tiles.items():
+            if not tile.visible:  # Wall
+                barriers.add(pos)
+        for pos, obj_uuids in self._objects_by_position.items():
+            for obj_uuid in obj_uuids:
+                block = BaseBlock.get(obj_uuid)
+                if block is not None and block.blocks_vision():
+                    barriers.add(pos)
+        return barriers
+
+    # =========================================================================
     # Utility Methods
     # =========================================================================
 
