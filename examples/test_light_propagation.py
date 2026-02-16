@@ -314,6 +314,90 @@ check("Target visible through open door with light", target.uuid in observer.sen
 
 
 # =============================================================================
+# Test 8: Tile change (wall -> floor) propagates light automatically
+# =============================================================================
+section("Tile change (wall -> floor) propagates light via callback")
+reset_combat_state()
+grid = get_map()
+grid.create_rectangle(0, 0, 15, 15)
+
+# Make all tiles dark
+for _, tile in grid._tiles.items():
+    tile.default_light = LightLevel.DARKNESS
+
+# Wall at x=5, y=4..10 (solid wall, no door)
+for y in range(4, 11):
+    grid.set_tile(5, y, walkable=False, visible=False, name="Wall")
+
+# Light source on left side at (3,7) — bright 10ft=2tiles, dim 10ft=2tiles
+wt_tile = create_wall_torch(position=(3, 7), owner_uuid=uuid4(), lit=True)
+
+Entity.update_all_entities_senses()
+
+# Left side lit, right side blocked by wall
+check("(3,7) bright (torch position)", tile_light(3, 7) == LightLevel.BRIGHT_LIGHT)
+check("(4,7) has light (before wall)", tile_light(4, 7) != LightLevel.DARKNESS)
+check("(6,7) dark (wall blocks light)", tile_light(6, 7) == LightLevel.DARKNESS)
+
+# Replace wall at (5,7) with a floor tile — light should propagate automatically
+grid.set_tile(5, 7, walkable=True, visible=True, name="Floor")
+
+# Light should now pass through the opened gap
+# (5,7) is 2 tiles from (3,7) = bright range
+check("(5,7) has light after wall->floor", tile_light(5, 7) != LightLevel.DARKNESS)
+# (6,7) is 3 tiles from (3,7) = dim range
+check("(6,7) has light after wall->floor (propagated through gap)", tile_light(6, 7) != LightLevel.DARKNESS)
+# (7,7) is 4 tiles from (3,7) = still within total radius (4 tiles)
+check("(7,7) has light after wall->floor (dim range)", tile_light(7, 7) != LightLevel.DARKNESS)
+
+# Now put the wall back — light should recede
+grid.set_tile(5, 7, walkable=False, visible=False, name="Wall")
+
+check("(6,7) dark after floor->wall", tile_light(6, 7) == LightLevel.DARKNESS)
+check("(7,7) dark after floor->wall", tile_light(7, 7) == LightLevel.DARKNESS)
+# Left side should still be lit
+check("(3,7) still bright after floor->wall", tile_light(3, 7) == LightLevel.BRIGHT_LIGHT)
+
+
+
+# =============================================================================
+# Test 9: remove_tile + set_tile (wall destruction → floor) propagates light
+# =============================================================================
+section("remove_tile + set_tile (wall destruction) propagates light")
+reset_combat_state()
+grid = get_map()
+grid.create_rectangle(0, 0, 15, 15)
+
+for _, tile in grid._tiles.items():
+    tile.default_light = LightLevel.DARKNESS
+
+# Wall at x=5, y=4..10
+for y in range(4, 11):
+    grid.set_tile(5, y, walkable=False, visible=False, name="Wall")
+
+# Torch at (3,7) — bright 10ft=2tiles, dim 10ft=2tiles
+wt_remove = create_wall_torch(position=(3, 7), owner_uuid=uuid4(), lit=True)
+
+Entity.update_all_entities_senses()
+
+# Wall blocks light to the right side
+check("(6,7) dark (wall blocks)", tile_light(6, 7) == LightLevel.DARKNESS)
+
+# Simulate wall destruction: remove_tile then set_tile with floor
+# This is the realistic pattern: wall is destroyed, floor appears
+grid.remove_tile(5, 7)
+grid.set_tile(5, 7, walkable=True, visible=True, name="Floor")
+
+# Light should now propagate through the gap
+check("(5,7) has light after wall destroyed", tile_light(5, 7) != LightLevel.DARKNESS)
+check("(6,7) has light after wall destroyed (propagated)", tile_light(6, 7) != LightLevel.DARKNESS)
+
+# Tiles that were lit before should still be lit
+check("(4,7) still has light", tile_light(4, 7) != LightLevel.DARKNESS)
+check("(3,7) still bright", tile_light(3, 7) == LightLevel.BRIGHT_LIGHT)
+
+
+# =============================================================================
 # Summary
 # =============================================================================
 print(f"\n{'='*60}")
