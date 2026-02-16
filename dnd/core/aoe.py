@@ -77,7 +77,10 @@ class AoEShape(BaseObject):
         return self.origin_override or self._default_origin(caster_pos)
 
     def compute_subjective(
-        self, caster_pos: Tuple[int, int], senses: "Senses"
+        self,
+        caster_pos: Tuple[int, int],
+        senses: "Senses",
+        fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
     ) -> "AoEShape":
         """
         Compute affected positions using caster's existing senses.
@@ -89,6 +92,9 @@ class AoEShape(BaseObject):
         Args:
             caster_pos: Caster's current position
             senses: Caster's Senses block with pre-computed visibility
+            fov_cache: Optional cache for FOV computations keyed by (origin, radius).
+                       When provided, avoids redundant compute_fov calls for the same
+                       origin+radius across multiple spell positions/templates.
 
         Returns:
             Self for chaining
@@ -101,10 +107,16 @@ class AoEShape(BaseObject):
         # If origin differs from caster, also compute origin's FOV
         # This handles cases like Fireball where explosion spreads from target
         if self.computed_origin != caster_pos:
-            grid = get_map()
-            origin_fov = set(
-                grid.compute_fov(self.computed_origin, self._get_max_radius_tiles())
-            )
+            cache_key = (self.computed_origin, self._get_max_radius_tiles())
+            if fov_cache is not None and cache_key in fov_cache:
+                origin_fov = fov_cache[cache_key]
+            else:
+                grid = get_map()
+                origin_fov = set(
+                    grid.compute_fov(self.computed_origin, self._get_max_radius_tiles())
+                )
+                if fov_cache is not None:
+                    fov_cache[cache_key] = origin_fov
             # Preview shows intersection: what caster sees AND what origin can hit
             perceived_fov = caster_fov & origin_fov
         else:
