@@ -21,6 +21,7 @@ from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.modifiers import DamageType, CreatureType
 from dnd.core.values import ModifiableValue
+from dnd.core.base_block import SenseMode, SensesType
 
 # Import weapons and armor from items module
 from dnd.items import (
@@ -166,7 +167,8 @@ def create_skeleton(
     name: str = "Skeleton",
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
-    weight: int = 120
+    weight: int = 120,
+    darkvision: bool = False
 ) -> Entity:
     """
     Creates a Skeleton (CR 1/4).
@@ -245,6 +247,12 @@ def create_skeleton(
 
     # Set up action templates (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
+
+    # Add darkvision 60ft (SRD: skeletons have darkvision)
+    if darkvision:
+        entity.senses.sense_modes.append(
+            SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
+        )
 
     # Equip weapons and armor (this triggers event handlers to register attack templates)
     shortsword = create_shortsword(entity.uuid)

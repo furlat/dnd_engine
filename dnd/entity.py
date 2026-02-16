@@ -1650,7 +1650,7 @@ class Entity(BaseBlock):
         seen: Set[Tuple[int, int]],
         max_distance: int = 10,
         entity_uuid: Optional[UUID] = None
-    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]], Dict[UUID, Tuple[int, int]]]:
+    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]], Dict[UUID, Tuple[int, int]], List[Tuple[int, int]]]:
         """
         Compute senses data from a position.
 
@@ -1661,19 +1661,32 @@ class Entity(BaseBlock):
             entity_uuid: If provided, pathfinding will exclude cells occupied by other entities
 
         Returns:
-            (visible_dict, paths, walkable, visible_entities, visible_objects)
+            (visible_dict, paths, walkable, visible_entities, visible_objects, fov_positions)
+            visible_dict is filtered by effective light (only tiles the observer can actually see).
+            fov_positions is the full geometric FOV (for subscriptions to detect light changes).
         """
         grid = get_map()
 
         # Get visible cells using shadowcast (observer_uuid for magical darkness)
-        visible_positions = grid.compute_fov(position, max_distance, observer_uuid=entity_uuid)
-        visible_dict = {pos: True for pos in visible_positions}
+        fov_positions = grid.compute_fov(position, max_distance, observer_uuid=entity_uuid)
+
+        # Filter by effective light: only tiles the observer can actually see
+        visible_dict: Dict[Tuple[int, int], bool] = {}
+        for pos in fov_positions:
+            tile = grid.get_tile(pos[0], pos[1])
+            if not tile:
+                continue  # No tile at this position
+            if entity_uuid:
+                eff = tile.get_effective_light_for(entity_uuid, observer_position=position)
+                if eff.value <= LightLevel.DARKNESS.value:
+                    continue  # Too dark to see
+            visible_dict[pos] = True
 
         # Get walkable paths using dijkstra (with occupancy check if entity_uuid provided)
         _, paths = grid.compute_paths(position, max_distance, requesting_entity_uuid=entity_uuid)
 
         # Filter paths to only include those where:
-        # 1. The destination is currently visible
+        # 1. The destination is currently visible (lit)
         # 2. All positions in the path are either seen before OR currently visible
         filtered_paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
         for pos, path in paths.items():
@@ -1681,15 +1694,9 @@ class Entity(BaseBlock):
             if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
                 filtered_paths[pos] = path
 
-        # Get entities at visible positions (filtered by light then perceivability)
+        # Get entities at visible (lit) positions (filtered by perceivability)
         visible_entities: Dict[UUID, Tuple[int, int]] = {}
-        for pos in visible_positions:
-            # Light pre-check: can observer see into this tile?
-            tile = grid.get_tile(pos[0], pos[1])
-            if tile and entity_uuid:
-                effective_light = tile.get_effective_light_for(entity_uuid, observer_position=position)
-                if effective_light.value <= LightLevel.DARKNESS.value:
-                    continue  # Too dark - entities at this tile not visible
+        for pos in visible_dict:
             entities = Entity.get_all_entities_at_position(pos)
             for entity in entities:
                 if entity_uuid and entity.uuid == entity_uuid:
@@ -1697,31 +1704,25 @@ class Entity(BaseBlock):
                 if entity.is_perceivable_by(entity_uuid):
                     visible_entities[entity.uuid] = pos
 
-        # Get objects at visible positions (filtered by light then perceivability)
+        # Get objects at visible (lit) positions (filtered by perceivability)
         visible_objects: Dict[UUID, Tuple[int, int]] = {}
-        for pos in visible_positions:
-            # Light pre-check for objects too
-            tile = grid.get_tile(pos[0], pos[1])
-            if tile and entity_uuid:
-                effective_light = tile.get_effective_light_for(entity_uuid, observer_position=position)
-                if effective_light.value <= LightLevel.DARKNESS.value:
-                    continue
+        for pos in visible_dict:
             for obj_uuid in grid.get_objects_at(pos):
                 obj = BaseBlock.get(obj_uuid)
                 if obj and not obj.is_perceivable_by(entity_uuid):
                     continue
                 visible_objects[obj_uuid] = pos
 
-        # Build walkable dict from grid
-        walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in visible_positions}
+        # Build walkable dict from full geometric FOV (for map rendering)
+        walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in fov_positions}
 
-        return visible_dict, filtered_paths, walkable, visible_entities, visible_objects
+        return visible_dict, filtered_paths, walkable, visible_entities, visible_objects, fov_positions
 
     def create_senses_copy_at_position(self, position: Tuple[int, int], max_distance: int = 10) -> 'Senses':
         """Create a copy of senses as if entity were at a different position."""
         senses = self.senses.model_copy(deep=True)
         senses.position = position
-        visible_dict, filtered_paths, walkable, visible_entities, visible_objects = Entity.compute_senses_from_position(
+        visible_dict, filtered_paths, walkable, visible_entities, visible_objects, _fov = Entity.compute_senses_from_position(
             position, self.senses.seen, max_distance, entity_uuid=self.uuid
         )
 
@@ -1749,7 +1750,7 @@ class Entity(BaseBlock):
         Args:
             max_distance: Maximum view/movement distance (default 10)
         """
-        visible_dict, filtered_paths, walkable, visible_entities, visible_objects = Entity.compute_senses_from_position(
+        visible_dict, filtered_paths, walkable, visible_entities, visible_objects, fov_positions = Entity.compute_senses_from_position(
             self.position, self.senses.seen, max_distance, entity_uuid=self.uuid
         )
         # Update the senses block
@@ -1760,9 +1761,8 @@ class Entity(BaseBlock):
             paths=filtered_paths,
             objects=visible_objects
         )
-        # Subscribe to visible cells for spatial change notifications
-        visible_cells = set(visible_dict.keys())
-        get_map().subscribe_to_cells(self.uuid, visible_cells)
+        # Subscribe to FULL geometric FOV (detect light changes in dark areas)
+        get_map().subscribe_to_cells(self.uuid, set(fov_positions))
 
     @classmethod
     def update_all_entities_senses(cls, max_distance: int = 10):
@@ -1788,34 +1788,31 @@ class Entity(BaseBlock):
         """
         grid = get_map()
         # Compute FOV only - returns list of visible positions (observer_uuid for magical darkness)
-        visible_positions = grid.compute_fov(self.position, max_distance, observer_uuid=self.uuid)
+        fov_positions = grid.compute_fov(self.position, max_distance, observer_uuid=self.uuid)
 
-        # Convert to dict format expected by Senses
-        visible_dict: Dict[Tuple[int, int], bool] = {pos: True for pos in visible_positions}
-
-        # Find entities in visible cells (filtered by light then perceivability)
-        visible_entities: Dict[UUID, Tuple[int, int]] = {}
-        for pos in visible_positions:
-            # Light pre-check
+        # Filter by effective light: only tiles the observer can actually see
+        visible_dict: Dict[Tuple[int, int], bool] = {}
+        for pos in fov_positions:
             tile = grid.get_tile(pos[0], pos[1])
-            if tile:
-                effective_light = tile.get_effective_light_for(self.uuid, observer_position=self.position)
-                if effective_light.value <= LightLevel.DARKNESS.value:
-                    continue
+            if not tile:
+                continue  # No tile at this position
+            eff = tile.get_effective_light_for(self.uuid, observer_position=self.position)
+            if eff.value <= LightLevel.DARKNESS.value:
+                continue  # Too dark to see
+            visible_dict[pos] = True
+
+        # Find entities in visible (lit) cells (filtered by perceivability)
+        visible_entities: Dict[UUID, Tuple[int, int]] = {}
+        for pos in visible_dict:
             for ent_uuid in grid.get_entities_at(pos):
                 if ent_uuid != self.uuid:
                     block = BaseBlock.get(ent_uuid)
                     if block and block.is_perceivable_by(self.uuid):
                         visible_entities[ent_uuid] = pos
 
-        # Find objects in visible cells (filtered by light then perceivability)
+        # Find objects in visible (lit) cells (filtered by perceivability)
         visible_objects: Dict[UUID, Tuple[int, int]] = {}
-        for pos in visible_positions:
-            tile = grid.get_tile(pos[0], pos[1])
-            if tile:
-                effective_light = tile.get_effective_light_for(self.uuid, observer_position=self.position)
-                if effective_light.value <= LightLevel.DARKNESS.value:
-                    continue
+        for pos in visible_dict:
             for obj_uuid in grid.get_objects_at(pos):
                 obj = BaseBlock.get(obj_uuid)
                 if obj and not obj.is_perceivable_by(self.uuid):
@@ -1858,9 +1855,8 @@ class Entity(BaseBlock):
         self.senses.entities = visible_entities
         self.senses.objects = visible_objects
 
-        # Update subscriptions to newly visible cells
-        visible_cells = set(visible_positions)
-        grid.subscribe_to_cells(self.uuid, visible_cells)
+        # Subscribe to FULL geometric FOV (detect light changes in dark areas)
+        grid.subscribe_to_cells(self.uuid, set(fov_positions))
 
     # =========================================================================
     # Action Registry System

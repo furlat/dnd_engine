@@ -2,7 +2,8 @@
 Display module for full-screen TUI with Rich.
 """
 
-from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Any, List, Optional, Tuple, Set, TYPE_CHECKING
+from collections import defaultdict
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
@@ -65,7 +66,7 @@ _in_alternate_screen = False
 
 # Store rich combat log entries (full action data, not just strings)
 _combat_log: List[Dict[str, Any]] = []
-MAX_COMBAT_LOG = 10  # Max entries to show
+MAX_COMBAT_LOG = 5  # Max entries to show
 
 # Output buffer for command feedback (valid positions, attack options, etc.)
 _output_buffer: List[str] = []
@@ -82,6 +83,25 @@ _session_info: Dict[str, Any] = {
 # Turn history for replay
 _turn_history: List[Dict[str, Any]] = []  # List of cached states
 _history_index: Optional[int] = None  # None = viewing current, int = viewing history
+
+# FOV mode state
+_fov_mode: str = "self"       # "global", "self", "entity"
+_fov_entity_index: int = 0    # For "entity" mode - matches legend numbering
+
+# Tile memory: positions ever seen, keyed by entity UUID
+_seen_tiles: Dict[str, Set[Tuple[int, int]]] = defaultdict(set)
+
+# Light level background color map (LightLevel enum values)
+LIGHT_LEVEL_BG = {
+    0: "on grey7",       # MAGICAL_DARKNESS
+    1: "on grey15",      # DARKNESS
+    2: "on grey23",      # DIM_LIGHT
+    3: "on color(58)",   # BRIGHT_LIGHT (subtle dark yellow/olive)
+    4: "on color(100)",  # VERY_BRIGHT (brighter warm)
+}
+
+# Fog of war background for memory tiles (seen but not currently visible)
+FOG_BG = "on grey11"
 
 
 def enter_alternate_screen():
@@ -296,6 +316,39 @@ def clear_history():
     _history_index = None
 
 
+# ============================================================================
+# FOV Mode API
+# ============================================================================
+
+def get_fov_mode() -> str:
+    """Get current FOV mode as display string."""
+    if _fov_mode == "entity":
+        return f"entity #{_fov_entity_index}"
+    return _fov_mode
+
+
+def set_fov_mode(mode: str, entity_index: int = 0):
+    """Set FOV mode. Modes: 'global', 'self', 'entity'."""
+    global _fov_mode, _fov_entity_index
+    _fov_mode = mode
+    _fov_entity_index = entity_index
+
+
+def update_seen_tiles(entity_uuid: str, visible_cells: Set[Tuple[int, int]]):
+    """Accumulate visible cells into seen set for an entity."""
+    _seen_tiles[entity_uuid].update(visible_cells)
+
+
+def get_seen_tiles(entity_uuid: str) -> Set[Tuple[int, int]]:
+    """Get all tiles ever seen by an entity."""
+    return _seen_tiles[entity_uuid]
+
+
+def reset_seen_tiles():
+    """Reset seen tiles (on new game)."""
+    _seen_tiles.clear()
+
+
 def get_terminal_size() -> Tuple[int, int]:
     """Get terminal width and height."""
     size = shutil.get_terminal_size((80, 24))
@@ -303,6 +356,50 @@ def get_terminal_size() -> Tuple[int, int]:
 
 
 ITEM_DEFAULT_CHAR = "\u03c6"      # phi fallback for items without map_char
+GREEK_AUTO_POOL = "\u03b1\u03b2\u03b3\u03b5\u03b6\u03b7\u03b9\u03ba\u03bc\u03bd\u03be\u03bf\u03c1\u03c4\u03c5\u03c7\u03c8\u03c9"  # αβγεζηικμνξορτυχψω
+
+
+def _resolve_entity_uuid_by_index(
+    index: int,
+    entities: List[Dict[str, Any]],
+    current_entity_uuid: Optional[str]
+) -> Optional[str]:
+    """Resolve a legend number to entity UUID.
+
+    Legend numbering matches entity_icons: non-player entities ordered by appearance,
+    numbered per starting letter when there are collisions.
+    """
+    count = 0
+    for e in entities:
+        if e["uuid"] != current_entity_uuid:
+            count += 1
+            if count == index:
+                return e["uuid"]
+    return None
+
+
+def _get_terrain_char(tile: Dict[str, Any]) -> Tuple[str, str]:
+    """Get the character and base style for terrain rendering (memory/fog mode).
+
+    Returns (char, style) for the tile's terrain type only — no entity/object overlay.
+    Uses FOG_BG background to make memory tiles visually distinct from visible tiles.
+    """
+    if not tile.get("walkable", True):
+        tile_name = tile.get("name", "Wall")
+        if tile_name == "Water":
+            return "~", f"blue dim {FOG_BG}"
+        return "#", f"dim {FOG_BG}"
+
+    tile_name = tile.get("name", "Floor")
+    is_hazardous = tile.get("is_hazardous", False)
+    walking_cost = tile.get("walking_cost", 1)
+
+    if is_hazardous or tile_name == "Spikes":
+        return "^", f"red dim {FOG_BG}"
+    elif walking_cost > 1 or tile_name == "Difficult Terrain":
+        return ",", f"yellow dim {FOG_BG}"
+    else:
+        return ".", f"dim {FOG_BG}"
 
 
 def render_map_content(
@@ -335,21 +432,71 @@ def render_map_content(
             if pos not in object_at:  # First object wins
                 object_at[pos] = obj
 
+    # Build item_char_map: item_name -> display_char (auto-assign unique Greek letters for default φ items)
+    item_char_map: Dict[str, str] = {}
+    _greek_idx = 0
+    for obj in (floor_objects or []):
+        obj_name = obj.get("name", "Item")
+        if obj_name in item_char_map:
+            continue
+        char = obj.get("map_char", ITEM_DEFAULT_CHAR)
+        if char != ITEM_DEFAULT_CHAR:
+            item_char_map[obj_name] = char
+        else:
+            item_char_map[obj_name] = GREEK_AUTO_POOL[_greek_idx % len(GREEK_AUTO_POOL)]
+            _greek_idx += 1
+
     valid_set = set(tuple(p) for p in valid_positions) if valid_positions else set()
     path_set = set(tuple(p) for p in movement_path) if movement_path else set()
 
-    hero_visible = set()
-    enemy_visible = set()
-    if visibility and current_entity_uuid:
+    # Build per-entity visible cell sets from visibility data
+    per_entity_visible: Dict[str, Set[Tuple[int, int]]] = {}
+    hero_visible: Set[Tuple[int, int]] = set()
+    enemy_visible: Set[Tuple[int, int]] = set()
+    if visibility:
         for uuid, data in visibility.items():
             cells = set(tuple(c) for c in data.get("visible_cells", []))
+            per_entity_visible[uuid] = cells
+            # Accumulate seen tiles for memory
+            update_seen_tiles(uuid, cells)
             if uuid == current_entity_uuid:
                 hero_visible = cells
             else:
                 enemy_visible.update(cells)
 
-    # Build icon mapping for ALL non-player entities (dynamic count)
-    # First pass: count entities per starting letter
+    # Compute FOV-mode visible/seen sets
+    fov_visible: Optional[Set[Tuple[int, int]]] = None   # Currently visible (None = show all)
+    fov_seen: Optional[Set[Tuple[int, int]]] = None       # Ever seen (None = show all)
+
+    # Set of entity UUIDs visible to the FOV observer (None = show all)
+    fov_visible_entities: Optional[Set[str]] = None
+
+    # Entity rendered as @ (the observer in current FOV mode)
+    at_entity_uuid: Optional[str] = current_entity_uuid  # Default: player
+
+    if _fov_mode == "self" and current_entity_uuid:
+        fov_visible = hero_visible
+        fov_seen = get_seen_tiles(current_entity_uuid)
+        if visibility:
+            vis_data = visibility.get(current_entity_uuid, {})
+            fov_visible_entities = set(vis_data.get("visible_entities", []))
+    elif _fov_mode == "entity":
+        # Find entity by legend index
+        target_uuid = _resolve_entity_uuid_by_index(_fov_entity_index, entities, current_entity_uuid)
+        if target_uuid:
+            at_entity_uuid = target_uuid  # FOV entity is the observer → rendered as @
+            fov_visible = per_entity_visible.get(target_uuid, set())
+            fov_seen = get_seen_tiles(target_uuid)
+            if visibility:
+                vis_data = visibility.get(target_uuid, {})
+                fov_visible_entities = set(vis_data.get("visible_entities", []))
+        else:
+            # Fallback to global if invalid index
+            fov_visible = None
+            fov_seen = None
+    # _fov_mode == "global": fov_visible/fov_seen/fov_visible_entities stay None (show everything)
+
+    # Build icon mapping for all entities except the @ observer
     letter_counts: Dict[str, int] = {}
     entity_icons: Dict[str, Tuple[str, int]] = {}  # uuid -> (letter, number)
 
@@ -375,16 +522,48 @@ def render_map_content(
         for x in range(min_x, max_x + 1):
             pos = (x, y)
             tile = tiles.get(pos)
+
+            # FOV filtering: check if position is visible or remembered
+            if fov_visible is not None:
+                # FOV mode active — apply fog of war
+                if pos not in (fov_seen or set()):
+                    # Never seen: dark void (very dark background so it doesn't
+                    # look like bright light on light terminals)
+                    result.append("  ", style="on grey3")
+                    continue
+                elif pos not in fov_visible:
+                    # Seen before but not currently visible: show terrain only (memory)
+                    if tile is not None:
+                        char, style = _get_terrain_char(tile)
+                    else:
+                        char, style = " ", ""
+                    result.append(" ")
+                    result.append(char, style=style)
+                    continue
+                # else: currently visible — fall through to full rendering
+
             entity = entity_at.get(pos)
+            # In FOV mode, only show entities visible to the FOV observer
+            # The @ entity (observer) always renders; others must be in visible list
+            if entity and fov_visible_entities is not None:
+                if entity["uuid"] != at_entity_uuid and entity["uuid"] not in fov_visible_entities:
+                    entity = None  # Not visible to FOV entity
+
+            # Subjective lighting: in FOV mode, if tile is visible but raw light
+            # is DARKNESS, observer sees it via darkvision/adjacent rule → render as DIM
+            raw_light = tile.get("light_level", 3) if tile else 3
+            if fov_visible is not None and raw_light <= 1:
+                raw_light = 2  # DIM_LIGHT — observer can see it, so at least dim
+            light_bg = LIGHT_LEVEL_BG.get(raw_light, "")
 
             if entity:
                 in_aoe = pos in valid_set
-                if entity["uuid"] == current_entity_uuid:
+                if entity["uuid"] == at_entity_uuid:
                     char = "@"
-                    # Yellow background if player is in AoE
-                    style = "bold green on yellow" if in_aoe else "bold green"
+                    # Yellow background if observer is in AoE
+                    style = "bold green on yellow" if in_aoe else f"bold green {light_bg}".strip()
                 elif entity.get("is_dead"):
-                    char, style = "%", "dim"
+                    char, style = "%", f"dim {light_bg}".strip()
                 else:
                     # Dynamic icon: number if multiple share letter, else letter
                     letter, num = entity_icons.get(entity["uuid"], (entity["name"][0].upper(), 1))
@@ -394,24 +573,28 @@ def render_map_content(
                     else:
                         char = letter
                     # Yellow background if enemy is in AoE
-                    style = "bold red on yellow" if in_aoe else "bold red"
+                    style = "bold red on yellow" if in_aoe else f"bold red {light_bg}".strip()
             elif pos in object_at:
                 obj = object_at[pos]
-                char = obj.get("map_char", ITEM_DEFAULT_CHAR)
-                style = "bold cyan"
+                obj_name: str = obj.get("name", "Item")
+                if obj_name in item_char_map:
+                    char = item_char_map[obj_name]
+                else:
+                    char = ITEM_DEFAULT_CHAR
+                style = f"bold cyan {light_bg}".strip()
             elif pos in path_set:
-                char, style = "+", "bold magenta"
+                char, style = "+", f"bold magenta {light_bg}".strip()
             elif pos in valid_set:
-                char, style = "*", "bold yellow"
+                char, style = "*", f"bold yellow {light_bg}".strip()
             elif tile is None:
                 char, style = " ", ""
             elif not tile.get("walkable", True):
                 # Distinguish water from walls
                 tile_name = tile.get("name", "Wall")
                 if tile_name == "Water":
-                    char, style = "~", "bold blue"
+                    char, style = "~", f"bold blue {light_bg}".strip()
                 else:
-                    char, style = "#", "white"
+                    char, style = "#", f"white {light_bg}".strip()
             else:
                 # Walkable tile - check for terrain types
                 tile_name = tile.get("name", "Floor")
@@ -419,24 +602,13 @@ def render_map_content(
                 walking_cost = tile.get("walking_cost", 1)
 
                 if is_hazardous or tile_name == "Spikes":
-                    # Hazardous terrain (spikes, fire, etc.)
-                    char, style = "^", "bold red"
+                    char, style = "^", f"bold red {light_bg}".strip()
                 elif walking_cost > 1 or tile_name == "Difficult Terrain":
-                    # Difficult terrain (2x movement)
-                    char, style = ",", "yellow"
+                    char, style = ",", f"yellow {light_bg}".strip()
                 else:
-                    # Normal floor - color by visibility
+                    # Normal floor - grey dot with light level background
                     char = "."
-                    in_hero = pos in hero_visible
-                    in_enemy = pos in enemy_visible
-                    if in_hero and in_enemy:
-                        style = "yellow"
-                    elif in_hero:
-                        style = "green"
-                    elif in_enemy:
-                        style = "red"
-                    else:
-                        style = "dim"
+                    style = f"grey50 {light_bg}".strip()
 
             result.append(" ")
             result.append(char, style=style)
@@ -444,14 +616,20 @@ def render_map_content(
 
     result.append("  +" + "-" * ((max_x - min_x + 1) * 2 + 1) + "+\n")
 
-    # Dynamic legend: player first
+    # Dynamic legend: observer (@) first
+    at_name = "You"
+    if at_entity_uuid and at_entity_uuid != current_entity_uuid:
+        for e in entities:
+            if e["uuid"] == at_entity_uuid:
+                at_name = e["name"]
+                break
     result.append("@ ", style="bold green")
-    result.append("You  ")
+    result.append(f"{at_name}  ")
 
     # Build legend entries from entity_icons (grouped by display icon)
     icon_to_names: Dict[str, List[Tuple[str, bool]]] = {}  # icon -> [(name, is_dead), ...]
     for e in entities:
-        if e["uuid"] != current_entity_uuid:
+        if e["uuid"] != at_entity_uuid and e["uuid"] != current_entity_uuid:
             letter, num = entity_icons.get(e["uuid"], (e["name"][0].upper(), 1))
             total_with_letter = letter_counts.get(letter, 1)
             icon = str(num) if total_with_letter > 1 else letter
@@ -476,10 +654,25 @@ def render_map_content(
     result.append("^ ", style="bold red")
     result.append("Spikes  ")
     if object_at:
-        result.append(f"{ITEM_DEFAULT_CHAR} ", style="bold cyan")
-        result.append("Item  ")
+        item_legend: Dict[str, str] = {}
+        for obj in object_at.values():
+            obj_name: str = obj.get("name", "Item")
+            if obj_name in item_char_map:
+                obj_char = item_char_map[obj_name]
+            else:
+                obj_char = ITEM_DEFAULT_CHAR
+            if obj_char not in item_legend:
+                item_legend[obj_char] = obj_name
+        for legend_char, legend_name in sorted(item_legend.items()):
+            result.append(f"{legend_char} ", style="bold cyan")
+            result.append(f"{legend_name}  ")
     result.append("+ ", style="bold magenta")
     result.append("Path")
+
+    # FOV mode indicator
+    if _fov_mode != "global":
+        result.append("  ")
+        result.append(f"FOV:{get_fov_mode()}", style="bold yellow")
 
     return result
 
@@ -893,6 +1086,63 @@ def render_combat_log_panel() -> Panel:
     return Panel(content, title="Combat Log", box=box.ROUNDED, border_style="blue")
 
 
+def _categorize_actions(actions: Dict[str, Any], entities: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Categorize raw actions into sections for display.
+
+    Returns dict with keys: movement, attacks, spells, items, objects, self_actions,
+    other_entity, entity_lookup. Each list contains only available (can_afford + has targets) actions.
+    Also includes 'all_*' variants with ALL actions (including unavailable) for count display.
+    """
+    entity_lookup = {e["uuid"]: e for e in entities}
+
+    position_actions = actions.get("position_actions", [])
+    all_entity_actions = actions.get("entity_actions", [])
+    all_self_actions = actions.get("self_actions", [])
+
+    # Movement (position actions that aren't spells)
+    movement_actions = [a for a in position_actions if a.get("action_category", "ability") != "spell"]
+    valid_movement = [a for a in movement_actions if a.get("valid_targets") and a.get("can_afford")]
+
+    # Spells from all sources
+    spell_actions_from_entity = [a for a in all_entity_actions if a.get("action_category", "ability") == "spell"]
+    spell_actions_from_position = [a for a in position_actions if a.get("action_category", "ability") == "spell"]
+    spell_actions_from_self = [a for a in all_self_actions if a.get("action_category", "ability") == "spell"]
+    all_spell_actions = spell_actions_from_entity + spell_actions_from_position + spell_actions_from_self
+    valid_spells = [a for a in all_spell_actions if a.get("valid_targets") and a.get("can_afford")]
+
+    # Attacks
+    non_spell_entity_actions = [a for a in all_entity_actions if a.get("action_category", "ability") != "spell"]
+    all_attacks = [a for a in non_spell_entity_actions if a.get("action_category", "ability") == "attack"]
+    other_entity_actions = [a for a in non_spell_entity_actions if a.get("action_category", "ability") != "attack"]
+    valid_attacks = [a for a in all_attacks if a.get("valid_targets") and a.get("can_afford")]
+    valid_other_entity = [a for a in other_entity_actions if a.get("valid_targets") and a.get("can_afford")]
+
+    # Items (non-spell item use actions)
+    item_use_self = [a for a in all_self_actions if a.get("is_item_use") and a.get("action_category", "ability") != "spell"]
+    item_use_entity = [a for a in all_entity_actions if a.get("is_item_use") and a.get("action_category", "ability") != "spell"]
+    all_items = item_use_self + item_use_entity
+    valid_items = [a for a in all_items if a.get("can_afford")]
+
+    # Objects (Pick Up, Attack Object)
+    object_actions = actions.get("object_actions", [])
+    valid_objects = [a for a in object_actions if a.get("valid_targets") and a.get("can_afford")]
+
+    # Self-actions (non-spell, non-item)
+    self_other = [a for a in all_self_actions if a.get("action_category", "ability") != "spell" and not a.get("is_item_use")]
+    valid_self = [a for a in self_other if a.get("can_afford")]
+
+    return {
+        "movement": valid_movement, "all_movement": movement_actions,
+        "attacks": valid_attacks, "all_attacks": all_attacks,
+        "spells": valid_spells, "all_spells": all_spell_actions,
+        "items": valid_items, "all_items": all_items,
+        "objects": valid_objects, "all_objects": object_actions,
+        "self_actions": valid_self, "all_self_actions": self_other,
+        "other_entity": valid_other_entity, "all_other_entity": other_entity_actions,
+        "entity_lookup": entity_lookup,
+    }
+
+
 def render_available_actions_panel(
     actions: Dict[str, Any],
     entities: List[Dict[str, Any]],
@@ -1090,14 +1340,24 @@ def render_available_actions_panel(
 
             # Entity-targeting spells (single or multi)
             elif target_type in ("entity", "multi_entity"):
-                for i, target in enumerate(targets):
-                    target_name = target.get("target_name") or entity_lookup.get(target.get("target_uuid"), {}).get("name", "?")
+                if len(targets) == 1:
+                    # Single target: show inline name
+                    target_name = targets[0].get("target_name") or entity_lookup.get(
+                        targets[0].get("target_uuid"), {}).get("name", "?")
                     content.append(f"  [", style="dim")
-                    content.append(f"{cmd} {i+1}", style="bold blue")
+                    content.append(f"{cmd} 1", style="bold blue")
                     content.append(f"] ", style="dim")
                     content.append(f"{cost_label[0]} ", style=cost_label[1])
                     content.append(f"{display_name}", style="bold")
                     content.append(f" -> {target_name}\n", style="dim")
+                else:
+                    # Multiple targets: compact grouped line
+                    content.append(f"  [", style="dim")
+                    content.append(f"{cmd} N", style="bold blue")
+                    content.append(f"] ", style="dim")
+                    content.append(f"{cost_label[0]} ", style=cost_label[1])
+                    content.append(f"{display_name}", style="bold")
+                    content.append(f" ({len(targets)} targets)\n", style="dim")
 
             # Self-targeting spells
             else:
@@ -1650,6 +1910,118 @@ def show_available_actions(actions: Dict[str, Any], entities: List[Dict[str, Any
     console.print(panel)
 
 
+def show_filtered_actions(
+    actions: Dict[str, Any],
+    entities: List[Dict[str, Any]],
+    turn: Dict[str, Any],
+    filter_type: str,
+    registry: Optional["ShortcutRegistry"] = None
+):
+    """Show a filtered view of available actions for a specific category.
+
+    Args:
+        actions: Raw actions dict from server
+        entities: Entity list for name lookup
+        turn: Turn info for economy
+        filter_type: One of 'filter_actions', 'filter_spells', 'filter_items',
+                     'filter_attacks', 'filter_move'
+        registry: Shortcut registry for command hints
+    """
+    if not actions:
+        console.print("[dim]No actions available.[/dim]")
+        return
+
+    cats = _categorize_actions(actions, entities)
+    entity_lookup = cats["entity_lookup"]
+    content = Text()
+
+    # Map filter type to category key and title
+    filter_map = {
+        "filter_actions": ("all", "All Actions"),
+        "filter_spells": ("spells", "Spells"),
+        "filter_items": ("items", "Items"),
+        "filter_attacks": ("attacks", "Attacks"),
+        "filter_move": ("movement", "Movement"),
+    }
+    cat_key, title = filter_map.get(filter_type, ("all", "All Actions"))
+
+    if cat_key == "all":
+        # Show everything — use full render
+        panel = render_available_actions_panel(actions, entities, turn, registry)
+        console.print(panel)
+        return
+
+    valid_list = cats.get(cat_key, [])
+    all_list = cats.get(f"all_{cat_key}", [])
+    shown = len(valid_list)
+    total = len(all_list)
+
+    if not valid_list:
+        content.append(f"No available {title.lower()}.", style="dim")
+        if total > 0:
+            content.append(f" ({total} registered but unavailable)", style="dim")
+        console.print(Panel(content, title=f"{title} [{shown}/{total}]", box=box.ROUNDED, border_style="cyan"))
+        return
+
+    for act in valid_list:
+        template_name = act.get("template_name", "Unknown")
+        display_name = act.get("display_name", template_name)
+        target_type = act.get("target_type", "self")
+        targets = act.get("valid_targets", [])
+        cost_type = act.get("cost_type", "actions")
+        cost_amount = act.get("cost_amount", 1)
+
+        # Shortcut
+        if registry:
+            cmd = registry.get_or_create_shortcut(template_name)
+        else:
+            cmd = template_name[0].lower()
+
+        # Cost label
+        if cost_amount == 0:
+            cost_label = ("FREE", "green")
+        elif cost_type == "bonus_actions":
+            cost_label = ("BONUS", "magenta")
+        elif cost_type == "movement":
+            remaining = actions.get("remaining_movement", 0)
+            cost_label = (f"{remaining}ft", "cyan")
+        elif cost_type == "reactions":
+            cost_label = ("REACT", "yellow")
+        else:
+            cost_label = ("ACTION", "cyan")
+
+        # Stack info for items
+        stack_count = act.get("item_stack_count")
+        stack_str = f" x{stack_count}" if stack_count and stack_count > 1 else ""
+
+        if target_type in ("position_aoe", "position_los", "position_path", "position"):
+            content.append(f"  [", style="dim")
+            content.append(f"{cmd} X Y", style="bold yellow")
+            content.append(f"] ", style="dim")
+            content.append(f"{cost_label[0]} ", style=cost_label[1])
+            content.append(f"{display_name}", style="bold")
+            content.append(f" ({len(targets)} positions)\n", style="dim")
+        elif target_type in ("entity", "multi_entity"):
+            for i, target in enumerate(targets):
+                target_name = target.get("target_name") or entity_lookup.get(target.get("target_uuid"), {}).get("name", "?")
+                content.append(f"  [", style="dim")
+                content.append(f"{cmd} {i+1}", style="bold yellow")
+                content.append(f"] ", style="dim")
+                content.append(f"{cost_label[0]} ", style=cost_label[1])
+                content.append(f"{display_name}", style="bold")
+                content.append(f"{stack_str} -> {target_name}\n", style="dim")
+        else:
+            # Self-targeting
+            content.append(f"  [", style="dim")
+            content.append(f"{cmd}", style="bold yellow")
+            content.append(f"] ", style="dim")
+            content.append(f"{cost_label[0]} ", style=cost_label[1])
+            content.append(f"{display_name}", style="bold")
+            content.append(f"{stack_str}\n", style="dim")
+
+    console.print(Panel(content, title=f"{title} [{shown}/{total}]", box=box.ROUNDED, border_style="cyan"))
+
+
 def show_opportunity_attack(reaction: Dict[str, Any]):
     """Display an opportunity attack that was triggered."""
     attacker = reaction.get("attacker", "Unknown")
@@ -1726,6 +2098,12 @@ def show_help():
   log c               Compact (one-line)
   log v               Verbose (default)
   log d               Detailed (full breakdowns)
+
+[bold cyan]FOV (Field of View):[/bold cyan]
+  fov                 Show current FOV mode
+  fov self            Your entity's vision (fog of war)
+  fov global          All entities merged (default)
+  fov N               Enemy N's vision (legend numbering)
 
 [bold cyan]Game:[/bold cyan]
   q / quit            Exit the game

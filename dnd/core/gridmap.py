@@ -946,6 +946,50 @@ class GridMap:
             if light_uuid in self._light_sources:
                 self.move_light_source(light_uuid, new_pos)
 
+    def recompute_lights_at_position(self, position: Tuple[int, int]) -> None:
+        """Recompute light sources affected by a blocking change at position.
+
+        When blocking geometry changes (door open/close, wall destruction),
+        light sources whose affected_tiles include the changed position
+        must recompute their illumination. Uses the same delta pattern as
+        move_light_source() — only tiles that actually change are touched.
+
+        Shadowcast includes blocking cells in FOV, so the changed position
+        is always in affected_tiles of any light it clips.
+        """
+        for source in self._light_sources.values():
+            if not source.is_active:
+                continue
+            if position not in source.affected_tiles:
+                continue
+
+            # Save old, recompute new at same position
+            old_affected = dict(source.affected_tiles)
+            new_affected = self._compute_light_tiles(source)
+
+            # Delta: only modify tiles that actually change
+            changed_positions: List[Tuple[int, int]] = []
+            all_positions = set(old_affected) | set(new_affected)
+            for pos in all_positions:
+                old_level = old_affected.get(pos)
+                new_level = new_affected.get(pos)
+                if old_level == new_level:
+                    continue
+
+                tile = self._tiles.get(pos)
+                if tile is None:
+                    continue
+
+                if old_level is not None and new_level is None:
+                    if tile.remove_light_modifier(source.uuid, fire_event=False):
+                        changed_positions.append(pos)
+                elif new_level is not None:
+                    if tile.add_illumination(source.uuid, new_level, fire_event=False):
+                        changed_positions.append(pos)
+
+            source.affected_tiles = new_affected
+            self._fire_light_batch_events(changed_positions)
+
     # =========================================================================
     # Utility Methods
     # =========================================================================

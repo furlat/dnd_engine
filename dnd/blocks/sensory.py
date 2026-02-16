@@ -268,14 +268,14 @@ class SpatialSensesCallback:
                 self.senses._paths_dirty = True
             return  # FOV recompute subsumes entity re-filtering
 
-        # Light changes: check subscription overlap, re-filter at affected positions
+        # Light changes: check subscription overlap, update visibility + entities + objects
         if hint.light_changed_positions:
             my_subs = grid.get_entity_subscriptions(self.owner_uuid)
             overlap = hint.light_changed_positions & my_subs
             if not overlap:
                 return  # No tiles in our FOV changed
             for pos in overlap:
-                self._refilter_entities_at(pos)
+                self._update_visibility_at(pos)
             return  # Light changes don't affect paths
 
         # Entity entered: add to visible dict if perceivable + lit
@@ -379,6 +379,46 @@ class SpatialSensesCallback:
                     return
         # Failed checks → remove
         self.senses.entities.pop(entity_uuid, None)
+
+    def _update_visibility_at(self, position: Tuple[int, int]) -> None:
+        """Update senses.visible, entities, and objects at one position after light change.
+
+        Positions are confirmed in the geometric FOV (they're in subscriptions).
+        We only check effective light — no shadowcast needed.
+        """
+        grid = get_map()
+        tile = grid.get_tile(*position)
+
+        is_lit = True
+        if tile:
+            eff = tile.get_effective_light_for(self.owner_uuid, self.senses.position)
+            if eff.value <= LightLevel.DARKNESS.value:
+                is_lit = False
+
+        if is_lit:
+            # Now visible — add to visible + seen, refilter entities/objects
+            self.senses.visible[position] = True
+            self.senses.seen.add(position)
+            self._refilter_entities_at(position)
+            self._refilter_objects_at(position)
+        else:
+            # Now dark — remove from visible, remove entities/objects there
+            self.senses.visible.pop(position, None)
+            to_remove = [u for u, p in self.senses.entities.items() if p == position]
+            for u in to_remove:
+                del self.senses.entities[u]
+            to_remove_obj = [u for u, p in self.senses.objects.items() if p == position]
+            for u in to_remove_obj:
+                del self.senses.objects[u]
+
+    def _refilter_objects_at(self, position: Tuple[int, int]) -> None:
+        """Re-check all objects at position. Add/remove from senses.objects."""
+        grid = get_map()
+        to_remove = [uuid for uuid, pos in self.senses.objects.items() if pos == position]
+        for uuid in to_remove:
+            del self.senses.objects[uuid]
+        for obj_uuid in grid.get_objects_at(position):
+            self._try_add_visible_object(obj_uuid, position)
 
     def _try_add_visible_object(self, object_uuid: UUID, position: Tuple[int, int]) -> None:
         """Add object to senses.objects if in visible area."""

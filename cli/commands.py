@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from cli.api_client import APIClient
-from cli.action_model import AvailableActionsState
+from cli.action_model import AvailableActionsState, ShortcutRegistry
 from cli import display
 from dnd.core.combat_log import CombatLogVerbosity
 
@@ -37,6 +37,14 @@ class MetaCommand(Enum):
     LOG_VERBOSITY = "log"
     # Tile inspection
     TILE_INSPECT = "tile_inspect"
+    # FOV mode
+    FOV_MODE = "fov"
+    # Action filter commands
+    FILTER_ACTIONS = "filter_actions"
+    FILTER_SPELLS = "filter_spells"
+    FILTER_ITEMS = "filter_items"
+    FILTER_ATTACKS = "filter_attacks"
+    FILTER_MOVE = "filter_move"
 
 
 # Command aliases
@@ -69,6 +77,13 @@ ALIASES: Dict[str, str] = {
     "log": "log",
     "verbosity": "log",
     "v": "log",
+    # FOV mode
+    "fov": "fov",
+    # Action filters
+    "actions": "filter_actions",
+    "spells": "filter_spells",
+    "items": "filter_items",
+    "attacks": "filter_attacks",
 }
 
 
@@ -173,6 +188,8 @@ class GameState:
         self.valid_move_positions: Optional[List[Tuple[int, int]]] = None
         # Last preview info for "!" command to execute
         self.last_preview: Optional[Dict[str, Any]] = None  # {template_name, target_index, display_name, position}
+        # Shortcut registry for action filter display
+        self.shortcut_registry: Optional[ShortcutRegistry] = None
 
     def update_from_state(self, state: Dict[str, Any]):
         """Update from /state response."""
@@ -252,6 +269,18 @@ def execute_meta_command(
 
         elif cmd.command == MetaCommand.TILE_INSPECT.value:
             return handle_tile_inspect(cmd, client)
+
+        elif cmd.command == MetaCommand.FOV_MODE.value:
+            return handle_fov_mode(cmd)
+
+        elif cmd.command in (MetaCommand.FILTER_ACTIONS.value, MetaCommand.FILTER_SPELLS.value,
+                             MetaCommand.FILTER_ITEMS.value, MetaCommand.FILTER_ATTACKS.value,
+                             MetaCommand.FILTER_MOVE.value):
+            display.show_filtered_actions(
+                state.actions_raw, state.entities, state.turn, cmd.command,
+                registry=state.shortcut_registry
+            )
+            return None
 
         else:
             display.set_output([
@@ -483,8 +512,12 @@ def handle_tile_inspect(cmd: ParsedCommand, client: APIClient) -> Optional[str]:
         return "refresh"
 
     # Format tile info
+    light_name = tile_info.get('light_level_name', 'Unknown')
+    light_val = tile_info.get('light_level', '?')
+    illum_count = tile_info.get('illumination_count', 0)
     lines = [
         f"Tile at ({x}, {y}): {tile_info.get('name', 'Unknown')}",
+        f"  Light: {light_name} ({light_val}) — {illum_count} light source(s)",
         f"  Walkable: {tile_info.get('walkable', True)}",
         f"  Walking cost: {tile_info.get('walking_cost', 1)}x",
     ]
@@ -518,6 +551,52 @@ def handle_tile_inspect(cmd: ParsedCommand, client: APIClient) -> Optional[str]:
 
     display.set_output(lines)
     return "preview"
+
+
+# =============================================================================
+# FOV Mode Control
+# =============================================================================
+
+def handle_fov_mode(cmd: ParsedCommand) -> Optional[str]:
+    """Handle FOV mode command.
+
+    Usage:
+        fov           - Show current mode + usage
+        fov self      - FOV from current player's entity only
+        fov global    - Merged global view (default)
+        fov N         - FOV from enemy #N (matching legend numbering)
+    """
+    if not cmd.args:
+        current = display.get_fov_mode()
+        display.set_output([
+            f"FOV mode: {current}",
+            "",
+            "  fov self     - Your entity's vision only (fog of war)",
+            "  fov global   - All entities merged (default)",
+            "  fov N        - Enemy N's vision (legend numbering)",
+        ])
+        return "refresh"
+
+    mode = cmd.args[0].lower()
+
+    if mode == "self":
+        display.set_fov_mode("self")
+        display.set_output(["FOV mode: self (your entity's vision)"])
+    elif mode == "global":
+        display.set_fov_mode("global")
+        display.set_output(["FOV mode: global (all entities merged)"])
+    else:
+        try:
+            entity_index = int(mode)
+            display.set_fov_mode("entity", entity_index)
+            display.set_output([f"FOV mode: entity #{entity_index}"])
+        except ValueError:
+            display.set_output([
+                f"Unknown FOV mode: {mode}",
+                "Options: self, global, N (entity number)"
+            ])
+
+    return "refresh"
 
 
 # =============================================================================
