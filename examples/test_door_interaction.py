@@ -1,0 +1,117 @@
+"""Test door interaction: sorcerer moves to door, opens it.
+
+Setup: 15x15 arena with vertical wall at x=7 (gap at y=7 with closed door).
+Sorcerer starts at (5,7), moves to (6,7), opens the door.
+"""
+import sys
+from uuid import uuid4
+
+from dnd.utils import reset_combat_state, setup_combat_arena, get_position, move_entity
+from dnd.core.gridmap import get_map
+from dnd.entity import Entity
+from dnd.monsters.bestiary import create_sorcerer, create_skeleton
+from dnd.items.test_items import TestDoorA
+from dnd.actions_functional import get_available_actions, execute_use_action
+
+passed = 0
+failed = 0
+
+def test(name, condition):
+    global passed, failed
+    if condition:
+        print(f"  PASS: {name}")
+        passed += 1
+    else:
+        print(f"  FAIL: {name}")
+        failed += 1
+
+
+def setup():
+    """Create arena with wall, door, sorcerer, and skeleton."""
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 15, 15)
+
+    # Vertical wall at x=7, y=3..11 with gap at y=7
+    for y in range(3, 12):
+        if y != 7:
+            grid.set_tile(7, y, walkable=False, visible=False)
+
+    # Place closed door at the gap
+    door = TestDoorA(source_entity_uuid=uuid4())
+    grid.place_object(door.uuid, (7, 7))
+
+    # Sorcerer on the left side, skeleton on the right
+    sorcerer = create_sorcerer(name="Sorcerer", position=(5, 7), faction="heroes")
+    skeleton = create_skeleton(name="Skeleton", position=(12, 7), faction="monsters")
+
+    Entity.update_all_entities_senses()
+    return sorcerer, skeleton, door
+
+
+print("=" * 60)
+print("Test: Door Interaction with Sorcerer")
+print("=" * 60)
+
+# --- Setup ---
+print("\n--- Setup ---")
+sorcerer, skeleton, door = setup()
+encounter = setup_combat_arena(sorcerer, skeleton)
+encounter.start_encounter()
+
+test("Sorcerer at (5,7)", get_position(sorcerer) == (5, 7))
+test("Door is closed", not door.is_open)
+test("Door blocks movement", door.blocks_movement)
+test("Door blocks vision", door.blocks_vision_field)
+
+# Sorcerer should NOT see skeleton through closed door
+test("Skeleton NOT visible through closed door", skeleton.uuid not in sorcerer.senses.entities)
+
+# --- Move sorcerer to (6,7), next to the door ---
+print("\n--- Move to door ---")
+# Start sorcerer's turn
+encounter.start_turn()
+move_entity(sorcerer, (6, 7))
+Entity.update_all_entities_senses()
+
+test("Sorcerer at (6,7)", get_position(sorcerer) == (6, 7))
+
+# Door should be visible as an object
+test("Door visible in senses.objects", door.uuid in sorcerer.senses.objects)
+
+# --- Get available actions (this was hanging) ---
+print("\n--- Available actions ---")
+actions = get_available_actions(sorcerer)
+test("get_available_actions returned", actions is not None)
+
+# Find the Open Door action among self_actions (use actions route there for SELF target)
+open_door_actions = [a for a in actions.self_actions if "Open Door" in (a.template_name or "")]
+test("Open Door in available actions", len(open_door_actions) > 0)
+
+# --- Open the door ---
+print("\n--- Open door ---")
+if open_door_actions:
+    result = execute_use_action(sorcerer, door.uuid, "Open Door")
+    test("Open Door executed", result is not None and not getattr(result, 'canceled', False))
+else:
+    print("  SKIP: No Open Door action found")
+
+test("Door is now open", door.is_open)
+test("Door no longer blocks movement", not door.blocks_movement)
+test("Door no longer blocks vision", not door.blocks_vision_field)
+
+# --- After opening, sorcerer should see the skeleton ---
+Entity.update_all_entities_senses()
+test("Skeleton visible through open door", skeleton.uuid in sorcerer.senses.entities)
+
+# --- Close Door should now be available ---
+print("\n--- Close door available ---")
+actions2 = get_available_actions(sorcerer)
+close_door_actions = [a for a in actions2.self_actions if "Close Door" in (a.template_name or "")]
+test("Close Door in available actions", len(close_door_actions) > 0)
+
+# --- Summary ---
+print(f"\n{'=' * 60}")
+print(f"Results: {passed} passed, {failed} failed")
+print(f"{'=' * 60}")
+sys.exit(1 if failed > 0 else 0)

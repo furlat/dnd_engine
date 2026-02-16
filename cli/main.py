@@ -604,6 +604,7 @@ def refresh_state(client: APIClient, state: GameState, clear_path: bool = False)
             # Register actions with session-stable shortcut registry
             if state.actions:
                 state.actions.register_actions(get_shortcut_registry())
+            state.shortcut_registry = get_shortcut_registry()
         else:
             state.actions = None
             state.actions_raw = {}
@@ -1073,6 +1074,7 @@ def play(
 
         # NOW start the game (this rolls initiative and may run AI turn first)
         display.console.print(f"[cyan]Creating {character_class.title()} and rolling initiative...[/cyan]")
+        display.reset_seen_tiles()  # Clear fog of war memory from previous game
         result = client.start_human_game(character_class=character_class)
         hero_uuid = result.get("hero_uuid")
 
@@ -1139,6 +1141,7 @@ def playpvp(
 
         # Start PvP game
         display.console.print(f"[cyan]Creating {character_class.title()} and starting PvP match...[/cyan]")
+        display.reset_seen_tiles()  # Clear fog of war memory from previous game
         result = client.start_pvp_game(character_class=character_class)
 
         hero_uuid = result.get("hero_uuid")

@@ -447,8 +447,19 @@ def execute_use_action(
     if template is None:
         raise ValueError(f"Use action '{action_name}' not found on item")
 
+    # If the action is already a non-template instance (e.g. Torch actions created
+    # fresh per get_use_actions() call), use it directly instead of trying to instantiate
+    if not template.template:
+        instance = template
+        if template.target_type == TargetType.ENTITY and target and target.target_uuid:
+            instance.target_entity_uuid = target.target_uuid
+        elif template.target_type in (TargetType.POSITION, TargetType.POSITION_LOS, TargetType.POSITION_PATH, TargetType.POSITION_AOE) and target and target.position:
+            instance.end_position = target.position
+        elif template.target_type == TargetType.MULTI_ENTITY and target and target.target_uuid:
+            instance.target_entity_uuid = target.target_uuid
+            instance.extra_target_entity_uuids = target.extra_target_uuids or []
     # Instantiate based on target type
-    if template.target_type == TargetType.SELF:
+    elif template.target_type == TargetType.SELF:
         instance = template.instantiate()
     elif template.target_type == TargetType.ENTITY:
         if target is None or target.target_uuid is None:

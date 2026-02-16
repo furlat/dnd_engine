@@ -103,6 +103,7 @@ class TestDoorA(UsableItem):
     """Door using get_use_actions override — item decides which action to surface."""
     name: str = Field(default="Door")
     is_pickable: bool = Field(default=False)
+    map_char: str = Field(default="\u03c0")
     blocks_movement: bool = Field(default=True)
     blocks_vision_field: bool = Field(default=True)
     is_open: bool = Field(default=False)
@@ -162,6 +163,7 @@ class TestDoorB(UsableItem):
     """Door using default use_action_templates — no override needed."""
     name: str = Field(default="Door")
     is_pickable: bool = Field(default=False)
+    map_char: str = Field(default="\u03c0")
     blocks_movement: bool = Field(default=True)
     blocks_vision_field: bool = Field(default=True)
     is_open: bool = Field(default=False)
@@ -930,12 +932,13 @@ class Torch(UsableItem):
     Light follows the entity as they move.
     """
     name: str = Field(default="Torch")
-    description: str = Field(default="A torch that provides bright light in 20ft and dim light in 40ft")
+    description: str = Field(default="A torch that provides bright light in 20ft and dim light in 20ft")
     is_equippable: bool = Field(default=False)
     is_pickable: bool = Field(default=True)
+    map_char: str = Field(default="\u2666")
 
     bright_radius_feet: int = Field(default=20)
-    dim_radius_feet: int = Field(default=40)
+    dim_radius_feet: int = Field(default=20)
     is_lit: bool = Field(default=False)
     _light_source_uuid: Optional[UUID] = None
 
@@ -989,3 +992,119 @@ class Torch(UsableItem):
 def create_torch(owner_uuid: UUID) -> Torch:
     """Create a torch item."""
     return Torch(source_entity_uuid=owner_uuid)
+
+
+# =============================================================================
+# Wall Torch — Fixed wall-mounted light source with on/off actions
+# =============================================================================
+
+class IgniteWallTorchAction(BaseAction):
+    """Light a wall torch."""
+    name: str = Field(default="Light Wall Torch")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    costs: List[Cost] = Field(default_factory=list)
+    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return declaration_event.cancel(status_message="No wall torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not isinstance(torch, WallTorch) or torch.is_lit:
+            return declaration_event.cancel(status_message="Cannot light")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return execution_event.cancel(status_message="No wall torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not isinstance(torch, WallTorch):
+            return execution_event.cancel(status_message="Wall torch not found")
+        torch.light()
+        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Wall torch lit")
+        return effect.phase_to(EventPhase.COMPLETION, status_message="Wall torch lit")
+
+
+class ExtinguishWallTorchAction(BaseAction):
+    """Put out a wall torch."""
+    name: str = Field(default="Extinguish Wall Torch")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    costs: List[Cost] = Field(default_factory=list)
+    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return declaration_event.cancel(status_message="No wall torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not isinstance(torch, WallTorch) or not torch.is_lit:
+            return declaration_event.cancel(status_message="Cannot extinguish")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        if self.source_item_uuid is None:
+            return execution_event.cancel(status_message="No wall torch linked")
+        torch = BaseBlock.get(self.source_item_uuid)
+        if not isinstance(torch, WallTorch):
+            return execution_event.cancel(status_message="Wall torch not found")
+        torch.put_out()
+        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Wall torch extinguished")
+        return effect.phase_to(EventPhase.COMPLETION, status_message="Wall torch extinguished")
+
+
+class WallTorch(UsableItem):
+    """A fixed wall-mounted torch. Cannot be picked up or moved."""
+    name: str = Field(default="Wall Torch")
+    is_pickable: bool = Field(default=False)
+    is_equippable: bool = Field(default=False)
+    map_char: str = Field(default="\u2666")
+
+    bright_radius_feet: int = Field(default=10)
+    dim_radius_feet: int = Field(default=10)
+    is_lit: bool = Field(default=False)
+    _light_source_uuid: Optional[UUID] = None
+    _wall_torch_position: Optional[Tuple[int, int]] = None
+
+    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        if not self.is_lit:
+            return [IgniteWallTorchAction(
+                source_entity_uuid=user_entity_uuid,
+                source_item_uuid=self.uuid,
+            )]
+        else:
+            return [ExtinguishWallTorchAction(
+                source_entity_uuid=user_entity_uuid,
+                source_item_uuid=self.uuid,
+            )]
+
+    def light(self) -> None:
+        """Light the wall torch — creates a fixed light source."""
+        if self.is_lit:
+            return
+        self.is_lit = True
+        if self._wall_torch_position is not None:
+            grid = get_map()
+            self._light_source_uuid = grid.add_light_source(
+                position=self._wall_torch_position,
+                bright_radius_feet=self.bright_radius_feet,
+                dim_radius_feet=self.dim_radius_feet,
+            )
+
+    def put_out(self) -> None:
+        """Extinguish the wall torch — removes the light source."""
+        if not self.is_lit:
+            return
+        self.is_lit = False
+        if self._light_source_uuid:
+            grid = get_map()
+            grid.remove_light_source(self._light_source_uuid)
+            self._light_source_uuid = None
+
+
+def create_wall_torch(position: Tuple[int, int], owner_uuid: UUID, lit: bool = True) -> WallTorch:
+    """Create a wall torch at a fixed position and optionally light it."""
+    torch = WallTorch(source_entity_uuid=owner_uuid)
+    torch._wall_torch_position = position
+    grid = get_map()
+    grid.place_object(torch.uuid, position)
+    if lit:
+        torch.light()
+    return torch
