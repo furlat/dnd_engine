@@ -88,6 +88,9 @@ class GridMap:
         # Callback for light source movement (registered once)
         self._light_callback_registered: bool = False
 
+        # Callback for vision-blocking changes (registered once)
+        self._blocking_callback_registered: bool = False
+
     @classmethod
     def get_instance(cls) -> 'GridMap':
         """Get the singleton GridMap instance."""
@@ -248,15 +251,22 @@ class GridMap:
         position = (x, y)
         if position in self._tiles:
             tile = self._tiles[position]
+            was_blocking_vision = not tile.visible
+            was_blocking_walking = not tile.walkable
             self._tiles_by_uuid.pop(tile.uuid, None)
             del self._tiles[position]
             self._bounds_dirty = True
 
             if fire_event and self._events_enabled:
+                hint = SensesUpdateHint(
+                    requires_fov=was_blocking_vision,
+                    requires_paths=was_blocking_walking,
+                )
                 event = SpatialChangeEvent(
                     source_entity_uuid=uuid4(),
                     change_type=SpatialChangeType.TILE_REMOVED,
-                    position=position
+                    position=position,
+                    senses_hint=hint,
                 )
                 self._fire_spatial_event(event)
 
@@ -927,6 +937,7 @@ class GridMap:
             return
         self._light_callback_registered = True
         EventQueue.add_on_event_callback(self._on_light_movement_event)
+        self._ensure_blocking_callback()
 
     def _on_light_movement_event(self, event: Event) -> None:
         """Move light sources when their anchor entity moves."""
@@ -946,21 +957,53 @@ class GridMap:
             if light_uuid in self._light_sources:
                 self.move_light_source(light_uuid, new_pos)
 
+    def _ensure_blocking_callback(self) -> None:
+        """Register vision-blocking callback for light recomputation (once)."""
+        if self._blocking_callback_registered:
+            return
+        self._blocking_callback_registered = True
+        EventQueue.add_on_event_callback(self._on_vision_blocking_changed)
+
+    def _on_vision_blocking_changed(self, event: Event) -> None:
+        """Recompute lights when vision-blocking geometry changes.
+
+        Reacts to ANY spatial event with requires_fov=True (the unified signal
+        that vision geometry changed). Fires at DECLARATION so light propagates
+        before senses evaluate.
+
+        Excludes SPATIAL_LIGHT_CHANGED to prevent recursion.
+        """
+        if event.phase != EventPhase.DECLARATION:
+            return
+        if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
+            return  # Prevent recursion
+        if not isinstance(event, SpatialChangeEvent):
+            return
+        hint = event.senses_hint
+        if hint is None or not hint.requires_fov:
+            return
+        self.recompute_lights_at_position(event.position)
+
     def recompute_lights_at_position(self, position: Tuple[int, int]) -> None:
         """Recompute light sources affected by a blocking change at position.
 
         When blocking geometry changes (door open/close, wall destruction),
-        light sources whose affected_tiles include the changed position
-        must recompute their illumination. Uses the same delta pattern as
-        move_light_source() — only tiles that actually change are touched.
+        light sources within range of the changed position must recompute
+        their illumination. Uses the same delta pattern as move_light_source()
+        — only tiles that actually change are touched.
 
-        Shadowcast includes blocking cells in FOV, so the changed position
-        is always in affected_tiles of any light it clips.
+        Uses a distance check (position within light's max radius) rather than
+        affected_tiles membership, since geometry changes may have previously
+        removed the position from affected_tiles (e.g. remove_tile + set_tile).
         """
         for source in self._light_sources.values():
             if not source.is_active:
                 continue
-            if position not in source.affected_tiles:
+            # Check if position is within the light's maximum range
+            total_radius_tiles = (source.bright_radius_feet + source.dim_radius_feet) / 5
+            dx = position[0] - source.position[0]
+            dy = position[1] - source.position[1]
+            if math.sqrt(dx * dx + dy * dy) > total_radius_tiles:
                 continue
 
             # Save old, recompute new at same position
