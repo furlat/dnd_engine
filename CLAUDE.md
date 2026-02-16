@@ -610,6 +610,9 @@ Per-tile light levels with dynamic light sources, sense modes (Darkvision, Trues
 5. **Test imports before running** - Run `python -c "import module_name"` to catch import errors early
 
 **Common pitfalls in this codebase:**
+- `entity.has_hp` — boolean property, True if HP > 0. Only on Entity and BaseItem (things with health).
+- `block.is_active` — boolean property, universal on BaseBlock. True if functional (Entity delegates to `has_hp`, non-health blocks always True). Use for polymorphic filtering.
+- `entity.get_hp()` — int, actual HP value. Use only when you need the number. Never use `get_hp() > 0` for filtering — use `has_hp` or `is_active`.
 - `Entity.get_hp()` returns current HP, NOT `entity.health.current_hit_points` (doesn't exist)
 - `AbilityScoresConfig` takes `AbilityConfig` objects, not raw integers
 - `Weapon` requires `source_entity_uuid`, `dice_numbers`, and proper `ModifiableValue` for bonuses

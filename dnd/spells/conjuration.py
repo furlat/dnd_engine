@@ -13,7 +13,7 @@ from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent, SpatialChangeEvent
 from dnd.core.modifiers import DamageType, NumericalModifier
-from dnd.core.base_tiles import LightLevel
+from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Concentrating, Prone, Restrained

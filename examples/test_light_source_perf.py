@@ -7,7 +7,7 @@ import time
 from uuid import uuid4
 from dnd.utils import reset_combat_state
 from dnd.entity import Entity
-from dnd.core.base_tiles import LightLevel
+from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.core.events import EventQueue
 from dnd.monsters.bestiary import create_skeleton

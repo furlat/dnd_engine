@@ -745,7 +745,7 @@ async def get_tile_info(x: int, y: int):
                 "uuid": str(entity.uuid),
                 "name": entity.name,
                 "hp": entity.get_hp(),
-                "is_dead": entity.get_hp() <= 0
+                "is_dead": not entity.has_hp
             })
 
     # Get objects at this position
@@ -1479,7 +1479,7 @@ async def execute_entity_action(request: EntityActionRequest):
         entity_hp=entity.get_hp(),
         target_hp=target.get_hp(),
         deaths=death_names,
-        turn_continues=not encounter_ended and entity.get_hp() > 0,
+        turn_continues=not encounter_ended and entity.has_hp,
         encounter_ended=encounter_ended,
         combat_log_entries=action_log_entries
     )
@@ -1571,7 +1571,7 @@ async def execute_position_action(request: PositionActionRequest):
         entity_hp=entity.get_hp(),
         deaths=death_names,
         triggered_reactions=triggered_reactions,
-        turn_continues=not encounter_ended and entity.get_hp() > 0,
+        turn_continues=not encounter_ended and entity.has_hp,
         encounter_ended=encounter_ended,
         combat_log_entries=action_log_entries
     )
@@ -1704,7 +1704,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         target_hp=target_hp,
         deaths=death_names,
         triggered_reactions=triggered_reactions,
-        turn_continues=not encounter_ended and entity.get_hp() > 0,
+        turn_continues=not encounter_ended and entity.has_hp,
         encounter_ended=encounter_ended,
         combat_log_entries=action_log_entries
     )
@@ -1935,7 +1935,7 @@ async def get_pvp_status():
         if faction_key not in factions:
             factions[faction_key] = {"total": 0, "alive": 0}
         factions[faction_key]["total"] += 1
-        if entity.get_hp() > 0:
+        if entity.has_hp:
             factions[faction_key]["alive"] += 1
 
     if sim.encounter:

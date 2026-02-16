@@ -19,6 +19,38 @@ class MovementMode(str, Enum):
     BURROWING = "burrowing"
 
 
+# =========================================================================
+# Light Level
+# =========================================================================
+
+class LightLevel(int, Enum):
+    """Light levels for tiles. Int values are for ordering comparisons only.
+    Darkvision shifting uses explicit mapping (NOT arithmetic)."""
+    MAGICAL_DARKNESS = 0   # Darkness spell - darkvision blocked
+    DARKNESS = 1           # No light at all
+    DIM_LIGHT = 2          # Shadows, edge of torchlight
+    BRIGHT_LIGHT = 3       # Normal daylight, close to torch
+    VERY_BRIGHT = 4        # Intense sunlight, Daylight spell
+
+
+# =========================================================================
+# Sense Types
+# =========================================================================
+
+class SensesType(str, Enum):
+    BLINDSIGHT = "Blindsight"
+    DARKVISION = "Darkvision"
+    TREMORSENSE = "Tremorsense"
+    TRUESIGHT = "Truesight"
+    DEVILS_SIGHT = "Devils Sight"
+
+
+class SenseMode(BaseModel):
+    """A sense type with its effective range in feet. 0 = unlimited."""
+    sense_type: SensesType
+    range_feet: int = 0
+
+
 class BaseBlock(BaseModel):
     """
     Base class for all block types in the system.
@@ -382,10 +414,14 @@ class BaseBlock(BaseModel):
         Entity overrides by checking sense_modes for TRUESIGHT/BLINDSIGHT/TREMORSENSE."""
         return False
 
-    def get_sense_modes(self) -> list:
+    def can_pierce_magical_darkness(self) -> bool:
+        """Whether this block can see through magical darkness. Default False.
+        Entity overrides by checking sense_modes for TRUESIGHT/DEVILS_SIGHT."""
+        return False
+
+    def get_sense_modes(self) -> List[SenseMode]:
         """Sense modes of this block as an observer. Default empty.
-        Entity overrides to relay to self.senses.get_sense_modes().
-        Returns untyped list to avoid importing SenseMode here."""
+        Entity overrides to relay to self.senses.get_sense_modes()."""
         return []
 
     # --- Virtual methods for Entity features (overridden by Entity) ---
@@ -394,9 +430,15 @@ class BaseBlock(BaseModel):
         """Override in Entity to return Senses block for subjective perception."""
         return None
 
+    @property
+    def is_active(self) -> bool:
+        """Whether this block is active and should be included in interactions.
+        Default True. Override in Entity/BaseItem for health-aware checks."""
+        return True
+
     def get_hp(self) -> int:
-        """Override in Entity to return current HP. Default: 1 (alive)."""
-        return 1
+        """Override in Entity/BaseItem to return current HP. Default: 0 (no health system)."""
+        return 0
 
     # --- Light source tracking ---
 

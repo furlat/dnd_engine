@@ -159,13 +159,9 @@ class HealingHerb(BaseItem):
 
 def test_get_position_on_floor():
     """Item placed on grid returns its grid position."""
-    grid = create_test_grid()
+    create_test_grid()
     item = BaseItem(source_entity_uuid=uuid4(), name="Floor Item")
-    grid.place_object(item.uuid, (5, 5))
-    item.position = (5, 5)
-    tile = grid.get_tile(5, 5)
-    assert tile is not None
-    item.tile_uuid = tile.uuid
+    item.place_on_grid((5, 5))
 
     assert item.get_position() == (5, 5), f"Expected (5,5), got {item.get_position()}"
 
@@ -190,10 +186,10 @@ def test_get_position_nowhere():
 
 def test_stored_in_uuid_set_on_loot():
     """stored_in_uuid is set to inventory UUID, owner_uuid to entity UUID after loot."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     item = BaseItem(source_entity_uuid=uuid4(), name="Test Item")
-    grid.place_object(item.uuid, (4, 3))
+    item.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     assert item.stored_in_uuid is None
@@ -207,14 +203,10 @@ def test_stored_in_uuid_set_on_loot():
 
 def test_tile_uuid_cleared_on_loot():
     """tile_uuid is cleared when item is looted from floor."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     item = BaseItem(source_entity_uuid=uuid4(), name="Test Item")
-    grid.place_object(item.uuid, (4, 3))
-    tile = grid.get_tile(4, 3)
-    assert tile is not None
-    item.position = (4, 3)
-    item.tile_uuid = tile.uuid
+    item.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     entity.loot_item(item)
@@ -275,20 +267,16 @@ def test_drop_at_adjacent_position():
 
 def test_get_position_floor_returns_own_position():
     """Floor item with tile_uuid returns self.position directly."""
-    grid = create_test_grid()
+    create_test_grid()
     item = BaseItem(source_entity_uuid=uuid4(), name="Floor Item")
-    grid.place_object(item.uuid, (5, 5))
-    tile = grid.get_tile(5, 5)
-    assert tile is not None
-    item.tile_uuid = tile.uuid
-    item.position = (5, 5)
+    item.place_on_grid((5, 5))
 
     assert item.get_position() == (5, 5), f"Expected (5,5), got {item.get_position()}"
 
 
 def test_destroy_clears_location_fields():
     """destroy() clears tile_uuid and stored_in_uuid."""
-    grid = create_test_grid()
+    create_test_grid()
     source_id = uuid4()
     item = BaseItem(
         source_entity_uuid=source_id,
@@ -296,11 +284,7 @@ def test_destroy_clears_location_fields():
         is_targetable=True,
         health=BaseItem.create_item_health(source_id, 8),
     )
-    grid.place_object(item.uuid, (5, 5))
-    tile = grid.get_tile(5, 5)
-    assert tile is not None
-    item.position = (5, 5)
-    item.tile_uuid = tile.uuid
+    item.place_on_grid((5, 5))
 
     item.receive_damage(100, DamageType.BLUDGEONING, uuid4())
     # Item destroyed — location fields should be cleared
@@ -320,11 +304,7 @@ def test_oil_barrel_destroy_applies_tile_conditions():
         source_entity_uuid=source_id,
         health=BaseItem.create_item_health(source_id, 8),
     )
-    grid.place_object(barrel.uuid, (5, 5))
-    barrel.position = (5, 5)
-    tile = grid.get_tile(5, 5)
-    assert tile is not None
-    barrel.tile_uuid = tile.uuid
+    barrel.place_on_grid((5, 5))
 
     barrel.receive_damage(100, DamageType.BLUDGEONING, uuid4())
 
@@ -344,11 +324,7 @@ def test_oil_barrel_oily_duration():
         source_entity_uuid=source_id,
         health=BaseItem.create_item_health(source_id, 8),
     )
-    grid.place_object(barrel.uuid, (5, 5))
-    barrel.position = (5, 5)
-    tile = grid.get_tile(5, 5)
-    assert tile is not None
-    barrel.tile_uuid = tile.uuid
+    barrel.place_on_grid((5, 5))
 
     barrel.receive_damage(100, DamageType.BLUDGEONING, uuid4())
 
@@ -364,10 +340,10 @@ def test_oil_barrel_oily_duration():
 
 def test_cursed_gem_applies_poisoned():
     """Looting a cursed gem applies Poisoned to the entity."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     gem = CursedGem(source_entity_uuid=uuid4())
-    grid.place_object(gem.uuid, (4, 3))
+    gem.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     assert "Poisoned" not in entity.active_conditions
@@ -378,10 +354,10 @@ def test_cursed_gem_applies_poisoned():
 
 def test_cursed_gem_condition_persists_after_drop():
     """Dropping the cursed gem does NOT remove the curse (it sticks)."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     gem = CursedGem(source_entity_uuid=uuid4())
-    grid.place_object(gem.uuid, (4, 3))
+    gem.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     entity.loot_item(gem)
@@ -398,10 +374,10 @@ def test_cursed_gem_condition_persists_after_drop():
 
 def test_aura_stone_adds_ac_on_loot():
     """Looting aura stone gives +2 AC."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     stone = AuraStone(source_entity_uuid=uuid4())
-    grid.place_object(stone.uuid, (4, 3))
+    stone.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     ac_before = entity.equipment.ac_bonus.normalized_score
@@ -414,10 +390,10 @@ def test_aura_stone_adds_ac_on_loot():
 
 def test_aura_stone_removes_ac_on_drop():
     """Dropping aura stone removes the +2 AC."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     stone = AuraStone(source_entity_uuid=uuid4())
-    grid.place_object(stone.uuid, (4, 3))
+    stone.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     ac_before = entity.equipment.ac_bonus.normalized_score
@@ -431,11 +407,11 @@ def test_aura_stone_removes_ac_on_drop():
 
 def test_aura_stone_transfer_moves_modifier():
     """Transferring aura stone between entities moves the AC bonus."""
-    grid = create_test_grid()
+    create_test_grid()
     e1 = create_test_entity(position=(3, 3), name="Holder1")
     e2 = create_test_entity(position=(4, 3), name="Holder2", faction="others")
     stone = AuraStone(source_entity_uuid=uuid4())
-    grid.place_object(stone.uuid, (3, 4))
+    stone.place_on_grid((3, 4))
     Entity.update_all_entities_senses()
 
     e1_ac_base = e1.equipment.ac_bonus.normalized_score
@@ -460,7 +436,7 @@ def test_aura_stone_transfer_moves_modifier():
 
 def test_healing_herb_heals_on_loot():
     """Looting a healing herb heals the entity for 10 HP."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
 
@@ -469,7 +445,7 @@ def test_healing_herb_heals_on_loot():
     hp_before = get_hp(entity)
 
     herb = HealingHerb(source_entity_uuid=uuid4())
-    grid.place_object(herb.uuid, (4, 3))
+    herb.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     entity.loot_item(herb)
@@ -480,7 +456,7 @@ def test_healing_herb_heals_on_loot():
 
 def test_healing_herb_no_overheal():
     """Healing herb doesn't exceed max HP."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
 
@@ -488,7 +464,7 @@ def test_healing_herb_no_overheal():
     set_hp(entity, max_hp - 3)  # Only 3 HP missing
 
     herb = HealingHerb(source_entity_uuid=uuid4())
-    grid.place_object(herb.uuid, (4, 3))
+    herb.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     entity.loot_item(herb)
@@ -510,10 +486,10 @@ def test_loot_hook_receives_correct_params():
             self.received_entity_uuid = entity_uuid
             self.received_inventory_uuid = inventory_uuid
 
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
     item = ParamTracker(source_entity_uuid=uuid4(), name="Tracked")
-    grid.place_object(item.uuid, (4, 3))
+    item.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     entity.loot_item(item)

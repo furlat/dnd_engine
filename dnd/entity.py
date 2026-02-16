@@ -23,7 +23,7 @@ from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponP
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses
-from dnd.core.base_tiles import SensesType, LightLevel
+from dnd.core.base_block import SensesType, SenseMode, LightLevel
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import BaseItem, UsableItem
@@ -679,7 +679,12 @@ class Entity(BaseBlock):
                 self.senses.has_sense(SensesType.BLINDSIGHT) or
                 self.senses.has_sense(SensesType.TREMORSENSE))
 
-    def get_sense_modes(self) -> list:
+    def can_pierce_magical_darkness(self) -> bool:
+        """Entity can see through magical darkness with TRUESIGHT or DEVILS_SIGHT."""
+        return (self.senses.has_sense(SensesType.TRUESIGHT) or
+                self.senses.has_sense(SensesType.DEVILS_SIGHT))
+
+    def get_sense_modes(self) -> List[SenseMode]:
         """Entity relays to its Senses block for sense modes."""
         return self.senses.get_sense_modes()
 
@@ -907,7 +912,7 @@ class Entity(BaseBlock):
         # Handle death if HP <= 0
         # Note: Relentless Rage already had its chance at EFFECT phase
         # If HP <= 0 here, the save either failed or wasn't triggered
-        if self.get_hp() <= 0 and "Dead" not in self.active_conditions:
+        if not self.has_hp and "Dead" not in self.active_conditions:
             # Fire DeathEvent through phases - death_handler applies Dead condition at EXECUTION
             # NOTE: Combat log auto-captured via callback in phase_to() at COMPLETION
             # DeathEvent is a child of the TakeDamageEvent that caused it
@@ -932,6 +937,16 @@ class Entity(BaseBlock):
     def get_senses(self) -> Senses:
         """Override BaseBlock virtual — returns Senses block for subjective perception."""
         return self.senses
+
+    @property
+    def has_hp(self) -> bool:
+        """Whether this entity has positive HP."""
+        return self.get_hp() > 0
+
+    @property
+    def is_active(self) -> bool:
+        """Entity is active if it has HP."""
+        return self.has_hp
 
     def get_hp(self) -> int:
         """ total health of the entity """
@@ -1184,7 +1199,7 @@ class Entity(BaseBlock):
             other = Entity.get(entity_uuid)
             if other and self.is_enemy(other):
                 # Filter dead entities unless include_dead is True
-                if not include_dead and other.get_hp() <= 0:
+                if not include_dead and not other.has_hp:
                     continue
                 enemies[entity_uuid] = pos
         return enemies
@@ -1204,7 +1219,7 @@ class Entity(BaseBlock):
             other = Entity.get(entity_uuid)
             if other and self.is_ally(other):
                 # Filter dead entities unless include_dead is True
-                if not include_dead and other.get_hp() <= 0:
+                if not include_dead and not other.has_hp:
                     continue
                 allies[entity_uuid] = pos
         return allies
@@ -1232,7 +1247,7 @@ class Entity(BaseBlock):
             List of alive entities with that faction
         """
         return [e for e in cls._entity_registry.values()
-                if e.faction == faction and e.get_hp() > 0]
+                if e.faction == faction and e.has_hp]
 
     def roll_d20(
         self,
@@ -1971,7 +1986,7 @@ class Entity(BaseBlock):
                     continue
                 if not include_dead:
                     other = Entity.get(k)
-                    if other and other.get_hp() <= 0:
+                    if other and not other.has_hp:
                         continue
                 potential_targets[k] = v
 
@@ -1991,7 +2006,7 @@ class Entity(BaseBlock):
                             continue
                         if not include_dead:
                             other = Entity.get(k)
-                            if other and other.get_hp() <= 0:
+                            if other and not other.has_hp:
                                 continue
                         template_targets[k] = v
                 elif action_filter == "self_or_allies":
@@ -2048,6 +2063,10 @@ class Entity(BaseBlock):
                     weapon_name=weapon_name,
                     action_category=template.action_category,
                 ))
+
+        # Refresh paths if dirtied mid-turn (e.g., entity death, door state change)
+        if self.senses._paths_dirty:
+            self.update_entity_senses(max_distance=20)
 
         # POSITION_PATH actions (Move) - validate for each reachable position via path
         for template in self.position_actions:
@@ -2173,7 +2192,7 @@ class Entity(BaseBlock):
                 if not template_include_dead and not include_dead:
                     affected_uuids = [
                         uid for uid in affected_uuids
-                        if (ent := Entity.get(uid)) and ent.get_hp() > 0
+                        if (ent := Entity.get(uid)) and ent.has_hp
                     ]
 
                 affected_names = []
@@ -2361,7 +2380,7 @@ class Entity(BaseBlock):
                     if not template_include_dead and not include_dead:
                         affected_uuids = [
                             uid for uid in affected_uuids
-                            if (ent := Entity.get(uid)) and ent.get_hp() > 0
+                            if (ent := Entity.get(uid)) and ent.has_hp
                         ]
                     affected_names = []
                     for uid in affected_uuids:

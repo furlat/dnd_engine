@@ -98,12 +98,10 @@ class BaseItem(BaseBlock):
         that is placed on the grid. Fires an event with hint indicating which
         senses layers are affected, replacing brute-force update_all_entities_senses().
         """
-        if self.tile_uuid is None:
-            return  # Not on grid
         grid = get_map()
         position = grid.get_object_position(self.uuid)
         if position is None:
-            return
+            return  # Not on grid
         vision_changed = self.blocks_vision_field != old_blocks_vision
         walking_changed = self.blocks_movement != old_blocks_movement
         if vision_changed or walking_changed:
@@ -129,6 +127,14 @@ class BaseItem(BaseBlock):
         if self.tile_uuid is not None:
             return self.position
         return None
+
+    def place_on_grid(self, position: Tuple[int, int]) -> None:
+        """Place this item on the grid, setting tile_uuid and registering with GridMap."""
+        grid = get_map()
+        self.position = position
+        tile = grid.get_tile(position[0], position[1])
+        self.tile_uuid = tile.uuid if tile else None
+        grid.place_object(self.uuid, position)
 
     # --- Lifecycle hooks ---
 
@@ -161,6 +167,9 @@ class BaseItem(BaseBlock):
     def destroy(self) -> None:
         """Destroy this item: fire hook, clean up conditions, remove from container, clear location, unregister."""
         self._on_destroy()
+        # Clean up any light sources attached to this item
+        gridmap = get_map()
+        gridmap.cleanup_block_light_sources(self.uuid)
         for cond_name in list(self.active_conditions.keys()):
             self.remove_condition(cond_name)
         # Remove from container via proper polymorphism (BaseBlock.remove_contained_item)
@@ -188,6 +197,18 @@ class BaseItem(BaseBlock):
         """Whether this item can be damaged and destroyed."""
         return self.is_targetable and self.health is not None
 
+    @property
+    def has_hp(self) -> bool:
+        """Whether this item is intact. Non-breakable items always have HP."""
+        if self.health is None:
+            return True
+        return self.get_hp() > 0
+
+    @property
+    def is_active(self) -> bool:
+        """Item is active if intact (non-breakable = always active)."""
+        return self.has_hp
+
     def get_hp(self) -> int:
         """Get current hit points (0 constitution modifier for items)."""
         if self.health is None:
@@ -208,7 +229,7 @@ class BaseItem(BaseBlock):
         if self.health is None:
             return 0
         actual = self.health.take_damage(amount, damage_type, source_uuid)
-        if self.get_hp() <= 0:
+        if not self.has_hp:
             self.destroy()
         return actual
 

@@ -15,7 +15,8 @@ from uuid import uuid4
 from dnd.utils import reset_combat_state, has_condition
 from dnd.entity import Entity
 from dnd.core.gridmap import get_map
-from dnd.core.base_tiles import LightLevel, SensesType, SenseMode, dark_floor_factory
+from dnd.core.base_block import LightLevel, SensesType, SenseMode
+from dnd.core.base_tiles import dark_floor_factory
 from dnd.conditions import Hidden, Invisible
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index
 from dnd.actions import Hide
