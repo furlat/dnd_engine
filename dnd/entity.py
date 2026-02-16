@@ -2140,6 +2140,10 @@ class Entity(BaseBlock):
                 ))
 
         # POSITION_AOE actions - compute affected entities for each valid position
+        # FOV cache shared across all AoE spells (registered + use-template)
+        # to avoid redundant compute_fov calls for same origin+radius
+        fov_cache: dict = {}
+
         for template in self.position_actions:
             if template.target_type != TargetType.POSITION_AOE:
                 continue
@@ -2148,18 +2152,37 @@ class Entity(BaseBlock):
             if shape_template is None:
                 continue
 
+            # Check costs ONCE before the position loop (not per-position)
+            can_afford = template.check_costs()
+            template_name = template.name or "Unknown"
+            cost_type = template.costs[0].cost_type if template.costs else "actions"
+            cost_amount = template.costs[0].cost if template.costs else 1
+
+            if not can_afford:
+                # Include spell with can_afford=False for grayed-out UI display
+                # but skip expensive position enumeration
+                result.position_actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_AOE,
+                    valid_targets=[],
+                    can_afford=False,
+                    display_name=template_name,
+                    description=template.description,
+                    cost_type=cost_type,
+                    cost_amount=cost_amount,
+                    action_category=template.action_category,
+                ))
+                continue
+
             valid_pos_list = template.get_valid_positions()
             valid_positions = []
             idx = 0
 
             for pos in valid_pos_list:
-                template.set_target_position(pos)
-                if not template.pre_validate():
-                    continue
-
-                # Compute shape for this position
+                # Compute shape directly — no pre_validate needed for POSITION_AOE
+                # pre_validate's only useful check (aoe_require_targets) is done after filtering
                 shape = shape_template.model_copy(update={'target': pos})
-                shape.compute_subjective(self.position, self.senses)
+                shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache)
 
                 affected_uuids = list(shape.affected_entity_uuids)
 
@@ -2191,6 +2214,10 @@ class Entity(BaseBlock):
                         if (ent := Entity.get(uid)) and ent.has_hp
                     ]
 
+                # Replace pre_validate's "no targets" check
+                if not affected_uuids and template.aoe_require_targets:
+                    continue
+
                 affected_names = []
                 for uuid in affected_uuids:
                     ent = Entity.get(uuid)
@@ -2209,17 +2236,15 @@ class Entity(BaseBlock):
                 idx += 1
 
             if valid_positions:
-                template_name = template.name or "Unknown"
-                cost_type = template.costs[0].cost_type if template.costs else "actions"
                 result.position_actions.append(AvailableActionInfo(
                     template_name=template_name,
                     target_type=TargetType.POSITION_AOE,
                     valid_targets=valid_positions,
-                    can_afford=template.check_costs(),
+                    can_afford=True,
                     display_name=template_name,
                     description=template.description,
                     cost_type=cost_type,
-                    cost_amount=template.costs[0].cost if template.costs else 1,
+                    cost_amount=cost_amount,
                     action_category=template.action_category,
                 ))
 
@@ -2346,15 +2371,33 @@ class Entity(BaseBlock):
                 use_shape_template = use_template.aoe_shape
                 if use_shape_template is None:
                     continue
+
+                if not can_afford:
+                    # Include spell with can_afford=False for grayed-out UI display
+                    # but skip expensive position enumeration
+                    result.position_actions.append(AvailableActionInfo(
+                        template_name=template_name,
+                        target_type=TargetType.POSITION_AOE,
+                        valid_targets=[],
+                        can_afford=False,
+                        display_name=display_name,
+                        description=use_template.description,
+                        cost_type=cost_type,
+                        cost_amount=cost_amount,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        action_category=use_template.action_category,
+                        item_stack_count=stack_count_field,
+                    ))
+                    continue
+
                 use_valid_pos_list = use_template.get_valid_positions()
                 use_valid_positions: List[AvailableTarget] = []
                 use_idx = 0
                 for pos in use_valid_pos_list:
-                    use_template.set_target_position(pos)
-                    if not use_template.pre_validate():
-                        continue
+                    # Compute shape directly — no pre_validate needed for POSITION_AOE
                     shape = use_shape_template.model_copy(update={'target': pos})
-                    shape.compute_subjective(self.position, self.senses)
+                    shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache)
                     affected_uuids = list(shape.affected_entity_uuids)
                     if not use_template.include_self:
                         affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
@@ -2378,6 +2421,9 @@ class Entity(BaseBlock):
                             uid for uid in affected_uuids
                             if (ent := Entity.get(uid)) and ent.has_hp
                         ]
+                    # Replace pre_validate's "no targets" check
+                    if not affected_uuids and use_template.aoe_require_targets:
+                        continue
                     affected_names = []
                     for uid in affected_uuids:
                         ent = Entity.get(uid)
@@ -2398,7 +2444,7 @@ class Entity(BaseBlock):
                         template_name=template_name,
                         target_type=TargetType.POSITION_AOE,
                         valid_targets=use_valid_positions,
-                        can_afford=can_afford,
+                        can_afford=True,
                         display_name=display_name,
                         description=use_template.description,
                         cost_type=cost_type,
