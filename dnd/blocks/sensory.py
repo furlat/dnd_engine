@@ -8,7 +8,7 @@ from collections import defaultdict
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
 from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent, DeathEvent
-from dnd.core.base_tiles import SensesType, SenseMode, LightLevel
+from dnd.core.base_block import SensesType, SenseMode, LightLevel
 
 
 class Senses(BaseBlock):
@@ -87,6 +87,7 @@ class Senses(BaseBlock):
         self.update_seen(visible)
         self.walkable = walkable
         self.paths = paths
+        self._paths_dirty = False
 
     def get_threathened_positions(self) -> List[Tuple[int,int]]:
         """

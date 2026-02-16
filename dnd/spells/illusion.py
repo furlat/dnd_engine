@@ -659,7 +659,7 @@ class ColorSpray(SpellAction):
                 continue
 
             entity = Entity.get(uid)
-            if not entity or entity.get_hp() <= 0:
+            if not entity or not entity.has_hp:
                 continue
 
             # Color Spray skips unconscious creatures

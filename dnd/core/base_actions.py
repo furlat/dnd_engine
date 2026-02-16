@@ -330,7 +330,7 @@ class BaseAction(BaseObject):
                     if not self.include_dead:
                         targets = [
                             uid for uid in targets
-                            if (block := BaseBlock.get(uid)) and block.get_hp() > 0
+                            if (block := BaseBlock.get(uid)) and block.is_active
                         ]
                     return targets
             return []

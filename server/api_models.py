@@ -43,7 +43,7 @@ class APIEntitySummary(BaseModel):
             max_hp=max_hp,
             ac=entity.ac_bonus().normalized_score,
             conditions=list(entity.active_conditions.keys()),
-            is_dead=entity.get_hp() <= 0,
+            is_dead=not entity.has_hp,
             faction=entity.faction
         )
 
@@ -69,7 +69,7 @@ class APIEntityFull(APIEntitySummary):
             max_hp=max_hp,
             ac=entity.ac_bonus().normalized_score,
             conditions=list(entity.active_conditions.keys()),
-            is_dead=entity.get_hp() <= 0,
+            is_dead=not entity.has_hp,
             faction=entity.faction,
             action_economy={
                 'actions': entity.action_economy.actions.normalized_score,

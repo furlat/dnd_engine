@@ -582,7 +582,7 @@ def test_intercept_path_blocked_by_door():
 
     # Create door at (4,2) — starts OPEN (interceptor opened it during setup)
     door = TestDoorA(source_entity_uuid=uuid4(), position=(4, 2))
-    grid.place_object(door.uuid, (4, 2))
+    door.place_on_grid((4, 2))
     # Open the door
     door.is_open = True
     door.blocks_movement = False
@@ -655,7 +655,7 @@ def test_dodge_roll_enabled_by_door_open():
 
     # Create closed door at (5,2)
     door = TestDoorA(source_entity_uuid=uuid4(), position=(5, 2))
-    grid.place_object(door.uuid, (5, 2))
+    door.place_on_grid((5, 2))
     assert_test(door.blocks_movement, "Door starts closed and blocks movement")
 
     Entity.update_all_entities_senses()

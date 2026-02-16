@@ -28,7 +28,7 @@ from dnd.entity import Entity
 from dnd.core.gridmap import get_map
 from dnd.blocks.base_item import UsableItem
 from dnd.conditions import Invisible, Hidden, Incapacitated, InvisibilityEffect, GreaterInvisibilityEffect
-from dnd.core.base_tiles import SensesType, SenseMode
+from dnd.core.base_block import SensesType, SenseMode
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index, execute_use_action, register_spell
 from dnd.actions import Hide
 from dnd.items.armors import create_chain_mail, create_leather_armor
@@ -501,7 +501,7 @@ def test_object_perceivability():
         name="Hidden Chest",
         position=(2, 0)
     )
-    grid.place_object(item.uuid, (2, 0))
+    item.place_on_grid((2, 0))
 
     Entity.update_all_entities_senses()
 

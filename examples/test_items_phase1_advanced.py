@@ -81,7 +81,7 @@ def create_simple_item(position=None, name="Potion", pickable=True, weight=1.0):
         value=50,
     )
     if position is not None:
-        get_map().place_object(item.uuid, position)
+        item.place_on_grid(position)
     return item
 
 
@@ -100,7 +100,7 @@ def create_breakable_item(position=None, name="Crate", hp=20, blocks_vision=Fals
         blocks_movement=blocks_movement,
     )
     if position is not None:
-        get_map().place_object(item.uuid, position)
+        item.place_on_grid(position)
     return item
 
 
@@ -228,7 +228,7 @@ def test_pickup_vision_blocker_unblocks_los():
         blocks_vision_field=True,
         is_pickable=True,
     )
-    get_map().place_object(blocker.uuid, (3, 5))
+    blocker.place_on_grid((3, 5))
     far_item = create_simple_item(position=(5, 5), name="Far Gem")
 
     Entity.update_all_entities_senses()
@@ -248,14 +248,13 @@ def test_pickup_vision_blocker_unblocks_los():
 def test_movement_blocked_by_object():
     """A movement-blocking object prevents pathing through its cell."""
     create_test_grid(20, 20)
-    grid = get_map()
 
     boulder = BaseItem(
         source_entity_uuid=uuid4(),
         name="Boulder",
         blocks_movement=True,
     )
-    grid.place_object(boulder.uuid, (3, 5))
+    boulder.place_on_grid((3, 5))
 
     entity = create_test_entity(position=(2, 5))
     Entity.update_all_entities_senses()
@@ -543,7 +542,7 @@ def test_non_breakable_item_not_attack_target():
         is_pickable=False,
         health=None,  # Not breakable
     )
-    get_map().place_object(item.uuid, (4, 3))
+    item.place_on_grid((4, 3))
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
 
@@ -644,7 +643,7 @@ def test_destroy_item_with_conditions_cleans_up():
         health=BaseItem.create_item_health(uuid4(), 8),
         allow_events_conditions=True,
     )
-    get_map().place_object(item.uuid, (5, 5))
+    item.place_on_grid((5, 5))
 
     cond = BaseCondition(
         name="OnFire",
@@ -742,8 +741,8 @@ def test_place_object_then_place_another_at_same_position():
     item1 = BaseItem(source_entity_uuid=uuid4(), name="A")
     item2 = BaseItem(source_entity_uuid=uuid4(), name="B")
 
-    grid.place_object(item1.uuid, (5, 5))
-    grid.place_object(item2.uuid, (5, 5))
+    item1.place_on_grid((5, 5))
+    item2.place_on_grid((5, 5))
 
     objects = grid.get_objects_at((5, 5))
     assert item1.uuid in objects
