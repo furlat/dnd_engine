@@ -547,7 +547,9 @@ def render_map_content(
             # The @ entity (observer) always renders; others must be in visible list
             if entity and fov_visible_entities is not None:
                 if entity["uuid"] != at_entity_uuid and entity["uuid"] not in fov_visible_entities:
-                    entity = None  # Not visible to FOV entity
+                    if not entity.get("is_dead"):
+                        entity = None  # Not visible to FOV entity
+                    # Dead entities (bodies) still render at visible positions
 
             # Subjective lighting: in FOV mode, if tile is visible but raw light
             # is DARKNESS, observer sees it via darkvision/adjacent rule → render as DIM
