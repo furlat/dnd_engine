@@ -17,14 +17,19 @@ Usage:
 """
 
 import asyncio
+import logging
+import time
+import traceback
 from typing import Dict, Set, Optional
 from uuid import UUID, uuid4
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+
+logger = logging.getLogger("dnd_server")
 
 from dnd.core.events import Event, EventQueue, EventType, EventPhase
 from dnd.core.gridmap import get_map, reset_map
@@ -37,14 +42,15 @@ from dnd.items import create_shortsword, create_dagger, create_longbow
 from dnd.items.test_items import (
     create_scroll_of_magic_missile, create_scroll_of_fireball,
     create_healing_potion, create_potion_of_greater_invisibility,
-    TrapLever, PullLeverAction,
+    TrapLever, PullLeverAction, create_torch, create_wall_torch,
+    TestDoorA,
 )
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
 from dnd.actions import MovementEvent, JumpEvent
 from dnd.core.base_actions import TargetType, AvailableTarget, AvailableActionsResult
-from dnd.core.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.tiles import create_spike_zone
 from dnd.core.base_tiles import difficult_terrain_factory
@@ -245,8 +251,12 @@ def setup_arena_combat(
 
     # Add a vertical wall in the middle (blocking LOS)
     for y in range(3, 12):
-        if y != 7:  # Leave a gap in the middle
+        if y != 7:  # Leave a gap — door goes here
             grid.set_tile(7, y, walkable=False, visible=False)
+
+    # Closed door at the wall gap — blocks movement and vision until opened
+    door = TestDoorA(source_entity_uuid=uuid4())
+    grid.place_object(door.uuid, (7, 7))
 
     # ADD: Jump test island in top-left corner
     # Create water barrier around island (visible=True, walkable=False)
@@ -281,6 +291,14 @@ def setup_arena_combat(
             grid._tiles[tile.position] = tile
             grid._tiles_by_uuid[tile.uuid] = tile.position
 
+    # Whole arena is dark — torch is the only light source
+    for pos, tile in grid._tiles.items():
+        tile.default_light = LightLevel.DARKNESS
+
+    # Wall-mounted torches at dark side corners (visible on map, toggleable)
+    create_wall_torch(position=(14, 1), owner_uuid=uuid4(), lit=True)
+    create_wall_torch(position=(14, 13), owner_uuid=uuid4(), lit=True)
+
     # Create Hero based on character class
     if character_class == "barbarian":
         player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
@@ -289,6 +307,11 @@ def setup_arena_combat(
     else:
         # Default to fighter
         player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
+
+    # Give hero a lit torch for exploring the dark side
+    torch = create_torch(player.uuid)
+    player.loot_item(torch)
+    torch.ignite(player.uuid)
 
     # Add Greater Invisibility potion to all heroes for stealth testing
     potion = create_potion_of_greater_invisibility(player.uuid)
@@ -328,7 +351,8 @@ def setup_arena_combat(
         skeleton = create_skeleton(
             name=f"Skeleton {i+1}",
             position=pos,
-            faction="monsters"
+            faction="monsters",
+            darkvision=True
         )
         skeletons.append(skeleton)
 
@@ -624,6 +648,30 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    """Log request duration for every endpoint."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    print(f"  TIMING: {request.method} {request.url.path} -> {response.status_code} ({elapsed_ms:.1f}ms)")
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Log all HTTP errors with full detail to server console."""
+    logger.error(f"HTTP {exc.status_code} on {request.method} {request.url.path}: {exc.detail}")
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Log unhandled exceptions with full traceback."""
+    logger.error(f"Unhandled error on {request.method} {request.url.path}:\n{traceback.format_exc()}")
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
 # =============================================================================
 # Health & Info Endpoints
 # =============================================================================
@@ -696,7 +744,8 @@ async def get_visibility():
         result[str(entity.uuid)] = {
             "name": entity.name,
             "position": list(entity.position),
-            "visible_cells": visible_positions
+            "visible_cells": visible_positions,
+            "visible_entities": [str(uuid) for uuid in entity.senses.entities.keys()]
         }
     return result
 
@@ -765,6 +814,10 @@ async def get_tile_info(x: int, y: int):
     # Get handler names
     handler_names = [h.name for h in tile.event_handlers.values()] if hasattr(tile, 'event_handlers') else []
 
+    # Light level
+    light_level = tile.resolved_light_level
+    light_level_names = {0: "Magical Darkness", 1: "Darkness", 2: "Dim Light", 3: "Bright Light", 4: "Very Bright"}
+
     return {
         "position": (x, y),
         "name": tile.name,
@@ -775,7 +828,11 @@ async def get_tile_info(x: int, y: int):
         "handlers": handler_names,
         "entities": entities_at,
         "objects": objects_at,
-        "height": tile.height if hasattr(tile, 'height') else 0
+        "height": tile.height if hasattr(tile, 'height') else 0,
+        "light_level": light_level.value,
+        "light_level_name": light_level_names.get(light_level.value, "Unknown"),
+        "default_light": tile.default_light.value,
+        "illumination_count": len(tile._illuminations),
     }
 
 
@@ -1947,7 +2004,6 @@ async def get_pvp_status():
 
     # Check session connections
     # Claude is "connected" if they had activity in the last 5 seconds
-    import time
     ACTIVITY_TIMEOUT = 5.0  # seconds
 
     human_connected = False
@@ -2124,7 +2180,6 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, force: bool = False):
     """Run the event server."""
     if force:
         kill_process_on_port(port)
-        import time
         time.sleep(0.5)  # Brief pause to let port release
 
     uvicorn.run(app, host=host, port=port)

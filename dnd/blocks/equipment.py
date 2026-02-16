@@ -81,6 +81,7 @@ class WeaponProperty(str, Enum):
 
 class Armor(EquippableItem):
     name: str = Field(default="Armor")
+    map_char: str = Field(default="\u03b4", description="Character to display on the map grid")
     description: Optional[str] = Field(
         default=None,
         description="Detailed description of the armor"
@@ -196,6 +197,7 @@ class Cloak(Armor):
 class Shield(EquippableItem):
     name: str = Field(default="Shield",   description="Name of the shield"
     )
+    map_char: str = Field(default="\u03a3", description="Character to display on the map grid")
     description: Optional[str] = Field(
         default=None,
         description="Detailed description of the shield"
@@ -207,6 +209,7 @@ class Shield(EquippableItem):
 
 class Weapon(EquippableItem):
     name: str = Field(default="Weapon", description="Name of the weapon")
+    map_char: str = Field(default="\u2020", description="Character to display on the map grid")
     description: Optional[str] = Field(
         default=None,
         description="Detailed description of the weapon"

@@ -97,6 +97,10 @@ class BaseItem(BaseBlock):
         Called after modifying blocks_movement or blocks_vision_field on an item
         that is placed on the grid. Fires an event with hint indicating which
         senses layers are affected, replacing brute-force update_all_entities_senses().
+
+        When vision blocking changes, recomputes affected light sources BEFORE
+        firing the spatial event so that light propagates through the changed
+        geometry before senses re-evaluate.
         """
         grid = get_map()
         position = grid.get_object_position(self.uuid)
@@ -105,6 +109,9 @@ class BaseItem(BaseBlock):
         vision_changed = self.blocks_vision_field != old_blocks_vision
         walking_changed = self.blocks_movement != old_blocks_movement
         if vision_changed or walking_changed:
+            # Light must propagate BEFORE senses evaluate
+            if vision_changed:
+                grid.recompute_lights_at_position(position)
             event = SpatialChangeEvent.object_changed(
                 position, self.uuid,
                 blocks_vision_changed=vision_changed,

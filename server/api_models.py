@@ -100,6 +100,7 @@ class APITile(BaseModel):
     walking_cost: int = 1  # 1=normal, 2=difficult terrain
     is_hazardous: bool = False  # Has damage handlers (spikes, fire, etc.)
     conditions: List[str] = []  # Active condition names on tile
+    light_level: int = 3  # LightLevel enum value: 0=MAGICAL_DARKNESS..4=VERY_BRIGHT
 
 
 class APIGrid(BaseModel):
@@ -131,7 +132,8 @@ class APIGrid(BaseModel):
                 name=td.name,
                 walking_cost=walking_cost,
                 is_hazardous=is_hazardous,
-                conditions=conditions
+                conditions=conditions,
+                light_level=td.resolved_light_level.value
             ))
         return cls(
             min_x=bounds[0], min_y=bounds[1],

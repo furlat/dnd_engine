@@ -881,7 +881,7 @@ Senses are updated incrementally via the `SensesUpdateHint` system (40-257x fast
 **Three separated concerns**:
 - **FOV (geometry)**: Recomputed only when `requires_fov=True` (magical darkness, door vision blocking)
 - **Paths (movement)**: NEVER recomputed from callbacks. `_paths_dirty = True` flag set, cleared at turn start and movement end
-- **Entity filtering**: Re-filter at specific positions only (`light_changed_positions`, `entity_entered`/`entity_left`)
+- **Visibility + entity filtering**: On `light_changed_positions`, update `senses.visible`, entities, and objects at affected positions. On `entity_entered`/`entity_left`, O(1) dict add/remove.
 
 **Key rule**: Callbacks NEVER run Dijkstra. All callback paths use `update_visibility_func()` (FOV only) + `_paths_dirty = True`. Full Dijkstra only runs at:
 1. Turn start (`Encounter.start_turn()` → `entity.update_entity_senses()`)

@@ -37,10 +37,10 @@ Spells / Light Sources / GridMap        Tile light storage (two dicts)
 
 | Effect | Mechanism | What Changes | Example |
 |--------|-----------|-------------|---------|
-| **Normal light change** (DARKNESS ↔ DIM ↔ BRIGHT ↔ VERY_BRIGHT) | Entity/object filtering only | Which entities are visible at already-known tile positions. FOV geometry unchanged. | Torch lit/extinguished, Fog Cloud |
+| **Normal light change** (DARKNESS ↔ DIM ↔ BRIGHT ↔ VERY_BRIGHT) | Visibility + entity/object filtering | `senses.visible` updated (dark tiles removed, lit tiles added), entities and objects re-filtered. FOV geometry unchanged. | Torch lit/extinguished, Fog Cloud |
 | **Magical darkness** (MAGICAL_DARKNESS) | FOV geometry change | `blocks_vision()` returns True → tiles behind it become invisible. Like a temporary wall for vision. | Darkness spell |
 
-Normal light changes are cheap to process — the set of visible tiles stays the same, only the "can I see entities here?" filter changes. Magical darkness is expensive — it changes FOV geometry, potentially hiding tiles that were previously visible (and revealing them when removed).
+Normal light changes are cheap to process — no shadowcast needed, just per-position light checks on `senses.visible`, entities, and objects. Magical darkness is expensive — it changes FOV geometry, potentially hiding tiles that were previously visible (and revealing them when removed).
 
 ---
 
@@ -240,7 +240,7 @@ entity.is_perceivable_by()       → stealth/invis check (stealth_dc, is_invisib
 visible_entities dict            → final result
 ```
 
-**Key**: `senses.visible` (geometric FOV) is unchanged by normal light — dark tiles are still "known" for movement/map awareness. Only entity/object **filtering** is affected by DARKNESS/DIM_LIGHT.
+**Key**: `senses.visible` is light-filtered — dark tiles are removed from `senses.visible` (but stay in `senses.seen` for memory/fog-of-war). Normal light changes update `senses.visible`, entities, and objects at affected positions via `_update_visibility_at()`.
 
 ### SpatialSensesCallback (`sensory.py:157-392`)
 
@@ -251,7 +251,7 @@ Registered as `EventQueue.add_on_event_callback()`. Fires for ALL events, filter
   - `requires_fov`: recompute FOV via `update_visibility_func()` (for magical darkness, door vision blocking)
   - `requires_paths`: set `_paths_dirty = True` (deferred to turn start or movement end)
   - `entity_entered`/`entity_left`: O(1) dict add/remove on `senses.entities`
-  - `light_changed_positions`: re-filter entities at changed positions only (light + perceivability check)
+  - `light_changed_positions`: update `senses.visible`, entities, and objects at changed positions (`_update_visibility_at()`)
   - `perceivability_entity`: re-check one entity's visibility
   - `object_placed`/`object_removed`: O(1) dict add/remove on `senses.objects`
 - **Fallback** (events without hints): check position subscription, visibility-only + `_paths_dirty = True`
@@ -372,7 +372,7 @@ class SensesUpdateHint(BaseModel):
     entity_left: Optional[Tuple[UUID, Tuple[int,int]]] = None      # O(1) dict remove
     entity_died: Optional[Tuple[UUID, Tuple[int,int]]] = None      # Dict remove + paths dirty
 
-    light_changed_positions: Optional[Set[Tuple[int,int]]] = None  # Re-filter entities here
+    light_changed_positions: Optional[Set[Tuple[int,int]]] = None  # Update visible + entities + objects here
     perceivability_entity: Optional[UUID] = None                    # Re-check one entity
 
     object_placed: Optional[Tuple[UUID, Tuple[int,int]]] = None    # O(1) dict add
