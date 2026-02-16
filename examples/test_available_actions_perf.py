@@ -7,8 +7,8 @@ Measures timing across 4 scenarios:
 3. Door open, hero torch off (dark on hero side)
 4. Door open, hero torch on again
 
-Reports macro timing (full call), micro benchmarks (isolated bottlenecks),
-and AoE loop isolation to pinpoint where time is spent.
+Uses AoEProfiler to monkey-patch the real code path and collect per-call
+timing without duplicating any logic.
 """
 
 import time
@@ -16,10 +16,11 @@ import statistics
 from uuid import uuid4
 from typing import List, Tuple, Dict, Any
 
-from dnd.core.gridmap import reset_map, get_map
+from dnd.core.gridmap import reset_map, get_map, GridMap
 from dnd.core.events import EventQueue
 from dnd.core.base_block import LightLevel
 from dnd.core.base_actions import TargetType
+from dnd.core.aoe import AoEShape
 from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import HumanController, MeleeAIController, Controller
@@ -240,582 +241,131 @@ def print_summary(summary: Dict[str, Any]) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Internal Instrumentation — times each phase inside get_available_actions
+# AoE Profiler — monkey-patches the real code path, no duplicate logic
 # ──────────────────────────────────────────────────────────────────────
 
-from dnd.core.base_actions import AvailableTarget, AvailableActionInfo
-from dnd.core.base_block import BaseBlock
-from dnd.blocks.base_item import UsableItem
-from dnd.blocks.equipment import WeaponSlot
+class AoEProfiler:
+    """Wraps AoEShape.compute_subjective and GridMap.compute_fov to collect
+    per-call timing from the real get_available_actions code path."""
 
+    def __init__(self) -> None:
+        self.cs_calls: List[Dict[str, Any]] = []
+        self.fov_calls: List[Dict[str, Any]] = []
+        self._orig_cs = AoEShape.compute_subjective
+        self._orig_fov = GridMap.compute_fov
 
-def instrumented_get_available_actions(
-    entity: Entity,
-    target_filter: str = "enemies",
-    include_dead: bool = False,
-) -> Tuple[Any, Dict[str, float]]:
-    """Run get_available_actions logic with per-phase timing.
+    def __enter__(self) -> "AoEProfiler":
+        profiler = self
 
-    Returns (AvailableActionsResult, phase_timings_dict).
-    Phase timings keys:
-      self_actions, entity_actions, paths_refresh, position_path, position_los,
-      aoe_registered, use_actions_discovery, use_self, use_entity, use_aoe,
-      use_position_los, use_position_path, object_actions, total
-    Also per-AoE-spell keys like "aoe:Fireball" with sub-dict {get_valid_positions, pre_validate, compute_subjective, filtering, total, n_positions, n_valid}.
-    """
-    timings: Dict[str, float] = {}
-    aoe_details: Dict[str, Dict[str, Any]] = {}  # per-spell AoE breakdown
-    t_total_start = time.perf_counter()
+        def timed_cs(shape_self: AoEShape, caster_pos: Any, senses: Any,
+                     fov_cache: Any = None, barrier_positions: Any = None) -> AoEShape:
+            t = time.perf_counter()
+            result = profiler._orig_cs(shape_self, caster_pos, senses, fov_cache=fov_cache, barrier_positions=barrier_positions)
+            elapsed = (time.perf_counter() - t) * 1000
+            profiler.cs_calls.append({
+                "shape": shape_self.name,
+                "elapsed_ms": elapsed,
+                "needs_fov": shape_self.computed_origin != caster_pos,
+                "has_cache": fov_cache is not None,
+            })
+            return result
 
-    from dnd.core.base_actions import AvailableActionsResult
+        def timed_fov(grid_self: GridMap, origin: Any, max_distance: Any = None,
+                      observer_uuid: Any = None) -> Any:
+            t = time.perf_counter()
+            result = profiler._orig_fov(grid_self, origin, max_distance, observer_uuid)
+            elapsed = (time.perf_counter() - t) * 1000
+            profiler.fov_calls.append({
+                "origin": origin,
+                "radius": max_distance,
+                "elapsed_ms": elapsed,
+            })
+            return result
 
-    result = AvailableActionsResult(
-        entity_uuid=entity.uuid,
-        remaining_movement=entity.action_economy.movement.normalized_score
-    )
+        AoEShape.compute_subjective = timed_cs  # type: ignore[assignment]
+        GridMap.compute_fov = timed_fov  # type: ignore[assignment]
+        return self
 
-    # ── SELF actions ──
-    t0 = time.perf_counter()
-    for template in entity.self_actions:
-        template_name = template.name or "Unknown"
-        can_afford = template.check_costs()
-        is_valid = can_afford and template.pre_validate()
-        if is_valid or not can_afford:
-            result.self_actions.append(AvailableActionInfo(
-                template_name=template_name, target_type=TargetType.SELF,
-                valid_targets=[AvailableTarget(index=0)] if is_valid else [],
-                can_afford=can_afford, display_name=template_name,
-                description=template.description,
-                cost_type=template.costs[0].cost_type if template.costs else "actions",
-                cost_amount=template.costs[0].cost if template.costs else 0,
-                action_category=template.action_category,
-            ))
-    timings["self_actions"] = (time.perf_counter() - t0) * 1000
+    def __exit__(self, *args: Any) -> None:
+        AoEShape.compute_subjective = self._orig_cs  # type: ignore[assignment]
+        GridMap.compute_fov = self._orig_fov  # type: ignore[method-assign]
 
-    # ── ENTITY actions ──
-    t0 = time.perf_counter()
-    if target_filter == "enemies":
-        potential_targets = entity.get_visible_enemies(include_dead=include_dead)
-    elif target_filter == "allies":
-        potential_targets = entity.get_visible_allies(include_dead=include_dead)
-    else:
-        potential_targets = {}
-        for k, v in entity.senses.entities.items():
-            if k == entity.uuid:
-                continue
-            if not include_dead:
-                other = Entity.get(k)
-                if other and not other.has_hp:
-                    continue
-            potential_targets[k] = v
+    def print_report(self) -> None:
+        if not self.cs_calls:
+            print("\n  --- AoE Profile: no compute_subjective calls ---")
+            return
 
-    for template in entity.entity_actions:
-        valid_targets: list = []
-        idx = 0
-        action_filter = template.valid_target_filter
-        if action_filter == "all" or action_filter == "self_or_allies":
-            template_targets: Dict = {}
-            if action_filter == "all":
-                for k, v in entity.senses.entities.items():
-                    if k == entity.uuid:
-                        continue
-                    if not include_dead:
-                        other = Entity.get(k)
-                        if other and not other.has_hp:
-                            continue
-                    template_targets[k] = v
-            elif action_filter == "self_or_allies":
-                for k, v in entity.get_visible_allies(include_dead=include_dead).items():
-                    template_targets[k] = v
-        else:
-            template_targets = dict(potential_targets)
+        total_cs_ms = sum(c["elapsed_ms"] for c in self.cs_calls)
 
-        if template.include_self:
-            template_targets[entity.uuid] = entity.position
+        # Group by shape
+        by_shape: Dict[str, Dict[str, Any]] = {}
+        for call in self.cs_calls:
+            shape = call["shape"]
+            if shape not in by_shape:
+                by_shape[shape] = {"count": 0, "total_ms": 0.0, "needs_fov": 0}
+            by_shape[shape]["count"] += 1
+            by_shape[shape]["total_ms"] += call["elapsed_ms"]
+            if call["needs_fov"]:
+                by_shape[shape]["needs_fov"] += 1
 
-        for target_uuid, target_pos in template_targets.items():
-            template.set_target_entity(target_uuid)
-            if template.pre_validate():
-                target_entity = Entity.get(target_uuid)
-                valid_targets.append(AvailableTarget(
-                    index=idx, target_uuid=target_uuid,
-                    target_name=target_entity.name if target_entity else None,
-                    distance=entity.senses.get_feet_distance(target_pos)
-                ))
-                idx += 1
+        print(f"\n  --- AoE Profile ---")
+        print(f"  compute_subjective: {len(self.cs_calls)} calls, {total_cs_ms:.1f}ms total")
+        print(f"  {'Shape':<12} {'Calls':>6} {'Total':>8} {'Avg':>7} {'NeedFOV':>8}")
+        for shape, info in sorted(by_shape.items()):
+            avg = info["total_ms"] / info["count"]
+            print(f"  {shape:<12} {info['count']:>6} {info['total_ms']:>7.1f}ms {avg:>6.2f}ms {info['needs_fov']:>8}")
 
-        if valid_targets:
-            template_name = template.name or "Unknown"
-            weapon_name = None
-            weapon_slot_str = None
-            display_name = template_name
-            weapon_slot_attr = getattr(template, 'weapon_slot', None)
-            if weapon_slot_attr is not None:
-                weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
-                weapon = entity.equipment._get_weapon_by_slot(weapon_slot_attr)
-                if weapon:
-                    weapon_name = weapon.name
-                    display_name = weapon_name
+        # FOV cache analysis
+        total_fov_needed = sum(1 for c in self.cs_calls if c["needs_fov"])
+        actual_fov_calls = len(self.fov_calls)
+        cache_hits = total_fov_needed - actual_fov_calls
+        total_fov_ms = sum(c["elapsed_ms"] for c in self.fov_calls)
 
-            result.entity_actions.append(AvailableActionInfo(
-                template_name=template_name, target_type=template.target_type,
-                valid_targets=valid_targets, can_afford=template.check_costs(),
-                display_name=display_name, description=template.description,
-                cost_type=template.costs[0].cost_type if template.costs else "actions",
-                cost_amount=template.costs[0].cost if template.costs else 0,
-                weapon_slot=weapon_slot_str, weapon_name=weapon_name,
-                action_category=template.action_category,
-            ))
-    timings["entity_actions"] = (time.perf_counter() - t0) * 1000
+        if total_fov_needed > 0:
+            hit_rate = cache_hits / total_fov_needed * 100
+            print(f"\n  FOV cache: {cache_hits} hits / {total_fov_needed} needed ({hit_rate:.0f}% hit rate)")
+            print(f"  compute_fov: {actual_fov_calls} calls, {total_fov_ms:.1f}ms total", end="")
+            if actual_fov_calls > 0:
+                avg_fov = total_fov_ms / actual_fov_calls
+                saved_ms = cache_hits * avg_fov
+                print(f" (avg {avg_fov:.2f}ms, cache saved ~{saved_ms:.0f}ms)")
+            else:
+                print()
 
-    # ── Paths refresh ──
-    t0 = time.perf_counter()
-    if entity.senses._paths_dirty:
-        entity.update_entity_senses(max_distance=20)
-    timings["paths_refresh"] = (time.perf_counter() - t0) * 1000
+            # FOV by radius
+            fov_by_radius: Dict[int, Dict[str, Any]] = {}
+            for call in self.fov_calls:
+                r = call["radius"] or 0
+                if r not in fov_by_radius:
+                    fov_by_radius[r] = {"count": 0, "total_ms": 0.0}
+                fov_by_radius[r]["count"] += 1
+                fov_by_radius[r]["total_ms"] += call["elapsed_ms"]
+            if len(fov_by_radius) > 1:
+                print(f"  FOV by radius:")
+                for r, info in sorted(fov_by_radius.items()):
+                    avg = info["total_ms"] / info["count"]
+                    print(f"    r={r}: {info['count']} calls, {info['total_ms']:.1f}ms total, {avg:.2f}ms avg")
 
-    # ── POSITION_PATH (Move) ──
-    t0 = time.perf_counter()
-    for template in entity.position_actions:
-        if template.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
-            continue
-        valid_positions: list = []
-        idx = 0
-        for pos, _ in entity.senses.paths.items():
-            if pos == entity.senses.position:
-                continue
-            template.set_target_position(pos)
-            if template.pre_validate():
-                path_cost = 0
-                for cost in template.costs:
-                    if cost.cost_type == "movement":
-                        path_cost = cost.cost
-                        break
-                valid_positions.append(AvailableTarget(
-                    index=idx, position=pos,
-                    distance=entity.senses.get_feet_distance(pos), path_cost=path_cost
-                ))
-                idx += 1
-        if valid_positions:
-            template_name = template.name or "Unknown"
-            result.position_actions.append(AvailableActionInfo(
-                template_name=template_name, target_type=template.target_type,
-                valid_targets=valid_positions, can_afford=True,
-                display_name=template_name,
-                description=f"{result.remaining_movement}ft remaining",
-                cost_type="movement", cost_amount=0,
-                action_category=template.action_category,
-            ))
-    timings["position_path"] = (time.perf_counter() - t0) * 1000
-
-    # ── POSITION_LOS (Jump) ──
-    t0 = time.perf_counter()
-    for template in entity.position_actions:
-        if template.target_type != TargetType.POSITION_LOS:
-            continue
-        valid_pos_list = template.get_valid_positions()
-        valid_positions = []
-        idx = 0
-        for pos in valid_pos_list:
-            template.set_target_position(pos)
-            if template.pre_validate():
-                valid_positions.append(AvailableTarget(
-                    index=idx, position=pos,
-                    distance=entity.senses.get_feet_distance(pos), path_cost=None
-                ))
-                idx += 1
-        if valid_positions:
-            template_name = template.name or "Unknown"
-            cost_type = template.costs[0].cost_type if template.costs else "bonus_actions"
-            cost_amount = template.costs[0].cost if template.costs else 1
-            result.position_actions.append(AvailableActionInfo(
-                template_name=template_name, target_type=TargetType.POSITION_LOS,
-                valid_targets=valid_positions, can_afford=template.check_costs(),
-                display_name=template_name, description=template.description,
-                cost_type=cost_type, cost_amount=cost_amount,
-                action_category=template.action_category,
-            ))
-    timings["position_los"] = (time.perf_counter() - t0) * 1000
-
-    # ── POSITION_AOE (registered spells) — per-spell breakdown ──
-    t0 = time.perf_counter()
-    for template in entity.position_actions:
-        if template.target_type != TargetType.POSITION_AOE:
-            continue
-        shape_template = template.aoe_shape
-        if shape_template is None:
-            continue
-
-        spell_name = template.name or "Unknown"
-        spell_t: Dict[str, Any] = {"get_valid_positions": 0.0, "pre_validate": 0.0,
-                                    "compute_subjective": 0.0, "filtering": 0.0,
-                                    "total": 0.0, "n_positions": 0, "n_valid": 0}
-        spell_start = time.perf_counter()
-
-        t_gvp = time.perf_counter()
-        valid_pos_list = template.get_valid_positions()
-        spell_t["get_valid_positions"] = (time.perf_counter() - t_gvp) * 1000
-        spell_t["n_positions"] = len(valid_pos_list)
-
-        valid_positions = []
-        idx = 0
-        pv_time = 0.0
-        cs_time = 0.0
-        filt_time = 0.0
-
-        for pos in valid_pos_list:
-            t_pv = time.perf_counter()
-            template.set_target_position(pos)
-            passed = template.pre_validate()
-            pv_time += (time.perf_counter() - t_pv) * 1000
-
-            if not passed:
-                continue
-
-            t_cs = time.perf_counter()
-            shape = shape_template.model_copy(update={'target': pos})
-            shape.compute_subjective(entity.position, entity.senses)
-            cs_time += (time.perf_counter() - t_cs) * 1000
-
-            t_filt = time.perf_counter()
-            affected_uuids = list(shape.affected_entity_uuids)
-            if not template.include_self:
-                affected_uuids = [uid for uid in affected_uuids if uid != entity.uuid]
-            tf = template.valid_target_filter
-            if tf != "all":
-                filtered = []
-                for uid in affected_uuids:
-                    ent = Entity.get(uid)
-                    if ent:
-                        if tf == "enemies" and entity.is_enemy(ent):
-                            filtered.append(uid)
-                        elif tf == "allies" and entity.is_ally(ent):
-                            filtered.append(uid)
-                        elif tf == "self_or_allies":
-                            if uid == entity.uuid or entity.is_ally(ent):
-                                filtered.append(uid)
-                affected_uuids = filtered
-            if not template.include_dead and not include_dead:
-                affected_uuids = [
-                    uid for uid in affected_uuids
-                    if (ent := Entity.get(uid)) and ent.has_hp
-                ]
-            affected_names = []
-            for uid in affected_uuids:
-                ent = Entity.get(uid)
-                if ent:
-                    affected_names.append(ent.name or "Unknown")
-            filt_time += (time.perf_counter() - t_filt) * 1000
-
-            valid_positions.append(AvailableTarget(
-                index=idx, position=pos,
-                distance=entity.senses.get_feet_distance(pos),
-                affected_entity_uuids=affected_uuids,
-                affected_entity_names=affected_names,
-                affected_count=len(affected_uuids),
-                affected_positions=list(shape.affected_positions)
-            ))
-            idx += 1
-
-        spell_t["pre_validate"] = pv_time
-        spell_t["compute_subjective"] = cs_time
-        spell_t["filtering"] = filt_time
-        spell_t["n_valid"] = len(valid_positions)
-        spell_t["total"] = (time.perf_counter() - spell_start) * 1000
-        aoe_details[spell_name] = spell_t
-
-        if valid_positions:
-            template_name = template.name or "Unknown"
-            cost_type = template.costs[0].cost_type if template.costs else "actions"
-            result.position_actions.append(AvailableActionInfo(
-                template_name=template_name, target_type=TargetType.POSITION_AOE,
-                valid_targets=valid_positions, can_afford=template.check_costs(),
-                display_name=template_name, description=template.description,
-                cost_type=cost_type,
-                cost_amount=template.costs[0].cost if template.costs else 1,
-                action_category=template.action_category,
-            ))
-    timings["aoe_registered"] = (time.perf_counter() - t0) * 1000
-
-    # ── OBJECT actions ──
-    t0 = time.perf_counter()
-    for template in entity.object_actions:
-        valid_targets = []
-        idx = 0
-        can_afford = template.check_costs()
-        for obj_uuid, obj_pos in entity.senses.objects.items():
-            template.set_target_entity(obj_uuid)
-            if template.pre_validate():
-                obj_block = BaseBlock.get(obj_uuid)
-                obj_name = obj_block.name if obj_block else "Object"
-                valid_targets.append(AvailableTarget(
-                    index=idx, target_uuid=obj_uuid, position=obj_pos,
-                    target_name=obj_name,
-                    distance=entity.senses.get_feet_distance(obj_pos)
-                ))
-                idx += 1
-        if valid_targets:
-            template_name = template.name or "Unknown"
-            result.object_actions.append(AvailableActionInfo(
-                template_name=template_name, target_type=TargetType.OBJECT,
-                valid_targets=valid_targets, can_afford=can_afford,
-                display_name=template_name, description=template.description,
-                cost_type=template.costs[0].cost_type if template.costs else "actions",
-                cost_amount=template.costs[0].cost if template.costs else 0,
-                action_category=template.action_category,
-            ))
-    timings["object_actions"] = (time.perf_counter() - t0) * 1000
-
-    # ── USE ACTIONS (inventory + environment) ──
-    t0 = time.perf_counter()
-    use_sources: list = []
-    for use_template in entity.inventory.get_all_use_actions(entity.uuid):
-        item_uuid = use_template.source_item_uuid
-        item = BaseBlock.get(item_uuid) if item_uuid else None
-        item_name = item.name if item else "Item"
-        item_stack = getattr(item, 'stack_count', None) if item else None
-        use_sources.append((use_template, item_uuid, item_name, item_stack))
-    for obj_uuid, obj_pos in entity.senses.objects.items():
-        obj = BaseBlock.get(obj_uuid)
-        if not isinstance(obj, UsableItem):
-            continue
-        if entity.senses.get_feet_distance(obj_pos) > 5:
-            continue
-        for use_template in obj.get_use_actions(entity.uuid):
-            use_sources.append((use_template, obj_uuid, obj.name, None))
-    timings["use_actions_discovery"] = (time.perf_counter() - t0) * 1000
-
-    t_use_self = 0.0
-    t_use_entity = 0.0
-    t_use_aoe = 0.0
-    t_use_pos_los = 0.0
-    t_use_pos_path = 0.0
-
-    for use_template, item_uuid, item_name, item_stack in use_sources:
-        base_name = use_template.name or "Use"
-        template_name = f"{base_name}__item_{item_uuid}"
-        stack_suffix = f" x{item_stack}" if item_stack and item_stack > 1 else ""
-        display_name = f"{base_name} ({item_name}{stack_suffix})"
-        stack_count_field = item_stack if item_stack and item_stack > 1 else None
-        can_afford = use_template.check_costs()
-        cost_type = use_template.costs[0].cost_type if use_template.costs else "actions"
-        cost_amount = use_template.costs[0].cost if use_template.costs else 0
-
-        if use_template.target_type == TargetType.SELF:
-            t_s = time.perf_counter()
-            if use_template.pre_validate():
-                result.self_actions.append(AvailableActionInfo(
-                    template_name=template_name, target_type=TargetType.SELF,
-                    valid_targets=[AvailableTarget(index=0)], can_afford=can_afford,
-                    display_name=display_name, description=use_template.description,
-                    cost_type=cost_type, cost_amount=cost_amount,
-                    is_item_use=True, source_item_uuid=item_uuid,
-                    action_category=use_template.action_category,
-                    item_stack_count=stack_count_field,
-                ))
-            t_use_self += (time.perf_counter() - t_s) * 1000
-
-        elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
-            t_s = time.perf_counter()
-            use_valid_targets: list = []
-            use_idx = 0
-            use_target_pool = dict(potential_targets)
-            if use_template.include_self:
-                use_target_pool[entity.uuid] = entity.position
-            for target_uuid, target_pos in use_target_pool.items():
-                use_template.set_target_entity(target_uuid)
-                if use_template.pre_validate():
-                    target_entity = Entity.get(target_uuid)
-                    use_valid_targets.append(AvailableTarget(
-                        index=use_idx, target_uuid=target_uuid,
-                        target_name=target_entity.name if target_entity else None,
-                        distance=entity.senses.get_feet_distance(target_pos)
-                    ))
-                    use_idx += 1
-            if use_valid_targets:
-                result.entity_actions.append(AvailableActionInfo(
-                    template_name=template_name, target_type=use_template.target_type,
-                    valid_targets=use_valid_targets, can_afford=can_afford,
-                    display_name=display_name, description=use_template.description,
-                    cost_type=cost_type, cost_amount=cost_amount,
-                    is_item_use=True, source_item_uuid=item_uuid,
-                    action_category=use_template.action_category,
-                    item_stack_count=stack_count_field,
-                ))
-            t_use_entity += (time.perf_counter() - t_s) * 1000
-
-        elif use_template.target_type == TargetType.POSITION_AOE:
-            t_s = time.perf_counter()
-            use_shape_template = use_template.aoe_shape
-            if use_shape_template is None:
-                continue
-
-            spell_name = f"{base_name}__item"
-            spell_t_item: Dict[str, Any] = {"get_valid_positions": 0.0, "pre_validate": 0.0,
-                                             "compute_subjective": 0.0, "filtering": 0.0,
-                                             "total": 0.0, "n_positions": 0, "n_valid": 0}
-            item_spell_start = time.perf_counter()
-
-            t_gvp = time.perf_counter()
-            use_valid_pos_list = use_template.get_valid_positions()
-            spell_t_item["get_valid_positions"] = (time.perf_counter() - t_gvp) * 1000
-            spell_t_item["n_positions"] = len(use_valid_pos_list)
-
-            use_valid_positions: list = []
-            use_idx = 0
-            item_pv = 0.0
-            item_cs = 0.0
-            item_filt = 0.0
-
-            for pos in use_valid_pos_list:
-                t_pv = time.perf_counter()
-                use_template.set_target_position(pos)
-                passed = use_template.pre_validate()
-                item_pv += (time.perf_counter() - t_pv) * 1000
-
-                if not passed:
-                    continue
-
-                t_cs = time.perf_counter()
-                shape = use_shape_template.model_copy(update={'target': pos})
-                shape.compute_subjective(entity.position, entity.senses)
-                item_cs += (time.perf_counter() - t_cs) * 1000
-
-                t_filt = time.perf_counter()
-                affected_uuids = list(shape.affected_entity_uuids)
-                if not use_template.include_self:
-                    affected_uuids = [uid for uid in affected_uuids if uid != entity.uuid]
-                vtf = use_template.valid_target_filter
-                if vtf != "all":
-                    filtered = []
-                    for uid in affected_uuids:
-                        ent = Entity.get(uid)
-                        if ent:
-                            if vtf == "enemies" and entity.is_enemy(ent):
-                                filtered.append(uid)
-                            elif vtf == "allies" and entity.is_ally(ent):
-                                filtered.append(uid)
-                            elif vtf == "self_or_allies":
-                                if uid == entity.uuid or entity.is_ally(ent):
-                                    filtered.append(uid)
-                    affected_uuids = filtered
-                if not use_template.include_dead and not include_dead:
-                    affected_uuids = [
-                        uid for uid in affected_uuids
-                        if (ent := Entity.get(uid)) and ent.has_hp
-                    ]
-                affected_names = []
-                for uid in affected_uuids:
-                    ent = Entity.get(uid)
-                    if ent:
-                        affected_names.append(ent.name or "Unknown")
-                item_filt += (time.perf_counter() - t_filt) * 1000
-
-                use_valid_positions.append(AvailableTarget(
-                    index=use_idx, position=pos,
-                    distance=entity.senses.get_feet_distance(pos),
-                    affected_entity_uuids=affected_uuids,
-                    affected_entity_names=affected_names,
-                    affected_count=len(affected_uuids),
-                    affected_positions=list(shape.affected_positions)
-                ))
-                use_idx += 1
-
-            spell_t_item["pre_validate"] = item_pv
-            spell_t_item["compute_subjective"] = item_cs
-            spell_t_item["filtering"] = item_filt
-            spell_t_item["n_valid"] = len(use_valid_positions)
-            spell_t_item["total"] = (time.perf_counter() - item_spell_start) * 1000
-            aoe_details[f"[item] {base_name}"] = spell_t_item
-
-            if use_valid_positions:
-                result.position_actions.append(AvailableActionInfo(
-                    template_name=template_name, target_type=TargetType.POSITION_AOE,
-                    valid_targets=use_valid_positions, can_afford=can_afford,
-                    display_name=display_name, description=use_template.description,
-                    cost_type=cost_type, cost_amount=cost_amount,
-                    is_item_use=True, source_item_uuid=item_uuid,
-                    action_category=use_template.action_category,
-                    item_stack_count=stack_count_field,
-                ))
-            t_use_aoe += (time.perf_counter() - t_s) * 1000
-
-        elif use_template.target_type == TargetType.POSITION_LOS:
-            t_s = time.perf_counter()
-            use_valid_pos_list = use_template.get_valid_positions()
-            use_valid_positions = []
-            use_idx = 0
-            for pos in use_valid_pos_list:
-                use_template.set_target_position(pos)
-                if use_template.pre_validate():
-                    use_valid_positions.append(AvailableTarget(
-                        index=use_idx, position=pos,
-                        distance=entity.senses.get_feet_distance(pos),
-                    ))
-                    use_idx += 1
-            if use_valid_positions:
-                result.position_actions.append(AvailableActionInfo(
-                    template_name=template_name, target_type=TargetType.POSITION_LOS,
-                    valid_targets=use_valid_positions, can_afford=can_afford,
-                    display_name=display_name, description=use_template.description,
-                    cost_type=cost_type, cost_amount=cost_amount,
-                    is_item_use=True, source_item_uuid=item_uuid,
-                    action_category=use_template.action_category,
-                    item_stack_count=stack_count_field,
-                ))
-            t_use_pos_los += (time.perf_counter() - t_s) * 1000
-
-    timings["use_self"] = t_use_self
-    timings["use_entity"] = t_use_entity
-    timings["use_aoe"] = t_use_aoe
-    timings["use_position_los"] = t_use_pos_los
-    timings["use_position_path"] = t_use_pos_path
-
-    timings["total"] = (time.perf_counter() - t_total_start) * 1000
-    timings["_aoe_details"] = aoe_details  # type: ignore[assignment]
-
-    return result, timings
-
-
-def print_instrumented(timings: Dict[str, Any]) -> None:
-    """Print the phase breakdown from instrumented_get_available_actions."""
-    total = timings["total"]
-    print(f"\n  --- Phase Breakdown (total: {total:.1f}ms) ---")
-
-    phases = [
-        ("self_actions", "Self actions"),
-        ("entity_actions", "Entity actions"),
-        ("paths_refresh", "Paths refresh"),
-        ("position_path", "Position/path (Move)"),
-        ("position_los", "Position/LOS (Jump)"),
-        ("aoe_registered", "AoE registered spells"),
-        ("object_actions", "Object actions"),
-        ("use_actions_discovery", "Use actions discovery"),
-        ("use_self", "Use self actions"),
-        ("use_entity", "Use entity actions"),
-        ("use_aoe", "Use AoE (scroll spells)"),
-        ("use_position_los", "Use position/LOS"),
-    ]
-    for key, label in phases:
-        val = timings.get(key, 0.0)
-        pct = val / total * 100 if total > 0 else 0
-        if val >= 0.1:
-            print(f"  {label:<30} {val:>8.1f}ms  ({pct:>5.1f}%)")
-
-    # AoE per-spell details
-    aoe_details = timings.get("_aoe_details", {})
-    if aoe_details:
-        print(f"\n  --- AoE Per-Spell Breakdown ---")
-        print(f"  {'Spell':<25} {'Pos':>5} {'Valid':>5} {'GVP':>7} {'PreVal':>8} {'CompSub':>8} {'Filt':>6} {'Total':>8}")
-        for spell_name, d in aoe_details.items():
-            print(f"  {spell_name:<25} {d['n_positions']:>5} {d['n_valid']:>5} "
-                  f"{d['get_valid_positions']:>6.1f} {d['pre_validate']:>7.1f} "
-                  f"{d['compute_subjective']:>7.1f} {d['filtering']:>5.1f} {d['total']:>7.1f}")
+        # Non-FOV overhead (geometry + filtering + model_copy)
+        non_fov_ms = total_cs_ms - total_fov_ms
+        print(f"\n  Non-FOV overhead: {non_fov_ms:.1f}ms "
+              f"({non_fov_ms / len(self.cs_calls):.3f}ms avg per call)")
 
 
 # ──────────────────────────────────────────────────────────────────────
 # Main Test
 # ──────────────────────────────────────────────────────────────────────
+
+def run_profiled(hero: Entity) -> None:
+    """Run get_available_actions with AoE profiling and print report."""
+    with AoEProfiler() as profiler:
+        start = time.perf_counter()
+        result = get_available_actions(hero)
+        elapsed = (time.perf_counter() - start) * 1000
+    print(f"\n  Profiled run: {elapsed:.1f}ms")
+    profiler.print_report()
+    return result
+
 
 def main():
     print("=" * 70)
@@ -865,11 +415,7 @@ def main():
     all_timings[scenario] = times
     print_timing("get_available_actions", times)
     print_summary(summarize_result(result))
-
-    # Instrumented run for scenario 1
-    print("\n  --- Instrumented Run ---")
-    _, inst_timings = instrumented_get_available_actions(hero)
-    print_instrumented(inst_timings)
+    run_profiled(hero)
 
     # ══════════════════════════════════════════════════════════════════
     # Scenario 2: Open door, enemies visible
@@ -888,11 +434,7 @@ def main():
     all_timings[scenario] = times
     print_timing("get_available_actions", times)
     print_summary(summarize_result(result))
-
-    # Run instrumented version for detailed phase breakdown
-    print("\n  --- Instrumented Run ---")
-    _, inst_timings = instrumented_get_available_actions(hero)
-    print_instrumented(inst_timings)
+    run_profiled(hero)
 
     # ══════════════════════════════════════════════════════════════════
     # Scenario 3: Door open, hero torch OFF (dark on hero side)
@@ -931,11 +473,7 @@ def main():
     all_timings[scenario] = times
     print_timing("get_available_actions", times)
     print_summary(summarize_result(result))
-
-    # Instrumented run for scenario 4 (same as 2 but after torch cycle)
-    print("\n  --- Instrumented Run ---")
-    _, inst_timings = instrumented_get_available_actions(hero)
-    print_instrumented(inst_timings)
+    run_profiled(hero)
 
     # ══════════════════════════════════════════════════════════════════
     # Summary Table

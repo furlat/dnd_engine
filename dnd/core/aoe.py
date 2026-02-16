@@ -81,6 +81,7 @@ class AoEShape(BaseObject):
         caster_pos: Tuple[int, int],
         senses: "Senses",
         fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
+        barrier_positions: Optional[Set[Tuple[int, int]]] = None,
     ) -> "AoEShape":
         """
         Compute affected positions using caster's existing senses.
@@ -89,12 +90,18 @@ class AoEShape(BaseObject):
         at target location), we compute FOV from the origin and intersect
         with caster's FOV. This ensures preview matches actual execution.
 
+        AoE propagation uses physical barriers only (walls, closed doors) —
+        magical darkness does NOT block AoE spread per D&D 5e rules.
+
         Args:
             caster_pos: Caster's current position
             senses: Caster's Senses block with pre-computed visibility
             fov_cache: Optional cache for FOV computations keyed by (origin, radius).
                        When provided, avoids redundant compute_fov calls for the same
                        origin+radius across multiple spell positions/templates.
+            barrier_positions: Optional pre-computed set of positions that block AoE
+                       propagation. When provided, enables fast-path: if geometric
+                       shape has no barriers, skip shadowcast entirely.
 
         Returns:
             Self for chaining
@@ -107,26 +114,36 @@ class AoEShape(BaseObject):
         # If origin differs from caster, also compute origin's FOV
         # This handles cases like Fireball where explosion spreads from target
         if self.computed_origin != caster_pos:
-            cache_key = (self.computed_origin, self._get_max_radius_tiles())
-            if fov_cache is not None and cache_key in fov_cache:
-                origin_fov = fov_cache[cache_key]
+            # Compute geometric shape early for barrier fast-path check
+            geometric = self._get_positions_in_shape(self.computed_origin)
+
+            # Fast-path: no barriers in blast → geometric IS the reachable area
+            if barrier_positions is not None and not (geometric & barrier_positions):
+                origin_fov = geometric
             else:
-                grid = get_map()
-                origin_fov = set(
-                    grid.compute_fov(self.computed_origin, self._get_max_radius_tiles())
-                )
-                if fov_cache is not None:
-                    fov_cache[cache_key] = origin_fov
+                # Slow path: compute propagation FOV (walls present)
+                cache_key = (self.computed_origin, self._get_max_radius_tiles())
+                if fov_cache is not None and cache_key in fov_cache:
+                    origin_fov = fov_cache[cache_key]
+                else:
+                    grid = get_map()
+                    origin_fov = set(
+                        grid.compute_propagation_fov(
+                            self.computed_origin, self._get_max_radius_tiles()
+                        )
+                    )
+                    if fov_cache is not None:
+                        fov_cache[cache_key] = origin_fov
+
             # Preview shows intersection: what caster sees AND what origin can hit
             perceived_fov = caster_fov & origin_fov
+            self.affected_positions = geometric & perceived_fov
         else:
             perceived_fov = caster_fov
-
-        # Get geometric positions in shape
-        geometric = self._get_positions_in_shape(self.computed_origin)
-
-        # Intersection: only positions both in shape AND in perceived FOV
-        self.affected_positions = geometric & perceived_fov
+            # Get geometric positions in shape
+            geometric = self._get_positions_in_shape(self.computed_origin)
+            # Intersection: only positions both in shape AND in perceived FOV
+            self.affected_positions = geometric & perceived_fov
 
         # Find entities at affected positions
         # When origin != caster, use GridMap for fresh entity data
@@ -153,6 +170,9 @@ class AoEShape(BaseObject):
         This is more accurate (uses actual FOV from origin) but slower.
         Use for actual spell effects.
 
+        AoE propagation uses physical barriers only (walls, closed doors) —
+        magical darkness does NOT block AoE spread per D&D 5e rules.
+
         Args:
             caster_pos: Caster's current position (for determining origin)
 
@@ -162,16 +182,21 @@ class AoEShape(BaseObject):
         grid = get_map()
         self.computed_origin = self.get_origin(caster_pos)
 
-        # Compute fresh FOV from shape origin
-        fov_from_origin = set(
-            grid.compute_fov(self.computed_origin, self._get_max_radius_tiles())
-        )
-
         # Get geometric positions in shape
         geometric = self._get_positions_in_shape(self.computed_origin)
 
-        # Intersection: only positions both in shape AND visible from origin
-        self.affected_positions = geometric & fov_from_origin
+        # Fast-path: no barriers in blast → skip shadowcast
+        barriers = grid.get_barrier_positions()
+        if not (geometric & barriers):
+            self.affected_positions = geometric
+        else:
+            # Compute propagation FOV (physical barriers only, no magical darkness)
+            fov_from_origin = set(
+                grid.compute_propagation_fov(
+                    self.computed_origin, self._get_max_radius_tiles()
+                )
+            )
+            self.affected_positions = geometric & fov_from_origin
 
         # Find all entities at affected positions
         self.affected_entity_uuids = set()
