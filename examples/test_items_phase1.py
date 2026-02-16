@@ -82,7 +82,7 @@ def create_simple_item(position=None, name="Potion", pickable=True):
         value=50,
     )
     if position is not None:
-        get_map().place_object(item.uuid, position)
+        item.place_on_grid(position)
     return item
 
 
@@ -99,7 +99,7 @@ def create_breakable_item(position=None, name="Crate", hp=20):
         weight=50.0,
     )
     if position is not None:
-        get_map().place_object(item.uuid, position)
+        item.place_on_grid(position)
     return item
 
 
@@ -204,7 +204,7 @@ def test_gridmap_place_remove():
     item = BaseItem(source_entity_uuid=uuid4(), name="Key")
     item_uuid = item.uuid
 
-    grid.place_object(item_uuid, (2, 3))
+    item.place_on_grid((2, 3))
     assert grid.get_object_position(item_uuid) == (2, 3)
     assert item_uuid in grid.get_objects_at((2, 3))
 
@@ -216,7 +216,7 @@ def test_gridmap_place_remove():
 def test_gridmap_clear():
     grid = create_test_grid()
     item = BaseItem(source_entity_uuid=uuid4(), name="Gem")
-    grid.place_object(item.uuid, (1, 1))
+    item.place_on_grid((1, 1))
     grid.clear()
     assert grid.get_object_position(item.uuid) is None
 
@@ -227,7 +227,7 @@ def test_gridmap_clear():
 def test_blocking_object_walkability():
     grid = create_test_grid()
     boulder = BaseItem(source_entity_uuid=uuid4(), name="Boulder", blocks_movement=True)
-    grid.place_object(boulder.uuid, (5, 5))
+    boulder.place_on_grid((5, 5))
 
     # Position should NOT be walkable for entities
     assert grid.is_walkable_for(5, 5) is False
@@ -238,7 +238,7 @@ def test_blocking_object_walkability():
 def test_blocking_object_vision():
     grid = create_test_grid()
     wall_obj = BaseItem(source_entity_uuid=uuid4(), name="Barricade", blocks_vision_field=True)
-    grid.place_object(wall_obj.uuid, (5, 5))
+    wall_obj.place_on_grid((5, 5))
 
     assert grid.is_blocking(5, 5) is True
 
@@ -373,9 +373,9 @@ def test_lifecycle_hooks():
         def _on_destroy(self):
             self.destroyed = True
 
-    grid = create_test_grid()
+    create_test_grid()
     item = TrackingItem(source_entity_uuid=uuid4(), name="Tracked")
-    grid.place_object(item.uuid, (4, 4))
+    item.place_on_grid((4, 4))
 
     entity = create_test_entity(position=(3, 3))
     Entity.update_all_entities_senses()
@@ -513,7 +513,7 @@ def test_objects_with_conditions():
         name="Burning Item",
         allow_events_conditions=True,
     )
-    grid.place_object(item.uuid, (5, 5))
+    item.place_on_grid((5, 5))
 
     # No conditions yet
     assert len(grid.get_objects_with_conditions()) == 0

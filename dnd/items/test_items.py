@@ -976,6 +976,10 @@ class Torch(UsableItem):
             grid.remove_light_source(self._light_source_uuid)
             self._light_source_uuid = None
 
+    def _on_destroy(self) -> None:
+        """Extinguish before destruction."""
+        self.extinguish()
+
     def _on_drop(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
         """Auto-extinguish when dropped."""
         self.extinguish()

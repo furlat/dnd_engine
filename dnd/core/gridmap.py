@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
-from dnd.core.base_tiles import Tile, LightLevel
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
+from dnd.core.base_tiles import Tile
 from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint
 
 
@@ -739,6 +739,15 @@ class GridMap:
             anchor = BaseBlock.get(source.anchor_uuid)
             if anchor:
                 anchor.detach_light_source(light_uuid)
+
+    def cleanup_block_light_sources(self, block_uuid: UUID) -> None:
+        """Remove all light sources attached to a block (entity or item).
+        Called on entity death and item destruction."""
+        block = BaseBlock.get(block_uuid)
+        if block is None:
+            return
+        for light_uuid in block.get_attached_light_sources():
+            self.remove_light_source(light_uuid)
 
     def move_light_source(self, light_uuid: UUID, new_position: Tuple[int, int]) -> None:
         """Move a light source to a new position using delta computation.

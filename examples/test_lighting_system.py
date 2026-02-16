@@ -9,7 +9,8 @@ from uuid import uuid4
 
 from dnd.utils import reset_combat_state, setup_combat_arena
 from dnd.entity import Entity
-from dnd.core.base_tiles import LightLevel, SensesType, SenseMode, Tile, dark_floor_factory
+from dnd.core.base_block import LightLevel, SensesType, SenseMode
+from dnd.core.base_tiles import Tile, dark_floor_factory
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
 from dnd.monsters.bestiary import create_skeleton

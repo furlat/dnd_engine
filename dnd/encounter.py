@@ -106,7 +106,7 @@ class CombatantState(BaseObject):
         entity = self.entity
         if entity is None:
             return False
-        return entity.get_hp() > 0
+        return entity.has_hp
 
 
 class Encounter(BaseObject):
@@ -746,7 +746,7 @@ class Encounter(BaseObject):
             if entity is None:
                 continue
 
-            if entity.get_hp() <= 0:
+            if not entity.has_hp:
                 any_new_deaths = True
                 # Handle death - _handle_death checks if already handled by receive_damage
                 event = self._handle_death(combatant)

@@ -7,7 +7,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent
 from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.base_tiles import LightLevel
+from dnd.core.base_block import LightLevel
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
@@ -457,7 +457,7 @@ class Move(BaseAction):
             # - Normal completion
             # - break (step canceled, path invalid, not enough movement, death)
             # - Exception
-            # This clears _paths_dirty and gives fresh Dijkstra for subsequent actions.
+            # Full senses update: runs Dijkstra for fresh paths, resets _paths_dirty flag.
             source_entity.update_entity_senses(max_distance=20)
 
         # Determine final result
@@ -1859,26 +1859,29 @@ class Jump(BaseAction):
         if not source_entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Move to effect phase
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"Jumping to {execution_event.end_position}"
-        )
-        if effect_event.canceled:
-            return effect_event
+        try:
+            # Move to effect phase
+            effect_event = execution_event.phase_to(
+                new_phase=EventPhase.EFFECT,
+                status_message=f"Jumping to {execution_event.end_position}"
+            )
+            if effect_event.canceled:
+                return effect_event
 
-        # Teleport entity (bypasses path - that's the point of jumping!)
-        # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
-        Entity.update_entity_position(source_entity, execution_event.end_position)
+            # Teleport entity (bypasses path - that's the point of jumping!)
+            Entity.update_entity_position(source_entity, execution_event.end_position)
 
-        # Verify landing
-        if source_entity.position != execution_event.end_position:
-            return effect_event.cancel(status_message=f"Failed to land at {execution_event.end_position}")
+            # Verify landing
+            if source_entity.position != execution_event.end_position:
+                return effect_event.cancel(status_message=f"Failed to land at {execution_event.end_position}")
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message=f"Jumped to {execution_event.end_position}"
-        )
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Jumped to {execution_event.end_position}"
+            )
+        finally:
+            # Full senses update: runs Dijkstra for fresh paths, resets _paths_dirty flag.
+            source_entity.update_entity_senses(max_distance=20)
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
         """Apply the costs of the jump (bonus action + movement)."""

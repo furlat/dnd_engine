@@ -84,12 +84,12 @@ def create_test_grid():
 
 def test_door_a_discovery():
     """Closed door surfaces 'Open Door', open door surfaces 'Close Door'."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
 
     # Place closed door at (4, 3) — adjacent to entity
     door = TestDoorA(source_entity_uuid=uuid4(), position=(4, 3))
-    grid.place_object(door.uuid, (4, 3))
+    door.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     # Closed door: should surface "Open Door"
@@ -112,11 +112,11 @@ def test_door_a_discovery():
 
 def test_door_a_open_close_cycle():
     """Execute open -> close -> verify full cycle."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
 
     door = TestDoorA(source_entity_uuid=uuid4(), position=(4, 3))
-    grid.place_object(door.uuid, (4, 3))
+    door.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     # Open the door
@@ -139,11 +139,11 @@ def test_door_a_open_close_cycle():
 
 def test_door_a_blocks_movement():
     """Closed door blocks walkability, open allows."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
 
     door = TestDoorA(source_entity_uuid=uuid4(), position=(4, 3))
-    grid.place_object(door.uuid, (4, 3))
+    door.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     # Closed: blocks walking
@@ -162,7 +162,7 @@ def test_door_a_blocks_movement():
 
 def test_door_b_discovery():
     """Door always surfaces 'Interact Door' regardless of state."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
 
     door = TestDoorB(
@@ -171,7 +171,7 @@ def test_door_b_discovery():
         use_action_templates=[InteractDoorAction(
             source_entity_uuid=uuid4(), template=True)],
     )
-    grid.place_object(door.uuid, (4, 3))
+    door.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     # Should always show "Interact Door"
@@ -182,7 +182,7 @@ def test_door_b_discovery():
 
 def test_door_b_toggle():
     """Execute interact -> toggles state -> execute again -> toggles back."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
 
     door = TestDoorB(
@@ -191,7 +191,7 @@ def test_door_b_toggle():
         use_action_templates=[InteractDoorAction(
             source_entity_uuid=uuid4(), template=True)],
     )
-    grid.place_object(door.uuid, (4, 3))
+    door.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     assert not door.is_open
@@ -225,12 +225,12 @@ def test_door_b_uses_default_field():
 
 def test_door_vision_blocking():
     """Closed door blocks FOV, open allows."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
 
     # Place door between entity and target position
     door = TestDoorA(source_entity_uuid=uuid4(), position=(4, 3))
-    grid.place_object(door.uuid, (4, 3))
+    door.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     # Closed: should block vision through (4,3)
@@ -249,7 +249,7 @@ def test_door_vision_blocking():
 
 def test_lever_discovery():
     """'Pull Lever' visible near lever."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     spike_positions = {(3, 3), (3, 4)}
@@ -265,7 +265,7 @@ def test_lever_discovery():
             template=True,
         )],
     )
-    grid.place_object(lever.uuid, (5, 6))
+    lever.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
@@ -275,7 +275,7 @@ def test_lever_discovery():
 
 def test_lever_deactivates_trap():
     """Pull lever -> remove_spatial_handler, verify handler gone."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     spike_positions = {(3, 3), (3, 4)}
@@ -295,7 +295,7 @@ def test_lever_deactivates_trap():
             template=True,
         )],
     )
-    grid.place_object(lever.uuid, (5, 6))
+    lever.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
 
     # Pull lever
@@ -310,7 +310,7 @@ def test_lever_deactivates_trap():
 
 def test_lever_one_use():
     """After pulling (charges=1->0), no action available."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     spike_positions = {(3, 3)}
@@ -326,7 +326,7 @@ def test_lever_one_use():
             template=True,
         )],
     )
-    grid.place_object(lever.uuid, (5, 6))
+    lever.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
 
     # Pull lever (consumes charge)
@@ -345,7 +345,7 @@ def test_lever_one_use():
 
 def test_chest_discovery():
     """'Loot All' visible when chest has items."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     chest = StorageChest(
@@ -357,7 +357,7 @@ def test_chest_discovery():
     # Add items to chest
     sword = create_shortsword(uuid4())
     chest.chest_inventory.add_item(sword)
-    grid.place_object(chest.uuid, (6, 5))
+    chest.place_on_grid((6, 5))
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
@@ -367,7 +367,7 @@ def test_chest_discovery():
 
 def test_chest_loot_transfers():
     """Items move from chest to entity inventory."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     chest = StorageChest(
@@ -380,7 +380,7 @@ def test_chest_loot_transfers():
     potion = BaseItem(source_entity_uuid=uuid4(), name="Healing Potion")
     chest.chest_inventory.add_item(sword)
     chest.chest_inventory.add_item(potion)
-    grid.place_object(chest.uuid, (6, 5))
+    chest.place_on_grid((6, 5))
     Entity.update_all_entities_senses()
 
     assert len(chest.chest_inventory.items) == 2
@@ -398,7 +398,7 @@ def test_chest_loot_transfers():
 
 def test_empty_chest_no_action():
     """After looting, no 'Loot All' (validate fails)."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     chest = StorageChest(
@@ -409,7 +409,7 @@ def test_empty_chest_no_action():
     )
     sword = create_shortsword(uuid4())
     chest.chest_inventory.add_item(sword)
-    grid.place_object(chest.uuid, (6, 5))
+    chest.place_on_grid((6, 5))
     Entity.update_all_entities_senses()
 
     # Loot everything
@@ -437,7 +437,7 @@ def test_chest_destroy_drops_loot():
     potion = BaseItem(source_entity_uuid=uuid4(), name="Healing Potion")
     chest.chest_inventory.add_item(sword)
     chest.chest_inventory.add_item(potion)
-    grid.place_object(chest.uuid, (6, 5))
+    chest.place_on_grid((6, 5))
     Entity.update_all_entities_senses()
 
     sword_uuid = sword.uuid
@@ -459,7 +459,7 @@ def test_chest_destroy_drops_loot():
 
 def test_campfire_multiple_actions():
     """Campfire surfaces both 'Rest' and 'Cook' actions."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     campfire = UsableItem(
@@ -472,7 +472,7 @@ def test_campfire_multiple_actions():
             CookAction(source_entity_uuid=uuid4(), template=True),
         ],
     )
-    grid.place_object(campfire.uuid, (5, 6))
+    campfire.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
@@ -483,7 +483,7 @@ def test_campfire_multiple_actions():
 
 def test_campfire_execute_each():
     """Can execute each action independently."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     campfire = UsableItem(
@@ -496,7 +496,7 @@ def test_campfire_execute_each():
             CookAction(source_entity_uuid=uuid4(), template=True),
         ],
     )
-    grid.place_object(campfire.uuid, (5, 6))
+    campfire.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
 
     # Damage entity first so heal has effect
@@ -524,11 +524,11 @@ def test_campfire_execute_each():
 
 def test_out_of_range():
     """Entity >5ft from object sees no use actions."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(0, 0))
 
     door = TestDoorA(source_entity_uuid=uuid4(), position=(8, 8))
-    grid.place_object(door.uuid, (8, 8))
+    door.place_on_grid((8, 8))
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
@@ -538,11 +538,11 @@ def test_out_of_range():
 
 def test_non_usable_ignored():
     """Regular BaseItem on floor generates no use actions."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(3, 3))
 
     item = BaseItem(source_entity_uuid=uuid4(), name="Rock", is_pickable=False)
-    grid.place_object(item.uuid, (4, 3))
+    item.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
     result = entity.get_available_actions()
@@ -552,7 +552,7 @@ def test_non_usable_ignored():
 
 def test_charges_system():
     """Verify charges decrement, depleted returns no actions."""
-    grid = create_test_grid()
+    create_test_grid()
     entity = create_test_entity(position=(5, 5))
 
     # Item with 2 charges
@@ -567,7 +567,7 @@ def test_charges_system():
             RestAction(source_entity_uuid=uuid4(), template=True),
         ],
     )
-    grid.place_object(campfire.uuid, (5, 6))
+    campfire.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
 
     assert campfire.charges == 2

@@ -6,53 +6,16 @@ As a BaseBlock, tiles can have conditions attached (fire, traps, difficult terra
 
 GridMap handles all spatial computation (FOV, pathfinding).
 Tiles are stored in GridMap and provide the data/state for each cell.
-
-Also defines LightLevel, SensesType, and SenseMode — tile-level types used by
-the lighting and vision systems. These live here (not in sensory.py) to avoid
-circular imports: base_tiles -> sensory -> entity is fine, reverse is not.
 """
 
 import math
-from enum import Enum
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, PrivateAttr
-from dnd.core.base_block import BaseBlock, MovementMode
+from pydantic import Field, PrivateAttr
+from dnd.core.base_block import BaseBlock, MovementMode, LightLevel, SensesType
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.events import SpatialChangeEvent, EventQueue, EventPhase
-
-
-# =========================================================================
-# Light Level
-# =========================================================================
-
-class LightLevel(int, Enum):
-    """Light levels for tiles. Int values are for ordering comparisons only.
-    Darkvision shifting uses explicit mapping (NOT arithmetic)."""
-    MAGICAL_DARKNESS = 0   # Darkness spell - darkvision blocked
-    DARKNESS = 1           # No light at all
-    DIM_LIGHT = 2          # Shadows, edge of torchlight
-    BRIGHT_LIGHT = 3       # Normal daylight, close to torch
-    VERY_BRIGHT = 4        # Intense sunlight, Daylight spell
-
-
-# =========================================================================
-# Sense Types (moved from sensory.py to avoid circular imports)
-# =========================================================================
-
-class SensesType(str, Enum):
-    BLINDSIGHT = "Blindsight"
-    DARKVISION = "Darkvision"
-    TREMORSENSE = "Tremorsense"
-    TRUESIGHT = "Truesight"
-    DEVILS_SIGHT = "Devils Sight"
-
-
-class SenseMode(BaseModel):
-    """A sense type with its effective range in feet. 0 = unlimited."""
-    sense_type: SensesType
-    range_feet: int = 0
 
 
 # =========================================================================
@@ -183,7 +146,7 @@ class Tile(BaseBlock):
 
     def blocks_vision(self, requesting_entity_uuid: Optional['UUID'] = None) -> bool:
         """A tile blocks vision if it is not visible (e.g., walls).
-        Magical darkness also blocks vision unless observer has TRUESIGHT or DEVILS_SIGHT."""
+        Magical darkness also blocks vision unless observer can pierce it."""
         if not self.visible:
             return True  # Wall
         # Magical darkness blocks vision unless observer can pierce it
@@ -191,12 +154,7 @@ class Tile(BaseBlock):
             if requesting_entity_uuid is None:
                 return True
             observer = BaseBlock.get(requesting_entity_uuid)
-            if observer is None:
-                return True
-            sense_modes: list = observer.get_sense_modes()
-            if not any(sm.sense_type in (SensesType.TRUESIGHT, SensesType.DEVILS_SIGHT)
-                       for sm in sense_modes):
-                return True
+            return observer is None or not observer.can_pierce_magical_darkness()
         return False
 
     # =========================================================================

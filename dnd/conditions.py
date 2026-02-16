@@ -9,7 +9,7 @@ from dnd.core.modifiers import (  AdvantageModifier, ContextAwareAdvantage,
                                    ContextualCriticalModifier, CriticalModifier, CriticalStatus,
                                    ContextAwareNumerical, ContextAwareAutoHit, ContextualAutoHitModifier, ContextualAdvantageModifier)
 from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiring_hearing, skills_social
-from dnd.core.base_tiles import SensesType, LightLevel
+from dnd.core.base_block import SensesType, LightLevel
 from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
@@ -912,6 +912,10 @@ class Dead(BaseCondition):
             )
             if sub_conditions_application_event is not None and sub_conditions_application_event.phase == EventPhase.COMPLETION:
                 sub_conditions_uuids.append(incapacitated_condition.uuid)
+
+            # Clean up any light sources attached to the dead entity
+            grid = get_map()
+            grid.cleanup_block_light_sources(self.target_entity_uuid)
 
             effect_event = execution_event.phase_to(
                 EventPhase.EFFECT,

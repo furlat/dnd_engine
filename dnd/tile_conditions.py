@@ -20,7 +20,8 @@ Event Handling:
 import re
 from typing import List, Optional, Tuple, Type, Set, Dict
 
-from dnd.core.base_tiles import Tile, LightLevel
+from dnd.core.base_block import LightLevel
+from dnd.core.base_tiles import Tile
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
 
