@@ -42,7 +42,9 @@
       "Bash(for f in examples/test_difficult_terrain.py examples/test_entity_blocking.py examples/test_condition_removal_system.py examples/test_terrain_movement_system.py examples/test_reactive_senses.py examples/test_event_serialization.py examples/test_cloudkill.py examples/test_grease.py examples/test_web.py examples/test_spirit_guardians.py)",
       "Bash(for f in examples/test_new_spells.py examples/test_items_equip_hooks.py examples/test_items_lifecycle_hooks.py examples/test_items_phase1_advanced.py examples/test_items_phase1.py examples/test_stackable_items.py examples/test_usable_items.py examples/test_inventory_use_actions.py examples/test_concentration.py examples/test_spike_zone.py)",
       "Bash(for f in examples/test_concentration_spells.py examples/test_intercept_dodge_roll.py examples/test_light_source_perf.py examples/test_stealth_system.py examples/test_lighting_system.py examples/test_tile_condition_duration.py examples/test_spell_system.py)",
-      "Bash(.venv/bin/pyright:*)"
+      "Bash(.venv/bin/pyright:*)",
+      "WebSearch",
+      "Bash(kill:*)"
     ]
   }
 }
