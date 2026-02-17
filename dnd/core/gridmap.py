@@ -16,6 +16,7 @@ from collections import defaultdict
 
 from pydantic import BaseModel, Field
 
+from dnd.core.geometry import circle_positions
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
@@ -1032,6 +1033,23 @@ class GridMap:
 
             source.affected_tiles = new_affected
             self._fire_light_batch_events(changed_positions)
+
+    # =========================================================================
+    # AoE Prefilter
+    # =========================================================================
+
+    def get_positions_near_entities(
+        self, entity_positions: Set[Tuple[int, int]], radius: int
+    ) -> Set[Tuple[int, int]]:
+        """Union of all positions within radius tiles of any entity position.
+
+        Used by AoE prefilter to skip shape computation at positions that
+        can't possibly hit any entity.
+        """
+        candidates: Set[Tuple[int, int]] = set()
+        for ent_pos in entity_positions:
+            candidates |= circle_positions(ent_pos, radius)
+        return candidates
 
     # =========================================================================
     # AoE Propagation (physical barriers only, ignores magical darkness)

@@ -35,13 +35,14 @@ def circle_positions(
     """
     positions: Set[Tuple[int, int]] = set()
     cx, cy = center
+    r_sq = radius * radius
 
     for dx in range(-radius, radius + 1):
-        for dy in range(-radius, radius + 1):
-            if dx * dx + dy * dy <= radius * radius:
-                if dx == 0 and dy == 0 and not include_center:
-                    continue
-                positions.add((cx + dx, cy + dy))
+        max_dy = int((r_sq - dx * dx) ** 0.5)
+        for dy in range(-max_dy, max_dy + 1):
+            if dx == 0 and dy == 0 and not include_center:
+                continue
+            positions.add((cx + dx, cy + dy))
 
     return positions
 
