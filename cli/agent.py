@@ -7,7 +7,9 @@ enabling Claude Code to play the game by issuing commands.
 Updated to use session-based authentication.
 
 Usage:
+    python -m cli.agent [--token TOKEN] <command> [args]
     python -m cli.agent connect              # Connect to game (creates session, joins)
+    python -m cli.agent --token hero move X Y  # Multi-session with token
     python -m cli.agent state                # Show game state (map, entities, turn)
     python -m cli.agent actions              # Show available actions
     python -m cli.agent move X Y             # Move to position
@@ -125,6 +127,20 @@ def show_combat_log(entries: List[dict], label: str = "LOG") -> None:
     for entry in entries:
         for line in format_combat_log_entry(entry):
             print(f"  [{label}] {line}")
+
+
+def show_action_result_status(result: dict) -> None:
+    """Show deaths and encounter-end status from an action result."""
+    deaths = result.get("deaths", [])
+    if deaths:
+        for name in deaths:
+            print(f"  >>> {name} DIED <<<")
+    if result.get("encounter_ended", False):
+        print("")
+        print("=" * 40)
+        print("  ENCOUNTER ENDED — game over!")
+        print("=" * 40)
+        print("  Run `end` to finish your turn.")
 
 
 def get_my_entity(client: APIClient) -> Optional[dict]:
@@ -320,7 +336,7 @@ def format_actions(actions: dict, entity_name: str) -> str:
         lines.append(f"  {spell_tag}{display_name}: {len(valid_targets)} positions ({cost_label}) - {status}")
 
         if valid_targets and can_afford:
-            # For AoE spells, show positions with hit counts
+            # For AoE spells, show positions with hit counts and affected names
             if is_spell:
                 # Show best targets first (most affected), then rest
                 sorted_targets = sorted(valid_targets, key=lambda t: t.get("affected_count", 0), reverse=True)
@@ -328,7 +344,10 @@ def format_actions(actions: dict, entity_name: str) -> str:
                 for t in sorted_targets:
                     pos = t.get("position", [0, 0])
                     count = t.get("affected_count", 0)
-                    if count:
+                    names = t.get("affected_entity_names", [])
+                    if count and names:
+                        parts.append(f"({pos[0]},{pos[1]}) hits {count}: {', '.join(names)}")
+                    elif count:
                         parts.append(f"({pos[0]},{pos[1]}) hits {count}")
                     else:
                         parts.append(f"({pos[0]},{pos[1]})")
@@ -645,6 +664,7 @@ def cmd_move(client: APIClient, x: int, y: int) -> int:
         end_pos = event_data.get("end", [x, y])
         print(f"OK: Moved to ({end_pos[0]},{end_pos[1]})")
         show_combat_log(result.get("combat_log_entries", []))
+        show_action_result_status(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -711,6 +731,7 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
                 end_pos = event_data.get("end_position", event_data.get("end", [x, y]))
                 print(f"OK: {action_name} to ({end_pos[0]},{end_pos[1]})")
                 show_combat_log(result.get("combat_log_entries", []))
+                show_action_result_status(result)
             else:
                 message = result.get("message", "Unknown error")
                 print(f"ERROR: {message}")
@@ -777,6 +798,7 @@ def cmd_attack(client: APIClient, target_index: int) -> int:
     if success:
         print(f"OK: Attack vs {target_name}")
         show_combat_log(result.get("combat_log_entries", []))
+        show_action_result_status(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -885,6 +907,7 @@ def cmd_self_action(client: APIClient, action_name: str) -> int:
     if success:
         print(f"OK: {match.get('display_name', action_name)}")
         show_combat_log(result.get("combat_log_entries", []))
+        show_action_result_status(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -973,6 +996,7 @@ def cmd_use(client: APIClient, target_arg: str) -> int:
         target_name = valid_targets[0].get("target_name", "object")
         print(f"OK: {action.get('display_name', '?')} -> {target_name}")
         show_combat_log(result.get("combat_log_entries", []))
+        show_action_result_status(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -1158,6 +1182,7 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
     if success:
         print(f"OK: {spell_display}")
         show_combat_log(result.get("combat_log_entries", []))
+        show_action_result_status(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -1354,6 +1379,16 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
 
 
 def main():
+    global SESSION_FILE
+
+    # Parse --token flag (must come before command)
+    # Usage: python -m cli.agent --token hero move 5 3
+    if len(sys.argv) > 2 and sys.argv[1] == "--token":
+        token = sys.argv[2]
+        SESSION_FILE = f"/tmp/dnd_game/{token}_session.txt"
+        # Remove --token <value> from argv so command parsing works unchanged
+        sys.argv = [sys.argv[0]] + sys.argv[3:]
+
     # Position-based commands that route to cmd_position_action
     POSITION_COMMANDS = ["move", "jump"]
 
