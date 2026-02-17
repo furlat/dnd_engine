@@ -518,7 +518,7 @@ def render_map_content(
     # Top border
     result.append("  +" + "-" * ((max_x - min_x + 1) * 2 + 1) + "+\n")
 
-    for y in range(max_y, min_y - 1, -1):
+    for y in range(min_y, max_y + 1):
         result.append(f"{y:2}|")
         for x in range(min_x, max_x + 1):
             pos = (x, y)
