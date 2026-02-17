@@ -22,6 +22,10 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     if reaction_source_entity.uuid == event_source_entity.uuid:
         return event
 
+    # Can't OA allies
+    if reaction_source_entity.is_ally(event_source_entity):
+        return event
+
     # Disengage action prevents opportunity attacks
     if "Disengaging" in event_source_entity.active_conditions:
         return event
