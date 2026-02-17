@@ -1387,13 +1387,17 @@ async def get_entity_available_actions(entity_uuid: str):
     # Cache for execute endpoint
     _available_actions_cache[entity_uuid] = actions
 
+    ae = entity.action_economy
     return {
         "entity_uuid": str(actions.entity_uuid),
         "entity_actions": [serialize_action(a) for a in actions.entity_actions],
         "position_actions": [serialize_action(a) for a in actions.position_actions],
         "self_actions": [serialize_action(a) for a in actions.self_actions],
         "object_actions": [serialize_action(a) for a in actions.object_actions],
-        "remaining_movement": actions.remaining_movement
+        "remaining_movement": actions.remaining_movement,
+        "actions_remaining": ae.actions.normalized_score,
+        "bonus_actions_remaining": ae.bonus_actions.normalized_score,
+        "reactions_remaining": ae.reactions.normalized_score,
     }
 
 
