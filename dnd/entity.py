@@ -1920,6 +1920,611 @@ class Entity(BaseBlock):
         """Actions that target objects on the grid (Pick Up, Attack Object)."""
         return [a for a in self.registered_actions if a.target_type == TargetType.OBJECT]
 
+    # =========================================================================
+    # get_available_actions helpers (private)
+    # =========================================================================
+
+    def _make_action_info(
+        self,
+        template_name: str,
+        target_type: TargetType,
+        valid_targets: List[AvailableTarget],
+        can_afford: bool,
+        template: BaseAction,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        weapon_slot: Optional[str] = None,
+        weapon_name: Optional[str] = None,
+        is_item_use: bool = False,
+        source_item_uuid: Optional[UUID] = None,
+        item_stack_count: Optional[int] = None,
+    ) -> AvailableActionInfo:
+        """Build an AvailableActionInfo, extracting cost from template."""
+        cost_type = template.costs[0].cost_type if template.costs else "actions"
+        cost_amount = template.costs[0].cost if template.costs else 0
+        return AvailableActionInfo(
+            template_name=template_name,
+            target_type=target_type,
+            valid_targets=valid_targets,
+            can_afford=can_afford,
+            display_name=display_name or template_name,
+            description=description if description is not None else template.description,
+            cost_type=cost_type,
+            cost_amount=cost_amount,
+            weapon_slot=weapon_slot,
+            weapon_name=weapon_name,
+            action_category=template.action_category,
+            is_item_use=is_item_use,
+            source_item_uuid=source_item_uuid,
+            item_stack_count=item_stack_count,
+        )
+
+    def _compute_target_pool(
+        self,
+        action_filter: str,
+        include_dead: bool,
+        include_self: bool,
+        default_pool: Dict[UUID, Tuple[int, int]],
+    ) -> Dict[UUID, Tuple[int, int]]:
+        """Compute entity target pool based on valid_target_filter.
+
+        Fixes two bugs in the old code:
+        1. "allies" filter was unreachable dead code (fell through to default_pool)
+        2. Use-template entity actions ignored valid_target_filter entirely
+        """
+        if action_filter == "all":
+            pool: Dict[UUID, Tuple[int, int]] = {}
+            for k, v in self.senses.entities.items():
+                if k == self.uuid:
+                    continue
+                if not include_dead:
+                    other = Entity.get(k)
+                    if other and not other.has_hp:
+                        continue
+                pool[k] = v
+        elif action_filter in ("allies", "self_or_allies"):
+            pool = dict(self.get_visible_allies(include_dead=include_dead))
+        else:
+            pool = dict(default_pool)
+
+        if include_self:
+            pool[self.uuid] = self.position
+        return pool
+
+    def _validate_entity_targets(
+        self,
+        template: BaseAction,
+        target_pool: Dict[UUID, Tuple[int, int]],
+    ) -> List[AvailableTarget]:
+        """Validate each candidate in target_pool against template.pre_validate()."""
+        valid_targets: List[AvailableTarget] = []
+        idx = 0
+        for target_uuid, target_pos in target_pool.items():
+            template.set_target_entity(target_uuid)
+            if template.pre_validate():
+                target_entity = Entity.get(target_uuid)
+                valid_targets.append(AvailableTarget(
+                    index=idx,
+                    target_uuid=target_uuid,
+                    target_name=target_entity.name if target_entity else None,
+                    distance=self.senses.get_feet_distance(target_pos)
+                ))
+                idx += 1
+        return valid_targets
+
+    def _compute_aoe_at_position(
+        self,
+        shape_template: Any,
+        pos: Tuple[int, int],
+        template: BaseAction,
+        include_dead: bool,
+        fov_cache: dict,
+        barrier_positions: Set[Tuple[int, int]],
+        idx: int,
+    ) -> Optional[AvailableTarget]:
+        """Compute AoE shape at a position and return AvailableTarget or None."""
+        shape = shape_template.model_copy(update={'target': pos})
+        shape.compute_subjective(
+            self.position, self.senses,
+            fov_cache=fov_cache, barrier_positions=barrier_positions
+        )
+
+        affected_uuids = list(shape.affected_entity_uuids)
+
+        # Apply include_self filter
+        if not template.include_self:
+            affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
+
+        # Apply valid_target_filter
+        vtf = template.valid_target_filter
+        if vtf != "all":
+            filtered = []
+            for uid in affected_uuids:
+                ent = Entity.get(uid)
+                if ent:
+                    if vtf == "enemies" and self.is_enemy(ent):
+                        filtered.append(uid)
+                    elif vtf == "allies" and self.is_ally(ent):
+                        filtered.append(uid)
+                    elif vtf == "self_or_allies":
+                        if uid == self.uuid or self.is_ally(ent):
+                            filtered.append(uid)
+            affected_uuids = filtered
+
+        # Filter dead entities
+        template_include_dead = template.include_dead
+        if not template_include_dead and not include_dead:
+            affected_uuids = [
+                uid for uid in affected_uuids
+                if (ent := Entity.get(uid)) and ent.has_hp
+            ]
+
+        # No targets check
+        if not affected_uuids and template.aoe_require_targets:
+            return None
+
+        # Build names
+        affected_names = []
+        for uid in affected_uuids:
+            ent = Entity.get(uid)
+            if ent:
+                affected_names.append(ent.name or "Unknown")
+
+        return AvailableTarget(
+            index=idx,
+            position=pos,
+            distance=self.senses.get_feet_distance(pos),
+            affected_entity_uuids=affected_uuids,
+            affected_entity_names=affected_names,
+            affected_count=len(affected_uuids),
+            affected_positions=list(shape.affected_positions)
+        )
+
+    # =========================================================================
+    # get_available_actions section collectors (private)
+    # =========================================================================
+
+    def _collect_self_actions(self) -> List[AvailableActionInfo]:
+        """Collect SELF-targeting actions (Dash, Dodge, etc.)."""
+        actions: List[AvailableActionInfo] = []
+        for template in self.self_actions:
+            template_name = template.name or "Unknown"
+            can_afford = template.check_costs()
+            is_valid = can_afford and template.pre_validate()
+            if is_valid or not can_afford:
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.SELF,
+                    valid_targets=[AvailableTarget(index=0)] if is_valid else [],
+                    can_afford=can_afford,
+                    template=template,
+                ))
+        return actions
+
+    def _collect_entity_actions(
+        self,
+        potential_targets: Dict[UUID, Tuple[int, int]],
+        include_dead: bool,
+    ) -> List[AvailableActionInfo]:
+        """Collect ENTITY-targeting actions (Attack, targeted spells)."""
+        actions: List[AvailableActionInfo] = []
+        for template in self.entity_actions:
+            target_pool = self._compute_target_pool(
+                template.valid_target_filter, include_dead,
+                template.include_self, potential_targets
+            )
+            valid_targets = self._validate_entity_targets(template, target_pool)
+
+            if valid_targets:
+                template_name = template.name or "Unknown"
+
+                # Extract weapon info for attacks
+                weapon_name: Optional[str] = None
+                weapon_slot_str: Optional[str] = None
+                display_name = template_name
+
+                weapon_slot_attr = getattr(template, 'weapon_slot', None)
+                if weapon_slot_attr is not None:
+                    weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
+                    weapon = self.equipment._get_weapon_by_slot(weapon_slot_attr)
+                    if weapon:
+                        weapon_name = weapon.name
+                        display_name = weapon_name
+
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=template.target_type,
+                    valid_targets=valid_targets,
+                    can_afford=template.check_costs(),
+                    template=template,
+                    display_name=display_name,
+                    weapon_slot=weapon_slot_str,
+                    weapon_name=weapon_name,
+                ))
+        return actions
+
+    def _collect_path_actions(self, remaining_movement: int) -> List[AvailableActionInfo]:
+        """Collect POSITION_PATH actions (Move)."""
+        actions: List[AvailableActionInfo] = []
+        for template in self.position_actions:
+            if template.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
+                continue
+            valid_positions: List[AvailableTarget] = []
+            idx = 0
+            for pos, _ in self.senses.paths.items():
+                if pos == self.senses.position:
+                    continue
+                template.set_target_position(pos)
+                if template.pre_validate():
+                    path_cost = 0
+                    for cost in template.costs:
+                        if cost.cost_type == "movement":
+                            path_cost = cost.cost
+                            break
+                    valid_positions.append(AvailableTarget(
+                        index=idx,
+                        position=pos,
+                        distance=self.senses.get_feet_distance(pos),
+                        path_cost=path_cost
+                    ))
+                    idx += 1
+
+            if valid_positions:
+                template_name = template.name or "Unknown"
+                actions.append(AvailableActionInfo(
+                    template_name=template_name,
+                    target_type=template.target_type,
+                    valid_targets=valid_positions,
+                    can_afford=True,
+                    display_name=template_name,
+                    description=f"{remaining_movement}ft remaining",
+                    cost_type="movement",
+                    cost_amount=0,
+                    action_category=template.action_category,
+                ))
+        return actions
+
+    def _collect_los_actions(self) -> List[AvailableActionInfo]:
+        """Collect POSITION_LOS actions (Jump, Teleport)."""
+        actions: List[AvailableActionInfo] = []
+        for template in self.position_actions:
+            if template.target_type != TargetType.POSITION_LOS:
+                continue
+            valid_pos_list = template.get_valid_positions()
+            valid_positions: List[AvailableTarget] = []
+            idx = 0
+            for pos in valid_pos_list:
+                template.set_target_position(pos)
+                if template.pre_validate():
+                    valid_positions.append(AvailableTarget(
+                        index=idx,
+                        position=pos,
+                        distance=self.senses.get_feet_distance(pos),
+                        path_cost=None
+                    ))
+                    idx += 1
+
+            if valid_positions:
+                template_name = template.name or "Unknown"
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_LOS,
+                    valid_targets=valid_positions,
+                    can_afford=template.check_costs(),
+                    template=template,
+                ))
+        return actions
+
+    def _collect_aoe_actions(
+        self,
+        include_dead: bool,
+        fov_cache: dict,
+        barrier_positions: Set[Tuple[int, int]],
+    ) -> List[AvailableActionInfo]:
+        """Collect POSITION_AOE actions with entity-proximity prefilter."""
+        actions: List[AvailableActionInfo] = []
+        grid = get_map()
+
+        # Pre-compute entity positions for prefilter
+        entity_positions: Set[Tuple[int, int]] = set()
+        for uid, pos in self.senses.entities.items():
+            if uid == self.uuid:
+                continue
+            entity_positions.add(pos)
+
+        for template in self.position_actions:
+            if template.target_type != TargetType.POSITION_AOE:
+                continue
+
+            shape_template = template.aoe_shape
+            if shape_template is None:
+                continue
+
+            can_afford = template.check_costs()
+            template_name = template.name or "Unknown"
+
+            if not can_afford:
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_AOE,
+                    valid_targets=[],
+                    can_afford=False,
+                    template=template,
+                ))
+                continue
+
+            valid_pos_list = template.get_valid_positions()
+
+            # AoE prefilter: skip positions that can't possibly hit any entity
+            if template.aoe_require_targets:
+                prefilter_positions = set(entity_positions)
+                if template.include_self:
+                    prefilter_positions.add(self.position)
+                if prefilter_positions:
+                    radius = shape_template._get_max_radius_tiles()
+                    candidates = grid.get_positions_near_entities(prefilter_positions, radius)
+                    valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
+                else:
+                    continue  # No entities to hit
+
+            valid_positions: List[AvailableTarget] = []
+            idx = 0
+            for pos in valid_pos_list:
+                target = self._compute_aoe_at_position(
+                    shape_template, pos, template, include_dead,
+                    fov_cache, barrier_positions, idx
+                )
+                if target is not None:
+                    valid_positions.append(target)
+                    idx += 1
+
+            if valid_positions:
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_AOE,
+                    valid_targets=valid_positions,
+                    can_afford=True,
+                    template=template,
+                ))
+        return actions
+
+    def _collect_object_actions(self) -> List[AvailableActionInfo]:
+        """Collect OBJECT-targeting actions (Pick Up, Attack Object)."""
+        actions: List[AvailableActionInfo] = []
+        for template in self.object_actions:
+            valid_targets: List[AvailableTarget] = []
+            idx = 0
+            can_afford = template.check_costs()
+
+            for obj_uuid, obj_pos in self.senses.objects.items():
+                template.set_target_entity(obj_uuid)
+                if template.pre_validate():
+                    obj_block = BaseBlock.get(obj_uuid)
+                    obj_name = obj_block.name if obj_block else "Object"
+                    distance = self.senses.get_feet_distance(obj_pos)
+                    valid_targets.append(AvailableTarget(
+                        index=idx,
+                        target_uuid=obj_uuid,
+                        position=obj_pos,
+                        target_name=obj_name,
+                        distance=distance
+                    ))
+                    idx += 1
+
+            if valid_targets:
+                template_name = template.name or "Unknown"
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.OBJECT,
+                    valid_targets=valid_targets,
+                    can_afford=can_afford,
+                    template=template,
+                ))
+        return actions
+
+    def _collect_use_actions(
+        self,
+        result: AvailableActionsResult,
+        potential_targets: Dict[UUID, Tuple[int, int]],
+        include_dead: bool,
+        fov_cache: dict,
+        barrier_positions: Set[Tuple[int, int]],
+    ) -> None:
+        """Collect use actions from inventory + environment, distributing into result groups."""
+        grid = get_map()
+
+        # Gather use action sources
+        use_sources: list = []  # List of (template, item_uuid, item_name, item_stack)
+
+        # A) Inventory use actions
+        for use_template in self.inventory.get_all_use_actions(self.uuid):
+            item_uuid = use_template.source_item_uuid
+            item = BaseBlock.get(item_uuid) if item_uuid else None
+            item_name = item.name if item else "Item"
+            item_stack = getattr(item, 'stack_count', None) if item else None
+            use_sources.append((use_template, item_uuid, item_name, item_stack))
+
+        # B) Environment use actions (≤5ft objects, no stacking)
+        for obj_uuid, obj_pos in self.senses.objects.items():
+            obj = BaseBlock.get(obj_uuid)
+            if not isinstance(obj, UsableItem):
+                continue
+            if self.senses.get_feet_distance(obj_pos) > 5:
+                continue
+            for use_template in obj.get_use_actions(self.uuid):
+                use_sources.append((use_template, obj_uuid, obj.name, None))
+
+        # Pre-compute entity positions for AoE prefilter
+        entity_positions: Set[Tuple[int, int]] = set()
+        for uid, pos in self.senses.entities.items():
+            if uid == self.uuid:
+                continue
+            entity_positions.add(pos)
+
+        # Route each use template by target_type
+        for use_template, item_uuid, item_name, item_stack in use_sources:
+            base_name = use_template.name or "Use"
+            template_name = f"{base_name}__item_{item_uuid}"
+            stack_suffix = f" x{item_stack}" if item_stack and item_stack > 1 else ""
+            display_name = f"{base_name} ({item_name}{stack_suffix})"
+            stack_count_field = item_stack if item_stack and item_stack > 1 else None
+            can_afford = use_template.check_costs()
+
+            if use_template.target_type == TargetType.SELF:
+                if not use_template.pre_validate():
+                    continue
+                result.self_actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.SELF,
+                    valid_targets=[AvailableTarget(index=0)],
+                    can_afford=can_afford,
+                    template=use_template,
+                    display_name=display_name,
+                    is_item_use=True,
+                    source_item_uuid=item_uuid,
+                    item_stack_count=stack_count_field,
+                ))
+
+            elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
+                # Uses _compute_target_pool to respect valid_target_filter (bug fix)
+                target_pool = self._compute_target_pool(
+                    use_template.valid_target_filter, include_dead,
+                    use_template.include_self, potential_targets
+                )
+                valid_targets = self._validate_entity_targets(use_template, target_pool)
+                if valid_targets:
+                    result.entity_actions.append(self._make_action_info(
+                        template_name=template_name,
+                        target_type=use_template.target_type,
+                        valid_targets=valid_targets,
+                        can_afford=can_afford,
+                        template=use_template,
+                        display_name=display_name,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                    ))
+
+            elif use_template.target_type == TargetType.POSITION_AOE:
+                use_shape_template = use_template.aoe_shape
+                if use_shape_template is None:
+                    continue
+
+                if not can_afford:
+                    result.position_actions.append(self._make_action_info(
+                        template_name=template_name,
+                        target_type=TargetType.POSITION_AOE,
+                        valid_targets=[],
+                        can_afford=False,
+                        template=use_template,
+                        display_name=display_name,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                    ))
+                    continue
+
+                valid_pos_list = use_template.get_valid_positions()
+
+                # AoE prefilter
+                if use_template.aoe_require_targets:
+                    prefilter_positions = set(entity_positions)
+                    if use_template.include_self:
+                        prefilter_positions.add(self.position)
+                    if prefilter_positions:
+                        radius = use_shape_template._get_max_radius_tiles()
+                        candidates = grid.get_positions_near_entities(prefilter_positions, radius)
+                        valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
+                    else:
+                        continue
+
+                use_valid_positions: List[AvailableTarget] = []
+                use_idx = 0
+                for pos in valid_pos_list:
+                    target = self._compute_aoe_at_position(
+                        use_shape_template, pos, use_template, include_dead,
+                        fov_cache, barrier_positions, use_idx
+                    )
+                    if target is not None:
+                        use_valid_positions.append(target)
+                        use_idx += 1
+                if use_valid_positions:
+                    result.position_actions.append(self._make_action_info(
+                        template_name=template_name,
+                        target_type=TargetType.POSITION_AOE,
+                        valid_targets=use_valid_positions,
+                        can_afford=True,
+                        template=use_template,
+                        display_name=display_name,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                    ))
+
+            elif use_template.target_type == TargetType.POSITION_LOS:
+                use_valid_pos_list = use_template.get_valid_positions()
+                use_valid_positions_los: List[AvailableTarget] = []
+                use_idx = 0
+                for pos in use_valid_pos_list:
+                    use_template.set_target_position(pos)
+                    if use_template.pre_validate():
+                        use_valid_positions_los.append(AvailableTarget(
+                            index=use_idx,
+                            position=pos,
+                            distance=self.senses.get_feet_distance(pos),
+                        ))
+                        use_idx += 1
+                if use_valid_positions_los:
+                    result.position_actions.append(self._make_action_info(
+                        template_name=template_name,
+                        target_type=TargetType.POSITION_LOS,
+                        valid_targets=use_valid_positions_los,
+                        can_afford=can_afford,
+                        template=use_template,
+                        display_name=display_name,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                    ))
+
+            elif use_template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH):
+                use_valid_positions_pos: List[AvailableTarget] = []
+                use_idx = 0
+                action_range = use_template.get_range()
+                max_range = action_range.normal if action_range else 0
+                for pos, is_visible in self.senses.visible.items():
+                    if not is_visible:
+                        continue
+                    if pos == self.senses.position:
+                        continue
+                    dist = self.senses.get_feet_distance(pos)
+                    if max_range > 0 and dist > max_range:
+                        continue
+                    use_template.set_target_position(pos)
+                    if use_template.pre_validate():
+                        use_valid_positions_pos.append(AvailableTarget(
+                            index=use_idx,
+                            position=pos,
+                            distance=dist,
+                        ))
+                        use_idx += 1
+                if use_valid_positions_pos:
+                    result.position_actions.append(self._make_action_info(
+                        template_name=template_name,
+                        target_type=use_template.target_type,
+                        valid_targets=use_valid_positions_pos,
+                        can_afford=can_afford,
+                        template=use_template,
+                        display_name=display_name,
+                        is_item_use=True,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                    ))
+
+    # =========================================================================
+    # get_available_actions orchestrator
+    # =========================================================================
+
     def get_available_actions(
         self,
         target_filter: str = "enemies",
@@ -1947,36 +2552,13 @@ class Entity(BaseBlock):
             remaining_movement=self.action_economy.movement.normalized_score
         )
 
-        # SELF actions - validate once, no targets needed
-        # Include all registered self actions, set can_afford based on check_costs()
-        for template in self.self_actions:
-            template_name = template.name or "Unknown"
-            can_afford = template.check_costs()
-            # Only check pre_validate if costs are affordable (avoid duplicate work)
-            is_valid = can_afford and template.pre_validate()
-            # Include action if it's valid OR if it just can't be afforded
-            # This allows UI to show grayed-out actions that exist but can't be used
-            if is_valid or not can_afford:
-                result.self_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=TargetType.SELF,
-                    valid_targets=[AvailableTarget(index=0)] if is_valid else [],
-                    can_afford=can_afford,
-                    display_name=template_name,
-                    description=template.description,
-                    cost_type=template.costs[0].cost_type if template.costs else "actions",
-                    cost_amount=template.costs[0].cost if template.costs else 0,
-                    action_category=template.action_category,
-                ))
-
-        # ENTITY actions - filter targets based on target_filter
+        # Compute default target pool based on target_filter
         if target_filter == "enemies":
             potential_targets = self.get_visible_enemies(include_dead=include_dead)
         elif target_filter == "allies":
             potential_targets = self.get_visible_allies(include_dead=include_dead)
         else:  # "all"
-            # For "all" filter, still apply dead filtering unless include_dead is True
-            potential_targets = {}
+            potential_targets: Dict[UUID, Tuple[int, int]] = {}
             for k, v in self.senses.entities.items():
                 if k == self.uuid:
                     continue
@@ -1986,543 +2568,22 @@ class Entity(BaseBlock):
                         continue
                 potential_targets[k] = v
 
-        for template in self.entity_actions:
-            valid_targets: List[AvailableTarget] = []
-            idx = 0
-
-            # Build targets for THIS template
-            # Use the template's valid_target_filter to compute per-action targets
-            action_filter = template.valid_target_filter
-            if action_filter == "all" or action_filter == "self_or_allies":
-                # Action wants broader targeting — compute its own pool
-                template_targets: Dict[UUID, Tuple[int, int]] = {}
-                if action_filter == "all":
-                    for k, v in self.senses.entities.items():
-                        if k == self.uuid:
-                            continue
-                        if not include_dead:
-                            other = Entity.get(k)
-                            if other and not other.has_hp:
-                                continue
-                        template_targets[k] = v
-                elif action_filter == "self_or_allies":
-                    for k, v in self.get_visible_allies(include_dead=include_dead).items():
-                        template_targets[k] = v
-                elif action_filter == "allies":
-                    for k, v in self.get_visible_allies(include_dead=include_dead).items():
-                        template_targets[k] = v
-            else:
-                template_targets = dict(potential_targets)
-
-            if template.include_self:
-                template_targets[self.uuid] = self.position
-
-            for target_uuid, target_pos in template_targets.items():
-                template.set_target_entity(target_uuid)
-                if template.pre_validate():
-                    target_entity = Entity.get(target_uuid)
-                    valid_targets.append(AvailableTarget(
-                        index=idx,
-                        target_uuid=target_uuid,
-                        target_name=target_entity.name if target_entity else None,
-                        distance=self.senses.get_feet_distance(target_pos)
-                    ))
-                    idx += 1
-
-            if valid_targets:
-                template_name = template.name or "Unknown"
-
-                # Extract weapon info for attacks
-                weapon_name: Optional[str] = None
-                weapon_slot_str: Optional[str] = None
-                display_name = template_name
-
-                # Check if template has weapon_slot (Attack actions)
-                weapon_slot_attr = getattr(template, 'weapon_slot', None)
-                if weapon_slot_attr is not None:
-                    weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
-                    weapon = self.equipment._get_weapon_by_slot(weapon_slot_attr)
-                    if weapon:
-                        weapon_name = weapon.name
-                        display_name = weapon_name  # Use weapon name as display name
-
-                result.entity_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=template.target_type,  # Use actual target type (ENTITY or MULTI_ENTITY)
-                    valid_targets=valid_targets,
-                    can_afford=template.check_costs(),
-                    display_name=display_name,
-                    description=template.description,
-                    cost_type=template.costs[0].cost_type if template.costs else "actions",
-                    cost_amount=template.costs[0].cost if template.costs else 0,
-                    weapon_slot=weapon_slot_str,
-                    weapon_name=weapon_name,
-                    action_category=template.action_category,
-                ))
+        result.self_actions = self._collect_self_actions()
+        result.entity_actions = self._collect_entity_actions(potential_targets, include_dead)
 
         # Refresh paths if dirtied mid-turn (e.g., entity death, door state change)
         if self.senses._paths_dirty:
             self.update_entity_senses(max_distance=20)
 
-        # POSITION_PATH actions (Move) - validate for each reachable position via path
-        for template in self.position_actions:
-            if template.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
-                continue
-            valid_positions: List[AvailableTarget] = []
-            idx = 0
-            for pos, _ in self.senses.paths.items():
-                if pos == self.senses.position:
-                    continue
-                template.set_target_position(pos)
-                if template.pre_validate():
-                    # Get actual terrain-based movement cost from template's computed costs
-                    path_cost = 0
-                    for cost in template.costs:
-                        if cost.cost_type == "movement":
-                            path_cost = cost.cost
-                            break
-                    valid_positions.append(AvailableTarget(
-                        index=idx,
-                        position=pos,
-                        distance=self.senses.get_feet_distance(pos),
-                        path_cost=path_cost
-                    ))
-                    idx += 1
-
-            if valid_positions:
-                template_name = template.name or "Unknown"
-                result.position_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=template.target_type,
-                    valid_targets=valid_positions,
-                    can_afford=True,
-                    display_name=template_name,
-                    description=f"{result.remaining_movement}ft remaining",
-                    cost_type="movement",
-                    cost_amount=0,
-                    action_category=template.action_category,
-                ))
-
-        # POSITION_LOS actions (Jump, Teleport) - use action's get_valid_positions()
-        for template in self.position_actions:
-            if template.target_type != TargetType.POSITION_LOS:
-                continue
-
-            # Let the action compute its own valid positions
-            valid_pos_list = template.get_valid_positions()
-            valid_positions = []
-            idx = 0
-            for pos in valid_pos_list:
-                template.set_target_position(pos)
-                if template.pre_validate():
-                    valid_positions.append(AvailableTarget(
-                        index=idx,
-                        position=pos,
-                        distance=self.senses.get_feet_distance(pos),
-                        path_cost=None  # LOS actions don't use path cost
-                    ))
-                    idx += 1
-
-            if valid_positions:
-                template_name = template.name or "Unknown"
-                cost_type = template.costs[0].cost_type if template.costs else "bonus_actions"
-                cost_amount = template.costs[0].cost if template.costs else 1
-                result.position_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=TargetType.POSITION_LOS,
-                    valid_targets=valid_positions,
-                    can_afford=template.check_costs(),
-                    display_name=template_name,
-                    description=template.description,
-                    cost_type=cost_type,
-                    cost_amount=cost_amount,
-                    action_category=template.action_category,
-                ))
-
-        # POSITION_AOE actions - compute affected entities for each valid position
-        # FOV cache shared across all AoE spells (registered + use-template)
-        # to avoid redundant compute_fov calls for same origin+radius
         fov_cache: dict = {}
-        # Pre-compute barrier positions once for fast-path: if no barriers in
-        # blast radius, skip shadowcast entirely (most common case in open arenas)
         barrier_positions = get_map().get_barrier_positions()
 
-        for template in self.position_actions:
-            if template.target_type != TargetType.POSITION_AOE:
-                continue
-
-            shape_template = template.aoe_shape
-            if shape_template is None:
-                continue
-
-            # Check costs ONCE before the position loop (not per-position)
-            can_afford = template.check_costs()
-            template_name = template.name or "Unknown"
-            cost_type = template.costs[0].cost_type if template.costs else "actions"
-            cost_amount = template.costs[0].cost if template.costs else 1
-
-            if not can_afford:
-                # Include spell with can_afford=False for grayed-out UI display
-                # but skip expensive position enumeration
-                result.position_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=TargetType.POSITION_AOE,
-                    valid_targets=[],
-                    can_afford=False,
-                    display_name=template_name,
-                    description=template.description,
-                    cost_type=cost_type,
-                    cost_amount=cost_amount,
-                    action_category=template.action_category,
-                ))
-                continue
-
-            valid_pos_list = template.get_valid_positions()
-            valid_positions = []
-            idx = 0
-
-            for pos in valid_pos_list:
-                # Compute shape directly — no pre_validate needed for POSITION_AOE
-                # pre_validate's only useful check (aoe_require_targets) is done after filtering
-                shape = shape_template.model_copy(update={'target': pos})
-                shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache, barrier_positions=barrier_positions)
-
-                affected_uuids = list(shape.affected_entity_uuids)
-
-                # Apply include_self filter (match get_all_targets behavior)
-                if not template.include_self:
-                    affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
-
-                # Apply valid_target_filter (match _validate behavior)
-                target_filter = template.valid_target_filter
-                if target_filter != "all":
-                    filtered = []
-                    for uid in affected_uuids:
-                        ent = Entity.get(uid)
-                        if ent:
-                            if target_filter == "enemies" and self.is_enemy(ent):
-                                filtered.append(uid)
-                            elif target_filter == "allies" and self.is_ally(ent):
-                                filtered.append(uid)
-                            elif target_filter == "self_or_allies":
-                                if uid == self.uuid or self.is_ally(ent):
-                                    filtered.append(uid)
-                    affected_uuids = filtered
-
-                # Filter dead entities (unless include_dead=True on template)
-                template_include_dead = template.include_dead
-                if not template_include_dead and not include_dead:
-                    affected_uuids = [
-                        uid for uid in affected_uuids
-                        if (ent := Entity.get(uid)) and ent.has_hp
-                    ]
-
-                # Replace pre_validate's "no targets" check
-                if not affected_uuids and template.aoe_require_targets:
-                    continue
-
-                affected_names = []
-                for uuid in affected_uuids:
-                    ent = Entity.get(uuid)
-                    if ent:
-                        affected_names.append(ent.name or "Unknown")
-
-                valid_positions.append(AvailableTarget(
-                    index=idx,
-                    position=pos,
-                    distance=self.senses.get_feet_distance(pos),
-                    affected_entity_uuids=affected_uuids,
-                    affected_entity_names=affected_names,
-                    affected_count=len(affected_uuids),
-                    affected_positions=list(shape.affected_positions)
-                ))
-                idx += 1
-
-            if valid_positions:
-                result.position_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=TargetType.POSITION_AOE,
-                    valid_targets=valid_positions,
-                    can_afford=True,
-                    display_name=template_name,
-                    description=template.description,
-                    cost_type=cost_type,
-                    cost_amount=cost_amount,
-                    action_category=template.action_category,
-                ))
-
-        # OBJECT actions - discover from templates + nearby visible objects
-        for template in self.object_actions:
-            valid_targets: List[AvailableTarget] = []
-            idx = 0
-            can_afford = template.check_costs()
-
-            for obj_uuid, obj_pos in self.senses.objects.items():
-                template.set_target_entity(obj_uuid)
-                if template.pre_validate():
-                    obj_block = BaseBlock.get(obj_uuid)
-                    obj_name = obj_block.name if obj_block else "Object"
-                    distance = self.senses.get_feet_distance(obj_pos)
-                    valid_targets.append(AvailableTarget(
-                        index=idx,
-                        target_uuid=obj_uuid,
-                        position=obj_pos,
-                        target_name=obj_name,
-                        distance=distance
-                    ))
-                    idx += 1
-
-            if valid_targets:
-                template_name = template.name or "Unknown"
-                result.object_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=TargetType.OBJECT,
-                    valid_targets=valid_targets,
-                    can_afford=can_afford,
-                    display_name=template_name,
-                    description=template.description,
-                    cost_type=template.costs[0].cost_type if template.costs else "actions",
-                    cost_amount=template.costs[0].cost if template.costs else 0,
-                    action_category=template.action_category,
-                ))
-
-        # USE ACTIONS — from inventory items + nearby environment UsableItems
-        use_sources: list = []  # List of (template, item_uuid, item_name, item_stack)
-
-        # A) Inventory use actions
-        for use_template in self.inventory.get_all_use_actions(self.uuid):
-            item_uuid = use_template.source_item_uuid
-            item = BaseBlock.get(item_uuid) if item_uuid else None
-            item_name = item.name if item else "Item"
-            item_stack = getattr(item, 'stack_count', None) if item else None
-            use_sources.append((use_template, item_uuid, item_name, item_stack))
-
-        # B) Environment use actions (≤5ft objects, no stacking)
-        for obj_uuid, obj_pos in self.senses.objects.items():
-            obj = BaseBlock.get(obj_uuid)
-            if not isinstance(obj, UsableItem):
-                continue
-            if self.senses.get_feet_distance(obj_pos) > 5:
-                continue
-            for use_template in obj.get_use_actions(self.uuid):
-                use_sources.append((use_template, obj_uuid, obj.name, None))
-
-        # Route each use template by target_type
-        for use_template, item_uuid, item_name, item_stack in use_sources:
-            base_name = use_template.name or "Use"
-            template_name = f"{base_name}__item_{item_uuid}"
-            stack_suffix = f" x{item_stack}" if item_stack and item_stack > 1 else ""
-            display_name = f"{base_name} ({item_name}{stack_suffix})"
-            stack_count_field = item_stack if item_stack and item_stack > 1 else None
-            can_afford = use_template.check_costs()
-            cost_type = use_template.costs[0].cost_type if use_template.costs else "actions"
-            cost_amount = use_template.costs[0].cost if use_template.costs else 0
-
-            if use_template.target_type == TargetType.SELF:
-                if not use_template.pre_validate():
-                    continue
-                result.self_actions.append(AvailableActionInfo(
-                    template_name=template_name,
-                    target_type=TargetType.SELF,
-                    valid_targets=[AvailableTarget(index=0)],
-                    can_afford=can_afford,
-                    display_name=display_name,
-                    description=use_template.description,
-                    cost_type=cost_type,
-                    cost_amount=cost_amount,
-                    is_item_use=True,
-                    source_item_uuid=item_uuid,
-                    action_category=use_template.action_category,
-                    item_stack_count=stack_count_field,
-                ))
-
-            elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
-                use_valid_targets: List[AvailableTarget] = []
-                use_idx = 0
-                # Build targets pool (reuse potential_targets computed earlier)
-                use_target_pool = dict(potential_targets)
-                if use_template.include_self:
-                    use_target_pool[self.uuid] = self.position
-                for target_uuid, target_pos in use_target_pool.items():
-                    use_template.set_target_entity(target_uuid)
-                    if use_template.pre_validate():
-                        target_entity = Entity.get(target_uuid)
-                        use_valid_targets.append(AvailableTarget(
-                            index=use_idx,
-                            target_uuid=target_uuid,
-                            target_name=target_entity.name if target_entity else None,
-                            distance=self.senses.get_feet_distance(target_pos)
-                        ))
-                        use_idx += 1
-                if use_valid_targets:
-                    result.entity_actions.append(AvailableActionInfo(
-                        template_name=template_name,
-                        target_type=use_template.target_type,
-                        valid_targets=use_valid_targets,
-                        can_afford=can_afford,
-                        display_name=display_name,
-                        description=use_template.description,
-                        cost_type=cost_type,
-                        cost_amount=cost_amount,
-                        is_item_use=True,
-                        source_item_uuid=item_uuid,
-                        action_category=use_template.action_category,
-                        item_stack_count=stack_count_field,
-                    ))
-
-            elif use_template.target_type == TargetType.POSITION_AOE:
-                use_shape_template = use_template.aoe_shape
-                if use_shape_template is None:
-                    continue
-
-                if not can_afford:
-                    # Include spell with can_afford=False for grayed-out UI display
-                    # but skip expensive position enumeration
-                    result.position_actions.append(AvailableActionInfo(
-                        template_name=template_name,
-                        target_type=TargetType.POSITION_AOE,
-                        valid_targets=[],
-                        can_afford=False,
-                        display_name=display_name,
-                        description=use_template.description,
-                        cost_type=cost_type,
-                        cost_amount=cost_amount,
-                        is_item_use=True,
-                        source_item_uuid=item_uuid,
-                        action_category=use_template.action_category,
-                        item_stack_count=stack_count_field,
-                    ))
-                    continue
-
-                use_valid_pos_list = use_template.get_valid_positions()
-                use_valid_positions: List[AvailableTarget] = []
-                use_idx = 0
-                for pos in use_valid_pos_list:
-                    # Compute shape directly — no pre_validate needed for POSITION_AOE
-                    shape = use_shape_template.model_copy(update={'target': pos})
-                    shape.compute_subjective(self.position, self.senses, fov_cache=fov_cache, barrier_positions=barrier_positions)
-                    affected_uuids = list(shape.affected_entity_uuids)
-                    if not use_template.include_self:
-                        affected_uuids = [uid for uid in affected_uuids if uid != self.uuid]
-                    vtf = use_template.valid_target_filter
-                    if vtf != "all":
-                        filtered = []
-                        for uid in affected_uuids:
-                            ent = Entity.get(uid)
-                            if ent:
-                                if vtf == "enemies" and self.is_enemy(ent):
-                                    filtered.append(uid)
-                                elif vtf == "allies" and self.is_ally(ent):
-                                    filtered.append(uid)
-                                elif vtf == "self_or_allies":
-                                    if uid == self.uuid or self.is_ally(ent):
-                                        filtered.append(uid)
-                        affected_uuids = filtered
-                    template_include_dead = use_template.include_dead
-                    if not template_include_dead and not include_dead:
-                        affected_uuids = [
-                            uid for uid in affected_uuids
-                            if (ent := Entity.get(uid)) and ent.has_hp
-                        ]
-                    # Replace pre_validate's "no targets" check
-                    if not affected_uuids and use_template.aoe_require_targets:
-                        continue
-                    affected_names = []
-                    for uid in affected_uuids:
-                        ent = Entity.get(uid)
-                        if ent:
-                            affected_names.append(ent.name or "Unknown")
-                    use_valid_positions.append(AvailableTarget(
-                        index=use_idx,
-                        position=pos,
-                        distance=self.senses.get_feet_distance(pos),
-                        affected_entity_uuids=affected_uuids,
-                        affected_entity_names=affected_names,
-                        affected_count=len(affected_uuids),
-                        affected_positions=list(shape.affected_positions)
-                    ))
-                    use_idx += 1
-                if use_valid_positions:
-                    result.position_actions.append(AvailableActionInfo(
-                        template_name=template_name,
-                        target_type=TargetType.POSITION_AOE,
-                        valid_targets=use_valid_positions,
-                        can_afford=True,
-                        display_name=display_name,
-                        description=use_template.description,
-                        cost_type=cost_type,
-                        cost_amount=cost_amount,
-                        is_item_use=True,
-                        source_item_uuid=item_uuid,
-                        action_category=use_template.action_category,
-                        item_stack_count=stack_count_field,
-                    ))
-
-            elif use_template.target_type == TargetType.POSITION_LOS:
-                use_valid_pos_list = use_template.get_valid_positions()
-                use_valid_positions = []
-                use_idx = 0
-                for pos in use_valid_pos_list:
-                    use_template.set_target_position(pos)
-                    if use_template.pre_validate():
-                        use_valid_positions.append(AvailableTarget(
-                            index=use_idx,
-                            position=pos,
-                            distance=self.senses.get_feet_distance(pos),
-                        ))
-                        use_idx += 1
-                if use_valid_positions:
-                    result.position_actions.append(AvailableActionInfo(
-                        template_name=template_name,
-                        target_type=TargetType.POSITION_LOS,
-                        valid_targets=use_valid_positions,
-                        can_afford=can_afford,
-                        display_name=display_name,
-                        description=use_template.description,
-                        cost_type=cost_type,
-                        cost_amount=cost_amount,
-                        is_item_use=True,
-                        source_item_uuid=item_uuid,
-                        action_category=use_template.action_category,
-                        item_stack_count=stack_count_field,
-                    ))
-
-            elif use_template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH):
-                # POSITION type spells (e.g., Spike Growth) — use visible positions within range
-                use_valid_positions = []
-                use_idx = 0
-                action_range = use_template.get_range()
-                max_range = action_range.normal if action_range else 0
-                for pos, is_visible in self.senses.visible.items():
-                    if not is_visible:
-                        continue
-                    if pos == self.senses.position:
-                        continue
-                    dist = self.senses.get_feet_distance(pos)
-                    if max_range > 0 and dist > max_range:
-                        continue
-                    use_template.set_target_position(pos)
-                    if use_template.pre_validate():
-                        use_valid_positions.append(AvailableTarget(
-                            index=use_idx,
-                            position=pos,
-                            distance=dist,
-                        ))
-                        use_idx += 1
-                if use_valid_positions:
-                    result.position_actions.append(AvailableActionInfo(
-                        template_name=template_name,
-                        target_type=use_template.target_type,
-                        valid_targets=use_valid_positions,
-                        can_afford=can_afford,
-                        display_name=display_name,
-                        description=use_template.description,
-                        cost_type=cost_type,
-                        cost_amount=cost_amount,
-                        is_item_use=True,
-                        source_item_uuid=item_uuid,
-                        action_category=use_template.action_category,
-                        item_stack_count=stack_count_field,
-                    ))
+        result.position_actions = self._collect_path_actions(result.remaining_movement)
+        result.position_actions.extend(self._collect_los_actions())
+        result.position_actions.extend(
+            self._collect_aoe_actions(include_dead, fov_cache, barrier_positions)
+        )
+        result.object_actions = self._collect_object_actions()
+        self._collect_use_actions(result, potential_targets, include_dead, fov_cache, barrier_positions)
 
         return result

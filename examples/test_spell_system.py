@@ -563,8 +563,10 @@ def test_fire_bolt_combat():
     print("\n=== Test 13: Fire Bolt Combat (Spell Attack vs AC) ===")
 
     from dnd.spells import FireBolt
+    from dnd.core.gridmap import get_map
 
     reset_combat_state()
+    get_map().create_rectangle(-2, -2, 10, 10)  # Floor tiles for LOS
 
     # Create caster with high INT for reliable hits
     caster_config = EntityConfig(
@@ -628,8 +630,10 @@ def test_sacred_flame_combat():
     print("\n=== Test 14: Sacred Flame Combat (Spell DC vs Save) ===")
 
     from dnd.spells import SacredFlame
+    from dnd.core.gridmap import get_map
 
     reset_combat_state()
+    get_map().create_rectangle(-2, -2, 10, 10)  # Floor tiles for LOS
 
     # Create caster with high WIS
     caster_config = EntityConfig(
@@ -776,8 +780,10 @@ def test_spell_slot_consumption():
     print("\n=== Test 16: Spell Slot Consumption ===")
 
     from dnd.spells import MagicMissile
+    from dnd.core.gridmap import get_map
 
     reset_combat_state()
+    get_map().create_rectangle(-2, -2, 10, 10)  # Floor tiles for LOS
 
     caster_config = EntityConfig(
         ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=16)),
