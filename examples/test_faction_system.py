@@ -15,6 +15,9 @@ from dnd.encounter import Encounter
 from dnd.controller import Controller
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType
+from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions_functional import setup_standard_actions, execute_by_index
+from dnd.utils import get_hp, setup_combat_arena, force_attack_hit
 
 
 def reset_state():
@@ -239,6 +242,94 @@ def test_get_available_actions_target_filter():
     print("✓ test_get_available_actions_target_filter passed")
 
 
+def test_opportunity_attack_respects_faction():
+    """Test that opportunity attacks do NOT trigger against allies, only enemies."""
+    reset_state()
+
+    # --- Test 1: Ally moving away from ally should NOT trigger OA ---
+    # Keep enemy far away so only ally OA could fire
+    ally1 = create_skeleton(name="Ally1", position=(5, 5), faction="heroes")
+    ally2 = create_skeleton(name="Ally2", position=(6, 5), faction="heroes")
+    enemy = create_skeleton(name="Enemy", position=(15, 15), faction="monsters")
+
+    setup_standard_actions(ally1)
+    setup_standard_actions(ally2)
+    setup_standard_actions(enemy)
+
+    add_opportunity_attack_handler(ally1)
+    add_opportunity_attack_handler(enemy)
+
+    Entity.update_all_entities_senses()
+
+    encounter = setup_combat_arena(ally2, ally1)
+    encounter.add_combatant(enemy, Controller(name="Enemy", source_entity_uuid=enemy.uuid))
+    encounter.start_encounter()
+
+    force_attack_hit(ally1)
+
+    encounter.start_turn()  # ally2's turn
+    ally2_hp_before = get_hp(ally2)
+
+    # Move ally2 away from ally1's threat range
+    actions = ally2.get_available_actions()
+    move_actions = [a for a in actions.position_actions if a.template_name == "Move"]
+    assert move_actions, "Ally2 should have move action"
+
+    target_pos = None
+    for t in move_actions[0].valid_targets:
+        if t.position == (10, 5):
+            target_pos = t
+            break
+    assert target_pos is not None, "Should be able to move to (10,5)"
+
+    execute_by_index(ally2, "Move", target_pos.index)
+
+    ally2_hp_after = get_hp(ally2)
+    assert ally2_hp_after == ally2_hp_before, \
+        f"Ally should NOT take OA from ally! Lost {ally2_hp_before - ally2_hp_after} HP"
+
+    print("  Part 1: Ally does NOT OA ally ✓")
+
+    # --- Test 2: Ally moving away from enemy SHOULD trigger OA ---
+    reset_state()
+
+    enemy2 = create_skeleton(name="Enemy2", position=(5, 5), faction="monsters")
+    mover = create_skeleton(name="Mover", position=(6, 5), faction="heroes")
+
+    setup_standard_actions(enemy2)
+    setup_standard_actions(mover)
+
+    add_opportunity_attack_handler(enemy2)
+
+    Entity.update_all_entities_senses()
+
+    encounter2 = setup_combat_arena(mover, enemy2)
+    encounter2.start_encounter()
+
+    force_attack_hit(enemy2)
+
+    encounter2.start_turn()  # mover's turn
+    mover_hp_before = get_hp(mover)
+
+    actions = mover.get_available_actions()
+    move_actions = [a for a in actions.position_actions if a.template_name == "Move"]
+    target_pos = None
+    for t in move_actions[0].valid_targets:
+        if t.position == (10, 5):
+            target_pos = t
+            break
+    assert target_pos is not None, "Should be able to move to (10,5)"
+
+    execute_by_index(mover, "Move", target_pos.index)
+
+    mover_hp_after = get_hp(mover)
+    assert mover_hp_after < mover_hp_before, \
+        f"Enemy SHOULD OA when leaving threat! HP unchanged at {mover_hp_after}"
+
+    print("  Part 2: Enemy DOES OA enemy ✓")
+    print("✓ test_opportunity_attack_respects_faction passed")
+
+
 if __name__ == "__main__":
     print("Testing Faction System...")
     print()
@@ -251,6 +342,7 @@ if __name__ == "__main__":
     test_backward_compatibility()
     test_is_threatened_faction()
     test_get_available_actions_target_filter()
+    test_opportunity_attack_respects_faction()
 
     print()
     print("=" * 50)
