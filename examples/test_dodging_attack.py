@@ -8,12 +8,8 @@ from dnd.actions import Attack
 from dnd.blocks.equipment import WeaponSlot
 from dnd.entity import Entity
 from dnd.core.values import AdvantageStatus
-
-
-def reset_entities():
-    """Clear entity registries for a fresh test."""
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+from dnd.utils import reset_combat_state
+from dnd.core.gridmap import get_map
 
 
 def test_attack_vs_dodging():
@@ -22,7 +18,8 @@ def test_attack_vs_dodging():
     print(" TEST: ATTACK VS DODGING TARGET")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create attacker and target at melee range
     attacker = create_goblin(name="Attacker", position=(0, 0))
@@ -81,7 +78,8 @@ def test_attack_without_dodging():
     print(" CONTROL TEST: ATTACK WITHOUT DODGING")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     attacker = create_goblin(name="Attacker", position=(0, 0))
     target = create_skeleton(name="Target", position=(1, 0))

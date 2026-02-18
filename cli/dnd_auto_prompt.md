@@ -69,6 +69,12 @@ Your notebook persists between turns. Write observations about:
 - Strategy for next turns
 - Faction status (alive, HP, conditions)
 
+## Reading the Display
+
+- **Actions show cost** in parentheses: `(action)`, `(bonus)`, `(FREE)`. `FREE` = no action economy cost.
+- **Spell slots** shown in RESOURCES line for spellcasters: `Slots: L1:3/4 L2:2/2`
+- **Conditions**: Internal engine markers are hidden. Status effects like Dashing shown in parentheses.
+
 ## Tactical Priorities
 
 1. Scout: `inspect` unknowns, check map layout

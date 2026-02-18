@@ -18,10 +18,12 @@ from dnd.core.base_actions import (
 from dnd.core.events import EventPhase
 from dnd.core.dice import Dice, RollType
 from dnd.core.values import ModifiableValue
+from dnd.core.gridmap import get_map
 from dnd.blocks.action_economy import RechargeType
 from dnd.blocks.health import DamageType
 from dnd.actions import entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.actions_functional import setup_standard_actions, execute_by_index
+from dnd.utils import reset_combat_state
 
 
 # =============================================================================
@@ -117,6 +119,9 @@ def test_second_wind():
     print("=" * 60)
     print("TEST: Second Wind Resource System")
     print("=" * 60)
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create entity (skeleton as base)
     fighter = create_skeleton(name="Fighter", position=(0, 0))

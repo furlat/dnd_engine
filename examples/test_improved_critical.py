@@ -11,31 +11,17 @@ Tests:
 
 from uuid import uuid4
 
-# Reset registries before imports to ensure clean state
-from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue
-
-BaseObject._registry.clear()
-EventQueue._events_by_uuid.clear()
-EventQueue._events_by_lineage.clear()
-EventQueue._events_by_type.clear()
-EventQueue._events_by_phase.clear()
-EventQueue._events_by_source.clear()
-EventQueue._events_by_target.clear()
-EventQueue._events_by_timestamp.clear()
-EventQueue._all_events.clear()
-
 from dnd.entity import Entity, determine_attack_outcome, get_natural_roll
 from dnd.core.values import AdvantageStatus, CriticalStatus, AutoHitStatus
 from dnd.core.dice import DiceRoll, RollType, AttackOutcome
-from dnd.core.gridmap import reset_map
+from dnd.core.gridmap import get_map
 from dnd.classes.fighter import ImprovedCritical, SuperiorCritical
 from dnd.monsters.bestiary import create_goblin
+from dnd.utils import reset_combat_state
 
-# Reset entity registries
-Entity._entity_registry.clear()
-Entity._entity_by_position.clear()
-reset_map()
+# Reset state at module level
+reset_combat_state()
+get_map().create_rectangle(0, 0, 20, 20)
 
 
 def create_mock_dice_roll(

@@ -19,7 +19,9 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
+from dnd.core.gridmap import get_map
+from dnd.utils import reset_combat_state
 from dnd.core.modifiers import AdvantageStatus, DamageType, ResistanceStatus
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_action
 from dnd.items.weapons import create_greatsword
@@ -79,9 +81,8 @@ def test_rage_damage_resistance():
     """Test that rage actually halves bludgeoning/piercing/slashing damage."""
     print("\n=== Test: Rage Damage Resistance ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Tanky Barbarian")
     attacker_id = barbarian.uuid  # Just need a source UUID for damage
@@ -133,16 +134,15 @@ def test_rage_damage_resistance():
     print("  ✓ Slashing damage halved (resistance)")
     print("  ✓ Piercing damage halved (resistance)")
 
-    EventQueue.reset()
+
 
 
 def test_rage_activation():
     """Test that Rage can be activated and applies Raging condition."""
     print("\n=== Test: Rage Activation ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Rage Test Barbarian")
 
@@ -180,16 +180,15 @@ def test_rage_activation():
     print("  ✓ Raging condition applied")
     print("  ✓ Rage resource consumed")
 
-    EventQueue.reset()
+
 
 
 def test_rage_benefits():
     """Test rage grants STR advantage and damage bonus."""
     print("\n=== Test: Rage Benefits ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Benefits Test Barbarian")
 
@@ -227,16 +226,15 @@ def test_rage_benefits():
     print("  ✓ Melee attacks have +2 rage damage")
     print("  ✓ Has resistance to bludgeoning/piercing/slashing")
 
-    EventQueue.reset()
+
 
 
 def test_rage_maintenance_attack():
     """Test that attacking while raging applies HasAttacked marker."""
     print("\n=== Test: Rage Maintenance (Attack) ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Attack Maintenance Barbarian", position=(0, 0))
     _target = create_test_barbarian("Target Dummy", position=(1, 0))  # Adjacent
@@ -259,7 +257,6 @@ def test_rage_maintenance_attack():
     attack_info = next((a for a in available.entity_actions if "Attack" in a.template_name), None)
     if not attack_info or not attack_info.valid_targets:
         print("  ✗ No attack action or valid targets found")
-        EventQueue.reset()
         return
 
     result = execute_action(barbarian, attack_info.template_name, attack_info.valid_targets[0])
@@ -274,7 +271,7 @@ def test_rage_maintenance_attack():
     else:
         print("  ✗ HasAttacked marker NOT applied (handler may not have fired)")
 
-    EventQueue.reset()
+
 
 
 def test_rage_maintenance_damage():
@@ -287,9 +284,8 @@ def test_rage_maintenance_damage():
 
     from dnd.core.events import TakeDamageEvent, EventPhase
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Damage Maintenance Barbarian", position=(0, 0))
     attacker = create_test_barbarian("Attacker", position=(1, 0))  # Adjacent
@@ -345,16 +341,15 @@ def test_rage_maintenance_damage():
         else:
             print("  ✗ Rage should have been maintained")
 
-    EventQueue.reset()
+
 
 
 def test_rage_ends_no_activity():
     """Test that rage ends at next turn start if no attack/damage since last turn."""
     print("\n=== Test: Rage Ends Without Activity ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Idle Rage Barbarian")
 
@@ -382,16 +377,15 @@ def test_rage_ends_no_activity():
     else:
         print("  ✗ Rage should have ended")
 
-    EventQueue.reset()
+
 
 
 def test_cannot_rage_heavy_armor():
     """Test that rage cannot be activated in heavy armor."""
     print("\n=== Test: Cannot Rage in Heavy Armor ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Armored Barbarian")
 
@@ -438,16 +432,15 @@ def test_cannot_rage_heavy_armor():
     print(f"  Is raging: {is_raging}")
     assert not is_raging, "Should not be able to rage in heavy armor"
 
-    EventQueue.reset()
+
 
 
 def test_unarmored_defense():
     """Test Unarmored Defense adds CON to AC."""
     print("\n=== Test: Unarmored Defense ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Unarmored Barbarian")
 
@@ -474,16 +467,15 @@ def test_unarmored_defense():
     else:
         print(f"  ✗ Expected AC {expected_ac}, got {new_ac}")
 
-    EventQueue.reset()
+
 
 
 def test_reckless_attack():
     """Test Reckless Attack grants advantage but exposes to attacks."""
     print("\n=== Test: Reckless Attack ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Reckless Barbarian")
 
@@ -533,16 +525,15 @@ def test_reckless_attack():
     else:
         print("  ✗ Attackers should have advantage against us")
 
-    EventQueue.reset()
+
 
 
 def test_danger_sense():
     """Test Danger Sense grants advantage on DEX saves."""
     print("\n=== Test: Danger Sense ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Alert Barbarian")
 
@@ -567,16 +558,15 @@ def test_danger_sense():
     else:
         print("  ✗ Should have advantage on DEX saves")
 
-    EventQueue.reset()
+
 
 
 def test_equip_heavy_armor_ends_rage():
     """Test that equipping heavy armor while raging ends the rage."""
     print("\n=== Test: Equip Heavy Armor Ends Rage ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Armoring Barbarian")
 
@@ -609,7 +599,7 @@ def test_equip_heavy_armor_ends_rage():
 
     assert not is_raging_after, "Rage should end when equipping heavy armor"
 
-    EventQueue.reset()
+
 
 
 if __name__ == "__main__":

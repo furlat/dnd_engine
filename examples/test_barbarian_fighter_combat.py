@@ -23,6 +23,7 @@ from dnd.utils import (
     set_hp,
     has_condition,
 )
+from dnd.core.gridmap import get_map
 
 # Direct imports for verification
 from dnd.classes.rage import Raging
@@ -37,6 +38,7 @@ def test_rage_activation_and_benefits():
     """Test Rage activation grants damage bonus and resistance."""
     print("\n=== Test: Rage Activation and Benefits ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create combatants
     barbarian = create_barbarian(BarbarianConfig(
@@ -100,6 +102,7 @@ def test_rage_ends_when_unconscious():
     """Test that falling unconscious ends rage."""
     print("\n=== Test: Rage Ends When Unconscious ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,
@@ -159,6 +162,7 @@ def test_relentless_rage():
     """Test RelentlessRage prevents dropping to 0 HP."""
     print("\n=== Test: Relentless Rage ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Level 11 has RelentlessRage
     barbarian = create_barbarian(BarbarianConfig(
@@ -209,6 +213,7 @@ def test_end_rage_action():
     """Test End Rage bonus action."""
     print("\n=== Test: End Rage Action ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,
@@ -267,6 +272,7 @@ def test_reckless_attack_advantage():
     """Test Reckless Attack grants advantage on attacks."""
     print("\n=== Test: Reckless Attack Advantage ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,
@@ -324,6 +330,7 @@ def test_reckless_attack_resets():
     """Test Reckless Attack condition expires after turn."""
     print("\n=== Test: Reckless Attack Duration ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,
@@ -367,6 +374,7 @@ def test_danger_sense_dex_advantage():
     """Test Danger Sense grants DEX save advantage."""
     print("\n=== Test: Danger Sense DEX Save Advantage ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,
@@ -393,6 +401,7 @@ def test_danger_sense_disabled_when_blinded():
     """Test Danger Sense is disabled when Blinded."""
     print("\n=== Test: Danger Sense Disabled When Blinded ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,
@@ -436,6 +445,7 @@ def test_mindless_rage_removes_charmed():
     """Test Mindless Rage removes Charmed when entering rage."""
     print("\n=== Test: Mindless Rage Removes Charmed ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Level 6 Berserker has Mindless Rage
     barbarian = create_barbarian(BarbarianConfig(
@@ -481,6 +491,7 @@ def test_mindless_rage_blocks_charmed():
     """Test Mindless Rage blocks new Charmed while raging."""
     print("\n=== Test: Mindless Rage Blocks New Charmed ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=6,
@@ -527,6 +538,7 @@ def test_frenzy_bonus_action_attack():
     """Test Frenzy grants bonus action melee attack."""
     print("\n=== Test: Frenzy Bonus Action Attack ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,
@@ -586,6 +598,7 @@ def test_brutal_critical_extra_dice():
     """Test Brutal Critical adds extra damage dice on crits."""
     print("\n=== Test: Brutal Critical Extra Dice ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Level 9 has 1 extra die
     barbarian = create_barbarian(BarbarianConfig(
@@ -613,6 +626,7 @@ def test_brutal_critical_scaling():
     """Test Brutal Critical scales with level."""
     print("\n=== Test: Brutal Critical Scaling ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     levels_to_check = [
         (9, 1),   # L9: 1 die
@@ -622,6 +636,7 @@ def test_brutal_critical_scaling():
 
     for level, expected_dice in levels_to_check:
         reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         # Create ASIs needed for each level
         config_kwargs = {
@@ -658,6 +673,7 @@ def test_fast_movement_speed_bonus():
     """Test Fast Movement grants +10 speed."""
     print("\n=== Test: Fast Movement Speed Bonus ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_barbarian(BarbarianConfig(
         level=5,

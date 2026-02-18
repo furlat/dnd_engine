@@ -26,6 +26,7 @@ class APIEntitySummary(BaseModel):
     max_hp: int
     ac: int
     conditions: List[str]
+    condition_details: List[dict] = []  # [{name, category}] for each active condition
     is_dead: bool
     faction: Optional[str] = None
 
@@ -43,6 +44,10 @@ class APIEntitySummary(BaseModel):
             max_hp=max_hp,
             ac=entity.ac_bonus().normalized_score,
             conditions=list(entity.active_conditions.keys()),
+            condition_details=[
+                {"name": c.name, "category": c.condition_category.value}
+                for c in entity.active_conditions.values()
+            ],
             is_dead=not entity.has_hp,
             faction=entity.faction
         )

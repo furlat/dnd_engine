@@ -9,40 +9,20 @@ Expected behavior:
 - Level 11 Fighter (2 extra attacks) + Action Surge = 6 attacks total
 """
 
-from dnd.core.gridmap import get_map, reset_map
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton, create_goblin
 from dnd.actions import Attack
 from dnd.classes.fighter import ExtraAttackFeature, ExtraAttack
-from dnd.core.events import WeaponSlot, EventQueue
+from dnd.core.events import WeaponSlot
 from dnd.core.modifiers import NumericalModifier
-from dnd.utils import set_hp
+from dnd.utils import set_hp, reset_combat_state
 
 
 def setup_test():
-    """Reset entity registries, event queue, and create a clean map."""
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    reset_map()
-
-    # Clear EventQueue handlers
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
-
-    # Clear events
-    EventQueue._events_by_lineage.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_timestamp.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-    EventQueue._all_events.clear()
-
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
+    """Reset all combat state and create a clean map."""
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
 
 def create_fighter_with_extra_attack(name: str, position: tuple, extra_attacks: int = 1) -> Entity:

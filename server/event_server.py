@@ -1376,7 +1376,7 @@ def _serialize_action(a) -> dict:
 def _serialize_available_actions(entity: Entity, actions: AvailableActionsResult) -> dict:
     """Serialize full available actions result for an entity."""
     ae = entity.action_economy
-    return {
+    result: dict = {
         "entity_uuid": str(actions.entity_uuid),
         "entity_actions": [_serialize_action(a) for a in actions.entity_actions],
         "position_actions": [_serialize_action(a) for a in actions.position_actions],
@@ -1388,6 +1388,22 @@ def _serialize_available_actions(entity: Entity, actions: AvailableActionsResult
         "reactions_remaining": ae.reactions.normalized_score,
         "extra_attacks_remaining": ae.get_resource_current("extra_attacks"),
     }
+    # Add spell slots for spellcasters
+    if entity.is_spellcaster:
+        spell_slots = {}
+        for level in range(1, 10):
+            slot_attr = getattr(ae, f"spell_slot_{level}", None)
+            if slot_attr is not None:
+                base_mod = slot_attr.get_base_modifier()
+                max_val = base_mod.value if base_mod else 0
+                if max_val > 0:
+                    spell_slots[str(level)] = {
+                        "current": slot_attr.normalized_score,
+                        "max": max_val,
+                    }
+        if spell_slots:
+            result["spell_slots"] = spell_slots
+    return result
 
 
 @app.get("/entity/{entity_uuid}/available-actions")

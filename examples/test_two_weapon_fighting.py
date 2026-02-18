@@ -14,12 +14,8 @@ from dnd.core.events import RangeType, Range
 from dnd.entity import Entity
 from dnd.actions import Attack
 from dnd.classes.fighter import FightingStyleTwoWeaponFighting
-
-
-def reset_entities():
-    """Clear entity registries for a fresh test."""
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+from dnd.utils import reset_combat_state, set_hp
+from dnd.core.gridmap import get_map
 
 
 def create_light_dagger(source_id):
@@ -64,7 +60,8 @@ def test_light_weapon_requirement():
     print(" TEST 1: LIGHT weapon requirement for off-hand slots")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     goblin = create_goblin(name="Goblin", position=(0, 0))
 
     heavy_sword = create_heavy_sword(goblin.uuid)
@@ -99,7 +96,8 @@ def test_off_hand_costs_bonus_action():
     print(" TEST 2: Off-hand attack costs BONUS ACTION")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     attacker = create_goblin(name="Attacker", position=(0, 0))
     target = create_goblin(name="Target", position=(1, 0))
 
@@ -145,7 +143,8 @@ def test_off_hand_no_ability_modifier():
     print(" TEST 3: Off-hand damage excludes ability modifier")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     attacker = create_goblin(name="Attacker", position=(0, 0))
     target = create_goblin(name="Target", position=(1, 0))
 
@@ -183,7 +182,8 @@ def test_full_two_weapon_combat():
     print(" TEST 4: Full two-weapon fighting combat round")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     attacker = create_goblin(name="Dual Wielder", position=(0, 0))
     target = create_goblin(name="Target", position=(1, 0))
 
@@ -191,6 +191,9 @@ def test_full_two_weapon_combat():
     dagger = create_light_dagger(attacker.uuid)
     attacker.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
     Entity.update_all_entities_senses()
+
+    # Set target HP high so it can't die from first hit
+    set_hp(target, 100)
 
     print(f"\nSetup: {attacker.name} has scimitar (main) and dagger (off)")
     print(f"Action Economy: actions={attacker.action_economy.actions.normalized_score}, "
@@ -247,7 +250,8 @@ def test_twf_style_adds_ability_modifier():
     print(" TEST 5: TWF style adds ability modifier to off-hand")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     attacker = create_goblin(name="Attacker", position=(0, 0))
     target = create_goblin(name="Target", position=(1, 0))
 
@@ -297,7 +301,8 @@ def test_twf_finesse_uses_higher_ability():
     print(" TEST 6: TWF finesse uses higher of STR/DEX")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     # Create a strong fighter (high STR, low DEX)
     from uuid import uuid4
     from dnd.entity import Entity, EntityConfig
@@ -363,7 +368,8 @@ def test_twf_main_hand_unaffected():
     print(" TEST 7: Main-hand unaffected by TWF style")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     attacker = create_goblin(name="Attacker", position=(0, 0))
     target = create_goblin(name="Target", position=(1, 0))
 
@@ -408,7 +414,8 @@ def test_twf_condition_removal():
     print(" TEST 8: TWF condition removal reverts off-hand damage")
     print("=" * 70)
 
-    reset_entities()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     attacker = create_goblin(name="Attacker", position=(0, 0))
     target = create_goblin(name="Target", position=(1, 0))
 

@@ -19,11 +19,13 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
 from dnd.core.modifiers import AdvantageStatus, DamageType, ResistanceStatus
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_action
 from dnd.items.weapons import create_greatsword, create_shortsword
 from dnd.items.armors import create_chain_mail
+from dnd.utils import reset_combat_state
+from dnd.core.gridmap import get_map
 
 from dnd.classes.rage import (
     RageFeature,
@@ -135,9 +137,8 @@ def test_frenzy_activation():
     """Test that Frenzy can be activated and applies Frenzied condition."""
     print("\n=== Test: Frenzy Activation ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # create_test_barbarian now includes RageFeature and FrenzyFeature
     barbarian = create_test_barbarian("Frenzy Test Barbarian")
@@ -169,7 +170,7 @@ def test_frenzy_activation():
     print("  [PASS] Frenzied condition applied")
     print("  [PASS] Rage resource consumed")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_frenzied_includes_raging():
@@ -181,9 +182,8 @@ def test_frenzied_includes_raging():
     """
     print("\n=== Test: Frenzied Includes Raging ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Frenzied Barbarian")
 
@@ -225,16 +225,15 @@ def test_frenzied_includes_raging():
     print("  [PASS] Parent-child relationship is correct (Raging > Frenzied)")
     print("  [PASS] Rage benefits are active")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_frenzied_strike_available():
     """Test that FrenziedStrike action is available while frenzied."""
     print("\n=== Test: FrenziedStrike Available While Frenzied ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Strike Test Barbarian", position=(0, 0))
     _ = create_test_target("Strike Target", position=(1, 0))  # Need target for senses
@@ -260,16 +259,15 @@ def test_frenzied_strike_available():
     assert has_frenzied_strike, "FrenziedStrike should be available while frenzied"
     print("  [PASS] FrenziedStrike is available while frenzied")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_frenzied_strike_costs_bonus_action():
     """Test that FrenziedStrike costs a bonus action."""
     print("\n=== Test: FrenziedStrike Costs Bonus Action ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Bonus Action Test", position=(0, 0))
     target = create_test_target("Strike Target", position=(1, 0))
@@ -307,16 +305,15 @@ def test_frenzied_strike_costs_bonus_action():
     else:
         print("  [INFO] Attack missed or was canceled - bonus action consumption not verified")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_frenzied_strike_validates_range():
     """Test that FrenziedStrike validates melee range."""
     print("\n=== Test: FrenziedStrike Validates Range ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Range Test Barbarian", position=(0, 0))
     target = create_test_target("Distant Target", position=(10, 0))  # Far away
@@ -346,16 +343,15 @@ def test_frenzied_strike_validates_range():
         print(f"  Result: {result.status_message if result else 'None'}")
         print("  [WARN] Expected strike to be blocked due to range")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_cannot_frenzy_heavy_armor():
     """Test that frenzy cannot be activated in heavy armor."""
     print("\n=== Test: Cannot Frenzy in Heavy Armor ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Armored Barbarian")
 
@@ -408,7 +404,7 @@ def test_cannot_frenzy_heavy_armor():
     is_frenzied = "Frenzied" in barbarian.active_conditions
     assert not is_frenzied, "Should not be frenzied in heavy armor"
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_frenzy_maintenance():
@@ -419,9 +415,8 @@ def test_frenzy_maintenance():
     """
     print("\n=== Test: Frenzy Maintenance ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Frenzy Maintenance Test")
 
@@ -452,16 +447,15 @@ def test_frenzy_maintenance():
     print("  [PASS] Rage ended correctly (no attack or damage)")
     print("  [PASS] Frenzied ended correctly (cascade removal)")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_no_exhaustion():
     """Test that BG3-style frenzy has no exhaustion mechanic."""
     print("\n=== Test: No Exhaustion (BG3 Adaptation) ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("No Exhaustion Barbarian")
 
@@ -481,16 +475,15 @@ def test_no_exhaustion():
     assert not has_exhaustion, "BG3 frenzy should not cause exhaustion"
     print("  [PASS] No exhaustion after frenzy (BG3 adaptation)")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 def test_frenzy_removes_frenzied_strike():
     """Test that FrenziedStrike is removed when frenzy ends."""
     print("\n=== Test: FrenziedStrike Removed When Frenzy Ends ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Cleanup Test", position=(0, 0))
     _target = create_test_target("Target", position=(1, 0))  # Need target for senses
@@ -539,7 +532,7 @@ def test_frenzy_removes_frenzied_strike():
     else:
         print("  [FAIL] FrenziedStrike should be removed when frenzy ends")
 
-    EventQueue.reset()
+    # cleanup handled by reset_combat_state() at start of next test
 
 
 if __name__ == "__main__":

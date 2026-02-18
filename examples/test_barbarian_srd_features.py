@@ -12,13 +12,15 @@ Tests for:
 
 from uuid import uuid4
 
-from dnd.core.events import EventPhase, DeathEvent, TurnEndEvent, EventQueue
+from dnd.core.events import EventPhase, DeathEvent, TurnEndEvent
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.actions_functional import setup_standard_actions, execute_action, get_available_actions
+from dnd.utils import reset_combat_state
+from dnd.core.gridmap import get_map
 from dnd.items.weapons import create_greataxe
 from dnd.classes.barbarian import (
     RageFeature, Raging, MindlessRage, DangerSense,
@@ -59,9 +61,8 @@ def create_test_barbarian(name: str = "Test Barbarian", position: tuple = (0, 0)
 
 def reset_test_state():
     """Reset game state for clean tests."""
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
 
 def test_death_event_fires():

@@ -16,14 +16,12 @@ from dnd.core.events import (
     EventQueue, EventType, EventPhase, Event, Trigger, EventHandler
 )
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
-from dnd.core.gridmap import reset_map, get_map
+from dnd.core.gridmap import get_map
+from dnd.utils import reset_combat_state
 
 
 def setup_test_entity(name: str = "TestEntity", position=(0, 0)) -> Entity:
     """Create a simple test entity."""
-    reset_map()
-    get_map().create_rectangle(0, 0, 10, 10)
-
     config = EntityConfig(
         ability_scores=AbilityScoresConfig(
             wisdom=AbilityConfig(ability_score=10),  # +0 modifier
@@ -39,29 +37,13 @@ def setup_test_entity(name: str = "TestEntity", position=(0, 0)) -> Entity:
     return entity
 
 
-def clear_event_queue():
-    """Clear all events and handlers from the queue for fresh tests."""
-    EventQueue._events_by_lineage.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_timestamp.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-    EventQueue._all_events.clear()
-    # Also clear handlers to avoid cross-test interference
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
-
-
 def test_saving_throw_phases():
     """Test that saving throw transitions through all phases."""
     print("\n=== Test 1: Saving Throw Phase Transitions ===")
 
     # Setup
-    clear_event_queue()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     entity = setup_test_entity("Saver")
     caster = setup_test_entity("Caster", position=(1, 0))
 
@@ -102,7 +84,8 @@ def test_handler_intercepts_effect_phase():
     print("\n=== Test 2: Handler Intercepts EFFECT Phase ===")
 
     # Setup
-    clear_event_queue()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     entity = setup_test_entity("Saver")
     caster = setup_test_entity("Caster", position=(1, 0))
 
@@ -161,7 +144,8 @@ def test_handler_can_modify_result():
     print("\n=== Test 3: Handler Modifies Result ===")
 
     # Setup
-    clear_event_queue()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     entity = setup_test_entity("Saver")
     caster = setup_test_entity("Caster", position=(1, 0))
 
