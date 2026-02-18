@@ -31,11 +31,28 @@ def log(msg: str) -> None:
 
 
 DRY_RUN = "--dry-run" in sys.argv
+CHARACTER_CLASS = "sorcerer"
+CLAUDE_MODEL = ""  # Empty = use default
+_RUN_DIR_OVERRIDE = ""
+for _i, _arg in enumerate(sys.argv):
+    if _arg == "--character-class" and _i + 1 < len(sys.argv):
+        CHARACTER_CLASS = sys.argv[_i + 1]
+    if _arg == "--model" and _i + 1 < len(sys.argv):
+        CLAUDE_MODEL = sys.argv[_i + 1]
+    if _arg == "--run-dir" and _i + 1 < len(sys.argv):
+        _RUN_DIR_OVERRIDE = sys.argv[_i + 1]
 SERVER_URL = "http://localhost:8000"
 PROJECT_DIR = Path(__file__).resolve().parent.parent  # dnd_engine root
 SCRATCH_DIR = Path("/tmp/dnd_game")
-LOG_DIR = PROJECT_DIR / "game_logs" / "turns"
-NOTEBOOK_DIR = PROJECT_DIR / "game_logs" / "notebooks"
+
+# Run directory: use --run-dir if provided (from spectate), else create timestamped
+from datetime import datetime as _dt
+if _RUN_DIR_OVERRIDE:
+    RUN_DIR = Path(_RUN_DIR_OVERRIDE)
+else:
+    RUN_DIR = PROJECT_DIR / "game_logs" / _dt.now().strftime("%Y-%m-%d_%H-%M-%S")
+LOG_DIR = RUN_DIR / "turns"
+NOTEBOOK_DIR = RUN_DIR / "notebooks"
 PROMPT_TEMPLATE = PROJECT_DIR / "cli" / "dnd_auto_prompt.md"
 
 
@@ -56,6 +73,8 @@ class PlayerSlot:
     notebook_path: Optional[Path] = None
     prompt_file: Optional[Path] = None
     combat_log_index: int = 0
+    trajectory_path: Optional[Path] = None
+    trajectory_started: bool = False
 
     @property
     def session_file(self) -> str:
@@ -197,6 +216,159 @@ def _clean_env() -> dict:
     return env
 
 
+def append_trajectory_turn(
+    raw_output: str,
+    prompt: str,
+    entity_name: str,
+    round_num: int,
+    trajectory_file: Path,
+    token: str = "",
+    system_prompt: str = "",
+    is_first_turn: bool = False,
+) -> None:
+    """Append a turn's trajectory to a per-faction trajectory file.
+
+    Each faction gets ONE trajectory file for the whole combat.
+    Uses ~~~~ fences (not backticks) to avoid nesting issues with markdown content.
+
+    Args:
+        raw_output: Raw stream-json output from Claude subprocess
+        prompt: The exact turn prompt sent to Claude
+        entity_name: Name of the active entity this turn
+        round_num: Current round number
+        trajectory_file: Path to the faction's trajectory file (appended to)
+        token: Session token (stripped from commands for readability)
+        system_prompt: System prompt content (only included on first turn)
+        is_first_turn: Whether this is the first turn for this faction
+    """
+    lines: List[str] = []
+
+    # Header for this faction's trajectory (only on first turn)
+    if is_first_turn:
+        lines.append(f"# Trajectory Log\n")
+        if system_prompt:
+            lines.append("## System Prompt")
+            lines.append("~~~~")
+            lines.append(system_prompt)
+            lines.append("~~~~\n")
+
+    # Turn header
+    lines.append(f"---\n## Round {round_num} — {entity_name}\n")
+
+    # Turn prompt
+    lines.append("### Observation")
+    lines.append("~~~~")
+    if len(prompt) > 8000:
+        lines.append(prompt[:4000])
+        lines.append(f"\n... ({len(prompt)} chars total, truncated) ...\n")
+        lines.append(prompt[-2000:])
+    else:
+        lines.append(prompt)
+    lines.append("~~~~\n")
+
+    # Parse stream-json events into action steps
+    # Stream-json format from `claude -p --output-format stream-json`:
+    #   {"type": "assistant", "message": {"content": [{"type": "text", "text": "..."}]}}
+    #   {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {...}}]}}
+    #   {"type": "user", "message": {"content": [{"type": "tool_result", "content": "..."}]}}
+    lines.append("### Actions")
+    step_num = 0
+    pending_tool: Optional[dict] = None
+
+    for raw_line in raw_output.split("\n"):
+        raw_line = raw_line.strip()
+        if not raw_line:
+            continue
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+
+        event_type = event.get("type")
+
+        if event_type == "assistant":
+            # Parse content blocks from message
+            message = event.get("message", {})
+            content_blocks = message.get("content", []) if isinstance(message, dict) else []
+            for block in content_blocks:
+                if not isinstance(block, dict):
+                    continue
+                block_type = block.get("type")
+
+                if block_type == "text":
+                    text = block.get("text", "").strip()
+                    if text:
+                        step_num += 1
+                        lines.append(f"**Step {step_num}** (reasoning)")
+                        lines.append("~~~~")
+                        lines.append(text[:2000])
+                        lines.append("~~~~\n")
+
+                elif block_type == "tool_use":
+                    pending_tool = {
+                        "tool": block.get("name", "?"),
+                        "input": block.get("input", {}),
+                    }
+
+        elif event_type == "user":
+            # Tool results are nested in user message content
+            message = event.get("message", {})
+            content_blocks = message.get("content", []) if isinstance(message, dict) else []
+            for block in content_blocks:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") != "tool_result":
+                    continue
+
+                step_num += 1
+                tool_name = pending_tool["tool"] if pending_tool else "?"
+                tool_input = pending_tool["input"] if pending_tool else {}
+                result_content = block.get("content", "")
+
+                lines.append(f"**Step {step_num}** — {tool_name}")
+
+                # Format input based on tool type
+                if tool_name == "Bash":
+                    cmd = tool_input.get("command", "")
+                    if token:
+                        cmd = cmd.replace(f"--token {token}", "--token ***")
+                    lines.append(f"Input: `{cmd}`")
+                elif tool_name == "Write":
+                    fp = tool_input.get("file_path", "")
+                    content_preview = tool_input.get("content", "")
+                    if len(content_preview) > 500:
+                        content_preview = content_preview[:500] + "..."
+                    lines.append(f"Input: Write {fp}")
+                    lines.append("~~~~")
+                    lines.append(content_preview)
+                    lines.append("~~~~")
+                elif tool_name == "Read":
+                    fp = tool_input.get("file_path", "")
+                    lines.append(f"Input: Read {fp}")
+                else:
+                    lines.append(f"Input: {json.dumps(tool_input, indent=2)[:500]}")
+
+                # Output
+                lines.append("Response:")
+                lines.append("~~~~")
+                if isinstance(result_content, str):
+                    lines.append(result_content[:3000] if len(result_content) > 3000 else result_content)
+                else:
+                    lines.append(str(result_content)[:3000])
+                lines.append("~~~~\n")
+
+                pending_tool = None
+
+    if step_num == 0:
+        lines.append("(no actions taken)\n")
+
+    # Append to file (create if first turn)
+    trajectory_file.parent.mkdir(parents=True, exist_ok=True)
+    mode = "w" if is_first_turn else "a"
+    with open(trajectory_file, mode, encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def display_stream_event(event: dict, slot_id: str) -> None:
     """Display stream-json event for spectator."""
     event_type = event.get("type")
@@ -241,17 +413,23 @@ def run_claude_turn(slot: PlayerSlot, prompt: str, max_turns: int = 20) -> dict:
     """
     cmd = ["claude", "-p", prompt]
 
+    # Model override (if specified)
+    if CLAUDE_MODEL:
+        cmd += ["--model", CLAUDE_MODEL]
+
     # Output format
     cmd += ["--output-format", "stream-json", "--verbose"]
 
     # Tool restrictions: ONLY agent CLI with this slot's random token + notebook R/W
+    # Note: path patterns (parenthetical) only work for Bash commands.
+    # Read/Write are auto-approved by listing the tool name.
     agent_prefix = (
         f"source .venv/bin/activate && "
         f"python -m cli.agent --token {slot.token}"
     )
     cmd += ["--allowedTools", f"Bash({agent_prefix} *)"]
-    cmd += ["--allowedTools", f"Read({NOTEBOOK_DIR}/*)"]
-    cmd += ["--allowedTools", f"Write({NOTEBOOK_DIR}/*)"]
+    cmd += ["--allowedTools", "Read"]
+    cmd += ["--allowedTools", "Write"]
 
     # System prompt (per-slot, with token filled in)
     if slot.prompt_file and slot.prompt_file.exists():
@@ -319,7 +497,7 @@ def run_claude_turn(slot: PlayerSlot, prompt: str, max_turns: int = 20) -> dict:
 # Turn verification
 # ---------------------------------------------------------------------------
 
-def verify_turn_ended(slot_client: APIClient, slot: PlayerSlot, entity_uuid: str) -> None:
+def verify_turn_ended(slot_client: APIClient, entity_uuid: str) -> None:
     """Check if Claude ended its turn. Force-end if not."""
     try:
         ping = slot_client.ping_session()
@@ -408,10 +586,14 @@ def turn_loop(
         # Get visibility for subjective view
         visibility = spectator.get_visibility()
         vis_set: Optional[set] = None
+        vis_cells: Optional[set] = None
         if active_uuid in visibility:
             vis_data = visibility[active_uuid]
             vis_set = set(vis_data.get("visible_entities", []))
             vis_set.update(slot.entity_uuids)
+            vis_cells = set(
+                tuple(c) for c in vis_data.get("visible_cells", [])
+            )
 
         # Get available actions
         actions = spectator.get_available_actions(active_uuid)
@@ -439,6 +621,7 @@ def turn_loop(
             round_number=round_num,
             notebook_content=notebook_content,
             visible_entity_uuids=vis_set,
+            visible_cells=vis_cells,
         )
 
         # Write session file (before Claude invocation)
@@ -459,16 +642,40 @@ def turn_loop(
             # Run Claude subprocess (blocking)
             result = run_claude_turn(slot, prompt)
 
-            # Log raw output
+            # Log raw output (prefixed with system prompt and turn prompt)
             safe_name = entity_name.replace(" ", "_")
             log_file = LOG_DIR / f"turn_{round_num}_{safe_name}.log"
             with open(log_file, "w") as f:
+                # Write system prompt at top of log
+                if slot.prompt_file and slot.prompt_file.exists():
+                    f.write("=== SYSTEM PROMPT ===\n")
+                    f.write(slot.prompt_file.read_text())
+                    f.write("\n=== END SYSTEM PROMPT ===\n\n")
+                f.write("=== TURN PROMPT ===\n")
+                f.write(prompt)
+                f.write("\n=== END TURN PROMPT ===\n\n")
+                f.write("=== STREAM OUTPUT ===\n")
                 f.write(result.get("raw_output", ""))
             log(f"  Log: {log_file}")
 
+            # Append to per-faction trajectory file
+            if slot.trajectory_path:
+                sys_prompt = ""
+                if not slot.trajectory_started and slot.prompt_file and slot.prompt_file.exists():
+                    sys_prompt = slot.prompt_file.read_text()
+                append_trajectory_turn(
+                    result.get("raw_output", ""),
+                    prompt, entity_name, round_num, slot.trajectory_path,
+                    token=slot.token,
+                    system_prompt=sys_prompt,
+                    is_first_turn=not slot.trajectory_started,
+                )
+                slot.trajectory_started = True
+                log(f"  Trajectory: {slot.trajectory_path}")
+
             # Verify turn ended — force end if Claude forgot
             slot_client = slot_clients[slot.slot_id]
-            verify_turn_ended(slot_client, slot, active_uuid)
+            verify_turn_ended(slot_client, active_uuid)
 
         # Show post-turn combat log to spectator
         log_data = spectator.get_combat_log(since=slot.combat_log_index)
@@ -508,8 +715,8 @@ def main() -> None:
     monster_client = APIClient(base_url=SERVER_URL)
 
     try:
-        # 3. Start PvP game (sorcerer hero)
-        pvp_result = spectator.start_pvp_game(character_class="sorcerer")
+        # 3. Start PvP game
+        pvp_result = spectator.start_pvp_game(character_class=CHARACTER_CLASS)
         log(f"PvP started: {pvp_result.get('message', '')}")
 
         # 4. Get entities by faction
@@ -526,12 +733,14 @@ def main() -> None:
             entity_uuids=hero_uuids,
             notebook_path=NOTEBOOK_DIR / "hero.md",
             prompt_file=SCRATCH_DIR / f"prompt_{hero_token}.md",
+            trajectory_path=RUN_DIR / "trajectory_hero.md",
         )
         monster_slot = PlayerSlot(
             slot_id="monsters", token=monster_token, faction="monsters",
             entity_uuids=monster_uuids,
             notebook_path=NOTEBOOK_DIR / "monsters.md",
             prompt_file=SCRATCH_DIR / f"prompt_{monster_token}.md",
+            trajectory_path=RUN_DIR / "trajectory_monsters.md",
         )
 
         log(f"Tokens: hero={hero_token}, monsters={monster_token}")

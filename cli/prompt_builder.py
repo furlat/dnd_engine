@@ -1,7 +1,7 @@
 """Build turn prompts for orchestrated Claude-vs-Claude PvP."""
 
 import copy
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Tuple
 
 from cli.agent import format_map, format_entities, format_actions, format_combat_log_entry
 
@@ -36,6 +36,7 @@ def build_turn_prompt(
     round_number: int,
     notebook_content: str,
     visible_entity_uuids: Optional[Set[str]] = None,
+    visible_cells: Optional[Set[Tuple[int, int]]] = None,
 ) -> str:
     """Build a complete turn prompt for a Claude subprocess.
 
@@ -62,23 +63,27 @@ def build_turn_prompt(
             log_lines.extend(format_combat_log_entry(entry))
         sections.append("\n".join(log_lines))
 
-    # 4. Entity table
+    # 4. Entity table (sorted by initiative order)
     entities = state.get("entities", [])
+    encounter = state.get("encounter", {})
+    init_order = encounter.get("initiative_order")
     entity_table = format_entities(
         entities,
         visible_entity_uuids=visible_entity_uuids,
         my_entity_uuid=active_entity_uuid,
         controlled_uuids=controlled_uuids,
+        initiative_order=init_order,
     )
     sections.append(f"## Entities\n{entity_table}")
 
-    # 5. ASCII map
-    ascii_map = format_map(
+    # 5. Map (structured data + ASCII grid, filtered by FOV)
+    map_text = format_map(
         state,
         visible_entity_uuids=visible_entity_uuids,
         my_entity_uuid=active_entity_uuid,
+        visible_cells=visible_cells,
     )
-    sections.append(f"## Map\n{ascii_map}")
+    sections.append(f"## Map\n{map_text}")
 
     # 6. Available actions (with AoE trimming)
     trimmed_actions = summarize_position_targets(actions)

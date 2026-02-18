@@ -78,6 +78,7 @@ _session_info: Dict[str, Any] = {
     "claude_connected": False,
     "session_id": None,
     "pvp_mode": False,
+    "spectator_mode": False,
 }
 
 # Turn history for replay
@@ -193,7 +194,8 @@ def set_session_info(
     hero_connected: Optional[bool] = None,
     claude_connected: Optional[bool] = None,
     session_id: Optional[str] = None,
-    pvp_mode: Optional[bool] = None
+    pvp_mode: Optional[bool] = None,
+    spectator_mode: Optional[bool] = None
 ):
     """Update session info for header display."""
     global _session_info
@@ -205,6 +207,8 @@ def set_session_info(
         _session_info["session_id"] = session_id
     if pvp_mode is not None:
         _session_info["pvp_mode"] = pvp_mode
+    if spectator_mode is not None:
+        _session_info["spectator_mode"] = spectator_mode
 
 
 def get_session_info() -> Dict[str, Any]:
@@ -691,6 +695,10 @@ def render_header_panel(
 
     if history_mode:
         content.append(f"HISTORY MODE {history_position or ''}", style="bold yellow")
+    elif _session_info.get("spectator_mode"):
+        content.append("SPECTATOR MODE", style="bold magenta")
+        content.append("  │  ")
+        content.append("Watching Claude vs Claude", style="dim")
     elif _session_info.get("pvp_mode"):
         content.append("PvP Mode", style="bold")
         content.append("  │  ")
@@ -1071,12 +1079,13 @@ def _render_log_entry(entry: Dict[str, Any], content: Text, depth: int = 0):
         content.append(f"{message}", style="dim")
 
 
-def render_combat_log_panel() -> Panel:
+def render_combat_log_panel(max_entries: Optional[int] = None) -> Panel:
     """Render the combat log with rich formatting."""
     global _combat_log
 
+    limit = max_entries or MAX_COMBAT_LOG
     content = Text()
-    entries = _combat_log[-MAX_COMBAT_LOG:]
+    entries = _combat_log[-limit:]
 
     if not entries:
         content.append("No combat history yet", style="dim")
@@ -1660,16 +1669,17 @@ def render_full_screen(
     # 3. Combatants panel (entity table with turn info in title)
     combatants_panel = render_combatants_panel(entities, turn, current_entity_uuid, is_my_turn)
 
-    # 4. Combat log panel
-    log_panel = render_combat_log_panel()
-
-    # 5. Output panel (command feedback - only if there's content)
-    output_panel = render_output_panel()
-
-    # 6. Available actions panel (only on player's turn, with economy in title)
+    # 4. Available actions panel (only on player's turn, with economy in title)
     actions_panel = None
     if is_my_turn and actions:
         actions_panel = render_available_actions_panel(actions, entities, turn, shortcut_registry)
+
+    # 5. Combat log panel (larger when no actions panel, e.g. spectator mode)
+    log_max = 15 if not actions_panel else None
+    log_panel = render_combat_log_panel(max_entries=log_max)
+
+    # 6. Output panel (command feedback - only if there's content)
+    output_panel = render_output_panel()
 
     # Print all panels in order (with top padding to avoid cutoff)
     console.print()  # Top margin
