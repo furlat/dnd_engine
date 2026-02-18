@@ -309,48 +309,66 @@ def test_thunderwave_push_direction():
 
 
 def test_thunderwave_push_blocked_by_wall():
-    """Push stops early if wall blocks the path."""
+    """Push stops early if wall blocks the path. Combat log says 'blocked by Wall'."""
     print("\n=== Test 5: Push Blocked by Wall ===")
-    reset_combat_state()
-    grid = get_map()
 
-    # Create arena with wall
-    grid.create_rectangle(0, 0, 20, 10)
+    for attempt in range(10):
+        reset_combat_state()
+        grid = get_map()
 
-    # Wall 1 tile behind target's initial position
-    grid.set_tile(9, 5, walkable=False, visible=False, name="Wall")
+        # Create arena with wall
+        grid.create_rectangle(0, 0, 20, 10)
 
-    caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
-    # Target that will be pushed toward wall
-    target = create_target(name="Target", position=(7, 5), constitution=1, hp=100)
-    Entity.update_all_entities_senses()
+        # Wall 1 tile behind target's initial position
+        grid.set_tile(9, 5, walkable=False, visible=False, name="Wall")
 
-    initial_pos = get_position(target)
-    print(f"  Initial position: {initial_pos}")
-    print(f"  Wall at: (9, 5)")
+        caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
+        # Target that will be pushed toward wall (CON 1 = always fails save except nat 20)
+        target = create_target(name="Target", position=(7, 5), constitution=1, hp=100)
+        Entity.update_all_entities_senses()
 
-    thunderwave = Thunderwave(
-        source_entity_uuid=caster.uuid,
-        end_position=(10, 5),  # Direction: east
-        cast_at_level=1,
-        template=False
-    )
+        initial_pos = get_position(target)
 
-    result = thunderwave.apply()
-    assert result is not None and not result.canceled
+        thunderwave = Thunderwave(
+            source_entity_uuid=caster.uuid,
+            end_position=(10, 5),  # Direction: east
+            cast_at_level=1,
+            template=False
+        )
 
-    final_pos = get_position(target)
-    print(f"  Final position: {final_pos}")
+        result = thunderwave.apply()
+        assert result is not None and not result.canceled
 
-    # Target should have been pushed but stopped at (8, 5), one tile before wall
-    # (Initial at 7, wall at 9, so max is 8)
-    if final_pos[0] > initial_pos[0]:
+        final_pos = get_position(target)
+
+        if final_pos[0] <= initial_pos[0]:
+            print(f"  Attempt {attempt + 1}: No push (nat 20?), retrying...")
+            continue
+
+        # Target should have been pushed but stopped at (8, 5), one tile before wall
         assert final_pos[0] <= 8, f"Target should stop before wall at (9,5), but ended at {final_pos}"
-        print(f"  Push blocked by wall at correct position")
-    else:
-        print(f"  No push occurred (target might have saved)")
+        print(f"  Initial position: {initial_pos}")
+        print(f"  Wall at: (9, 5)")
+        print(f"  Final position: {final_pos}")
 
-    print("PASS: Push blocked by wall tested")
+        # Verify blocked_by in ForcedMovementEvent combat log
+        assert isinstance(result, SpellEvent) and result.combat_log
+        found_blocked_by = False
+        for sub in result.combat_log.sub_entries:
+            for subsub in sub.sub_entries:
+                if subsub.data and subsub.data.get("type") == "forced_movement":
+                    assert subsub.data.get("blocked") is True, "Should be blocked"
+                    assert subsub.data.get("blocked_by") == "Wall", \
+                        f"blocked_by should be 'Wall', got '{subsub.data.get('blocked_by')}'"
+                    assert "blocked by Wall" in subsub.compact, \
+                        f"Compact text should contain 'blocked by Wall', got: {subsub.compact}"
+                    found_blocked_by = True
+                    print(f"  Combat log: {subsub.compact}")
+        assert found_blocked_by, "Should have found ForcedMovementEvent with blocked_by=Wall"
+        print("PASS: Push blocked by wall with descriptive combat log")
+        break
+    else:
+        pytest.fail("Got nat 20 on all 10 attempts")
 
 
 def test_thunderwave_cube_shape():
@@ -529,47 +547,70 @@ def test_thunderwave_statistical_saves():
 
 
 def test_thunderwave_push_into_occupied_space():
-    """Push stops at occupied spaces (other entities)."""
+    """Push stops at occupied spaces. Combat log says 'blocked by <entity name>'."""
     print("\n=== Test 10: Push Stops at Occupied Space ===")
-    reset_combat_state()
-    setup_basic_arena(20, 20)
 
-    caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
-    # Target that will be pushed
-    target_front = create_target(name="Front", position=(7, 5), constitution=1, hp=50)
-    # Blocker in the push path
-    blocker = create_target(name="Blocker", position=(9, 5), constitution=30, hp=100)
+    for attempt in range(10):
+        reset_combat_state()
+        setup_basic_arena(20, 20)
 
-    Entity.update_all_entities_senses()
+        caster = create_caster(name="Wizard", position=(5, 5), intelligence=20, proficiency=4)
+        # Target that will be pushed (CON 1 = always fails except nat 20)
+        target_front = create_target(name="Front", position=(7, 5), constitution=1, hp=50)
+        # Blocker in the push path (CON 30 = always saves, won't move)
+        blocker = create_target(name="Blocker", position=(9, 5), constitution=30, hp=100)
 
-    front_initial = get_position(target_front)
-    blocker_initial = get_position(blocker)
-    print(f"  Front target: {front_initial}")
-    print(f"  Blocker: {blocker_initial}")
+        Entity.update_all_entities_senses()
 
-    thunderwave = Thunderwave(
-        source_entity_uuid=caster.uuid,
-        end_position=(10, 5),
-        cast_at_level=1,
-        template=False
-    )
+        front_initial = get_position(target_front)
+        blocker_initial = get_position(blocker)
 
-    result = thunderwave.apply()
-    assert result is not None and not result.canceled
+        thunderwave = Thunderwave(
+            source_entity_uuid=caster.uuid,
+            end_position=(10, 5),
+            cast_at_level=1,
+            template=False
+        )
 
-    front_final = get_position(target_front)
-    blocker_final = get_position(blocker)
+        result = thunderwave.apply()
+        assert result is not None and not result.canceled
 
-    print(f"  Front final: {front_final}")
-    print(f"  Blocker final: {blocker_final}")
+        front_final = get_position(target_front)
+        blocker_final = get_position(blocker)
 
-    # Front target should be pushed but stopped before blocker
-    if front_final[0] > front_initial[0]:
+        if front_final[0] <= front_initial[0]:
+            print(f"  Attempt {attempt + 1}: Front not pushed (nat 20?), retrying...")
+            continue
+
+        # Front target should be pushed but stopped before blocker
         assert front_final[0] < blocker_initial[0], \
             f"Front should stop before blocker, got {front_final}"
+        print(f"  Front target: {front_initial} -> {front_final}")
+        print(f"  Blocker: {blocker_initial} -> {blocker_final}")
         print("  Front target stopped before blocker correctly")
 
-    print("PASS: Push blocked by occupied space tested")
+        # Verify blocked_by in ForcedMovementEvent combat log
+        assert isinstance(result, SpellEvent) and result.combat_log
+        found_blocked_by = False
+        for sub in result.combat_log.sub_entries:
+            target_name = sub.data.get("target_name", "")
+            if target_name != "Front":
+                continue
+            for subsub in sub.sub_entries:
+                if subsub.data and subsub.data.get("type") == "forced_movement":
+                    blocked_by = subsub.data.get("blocked_by")
+                    if blocked_by:
+                        assert blocked_by == "Blocker", \
+                            f"blocked_by should be 'Blocker', got '{blocked_by}'"
+                        assert "blocked by Blocker" in subsub.compact, \
+                            f"Compact text should contain 'blocked by Blocker', got: {subsub.compact}"
+                        found_blocked_by = True
+                        print(f"  Combat log: {subsub.compact}")
+        assert found_blocked_by, "Should have found ForcedMovementEvent with blocked_by=Blocker"
+        print("PASS: Push blocked by entity with descriptive combat log")
+        break
+    else:
+        pytest.fail("Front target never pushed in 10 attempts")
 
 
 def run_all_tests():

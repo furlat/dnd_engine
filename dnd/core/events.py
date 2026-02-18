@@ -1800,6 +1800,7 @@ class ForcedMovementEvent(Event):
     intended_distance: int = Field(description="How far we tried to push (feet)")
     actual_distance: int = Field(default=0, description="How far they actually moved")
     blocked_by_obstacle: bool = Field(default=False, description="Stopped by wall/entity")
+    blocked_by: Optional[str] = Field(default=None, description="What blocked the push (e.g. 'Wall', 'Skeleton 1')")
     cause: str = Field(default="shove", description="What caused this: shove, thunderwave, etc.")
 
     def generate_combat_log(self) -> CombatLogEntry:
@@ -1807,11 +1808,19 @@ class ForcedMovementEvent(Event):
         source_name = self.source_entity_name or "Unknown"
         target_name = self.target_entity_name or "Unknown"
 
+        # Build blocked suffix
+        blocked_suffix = ""
+        if self.blocked_by_obstacle:
+            if self.blocked_by:
+                blocked_suffix = f" (blocked by {self.blocked_by})"
+            else:
+                blocked_suffix = " (blocked)"
+
         # Build markdown-formatted verbosity levels
         if self.actual_distance == 0:
             compact_text = f"{md_color(target_name, 'yellow')} resists being pushed"
         elif self.blocked_by_obstacle:
-            compact_text = f"{md_color(target_name, 'yellow')} pushed {md_color(f'{self.actual_distance}ft', 'green')} (blocked)"
+            compact_text = f"{md_color(target_name, 'yellow')} pushed {md_color(f'{self.actual_distance}ft', 'green')}{blocked_suffix}"
         else:
             compact_text = f"{md_color(target_name, 'yellow')} pushed {md_color(f'{self.actual_distance}ft', 'green')}"
 
@@ -1820,7 +1829,7 @@ class ForcedMovementEvent(Event):
         if self.actual_distance > 0:
             verbose_text += f" {md_color(f'{self.actual_distance}ft', 'green')}"
             if self.blocked_by_obstacle:
-                verbose_text += " (blocked)"
+                verbose_text += blocked_suffix
         else:
             verbose_text += f" - {md_color('resisted', 'red')}"
 
@@ -1847,6 +1856,7 @@ class ForcedMovementEvent(Event):
                 "intended_distance": self.intended_distance,
                 "actual_distance": self.actual_distance,
                 "blocked": self.blocked_by_obstacle,
+                "blocked_by": self.blocked_by,
                 "start_position": list(self.start_position),
                 "end_position": list(self.end_position)
             },

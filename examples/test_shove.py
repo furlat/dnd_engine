@@ -280,12 +280,13 @@ def test_no_opportunity_attack():
 
 
 def test_blocked_by_wall():
-    """Test that shove stops at unwalkable tiles."""
+    """Test that shove stops at unwalkable tiles. Combat log says 'blocked by Wall'."""
     print("\n=== Test: Blocked by Wall ===")
 
     # Run multiple attempts to handle random Athletics contest
     success_count = 0
     blocked_correctly = 0
+    blocked_by_correct = 0
     max_attempts = 10
 
     for attempt in range(max_attempts):
@@ -313,7 +314,7 @@ def test_blocked_by_wall():
 
         assert shove_action is not None, "Shove should be available"
         target_info = shove_action.valid_targets[0]
-        execute_action(shover, "Shove", target_info)
+        result = execute_action(shover, "Shove", target_info)
 
         if target.position != (3, 2):
             # Shove succeeded - check wall blocking
@@ -321,6 +322,23 @@ def test_blocked_by_wall():
             if target.position[0] == 4:
                 blocked_correctly += 1
                 print(f"  Attempt {attempt + 1}: SUCCESS - pushed to {target.position} (blocked by wall)")
+
+                # Verify blocked_by in ShoveEvent combat log data
+                if result and result.combat_log:
+                    shove_blocked_by = result.combat_log.data.get("blocked_by")
+                    if shove_blocked_by == "Wall":
+                        blocked_by_correct += 1
+                    else:
+                        print(f"    WARNING: ShoveEvent blocked_by={shove_blocked_by}, expected 'Wall'")
+
+                    # Also check ForcedMovementEvent sub-entry
+                    for sub in result.combat_log.sub_entries:
+                        if sub.data and sub.data.get("type") == "forced_movement":
+                            assert sub.data.get("blocked_by") == "Wall", \
+                                f"ForcedMovementEvent blocked_by should be 'Wall', got '{sub.data.get('blocked_by')}'"
+                            assert "blocked by Wall" in sub.compact, \
+                                f"ForcedMovement compact should contain 'blocked by Wall', got: {sub.compact}"
+                            print(f"    ForcedMovement log: {sub.compact}")
             else:
                 print(f"  Attempt {attempt + 1}: FAIL - pushed to {target.position} (should be x=4)")
         else:
@@ -328,11 +346,13 @@ def test_blocked_by_wall():
 
     print(f"\nResults: {success_count} successful shoves out of {max_attempts} attempts")
     print(f"Wall blocking correct: {blocked_correctly}/{success_count} successful shoves")
+    print(f"blocked_by='Wall' correct: {blocked_by_correct}/{success_count} successful shoves")
 
     # We need at least one successful shove to verify wall blocking
     assert success_count > 0, "No shoves succeeded - need at least one to test wall blocking"
     assert blocked_correctly == success_count, f"Wall blocking failed: {blocked_correctly}/{success_count}"
-    print("PASS: Shove correctly blocked by wall")
+    assert blocked_by_correct == success_count, f"blocked_by check failed: {blocked_by_correct}/{success_count}"
+    print("PASS: Shove correctly blocked by wall with descriptive combat log")
 
 
 def test_passive_skill_calculation():

@@ -147,6 +147,26 @@ def show_action_result_status(result: dict) -> None:
         print("=" * 40)
 
 
+def show_inline_state(result: dict, client: APIClient) -> None:
+    """Show map and entity table from the inline state in an action result."""
+    state = result.get("state")
+    if not state:
+        return
+
+    my_entity_uuid = client.current_entity_uuid
+    controlled_uuids = getattr(client, '_controlled_entity_uuids', [])
+
+    print("")
+    print(format_map(state, my_entity_uuid=my_entity_uuid))
+    print("")
+
+    entities = state.get("entities", [])
+    encounter = state.get("encounter")
+    init_order = encounter.get("initiative_order") if encounter else None
+    print(format_entities(entities, my_entity_uuid=my_entity_uuid,
+                          controlled_uuids=controlled_uuids, initiative_order=init_order))
+
+
 def show_remaining_actions(result: dict) -> None:
     """Show compact summary of remaining actions from execute response."""
     actions = result.get("available_actions")
@@ -369,7 +389,7 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
             first_letters[letter] = []
         first_letters[letter].append(e)
 
-    # Assign chars
+    # Assign chars (priority: @ > alive > dead — never overwrite higher priority)
     next_num = 1
     for e in visible_entities:
         e_uuid = e.get("uuid")
@@ -379,9 +399,11 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
         is_dead = e.get("is_dead", False)
 
         if e_uuid == my_entity_uuid:
-            entity_char_map[pos_tuple] = "@"
+            entity_char_map[pos_tuple] = "@"  # Self always wins
         elif is_dead:
-            entity_char_map[pos_tuple] = "%"
+            # Dead only renders if no living entity or self already there
+            if pos_tuple not in entity_char_map:
+                entity_char_map[pos_tuple] = "%"
         else:
             letter = name[0].upper()
             if len(first_letters.get(letter, [])) > 1:
@@ -389,8 +411,11 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
                 next_num += 1
             else:
                 char = letter
-            entity_char_map[pos_tuple] = char
-            # Legend entry
+            # Alive entity overwrites dead but not self
+            existing = entity_char_map.get(pos_tuple)
+            if existing != "@":
+                entity_char_map[pos_tuple] = char
+            # Legend entry (always add — entity is listed in ENTITIES section regardless)
             faction = e.get("faction")
             if my_faction and faction == my_faction:
                 tag = "ally"
@@ -907,6 +932,7 @@ def cmd_move(client: APIClient, x: int, y: int) -> int:
         print(f"OK: Moved to ({end_pos[0]},{end_pos[1]})")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_inline_state(result, client)
         show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
@@ -975,6 +1001,7 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
                 print(f"OK: {action_name} to ({end_pos[0]},{end_pos[1]})")
                 show_combat_log(result.get("combat_log_entries", []))
                 show_action_result_status(result)
+                show_inline_state(result, client)
                 show_remaining_actions(result)
             else:
                 message = result.get("message", "Unknown error")
@@ -1047,6 +1074,7 @@ def cmd_attack(client: APIClient, action_index: int, target_index: int = 0) -> i
         print(f"OK: Attack vs {target_name}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_inline_state(result, client)
         show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
@@ -1157,6 +1185,7 @@ def cmd_self_action(client: APIClient, action_name: str) -> int:
         print(f"OK: {match.get('display_name', action_name)}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_inline_state(result, client)
         show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
@@ -1247,6 +1276,7 @@ def cmd_use(client: APIClient, target_arg: str) -> int:
         print(f"OK: {action.get('display_name', '?')} -> {target_name}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_inline_state(result, client)
         show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
@@ -1434,6 +1464,7 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
         print(f"OK: {spell_display}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_inline_state(result, client)
         show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")

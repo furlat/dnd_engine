@@ -379,3 +379,6 @@ class ActionResult(BaseModel):
 
     # Updated available actions after execution (so agent sees new options like Extra Attack)
     available_actions: Optional[dict] = None
+
+    # Full game state snapshot after action (grid, entities, encounter, floor_objects)
+    state: Optional[APIGameState] = None

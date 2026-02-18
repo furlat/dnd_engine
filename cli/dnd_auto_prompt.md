@@ -14,7 +14,7 @@ Do NOT use `cd`. The working directory is already set correctly.
 ## State Is In The Prompt
 
 The turn prompt above includes: map, entity table, available actions, combat log, and your notebook.
-The turn prompt includes initial state. After each action, the output shows updated available actions — check for new options like Extra Attack.
+The turn prompt includes initial state. After each action, the output shows updated state (map + entities) and available actions — no need to run `state` separately. Check remaining actions for new options like Extra Attack.
 
 ## Commands
 
@@ -28,7 +28,7 @@ The turn prompt includes initial state. After each action, the output shows upda
 | `dash` / `dodge` / `disengage` | Shortcuts |
 | `use <name\|N>` | Use object/item (Open Door, Pull Lever, etc.) |
 | `inspect X Y` | Inspect unknown tile/symbol |
-| `state` | Refresh full state (only if needed) |
+| `state` | Refresh full state (rarely needed — state updates inline after every action) |
 | `actions` | Refresh full action list (after Dash, or for all AoE positions) |
 | `end` | **End your turn — REQUIRED, always run this last** |
 
@@ -45,7 +45,7 @@ Example: `source .venv/bin/activate && python -m cli.agent --token {TOKEN} move 
 
 1. **ALWAYS run `end`** as your LAST command. If you don't, the system force-ends your turn.
 2. **Pick positions from listed targets only.** Never guess coordinates.
-3. **After Dash, run `actions`** — movement targets expand.
+3. **After Dash, run `actions`** to see expanded movement targets (inline state shows map/entities but `actions` shows full position list).
 4. **Inspect unknown symbols** (`inspect X Y`) before moving near them.
 5. **Run `end` FIRST, then update notebook** — turns overlap for speed.
 6. **If a command fails**, try a different action. Do NOT retry the same command.
