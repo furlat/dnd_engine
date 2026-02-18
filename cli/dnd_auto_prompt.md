@@ -14,7 +14,7 @@ Do NOT use `cd`. The working directory is already set correctly.
 ## State Is In The Prompt
 
 The turn prompt above includes: map, entity table, available actions, combat log, and your notebook.
-Use this data directly. Only run `state` or `actions` if something changes mid-turn (after Dash, door open, etc.).
+The turn prompt includes initial state. After each action, the output shows updated available actions — check for new options like Extra Attack.
 
 ## Commands
 
@@ -22,7 +22,7 @@ Use this data directly. Only run `state` or `actions` if something changes mid-t
 |---------|---------|
 | `move X Y` | Move to position — pick from listed targets |
 | `jump X Y` | Jump to position |
-| `attack N` | Attack target by entity action index |
+| `attack N [T]` | Attack: N=action index, T=target index (default 0) |
 | `cast <spell> [N\|X Y]` | Cast spell at target index or position |
 | `self <name>` | Self-action (Dash, Dodge, Disengage, Hide) |
 | `dash` / `dodge` / `disengage` | Shortcuts |
@@ -33,6 +33,13 @@ Use this data directly. Only run `state` or `actions` if something changes mid-t
 | `end` | **End your turn — REQUIRED, always run this last** |
 
 Example: `source .venv/bin/activate && python -m cli.agent --token {TOKEN} move 5 3`
+
+## Attacks
+- `attack N` = ONE attack roll using entity action [N] against target [0]
+- `attack N T` = entity action [N] against target [T]
+- After each attack, remaining actions are shown — look for Extra Attack
+- Fighters get Extra Attack after their first attack (it appears as a new action)
+- Typical Fighter turn: `attack 0` → `attack 1` (Extra Attack) → `attack 2` (Dagger bonus)
 
 ## Rules
 
@@ -70,15 +77,26 @@ Your notebook persists between turns. Write observations about:
 4. Avoid hazards: don't repeat a path that killed an ally
 5. Dash wisely: extra movement but costs your action
 
-## Map Symbols
+## Map Format
 
-| Symbol | Meaning |
-|--------|---------|
-| `@` | Your active entity |
-| `S` | Your allies (same faction) |
-| `H` | Enemy |
-| `#` | Wall |
-| `.` | Floor |
-| `~` | Water |
-| `π` | Door |
-| `θ`, `λ`, `♦` | Objects — `inspect X Y` to identify |
+The map has two sections: **structured data** (exact coordinates) and **ASCII grid** (spatial layout).
+
+### Structured Data (use for targeting)
+- `MAP: (min_x,min_y)-(max_x,max_y)` — grid bounds
+- `ENTITIES: (x,y):Name(tag)` — tag is `you`, `ally`, `enemy`, or `dead`
+- `WALLS: (x,y) ...` — blocks movement and vision
+- `WATER: (x,y) ...` — blocks movement, allows vision
+- `HAZARDS: (x,y) ...` — deals damage (spikes, fire)
+- `DIFFICULT: (x,y) ...` — costs 2x movement
+- `OBJECTS: (x,y):Name` — floor items — `inspect X Y` to interact
+- `DARK: (x,y) ...` — darkness tiles (can't see without darkvision)
+- `DIM: (x,y) ...` — dim light tiles
+
+Everything not listed is normal walkable floor.
+
+### ASCII Grid (use for spatial awareness)
+Below the data is an ASCII grid showing the same map visually.
+- `@` = You, `%` = Dead, `#` = Wall, `~` = Water, `^` = Hazard, `,` = Slow, `.` = Floor, `φ` = Item
+- Letters/numbers = entities (see LEGEND line)
+- Dark tiles appear as spaces
+- **Always use coordinates from the structured data for commands, not grid counting.**

@@ -111,12 +111,17 @@ def strip_markdown(text: str) -> str:
 
 
 def format_combat_log_entry(entry: dict, indent: int = 0) -> List[str]:
-    """Format a combat log entry + sub_entries recursively using compact text."""
+    """Format a combat log entry + sub_entries recursively using verbose text.
+
+    Uses 'verbose' level (includes roll details like 'd20(15)+4=19 vs AC 13')
+    so the agent sees the same detail as the human player.
+    Falls back to compact if verbose not available.
+    """
     lines: List[str] = []
-    compact = entry.get("compact", entry.get("summary", ""))
-    if compact:
+    text = entry.get("verbose", entry.get("compact", entry.get("summary", "")))
+    if text:
         prefix = "  " * indent
-        lines.append(f"{prefix}{strip_markdown(compact)}")
+        lines.append(f"{prefix}{strip_markdown(text)}")
     for sub in entry.get("sub_entries", []):
         lines.extend(format_combat_log_entry(sub, indent + 1))
     return lines
@@ -140,7 +145,34 @@ def show_action_result_status(result: dict) -> None:
         print("=" * 40)
         print("  ENCOUNTER ENDED — game over!")
         print("=" * 40)
-        print("  Run `end` to finish your turn.")
+
+
+def show_remaining_actions(result: dict) -> None:
+    """Show compact summary of remaining actions from execute response."""
+    actions = result.get("available_actions")
+    if not actions:
+        return
+
+    act = actions.get("actions_remaining", 0)
+    bonus = actions.get("bonus_actions_remaining", 0)
+    movement = actions.get("remaining_movement", 0)
+    extra_atk = actions.get("extra_attacks_remaining", 0)
+    extra_str = f"  Extra Attacks:{extra_atk}" if extra_atk else ""
+    print(f"REMAINING: Actions:{act}  Bonus:{bonus}  Movement:{movement}ft{extra_str}")
+
+    # Show ready entity actions (attacks) with targets
+    entity_actions = actions.get("entity_actions", [])
+    ready_attacks = []
+    for i, atk in enumerate(entity_actions):
+        if atk.get("can_afford", False) and atk.get("valid_targets"):
+            name = atk.get("display_name", atk.get("template_name", "?"))
+            cost_type = atk.get("cost_type", "actions")
+            cost_label = {"actions": "action", "bonus_actions": "bonus", "extra_attacks": "extra attack"}.get(cost_type, cost_type)
+            targets = atk.get("valid_targets", [])
+            target_parts = [f"[{t.get('index', j)}]{t.get('target_name', '?')}" for j, t in enumerate(targets[:5])]
+            ready_attacks.append(f"[{i}] {name} ({cost_label}) -> {', '.join(target_parts)}")
+    if ready_attacks:
+        print(f"READY ATTACKS: {' | '.join(ready_attacks)}")
 
 
 def get_my_entity(client: APIClient) -> Optional[dict]:
@@ -177,20 +209,30 @@ def is_my_turn(client: APIClient) -> bool:
 
 
 def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
-               my_entity_uuid: Optional[str] = None) -> str:
-    """Format ASCII map from state data.
+               my_entity_uuid: Optional[str] = None,
+               visible_cells: Optional[set] = None) -> str:
+    """Format map as structured data + ASCII grid for AI consumption.
+
+    Outputs two sections:
+    1. Structured coordinate data (precise positions for targeting)
+    2. ASCII grid (spatial layout for understanding adjacency/distance)
+
+    Both sections are filtered by visible_cells (FOV) when provided.
+    Only tiles the entity can actually see are included.
 
     Args:
         state: Full game state from /state endpoint
         visible_entity_uuids: Set of entity UUIDs visible to the observer.
             If None, shows all entities (omniscient view).
-        my_entity_uuid: UUID of the observer entity (always rendered as @).
+        my_entity_uuid: UUID of the observer entity (marked as @).
+        visible_cells: Set of (x,y) tuples the entity can currently see.
+            If None, shows all tiles (omniscient view).
     """
     grid = state.get("grid", {})
     tiles = grid.get("tiles", [])
 
     # Build tile lookup
-    tile_map = {}
+    tile_map: dict[tuple[int, int], dict] = {}
     for t in tiles:
         tile_map[(t.get("x", 0), t.get("y", 0))] = t
 
@@ -201,54 +243,213 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
     max_y = grid.get("max_y", 14)
 
     entities = state.get("entities", [])
+    my_faction: Optional[str] = None
+    for e in entities:
+        if e.get("uuid") == my_entity_uuid:
+            my_faction = e.get("faction")
+            break
 
-    # Build entity position map (highest priority on map)
-    # Filter by visibility: only show entities the observer can see
-    entity_map = {}
+    def _is_visible(pos: tuple) -> bool:
+        """Check if a position is visible to the entity."""
+        if visible_cells is None:
+            return True
+        return pos in visible_cells
+
+    lines: List[str] = []
+    lines.append(f"MAP: ({min_x},{min_y})-({max_x},{max_y})")
+
+    # --- Entities section ---
+    entity_lines: List[str] = []
+    visible_entities: list = []
     for e in entities:
         e_uuid = e.get("uuid")
-        # Skip entities not visible to us (unless omniscient mode)
         if visible_entity_uuids is not None and e_uuid != my_entity_uuid:
             if e_uuid not in visible_entity_uuids:
                 continue
-        pos = tuple(e.get("position", [0, 0]))
+        visible_entities.append(e)
+
+    for e in visible_entities:
+        e_uuid = e.get("uuid")
+        pos = e.get("position", [0, 0])
         name = e.get("name", "?")
-        char = "@" if e_uuid == my_entity_uuid else name[0].upper()
-        entity_map[pos] = char
+        is_dead = e.get("is_dead", False)
 
-    # Build floor object position map (lower priority than entities)
-    object_map: dict[tuple[int, int], str] = {}
+        if e_uuid == my_entity_uuid:
+            tag = "you"
+        elif is_dead:
+            tag = "dead"
+        else:
+            faction = e.get("faction")
+            if my_faction and faction == my_faction:
+                tag = "ally"
+            elif my_faction and faction and faction != my_faction:
+                tag = "enemy"
+            else:
+                tag = ""
+        entity_lines.append(f"({pos[0]},{pos[1]}):{name}({tag})")
+    if entity_lines:
+        lines.append(f"ENTITIES: {' '.join(entity_lines)}")
+
+    # --- Terrain: walls, water, hazards, difficult (only visible, non-floor) ---
+    walls: List[str] = []
+    water: List[str] = []
+    hazards: List[str] = []
+    difficult: List[str] = []
+
+    for pos, tile in sorted(tile_map.items()):
+        if not _is_visible(pos):
+            continue
+        if not tile.get("walkable", True):
+            tile_name = tile.get("name", "Wall")
+            if tile_name == "Water":
+                water.append(f"({pos[0]},{pos[1]})")
+            else:
+                walls.append(f"({pos[0]},{pos[1]})")
+        else:
+            is_hazardous = tile.get("is_hazardous", False)
+            walking_cost = tile.get("walking_cost", 1)
+            tile_name = tile.get("name", "Floor")
+            if is_hazardous or tile_name == "Spikes":
+                hazards.append(f"({pos[0]},{pos[1]})")
+            elif walking_cost > 1 or tile_name == "Difficult Terrain":
+                difficult.append(f"({pos[0]},{pos[1]})")
+
+    if walls:
+        lines.append(f"WALLS: {' '.join(walls)}")
+    if water:
+        lines.append(f"WATER: {' '.join(water)}")
+    if hazards:
+        lines.append(f"HAZARDS: {' '.join(hazards)}")
+    if difficult:
+        lines.append(f"DIFFICULT: {' '.join(difficult)}")
+
+    # --- Floor objects (only visible) ---
+    obj_pos_map: dict[tuple[int, int], str] = {}
     for obj in state.get("floor_objects", []):
-        pos = tuple(obj.get("position", [0, 0]))
-        if pos not in entity_map:
-            object_map[(pos[0], pos[1])] = obj.get("map_char", "?")[0]
+        pos = obj.get("position", [0, 0])
+        pos_tuple = (pos[0], pos[1])
+        if not _is_visible(pos_tuple):
+            continue
+        obj_name = obj.get("name", "Item")
+        obj_pos_map[pos_tuple] = obj_name
+    if obj_pos_map:
+        obj_entries = [f"({p[0]},{p[1]}):{n}" for p, n in sorted(obj_pos_map.items())]
+        lines.append(f"OBJECTS: {' '.join(obj_entries)}")
 
-    lines = []
+    # --- Light levels (only visible, only non-bright) ---
+    dim_list: List[str] = []
+    for pos, tile in sorted(tile_map.items()):
+        if not _is_visible(pos):
+            continue
+        light = tile.get("light_level", 3)
+        # If entity can see it, it's at least dim (darkvision etc.)
+        # Only report dim — dark tiles the entity can see via darkvision appear dim
+        if light <= 2:
+            dim_list.append(f"({pos[0]},{pos[1]})")
+
+    if dim_list:
+        lines.append(f"DIM: {' '.join(dim_list)}")
+
+    # ===== ASCII GRID (spatial layout) =====
+    # Assign entity symbols: @ for self, % for dead, letters/numbers for others
+    entity_char_map: dict[tuple[int, int], str] = {}
+    legend_entries: List[str] = []
+    # Count first letters to detect collisions
+    first_letters: dict[str, list] = {}
+    for e in visible_entities:
+        if e.get("uuid") == my_entity_uuid or e.get("is_dead", False):
+            continue
+        letter = e.get("name", "?")[0].upper()
+        if letter not in first_letters:
+            first_letters[letter] = []
+        first_letters[letter].append(e)
+
+    # Assign chars
+    next_num = 1
+    for e in visible_entities:
+        e_uuid = e.get("uuid")
+        pos = e.get("position", [0, 0])
+        pos_tuple = (pos[0], pos[1])
+        name = e.get("name", "?")
+        is_dead = e.get("is_dead", False)
+
+        if e_uuid == my_entity_uuid:
+            entity_char_map[pos_tuple] = "@"
+        elif is_dead:
+            entity_char_map[pos_tuple] = "%"
+        else:
+            letter = name[0].upper()
+            if len(first_letters.get(letter, [])) > 1:
+                char = str(next_num)
+                next_num += 1
+            else:
+                char = letter
+            entity_char_map[pos_tuple] = char
+            # Legend entry
+            faction = e.get("faction")
+            if my_faction and faction == my_faction:
+                tag = "ally"
+            elif my_faction and faction and faction != my_faction:
+                tag = "enemy"
+            else:
+                tag = ""
+            legend_entries.append(f"{char}={name}({tag})" if tag else f"{char}={name}")
+
+    # Build grid rows
     width = max_x - min_x + 1
-    lines.append("=" * (width + 2))
-
-    for y in range(max_y, min_y - 1, -1):
-        row = ""
+    border = "=" * (width + 2)
+    lines.append("")
+    lines.append(border)
+    for y in range(min_y, max_y + 1):
+        row_chars: List[str] = []
         for x in range(min_x, max_x + 1):
             pos = (x, y)
-            if pos in entity_map:
-                row += entity_map[pos]
-            elif pos in object_map:
-                row += object_map[pos]
-            elif pos in tile_map and not tile_map[pos].get("walkable", True):
-                row += "#"
+            # Not visible = space (fog of war)
+            if not _is_visible(pos):
+                row_chars.append(" ")
+                continue
+            # Entity takes priority
+            if pos in entity_char_map:
+                row_chars.append(entity_char_map[pos])
+                continue
+            # Floor object
+            if pos in obj_pos_map:
+                row_chars.append("\u03c6")  # φ
+                continue
+            tile = tile_map.get(pos)
+            if tile is None:
+                row_chars.append(" ")
+                continue
+            # Terrain
+            if not tile.get("walkable", True):
+                tile_name = tile.get("name", "Wall")
+                if tile_name == "Water":
+                    row_chars.append("~")
+                else:
+                    row_chars.append("#")
+            elif tile.get("is_hazardous", False) or tile.get("name") == "Spikes":
+                row_chars.append("^")
+            elif tile.get("walking_cost", 1) > 1 or tile.get("name") == "Difficult Terrain":
+                row_chars.append(",")
             else:
-                row += "."
-        lines.append(f"|{row}|")
+                row_chars.append(".")
+        lines.append("|" + "".join(row_chars) + "|")
+    lines.append(border)
 
-    lines.append("=" * (width + 2))
+    # Legend
+    legend_parts = ["@=You"]
+    legend_parts.extend(legend_entries)
+    legend_parts.extend(["%=Dead", "#=Wall", "~=Water", "^=Hazard", ",=Slow", ".=Floor", "\u03c6=Item"])
+    lines.append("LEGEND: " + "  ".join(legend_parts))
+
     return "\n".join(lines)
 
 
 def format_entities(entities: list, visible_entity_uuids: Optional[set] = None,
                     my_entity_uuid: Optional[str] = None,
-                    controlled_uuids: Optional[List[str]] = None) -> str:
-    """Format entity status table.
+                    controlled_uuids: Optional[List[str]] = None,
+                    initiative_order: Optional[list] = None) -> str:
+    """Format entity status table sorted by initiative order.
 
     Args:
         entities: All entities from state.
@@ -256,8 +457,15 @@ def format_entities(entities: list, visible_entity_uuids: Optional[set] = None,
             If None, shows all entities (omniscient view).
         my_entity_uuid: UUID of the observer entity (always shown).
         controlled_uuids: All entity UUIDs controlled by this session (always shown).
+        initiative_order: List of {uuid, name, initiative} dicts from encounter.
+            If provided, entities are sorted by initiative (turn order).
     """
-    lines = ["ENTITIES:"]
+    # Sort entities by initiative order if available
+    if initiative_order:
+        order_map = {c.get("uuid"): i for i, c in enumerate(initiative_order)}
+        entities = sorted(entities, key=lambda e: order_map.get(e.get("uuid"), 999))
+
+    lines = ["ENTITIES (in turn order):"]
     lines.append(f"{'#':<3} {'Name':<12} {'Faction':<10} {'HP':<8} {'AC':<4} {'Pos':<8} {'Conditions'}")
     lines.append("-" * 70)
 
@@ -307,7 +515,9 @@ def format_actions(actions: dict, entity_name: str) -> str:
     bonus = actions.get("bonus_actions_remaining", "?")
     react = actions.get("reactions_remaining", "?")
     movement = actions.get("remaining_movement", 0)
-    lines.append(f"RESOURCES: Actions:{act}  Bonus:{bonus}  Reactions:{react}  Movement:{movement}ft")
+    extra_atk = actions.get("extra_attacks_remaining", 0)
+    extra_str = f"  Extra Attacks:{extra_atk}" if extra_atk else ""
+    lines.append(f"RESOURCES: Actions:{act}  Bonus:{bonus}  Reactions:{react}  Movement:{movement}ft{extra_str}")
     lines.append("")
 
     # Position-based actions (Move, Jump, AoE spells)
@@ -367,11 +577,13 @@ def format_actions(actions: dict, entity_name: str) -> str:
         valid_targets = atk.get("valid_targets", [])
         num_targets = len(valid_targets)
         is_spell = atk.get("action_category") == "spell"
+        cost_type = atk.get("cost_type", "actions")
+        cost_label = {"actions": "action", "bonus_actions": "bonus", "extra_attacks": "extra attack", "reactions": "reaction", "movement": "movement"}.get(cost_type, cost_type)
         status = "READY" if can_afford and num_targets > 0 else "NO TARGETS" if num_targets == 0 else "NO ACTION"
         spell_tag = "[SPELL] " if is_spell else ""
-        target_names = [t.get("target_name", "?") for t in valid_targets[:3]]
-        targets_str = f" -> {', '.join(target_names)}" if target_names else ""
-        lines.append(f"  [{i}] {spell_tag}{name} - {num_targets} targets ({status}){targets_str}")
+        target_parts = [f"[{t.get('index', j)}]{t.get('target_name', '?')}" for j, t in enumerate(valid_targets[:5])]
+        targets_str = f" -> {', '.join(target_parts)}" if target_parts else ""
+        lines.append(f"  [{i}] {spell_tag}{name} ({cost_label}) - {num_targets} targets ({status}){targets_str}")
 
     lines.append("")
 
@@ -455,7 +667,7 @@ def cmd_connect(client: APIClient) -> int:
         return 1
 
 
-def cmd_disconnect(client: APIClient) -> int:
+def cmd_disconnect(_client: APIClient) -> int:
     """Disconnect from the game."""
     clear_session()
     print("Disconnected. Session cleared.")
@@ -492,13 +704,17 @@ def cmd_state(client: APIClient) -> int:
         if my_entity_uuid and e.get("uuid") == my_entity_uuid:
             my_entity = e
 
-    # Build visible entity set from the observer's perspective
+    # Build visible entity set and visible cells from the observer's perspective
     visible_entity_uuids: Optional[set] = None
+    visible_cells: Optional[set] = None
     if my_entity_uuid and my_entity_uuid in visibility:
         my_vis = visibility[my_entity_uuid]
         visible_entity_uuids = set(my_vis.get("visible_entities", []))
         # Always include all controlled entities
         visible_entity_uuids.update(controlled_uuids)
+        visible_cells = set(
+            tuple(c) for c in my_vis.get("visible_cells", [])
+        )
 
     # Check if it's my turn using session
     my_turn = is_my_turn(client)
@@ -521,42 +737,12 @@ def cmd_state(client: APIClient) -> int:
     print("")
 
     # Map (filtered by visibility)
-    print(format_map(state, visible_entity_uuids, my_entity_uuid))
+    print(format_map(state, visible_entity_uuids, my_entity_uuid, visible_cells))
     print("")
 
-    # Entities (filtered by visibility)
-    print(format_entities(entities, visible_entity_uuids, my_entity_uuid, controlled_uuids))
-
-    # Lighting summary (only show if there are dark/dim tiles)
-    grid = state.get("grid", {})
-    tiles = grid.get("tiles", [])
-    dark_positions = []
-    dim_positions = []
-    for t in tiles:
-        light = t.get("light_level", 3)  # default bright
-        if light <= 1:  # darkness or magical darkness
-            dark_positions.append((t.get("x", 0), t.get("y", 0)))
-        elif light == 2:  # dim light
-            dim_positions.append((t.get("x", 0), t.get("y", 0)))
-
-    if dark_positions or dim_positions:
-        print("")
-        print("LIGHTING:")
-        if dark_positions:
-            pos_strs = [f"({p[0]},{p[1]})" for p in dark_positions[:8]]
-            suffix = f" ... +{len(dark_positions) - 8} more" if len(dark_positions) > 8 else ""
-            print(f"  Dark: {', '.join(pos_strs)}{suffix}")
-        if dim_positions:
-            pos_strs = [f"({p[0]},{p[1]})" for p in dim_positions[:8]]
-            suffix = f" ... +{len(dim_positions) - 8} more" if len(dim_positions) > 8 else ""
-            print(f"  Dim: {', '.join(pos_strs)}{suffix}")
-
-        # Show darkvision info for controlled entity
-        if my_entity:
-            senses = my_entity.get("senses", {})
-            darkvision = senses.get("darkvision_range", 0)
-            if darkvision:
-                print(f"  ({my_entity.get('name', '?')} has Darkvision {darkvision}ft)")
+    # Entities (filtered by visibility, sorted by initiative)
+    init_order = encounter.get("initiative_order")
+    print(format_entities(entities, visible_entity_uuids, my_entity_uuid, controlled_uuids, init_order))
 
     # Show if it's my turn
     if my_turn:
@@ -665,6 +851,7 @@ def cmd_move(client: APIClient, x: int, y: int) -> int:
         print(f"OK: Moved to ({end_pos[0]},{end_pos[1]})")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -732,6 +919,7 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
                 print(f"OK: {action_name} to ({end_pos[0]},{end_pos[1]})")
                 show_combat_log(result.get("combat_log_entries", []))
                 show_action_result_status(result)
+                show_remaining_actions(result)
             else:
                 message = result.get("message", "Unknown error")
                 print(f"ERROR: {message}")
@@ -743,8 +931,8 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
     return 1
 
 
-def cmd_attack(client: APIClient, target_index: int) -> int:
-    """Attack target by index."""
+def cmd_attack(client: APIClient, action_index: int, target_index: int = 0) -> int:
+    """Attack target by action index and optional target index."""
     if not validate_my_turn(client):
         return 1
 
@@ -762,19 +950,23 @@ def cmd_attack(client: APIClient, target_index: int) -> int:
         print("ERROR: No attack actions available")
         return 1
 
-    if target_index < 0 or target_index >= len(entity_actions):
-        print(f"ERROR: Invalid target index {target_index}. Valid: 0-{len(entity_actions)-1}")
+    if action_index < 0 or action_index >= len(entity_actions):
+        print(f"ERROR: Invalid action index {action_index}. Valid: 0-{len(entity_actions)-1}")
         return 1
 
-    attack_info = entity_actions[target_index]
+    attack_info = entity_actions[action_index]
     template_name = attack_info.get("template_name", "Attack")
     valid_targets = attack_info.get("valid_targets", [])
     if not valid_targets:
         print("ERROR: No valid targets for this attack")
         return 1
 
+    if target_index < 0 or target_index >= len(valid_targets):
+        print(f"ERROR: Invalid target {target_index}. Valid: 0-{len(valid_targets)-1}")
+        return 1
+
     # valid_targets are now objects with target_uuid and index
-    target_obj = valid_targets[0]
+    target_obj = valid_targets[target_index]
     target_uuid = target_obj.get("target_uuid", "")
     target_idx = target_obj.get("index", 0)
 
@@ -799,6 +991,7 @@ def cmd_attack(client: APIClient, target_index: int) -> int:
         print(f"OK: Attack vs {target_name}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -908,6 +1101,7 @@ def cmd_self_action(client: APIClient, action_name: str) -> int:
         print(f"OK: {match.get('display_name', action_name)}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -997,6 +1191,7 @@ def cmd_use(client: APIClient, target_arg: str) -> int:
         print(f"OK: {action.get('display_name', '?')} -> {target_name}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -1183,6 +1378,7 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
         print(f"OK: {spell_display}")
         show_combat_log(result.get("combat_log_entries", []))
         show_action_result_status(result)
+        show_remaining_actions(result)
     else:
         message = result.get("message", "Unknown error")
         print(f"ERROR: {message}")
@@ -1193,7 +1389,17 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
 
 def cmd_end(client: APIClient) -> int:
     """End turn."""
-    if not validate_my_turn(client):
+    if not ensure_session(client):
+        print("ERROR: Not connected.")
+        return 1
+    # Check if encounter already ended (don't error, just acknowledge)
+    state = client.get_state()
+    encounter = state.get("encounter", {}) if state else {}
+    if encounter.get("state") == "ended" or not encounter.get("encounter_active", True):
+        print("OK: Encounter already ended. No turn to end.")
+        return 0
+    if not is_my_turn(client):
+        print("ERROR: Not my turn")
         return 1
 
     try:
@@ -1467,10 +1673,11 @@ def main():
 
         elif command == "attack":
             if len(sys.argv) < 3:
-                print("Usage: python -m cli.agent attack N")
+                print("Usage: python -m cli.agent attack N [T]")
                 return 1
-            target_index = int(sys.argv[2])
-            return cmd_attack(client, target_index)
+            action_index = int(sys.argv[2])
+            target_index = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+            return cmd_attack(client, action_index, target_index)
 
         elif command == "cast":
             return cmd_cast(client, sys.argv[2:])

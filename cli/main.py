@@ -1182,6 +1182,245 @@ def playpvp(
 
 
 @app.command()
+def spectate(
+    character_class: str = typer.Argument("sorcerer", help="Hero class: fighter, barbarian, or sorcerer"),
+    host: str = typer.Option("localhost", "--host", "-h", help="Server hostname"),
+    port: int = typer.Option(8000, "--port", "-p", help="Server port"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Skip Claude subprocesses (test the loop)"),
+    model: str = typer.Option("", "--model", "-m", help="Claude model for subprocesses (e.g. claude-sonnet-4-5-20250929)"),
+):
+    """
+    Watch Claude vs Claude play D&D. Spawns orchestrator, shows Rich display.
+
+    Usage: python -m cli spectate [fighter|barbarian|sorcerer]
+           python -m cli spectate sorcerer --model claude-sonnet-4-5-20250929
+    """
+    import os
+    import signal
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    base_url = f"http://{host}:{port}"
+    client = APIClient(base_url=base_url)
+
+    # 1. Verify server is running
+    try:
+        client.get_simulation_status()
+    except Exception:
+        display.console.print("[red]Server not running. Start it with:[/red]")
+        display.console.print("[dim]  uvicorn server.event_server:app --port 8000[/dim]")
+        raise typer.Exit(1)
+
+    display.console.print(f"[green]Server running at {base_url}[/green]")
+    display.console.print(f"[cyan]Spawning orchestrator ({character_class})...[/cyan]")
+
+    # 2. Create shared run directory (spectator + orchestrator logs together)
+    from datetime import datetime
+    run_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_dir = Path.cwd() / "game_logs" / run_stamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    orch_cmd = [sys.executable, "-m", "cli.orchestrator",
+                "--character-class", character_class,
+                "--run-dir", str(run_dir)]
+    if dry_run:
+        orch_cmd.append("--dry-run")
+    if model:
+        orch_cmd += ["--model", model]
+
+    orch_log_path = run_dir / "orchestrator_output.log"
+    orch_log = open(orch_log_path, "w")
+
+    orch_proc = subprocess.Popen(
+        orch_cmd, stdout=orch_log, stderr=subprocess.STDOUT,
+        preexec_fn=os.setsid,  # own process group for clean kill
+    )
+
+    # 3. Rich display setup
+    display.set_session_info(spectator_mode=True)
+    display.enter_alternate_screen()
+    display.clear_history()
+    display.reset_seen_tiles()
+    display.clear_combat_log()
+
+    # Bulletproof Ctrl+C: set flag so poll loop exits
+    _interrupted = False
+    def _on_sigint(_signum, _frame):
+        nonlocal _interrupted
+        _interrupted = True
+    _prev_handler = signal.signal(signal.SIGINT, _on_sigint)
+
+    try:
+        # 4. Wait for encounter to start (orchestrator needs time to set up)
+        state_data = None
+        display.console.print("[cyan]Waiting for encounter to start...[/cyan]")
+        for _ in range(60):
+            try:
+                state_data = client.get_state()
+                enc = state_data.get("encounter", {})
+                if enc.get("state") == "active":
+                    break
+            except Exception:
+                pass
+            if orch_proc.poll() is not None:
+                display.exit_alternate_screen()
+                display.console.print("[red]Orchestrator exited prematurely.[/red]")
+                display.console.print(f"[dim]Check log: {orch_log_path}[/dim]")
+                return
+            time.sleep(1.0)
+        else:
+            display.exit_alternate_screen()
+            display.console.print("[red]Timeout waiting for encounter to start.[/red]")
+            return
+
+        # 5. Initialize state
+        state = GameState()
+        state.update_from_state(state_data)
+        state.turn = client.get_current_turn()
+        combat_log_index = 0
+        last_positions = {e["uuid"]: tuple(e["position"]) for e in state.entities}
+        last_hp = {e["uuid"]: e.get("hp", 0) for e in state.entities}
+        last_turn_uuid = state.turn.get("current_entity_uuid")
+
+        # Initial render
+        def _render_spectator():
+            display.render_full_screen(
+                grid=state.grid, entities=state.entities, turn=state.turn,
+                current_entity_uuid=None, actions=None,
+                visibility=None, is_my_turn=False,
+                floor_objects=state.floor_objects,
+            )
+            display.console.print("[dim]q=quit  pt/nt/ft/ct=history[/dim]")
+
+        _render_spectator()
+        display.save_turn_snapshot(state.turn, state.entities, state.grid)
+
+        # 6. Poll loop — no user input during live game (like wait_for_opponent_turn)
+        #    Ctrl+C sets _interrupted flag via SIGINT handler.
+        while not _interrupted:
+            # Poll combat log for new entries
+            try:
+                log_response = client.get_combat_log(since=combat_log_index)
+            except (OSError, httpx.HTTPError):
+                time.sleep(0.5)
+                continue
+            new_entries = log_response.get("entries", [])
+            need_redraw = False
+            for entry in new_entries:
+                display.show_opponent_action(entry)
+                need_redraw = True
+            combat_log_index = log_response.get("total", combat_log_index)
+
+            # Poll full state for position/HP changes
+            try:
+                full_state = client.get_state()
+            except (OSError, httpx.HTTPError):
+                time.sleep(0.5)
+                continue
+            for e in full_state.get("entities", []):
+                uuid = e["uuid"]
+                if last_positions.get(uuid) != tuple(e["position"]):
+                    last_positions[uuid] = tuple(e["position"])
+                    need_redraw = True
+                if last_hp.get(uuid) != e.get("hp", 0):
+                    last_hp[uuid] = e.get("hp", 0)
+                    need_redraw = True
+
+            state.update_from_state(full_state)
+            state.turn = client.get_current_turn()
+            new_turn_uuid = state.turn.get("current_entity_uuid")
+            if new_turn_uuid != last_turn_uuid:
+                display.save_turn_snapshot(state.turn, state.entities, state.grid)
+                last_turn_uuid = new_turn_uuid
+                need_redraw = True
+
+            if need_redraw:
+                _render_spectator()
+
+            # Encounter ended?
+            if not state.turn.get("encounter_active", False):
+                display.save_turn_snapshot(state.turn, state.entities, state.grid)
+                break
+
+            # Orchestrator process died?
+            if orch_proc.poll() is not None:
+                time.sleep(1)
+                try:
+                    full_state = client.get_state()
+                    state.update_from_state(full_state)
+                    state.turn = client.get_current_turn()
+                except Exception:
+                    pass
+                break
+
+            time.sleep(0.5)
+
+        # 7. Game over — determine winner
+        _render_spectator()
+        alive = [e for e in state.entities if not e.get("is_dead", False)]
+        factions = set(e.get("faction", "?") for e in alive)
+        if len(factions) == 1:
+            winner_msg = f"[bold green]*** {list(factions)[0].upper()} WINS! ***[/bold green]"
+        elif len(factions) == 0:
+            winner_msg = "[bold red]*** EVERYONE IS DEAD ***[/bold red]"
+        else:
+            winner_msg = "[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]"
+
+        # 8. Post-game history navigation loop (uses prompt_command like normal play)
+        viewing_history = False
+        while True:
+            if viewing_history:
+                snapshot = display.get_current_snapshot()
+                if snapshot:
+                    display.render_history_snapshot(snapshot)
+            else:
+                _render_spectator()
+            display.console.print(f"\n{winner_msg}")
+            display.console.print("[dim]History: pt/nt/ft/ct | Enter or q to exit[/dim]")
+
+            cmd_str = display.prompt_command()
+            cmd = parse_command(cmd_str)
+            if cmd.command == "quit" or cmd_str in ("", "q"):
+                break
+            elif cmd.command == MetaCommand.PREV_TURN.value:
+                if display.goto_previous_turn():
+                    viewing_history = True
+            elif cmd.command == MetaCommand.NEXT_TURN.value:
+                if not display.goto_next_turn():
+                    display.goto_current_turn()
+                    viewing_history = False
+                else:
+                    viewing_history = True
+            elif cmd.command == MetaCommand.FIRST_TURN.value:
+                if display.goto_first_turn():
+                    viewing_history = True
+            elif cmd.command == MetaCommand.CURRENT_TURN.value:
+                display.goto_current_turn()
+                viewing_history = False
+
+    except KeyboardInterrupt:
+        pass
+    finally:
+        signal.signal(signal.SIGINT, _prev_handler)
+        display.exit_alternate_screen()
+        orch_log.close()
+        client.close()
+        # Kill orchestrator + all its Claude children
+        try:
+            os.killpg(os.getpgid(orch_proc.pid), signal.SIGTERM)
+            orch_proc.wait(timeout=5)
+        except (ProcessLookupError, OSError):
+            pass
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(orch_proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+        display.console.print(f"[dim]Game logs: {run_dir}[/dim]")
+
+
+@app.command()
 def status(
     host: str = typer.Option("localhost", "--host", "-h", help="Server hostname"),
     port: int = typer.Option(8000, "--port", "-p", help="Server port"),
