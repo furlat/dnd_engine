@@ -810,14 +810,12 @@ def test_spell_slot_consumption():
     assert initial_l2 == 3, f"Should start with 3 L2 slots, got {initial_l2}"
     print(f"  Initial slots: L1={initial_l1}, L2={initial_l2}")
 
-    # Cast Magic Missile at L1
+    # Cast Magic Missile at L1 - model_post_init auto-sets spell slot cost
     mm_l1 = MagicMissile(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
-        spell_level=1,
         cast_at_level=1,
         template=False,
-        costs=MagicMissile(source_entity_uuid=caster.uuid)._get_costs_for_level(1)
     )
     mm_l1.apply()
 
@@ -828,14 +826,12 @@ def test_spell_slot_consumption():
     # Reset actions (but NOT spell slots) for second cast
     caster.action_economy.reset_all_costs()
 
-    # Cast Magic Missile at L2 (upcast)
+    # Cast Magic Missile at L2 (upcast) - model_post_init auto-sets spell slot cost
     mm_l2 = MagicMissile(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
-        spell_level=1,
         cast_at_level=2,
         template=False,
-        costs=MagicMissile(source_entity_uuid=caster.uuid)._get_costs_for_level(2)
     )
     mm_l2.apply()
 
@@ -852,6 +848,104 @@ def test_spell_slot_consumption():
     print(f"  After long rest: L1={restored_l1}, L2={restored_l2}")
 
     print("✓ Spell slot consumption and restoration work")
+
+
+def test_spell_slot_pipeline():
+    """Test full pipeline: register_spell → get_available_actions → execute_by_index consumes slots."""
+    print("\n=== Test 17: Spell Slot Pipeline (Full Integration) ===")
+
+    from dnd.spells import MagicMissile, FireBolt
+    from dnd.actions_functional import register_spell, get_available_actions, execute_by_index, setup_standard_actions
+    from dnd.core.gridmap import get_map
+
+    reset_combat_state()
+    get_map().create_rectangle(-2, -2, 10, 10)
+
+    caster_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=16)),
+        action_economy=ActionEconomyConfig(spell_slots={1: 2, 2: 1}),
+        proficiency_bonus=3,
+        spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
+        position=(0, 0),
+    )
+    caster = Entity.create(source_entity_uuid=uuid4(), name="Wizard", config=caster_config)
+    setup_standard_actions(caster)
+
+    target_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(),
+        health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=10, mode="maximums")]),
+        position=(1, 0),
+    )
+    target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)  # noqa: F841 - needed as target entity
+
+    Entity.update_all_entities_senses()
+
+    # Register spells via pipeline
+    register_spell(caster, MagicMissile, caster_level=5)
+    register_spell(caster, FireBolt, caster_level=5)
+
+    # Verify template has spell slot cost
+    for action in caster.registered_actions:
+        if action.name == "Magic Missile":
+            slot_costs = [c for c in action.costs if c.cost_type.startswith("spell_slot")]
+            assert len(slot_costs) == 1, f"Template should have 1 spell slot cost, got {len(slot_costs)}"
+            assert slot_costs[0].cost_type == "spell_slot_1", f"Expected spell_slot_1, got {slot_costs[0].cost_type}"
+            print(f"  Template costs: {[c.cost_type for c in action.costs]}")
+            break
+
+    # Check initial slots
+    initial_l1 = caster.action_economy.spell_slot_1.normalized_score
+    assert initial_l1 == 2, f"Should start with 2 L1 slots, got {initial_l1}"
+
+    # Get available actions - spell should be affordable
+    available = get_available_actions(caster)
+    mm_info = None
+    for info in available.all_actions:
+        if info.template_name == "Magic Missile":
+            mm_info = info
+            break
+    assert mm_info is not None, "Magic Missile should appear in available actions"
+    assert mm_info.can_afford, "Magic Missile should be affordable with slots available"
+    print(f"  Magic Missile can_afford={mm_info.can_afford} (slots: L1={initial_l1})")
+
+    # Cast via execute_by_index (full pipeline)
+    execute_by_index(caster, "Magic Missile", 0)
+
+    after_cast_l1 = caster.action_economy.spell_slot_1.normalized_score
+    assert after_cast_l1 == 1, f"Should have 1 L1 slot after casting, got {after_cast_l1}"
+    print(f"  After 1st cast: L1={after_cast_l1}")
+
+    # Reset action economy for second cast (but NOT spell slots)
+    caster.action_economy.reset_all_costs()
+
+    # Cast again
+    execute_by_index(caster, "Magic Missile", 0)
+    after_cast2_l1 = caster.action_economy.spell_slot_1.normalized_score
+    assert after_cast2_l1 == 0, f"Should have 0 L1 slots after 2nd cast, got {after_cast2_l1}"
+    print(f"  After 2nd cast: L1={after_cast2_l1}")
+
+    # Reset action economy, try casting again - spell should not appear (no slots)
+    caster.action_economy.reset_all_costs()
+    available = get_available_actions(caster)
+    mm_info = None
+    for info in available.all_actions:
+        if info.template_name == "Magic Missile":
+            mm_info = info
+            break
+    assert mm_info is None, "Magic Missile should not appear when slots are exhausted"
+    print(f"  After exhaustion: Magic Missile absent from available actions (L1={after_cast2_l1})")
+
+    # Cantrip (Fire Bolt) should always be affordable regardless of slots
+    fb_info = None
+    for info in available.all_actions:
+        if info.template_name == "Fire Bolt":
+            fb_info = info
+            break
+    assert fb_info is not None, "Fire Bolt should appear in available actions"
+    assert fb_info.can_afford, "Fire Bolt (cantrip) should always be affordable"
+    print(f"  Fire Bolt (cantrip) can_afford={fb_info.can_afford}")
+
+    print("✓ Full pipeline spell slot consumption works")
 
 
 def run_all_tests():
@@ -881,6 +975,7 @@ def run_all_tests():
     test_sacred_flame_combat()
     test_magic_missile_combat()
     test_spell_slot_consumption()
+    test_spell_slot_pipeline()
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED!")
