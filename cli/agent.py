@@ -967,16 +967,25 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
             break
 
     if not action:
-        print(f"ERROR: No {action_name} action available")
+        available_names = [a.get("template_name", "?") for a in position_actions]
+        if available_names:
+            print(f"ERROR: No {action_name} action available. Position actions: {', '.join(available_names)}")
+        else:
+            movement = actions.get("remaining_movement", 0)
+            print(f"ERROR: No {action_name} action available (remaining movement: {movement}ft). Run 'actions' to see options.")
         return 1
 
     if not action.get("can_afford", False):
-        print(f"ERROR: Cannot afford {action_name}")
+        cost_type = action.get("cost_type", "movement")
+        cost_label = {"movement": "movement", "bonus_actions": "bonus action", "actions": "action"}.get(cost_type, cost_type)
+        movement = actions.get("remaining_movement", 0)
+        print(f"ERROR: Cannot afford {action_name} (costs {cost_label}, remaining movement: {movement}ft)")
         return 1
 
     valid_targets = action.get("valid_targets", [])
     if not valid_targets:
-        print(f"ERROR: No valid targets for {action_name}")
+        movement = actions.get("remaining_movement", 0)
+        print(f"ERROR: No reachable positions for {action_name} (remaining movement: {movement}ft)")
         return 1
 
     # Find matching position in valid targets
@@ -1010,7 +1019,10 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
 
             return 0
 
-    print(f"ERROR: Position ({x}, {y}) not valid for {action_name}")
+    # Position not in valid targets — show nearest options
+    nearest = sorted(valid_targets, key=lambda t: abs(t.get("position", [0,0])[0] - x) + abs(t.get("position", [0,0])[1] - y))[:5]
+    nearest_strs = [f"({t.get('position', [0,0])[0]},{t.get('position', [0,0])[1]})" for t in nearest]
+    print(f"ERROR: ({x},{y}) not in range for {action_name}. {len(valid_targets)} valid positions. Nearest: {', '.join(nearest_strs)}")
     return 1
 
 
@@ -1030,22 +1042,35 @@ def cmd_attack(client: APIClient, action_index: int, target_index: int = 0) -> i
     # entity_actions contains attacks (entity-targeting actions)
     entity_actions = actions.get("entity_actions", [])
     if not entity_actions:
-        print("ERROR: No attack actions available")
+        act = actions.get("actions_remaining", 0)
+        bonus = actions.get("bonus_actions_remaining", 0)
+        extra = actions.get("extra_attacks_remaining", 0)
+        print(f"ERROR: No attack actions available (actions:{act}, bonus:{bonus}, extra attacks:{extra})")
         return 1
 
     if action_index < 0 or action_index >= len(entity_actions):
-        print(f"ERROR: Invalid action index {action_index}. Valid: 0-{len(entity_actions)-1}")
+        names = [f"[{i}]{a.get('display_name', a.get('template_name', '?'))}" for i, a in enumerate(entity_actions)]
+        print(f"ERROR: Invalid action index {action_index}. Available: {', '.join(names)}")
         return 1
 
     attack_info = entity_actions[action_index]
     template_name = attack_info.get("template_name", "Attack")
+    display_name = attack_info.get("display_name", template_name)
+
+    if not attack_info.get("can_afford", True):
+        cost_type = attack_info.get("cost_type", "actions")
+        cost_label = {"actions": "action", "bonus_actions": "bonus action", "extra_attacks": "extra attack"}.get(cost_type, cost_type)
+        print(f"ERROR: Cannot afford {display_name} (costs {cost_label})")
+        return 1
+
     valid_targets = attack_info.get("valid_targets", [])
     if not valid_targets:
-        print("ERROR: No valid targets for this attack")
+        print(f"ERROR: No valid targets in range for {display_name}")
         return 1
 
     if target_index < 0 or target_index >= len(valid_targets):
-        print(f"ERROR: Invalid target {target_index}. Valid: 0-{len(valid_targets)-1}")
+        target_names = [f"[{i}]{t.get('target_name', '?')}" for i, t in enumerate(valid_targets)]
+        print(f"ERROR: Invalid target {target_index} for {display_name}. Targets: {', '.join(target_names)}")
         return 1
 
     # valid_targets are now objects with target_uuid and index
@@ -1164,13 +1189,18 @@ def cmd_self_action(client: APIClient, action_name: str) -> int:
                 break
 
     if not match:
-        available = [a.get("display_name", a.get("template_name", "")) for a in self_actions]
+        available = [f"{a.get('display_name', a.get('template_name', ''))} ({'READY' if a.get('can_afford') else 'NO RESOURCE'})" for a in self_actions]
         print(f"ERROR: No self-action matching '{action_name}'")
-        print(f"  Available: {', '.join(available)}")
+        if available:
+            print(f"  Available: {', '.join(available)}")
+        else:
+            print(f"  No self-actions available")
         return 1
 
     if not match.get("can_afford", False):
-        print(f"ERROR: Cannot afford {match.get('display_name', action_name)}")
+        cost_type = match.get("cost_type", "actions")
+        cost_label = {"actions": "action", "bonus_actions": "bonus action", "reactions": "reaction"}.get(cost_type, cost_type)
+        print(f"ERROR: Cannot afford {match.get('display_name', action_name)} (costs {cost_label})")
         return 1
 
     template_name = match.get("template_name", "")
@@ -1217,7 +1247,7 @@ def cmd_use(client: APIClient, target_arg: str) -> int:
             usable_actions.append(a)
 
     if not usable_actions:
-        print("ERROR: No object/item actions available")
+        print("ERROR: No object/item actions available (need to be near an interactable object or have usable items)")
         return 1
 
     # Try numeric index first
@@ -1253,12 +1283,14 @@ def cmd_use(client: APIClient, target_arg: str) -> int:
             return 1
 
     if not action.get("can_afford", False):
-        print(f"ERROR: Cannot afford {action.get('display_name', '?')}")
+        cost_type = action.get("cost_type", "actions")
+        cost_label = {"actions": "action", "bonus_actions": "bonus action"}.get(cost_type, cost_type)
+        print(f"ERROR: Cannot afford {action.get('display_name', '?')} (costs {cost_label})")
         return 1
 
     valid_targets = action.get("valid_targets", [])
     if not valid_targets:
-        print(f"ERROR: No valid targets for {action.get('display_name', '?')}")
+        print(f"ERROR: No valid targets for {action.get('display_name', '?')} (may need to be closer)")
         return 1
 
     template_name = action.get("template_name", "")
@@ -1355,13 +1387,23 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
                 break
 
     if not spell_match or not spell_source:
-        available = [s.get("display_name", s.get("template_name", "")) for s, _ in all_spells]
+        available = [f"{s.get('display_name', s.get('template_name', ''))} ({'READY' if s.get('can_afford') else 'NO SLOT/ACTION'})" for s, _ in all_spells]
         print(f"ERROR: No spell matching '{' '.join(args)}'")
-        print(f"  Available: {', '.join(available)}")
+        if available:
+            print(f"  Available: {', '.join(available)}")
+        else:
+            print(f"  No spells available (check spell slots and action economy)")
         return 1
 
     if not spell_match.get("can_afford", False):
-        print(f"ERROR: Cannot afford {spell_match.get('display_name', '?')}")
+        cost_type = spell_match.get("cost_type", "actions")
+        cost_label = {"actions": "action", "bonus_actions": "bonus action"}.get(cost_type, cost_type)
+        spell_slots = actions.get("spell_slots", {})
+        slots_str = ""
+        if spell_slots:
+            slot_parts = [f"L{lvl}:{info['current']}/{info['max']}" for lvl, info in sorted(spell_slots.items())]
+            slots_str = f" Slots: {' '.join(slot_parts)}"
+        print(f"ERROR: Cannot afford {spell_match.get('display_name', '?')} (costs {cost_label}).{slots_str}")
         return 1
 
     template_name = spell_match.get("template_name", "")
