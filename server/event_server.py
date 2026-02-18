@@ -1789,6 +1789,26 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     if not action_log_entries and event and event.combat_log:
         action_log_entries.append(event.combat_log.to_dict())
 
+    # Build full game state snapshot
+    grid = get_map()
+    floor_objects = []
+    for obj_uuid, obj_pos in grid._object_positions.items():
+        obj = BaseBlock.get(obj_uuid)
+        if obj:
+            map_char = getattr(obj, 'map_char', '\u03c6')
+            floor_objects.append(APIFloorObject(
+                uuid=str(obj_uuid),
+                name=obj.name or "Object",
+                position=list(obj_pos),
+                map_char=map_char,
+            ))
+    game_state = APIGameState(
+        grid=APIGrid.create(grid),
+        entities=[APIEntitySummary.create(e) for e in Entity.get_all_entities()],
+        encounter=APIEncounter.create(sim.encounter) if sim.encounter else None,
+        floor_objects=floor_objects,
+    )
+
     return ActionResult(
         success=not event.canceled if event else False,
         message=(event.status_message if event else None) or f"{request.template_name} executed",
@@ -1802,6 +1822,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         encounter_ended=encounter_ended,
         combat_log_entries=action_log_entries,
         available_actions=updated_actions,
+        state=game_state,
     )
 
 
