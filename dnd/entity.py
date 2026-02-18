@@ -2129,7 +2129,10 @@ class Entity(BaseBlock):
                     weapon = self.equipment._get_weapon_by_slot(weapon_slot_attr)
                     if weapon:
                         weapon_name = weapon.name
-                        display_name = weapon_name
+                        if template_name.startswith("Extra Attack"):
+                            display_name = f"Extra Attack ({weapon_name})"
+                        else:
+                            display_name = weapon_name
 
                 actions.append(self._make_action_info(
                     template_name=template_name,

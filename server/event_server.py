@@ -1325,6 +1325,71 @@ async def get_current_turn():
     )
 
 
+def _serialize_target(t: AvailableTarget) -> dict:
+    """Serialize an AvailableTarget to JSON-compatible dict."""
+    result: dict = {"index": t.index}
+    if t.target_uuid:
+        result["target_uuid"] = str(t.target_uuid)
+    if t.position:
+        result["position"] = list(t.position)
+    if t.target_name:
+        result["target_name"] = t.target_name
+    if t.distance is not None:
+        result["distance"] = t.distance
+    if t.path_cost is not None:
+        result["path_cost"] = t.path_cost
+    # AoE-specific fields
+    if t.affected_entity_uuids:
+        result["affected_entity_uuids"] = [str(uuid) for uuid in t.affected_entity_uuids]
+    if t.affected_entity_names:
+        result["affected_entity_names"] = t.affected_entity_names
+    if t.affected_count is not None:
+        result["affected_count"] = t.affected_count
+    if t.affected_positions:
+        result["affected_positions"] = [list(p) for p in t.affected_positions]
+    return result
+
+
+def _serialize_action(a) -> dict:
+    """Serialize an AvailableActionInfo to JSON-compatible dict."""
+    result = {
+        "template_name": a.template_name,
+        "target_type": a.target_type.value,
+        "valid_targets": [_serialize_target(t) for t in a.valid_targets],
+        "can_afford": a.can_afford,
+        "display_name": a.display_name,
+        "description": a.description,
+        "cost_type": a.cost_type,
+        "cost_amount": a.cost_amount,
+        "weapon_slot": a.weapon_slot,
+        "weapon_name": a.weapon_name,
+        "action_category": a.action_category.value
+    }
+    # Item use fields
+    if a.is_item_use:
+        result["is_item_use"] = True
+        result["source_item_uuid"] = str(a.source_item_uuid) if a.source_item_uuid else None
+        result["item_stack_count"] = a.item_stack_count
+    return result
+
+
+def _serialize_available_actions(entity: Entity, actions: AvailableActionsResult) -> dict:
+    """Serialize full available actions result for an entity."""
+    ae = entity.action_economy
+    return {
+        "entity_uuid": str(actions.entity_uuid),
+        "entity_actions": [_serialize_action(a) for a in actions.entity_actions],
+        "position_actions": [_serialize_action(a) for a in actions.position_actions],
+        "self_actions": [_serialize_action(a) for a in actions.self_actions],
+        "object_actions": [_serialize_action(a) for a in actions.object_actions],
+        "remaining_movement": actions.remaining_movement,
+        "actions_remaining": ae.actions.normalized_score,
+        "bonus_actions_remaining": ae.bonus_actions.normalized_score,
+        "reactions_remaining": ae.reactions.normalized_score,
+        "extra_attacks_remaining": ae.get_resource_current("extra_attacks"),
+    }
+
+
 @app.get("/entity/{entity_uuid}/available-actions")
 async def get_entity_available_actions(entity_uuid: str):
     """Get all available actions for an entity."""
@@ -1339,66 +1404,10 @@ async def get_entity_available_actions(entity_uuid: str):
 
     actions = get_available_actions(entity)
 
-    # Convert to JSON-serializable format using new AvailableActionsResult structure
-    def serialize_target(t):
-        result = {"index": t.index}
-        if t.target_uuid:
-            result["target_uuid"] = str(t.target_uuid)
-        if t.position:
-            result["position"] = list(t.position)
-        if t.target_name:
-            result["target_name"] = t.target_name
-        if t.distance is not None:
-            result["distance"] = t.distance
-        if t.path_cost is not None:
-            result["path_cost"] = t.path_cost
-        # AoE-specific fields
-        if t.affected_entity_uuids:
-            result["affected_entity_uuids"] = [str(uuid) for uuid in t.affected_entity_uuids]
-        if t.affected_entity_names:
-            result["affected_entity_names"] = t.affected_entity_names
-        if t.affected_count is not None:
-            result["affected_count"] = t.affected_count
-        if t.affected_positions:
-            result["affected_positions"] = [list(p) for p in t.affected_positions]
-        return result
-
-    def serialize_action(a):
-        result = {
-            "template_name": a.template_name,
-            "target_type": a.target_type.value,
-            "valid_targets": [serialize_target(t) for t in a.valid_targets],
-            "can_afford": a.can_afford,
-            "display_name": a.display_name,
-            "description": a.description,
-            "cost_type": a.cost_type,
-            "cost_amount": a.cost_amount,
-            "weapon_slot": a.weapon_slot,
-            "weapon_name": a.weapon_name,
-            "action_category": a.action_category.value
-        }
-        # Item use fields
-        if a.is_item_use:
-            result["is_item_use"] = True
-            result["source_item_uuid"] = str(a.source_item_uuid) if a.source_item_uuid else None
-            result["item_stack_count"] = a.item_stack_count
-        return result
-
     # Cache for execute endpoint
     _available_actions_cache[entity_uuid] = actions
 
-    ae = entity.action_economy
-    return {
-        "entity_uuid": str(actions.entity_uuid),
-        "entity_actions": [serialize_action(a) for a in actions.entity_actions],
-        "position_actions": [serialize_action(a) for a in actions.position_actions],
-        "self_actions": [serialize_action(a) for a in actions.self_actions],
-        "object_actions": [serialize_action(a) for a in actions.object_actions],
-        "remaining_movement": actions.remaining_movement,
-        "actions_remaining": ae.actions.normalized_score,
-        "bonus_actions_remaining": ae.bonus_actions.normalized_score,
-        "reactions_remaining": ae.reactions.normalized_score,
-    }
+    return _serialize_available_actions(entity, actions)
 
 
 @app.post("/action/end-turn")
@@ -1687,6 +1696,13 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     # Check if encounter ended
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
+    # Re-compute available actions after execution so agent sees new options (Extra Attack etc.)
+    updated_actions = None
+    if not encounter_ended and entity.has_hp:
+        new_available = get_available_actions(entity)
+        _available_actions_cache[request.entity_uuid] = new_available
+        updated_actions = _serialize_available_actions(entity, new_available)
+
     # Extract event_data and add main event to combat log
     event_data = None
     target_hp = None
@@ -1768,7 +1784,8 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         triggered_reactions=triggered_reactions,
         turn_continues=not encounter_ended and entity.has_hp,
         encounter_ended=encounter_ended,
-        combat_log_entries=action_log_entries
+        combat_log_entries=action_log_entries,
+        available_actions=updated_actions,
     )
 
 
