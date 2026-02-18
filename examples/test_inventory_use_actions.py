@@ -1176,8 +1176,8 @@ def test_scroll_magic_missile_upcast_more_darts():
     damage_l3 = initial_hp3 - get_hp(target3)
 
     # L3 = 5 darts (10-25), L1 = 3 darts (6-15)
+    assert 6 <= damage_l1 <= 15, f"L1 should be 6-15, got {damage_l1}"
     assert 10 <= damage_l3 <= 25, f"L3 should be 10-25, got {damage_l3}"
-    assert damage_l3 > damage_l1, f"L3 ({damage_l3}) should exceed L1 ({damage_l1})"
 
 
 # --- 2f. Mage Armor Scroll — AC Formula Verification ---
@@ -1208,7 +1208,7 @@ def test_scroll_mage_armor_ac_formula():
 
 def test_scroll_fire_bolt_damage_on_hit():
     """Fire Bolt scroll with forced hit → target takes fire damage."""
-    from dnd.utils import force_attack_hit, remove_attack_modifier
+    from dnd.core.modifiers import AutoHitModifier, AutoHitStatus
     setup_grid()
     caster = create_caster(position=(0, 0))
     target = create_target(position=(3, 0), hp=100, name="Bolted")
@@ -1217,14 +1217,19 @@ def test_scroll_fire_bolt_damage_on_hit():
     scroll = create_scroll_of_fire_bolt(caster.uuid)
     caster.loot_item(scroll)
 
-    # Force hit so we reliably test damage
-    mod_id = force_attack_hit(caster)
+    # Force hit on spell attacks (attack_bonus feeds into spell_attack_bonus)
+    modifier = AutoHitModifier(
+        name="Forced Spell Hit",
+        value=AutoHitStatus.AUTOHIT,
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=caster.uuid
+    )
+    caster.equipment.attack_bonus.self_static.add_auto_hit_modifier(modifier)
 
     available = get_available_actions(caster)
     bolt = find_action(available, "Fire Bolt", "entity_actions")
     execute_use_action(caster, scroll.uuid, bolt.template_name, bolt.valid_targets[0])
 
-    remove_attack_modifier(caster, mod_id)
     assert get_hp(target) < 100, "Target should take fire damage from Fire Bolt"
     assert scroll.uuid not in caster.inventory.items, "Scroll consumed"
 

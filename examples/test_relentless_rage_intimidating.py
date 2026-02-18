@@ -13,10 +13,12 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
+from dnd.core.gridmap import get_map
 from dnd.actions_functional import setup_standard_actions, execute_action, get_available_actions
 from dnd.actions import Attack
 from dnd.items.weapons import create_greatsword, create_shortsword
+from dnd.utils import reset_combat_state
 
 from dnd.classes.barbarian import (
     RageFeature,
@@ -167,9 +169,8 @@ def test_relentless_rage_with_real_combat():
 
     for trial in range(trials):
         # Reset state for each trial
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         # Create barbarian and enemy at adjacent positions
         barbarian = create_test_barbarian(
@@ -254,7 +255,7 @@ def test_relentless_rage_with_real_combat():
     print("         - Uses entity.roll_d20(con_save.bonus, RollType.SAVE)")
     print("         - Uses entity.saving_throws.get_saving_throw('constitution')")
 
-    EventQueue.reset()
+
     return True
 
 
@@ -262,9 +263,8 @@ def test_intimidating_presence_uses_saving_throw():
     """Test that IntimidatingPresence uses the proper saving throw system."""
     print("\n=== Test: IntimidatingPresence Proper Saving Throw ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Barbarian with high CHA for DC calculation
     barbarian = create_test_barbarian(
@@ -323,7 +323,7 @@ def test_intimidating_presence_uses_saving_throw():
         if "WIS save" in str(result.status_message) and "vs DC" in str(result.status_message):
             print("  [PASS] Status message shows proper save roll format")
 
-    EventQueue.reset()
+
     return True
 
 
@@ -331,9 +331,8 @@ def test_intimidating_presence_event_integration():
     """Test that IntimidatingPresence saving throw integrates with event system."""
     print("\n=== Test: IntimidatingPresence Event System Integration ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian(
         name="Event Test Barbarian",
@@ -378,7 +377,7 @@ def test_intimidating_presence_event_integration():
         else:
             print("  [WARN] Could not extract roll from message")
 
-    EventQueue.reset()
+
     return True
 
 
@@ -391,9 +390,8 @@ def test_intimidating_presence_variable_results():
     trials = 20
 
     for trial in range(trials):
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         # Use moderate stats so both outcomes are possible
         barbarian = create_test_barbarian(
@@ -441,7 +439,7 @@ def test_intimidating_presence_variable_results():
     else:
         print(f"  [INFO] Only one outcome observed (statistically unlikely but possible)")
 
-    EventQueue.reset()
+
     return True
 
 
@@ -449,9 +447,8 @@ def test_intimidating_presence_immunity():
     """Test that immunity tracking works correctly after a successful save."""
     print("\n=== Test: IntimidatingPresence Immunity Tracking ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian(
         name="Immunity Test Barbarian",
@@ -504,7 +501,7 @@ def test_intimidating_presence_immunity():
 
     if not saved:
         print(f"  [INFO] Target never saved after {max_attempts} attempts (unlikely)")
-        EventQueue.reset()
+    
         return True
 
     # Now try again - should be blocked due to immunity condition
@@ -523,7 +520,7 @@ def test_intimidating_presence_immunity():
         print(f"  Second attempt result: {result2.status_message if result2 else 'None'}")
         print("  [FAIL] Target should have been immune")
 
-    EventQueue.reset()
+
     return True
 
 

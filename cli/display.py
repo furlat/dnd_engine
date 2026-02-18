@@ -724,6 +724,37 @@ def render_header_panel(
     return Panel(content, title="⚔ NEURODRAGON ⚔", box=box.DOUBLE, border_style=border_style)
 
 
+def _format_conditions_rich(entity: Dict[str, Any]) -> str:
+    """Format conditions for Rich display, filtering by category.
+
+    Dead entities show only 'Dead'. Internal conditions are always hidden.
+    Status conditions are shown dimmed.
+    """
+    if entity.get("is_dead"):
+        return "[dim]Dead[/dim]"
+
+    condition_details = entity.get("condition_details", [])
+    if condition_details:
+        real_conds: List[str] = []
+        status_conds: List[str] = []
+        for cd in condition_details:
+            cat = cd.get("category", "condition")
+            cname = cd.get("name", "")
+            if cat == "internal":
+                continue
+            if cat == "status":
+                status_conds.append(cname)
+                continue
+            real_conds.append(cname)
+        parts = real_conds[:]
+        if status_conds:
+            parts.append(f"[dim]{', '.join(status_conds)}[/dim]")
+        return ", ".join(parts)
+
+    # Fallback: old-style conditions list
+    return ", ".join(entity.get("conditions", []))
+
+
 def render_combatants_panel(
     entities: List[Dict[str, Any]],
     turn: Dict[str, Any],
@@ -764,7 +795,7 @@ def render_combatants_panel(
         hp_color = "green" if hp_pct > 0.5 else "yellow" if hp_pct > 0.25 else "red"
         hp = f"[{hp_color}]{hp_val}/{max_hp}[/{hp_color}]"
 
-        conditions = ", ".join(e.get("conditions", [])) or "-"
+        conditions = _format_conditions_rich(e) or "-"
         pos = f"({e['position'][0]},{e['position'][1]})"
         table.add_row(name, hp, str(e.get("ac", "?")), pos, conditions)
 
@@ -836,7 +867,7 @@ def render_turn_info_panel(
         hp_color = "green" if hp_val > max_hp // 2 else "yellow" if hp_val > 0 else "red"
         hp = f"[{hp_color}]{hp_val}/{max_hp}[/{hp_color}]"
 
-        conditions = ", ".join(e.get("conditions", [])) or "-"
+        conditions = _format_conditions_rich(e) or "-"
         table.add_row(name, hp, str(e.get("ac", "?")), f"({e['position'][0]},{e['position'][1]})", conditions)
 
     # Action economy line

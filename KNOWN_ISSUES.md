@@ -36,6 +36,13 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Status**: OPEN
 
 
+### Dodging Attack test fails — dice roll extraction broken
+- **Found**: 2026-02-18
+- **Test file**: `examples/test_dodging_attack.py`
+- **Error**: `[FAIL] No dice roll found in event` — both the control case (no dodging) and the test case (with dodging) fail at the dice roll extraction step
+- **Hypothesis**: The test relies on extracting dice rolls from attack events but the event data structure may have changed. Since both control and test cases fail identically, this is a test/event schema mismatch, not a dodge logic bug. NOT related to any ConditionCategory changes.
+- **Status**: OPEN
+
 ## Extra Attack Fails on Second Turn
 - **Test**: `examples/test_pvp_extra_attack.py`
 - **Symptom**: Extra Attack unavailable on Turn 3 (hero second turn) despite `HasAttacked=True`, `extra_attacks=1`, and `ExtraAttacksGranted` condition present

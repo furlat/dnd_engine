@@ -14,7 +14,9 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
+from dnd.core.gridmap import get_map
+from dnd.utils import reset_combat_state
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greatsword
 
@@ -67,9 +69,8 @@ def test_persistent_rage_prevents_inactivity_end():
     """Test that rage doesn't end from inactivity with PersistentRage."""
     print("\n=== Test: Persistent Rage Prevents Inactivity End ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Persistent Barbarian")
 
@@ -115,16 +116,15 @@ def test_persistent_rage_prevents_inactivity_end():
     else:
         print("  [FAIL] Rage should not end with PersistentRage")
 
-    EventQueue.reset()
+
 
 
 def test_without_persistent_rage_ends_on_inactivity():
     """Test that WITHOUT PersistentRage, rage ends from inactivity."""
     print("\n=== Test: Without PersistentRage, Rage Ends on Inactivity ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Non-Persistent Barbarian")
 
@@ -158,16 +158,15 @@ def test_without_persistent_rage_ends_on_inactivity():
     else:
         print("  [FAIL] Rage should end without PersistentRage")
 
-    EventQueue.reset()
+
 
 
 def test_persistent_rage_multiple_turns():
     """Test that PersistentRage keeps rage active across multiple idle turns."""
     print("\n=== Test: Persistent Rage Across Multiple Turns ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Multi-Turn Barbarian")
 
@@ -205,16 +204,15 @@ def test_persistent_rage_multiple_turns():
     else:
         print(f"  [FAIL] Rage ended during turn {turn}")
 
-    EventQueue.reset()
+
 
 
 def test_persistent_rage_is_marker_condition():
     """Test that PersistentRage is a marker condition (no modifiers)."""
     print("\n=== Test: PersistentRage Is Marker Condition ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Marker Test")
 
@@ -241,16 +239,15 @@ def test_persistent_rage_is_marker_condition():
     else:
         print("  [FAIL] PersistentRage should not modify any stats")
 
-    EventQueue.reset()
+
 
 
 def test_rage_ends_when_persistent_rage_removed():
     """Test that removing PersistentRage allows rage to end normally."""
     print("\n=== Test: Rage Ends When PersistentRage Removed ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Removal Test")
 
@@ -291,7 +288,7 @@ def test_rage_ends_when_persistent_rage_removed():
     else:
         print("  [FAIL] Rage should end without PersistentRage")
 
-    EventQueue.reset()
+
 
 
 if __name__ == "__main__":

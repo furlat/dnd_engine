@@ -1,5 +1,5 @@
 from pydantic import Field
-from dnd.core.base_conditions import BaseCondition, DurationType, ConditionApplicationEvent
+from dnd.core.base_conditions import BaseCondition, ConditionCategory, DurationType, ConditionApplicationEvent
 
 from dnd.entity import Entity
 from typing import Dict, Any, Optional, List, Tuple, Type
@@ -44,6 +44,7 @@ class HasAttacked(BaseCondition):
     """
     name: str = "HasAttacked"
     description: str = "Has made an attack this turn using an action"
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         # No modifiers - just a marker condition
@@ -68,6 +69,7 @@ class HasTakenDamage(BaseCondition):
     """
     name: str = "HasTakenDamage"
     description: str = "Took damage this turn"
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         # No modifiers - just a marker condition
@@ -277,6 +279,7 @@ class Charmed(BaseCondition):
 class Dashing(BaseCondition):
     name: str = "Dashing"
     description: str = "A dashing creature gets a movement bonues equal to it base movement speed"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -325,6 +328,7 @@ class Deafened(BaseCondition):
 class Dodging(BaseCondition):
     name: str = "Dodging"
     description: str = "A dodging creature has advantage on Dexterity saving throws against being grappled."
+    condition_category: ConditionCategory = ConditionCategory.STATUS
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -357,6 +361,7 @@ class Disengaging(BaseCondition):
     """
     name: str = "Disengaging"
     description: str = "Your movement doesn't provoke opportunity attacks for the rest of the turn."
+    condition_category: ConditionCategory = ConditionCategory.STATUS
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         # No modifiers to apply - this condition is checked by opportunity attack logic
@@ -999,6 +1004,7 @@ class Concentrating(BaseCondition):
     """
     name: str = "Concentrating"
     description: str = "Concentrating on a spell"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
 
     # What spell is being concentrated on
     spell_name: str = ""

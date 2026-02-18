@@ -12,6 +12,7 @@ Tests:
 
 from uuid import uuid4
 from dnd.utils import reset_combat_state, set_hp, has_condition, get_hp
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
@@ -86,6 +87,7 @@ def test_1_hold_person_applies_paralyzed():
     spell_worked = False
     for _ in range(10):
         reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
         caster = create_caster("Mage", (0, 0))
         target = create_target("Target", (1, 0))
         Entity.update_all_entities_senses()
@@ -136,6 +138,7 @@ def test_2_call_lightning_deals_damage():
     """Test that Call Lightning deals damage and grants strike action."""
     print("\n=== Test 2: Call Lightning Deals Damage ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     caster = create_caster("Mage", (0, 0))
     target = create_target("Target", (1, 0))
@@ -179,6 +182,7 @@ def test_3_call_lightning_strike_repeatable():
     """Test that Call Lightning Strike can be used each turn."""
     print("\n=== Test 3: Call Lightning Strike Repeatable ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     caster = create_caster("Mage", (0, 0))
     target = create_target("Target", (1, 0))
@@ -234,6 +238,7 @@ def test_4_hold_person_then_call_lightning():
     hold_worked = False
     for _ in range(10):
         reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
         caster = create_caster("Mage", (0, 0))
         target = create_target("Target", (1, 0))
         Entity.update_all_entities_senses()
@@ -299,6 +304,7 @@ def test_5_call_lightning_then_hold_person():
     """Test that casting Hold Person breaks Call Lightning concentration."""
     print("\n=== Test 5: Hold Person Breaks Call Lightning ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     caster = create_caster("Mage", (0, 0))
     target = create_target("Target", (1, 0))
@@ -354,6 +360,7 @@ def test_6_concentration_broken_by_damage():
     """Test that high damage breaks Call Lightning concentration and removes strike action."""
     print("\n=== Test 6: Damage Breaks Concentration ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     caster = create_caster("Mage", (0, 0))
     target = create_target("Target", (1, 0))
@@ -403,6 +410,7 @@ def test_7_immunity_to_hold_person_effect():
     """
     print("\n=== Test 7: Immunity to Hold Person Effect ===")
     reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     caster = create_caster("Mage", (0, 0))
     target = create_target("Target", (1, 0))
@@ -455,6 +463,7 @@ def test_8_immunity_to_paralyzed_subcondition():
     spell_attempted = False
     for _ in range(10):
         reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
         caster = create_caster("Mage", (0, 0))
         target = create_target("Target", (1, 0))
         Entity.update_all_entities_senses()

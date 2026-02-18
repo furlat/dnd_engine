@@ -11,30 +11,20 @@ Tests:
 7. Integration with Extra Attack - 4 attacks with L5 Fighter + Action Surge
 """
 
-from dnd.core.gridmap import get_map, reset_map
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton, create_goblin
 from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
 from dnd.classes.fighter import ExtraAttackFeature, ActionSurgeFeature, ExtraAttack, ActionSurge
-from dnd.core.events import WeaponSlot, EventQueue
-from dnd.utils import force_attack_miss
+from dnd.core.events import WeaponSlot
+from dnd.utils import force_attack_miss, reset_combat_state
 
 
 def setup_test():
-    """Reset entity registries, event queue, and create a clean map."""
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    reset_map()
-
-    # Clear EventQueue handlers (they reference old entities)
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
-
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
+    """Reset all combat state and create a clean map."""
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
 
 def create_fighter_with_action_surge(name: str, position: tuple, num_uses: int = 1) -> Entity:

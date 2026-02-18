@@ -10,8 +10,11 @@ from dnd.core.values import ModifiableValue
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 
-# Internal marker conditions that should never generate combat logs
-INTERNAL_MARKER_CONDITIONS = {"HasAttacked", "HasTakenDamage"}
+
+class ConditionCategory(str, Enum):
+    CONDITION = "condition"      # Real D&D conditions: Blinded, Prone, Paralyzed, etc.
+    STATUS = "status"            # Turn-scoped action effects: Dashing, Dodging, Disengaging, Concentrating
+    INTERNAL = "internal"        # Engine bookkeeping: HasAttacked, HasTakenDamage, ExtraAttacksGranted, ActionSurging
 
 class DurationType(str,Enum):
     ROUNDS = "rounds"
@@ -98,7 +101,7 @@ class ConditionApplicationEvent(Event):
         condition_name = cond.name or "Unknown"
 
         # Suppress combat logs for internal marker conditions
-        if condition_name in INTERNAL_MARKER_CONDITIONS:
+        if cond.condition_category == ConditionCategory.INTERNAL:
             return None
 
         target_name = self.target_entity_name or "Unknown"
@@ -146,7 +149,7 @@ class ConditionRemovalEvent(Event):
         condition_name = cond.name or "Unknown"
 
         # Suppress combat logs for internal marker conditions
-        if condition_name in INTERNAL_MARKER_CONDITIONS:
+        if cond.condition_category == ConditionCategory.INTERNAL:
             return None
 
         target_name = self.target_entity_name or "Unknown"
@@ -173,6 +176,7 @@ class ConditionRemovalEvent(Event):
 
 class BaseCondition(BaseObject):
     """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""
+    condition_category: ConditionCategory = Field(default=ConditionCategory.CONDITION)
     duration: Duration = Field(default_factory=Duration)
     application_saving_throw: Optional[SavingThrowEvent] = None
     removal_saving_throw: Optional[SavingThrowEvent] = None

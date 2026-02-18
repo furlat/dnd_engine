@@ -14,7 +14,9 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
+from dnd.core.gridmap import get_map
+from dnd.utils import reset_combat_state
 from dnd.core.modifiers import AdvantageStatus
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greatsword
@@ -76,9 +78,8 @@ def test_feral_instinct_advantage():
     """Test that Feral Instinct grants advantage on initiative."""
     print("\n=== Test: Feral Instinct Initiative Advantage ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Feral Barbarian", level=7)
 
@@ -102,16 +103,15 @@ def test_feral_instinct_advantage():
     else:
         print(f"  [FAIL] Expected ADVANTAGE, got {init_adv_after}")
 
-    EventQueue.reset()
+
 
 
 def test_feral_instinct_removal():
     """Test that removing Feral Instinct removes the advantage."""
     print("\n=== Test: Feral Instinct Removal ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Removal Test", level=7)
 
@@ -139,7 +139,7 @@ def test_feral_instinct_removal():
     else:
         print(f"  [WARN] Advantage status: {init_adv_without}")
 
-    EventQueue.reset()
+
 
 
 # =============================================================================
@@ -150,9 +150,8 @@ def test_indomitable_might_minimum():
     """Test that STR checks have a minimum equal to STR score."""
     print("\n=== Test: Indomitable Might Minimum ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create barbarian with 20 STR
     barbarian = create_test_barbarian("Mighty Barbarian", level=18, str_score=20)
@@ -175,16 +174,15 @@ def test_indomitable_might_minimum():
     print("  Full verification requires running actual skill checks")
     print("  [PASS] Indomitable Might condition applied with event handler")
 
-    EventQueue.reset()
+
 
 
 def test_indomitable_might_only_athletics():
     """Test that Indomitable Might only applies to Athletics (STR-based)."""
     print("\n=== Test: Indomitable Might Only Affects Athletics ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Selective Might", level=18, str_score=20)
 
@@ -201,7 +199,7 @@ def test_indomitable_might_only_athletics():
     print("  Handler checks event.skill_name == 'athletics'")
     print("  [PASS] Implementation correctly targets Athletics only")
 
-    EventQueue.reset()
+
 
 
 # =============================================================================
@@ -212,9 +210,8 @@ def test_primal_champion_str_bonus():
     """Test that Primal Champion adds +4 to STR."""
     print("\n=== Test: Primal Champion STR Bonus ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create L20 barbarian with 20 STR
     barbarian = create_test_barbarian("Champion Barbarian", level=20, str_score=20)
@@ -249,16 +246,15 @@ def test_primal_champion_str_bonus():
     else:
         print(f"  [INFO] Modifier: {new_str_mod} (expected {expected_mod})")
 
-    EventQueue.reset()
+
 
 
 def test_primal_champion_con_bonus():
     """Test that Primal Champion adds +4 to CON."""
     print("\n=== Test: Primal Champion CON Bonus ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create L20 barbarian with 18 CON
     barbarian = create_test_barbarian("Champion Barbarian", level=20, con_score=18)
@@ -286,16 +282,15 @@ def test_primal_champion_con_bonus():
     else:
         print(f"  [FAIL] Expected CON {expected_con}, got {new_con}")
 
-    EventQueue.reset()
+
 
 
 def test_primal_champion_both_bonuses():
     """Test that Primal Champion adds +4 to both STR and CON simultaneously."""
     print("\n=== Test: Primal Champion Both Bonuses ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create L20 barbarian
     barbarian = create_test_barbarian("Ultimate Champion", level=20, str_score=18, con_score=18)
@@ -325,16 +320,15 @@ def test_primal_champion_both_bonuses():
     else:
         print(f"  [FAIL] Expected STR={base_str + 4} CON={base_con + 4}")
 
-    EventQueue.reset()
+
 
 
 def test_primal_champion_removal():
     """Test that removing Primal Champion removes the bonuses."""
     print("\n=== Test: Primal Champion Removal ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Removal Test", level=20, str_score=18, con_score=18)
 
@@ -365,7 +359,7 @@ def test_primal_champion_removal():
     else:
         print(f"  [FAIL] Stats should return to original values")
 
-    EventQueue.reset()
+
 
 
 if __name__ == "__main__":

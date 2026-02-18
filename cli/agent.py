@@ -158,7 +158,12 @@ def show_remaining_actions(result: dict) -> None:
     movement = actions.get("remaining_movement", 0)
     extra_atk = actions.get("extra_attacks_remaining", 0)
     extra_str = f"  Extra Attacks:{extra_atk}" if extra_atk else ""
-    print(f"REMAINING: Actions:{act}  Bonus:{bonus}  Movement:{movement}ft{extra_str}")
+    spell_slots = actions.get("spell_slots", {})
+    slots_str = ""
+    if spell_slots:
+        slot_parts = [f"L{lvl}:{info['current']}/{info['max']}" for lvl, info in sorted(spell_slots.items())]
+        slots_str = f"  Slots: {' '.join(slot_parts)}"
+    print(f"REMAINING: Actions:{act}  Bonus:{bonus}  Movement:{movement}ft{extra_str}{slots_str}")
 
     # Show ready entity actions (attacks) with targets
     entity_actions = actions.get("entity_actions", [])
@@ -445,6 +450,14 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
     return "\n".join(lines)
 
 
+def _format_cost_label(cost_type: str, cost_amount: int) -> str:
+    """Format cost type and amount into a short label for display."""
+    if cost_amount == 0:
+        return "FREE"
+    label = {"actions": "action", "bonus_actions": "bonus", "reactions": "reaction", "movement": "movement"}.get(cost_type, cost_type)
+    return label
+
+
 def format_entities(entities: list, visible_entity_uuids: Optional[set] = None,
                     my_entity_uuid: Optional[str] = None,
                     controlled_uuids: Optional[List[str]] = None,
@@ -490,15 +503,46 @@ def format_entities(entities: list, visible_entity_uuids: Optional[set] = None,
         ac = e.get("ac", 0)
         pos = e.get("position", [0, 0])
         pos_str = f"({pos[0]},{pos[1]})"
-        raw_conditions = e.get("conditions", [])
-        # Tag stealth-related conditions
-        tagged = []
-        for c in raw_conditions:
-            if c.lower() in stealth_conditions:
-                tagged.append(f"{c} [STEALTH]")
-            else:
-                tagged.append(c)
-        conditions = ", ".join(tagged) or "none"
+
+        # Build filtered condition display using condition_details
+        condition_details = e.get("condition_details", [])
+        if e.get("is_dead"):
+            conditions = "Dead"
+        elif condition_details:
+            # Filter by category based on ownership
+            real_conds = []
+            status_conds = []
+            for cd in condition_details:
+                cat = cd.get("category", "condition")
+                cname = cd.get("name", "")
+                if cat == "internal":
+                    continue  # Always skip internal
+                if cat == "status":
+                    if is_mine:
+                        status_conds.append(cname)
+                    # Skip status for non-controlled entities
+                    continue
+                # Real condition — tag stealth
+                if cname.lower() in stealth_conditions:
+                    real_conds.append(f"{cname} [STEALTH]")
+                else:
+                    real_conds.append(cname)
+            # Combine: real conditions, then dimmed statuses
+            parts = real_conds[:]
+            if status_conds:
+                parts.append(f"({', '.join(status_conds)})")
+            conditions = ", ".join(parts) or "none"
+        else:
+            # Fallback: old-style conditions list (no details available)
+            raw_conditions = e.get("conditions", [])
+            tagged = []
+            for c in raw_conditions:
+                if c.lower() in stealth_conditions:
+                    tagged.append(f"{c} [STEALTH]")
+                else:
+                    tagged.append(c)
+            conditions = ", ".join(tagged) or "none"
+
         # Mark controlled entities
         mine_tag = " *" if is_mine else ""
         lines.append(f"{i:<3} {name:<12} {faction:<10} {hp:<8} {ac:<4} {pos_str:<8} {conditions}{mine_tag}")
@@ -517,7 +561,13 @@ def format_actions(actions: dict, entity_name: str) -> str:
     movement = actions.get("remaining_movement", 0)
     extra_atk = actions.get("extra_attacks_remaining", 0)
     extra_str = f"  Extra Attacks:{extra_atk}" if extra_atk else ""
-    lines.append(f"RESOURCES: Actions:{act}  Bonus:{bonus}  Reactions:{react}  Movement:{movement}ft{extra_str}")
+    # Spell slots
+    spell_slots = actions.get("spell_slots", {})
+    slots_str = ""
+    if spell_slots:
+        slot_parts = [f"L{lvl}:{info['current']}/{info['max']}" for lvl, info in sorted(spell_slots.items())]
+        slots_str = f"  Slots: {' '.join(slot_parts)}"
+    lines.append(f"RESOURCES: Actions:{act}  Bonus:{bonus}  Reactions:{react}  Movement:{movement}ft{extra_str}{slots_str}")
     lines.append("")
 
     # Position-based actions (Move, Jump, AoE spells)
@@ -595,6 +645,9 @@ def format_actions(actions: dict, entity_name: str) -> str:
         can_afford = action.get("can_afford", False)
         is_item = action.get("is_item_use", False)
         is_spell = action.get("action_category") == "spell"
+        cost_type = action.get("cost_type", "actions")
+        cost_amount = action.get("cost_amount", 1)
+        cost_label = _format_cost_label(cost_type, cost_amount)
         status = "READY" if can_afford else "NO ACTION"
         tags = []
         if is_spell:
@@ -604,7 +657,7 @@ def format_actions(actions: dict, entity_name: str) -> str:
         tag_str = " ".join(tags)
         if tag_str:
             tag_str = " " + tag_str
-        lines.append(f"  {action_name}: {status}{tag_str}")
+        lines.append(f"  {action_name} ({cost_label}): {status}{tag_str}")
 
     # Object actions (Pick Up, Open Door, Attack Object)
     object_actions = actions.get("object_actions", [])
@@ -614,11 +667,14 @@ def format_actions(actions: dict, entity_name: str) -> str:
         for i, action in enumerate(object_actions):
             action_name = action.get("display_name", action.get("template_name", "???"))
             can_afford = action.get("can_afford", False)
+            cost_type = action.get("cost_type", "actions")
+            cost_amount = action.get("cost_amount", 1)
+            cost_label = _format_cost_label(cost_type, cost_amount)
             valid_targets = action.get("valid_targets", [])
             status = "READY" if can_afford and valid_targets else "NO TARGETS"
             target_names = [t.get("target_name", "?") for t in valid_targets[:3]]
             targets_str = f" -> {', '.join(target_names)}" if target_names else ""
-            lines.append(f"  [{i}] {action_name}: {len(valid_targets)} targets ({status}){targets_str}")
+            lines.append(f"  [{i}] {action_name} ({cost_label}): {len(valid_targets)} targets ({status}){targets_str}")
 
     return "\n".join(lines)
 
