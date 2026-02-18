@@ -11,30 +11,14 @@ Tests:
 7. HasAttacked expires after 1 round
 """
 
-from dnd.core.gridmap import get_map, reset_map
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton, create_goblin
 from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
 from dnd.classes.fighter import ExtraAttackFeature, ExtraAttack
-from dnd.core.events import WeaponSlot, EventQueue
-from dnd.utils import set_hp
-
-
-def setup_test():
-    """Reset entity registries, event queue, and create a clean map."""
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    reset_map()
-
-    # Clear EventQueue handlers (they reference old entities)
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
-
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
+from dnd.core.events import WeaponSlot
+from dnd.utils import set_hp, reset_combat_state
 
 
 def create_fighter_with_extra_attack(name: str, position: tuple, extra_attacks: int = 1) -> Entity:
@@ -58,7 +42,8 @@ def create_fighter_with_extra_attack(name: str, position: tuple, extra_attacks: 
 def test_has_attacked_applied_after_attack():
     """Test 1: HasAttacked is applied after an action-cost attack."""
     print("\n=== Test 1: HasAttacked applied after attack ===")
-    setup_test()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5))
     target = create_goblin(name="Target", position=(5, 6))
@@ -86,7 +71,8 @@ def test_has_attacked_applied_after_attack():
 def test_extra_attack_requires_has_attacked():
     """Test 2: ExtraAttack requires HasAttacked as prerequisite."""
     print("\n=== Test 2: ExtraAttack requires HasAttacked ===")
-    setup_test()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5))
     target = create_goblin(name="Target", position=(5, 6))
@@ -125,7 +111,8 @@ def test_extra_attack_requires_has_attacked():
 def test_extra_attack_consumes_resource():
     """Test 3: ExtraAttack consumes extra_attacks resource."""
     print("\n=== Test 3: ExtraAttack consumes resource ===")
-    setup_test()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=1)
     target = create_goblin(name="Target", position=(5, 6))
@@ -170,7 +157,8 @@ def test_extra_attack_consumes_resource():
 def test_resource_recharges_at_turn_start():
     """Test 4: extra_attacks resource recharges at turn start."""
     print("\n=== Test 4: Resource recharges at turn start ===")
-    setup_test()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=2)
     target = create_goblin(name="Target", position=(5, 6))
@@ -214,7 +202,8 @@ def test_resource_recharges_at_turn_start():
 def test_full_combat_round_l5():
     """Test 5: Full L5 combat round - Attack + 1 ExtraAttack = 2 attacks."""
     print("\n=== Test 5: Full L5 combat round ===")
-    setup_test()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=1)
     target = create_goblin(name="Target", position=(5, 6))
@@ -268,7 +257,8 @@ def test_full_combat_round_l5():
 def test_full_combat_round_l11():
     """Test 6: Full L11 combat round - Attack + 2 ExtraAttacks = 3 attacks."""
     print("\n=== Test 6: Full L11 combat round ===")
-    setup_test()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=2)
     target = create_goblin(name="Target", position=(5, 6))
@@ -332,7 +322,8 @@ def test_full_combat_round_l11():
 def test_has_attacked_duration():
     """Test 7: HasAttacked expires after 1 round."""
     print("\n=== Test 7: HasAttacked expires after 1 round ===")
-    setup_test()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5))
     target = create_goblin(name="Target", position=(5, 6))

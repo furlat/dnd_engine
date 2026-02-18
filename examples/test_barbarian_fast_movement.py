@@ -16,11 +16,13 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
 from dnd.core.events import BodyPart
+from dnd.core.gridmap import get_map
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greatsword
 from dnd.items.armors import create_leather_armor, create_chain_shirt, create_chain_mail
+from dnd.utils import reset_combat_state
 
 from dnd.classes.barbarian import FastMovement
 
@@ -70,9 +72,8 @@ def test_fast_movement_unarmored():
     """Test +10 speed when unarmored."""
     print("\n=== Test: Fast Movement - Unarmored ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Unarmored Barbarian")
 
@@ -99,16 +100,15 @@ def test_fast_movement_unarmored():
 
     assert new_speed == expected_speed, f"Expected {expected_speed}, got {new_speed}"
 
-    EventQueue.reset()
+
 
 
 def test_fast_movement_light_armor():
     """Test +10 speed with light armor."""
     print("\n=== Test: Fast Movement - Light Armor ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Light Armor Barbarian")
 
@@ -140,16 +140,15 @@ def test_fast_movement_light_armor():
 
     assert new_speed == expected_speed, f"Expected {expected_speed}, got {new_speed}"
 
-    EventQueue.reset()
+
 
 
 def test_fast_movement_medium_armor():
     """Test +10 speed with medium armor."""
     print("\n=== Test: Fast Movement - Medium Armor ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Medium Armor Barbarian")
 
@@ -181,16 +180,15 @@ def test_fast_movement_medium_armor():
 
     assert new_speed == expected_speed, f"Expected {expected_speed}, got {new_speed}"
 
-    EventQueue.reset()
+
 
 
 def test_fast_movement_heavy_armor():
     """Test NO bonus with heavy armor."""
     print("\n=== Test: Fast Movement - Heavy Armor (No Bonus) ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Heavy Armor Barbarian")
 
@@ -222,16 +220,15 @@ def test_fast_movement_heavy_armor():
 
     assert new_speed == base_speed, f"Expected {base_speed}, got {new_speed}"
 
-    EventQueue.reset()
+
 
 
 def test_fast_movement_equip_unequip():
     """Test that speed updates when equipping/unequipping armor."""
     print("\n=== Test: Fast Movement - Equip/Unequip Armor ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Equip Test Barbarian")
 
@@ -265,16 +262,15 @@ def test_fast_movement_equip_unequip():
 
     print("  [PASS] Fast Movement correctly updates with armor changes")
 
-    EventQueue.reset()
+
 
 
 def test_fast_movement_stacks_with_base():
     """Test that Fast Movement stacks correctly with base speed."""
     print("\n=== Test: Fast Movement - Stacks with Base Speed ===")
 
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Speed Stack Barbarian")
 
@@ -311,7 +307,7 @@ def test_fast_movement_stacks_with_base():
     else:
         print(f"  [INFO] Dash speed: {dash_speed} (stacking may work differently)")
 
-    EventQueue.reset()
+
 
 
 if __name__ == "__main__":

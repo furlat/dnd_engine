@@ -9,16 +9,10 @@ sys.path.insert(0, '.')
 
 from uuid import uuid4
 from dnd.entity import Entity, EntityConfig
-from dnd.core.events import EventQueue
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
-from dnd.core.gridmap import reset_map, get_map
+from dnd.core.gridmap import get_map
 from dnd.classes.fighter import Indomitable
-
-
-def setup_map_once():
-    """Reset and create the map (call once per test)."""
-    reset_map()
-    get_map().create_rectangle(0, 0, 10, 10)
+from dnd.utils import reset_combat_state
 
 
 def create_entity(name: str = "Entity", position=(0, 0), wisdom: int = 10) -> Entity:
@@ -37,30 +31,13 @@ def create_entity(name: str = "Entity", position=(0, 0), wisdom: int = 10) -> En
     return entity
 
 
-def clear_event_queue():
-    """Clear all events and handlers from the queue for fresh tests."""
-    EventQueue._events_by_lineage.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_timestamp.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-    EventQueue._all_events.clear()
-    # Also clear handlers to avoid cross-test interference
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
-
-
 def test_indomitable_basic():
     """Test basic Indomitable - resource exists and can be used."""
     print("\n=== Test 1: Basic Indomitable Setup ===")
 
     # Setup
-    clear_event_queue()
-    setup_map_once()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     fighter = create_entity("Fighter", position=(0, 0), wisdom=8)
     _caster = create_entity("Caster", position=(1, 0))
     Entity.update_all_entities_senses()
@@ -90,8 +67,8 @@ def test_indomitable_triggers_on_failure():
     print("\n=== Test 2: Indomitable Triggers on Failed Save ===")
 
     # Setup
-    clear_event_queue()
-    setup_map_once()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     fighter = create_entity("Fighter", position=(0, 0), wisdom=8)
     caster = create_entity("Caster", position=(1, 0))
     Entity.update_all_entities_senses()
@@ -138,8 +115,8 @@ def test_indomitable_no_trigger_on_success():
     print("\n=== Test 3: Indomitable Doesn't Trigger on Success ===")
 
     # Setup
-    clear_event_queue()
-    setup_map_once()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     fighter = create_entity("Fighter", position=(0, 0), wisdom=8)
     caster = create_entity("Caster", position=(1, 0))
     Entity.update_all_entities_senses()
@@ -180,8 +157,8 @@ def test_indomitable_resource_consumed():
     print("\n=== Test 4: Indomitable Resource Consumed ===")
 
     # Setup
-    clear_event_queue()
-    setup_map_once()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     fighter = create_entity("Fighter", position=(0, 0), wisdom=8)
     caster = create_entity("Caster", position=(1, 0))
     Entity.update_all_entities_senses()
@@ -232,8 +209,8 @@ def test_indomitable_multiple_uses():
     print("\n=== Test 5: Multiple Uses (Level 13 = 2 uses) ===")
 
     # Setup
-    clear_event_queue()
-    setup_map_once()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     fighter = create_entity("Fighter", position=(0, 0), wisdom=8)
     caster = create_entity("Caster", position=(1, 0))
     Entity.update_all_entities_senses()
@@ -280,8 +257,8 @@ def test_indomitable_long_rest_recharge():
     print("\n=== Test 6: Long Rest Recharge ===")
 
     # Setup
-    clear_event_queue()
-    setup_map_once()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
     fighter = create_entity("Fighter", position=(0, 0), wisdom=8)
     Entity.update_all_entities_senses()
 

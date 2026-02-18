@@ -17,16 +17,13 @@ from dnd.conditions import Prone
 from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import PassController
-from dnd.core.gridmap import get_map, reset_map
+from dnd.core.gridmap import get_map
 
 
 def setup_arena(size: int = 20):
     """Set up a simple floor arena for testing."""
-    reset_map()
     grid = get_map()
-    for x in range(size):
-        for y in range(size):
-            grid.set_tile(x, y, walkable=True, name="Floor")
+    grid.create_rectangle(0, 0, size, size)
     return grid
 
 

@@ -44,7 +44,22 @@
       "Bash(for f in examples/test_concentration_spells.py examples/test_intercept_dodge_roll.py examples/test_light_source_perf.py examples/test_stealth_system.py examples/test_lighting_system.py examples/test_tile_condition_duration.py examples/test_spell_system.py)",
       "Bash(.venv/bin/pyright:*)",
       "WebSearch",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(for f in examples/test_action_surge.py examples/test_action_surge_extra_attack.py examples/test_aoe_convolution.py examples/test_aoe_integration.py examples/test_aoe_shapes.py examples/test_available_actions.py examples/test_available_actions_perf.py examples/test_barbarian_fast_movement.py examples/test_barbarian_fighter_combat.py examples/test_barbarian_frenzy.py examples/test_barbarian_mindless_rage.py examples/test_barbarian_minor_features.py examples/test_barbarian_persistent_rage.py examples/test_barbarian_rage.py examples/test_barbarian_retaliation.py)",
+      "Bash(echo:*)",
+      "Bash(for f in examples/test_barbarian_srd_features.py examples/test_barbarian_unarmored_defense.py examples/test_brutal_critical.py examples/test_burning_hands.py examples/test_cloudkill.py examples/test_combat_log_hierarchy.py examples/test_concentration.py examples/test_concentration_spells.py examples/test_condition_removal_system.py examples/test_dice_processors.py examples/test_difficult_terrain.py examples/test_dodging_attack.py examples/test_door_interaction.py examples/test_easy_tier_spells.py examples/test_entity_blocking.py)",
+      "Bash(for f in examples/test_event_serialization.py examples/test_extra_attack.py examples/test_faction_system.py examples/test_fighter_combat_simulation.py examples/test_fighter_factory.py examples/test_fireball.py examples/test_frenzy_maintenance.py examples/test_geometry.py examples/test_grease.py examples/test_great_weapon_fighting.py examples/test_improved_critical.py examples/test_indomitable.py examples/test_intercept_dodge_roll.py examples/test_inventory_use_actions.py examples/test_items_equip_hooks.py)",
+      "Bash(for f in examples/test_items_lifecycle_hooks.py examples/test_items_phase1.py examples/test_items_phase1_advanced.py examples/test_jump.py examples/test_legacy_migration.py examples/test_light_propagation.py examples/test_light_source_cleanup.py examples/test_light_source_perf.py examples/test_lighting_stealth_integration.py examples/test_lighting_system.py examples/test_lightning_bolt.py examples/test_lucky_feat.py examples/test_magic_missile_multi.py examples/test_multi_target_allies.py examples/test_new_spells.py)",
+      "Bash(for f in examples/test_prone_auto_stand.py examples/test_protection.py examples/test_pvp_extra_attack.py examples/test_ray_of_frost_duration.py examples/test_reactive_senses.py examples/test_relentless_rage_intimidating.py examples/test_saving_throw_events.py examples/test_second_wind.py examples/test_shatter.py examples/test_shove.py examples/test_sleep_color_spray.py examples/test_spatial_handler_registry.py examples/test_spell_system.py examples/test_spike_growth.py examples/test_spike_zone.py)",
+      "Bash(for f in examples/test_spirit_guardians.py examples/test_stackable_items.py examples/test_stealth_system.py examples/test_survivor.py examples/test_terrain_movement_system.py examples/test_thunderwave.py examples/test_tier1_spells.py examples/test_tier2_spells.py examples/test_tile_condition_duration.py examples/test_torch_items.py examples/test_turn_end_handler.py examples/test_two_weapon_fighting.py examples/test_usable_items.py examples/test_web.py)",
+      "Bash(for i in {1..5})",
+      "Bash(do echo \"=== RUN $i ===\")",
+      "Bash(while read f)",
+      "Bash(do)",
+      "Bash(if ! grep -q \"create_rectangle\\\\|setup_grid\\\\|get_map\\(\\)\" \"$f\")",
+      "Bash(then)",
+      "Bash(fi)",
+      "Bash(stat:*)"
     ]
   }
 }

@@ -13,7 +13,7 @@ Level 15: Champion - Superior Critical
 Level 18: Champion - Survivor (DEFERRED)
 """
 
-from dnd.core.base_conditions import BaseCondition, DurationType
+from dnd.core.base_conditions import BaseCondition, ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
@@ -873,6 +873,7 @@ class ActionSurging(BaseCondition):
     """
     name: str = "ActionSurging"
     description: str = "+1 action this turn (Action Surge used)"
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1140,6 +1141,7 @@ class ExtraAttacksGranted(BaseCondition):
     """
     name: str = "ExtraAttacksGranted"
     description: str = "Extra attacks have been granted this turn"
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],

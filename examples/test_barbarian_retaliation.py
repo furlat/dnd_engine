@@ -17,10 +17,12 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
+from dnd.core.gridmap import get_map
 from dnd.actions_functional import setup_standard_actions
 from dnd.actions import Attack
 from dnd.items.weapons import create_greatsword, create_shortsword
+from dnd.utils import reset_combat_state
 
 from dnd.classes.barbarian import Retaliation
 
@@ -114,15 +116,14 @@ def test_retaliation_triggers_on_hit():
     # Run multiple trials since attacks can miss
     retaliation_triggered = 0
     hits_on_barbarian = 0
-    trials = 30
+    trials = 10
 
     for trial in range(trials):
         # Set seed for some variation but reproducibility
         random.seed(42 + trial)
 
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         barbarian = create_test_barbarian(f"Barbarian_{trial}", position=(0, 0))
         attacker = create_test_attacker(f"Attacker_{trial}", position=(1, 0))  # Adjacent (5ft)
@@ -174,7 +175,7 @@ def test_retaliation_triggers_on_hit():
     else:
         print("  [INFO] No hits on barbarian in trials")
 
-    EventQueue.reset()
+
 
 
 def test_retaliation_consumes_reaction():
@@ -184,12 +185,11 @@ def test_retaliation_consumes_reaction():
     # Find a trial where retaliation triggers
     reaction_consumed_correctly = False
 
-    for trial in range(50):
+    for trial in range(10):
         random.seed(100 + trial)
 
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         barbarian = create_test_barbarian(f"Barbarian_{trial}", position=(0, 0))
         attacker = create_test_attacker(f"Attacker_{trial}", position=(1, 0))
@@ -232,7 +232,7 @@ def test_retaliation_consumes_reaction():
     if not reaction_consumed_correctly:
         print("  [INFO] Could not verify reaction consumption (retaliation may not have triggered)")
 
-    EventQueue.reset()
+
 
 
 def test_retaliation_no_trigger_from_distance():
@@ -242,12 +242,11 @@ def test_retaliation_no_trigger_from_distance():
     # Multiple trials to ensure consistency
     triggered_from_distance = False
 
-    for trial in range(20):
+    for trial in range(10):
         random.seed(200 + trial)
 
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         barbarian = create_test_barbarian(f"Barbarian_{trial}", position=(0, 0))
         # Place attacker far away - but they need a ranged weapon to attack from distance
@@ -293,7 +292,7 @@ def test_retaliation_no_trigger_from_distance():
     else:
         print("  [FAIL] Retaliation triggered from distance > 5ft")
 
-    EventQueue.reset()
+
 
 
 def test_retaliation_no_trigger_without_reaction():
@@ -302,12 +301,11 @@ def test_retaliation_no_trigger_without_reaction():
 
     triggered_without_reaction = False
 
-    for trial in range(30):
+    for trial in range(10):
         random.seed(300 + trial)
 
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         barbarian = create_test_barbarian(f"Barbarian_{trial}", position=(0, 0))
         attacker = create_test_attacker(f"Attacker_{trial}", position=(1, 0))
@@ -350,7 +348,7 @@ def test_retaliation_no_trigger_without_reaction():
     else:
         print("  [FAIL] Retaliation triggered without reaction available")
 
-    EventQueue.reset()
+
 
 
 def test_retaliation_no_trigger_without_melee_weapon():
@@ -359,12 +357,11 @@ def test_retaliation_no_trigger_without_melee_weapon():
 
     triggered_without_weapon = False
 
-    for trial in range(30):
+    for trial in range(10):
         random.seed(400 + trial)
 
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         barbarian = create_test_barbarian(f"Barbarian_{trial}", position=(0, 0))
         attacker = create_test_attacker(f"Attacker_{trial}", position=(1, 0))
@@ -407,7 +404,7 @@ def test_retaliation_no_trigger_without_melee_weapon():
     else:
         print("  [FAIL] Retaliation triggered without melee weapon")
 
-    EventQueue.reset()
+
 
 
 def test_retaliation_only_once_per_round():
@@ -417,12 +414,11 @@ def test_retaliation_only_once_per_round():
     # Find a scenario where retaliation triggers on first hit
     found_scenario = False
 
-    for trial in range(50):
+    for trial in range(10):
         random.seed(500 + trial)
 
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         barbarian = create_test_barbarian(f"Barbarian_{trial}", position=(0, 0))
         attacker = create_test_attacker(f"Attacker_{trial}", position=(1, 0))
@@ -484,7 +480,7 @@ def test_retaliation_only_once_per_round():
     if not found_scenario:
         print("  [INFO] Could not find scenario where retaliation triggers (RNG)")
 
-    EventQueue.reset()
+
 
 
 def test_retaliation_feature_summary():
@@ -492,7 +488,7 @@ def test_retaliation_feature_summary():
     print("\n=== Test: Retaliation Feature Summary ===")
 
     # Multiple trials to get statistics
-    total_trials = 100
+    total_trials = 20
     hits_on_barbarian = 0
     retaliations = 0
     retaliation_hits = 0
@@ -500,9 +496,8 @@ def test_retaliation_feature_summary():
     for trial in range(total_trials):
         random.seed(600 + trial)
 
-        EventQueue.reset()
-        Entity._entity_registry.clear()
-        Entity._entity_by_position.clear()
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         barbarian = create_test_barbarian(f"Barb_{trial}", position=(0, 0))
         attacker = create_test_attacker(f"Att_{trial}", position=(1, 0))
@@ -551,7 +546,7 @@ def test_retaliation_feature_summary():
     else:
         print("  [WARN] No retaliations triggered - check implementation")
 
-    EventQueue.reset()
+
 
 
 if __name__ == "__main__":

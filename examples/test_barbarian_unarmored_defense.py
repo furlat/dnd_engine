@@ -17,7 +17,9 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.core.events import BodyPart
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.events import WeaponSlot
+from dnd.core.gridmap import get_map
+from dnd.utils import reset_combat_state
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greataxe
 from dnd.items.armors import create_leather_armor, create_chain_shirt, create_shield, create_cloth_armor
@@ -69,17 +71,11 @@ def create_test_barbarian(
     return entity
 
 
-def reset_test_state():
-    """Reset game state for clean tests."""
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-
-
 def test_unarmored_defense_basic():
     """Test that Unarmored Defense adds CON modifier to AC."""
     print("\n=== Test: Unarmored Defense Basic ===")
-    reset_test_state()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
@@ -114,7 +110,8 @@ def test_unarmored_defense_basic():
 def test_unarmored_defense_disabled_by_armor():
     """Test that wearing armor disables Unarmored Defense."""
     print("\n=== Test: Armor Disables Unarmored Defense ===")
-    reset_test_state()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
@@ -151,7 +148,8 @@ def test_unarmored_defense_disabled_by_armor():
 def test_unarmored_defense_with_shield():
     """Test that shields work with Unarmored Defense."""
     print("\n=== Test: Shield Works With Unarmored Defense ===")
-    reset_test_state()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
@@ -184,7 +182,8 @@ def test_unarmored_defense_with_shield():
 def test_removing_armor_restores_unarmored():
     """Test that removing armor re-enables Unarmored Defense."""
     print("\n=== Test: Removing Armor Restores Unarmored Defense ===")
-    reset_test_state()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
@@ -222,7 +221,8 @@ def test_removing_armor_restores_unarmored():
 def test_unarmored_defense_high_con():
     """Test Unarmored Defense with high CON score."""
     print("\n=== Test: High CON Unarmored Defense ===")
-    reset_test_state()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # DEX 16 (+3), CON 20 (+5) - like a high-level barbarian
     barbarian = create_test_barbarian(dex_score=16, con_score=20)
@@ -251,7 +251,8 @@ def test_unarmored_defense_high_con():
 def test_unarmored_defense_low_con():
     """Test Unarmored Defense with low CON score."""
     print("\n=== Test: Low CON Unarmored Defense ===")
-    reset_test_state()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # DEX 14 (+2), CON 10 (+0)
     barbarian = create_test_barbarian(dex_score=14, con_score=10)
@@ -281,7 +282,8 @@ def test_unarmored_defense_low_con():
 def test_unarmored_defense_with_cloth_armor():
     """Test that cloth armor doesn't disable Unarmored Defense."""
     print("\n=== Test: Cloth Armor Allows Unarmored Defense ===")
-    reset_test_state()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)

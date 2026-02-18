@@ -11,7 +11,7 @@ Tests all types of condition relationships:
 """
 
 from dnd.entity import Entity
-from dnd.core.gridmap import get_map, GridMap
+from dnd.core.gridmap import get_map
 from dnd.utils import reset_combat_state
 from dnd.monsters.bestiary import create_skeleton
 
@@ -309,11 +309,8 @@ def test_remove_condition_by_uuid():
 def test_tile_condition_removal():
     """Test that BaseBlock.remove_condition works for tiles."""
     reset_combat_state()
-
-    # Set up grid
-    GridMap.reset()
     grid = get_map()
-    grid.create_room(0, 0, 10, 10)
+    grid.create_rectangle(0, 0, 20, 20)
 
     # Get a tile
     tile = grid.get_tile(5, 5)

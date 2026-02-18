@@ -5,10 +5,11 @@ Reproduces the bug where rage disappears after attacking when using Frenzy.
 """
 
 from dnd.entity import Entity
-from dnd.core.events import EventQueue
 from dnd.monsters.bestiary import create_skeleton
 from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
 from dnd.actions_functional import get_available_actions, execute_action
+from dnd.utils import reset_combat_state
+from dnd.core.gridmap import get_map
 
 def test_frenzy_maintenance():
     """
@@ -24,9 +25,8 @@ def test_frenzy_maintenance():
     print("\n=== Test: Frenzy Rage Maintenance ===")
 
     # Clear state
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create combatants - L5 Berserker barbarian
     config = BarbarianConfig(

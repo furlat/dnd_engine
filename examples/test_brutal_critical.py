@@ -19,11 +19,13 @@ from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot
 from dnd.entity import EntityConfig
+from dnd.core.gridmap import get_map
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greataxe
 from dnd.core.dice import Dice, RollType, AttackOutcome
 from dnd.core.values import ModifiableValue
 from dnd.classes.barbarian import BrutalCritical
+from dnd.utils import reset_combat_state
 
 
 def create_test_barbarian(name: str, position: tuple = (0, 0)) -> Entity:
@@ -62,6 +64,9 @@ def test_default_crit_extra_dice():
     """Test that get_crit_extra_dice() returns 0 by default."""
     print("\n=== Test: Default crit_extra_dice ===")
 
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
+
     barbarian = create_test_barbarian("Test Barbarian")
 
     # Check default values
@@ -80,6 +85,9 @@ def test_default_crit_extra_dice():
 def test_brutal_critical_modifier():
     """Test that BrutalCritical adds to crit_extra_dice_melee."""
     print("\n=== Test: BrutalCritical modifier application ===")
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Brutal Barbarian")
 
@@ -127,6 +135,9 @@ def test_dice_crit_extra_dice():
     """Test that Dice class correctly rolls extra dice on crits."""
     print("\n=== Test: Dice class crit_extra_dice ===")
 
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
+
     # Create a simple damage bonus
     bonus = ModifiableValue.create(source_entity_uuid=uuid4(), base_value=5, value_name="Damage Bonus")
 
@@ -166,6 +177,9 @@ def test_damage_get_dice():
     """Test that Damage.get_dice() correctly passes crit_extra_dice."""
     print("\n=== Test: Damage.get_dice() with crit_extra_dice ===")
 
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
+
     from dnd.core.events import Damage
     from dnd.core.modifiers import DamageType
 
@@ -196,6 +210,9 @@ def test_damage_get_dice():
 def test_separate_melee_ranged():
     """Test that melee and ranged crit extra dice are tracked separately."""
     print("\n=== Test: Separate melee/ranged tracking ===")
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     barbarian = create_test_barbarian("Test Barbarian")
 

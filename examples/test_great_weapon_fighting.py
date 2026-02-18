@@ -8,8 +8,7 @@ import sys
 sys.path.insert(0, '.')
 
 from uuid import uuid4
-from dnd.core.gridmap import get_map, reset_map
-from dnd.core.base_object import BaseObject
+from dnd.core.gridmap import get_map
 from dnd.core.events import EventQueue, DamageRollResultEvent
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
@@ -19,26 +18,7 @@ from dnd.core.events import WeaponSlot, RangeType, Range
 from dnd.core.modifiers import DamageType
 from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
-
-
-def setup_test_environment():
-    """Reset all registries for clean test."""
-    reset_map()
-    BaseObject._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_lineage.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-    EventQueue._events_by_timestamp.clear()
-    EventQueue._all_events.clear()
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
+from dnd.utils import reset_combat_state
 
 
 def test_create_modified_dice_roll():
@@ -77,11 +57,8 @@ def test_create_modified_dice_roll():
 
 def test_great_weapon_fighting_condition():
     """Test that GreatWeaponFighting condition applies correctly."""
-    setup_test_environment()
-
-    # Create a map
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create a fighter with a two-handed weapon
     fighter = create_goblin(name="Fighter", position=(5, 5))
@@ -119,11 +96,8 @@ def test_great_weapon_fighting_condition():
 
 def test_great_weapon_fighting_attack():
     """Test that GWF rerolls damage dice during an attack."""
-    setup_test_environment()
-
-    # Create a map
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create combatants
     fighter = create_goblin(name="Fighter", position=(5, 5))
@@ -185,11 +159,8 @@ def test_great_weapon_fighting_attack():
 
 def test_gwf_does_not_apply_to_ranged():
     """Test that GWF doesn't affect ranged weapons."""
-    setup_test_environment()
-
-    # Create a map
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create combatants
     fighter = create_goblin(name="Fighter", position=(5, 5))
@@ -240,11 +211,8 @@ def test_gwf_does_not_apply_to_ranged():
 
 def test_gwf_does_not_apply_to_one_handed():
     """Test that GWF doesn't affect one-handed melee weapons."""
-    setup_test_environment()
-
-    # Create a map
-    grid = get_map()
-    grid.create_rectangle(0, 0, 20, 20)
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
 
     # Create combatants
     fighter = create_goblin(name="Fighter", position=(5, 5))
@@ -318,11 +286,8 @@ def test_gwf_statistics(num_runs: int = 20):
     print("-" * 50)
 
     for i in range(num_runs):
-        setup_test_environment()
-
-        # Create a map
-        grid = get_map()
-        grid.create_rectangle(0, 0, 20, 20)
+        reset_combat_state()
+        get_map().create_rectangle(0, 0, 20, 20)
 
         # Create combatants
         fighter = create_goblin(name="Fighter", position=(5, 5))
