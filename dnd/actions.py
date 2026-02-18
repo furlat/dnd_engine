@@ -2703,6 +2703,23 @@ class SpellAction(BaseAction):
         description="Action cost for casting"
     )
 
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        # For leveled spells, ensure cast_at_level is set and spell slot cost is included
+        if self.spell_level > 0:
+            if self.cast_at_level == 0:
+                self.cast_at_level = self.spell_level
+            # Append spell slot cost if not already present
+            has_slot_cost = any(c.cost_type.startswith("spell_slot") for c in self.costs)
+            if not has_slot_cost:
+                cost_type = cast(CostType, f"spell_slot_{self.cast_at_level}")
+                self.costs.append(Cost(
+                    name=f"Spell Slot L{self.cast_at_level}",
+                    cost_type=cost_type,
+                    cost=1,
+                    evaluator=entity_action_economy_cost_evaluator
+                ))
+
     def get_upcast_bonus(self) -> int:
         """Get levels above base spell level (for upcast scaling)."""
         return max(0, self.cast_at_level - self.spell_level)
@@ -2761,13 +2778,20 @@ class SpellAction(BaseAction):
     def _get_costs_for_level(self, level: int) -> List[Cost]:
         """Get costs for casting at a specific level.
 
+        Preserves the spell's actual action cost type (action vs bonus_action).
+
         Args:
             level: The spell slot level (0 for cantrips)
 
         Returns:
-            List of Cost objects (action + spell slot if level > 0)
+            List of Cost objects (action/bonus_action + spell slot if level > 0)
         """
-        costs = [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
+        # Use existing action cost from self.costs (preserves bonus_action for Misty Step)
+        base_cost = self.costs[0] if self.costs else Cost(
+            name="Cast Spell", cost_type="actions", cost=1,
+            evaluator=entity_action_economy_cost_evaluator
+        )
+        costs = [base_cost.model_copy()]
         if level > 0:
             cost_type = cast(CostType, f"spell_slot_{level}")
             costs.append(Cost(name=f"Spell Slot L{level}", cost_type=cost_type, cost=1, evaluator=entity_action_economy_cost_evaluator))
