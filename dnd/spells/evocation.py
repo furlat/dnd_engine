@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
+from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome, RollType
@@ -1239,16 +1240,17 @@ class Thunderwave(SpellAction):
         direction: Tuple[int, int],
         distance_feet: int,
         target_uuid: UUID
-    ) -> Tuple[Tuple[int, int], int, bool]:
+    ) -> Tuple[Tuple[int, int], int, bool, Optional[str]]:
         """Calculate where target lands after being pushed.
 
-        Returns: (final_position, actual_distance_feet, was_blocked)
+        Returns: (final_position, actual_distance_feet, was_blocked, blocked_by)
         """
 
         grid = get_map()
         distance_tiles = distance_feet // 5
         last_valid_pos = start
         was_blocked = False
+        blocked_by: Optional[str] = None
 
         for i in range(1, distance_tiles + 1):
             next_pos = (start[0] + direction[0] * i, start[1] + direction[1] * i)
@@ -1256,6 +1258,7 @@ class Thunderwave(SpellAction):
             # Check if tile is walkable
             if not grid.is_walkable_for(next_pos[0], next_pos[1], target_uuid):
                 was_blocked = True
+                blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break
 
             # Check if occupied by another entity
@@ -1263,6 +1266,8 @@ class Thunderwave(SpellAction):
             other_entities = [e for e in entities_at_pos if e != target_uuid]
             if other_entities:
                 was_blocked = True
+                blocker = BaseBlock.get(other_entities[0])
+                blocked_by = blocker.name if blocker else "entity"
                 break
 
             last_valid_pos = next_pos
@@ -1270,7 +1275,7 @@ class Thunderwave(SpellAction):
         actual_distance = abs(last_valid_pos[0] - start[0]) + abs(last_valid_pos[1] - start[1])
         actual_distance_feet = actual_distance * 5
 
-        return (last_valid_pos, actual_distance_feet, was_blocked)
+        return (last_valid_pos, actual_distance_feet, was_blocked, blocked_by)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cube direction. Self-range means no LOS check to target position."""
@@ -1355,7 +1360,7 @@ class Thunderwave(SpellAction):
         if not success:
             start_pos = target.senses.position
             push_dir = self._get_push_direction(caster.senses.position, start_pos)
-            end_pos, push_distance_actual, was_blocked = self._calculate_push_destination(
+            end_pos, push_distance_actual, was_blocked, blocked_by = self._calculate_push_destination(
                 start_pos, push_dir, self.push_distance_feet, target.uuid
             )
 
@@ -1372,6 +1377,7 @@ class Thunderwave(SpellAction):
                     intended_distance=self.push_distance_feet,
                     actual_distance=push_distance_actual,
                     blocked_by_obstacle=was_blocked,
+                    blocked_by=blocked_by,
                     cause="thunderwave",
                     phase=EventPhase.DECLARATION,
                     parent_event=effect_event.uuid

@@ -1854,10 +1854,19 @@ class Jump(BaseAction):
         )
 
     def _apply(self, execution_event: JumpEvent) -> JumpEvent:
-        """Apply the jump - teleport entity to target position."""
+        """Apply the jump - step through path cells firing StepMovementEvents.
+
+        Like Move, iterates cell-by-cell so opportunity attacks and reactions
+        can fire at each step. Unlike Move, intermediate cells are NOT checked
+        for walkability (the entity is airborne). Movement is consumed per-step.
+        """
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity:
             return execution_event.cancel(status_message="Entity not found")
+
+        path = execution_event.path or []
+        total_path_length = len(path)
+        actual_end_position = source_entity.position
 
         try:
             # Move to effect phase
@@ -1868,12 +1877,57 @@ class Jump(BaseAction):
             if effect_event.canceled:
                 return effect_event
 
-            # Teleport entity (bypasses path - that's the point of jumping!)
-            Entity.update_entity_position(source_entity, execution_event.end_position)
+            # Cell-by-cell movement through jump path
+            for i in range(1, total_path_length):
+                from_pos = path[i - 1]
+                to_pos = path[i]
 
-            # Verify landing
-            if source_entity.position != execution_event.end_position:
-                return effect_event.cancel(status_message=f"Failed to land at {execution_event.end_position}")
+                # Check movement budget (flat 5ft per cell - jumping ignores terrain cost)
+                step_cost_feet = 5
+                remaining_movement = source_entity.action_economy.movement.normalized_score
+                if remaining_movement < step_cost_feet:
+                    break
+
+                # Fire StepMovementEvent so OA and reaction handlers can react
+                step_event = StepMovementEvent(
+                    source_entity_uuid=self.source_entity_uuid,
+                    source_entity_name=source_entity.name,
+                    from_position=from_pos,
+                    to_position=to_pos,
+                    path_index=i,
+                    total_path_length=total_path_length,
+                    movement_cost=step_cost_feet,
+                    phase=EventPhase.EFFECT,
+                    parent_event=effect_event.uuid,
+                    use_register=False
+                )
+                processed_step = step_event.post(use_register=True)
+
+                if processed_step.canceled:
+                    break
+
+                # Move entity to this cell
+                Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
+                actual_end_position = to_pos
+
+                processed_step.phase_to(EventPhase.COMPLETION)
+
+                # Check for death during jump (e.g., OA killed the jumper)
+                if "Dead" in source_entity.active_conditions:
+                    break
+
+                # Consume movement for this step
+                source_entity.action_economy.consume("movement", step_cost_feet)
+
+            # Determine result
+            if source_entity.position == execution_event.start_position:
+                return effect_event.cancel(status_message=f"Failed to jump")
+            elif source_entity.position != execution_event.end_position:
+                return execution_event.phase_to(
+                    new_phase=EventPhase.COMPLETION,
+                    status_message=f"Partial jump, stopped at {source_entity.position}",
+                    end_position=actual_end_position
+                )
 
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
@@ -1884,8 +1938,18 @@ class Jump(BaseAction):
             source_entity.update_entity_senses(max_distance=20)
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
-        """Apply the costs of the jump (bonus action + movement)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        """Apply the costs of the jump (bonus action). Movement consumed per-step in _apply()."""
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None or not isinstance(entity, Entity):
+            return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
+
+        for cost in completion_event.costs:
+            # Skip movement cost - already consumed per-step in _apply()
+            if cost.cost_type == "movement":
+                continue
+            if cost.cost > 0:
+                entity.action_economy.consume(cost.cost_type, cost.cost)
+        return completion_event
 
 
 # =============================================================================
@@ -1923,6 +1987,7 @@ class ShoveEvent(ActionEvent):
     push_direction: Tuple[int, int] = Field(default=(0, 0), description="Direction of push (dx, dy)")
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target's final position after push")
     knocked_prone: bool = Field(default=False, description="Whether target was knocked prone instead")
+    blocked_by: Optional[str] = Field(default=None, description="What blocked the push (e.g. 'Wall', 'Skeleton 1')")
     is_ally: bool = Field(default=False, description="Whether target is an ally (auto-succeed)")
 
     def generate_combat_log(self) -> CombatLogEntry:
@@ -1941,7 +2006,8 @@ class ShoveEvent(ActionEvent):
             pos_str = f"→ {self.end_position}" if self.end_position else ""
             compact_text = f"{md_color(source_name, 'cyan')} shoves {md_color(target_name, 'yellow')} {md_color(f'{self.push_distance}ft', 'green')} {pos_str}"
         else:
-            compact_text = f"{md_color(source_name, 'cyan')} shoves {md_color(target_name, 'yellow')} (blocked)"
+            blocked_suffix = f" (blocked by {self.blocked_by})" if self.blocked_by else " (blocked)"
+            compact_text = f"{md_color(source_name, 'cyan')} shoves {md_color(target_name, 'yellow')}{blocked_suffix}"
 
         # VERBOSE: Add the roll info
         verbose_text = compact_text
@@ -1979,6 +2045,7 @@ class ShoveEvent(ActionEvent):
                 "push_direction": list(self.push_direction),
                 "end_position": list(self.end_position) if self.end_position else None,
                 "knocked_prone": self.knocked_prone,
+                "blocked_by": self.blocked_by,
                 "is_ally": self.is_ally
             },
             success=self.contest_success or False
@@ -2046,7 +2113,7 @@ class Shove(BaseAction):
         direction: Tuple[int, int],
         distance_feet: int,
         target_uuid: 'UUID'
-    ) -> Tuple[Tuple[int, int], int, bool]:
+    ) -> Tuple[Tuple[int, int], int, bool, Optional[str]]:
         """Calculate where target lands after being pushed.
 
         Walks cells in push direction until:
@@ -2063,13 +2130,14 @@ class Shove(BaseAction):
             target_uuid: UUID of entity being pushed (excluded from occupancy check)
 
         Returns:
-            (final_position, actual_distance_feet, was_blocked)
+            (final_position, actual_distance_feet, was_blocked, blocked_by)
         """
         grid = get_map()
         current = start
         cells_to_move = distance_feet // 5  # 5ft per cell
         actual_cells = 0
         blocked = False
+        blocked_by: Optional[str] = None
 
         for _ in range(cells_to_move):
             next_pos = (current[0] + direction[0], current[1] + direction[1])
@@ -2077,12 +2145,13 @@ class Shove(BaseAction):
             # Check if next cell is walkable for the target
             if not grid.is_walkable_for(next_pos[0], next_pos[1], target_uuid):
                 blocked = True
+                blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break
 
             current = next_pos
             actual_cells += 1
 
-        return current, actual_cells * 5, blocked
+        return current, actual_cells * 5, blocked, blocked_by
 
     def pre_validate(self) -> bool:
         """Quick validation for template filtering."""
@@ -2234,7 +2303,7 @@ class Shove(BaseAction):
         # PUSH
         direction = self.get_push_direction(source.position, target.position)
         distance = self.get_push_distance(source)
-        final_pos, actual_dist, blocked = self.calculate_final_position(
+        final_pos, actual_dist, blocked, blocked_by = self.calculate_final_position(
             target.position, direction, distance, target.uuid
         )
 
@@ -2254,6 +2323,7 @@ class Shove(BaseAction):
                 intended_distance=distance,
                 actual_distance=actual_dist,
                 blocked_by_obstacle=blocked,
+                blocked_by=blocked_by,
                 cause="shove",
                 phase=EventPhase.DECLARATION,
                 parent_event=execution_event.uuid
@@ -2271,7 +2341,8 @@ class Shove(BaseAction):
             push_distance=push_distance,
             push_direction=push_direction,
             end_position=final_pos,
-            status_message=f"Shoved {target.name} {push_distance}ft" + (" (blocked)" if blocked else "")
+            blocked_by=blocked_by,
+            status_message=f"Shoved {target.name} {push_distance}ft" + (f" (blocked by {blocked_by})" if blocked and blocked_by else " (blocked)" if blocked else "")
         )
 
     def _apply_costs(self, completion_event: ShoveEvent) -> ShoveEvent:

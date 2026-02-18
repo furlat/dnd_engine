@@ -876,7 +876,7 @@ def test_spell_slot_pipeline():
         health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=10, mode="maximums")]),
         position=(1, 0),
     )
-    target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)  # noqa: F841 - needed as target entity
+    _target = Entity.create(source_entity_uuid=uuid4(), name="Target", config=target_config)  # noqa: F841 - needed as target entity
 
     Entity.update_all_entities_senses()
 

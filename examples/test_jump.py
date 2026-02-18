@@ -18,6 +18,7 @@ from dnd.actions_functional import setup_standard_actions, get_available_actions
 from dnd.actions import Jump
 from dnd.core.base_actions import TargetType
 from dnd.core.modifiers import NumericalModifier
+from dnd.blocks.health import HealthConfig, HitDiceConfig
 
 
 def test_jump_range_calculation():
@@ -358,6 +359,131 @@ def test_jump_in_available_actions():
     print("PASSED: Jump appears in available actions with correct target type")
 
 
+def test_jump_provokes_opportunity_attack():
+    """Test that jumping away from an enemy provokes an opportunity attack."""
+    print("\n=== Test Jump Provokes Opportunity Attack ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.reactions import add_opportunity_attack_handler
+    from dnd.items.weapons import create_longsword
+    from dnd.core.events import WeaponSlot
+    from dnd.utils import get_hp, force_attack_hit
+
+    # Jumper at (5,5) - high STR for jump range, has HP
+    hp_config = HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=5, mode="maximums")])
+    jumper_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(strength=AbilityConfig(ability_score=16)),
+        health=hp_config,
+        position=(5, 5)
+    )
+    jumper = Entity.create(name="Jumper", source_entity_uuid=uuid4(), config=jumper_config)
+    setup_standard_actions(jumper)
+
+    # Enemy adjacent at (6,5) - jumper will leave their threatened zone
+    enemy_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(strength=AbilityConfig(ability_score=14)),
+        health=hp_config,
+        position=(6, 5)
+    )
+    enemy = Entity.create(name="Guard", source_entity_uuid=uuid4(), config=enemy_config)
+    setup_standard_actions(enemy)
+    sword = create_longsword(enemy.uuid)
+    enemy.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
+    add_opportunity_attack_handler(enemy)
+
+    Entity.update_all_entities_senses()
+
+    # Force the OA to hit so we can detect it via HP change
+    hp_before = get_hp(jumper)
+    force_attack_hit(enemy)
+    print(f"Jumper HP before jump: {hp_before}")
+    assert hp_before > 0, "Jumper should have HP"
+
+    # Jump away from enemy - just 3 cells so it stays within jump range (30ft movement)
+    jump_template = None
+    for action in jumper.registered_actions:
+        if isinstance(action, Jump):
+            jump_template = action
+            break
+    assert jump_template is not None, "Jump template should be registered"
+
+    jump_instance = jump_template.instantiate(end_position=(5, 8))
+    jump_instance.apply()
+
+    hp_after = get_hp(jumper)
+    print(f"Jumper HP after jump: {hp_after}")
+    print(f"Jumper final position: {jumper.position}")
+
+    assert hp_after < hp_before, f"Jump should provoke OA! HP before={hp_before}, after={hp_after}"
+    assert jumper.position == (5, 8), f"Jumper should reach destination, got {jumper.position}"
+    print("PASSED: Jump provokes opportunity attack")
+
+
+def test_jump_disengage_prevents_oa():
+    """Test that Disengage prevents OA during jump."""
+    print("\n=== Test Jump + Disengage Prevents OA ===")
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 20, 20)
+
+    from dnd.reactions import add_opportunity_attack_handler
+    from dnd.items.weapons import create_longsword
+    from dnd.core.events import WeaponSlot
+    from dnd.utils import get_hp, force_attack_hit
+    from dnd.conditions import Disengaging
+
+    # Jumper at (5,5)
+    hp_config = HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=5, mode="maximums")])
+    jumper_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(strength=AbilityConfig(ability_score=16)),
+        health=hp_config,
+        position=(5, 5)
+    )
+    jumper = Entity.create(name="Jumper", source_entity_uuid=uuid4(), config=jumper_config)
+    setup_standard_actions(jumper)
+
+    # Enemy adjacent at (6,5)
+    enemy_config = EntityConfig(
+        ability_scores=AbilityScoresConfig(strength=AbilityConfig(ability_score=14)),
+        health=hp_config,
+        position=(6, 5)
+    )
+    enemy = Entity.create(name="Guard", source_entity_uuid=uuid4(), config=enemy_config)
+    setup_standard_actions(enemy)
+    sword = create_longsword(enemy.uuid)
+    enemy.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
+    add_opportunity_attack_handler(enemy)
+
+    Entity.update_all_entities_senses()
+
+    # Apply Disengaging condition to jumper
+    disengage = Disengaging(source_entity_uuid=jumper.uuid, target_entity_uuid=jumper.uuid)
+    jumper.add_condition(disengage)
+
+    force_attack_hit(enemy)
+    hp_before = get_hp(jumper)
+    print(f"Jumper HP before jump: {hp_before}")
+
+    # Jump away
+    jump_template = None
+    for action in jumper.registered_actions:
+        if isinstance(action, Jump):
+            jump_template = action
+            break
+    assert jump_template is not None
+
+    jump_instance = jump_template.instantiate(end_position=(5, 8))
+    jump_instance.apply()
+
+    hp_after = get_hp(jumper)
+    print(f"HP before={hp_before}, after={hp_after}")
+    assert hp_after == hp_before, f"Disengage should prevent OA! HP changed from {hp_before} to {hp_after}"
+    assert jumper.position == (5, 8)
+    print("PASSED: Disengage prevents OA during jump")
+
+
 if __name__ == "__main__":
     test_jump_range_calculation()
     test_jump_valid_positions()
@@ -365,6 +491,8 @@ if __name__ == "__main__":
     test_jump_occupied_position()
     test_jump_movement_budget()
     test_jump_in_available_actions()
+    test_jump_provokes_opportunity_attack()
+    test_jump_disengage_prevents_oa()
 
     print("\n" + "=" * 50)
     print("All Jump action tests passed!")

@@ -346,6 +346,36 @@ class GridMap:
                 return True
         return False
 
+    def identify_blocker_at(self, position: Tuple[int, int],
+                            requesting_entity_uuid: Optional[UUID] = None,
+                            mode: MovementMode = MovementMode.WALKING) -> str:
+        """Identify what's blocking movement at a position.
+
+        Call this after is_walkable_for() returned False to get a descriptive
+        name for the blocker. Checks in the same order as is_walkable_for():
+        1. Tile itself (missing = "edge of map", blocks_walking = tile.name)
+        2. Entity at position
+        3. Object at position
+        4. Fallback: "obstacle"
+        """
+        tile = self._tiles.get(position)
+        if tile is None:
+            return "edge of map"
+        if tile.blocks_walking(mode=mode):
+            return tile.name
+
+        for entity_uuid in self._entities_by_position.get(position, set()):
+            block = BaseBlock.get(entity_uuid)
+            if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+                return block.name
+
+        for obj_uuid in self._objects_by_position.get(position, set()):
+            block = BaseBlock.get(obj_uuid)
+            if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+                return block.name
+
+        return "obstacle"
+
     # =========================================================================
     # Grid Bounds (cached)
     # =========================================================================
