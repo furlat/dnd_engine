@@ -16,6 +16,7 @@ import secrets
 import string
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -370,19 +371,73 @@ def append_trajectory_turn(
 
 
 def display_stream_event(event: dict, slot_id: str) -> None:
-    """Display stream-json event for spectator."""
+    """Display stream-json event for spectator.
+
+    Handles both nested format (type: assistant/user with message.content blocks)
+    and legacy flat format (type: tool_use/tool_result at top level).
+    """
     event_type = event.get("type")
 
+    # --- Nested format: assistant message with content blocks ---
+    if event_type == "assistant":
+        message = event.get("message", {})
+        if isinstance(message, str):
+            # Legacy flat: message is a string
+            first_line = message.strip().split("\n")[0][:120]
+            if first_line:
+                log(f"  [{slot_id}] {first_line}")
+            return
+
+        content_blocks = message.get("content", []) if isinstance(message, dict) else []
+        for block in content_blocks:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "text":
+                text = block.get("text", "").strip()
+                if text:
+                    first_line = text.split("\n")[0][:120]
+                    log(f"  [{slot_id}] {first_line}")
+            elif block_type == "tool_use":
+                tool = block.get("name", "")
+                tool_input = block.get("input", {})
+                if tool == "Bash":
+                    cmd_text = tool_input.get("command", "")
+                    if "cli.agent" in cmd_text:
+                        parts = cmd_text.split("cli.agent")[-1].strip()
+                        if parts.startswith("--token"):
+                            token_parts = parts.split(None, 2)
+                            parts = token_parts[2] if len(token_parts) > 2 else parts
+                        log(f"  [{slot_id}] > {parts}")
+                elif tool == "Write":
+                    filepath = tool_input.get("file_path", "")
+                    if "notebook" in filepath.lower():
+                        log(f"  [{slot_id}] > (writing notebook)")
+        return
+
+    # --- Nested format: user message with tool_result blocks ---
+    if event_type == "user":
+        message = event.get("message", {})
+        content_blocks = message.get("content", []) if isinstance(message, dict) else []
+        for block in content_blocks:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_result":
+                content = block.get("content", "")
+                if content and isinstance(content, str):
+                    first_line = content.split("\n")[0][:120]
+                    log(f"  [{slot_id}]   {first_line}")
+        return
+
+    # --- Legacy flat format fallback ---
     if event_type == "tool_use":
         tool = event.get("tool", "")
         if tool == "Bash":
             cmd_text = event.get("input", {}).get("command", "")
             if "cli.agent" in cmd_text:
-                # Extract the command after "cli.agent --token <token>"
                 parts = cmd_text.split("cli.agent")[-1].strip()
-                # Strip "--token <random_token>" prefix for clean display
                 if parts.startswith("--token"):
-                    token_parts = parts.split(None, 2)  # ["--token", "a7k3p2", "move 5 3"]
+                    token_parts = parts.split(None, 2)
                     parts = token_parts[2] if len(token_parts) > 2 else parts
                 log(f"  [{slot_id}] > {parts}")
         elif tool == "Write":
@@ -396,20 +451,69 @@ def display_stream_event(event: dict, slot_id: str) -> None:
             first_line = content.split("\n")[0][:120]
             log(f"  [{slot_id}]   {first_line}")
 
-    elif event_type == "assistant":
-        # Show Claude's thinking/text (truncated)
-        msg = event.get("message", "")
-        if msg and isinstance(msg, str):
-            first_line = msg.strip().split("\n")[0][:120]
-            if first_line:
-                log(f"  [{slot_id}] {first_line}")
+
+def _is_turn_ended_event(event: dict) -> bool:
+    """Detect 'OK: Turn ended' in a stream-json event.
+
+    Checks nested format (user → tool_result content blocks) and
+    legacy flat format (tool_result at top level).
+    """
+    def _check_content(content: object) -> bool:
+        if isinstance(content, str) and "OK: Turn ended" in content:
+            return True
+        return False
+
+    event_type = event.get("type")
+
+    # Nested format: type="user" with tool_result content blocks
+    if event_type == "user":
+        message = event.get("message", {})
+        content_blocks = message.get("content", []) if isinstance(message, dict) else []
+        for block in content_blocks:
+            if isinstance(block, dict) and block.get("type") == "tool_result":
+                if _check_content(block.get("content", "")):
+                    return True
+
+    # Legacy flat format
+    if event_type == "tool_result":
+        if _check_content(event.get("content", "")):
+            return True
+
+    return False
 
 
-def run_claude_turn(slot: PlayerSlot, prompt: str, max_turns: int = 20) -> dict:
-    """Run a Claude turn as a blocking subprocess.
+@dataclass
+class TurnResult:
+    """Result from a Claude subprocess turn, supporting background drain."""
+    session_id: Optional[str] = None
+    raw_lines: List[str] = field(default_factory=list)
+    returncode: Optional[int] = None
+    turn_ended: bool = False
+    _drain_thread: Optional[threading.Thread] = field(default=None, repr=False)
+    _drain_complete: threading.Event = field(default_factory=threading.Event, repr=False)
+    _process: Optional[subprocess.Popen] = field(default=None, repr=False)
+
+    @property
+    def raw_output(self) -> str:
+        return "".join(self.raw_lines)
+
+    def wait_for_drain(self, timeout: float = 45) -> None:
+        """Block until background drain finishes (or timeout)."""
+        if self._drain_thread is not None:
+            self._drain_complete.wait(timeout=timeout)
+            # If drain timed out and process is still alive, kill it
+            if self._process and self._process.poll() is None:
+                log(f"  WARNING: Drain timeout ({timeout}s), killing subprocess.")
+                self._process.kill()
+                self._process.wait(timeout=5)
+
+
+def run_claude_turn(slot: PlayerSlot, prompt: str, max_turns: int = 20) -> TurnResult:
+    """Run a Claude turn as a subprocess.
 
     Uses stream-json for real-time spectator view.
-    Captures session_id from final result event.
+    When 'OK: Turn ended' is detected in the stream, returns early while a
+    background thread drains the remaining output (notebook writes, etc.).
     """
     cmd = ["claude", "-p", prompt]
 
@@ -451,13 +555,12 @@ def run_claude_turn(slot: PlayerSlot, prompt: str, max_turns: int = 20) -> dict:
         env=_clean_env(),
     )
 
-    raw_lines: List[str] = []
-    session_id = None
+    result = TurnResult(_process=process)
 
     try:
         assert process.stdout is not None
         for line in process.stdout:
-            raw_lines.append(line)
+            result.raw_lines.append(line)
             line_stripped = line.strip()
             if not line_stripped:
                 continue
@@ -465,32 +568,71 @@ def run_claude_turn(slot: PlayerSlot, prompt: str, max_turns: int = 20) -> dict:
                 event = json.loads(line_stripped)
                 display_stream_event(event, slot.slot_id)
                 if event.get("type") == "result":
-                    session_id = event.get("session_id", session_id)
+                    result.session_id = event.get("session_id", result.session_id)
+
+                # Detect turn ended — return early, drain rest in background
+                if not result.turn_ended and _is_turn_ended_event(event):
+                    result.turn_ended = True
+                    log(f"  [{slot.slot_id}] [turn ended detected, starting next turn]")
+
+                    # Spawn daemon thread to drain remaining stdout
+                    def _drain(proc: subprocess.Popen, res: TurnResult, sid: str) -> None:
+                        try:
+                            assert proc.stdout is not None
+                            for rest_line in proc.stdout:
+                                res.raw_lines.append(rest_line)
+                                rest_stripped = rest_line.strip()
+                                if not rest_stripped:
+                                    continue
+                                try:
+                                    rest_event = json.loads(rest_stripped)
+                                    display_stream_event(rest_event, sid)
+                                    if rest_event.get("type") == "result":
+                                        res.session_id = rest_event.get("session_id", res.session_id)
+                                except json.JSONDecodeError:
+                                    pass
+                            proc.wait(timeout=60)
+                            res.returncode = proc.returncode
+                        except Exception:
+                            if proc.poll() is None:
+                                proc.kill()
+                                proc.wait(timeout=5)
+                        finally:
+                            res._drain_complete.set()
+
+                    t = threading.Thread(
+                        target=_drain, args=(process, result, slot.slot_id),
+                        daemon=True,
+                    )
+                    t.start()
+                    result._drain_thread = t
+                    return result
+
             except json.JSONDecodeError:
                 pass
 
         process.wait(timeout=180)  # 3-minute timeout
+        result.returncode = process.returncode
 
     except subprocess.TimeoutExpired:
         log(f"  TIMEOUT: Claude ({slot.slot_id}) exceeded 3 minutes. Killing.")
         process.kill()
         process.wait()
+        result.returncode = process.returncode
 
-    if session_id:
-        slot.claude_session_id = session_id
+    # Mark drain as complete (no background thread needed)
+    result._drain_complete.set()
 
-    returncode = process.returncode
-    if returncode and returncode != 0:
+    if result.session_id:
+        slot.claude_session_id = result.session_id
+
+    if result.returncode and result.returncode != 0:
         stderr_out = process.stderr.read() if process.stderr else ""
-        log(f"  WARNING: Claude exited with code {returncode}")
+        log(f"  WARNING: Claude exited with code {result.returncode}")
         if stderr_out:
             log(f"  stderr: {stderr_out[:300]}")
 
-    return {
-        "session_id": session_id,
-        "returncode": returncode,
-        "raw_output": "".join(raw_lines),
-    }
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -531,10 +673,71 @@ def run_post_game_reflection(slot: PlayerSlot, state: dict) -> None:
         f"Write your reflections to your notebook, then you're done."
     )
     result = run_claude_turn(slot, prompt, max_turns=5)
+    result.wait_for_drain(timeout=60)
     log_file = LOG_DIR / f"reflection_{slot.slot_id}.log"
     with open(log_file, "w") as f:
-        f.write(result.get("raw_output", ""))
+        f.write(result.raw_output)
     log(f"  Reflection logged: {log_file}")
+
+
+# ---------------------------------------------------------------------------
+# Deferred turn logging
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _PendingLog:
+    """Data needed to write turn log/trajectory after drain completes."""
+    result: TurnResult
+    slot: PlayerSlot
+    prompt: str
+    entity_name: str
+    round_num: int
+    active_uuid: str
+
+
+def _flush_turn_log(pending: _PendingLog, slot_clients: Dict[str, APIClient]) -> None:
+    """Wait for drain to complete, then write turn log and trajectory."""
+    pending.result.wait_for_drain(timeout=45)
+
+    # Update session_id from drained output (may have arrived after early return)
+    if pending.result.session_id:
+        pending.slot.claude_session_id = pending.result.session_id
+
+    # Write turn log file
+    safe_name = pending.entity_name.replace(" ", "_")
+    log_file = LOG_DIR / f"turn_{pending.round_num}_{safe_name}.log"
+    with open(log_file, "w") as f:
+        if pending.slot.prompt_file and pending.slot.prompt_file.exists():
+            f.write("=== SYSTEM PROMPT ===\n")
+            f.write(pending.slot.prompt_file.read_text())
+            f.write("\n=== END SYSTEM PROMPT ===\n\n")
+        f.write("=== TURN PROMPT ===\n")
+        f.write(pending.prompt)
+        f.write("\n=== END TURN PROMPT ===\n\n")
+        f.write("=== STREAM OUTPUT ===\n")
+        f.write(pending.result.raw_output)
+    log(f"  Log: {log_file}")
+
+    # Append to per-faction trajectory file
+    if pending.slot.trajectory_path:
+        sys_prompt = ""
+        if not pending.slot.trajectory_started and pending.slot.prompt_file and pending.slot.prompt_file.exists():
+            sys_prompt = pending.slot.prompt_file.read_text()
+        append_trajectory_turn(
+            pending.result.raw_output,
+            pending.prompt, pending.entity_name, pending.round_num,
+            pending.slot.trajectory_path,
+            token=pending.slot.token,
+            system_prompt=sys_prompt,
+            is_first_turn=not pending.slot.trajectory_started,
+        )
+        pending.slot.trajectory_started = True
+        log(f"  Trajectory: {pending.slot.trajectory_path}")
+
+    # Verify turn ended — force end if Claude forgot (only if NOT early-returned)
+    if not pending.result.turn_ended:
+        slot_client = slot_clients[pending.slot.slot_id]
+        verify_turn_ended(slot_client, pending.active_uuid)
 
 
 # ---------------------------------------------------------------------------
@@ -547,18 +750,32 @@ def turn_loop(
     slot_clients: Dict[str, APIClient],
 ) -> None:
     round_num = 0
+    pending_log: Optional[_PendingLog] = None
 
     while True:
+        # Flush previous turn's log (blocks until drain complete)
+        if pending_log is not None:
+            _flush_turn_log(pending_log, slot_clients)
+            pending_log = None
+
         state = spectator.get_state()
         encounter = state.get("encounter", {})
 
         if encounter.get("state") != "active":
             log("\n=== ENCOUNTER ENDED ===")
             show_final_results(state)
-            # Post-game reflections
+            # Post-game reflections — run in parallel
+            log("\n  Requesting post-game reflections...")
+            threads: List[threading.Thread] = []
             for slot in slots:
-                log(f"\n  Requesting reflection from {slot.slot_id}...")
-                run_post_game_reflection(slot, state)
+                log(f"  Starting reflection for {slot.slot_id}...")
+                t = threading.Thread(
+                    target=run_post_game_reflection, args=(slot, state),
+                )
+                t.start()
+                threads.append(t)
+            for t in threads:
+                t.join(timeout=120)
             break
 
         active_uuid = encounter.get("current_entity_uuid")
@@ -639,43 +856,18 @@ def turn_loop(
                 log(f"  [dry-run] End turn failed: {e}")
                 break
         else:
-            # Run Claude subprocess (blocking)
+            # Run Claude subprocess — returns early if turn-end detected
             result = run_claude_turn(slot, prompt)
 
-            # Log raw output (prefixed with system prompt and turn prompt)
-            safe_name = entity_name.replace(" ", "_")
-            log_file = LOG_DIR / f"turn_{round_num}_{safe_name}.log"
-            with open(log_file, "w") as f:
-                # Write system prompt at top of log
-                if slot.prompt_file and slot.prompt_file.exists():
-                    f.write("=== SYSTEM PROMPT ===\n")
-                    f.write(slot.prompt_file.read_text())
-                    f.write("\n=== END SYSTEM PROMPT ===\n\n")
-                f.write("=== TURN PROMPT ===\n")
-                f.write(prompt)
-                f.write("\n=== END TURN PROMPT ===\n\n")
-                f.write("=== STREAM OUTPUT ===\n")
-                f.write(result.get("raw_output", ""))
-            log(f"  Log: {log_file}")
-
-            # Append to per-faction trajectory file
-            if slot.trajectory_path:
-                sys_prompt = ""
-                if not slot.trajectory_started and slot.prompt_file and slot.prompt_file.exists():
-                    sys_prompt = slot.prompt_file.read_text()
-                append_trajectory_turn(
-                    result.get("raw_output", ""),
-                    prompt, entity_name, round_num, slot.trajectory_path,
-                    token=slot.token,
-                    system_prompt=sys_prompt,
-                    is_first_turn=not slot.trajectory_started,
-                )
-                slot.trajectory_started = True
-                log(f"  Trajectory: {slot.trajectory_path}")
-
-            # Verify turn ended — force end if Claude forgot
-            slot_client = slot_clients[slot.slot_id]
-            verify_turn_ended(slot_client, active_uuid)
+            # Queue logging as pending (flushed at top of next iteration)
+            pending_log = _PendingLog(
+                result=result,
+                slot=slot,
+                prompt=prompt,
+                entity_name=entity_name,
+                round_num=round_num,
+                active_uuid=active_uuid,
+            )
 
         # Show post-turn combat log to spectator
         log_data = spectator.get_combat_log(since=slot.combat_log_index)
@@ -687,6 +879,10 @@ def turn_loop(
         slot.combat_log_index = log_data.get("total", slot.combat_log_index)
 
         time.sleep(0.5)
+
+    # Flush any remaining pending log (e.g., last turn before encounter ended)
+    if pending_log is not None:
+        _flush_turn_log(pending_log, slot_clients)
 
 
 # ---------------------------------------------------------------------------

@@ -47,14 +47,14 @@ Example: `source .venv/bin/activate && python -m cli.agent --token {TOKEN} move 
 2. **Pick positions from listed targets only.** Never guess coordinates.
 3. **After Dash, run `actions`** — movement targets expand.
 4. **Inspect unknown symbols** (`inspect X Y`) before moving near them.
-5. **Update your notebook** before ending — write strategy and observations.
+5. **Run `end` FIRST, then update notebook** — turns overlap for speed.
 6. **If a command fails**, try a different action. Do NOT retry the same command.
 
 ## Notebook
 
 Your notebook file is: `{NOTEBOOK_PATH}`
 
-Use the **Write** tool to save observations before running `end`. Example:
+Use the **Write** tool to save observations AFTER running `end`. Example:
 ```
 Write to {NOTEBOOK_PATH}:
 # Turn N Notes

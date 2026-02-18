@@ -47,6 +47,7 @@ def test_has_attacked_applied_after_attack():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5))
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying from crits
     Entity.update_all_entities_senses(max_distance=20)
 
     # Before attack: no HasAttacked
@@ -76,6 +77,7 @@ def test_extra_attack_requires_has_attacked():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5))
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying from crits
     Entity.update_all_entities_senses(max_distance=20)
 
     # Try Extra Attack without HasAttacked - should fail pre_validate
@@ -116,6 +118,7 @@ def test_extra_attack_consumes_resource():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5), extra_attacks=1)
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying from crits
     Entity.update_all_entities_senses(max_distance=20)
 
     # Check initial resource
@@ -327,6 +330,7 @@ def test_has_attacked_duration():
 
     fighter = create_fighter_with_extra_attack("Fighter", (5, 5))
     target = create_goblin(name="Target", position=(5, 6))
+    set_hp(target, 200)  # Prevent target dying from crits
     Entity.update_all_entities_senses(max_distance=20)
 
     # Attack to get HasAttacked
