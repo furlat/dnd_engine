@@ -1,7 +1,7 @@
 """Test Phase 1 Easy Tier Spells: Shocking Grasp, Power Word Stun, Guiding Bolt"""
 
 from dnd.utils import reset_combat_state, get_hp, set_hp, has_condition
-from dnd.monsters.bestiary import create_skeleton
+from dnd.monsters.bestiary import create_skeleton, create_sorcerer
 from dnd.entity import Entity
 from dnd.items.armors import create_chain_mail, create_leather_armor
 from dnd.blocks.equipment import WeaponSlot
@@ -38,7 +38,7 @@ def test_shocking_grasp_basic():
     print("\n=== Test: Shocking Grasp Basic ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(1, 0))  # Adjacent
 
     setup_standard_actions(caster)
@@ -80,7 +80,7 @@ def test_shocking_grasp_metal_armor_advantage():
     print("\n=== Test: Shocking Grasp Metal Armor Advantage ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
 
     # Target with metal armor (chain mail = heavy metal)
     metal_target = create_skeleton(name="Metal Target", position=(1, 0))
@@ -110,7 +110,7 @@ def test_shocking_grasp_metal_armor_advantage():
 
     # Cast at non-metal target - should NOT have advantage
     setup_test()
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     nonmetal_target = create_skeleton(name="Leather Target", position=(1, 0))
     leather = create_leather_armor(nonmetal_target.uuid)
     nonmetal_target.equipment.equip(leather)
@@ -135,7 +135,7 @@ def test_shocking_grasp_range():
     print("\n=== Test: Shocking Grasp Range ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     # Position at (2, 0) = 10ft away - within LOS but outside melee range (5ft)
     target = create_skeleton(name="Target", position=(2, 0))
 
@@ -237,7 +237,7 @@ def test_guiding_bolt_basic():
     print("\n=== Test: Guiding Bolt Basic ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(2, 0))  # 10ft away (fixed for LOS)
     attacker = create_skeleton(name="Attacker", position=(3, 0))  # Adjacent to target
 
@@ -287,7 +287,7 @@ def test_guiding_bolt_mark_removed_on_attack():
     print("\n=== Test: Guiding Bolt Mark Removal ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(1, 0))
     attacker = create_skeleton(name="Attacker", position=(2, 0))
 
@@ -339,7 +339,7 @@ def test_guiding_bolt_upcast():
     print("\n=== Test: Guiding Bolt Upcast ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
 
     # Test at different levels
     spell_l1 = GuidingBolt(source_entity_uuid=caster.uuid, caster_level=5, cast_at_level=1)
@@ -363,7 +363,7 @@ def test_power_word_stun_basic():
     print("\n=== Test: Power Word Stun Basic ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(1, 0))  # Adjacent for LOS
 
     Entity.update_all_entities_senses()
@@ -399,7 +399,7 @@ def test_power_word_stun_hp_threshold():
     print("\n=== Test: Power Word Stun HP Threshold ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(1, 0))  # Adjacent for LOS
 
     Entity.update_all_entities_senses()
@@ -443,7 +443,7 @@ def test_power_word_stun_exact_threshold():
     print("\n=== Test: Power Word Stun Exact Threshold ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(1, 0))  # Adjacent for LOS
 
     Entity.update_all_entities_senses()
@@ -515,7 +515,7 @@ def test_guiding_bolt_range():
     # Use larger grid for range test (need 26+ tiles for 125ft test)
     get_map().create_rectangle(0, 0, 30, 30)
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
 
     # Target at 120ft (24 tiles) - should be at limit of range
     target_in_range = create_skeleton(name="In Range Target", position=(24, 0))
@@ -541,7 +541,7 @@ def test_guiding_bolt_range():
     setup_test()
     get_map().create_rectangle(0, 0, 30, 30)
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     # Target at 125ft (25 tiles) - should be out of range
     target_out = create_skeleton(name="Out Range Target", position=(25, 0))
     # Update senses with max_distance=30 to see far away entities
@@ -570,7 +570,7 @@ def test_guiding_bolt_mark_duration_expiration():
     print("\n=== Test: Guiding Bolt Mark Duration Expiration ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(1, 0))
     Entity.update_all_entities_senses()
 
@@ -616,7 +616,7 @@ def test_power_word_stun_range():
     # Use larger grid for range test (need 14+ tiles for 65ft test)
     get_map().create_rectangle(0, 0, 20, 20)
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
 
     # Target at 60ft (12 tiles) - should be at limit of range
     target_in_range = create_skeleton(name="In Range Target", position=(12, 0))
@@ -641,7 +641,7 @@ def test_power_word_stun_range():
     setup_test()
     get_map().create_rectangle(0, 0, 20, 20)
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     # Target at 65ft (13 tiles) - should be out of range
     target_out = create_skeleton(name="Out Range Target", position=(13, 0))
     set_hp(target_out, 100)
@@ -670,7 +670,7 @@ def test_power_word_stun_repeat_save():
     print("\n=== Test: Power Word Stun Repeat Save ===")
     setup_test()
 
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0), faction="casters")
     target = create_skeleton(name="Target", position=(1, 0))
     Entity.update_all_entities_senses()
 

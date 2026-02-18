@@ -414,9 +414,9 @@ def create_sorcerer(
         )]
     )
 
-    # Action economy with spell slots for level 7
+    # Action economy with spell slots (generous for testing high-level spells)
     action_economy_config = ActionEconomyConfig(
-        spell_slots={1: 4, 2: 3, 3: 3, 4: 1}  # Level 7 sorcerer spell slots
+        spell_slots={1: 4, 2: 3, 3: 3, 4: 2, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1}
     )
 
     # Equipment config (base values)
