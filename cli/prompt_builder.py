@@ -95,8 +95,8 @@ def build_turn_prompt(
         "## Reminders\n"
         "- Use commands with your token (see system prompt)\n"
         "- After Dash, run `actions` to see expanded movement targets\n"
-        "- Write observations to your notebook before ending\n"
-        "- **Always run `end` as your last command**"
+        "- Run `end` first, then write notebook observations\n"
+        "- **Always run `end` before writing notebook**"
     )
 
     return "\n\n".join(sections)

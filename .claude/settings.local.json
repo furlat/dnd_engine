@@ -59,7 +59,9 @@
       "Bash(if ! grep -q \"create_rectangle\\\\|setup_grid\\\\|get_map\\(\\)\" \"$f\")",
       "Bash(then)",
       "Bash(fi)",
-      "Bash(stat:*)"
+      "Bash(stat:*)",
+      "Bash(do python examples/test_extra_attack.py)",
+      "Bash(do echo \"Run $i:\")"
     ]
   }
 }
