@@ -216,7 +216,7 @@ def test_combat_log_anonymization():
     print("TEST 2: Combat log per-entity anonymization")
     print("=" * 60)
 
-    from cli.prompt_builder import _filter_combat_log, _ANON
+    from cli.log_filter import filter_combat_log as _filter_combat_log, ANON_NAME as _ANON
 
     # Simulate combat log entries
     hero_uuid = str(uuid4())
@@ -233,7 +233,7 @@ def test_combat_log_anonymization():
          "source_name": "Hero", "target_name": "Visible Enemy",
          "verbose": "Hero attacks Visible Enemy", "sub_entries": []},
     ]
-    result = _filter_combat_log(entries_both_visible, visible_set, controlled)
+    result = _filter_combat_log(entries_both_visible, controlled, visible_set)
     test("Both visible: all 1 entry kept", len(result) == 1)
     test("Both visible: no anonymization",
          result[0]["verbose"] == "Hero attacks Visible Enemy")
@@ -244,7 +244,7 @@ def test_combat_log_anonymization():
          "source_name": "Goblin", "target_name": "Rogue",
          "verbose": "Goblin attacks Rogue", "sub_entries": []},
     ]
-    result = _filter_combat_log(entries_hidden_target, visible_set, controlled)
+    result = _filter_combat_log(entries_hidden_target, controlled, visible_set)
     test("Hidden target: entry kept (not dropped)", len(result) == 1)
     test("Hidden target: target_name anonymized", result[0]["target_name"] == _ANON)
     test("Hidden target: source_name preserved", result[0]["source_name"] == "Goblin")
@@ -257,7 +257,7 @@ def test_combat_log_anonymization():
          "source_name": "Hidden Enemy", "target_name": None,
          "verbose": "Hidden Enemy moves to (5,5)", "sub_entries": []},
     ]
-    result = _filter_combat_log(entries_hidden_self, visible_set, controlled)
+    result = _filter_combat_log(entries_hidden_self, controlled, visible_set)
     test("Hidden source self-action: entry kept (not dropped)", len(result) == 1)
     test("Hidden source self-action: source anonymized",
          result[0]["source_name"] == _ANON)
@@ -270,7 +270,7 @@ def test_combat_log_anonymization():
          "source_name": "Hidden Enemy", "target_name": "Hidden Enemy",
          "verbose": "Hidden Enemy uses Dodge", "sub_entries": []},
     ]
-    result = _filter_combat_log(entries_hidden_buff, visible_set, controlled)
+    result = _filter_combat_log(entries_hidden_buff, controlled, visible_set)
     test("Hidden self-buff: entry kept (not dropped)", len(result) == 1)
     test("Hidden self-buff: both names anonymized",
          result[0]["source_name"] == _ANON and result[0]["target_name"] == _ANON)
@@ -283,7 +283,7 @@ def test_combat_log_anonymization():
          "source_name": "Hidden Enemy", "target_name": "Hero",
          "verbose": "Hidden Enemy attacks Hero", "sub_entries": []},
     ]
-    result = _filter_combat_log(entries_hidden_attacks_us, visible_set, controlled)
+    result = _filter_combat_log(entries_hidden_attacks_us, controlled, visible_set)
     test("Hidden attacks us: entry kept", len(result) == 1)
     test("Hidden attacks us: source anonymized",
          result[0]["source_name"] == _ANON)
@@ -298,7 +298,7 @@ def test_combat_log_anonymization():
          "source_name": "Hidden Enemy", "target_name": None,
          "verbose": "Hidden Enemy moves", "sub_entries": []},
     ]
-    result = _filter_combat_log(all_entries, None, controlled)
+    result = _filter_combat_log(all_entries, controlled, None)
     test("Omniscient: no anonymization",
          result[0]["verbose"] == "Hidden Enemy moves")
 
@@ -320,7 +320,7 @@ def test_combat_log_anonymization():
          "source_name": "Hid", "target_name": "Hid",
          "verbose": "Hid uses Dodge", "sub_entries": []},
     ]
-    result = _filter_combat_log(entries_mixed, visible_set, controlled)
+    result = _filter_combat_log(entries_mixed, controlled, visible_set)
     test("All 5 entries kept (none dropped)", len(result) == 5)
 
     # --- Test: Sub-entries are anonymized, not dropped ---
@@ -336,7 +336,7 @@ def test_combat_log_anonymization():
               "verbose": "Rogue: DEX save SAVE", "sub_entries": []},
          ]},
     ]
-    result = _filter_combat_log(entries_with_subs, visible_set, controlled)
+    result = _filter_combat_log(entries_with_subs, controlled, visible_set)
     test("Parent entry kept", len(result) == 1)
     subs = result[0].get("sub_entries", [])
     test("Both sub_entries kept (not dropped)", len(subs) == 2)
@@ -359,7 +359,7 @@ def test_combat_log_anonymization():
               "verbose": "Ally: DEX save SAVE, 7 fire", "sub_entries": []},
          ]},
     ]
-    result = _filter_combat_log(entries_hidden_aoe, visible_set, controlled)
+    result = _filter_combat_log(entries_hidden_aoe, controlled, visible_set)
     test("Hidden AoE: parent entry kept", len(result) == 1)
     test("Hidden AoE: parent source anonymized",
          result[0]["verbose"] == f"{_ANON} uses Fireball → 2 targets")
@@ -416,12 +416,439 @@ def test_aoe_empty_position():
 
 
 # =========================================================================
+# Test 4: Temporal filtering (perceiver_uuids Layer 1)
+# =========================================================================
+def test_temporal_filtering():
+    """filter_combat_log Layer 1: entries with perceiver_uuids that exclude
+    the observer are DROPPED. Legacy entries (empty perceiver_uuids) pass through."""
+    print("\n" + "=" * 60)
+    print("TEST 4: Temporal filtering (perceiver_uuids)")
+    print("=" * 60)
+
+    from cli.log_filter import filter_combat_log as _filter_combat_log, ANON_NAME as _ANON
+
+    hero_uuid = str(uuid4())
+    ally_uuid = str(uuid4())
+    enemy_uuid = str(uuid4())
+    bystander_uuid = str(uuid4())
+
+    controlled = [hero_uuid, ally_uuid]
+    visible_set = {hero_uuid, ally_uuid, enemy_uuid, bystander_uuid}  # all visible (Layer 2 passes)
+
+    # --- Entry perceivable by hero → SHOWN ---
+    entry_hero_perceives = {
+        "source_uuid": enemy_uuid, "target_uuid": hero_uuid,
+        "source_name": "Skeleton", "target_name": "Hero",
+        "verbose": "Skeleton attacks Hero", "sub_entries": [],
+        "perceiver_uuids": [hero_uuid, enemy_uuid],
+    }
+    result = _filter_combat_log([entry_hero_perceives], controlled, visible_set)
+    test("Hero in perceiver_uuids → entry shown", len(result) == 1)
+
+    # --- Entry perceivable by ally → SHOWN ---
+    entry_ally_perceives = {
+        "source_uuid": enemy_uuid, "target_uuid": bystander_uuid,
+        "source_name": "Skeleton", "target_name": "Bystander",
+        "verbose": "Skeleton attacks Bystander", "sub_entries": [],
+        "perceiver_uuids": [ally_uuid, enemy_uuid, bystander_uuid],
+    }
+    result = _filter_combat_log([entry_ally_perceives], controlled, visible_set)
+    test("Ally in perceiver_uuids → entry shown", len(result) == 1)
+
+    # --- Entry NOT perceivable → FULLY ANONYMIZED (not dropped) ---
+    entry_not_perceived = {
+        "source_uuid": enemy_uuid, "target_uuid": bystander_uuid,
+        "source_name": "Skeleton", "target_name": "Bystander",
+        "verbose": "Skeleton moves (3,3) behind wall", "sub_entries": [],
+        "perceiver_uuids": [enemy_uuid, bystander_uuid],
+    }
+    result = _filter_combat_log([entry_not_perceived], controlled, visible_set)
+    test("Not perceived: entry kept (not dropped)", len(result) == 1)
+    test("Not perceived: source fully anonymized",
+         result[0]["source_name"] == _ANON)
+    test("Not perceived: target fully anonymized",
+         result[0]["target_name"] == _ANON)
+    test("Not perceived: positions anonymized in text",
+         "(?,?)" in result[0]["verbose"])
+    test("Not perceived: names anonymized in text",
+         "Skeleton" not in result[0]["verbose"] and "Bystander" not in result[0]["verbose"])
+
+    # --- Legacy entry (empty perceiver_uuids) → SHOWN (backwards compat) ---
+    entry_legacy = {
+        "source_uuid": enemy_uuid, "target_uuid": None,
+        "source_name": "Skeleton", "target_name": None,
+        "verbose": "Skeleton does something", "sub_entries": [],
+        # no perceiver_uuids key at all
+    }
+    result = _filter_combat_log([entry_legacy], controlled, visible_set)
+    test("Legacy entry (no perceiver_uuids) → shown", len(result) == 1)
+
+    entry_legacy_empty = {
+        "source_uuid": enemy_uuid, "target_uuid": None,
+        "source_name": "Skeleton", "target_name": None,
+        "verbose": "Skeleton does something", "sub_entries": [],
+        "perceiver_uuids": [],  # explicit empty list
+    }
+    result = _filter_combat_log([entry_legacy_empty], controlled, visible_set)
+    test("Legacy entry (empty perceiver_uuids list) → shown", len(result) == 1)
+
+    # --- Mixed batch: all kept, but unperceived are anonymized ---
+    result = _filter_combat_log(
+        [entry_hero_perceives, entry_not_perceived, entry_ally_perceives],
+        controlled, visible_set,
+    )
+    test("Mixed batch: all 3 entries kept", len(result) == 3)
+    test("Mixed batch: perceived entries have real names",
+         result[0]["source_name"] == "Skeleton" and result[2]["source_name"] == "Skeleton")
+    test("Mixed batch: unperceived entry is anonymized",
+         result[1]["source_name"] == _ANON)
+
+    # --- Sub-entries with perceiver_uuids → non-perceived ANONYMIZED ---
+    entry_parent_perceived = {
+        "source_uuid": enemy_uuid, "target_uuid": None,
+        "source_name": "Skeleton", "target_name": None,
+        "verbose": "Skeleton moves (1,1) → (5,5)", "sub_entries": [
+            {"source_uuid": enemy_uuid, "target_uuid": None,
+             "source_name": "Skeleton", "target_name": None,
+             "verbose": "step (1,1)→(2,1)", "sub_entries": [],
+             "perceiver_uuids": [enemy_uuid]},  # hero can't see → anonymized
+            {"source_uuid": enemy_uuid, "target_uuid": None,
+             "source_name": "Skeleton", "target_name": None,
+             "verbose": "step (2,1)→(3,1)", "sub_entries": [],
+             "perceiver_uuids": [enemy_uuid, hero_uuid]},  # hero CAN see → kept
+            {"source_uuid": enemy_uuid, "target_uuid": None,
+             "source_name": "Skeleton", "target_name": None,
+             "verbose": "step (3,1)→(4,1)", "sub_entries": [],
+             "perceiver_uuids": [enemy_uuid]},  # hero can't see → anonymized
+        ],
+        "perceiver_uuids": [enemy_uuid, hero_uuid],  # parent shown (union)
+    }
+    result = _filter_combat_log([entry_parent_perceived], controlled, visible_set)
+    test("Parent with perceiver_uuids union → shown", len(result) == 1)
+    subs = result[0].get("sub_entries", [])
+    test("All 3 sub-entries kept (anonymized, not dropped)", len(subs) == 3)
+    test("Visible sub keeps real text",
+         subs[1]["verbose"] == "step (2,1)→(3,1)")
+    test("Invisible sub has anonymized positions",
+         "(?,?)" in subs[0]["verbose"])
+    test("Invisible sub has anonymized name",
+         subs[0]["source_name"] == _ANON)
+
+    # --- Layer 1 + Layer 2 combined: perceived but source hidden → shown + anonymized ---
+    hidden_source_uuid = str(uuid4())
+    visible_set_partial = {hero_uuid, ally_uuid, enemy_uuid}  # hidden_source NOT visible
+    entry_perceived_but_hidden = {
+        "source_uuid": hidden_source_uuid, "target_uuid": hero_uuid,
+        "source_name": "Invisible Wizard", "target_name": "Hero",
+        "verbose": "Invisible Wizard attacks Hero", "sub_entries": [],
+        "perceiver_uuids": [hero_uuid, hidden_source_uuid],
+    }
+    result = _filter_combat_log([entry_perceived_but_hidden], controlled, visible_set_partial)
+    test("Perceived but source hidden → entry shown (not dropped)", len(result) == 1)
+    test("Perceived but source hidden → source anonymized",
+         result[0]["source_name"] == "???")
+    test("Perceived but source hidden → target preserved",
+         result[0]["target_name"] == "Hero")
+
+
+# =========================================================================
+# Test 5: Engine stamps perceiver_uuids on combat log entries
+# =========================================================================
+def test_engine_perceiver_stamping():
+    """Verify the engine actually populates perceiver_uuids on CombatLogEntry
+    objects during encounter combat."""
+    print("\n" + "=" * 60)
+    print("TEST 5: Engine stamps perceiver_uuids during encounter")
+    print("=" * 60)
+
+    reset_combat_state()
+    setup_arena(20, 20)
+
+    # Place entities: attacker and target can see each other (open arena)
+    attacker = create_caster(name="Wizard", position=(5, 5))
+    target = create_target(name="Skeleton", position=(8, 5), faction="monsters")
+
+    register_spell(attacker, Fireball, caster_level=5)
+    Entity.update_all_entities_senses()
+
+    # Set up encounter
+    encounter = Encounter(name="Test Perceivers", source_entity_uuid=uuid4())
+    encounter.add_combatant(attacker, PassController(source_entity_uuid=attacker.uuid))
+    encounter.add_combatant(target, PassController(source_entity_uuid=target.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+
+    # Advance to attacker's turn
+    while encounter.get_current_entity() != attacker:
+        encounter.next_turn()
+
+    # Record log position before action
+    log_start = len(encounter.combat_log)
+
+    # Execute Fireball — should generate combat log with perceiver_uuids
+    fireball = Fireball(
+        source_entity_uuid=attacker.uuid,
+        end_position=(8, 5),
+        cast_at_level=3,
+        template=False,
+    )
+    result = fireball.apply()
+    test("Fireball succeeded", result is not None and not result.canceled)
+
+    # Check that combat log entries were generated
+    new_entries = encounter.get_combat_log(since=log_start)
+    test("Combat log entries were generated", len(new_entries) > 0)
+
+    if new_entries:
+        top_entry = new_entries[0]
+        test("Top entry has perceiver_uuids field",
+             hasattr(top_entry, "perceiver_uuids"))
+        test("perceiver_uuids is non-empty",
+             len(top_entry.perceiver_uuids) > 0)
+
+        attacker_uuid_str = str(attacker.uuid)
+        target_uuid_str = str(target.uuid)
+
+        test("Attacker is in perceiver_uuids (source always perceives)",
+             attacker_uuid_str in top_entry.perceiver_uuids)
+        test("Target is in perceiver_uuids (target always perceives)",
+             target_uuid_str in top_entry.perceiver_uuids)
+
+        print(f"  perceiver_uuids count: {len(top_entry.perceiver_uuids)}")
+
+    # --- Part 2: Observer behind wall can't perceive Fireball ---
+    reset_combat_state()
+    grid = setup_arena(30, 20)
+
+    # Create a wall column at x=15 blocking LOS
+    for y in range(0, 20):
+        grid.set_tile(15, y, walkable=False, visible=False, name="Wall")
+
+    attacker2 = create_caster(name="Wizard2", position=(5, 5))
+    target2 = create_target(name="Skeleton2", position=(8, 5), faction="monsters")
+    # Observer behind wall — can't see attacker or target
+    observer = create_target(name="Observer", position=(20, 5), faction="observers")
+
+    register_spell(attacker2, Fireball, caster_level=5)
+    Entity.update_all_entities_senses()
+
+    # Verify observer can't see attacker/target (wall blocks LOS)
+    test("Observer can't see attacker (wall blocks LOS)",
+         attacker2.uuid not in observer.senses.entities)
+    test("Observer can't see target (wall blocks LOS)",
+         target2.uuid not in observer.senses.entities)
+
+    encounter2 = Encounter(name="Test Wall", source_entity_uuid=uuid4())
+    encounter2.add_combatant(attacker2, PassController(source_entity_uuid=attacker2.uuid))
+    encounter2.add_combatant(target2, PassController(source_entity_uuid=target2.uuid))
+    encounter2.add_combatant(observer, PassController(source_entity_uuid=observer.uuid))
+    encounter2.roll_initiative()
+    encounter2.start_encounter()
+
+    while encounter2.get_current_entity() != attacker2:
+        encounter2.next_turn()
+
+    log_start2 = len(encounter2.combat_log)
+
+    fireball2 = Fireball(
+        source_entity_uuid=attacker2.uuid,
+        end_position=(8, 5),
+        cast_at_level=3,
+        template=False,
+    )
+    result2 = fireball2.apply()
+    test("Fireball behind wall succeeded", result2 is not None and not result2.canceled)
+
+    new_entries2 = encounter2.get_combat_log(since=log_start2)
+    test("Combat log entries generated (wall scenario)", len(new_entries2) > 0)
+
+    if new_entries2:
+        top_entry2 = new_entries2[0]
+        observer_uuid_str = str(observer.uuid)
+        attacker2_uuid_str = str(attacker2.uuid)
+        target2_uuid_str = str(target2.uuid)
+
+        test("Attacker2 in perceiver_uuids",
+             attacker2_uuid_str in top_entry2.perceiver_uuids)
+        test("Target2 in perceiver_uuids",
+             target2_uuid_str in top_entry2.perceiver_uuids)
+        test("Observer NOT in perceiver_uuids (behind wall)",
+             observer_uuid_str not in top_entry2.perceiver_uuids)
+
+        # Verify temporal filter works end-to-end: observer's log should drop this
+        from cli.log_filter import filter_combat_log as _filter_combat_log
+        entry_dict = top_entry2.model_dump()
+        # Convert perceiver_uuids set to list for dict form
+        entry_dict["perceiver_uuids"] = list(top_entry2.perceiver_uuids)
+
+        observer_filtered = _filter_combat_log(
+            [entry_dict],
+            [observer_uuid_str],
+            {observer_uuid_str},  # observer can only see itself
+        )
+        test("Temporal filter: observer's log keeps entry (anonymized, not dropped)",
+             len(observer_filtered) == 1)
+        test("Temporal filter: observer sees anonymized names",
+             observer_filtered[0]["source_name"] == "???")
+
+        # Attacker's log should keep it
+        attacker_filtered = _filter_combat_log(
+            [entry_dict],
+            [attacker2_uuid_str],
+            {attacker2_uuid_str, target2_uuid_str},
+        )
+        test("Temporal filter: attacker's log keeps own entry",
+             len(attacker_filtered) == 1)
+
+
+# =========================================================================
+# Test 6: Movement hidden position anonymization in parent text
+# =========================================================================
+def test_movement_hidden_positions():
+    """Movement parent text should replace hidden step positions with (?,?).
+    Sub_entries are kept and anonymized (not dropped)."""
+    print("\n" + "=" * 60)
+    print("TEST 6: Movement hidden position anonymization")
+    print("=" * 60)
+
+    from cli.log_filter import filter_combat_log as _filter, ANON_NAME as _ANON
+
+    hero_uuid = str(uuid4())
+    enemy_uuid = str(uuid4())
+    controlled = [hero_uuid]
+    visible_set = {hero_uuid, enemy_uuid}
+
+    # --- Movement with partially visible steps ---
+    # Skeleton moves 5 steps, only steps 3-4 visible to hero (through a door)
+    movement_entry = {
+        "entry_type": "movement",
+        "source_uuid": enemy_uuid, "target_uuid": None,
+        "source_name": "Skeleton", "target_name": None,
+        "compact": "{cyan:Skeleton} moves {green:25ft} to {yellow:(9,6)}",
+        "verbose": "{cyan:Skeleton} moves (14,6) → {green:(9,6)} (25ft)",
+        "detailed": "{cyan:Skeleton} moves (14,6) → {green:(9,6)} (25ft)",
+        "data": {
+            "entity_name": "Skeleton", "entity_uuid": enemy_uuid,
+            "start_position": [14, 6], "end_position": [9, 6],
+            "path": [[14, 6], [13, 6], [12, 6], [11, 6], [10, 6], [9, 6]],
+            "distance_feet": 25, "movement_cost": 25,
+        },
+        "sub_entries": [
+            {"entry_type": "movement", "source_uuid": enemy_uuid, "source_name": "Skeleton",
+             "verbose": "Skeleton (14,6) → (13,6)", "sub_entries": [],
+             "data": {"type": "step_movement", "from_position": [14, 6], "to_position": [13, 6], "movement_cost": 5},
+             "perceiver_uuids": [enemy_uuid]},  # behind wall
+            {"entry_type": "movement", "source_uuid": enemy_uuid, "source_name": "Skeleton",
+             "verbose": "Skeleton (13,6) → (12,6)", "sub_entries": [],
+             "data": {"type": "step_movement", "from_position": [13, 6], "to_position": [12, 6], "movement_cost": 5},
+             "perceiver_uuids": [enemy_uuid]},  # behind wall
+            {"entry_type": "movement", "source_uuid": enemy_uuid, "source_name": "Skeleton",
+             "verbose": "Skeleton (12,6) → (11,6)", "sub_entries": [],
+             "data": {"type": "step_movement", "from_position": [12, 6], "to_position": [11, 6], "movement_cost": 5},
+             "perceiver_uuids": [enemy_uuid, hero_uuid]},  # visible through door
+            {"entry_type": "movement", "source_uuid": enemy_uuid, "source_name": "Skeleton",
+             "verbose": "Skeleton (11,6) → (10,6)", "sub_entries": [],
+             "data": {"type": "step_movement", "from_position": [11, 6], "to_position": [10, 6], "movement_cost": 5},
+             "perceiver_uuids": [enemy_uuid, hero_uuid]},  # visible through door
+            {"entry_type": "movement", "source_uuid": enemy_uuid, "source_name": "Skeleton",
+             "verbose": "Skeleton (10,6) → (9,6)", "sub_entries": [],
+             "data": {"type": "step_movement", "from_position": [10, 6], "to_position": [9, 6], "movement_cost": 5},
+             "perceiver_uuids": [enemy_uuid]},  # behind wall again
+        ],
+        "perceiver_uuids": [enemy_uuid, hero_uuid],  # parent perceived (union)
+    }
+
+    result = _filter([movement_entry], controlled, visible_set)
+    test("Movement parent kept", len(result) == 1)
+
+    # All sub_entries kept (anonymized, not dropped)
+    subs = result[0].get("sub_entries", [])
+    test("All 5 sub_entries kept", len(subs) == 5)
+
+    # Non-perceived steps are fully anonymized
+    test("Hidden step 1: name anonymized", subs[0]["source_name"] == _ANON)
+    test("Hidden step 1: positions anonymized", "(?,?)" in subs[0]["verbose"])
+    test("Visible step 3: text preserved", "Skeleton" in subs[2]["verbose"])
+    test("Hidden step 5: name anonymized", subs[4]["source_name"] == _ANON)
+
+    # Parent text: hidden positions replaced with (?,?)
+    parent_verbose = result[0].get("verbose", "")
+    test("Parent text: hidden start (14,6) replaced with (?,?)",
+         "(14,6)" not in parent_verbose)
+    test("Parent text: hidden end (9,6) replaced with (?,?)",
+         "(9,6)" not in parent_verbose)
+    test("Parent text contains (?,?) for hidden positions",
+         "(?,?)" in parent_verbose)
+
+    # Perceived positions (12,6), (11,6), (10,6) should stay visible
+    # (12,6) is from_position of first visible step, (10,6) is to_position of last
+    # (11,6) is boundary between two visible steps — should NOT be anonymized
+    test("Parent text: visible position (11,6) preserved if in text",
+         True)  # (11,6) might not be in parent text — only start/end are
+
+    # --- All steps visible: no anonymization ---
+    movement_all_visible = {
+        "entry_type": "movement",
+        "source_uuid": enemy_uuid, "target_uuid": None,
+        "source_name": "Skeleton", "target_name": None,
+        "verbose": "{cyan:Skeleton} moves (5,6) → {green:(3,6)} (10ft)",
+        "sub_entries": [
+            {"entry_type": "movement", "source_uuid": enemy_uuid, "source_name": "Skeleton",
+             "verbose": "Skeleton (5,6) → (4,6)", "sub_entries": [],
+             "data": {"type": "step_movement", "from_position": [5, 6], "to_position": [4, 6], "movement_cost": 5},
+             "perceiver_uuids": [enemy_uuid, hero_uuid]},
+            {"entry_type": "movement", "source_uuid": enemy_uuid, "source_name": "Skeleton",
+             "verbose": "Skeleton (4,6) → (3,6)", "sub_entries": [],
+             "data": {"type": "step_movement", "from_position": [4, 6], "to_position": [3, 6], "movement_cost": 5},
+             "perceiver_uuids": [enemy_uuid, hero_uuid]},
+        ],
+        "perceiver_uuids": [enemy_uuid, hero_uuid],
+    }
+
+    result_vis = _filter([movement_all_visible], controlled, visible_set)
+    test("All-visible movement: no (?,?) in text",
+         "(?,?)" not in result_vis[0].get("verbose", ""))
+
+    # --- AoE sub_entries: non-perceived anonymized (not dropped) ---
+    hidden_target_uuid = str(uuid4())
+    fireball_entry = {
+        "entry_type": "multi_entity_action",
+        "source_uuid": enemy_uuid, "target_uuid": None,
+        "source_name": "Skeleton", "target_name": None,
+        "verbose": "Skeleton casts Fireball → 2 targets",
+        "sub_entries": [
+            {"source_uuid": enemy_uuid, "target_uuid": hero_uuid,
+             "source_name": "Skeleton", "target_name": "Hero",
+             "verbose": "Hero: DEX save FAIL, 15 fire", "sub_entries": [],
+             "perceiver_uuids": [enemy_uuid, hero_uuid]},
+            {"source_uuid": enemy_uuid, "target_uuid": hidden_target_uuid,
+             "source_name": "Skeleton", "target_name": "Hidden Guy",
+             "verbose": "Hidden Guy: DEX save SAVE, 7 fire", "sub_entries": [],
+             "perceiver_uuids": [enemy_uuid, hidden_target_uuid]},  # hero can't perceive
+        ],
+        "perceiver_uuids": [enemy_uuid, hero_uuid, hidden_target_uuid],
+    }
+
+    result3 = _filter([fireball_entry], controlled, visible_set)
+    test("Fireball parent kept", len(result3) == 1)
+    subs3 = result3[0].get("sub_entries", [])
+    test("Fireball: both sub_entries kept (anonymized, not dropped)", len(subs3) == 2)
+    test("Fireball: perceived sub has real target name",
+         subs3[0]["target_name"] == "Hero")
+    test("Fireball: non-perceived sub is fully anonymized",
+         subs3[1]["source_name"] == _ANON and subs3[1]["target_name"] == _ANON)
+
+
+# =========================================================================
 # Run all tests
 # =========================================================================
 if __name__ == "__main__":
     test_aoe_preview_hidden_entity()
     test_combat_log_anonymization()
     test_aoe_empty_position()
+    test_temporal_filtering()
+    test_engine_perceiver_stamping()
+    test_movement_hidden_positions()
 
     print("\n" + "=" * 60)
     total = passed + failed

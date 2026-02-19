@@ -24,7 +24,7 @@ from dnd.core.events import EventQueue
 def had_critical_d20() -> bool:
     """Check if any d20 roll in the current EventQueue had a nat 1 or nat 20."""
     for event in EventQueue._all_events:
-        for attr in ('dice_roll', 'save_roll'):
+        for attr in ('dice_roll', 'save_roll', 'roll'):
             roll = getattr(event, attr, None)
             if roll is not None:
                 try:

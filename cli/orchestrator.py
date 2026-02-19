@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from cli.api_client import APIClient
-from cli.agent import format_combat_log_entry
+from cli.agent import format_combat_log_entry, format_map, format_entities, format_actions
+from cli.log_filter import filter_combat_log
 
 
 def log(msg: str) -> None:
@@ -259,12 +260,7 @@ def append_trajectory_turn(
     # Turn prompt
     lines.append("### Observation")
     lines.append("~~~~")
-    if len(prompt) > 8000:
-        lines.append(prompt[:4000])
-        lines.append(f"\n... ({len(prompt)} chars total, truncated) ...\n")
-        lines.append(prompt[-2000:])
-    else:
-        lines.append(prompt)
+    lines.append(prompt)
     lines.append("~~~~\n")
 
     # Parse stream-json events into action steps
@@ -353,9 +349,9 @@ def append_trajectory_turn(
                 lines.append("Response:")
                 lines.append("~~~~")
                 if isinstance(result_content, str):
-                    lines.append(result_content[:3000] if len(result_content) > 3000 else result_content)
+                    lines.append(result_content)
                 else:
-                    lines.append(str(result_content)[:3000])
+                    lines.append(str(result_content))
                 lines.append("~~~~\n")
 
                 pending_tool = None
@@ -804,6 +800,7 @@ def turn_loop(
         visibility = spectator.get_visibility()
         vis_set: Optional[set] = None
         vis_cells: Optional[set] = None
+        mem_cells: Optional[set] = None
         if active_uuid in visibility:
             vis_data = visibility[active_uuid]
             vis_set = set(vis_data.get("visible_entities", []))
@@ -811,6 +808,10 @@ def turn_loop(
             vis_cells = set(
                 tuple(c) for c in vis_data.get("visible_cells", [])
             )
+            seen_cells = set(
+                tuple(c) for c in vis_data.get("seen_cells", [])
+            )
+            mem_cells = seen_cells - vis_cells
 
         # Get available actions
         actions = spectator.get_available_actions(active_uuid)
@@ -825,20 +826,31 @@ def turn_loop(
         if slot.notebook_path and slot.notebook_path.exists():
             notebook_content = slot.notebook_path.read_text()
 
-        # Build prompt
+        # Filter combat log (both layers) and format sections
         from cli.prompt_builder import build_turn_prompt
+        visible_entries = filter_combat_log(new_entries, slot.entity_uuids, vis_set)
+        log_lines: List[str] = []
+        for entry in visible_entries:
+            log_lines.extend(format_combat_log_entry(entry))
+
+        entities = state.get("entities", [])
+        encounter_data = state.get("encounter", {})
+        init_order = encounter_data.get("initiative_order")
+        pos_actions = actions.get("position_actions", [])
+
         prompt = build_turn_prompt(
-            faction=slot.faction,
             entity_name=entity_name,
-            active_entity_uuid=active_uuid,
-            controlled_uuids=slot.entity_uuids,
-            state=state,
-            actions=actions,
-            combat_log_entries=new_entries,
+            faction=slot.faction,
             round_number=round_num,
             notebook_content=notebook_content,
-            visible_entity_uuids=vis_set,
-            visible_cells=vis_cells,
+            combat_log_text="\n".join(log_lines),
+            entity_table_text=format_entities(
+                entities, vis_set, active_uuid, slot.entity_uuids, init_order,
+            ),
+            map_text=format_map(
+                state, vis_set, active_uuid, vis_cells, mem_cells, pos_actions,
+            ),
+            action_text=format_actions(actions, entity_name),
         )
 
         # Write session file (before Claude invocation)

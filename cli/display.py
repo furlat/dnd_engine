@@ -89,6 +89,11 @@ _history_index: Optional[int] = None  # None = viewing current, int = viewing hi
 _fov_mode: str = "self"       # "global", "self", "entity"
 _fov_entity_index: int = 0    # For "entity" mode - matches legend numbering
 
+# FOW (Fog of War) mode — temporal combat log filtering for human play
+_fow_enabled: bool = False    # Off by default; toggle with `fow on/off`
+_fow_visible_entity_uuids: Set[str] = set()  # Populated by main.py on state refresh
+_fow_controlled_uuids: List[str] = []  # Populated by main.py on state refresh
+
 # Tile memory: positions ever seen, keyed by entity UUID
 _seen_tiles: Dict[str, Set[Tuple[int, int]]] = defaultdict(set)
 
@@ -336,6 +341,24 @@ def set_fov_mode(mode: str, entity_index: int = 0):
     global _fov_mode, _fov_entity_index
     _fov_mode = mode
     _fov_entity_index = entity_index
+
+
+def get_fow_enabled() -> bool:
+    """Get whether FOW (temporal combat log filtering) is enabled."""
+    return _fow_enabled
+
+
+def set_fow_enabled(enabled: bool):
+    """Set FOW mode on/off."""
+    global _fow_enabled
+    _fow_enabled = enabled
+
+
+def set_fow_visibility(visible_entity_uuids: Set[str], controlled_uuids: List[str]):
+    """Update the FOW visibility context (called by main.py on state refresh)."""
+    global _fow_visible_entity_uuids, _fow_controlled_uuids
+    _fow_visible_entity_uuids = visible_entity_uuids
+    _fow_controlled_uuids = controlled_uuids
 
 
 def update_seen_tiles(entity_uuid: str, visible_cells: Set[Tuple[int, int]]):
@@ -1825,9 +1848,21 @@ def display_combat_log_entry(entry: Dict[str, Any]):
     directly for rendering. Legacy entries without these fields are handled via
     type-specific conversion.
 
+    When FOW mode is enabled, entries are filtered through log_filter before display.
+
     Args:
         entry: A CombatLogEntry.to_dict() from the server
     """
+    # Apply FOW filtering if enabled
+    if _fow_enabled and _fow_controlled_uuids:
+        from cli.log_filter import filter_combat_log
+        filtered = filter_combat_log(
+            [entry], _fow_controlled_uuids, _fow_visible_entity_uuids or None,
+        )
+        if not filtered:
+            return  # Filtered out by temporal visibility
+        entry = filtered[0]
+
     # Check for new verbosity-based format (has compact/verbose/detailed fields)
     if "compact" in entry and entry.get("compact"):
         # New format: pass through directly for _render_log_entry

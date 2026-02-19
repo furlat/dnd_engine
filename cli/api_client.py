@@ -354,6 +354,31 @@ class APIClient:
         # Our controlled entity was set in join_game and doesn't change.
         return data
 
+    def execute_position_action(self, action_name: str, position: Tuple[int, int],
+                                entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+        """Execute a position-targeting action by name and position.
+
+        Calls /action/position directly, bypassing the prefiltered valid_targets list.
+        Used for AoE spells targeting positions not in the preview (e.g., empty ground).
+
+        Args:
+            action_name: Template name (e.g., "Fireball")
+            position: Target (x, y) position
+            entity_uuid: Entity performing the action
+        """
+        session_id = self._require_session()
+        uuid = entity_uuid or self._current_entity_uuid
+        if not uuid:
+            raise ValueError("No entity UUID")
+        resp = self.client.post("/action/position", json={
+            "session_id": session_id,
+            "entity_uuid": uuid,
+            "action_name": action_name,
+            "position": list(position),
+        })
+        resp.raise_for_status()
+        return resp.json()
+
     @property
     def current_entity_uuid(self) -> Optional[str]:
         """Get the current entity UUID."""

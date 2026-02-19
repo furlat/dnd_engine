@@ -255,6 +255,15 @@ class Event(BaseObject):
         """
         return self.combat_log
 
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Grid positions spatially relevant to this event.
+
+        Returns only positions carried as fields. Entity-UUID-derived
+        positions are added by the perceiver computer (which has GridMap access).
+        Override in subclasses with explicit position fields.
+        """
+        return set()
+
     def get_trigger(self) -> 'Trigger':
         """ get the trigger for the event """
         return Trigger(event_type=self.event_type, event_phase=self.phase,event_source_entity_uuid=self.source_entity_uuid,event_target_entity_uuid=self.target_entity_uuid)
@@ -315,10 +324,19 @@ class Event(BaseObject):
                 temp_event = self.model_copy(update=phase_updates)
                 combat_log = temp_event.generate_combat_log()
                 if combat_log is not None:
+                    # Stamp perceivers using GridMap subscribers (O(1) per position)
+                    if EventQueue._perceiver_computer:
+                        combat_log.perceiver_uuids = EventQueue._perceiver_computer(temp_event)
+
                     # CENTRALIZED: Collect children here, not in each generate_combat_log()
                     child_logs = temp_event._collect_child_combat_logs()
                     if child_logs:
                         combat_log.sub_entries = child_logs
+                        # Union child perceivers into parent — if ANY sub-event
+                        # was perceivable, the parent is too
+                        for child_log in child_logs:
+                            combat_log.perceiver_uuids |= child_log.perceiver_uuids
+
                     phase_updates['combat_log'] = combat_log
 
                     # Auto-add top-level events via callback
@@ -629,6 +647,10 @@ class EventQueue:
     # Called for top-level events (parent_event=None) when they complete with combat_log
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
 
+    # Callback for computing perceiver UUIDs at COMPLETION phase.
+    # Takes an Event, returns Set[str] of entity UUIDs that can perceive it.
+    _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
+
     @classmethod
     def set_combat_log_callback(cls, callback: Optional[Callable[['Event'], None]]) -> None:
         """Register callback for auto-adding events to combat log.
@@ -637,6 +659,16 @@ class EventQueue:
         top-level events (parent_event=None) when they complete with a combat_log.
         """
         cls._combat_log_callback = callback
+
+    @classmethod
+    def set_perceiver_computer(cls, func: Optional[Callable[['Event'], Set[str]]]) -> None:
+        """Register callback for computing perceiver UUIDs on combat log entries.
+
+        Called at COMPLETION phase when a combat log is generated. The callback
+        receives the event and returns the set of entity UUID strings that can
+        perceive it (based on GridMap subscriber lookups at affected positions).
+        """
+        cls._perceiver_computer = func
 
     @classmethod
     def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
@@ -1172,6 +1204,7 @@ class EventQueue:
         cls._handler_positions.clear()
         # Clear event callbacks (spatial senses callbacks, etc.)
         cls._on_event_callbacks.clear()
+        cls._perceiver_computer = None
 
 
     @classmethod
@@ -1777,6 +1810,12 @@ class SpatialChangeEvent(Event):
             senses_hint=hint,
         )
 
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        positions = {self.position}
+        if self.old_position:
+            positions.add(self.old_position)
+        return positions
+
 
 class ForcedMovementEvent(Event):
     """Forced movement (push/pull) - does NOT trigger opportunity attacks.
@@ -1863,6 +1902,9 @@ class ForcedMovementEvent(Event):
             success=self.actual_distance > 0
         )
 
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return {self.start_position, self.end_position}
+
 
 class StepMovementEvent(Event):
     """Single cell transition within a movement path.
@@ -1905,6 +1947,9 @@ class StepMovementEvent(Event):
             },
             success=True
         )
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return {self.from_position, self.to_position}
 
 
 class RangeType(str, Enum):
