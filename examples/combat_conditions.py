@@ -28,7 +28,9 @@ Expected Condition Effects (from CLAUDE.md):
 from typing import List, Tuple, cast
 
 from dnd.core.events import SkillName
+from dnd.core.gridmap import get_map
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.utils import reset_combat_state
 from dnd.conditions import (
     Blinded, Charmed, Dashing, Deafened, Dodging, Frightened,
     Grappled, Incapacitated, Paralyzed, Poisoned,
@@ -68,15 +70,11 @@ class TestResult:
         return self.failed == 0
 
 
-def reset_entities():
-    """Clear entity registries for a fresh test."""
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-
-
 def setup_combat_pair(distance_ft: int = 5) -> Tuple[Entity, Entity]:
     """Create two entities at specified distance (in feet, 1 grid = 5ft)."""
-    reset_entities()
+    reset_combat_state()
+    grid = get_map()
+    grid.create_rectangle(0, 0, 10, 10)
     grid_distance = distance_ft // 5
     attacker = create_goblin(name="Attacker", position=(0, 0))
     target = create_skeleton(name="Target", position=(grid_distance, 0))
@@ -559,7 +557,6 @@ def test_prone() -> bool:
     )
 
     # Test at ranged distance (>5ft)
-    reset_entities()
     attacker2, target2 = setup_combat_pair(distance_ft=30)
     prone2 = Prone(source_entity_uuid=attacker2.uuid, target_entity_uuid=target2.uuid)
     target2.add_condition(prone2)
@@ -725,7 +722,6 @@ def test_unconscious() -> bool:
     )
 
     # Test ranged (prone-like disadvantage cancels advantage)
-    reset_entities()
     attacker2, target2 = setup_combat_pair(distance_ft=30)
     unconscious2 = Unconscious(source_entity_uuid=attacker2.uuid, target_entity_uuid=target2.uuid)
     target2.add_condition(unconscious2)

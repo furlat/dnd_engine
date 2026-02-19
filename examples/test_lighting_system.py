@@ -13,7 +13,7 @@ from dnd.core.base_block import LightLevel, SensesType, SenseMode
 from dnd.core.base_tiles import Tile, dark_floor_factory
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.monsters.bestiary import create_skeleton
+from dnd.monsters.bestiary import create_skeleton, create_sorcerer
 from dnd.actions_functional import setup_standard_actions, register_spell
 from dnd.actions import Hide
 from dnd.spells.conjuration import FogCloud, Darkness, Daylight
@@ -476,8 +476,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 20, 20)
 
-caster = create_skeleton(name="Caster", position=(5, 5), faction="heroes")
-setup_standard_actions(caster)
+caster = create_sorcerer(level=5, name="Caster", position=(5, 5), faction="heroes")
 register_spell(caster, FogCloud, caster_level=5)
 
 target_entity = create_skeleton(name="Target", position=(10, 10), faction="monsters")
@@ -513,8 +512,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 20, 20)
 
-caster = create_skeleton(name="Dark Caster", position=(0, 0), faction="heroes")
-setup_standard_actions(caster)
+caster = create_sorcerer(level=5, name="Dark Caster", position=(0, 0), faction="heroes")
 
 target_entity = create_skeleton(name="Target", position=(8, 0), faction="monsters")
 setup_standard_actions(target_entity)
@@ -547,8 +545,7 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 20, 20)
 
-caster = create_skeleton(name="Light Caster", position=(0, 0), faction="heroes")
-setup_standard_actions(caster)
+caster = create_sorcerer(level=5, name="Light Caster", position=(0, 0), faction="heroes")
 
 target_entity = create_skeleton(name="Target", position=(8, 0), faction="monsters")
 setup_standard_actions(target_entity)
