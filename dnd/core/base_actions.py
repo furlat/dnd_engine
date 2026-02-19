@@ -5,7 +5,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData, MultiEntityLogData, md_color
 from dnd.core.aoe import AoEShape
 from dnd.blocks.sensory import Senses
-from typing import Optional, Callable, OrderedDict, List, Literal, Tuple, cast
+from typing import Optional, Callable, OrderedDict, List, Literal, Set, Tuple, cast
 from uuid import UUID, uuid4
 from enum import Enum
 
@@ -73,6 +73,12 @@ class ActionEvent(Event):
     def from_costs(cls,costs: List[Cost], source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, parent_event: Optional[Event] = None, use_register: bool = True):
         base_costs = [BaseCost.model_validate(cost) for cost in costs]
         return cls(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, costs=base_costs, parent_event=parent_event.uuid if parent_event else None, use_register=use_register)
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        positions: Set[Tuple[int, int]] = set()
+        if self.aoe_position:
+            positions.add(self.aoe_position)
+        return positions
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate a combat log entry for generic actions.
@@ -492,13 +498,12 @@ class BaseAction(BaseObject):
 
             # Check: Do we have targets?
             # MULTI_ENTITY always requires targets (e.g., Magic Missile needs someone to shoot)
-            # POSITION_AOE: controlled by aoe_require_targets flag (default True for AI efficiency,
-            # set False for zone/wall spells that legitimately target empty positions)
+            # POSITION_AOE: never cancel here — it's valid to target empty ground (area denial,
+            # flushing hidden enemies). The aoe_require_targets flag is only used by the preview
+            # prefilter in _collect_aoe_actions() for performance; execution allows empty targets.
             if not all_targets:
                 if self.target_type == TargetType.MULTI_ENTITY:
                     return declaration_event.cancel(status_message="No targets specified")
-                if self.target_type == TargetType.POSITION_AOE and self.aoe_require_targets:
-                    return declaration_event.cancel(status_message="No targets in area")
 
             # Check: Same-target constraint (only for MULTI_ENTITY - AoE uses set, no duplicates)
             if self.target_type == TargetType.MULTI_ENTITY and not self.allow_same_target:

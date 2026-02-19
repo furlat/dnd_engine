@@ -39,6 +39,8 @@ class MetaCommand(Enum):
     TILE_INSPECT = "tile_inspect"
     # FOV mode
     FOV_MODE = "fov"
+    # FOW (Fog of War) mode — combat log temporal filtering for human play
+    FOW_MODE = "fow"
     # Action filter commands
     FILTER_ACTIONS = "filter_actions"
     FILTER_SPELLS = "filter_spells"
@@ -79,6 +81,8 @@ ALIASES: Dict[str, str] = {
     "v": "log",
     # FOV mode
     "fov": "fov",
+    # FOW mode
+    "fow": "fow",
     # Action filters
     "actions": "filter_actions",
     "spells": "filter_spells",
@@ -272,6 +276,9 @@ def execute_meta_command(
 
         elif cmd.command == MetaCommand.FOV_MODE.value:
             return handle_fov_mode(cmd)
+
+        elif cmd.command == MetaCommand.FOW_MODE.value:
+            return handle_fow_mode(cmd)
 
         elif cmd.command in (MetaCommand.FILTER_ACTIONS.value, MetaCommand.FILTER_SPELLS.value,
                              MetaCommand.FILTER_ITEMS.value, MetaCommand.FILTER_ATTACKS.value,
@@ -595,6 +602,40 @@ def handle_fov_mode(cmd: ParsedCommand) -> Optional[str]:
                 f"Unknown FOV mode: {mode}",
                 "Options: self, global, N (entity number)"
             ])
+
+    return "refresh"
+
+
+def handle_fow_mode(cmd: ParsedCommand) -> Optional[str]:
+    """Handle FOW (Fog of War) mode toggle for combat log filtering.
+
+    Usage:
+        fow         - Show current state + toggle
+        fow on      - Enable temporal combat log filtering
+        fow off     - Disable (show all combat log entries)
+    """
+    if not cmd.args:
+        current = "on" if display.get_fow_enabled() else "off"
+        display.set_output([
+            f"FOW mode: {current}",
+            "",
+            "  fow on    - Filter combat log by temporal visibility",
+            "  fow off   - Show all combat log entries (default)",
+        ])
+        return "refresh"
+
+    mode = cmd.args[0].lower()
+    if mode == "on":
+        display.set_fow_enabled(True)
+        display.set_output(["FOW mode: ON (combat log filtered by temporal visibility)"])
+    elif mode == "off":
+        display.set_fow_enabled(False)
+        display.set_output(["FOW mode: OFF (all combat log entries shown)"])
+    else:
+        display.set_output([
+            f"Unknown FOW mode: {mode}",
+            "Options: on, off"
+        ])
 
     return "refresh"
 

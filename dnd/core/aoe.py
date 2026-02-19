@@ -82,6 +82,7 @@ class AoEShape(BaseObject):
         senses: "Senses",
         fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
         barrier_positions: Optional[Set[Tuple[int, int]]] = None,
+        caster_uuid: Optional[UUID] = None,
     ) -> "AoEShape":
         """
         Compute affected positions using caster's existing senses.
@@ -145,19 +146,21 @@ class AoEShape(BaseObject):
             # Intersection: only positions both in shape AND in perceived FOV
             self.affected_positions = geometric & perceived_fov
 
-        # Find entities at affected positions
-        # When origin != caster, use GridMap for fresh entity data
+        # Find entities at affected positions (filtered by caster's perception)
+        # Both branches use senses.entities to prevent leaking hidden entity info.
+        # The caster's own UUID is always included (they know where they are).
         if self.computed_origin != caster_pos:
             grid = get_map()
             self.affected_entity_uuids = set()
             for pos in self.affected_positions:
-                for uuid in grid.get_entities_at(pos):
-                    self.affected_entity_uuids.add(uuid)
+                for entity_uuid in grid.get_entities_at(pos):
+                    if entity_uuid in senses.entities or entity_uuid == caster_uuid:
+                        self.affected_entity_uuids.add(entity_uuid)
         else:
             # Use caster's perception (fast path)
             self.affected_entity_uuids = {
-                uuid
-                for uuid, pos in senses.entities.items()
+                entity_uuid
+                for entity_uuid, pos in senses.entities.items()
                 if pos in self.affected_positions
             }
 
