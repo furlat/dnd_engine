@@ -13,7 +13,7 @@ Tests:
 import pytest
 
 from dnd.utils import reset_combat_state, has_condition
-from dnd.monsters.bestiary import create_skeleton
+from dnd.monsters.bestiary import create_skeleton, create_sorcerer
 from dnd.entity import Entity, get_natural_roll
 from dnd.spells.conjuration import Web
 from dnd.core.gridmap import get_map, reset_map
@@ -56,7 +56,7 @@ def test_web_zone_creation():
     setup_arena()
 
     # Create caster
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=20)
 
     # Cast Web at position (5, 5)
@@ -104,7 +104,7 @@ def test_web_entry_restrained():
         reset_combat_state()
         setup_arena()
 
-        caster = create_skeleton(name="Caster", position=(0, 0))
+        caster = create_sorcerer(name="Caster", position=(0, 0))
         target = create_skeleton(name="Target", position=(10, 5))
         caster.update_entity_senses(max_distance=20)
 
@@ -154,7 +154,7 @@ def test_web_escape_action():
         reset_combat_state()
         setup_arena()
 
-        caster = create_skeleton(name="Caster", position=(0, 0))
+        caster = create_sorcerer(name="Caster", position=(0, 0))
         target = create_skeleton(name="Target", position=(5, 5))
         caster.update_entity_senses(max_distance=20)
 
@@ -193,8 +193,15 @@ def test_web_escape_action():
             )
         )
 
+        # Clear events so had_critical_d20 only checks the escape roll
+        EventQueue._all_events.clear()
+
         escape_target = AvailableTarget(index=0)
         execute_action(target, "Escape Web", escape_target)
+
+        if had_critical_d20():
+            print(f"  Attempt {attempt + 1}: got nat 1/20 on escape roll, retrying...")
+            continue
 
         assert not has_condition(target, "Web Restrained"), "Should no longer be web restrained"
         assert not has_condition(target, "Restrained"), "Restrained sub-condition should be removed"
@@ -218,7 +225,7 @@ def test_web_escape_failure():
         reset_combat_state()
         setup_arena()
 
-        caster = create_skeleton(name="Caster", position=(0, 0))
+        caster = create_sorcerer(name="Caster", position=(0, 0))
         target = create_skeleton(name="Target", position=(5, 5))
         caster.update_entity_senses(max_distance=20)
 
@@ -275,7 +282,7 @@ def test_web_concentration_break():
     setup_arena()
 
     # Create caster
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=20)
 
     # Cast Web

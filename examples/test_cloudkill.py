@@ -14,7 +14,7 @@ Tests:
 import pytest
 
 from dnd.utils import reset_combat_state, has_condition, get_hp
-from dnd.monsters.bestiary import create_skeleton, create_goblin
+from dnd.monsters.bestiary import create_goblin, create_sorcerer
 from dnd.entity import Entity, get_natural_roll
 from dnd.spells.conjuration import Cloudkill
 from dnd.core.gridmap import get_map, reset_map
@@ -57,7 +57,7 @@ def test_cloudkill_zone_creation():
     setup_arena()
 
     # Create caster
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=30)
 
     # Cast Cloudkill at position (10, 10)
@@ -106,7 +106,7 @@ def test_cloudkill_initial_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_goblin(name="Caster", position=(0, 0))
+        caster = create_sorcerer(name="Caster", position=(0, 0))
         target = create_goblin(name="Target", position=(10, 10))
         caster.update_entity_senses(max_distance=30)
 
@@ -157,7 +157,7 @@ def test_cloudkill_entry_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_goblin(name="Caster", position=(0, 0))
+        caster = create_sorcerer(name="Caster", position=(0, 0))
         target = create_goblin(name="Target", position=(20, 10))
         caster.update_entity_senses(max_distance=30)
 
@@ -209,7 +209,7 @@ def test_cloudkill_turn_start_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_goblin(name="Caster", position=(0, 0))
+        caster = create_sorcerer(name="Caster", position=(0, 0))
         target = create_goblin(name="Target", position=(20, 10))
         caster.update_entity_senses(max_distance=30)
 
@@ -262,7 +262,7 @@ def test_cloudkill_auto_move():
     setup_arena()
 
     # Create caster at origin
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=30)
 
     # Cast Cloudkill at position (10, 0) - directly right of caster
@@ -312,7 +312,7 @@ def test_cloudkill_concentration_break():
     setup_arena()
 
     # Create caster
-    caster = create_skeleton(name="Caster", position=(0, 0))
+    caster = create_sorcerer(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=30)
 
     # Cast Cloudkill
