@@ -81,6 +81,11 @@ class CloseDoorAction(BaseAction):
             return declaration_event.cancel(status_message="Door not found")
         if not door.is_open:
             return declaration_event.cancel(status_message="Door already closed")
+        # Can't close door if someone is standing on it
+        grid = get_map()
+        door_pos = grid.get_object_position(door.uuid)
+        if door_pos and grid.get_entities_at(door_pos):
+            return declaration_event.cancel(status_message="Can't close door — someone is standing in the doorway")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -111,6 +116,11 @@ class TestDoorA(UsableItem):
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """State check HERE: return different action class based on door state."""
         if self.is_open:
+            # Can't close if someone is standing in the doorway
+            grid = get_map()
+            door_pos = grid.get_object_position(self.uuid)
+            if door_pos and grid.get_entities_at(door_pos):
+                return []
             return [CloseDoorAction(
                 source_entity_uuid=user_entity_uuid,
                 source_item_uuid=self.uuid,
@@ -140,6 +150,12 @@ class InteractDoorAction(BaseAction):
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, TestDoorB):
             return declaration_event.cancel(status_message="Door not found")
+        # Can't close door if someone is standing on it
+        if door.is_open:
+            grid = get_map()
+            door_pos = grid.get_object_position(door.uuid)
+            if door_pos and grid.get_entities_at(door_pos):
+                return declaration_event.cancel(status_message="Can't close door — someone is standing in the doorway")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
