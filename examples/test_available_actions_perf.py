@@ -258,9 +258,9 @@ class AoEProfiler:
         profiler = self
 
         def timed_cs(shape_self: AoEShape, caster_pos: Any, senses: Any,
-                     fov_cache: Any = None, barrier_positions: Any = None) -> AoEShape:
+                     fov_cache: Any = None, barrier_positions: Any = None, caster_uuid: Any = None) -> AoEShape:
             t = time.perf_counter()
-            result = profiler._orig_cs(shape_self, caster_pos, senses, fov_cache=fov_cache, barrier_positions=barrier_positions)
+            result = profiler._orig_cs(shape_self, caster_pos, senses, fov_cache=fov_cache, barrier_positions=barrier_positions, caster_uuid=caster_uuid)
             elapsed = (time.perf_counter() - t) * 1000
             profiler.cs_calls.append({
                 "shape": shape_self.name,

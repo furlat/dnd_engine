@@ -18,7 +18,7 @@ from dnd.entity import Entity
 from dnd.core.base_block import LightLevel
 from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import get_map
-from dnd.monsters.bestiary import create_skeleton
+from dnd.monsters.bestiary import create_skeleton, create_sorcerer
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.test_items import create_torch
 from dnd.spells.conjuration import Darkness
@@ -195,10 +195,8 @@ reset_combat_state()
 grid = get_map()
 grid.create_rectangle(0, 0, 10, 10)
 
-caster = create_skeleton(name="Caster", position=(0, 0))
+caster = create_sorcerer(level=5, name="Caster", position=(0, 0))
 target_dummy = create_skeleton(name="Target", position=(8, 0), faction="monsters")
-setup_standard_actions(caster)
-setup_standard_actions(target_dummy)
 Entity.update_all_entities_senses()
 
 encounter = setup_combat_arena(caster, target_dummy)
