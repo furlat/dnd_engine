@@ -61,7 +61,9 @@
       "Bash(fi)",
       "Bash(stat:*)",
       "Bash(do python examples/test_extra_attack.py)",
-      "Bash(do echo \"Run $i:\")"
+      "Bash(do echo \"Run $i:\")",
+      "Bash(for spell in \"Grease\" \"Web\" \"Cloudkill\" \"SpiritGuardians\")",
+      "Bash(do echo \"=== $spell ===\")"
     ]
   }
 }

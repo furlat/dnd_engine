@@ -69,11 +69,23 @@ Your notebook persists between turns. Write observations about:
 - Strategy for next turns
 - Faction status (alive, HP, conditions)
 
+## How Actions Work — CRITICAL
+
+**Actions are discovered dynamically. An action only appears when ALL its prerequisites and cost checks pass** (range, line of sight, valid targets, action economy, spell slots, etc.):
+- **Melee attacks** require a valid target within reach AND an available action/bonus action. Move closer to enemies and attacks will appear.
+- **Ranged attacks / spells** require a target within range, line of sight, AND sufficient resources (action, spell slots).
+- **Object actions** (Open Door, Pick Up, Pull Lever) require proximity to the object AND an available action.
+- **Extra Attack** appears as a new action AFTER your first attack resolves.
+- **After moving**, check the updated action list — new attacks and interactions may have become available.
+
+**If you see 0 entity actions, it means no valid targets are in range yet — not that your units can't fight.** Move closer to enemies and attacks will appear.
+
 ## Reading the Display
 
 - **Actions show cost** in parentheses: `(action)`, `(bonus)`, `(FREE)`. `FREE` = no action economy cost.
 - **Spell slots** shown in RESOURCES line for spellcasters: `Slots: L1:3/4 L2:2/2`
 - **Conditions**: Internal engine markers are hidden. Status effects like Dashing shown in parentheses.
+- **AoE spell targets** are shown in TILE DETAILS as `[SpellName: target1, target2]` annotations on the tiles where you can aim. Cast with `cast <spell> X Y` using the tile coordinates.
 
 ## Tactical Priorities
 
@@ -85,24 +97,43 @@ Your notebook persists between turns. Write observations about:
 
 ## Map Format
 
-The map has two sections: **structured data** (exact coordinates) and **ASCII grid** (spatial layout).
+The map has three sections: **header** (bounds + entities), **TILE DETAILS** (per-tile data), and **ASCII grid** (spatial layout).
 
-### Structured Data (use for targeting)
+### Header
 - `MAP: (min_x,min_y)-(max_x,max_y)` — grid bounds
 - `ENTITIES: (x,y):Name(tag)` — tag is `you`, `ally`, `enemy`, or `dead`
-- `WALLS: (x,y) ...` — blocks movement and vision
-- `WATER: (x,y) ...` — blocks movement, allows vision
-- `HAZARDS: (x,y) ...` — deals damage (spikes, fire)
-- `DIFFICULT: (x,y) ...` — costs 2x movement
-- `OBJECTS: (x,y):Name` — floor items — `inspect X Y` to interact
-- `DARK: (x,y) ...` — darkness tiles (can't see without darkvision)
-- `DIM: (x,y) ...` — dim light tiles
 
-Everything not listed is normal walkable floor.
+### TILE DETAILS (use for targeting and reasoning)
+Every visible tile with its terrain, light level, entities, objects, conditions, and AoE spell targets:
+```
+TILE DETAILS:
+  (6,3): Wall
+  (4,5): Floor, dim | Skeleton 3 (ally, 15hp, AC 13)
+  (7,7): Floor, bright | Door (closed) | [USE: Open Door]
+  (2,7): Floor, bright | Hero (enemy, 45hp, AC 16) | Potion (floor)
+  (8,2): Spikes, dim | hazardous
+  (3,9): Floor, dim | Spike Growth zone (difficult terrain)
+  (5,5): Floor, bright | [Fireball: Skeleton 1, Skeleton 2]
+```
+
+- **Terrain**: Floor, Wall, Water, Spikes, etc.
+- **Light**: `bright` or `dim` (after darkvision adjustment)
+- **Entities**: Name (faction tag, HP, AC)
+- **Objects**: Items on floor, doors, levers
+- **Conditions**: Zone spell effects, hazards
+- **AoE annotations**: `[SpellName: target1, target2]` — positions where you can aim AoE spells. Cast with `cast <spell> X Y`.
+
+### MEMORY (previously seen tiles)
+Tiles you saw before but can't currently see. Only non-floor terrain shown:
+```
+MEMORY (previously seen, not currently visible):
+  (12,4): Wall
+  (11,6): Water
+```
 
 ### ASCII Grid (use for spatial awareness)
 Below the data is an ASCII grid showing the same map visually.
 - `@` = You, `%` = Dead, `#` = Wall, `~` = Water, `^` = Hazard, `,` = Slow, `.` = Floor, `φ` = Item
 - Letters/numbers = entities (see LEGEND line)
 - Dark tiles appear as spaces
-- **Always use coordinates from the structured data for commands, not grid counting.**
+- **Always use coordinates from TILE DETAILS for commands, not grid counting.**

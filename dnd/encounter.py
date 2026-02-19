@@ -9,7 +9,7 @@ The Encounter class orchestrates combat:
 - Integrates with action economy and conditions
 """
 
-from typing import Any, Optional, Dict, List, ClassVar, Tuple
+from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple
 
 __all__ = [
     "EncounterState",
@@ -36,6 +36,41 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.controller import Controller, TurnContext
 from dnd.actions_functional import execute_by_index
+
+
+def _compute_perceivers(event: Event) -> Set[str]:
+    """Completely generic: event positions + entity UUIDs -> GridMap subscribers.
+
+    Each event type provides its spatial footprint via get_affected_positions().
+    This function:
+    1. Gets positions from event (polymorphic)
+    2. Adds entity-UUID positions (always available from BaseObject)
+    3. Looks up GridMap subscribers at all positions (O(1) per position)
+    4. Adds participants as self-perceivers
+    """
+    grid = get_map()
+
+    # 1. Collect all relevant positions from event
+    positions: Set[Tuple[int, int]] = event.get_affected_positions()
+
+    # 2. Also resolve entity UUIDs to current positions (GridMap access is here)
+    for uuid in (event.source_entity_uuid, event.target_entity_uuid):
+        if uuid:
+            pos = grid.get_entity_position(uuid)
+            if pos:
+                positions.add(pos)
+
+    # 3. Look up subscribers at all positions -> perceivers
+    perceivers: Set[str] = set()
+    for pos in positions:
+        perceivers |= {str(u) for u in grid.get_subscribers_at(pos)}
+
+    # 4. Participants always perceive their own events
+    for uuid in (event.source_entity_uuid, event.target_entity_uuid):
+        if uuid:
+            perceivers.add(str(uuid))
+
+    return perceivers
 
 
 class EncounterState(str, Enum):
@@ -344,6 +379,9 @@ class Encounter(BaseObject):
         # Register combat log callback for auto-capturing top-level events
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
 
+        # Register perceiver computer for temporal visibility on combat logs
+        EventQueue.set_perceiver_computer(_compute_perceivers)
+
         # Notify controllers
         self._notify_controllers_encounter_start()
 
@@ -385,8 +423,9 @@ class Encounter(BaseObject):
         if Encounter._active_encounter is self:
             Encounter._active_encounter = None
 
-        # Unregister combat log callback
+        # Unregister combat log callback and perceiver computer
         EventQueue.set_combat_log_callback(None)
+        EventQueue.set_perceiver_computer(None)
 
         # Notify controllers
         self._notify_controllers_encounter_end()

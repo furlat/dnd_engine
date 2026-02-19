@@ -2026,7 +2026,8 @@ class Entity(BaseBlock):
         shape = shape_template.model_copy(update={'target': pos})
         shape.compute_subjective(
             self.position, self.senses,
-            fov_cache=fov_cache, barrier_positions=barrier_positions
+            fov_cache=fov_cache, barrier_positions=barrier_positions,
+            caster_uuid=self.uuid,
         )
 
         affected_uuids = list(shape.affected_entity_uuids)

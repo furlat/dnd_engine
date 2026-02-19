@@ -6,7 +6,7 @@ eliminating post-hoc extraction and coupling between display layer and engine in
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -274,6 +274,14 @@ class CombatLogEntry(BaseModel):
     sub_entries: List["CombatLogEntry"] = Field(
         default_factory=list,
         description="Combat log entries from child events, in order"
+    )
+
+    # Temporal visibility: which entity UUIDs could perceive this event
+    # at the time it happened (stamped at COMPLETION phase).
+    # Empty set = legacy entry (show to everyone).
+    perceiver_uuids: Set[str] = Field(
+        default_factory=set,
+        description="Entity UUIDs that could perceive this event when it happened"
     )
 
     def get_text(self, verbosity: CombatLogVerbosity) -> str:

@@ -589,6 +589,16 @@ def refresh_state(client: APIClient, state: GameState, clear_path: bool = False)
         # Get visibility data
         state.visibility = client.get_visibility()
 
+        # Update FOW visibility context for display module
+        if state.visibility and display.get_fow_enabled():
+            player_uuid = client.current_entity_uuid
+            controlled = getattr(client, '_controlled_entity_uuids', [player_uuid] if player_uuid else [])
+            if player_uuid and player_uuid in state.visibility:
+                vis_data = state.visibility[player_uuid]
+                vis_set: set = set(vis_data.get("visible_entities", []))
+                vis_set.update(controlled)
+                display.set_fow_visibility(vis_set, controlled)
+
         # Clear movement path on refresh (unless we want to keep showing it)
         if clear_path:
             state.last_movement_path = None

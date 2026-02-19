@@ -15,7 +15,7 @@ from dnd.core.combat_log import (
     md_color
 )
 from pydantic import Field, model_validator
-from typing import Any, Optional, List, TypeVar, Tuple, Self, cast
+from typing import Any, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
@@ -91,6 +91,12 @@ class MovementEvent(ActionEvent):
     start_position: Tuple[int,int] = Field(description="The start position of the movement")
     end_position: Tuple[int,int] = Field(description="The end position of the movement")
     path: Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        positions = {self.start_position, self.end_position}
+        if self.path:
+            positions.update(self.path)
+        return positions
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for this movement event.
@@ -1568,6 +1574,12 @@ class JumpEvent(ActionEvent):
     jump_distance: int = Field(default=0, description="Distance jumped in feet")
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Straight-line path through air")
 
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        positions = {self.start_position, self.end_position}
+        if self.path:
+            positions.update(self.path)
+        return positions
+
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for this jump event."""
         source_name = self.source_entity_name or "Unknown"
@@ -1989,6 +2001,12 @@ class ShoveEvent(ActionEvent):
     knocked_prone: bool = Field(default=False, description="Whether target was knocked prone instead")
     blocked_by: Optional[str] = Field(default=None, description="What blocked the push (e.g. 'Wall', 'Skeleton 1')")
     is_ally: bool = Field(default=False, description="Whether target is an ally (auto-succeed)")
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        positions = super().get_affected_positions()
+        if self.end_position:
+            positions.add(self.end_position)
+        return positions
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for shove."""
