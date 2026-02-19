@@ -13,8 +13,8 @@ timing without duplicating any logic.
 
 import time
 import statistics
-from uuid import uuid4
-from typing import List, Tuple, Dict, Any
+from uuid import UUID, uuid4
+from typing import List, Tuple, Dict, Any, Optional
 
 from dnd.core.gridmap import reset_map, get_map, GridMap
 from dnd.core.events import EventQueue
@@ -258,7 +258,8 @@ class AoEProfiler:
         profiler = self
 
         def timed_cs(shape_self: AoEShape, caster_pos: Any, senses: Any,
-                     fov_cache: Any = None, barrier_positions: Any = None, caster_uuid: Any = None) -> AoEShape:
+                     fov_cache: Any = None, barrier_positions: Any = None,
+                     caster_uuid: Optional[UUID] = None) -> AoEShape:
             t = time.perf_counter()
             result = profiler._orig_cs(shape_self, caster_pos, senses, fov_cache=fov_cache, barrier_positions=barrier_positions, caster_uuid=caster_uuid)
             elapsed = (time.perf_counter() - t) * 1000
@@ -360,11 +361,10 @@ def run_profiled(hero: Entity) -> None:
     """Run get_available_actions with AoE profiling and print report."""
     with AoEProfiler() as profiler:
         start = time.perf_counter()
-        result = get_available_actions(hero)
+        _result = get_available_actions(hero)
         elapsed = (time.perf_counter() - start) * 1000
     print(f"\n  Profiled run: {elapsed:.1f}ms")
     profiler.print_report()
-    return result
 
 
 def main():
