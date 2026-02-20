@@ -10,7 +10,7 @@ from dnd.core.events import (
     RangeType, Event, EventType, EventPhase, EventHandler, Trigger,
     DamageRollResultEvent, EquipmentSlot
 )
-from dnd.core.modifiers import DamageType
+from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 
@@ -475,6 +475,57 @@ def create_assassin_dagger(source_id: UUID) -> UnseenStrikeDagger:
         dice_numbers=1,
         damage_type=DamageType.PIERCING,
         properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT],
+        range=Range(type=RangeType.REACH, normal=5),
+        attack_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Attack Bonus"),
+        extra_damage_dices=[],
+        extra_damage_dices_numbers=[],
+        extra_damage_bonus=[],
+        extra_damage_type=[]
+    )
+
+
+# =============================================================================
+# ARCANE WEAPONS
+# =============================================================================
+
+class ArcaneStaff(Weapon):
+    """Arcane Staff — quarterstaff that grants +1 spell attack bonus when equipped.
+    Uses _on_equip/_on_unequip hooks to add/remove spell attack modifier."""
+    _spell_mod_uuid: Optional[UUID] = None
+    _spell_mod_value_uuid: Optional[UUID] = None
+
+    def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        entity = Entity.get(entity_uuid)
+        if entity and isinstance(entity, Entity):
+            modifier = NumericalModifier(
+                name="Arcane Staff",
+                value=1,
+                source_entity_uuid=entity_uuid,
+                target_entity_uuid=entity_uuid
+            )
+            mod_uuid = entity.spellcasting.spell_attack_bonus.self_static.add_value_modifier(modifier)
+            self._spell_mod_uuid = mod_uuid
+            self._spell_mod_value_uuid = entity.spellcasting.spell_attack_bonus.uuid
+
+    def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        if self._spell_mod_uuid and self._spell_mod_value_uuid:
+            entity = Entity.get(entity_uuid)
+            if entity and isinstance(entity, Entity):
+                entity.spellcasting.spell_attack_bonus.self_static.remove_modifier(self._spell_mod_uuid)
+            self._spell_mod_uuid = None
+            self._spell_mod_value_uuid = None
+
+
+def create_arcane_staff(source_id: UUID) -> ArcaneStaff:
+    """Arcane Staff - 1d6 bludgeoning, versatile, +1 spell attack bonus"""
+    return ArcaneStaff(
+        source_entity_uuid=source_id,
+        name="Arcane Staff",
+        description="A staff crackling with arcane energy. +1 to spell attack rolls when equipped.",
+        damage_dice=6,
+        dice_numbers=1,
+        damage_type=DamageType.BLUDGEONING,
+        properties=[WeaponProperty.VERSATILE],
         range=Range(type=RangeType.REACH, normal=5),
         attack_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Attack Bonus"),
         extra_damage_dices=[],

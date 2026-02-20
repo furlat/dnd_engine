@@ -120,6 +120,58 @@ def force_attack_crit(entity: Entity) -> UUID:
     return mod_uuid
 
 
+def force_spell_attack_hit(entity: Entity) -> UUID:
+    """
+    Add AUTOHIT modifier to spell attacks to guarantee hits.
+
+    Args:
+        entity: The caster entity
+
+    Returns:
+        UUID of the modifier for later cleanup via remove_spell_attack_modifier()
+    """
+    modifier = AutoHitModifier(
+        name="Forced Spell Hit",
+        value=AutoHitStatus.AUTOHIT,
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid
+    )
+    mod_uuid = entity.spellcasting.spell_attack_bonus.self_static.add_auto_hit_modifier(modifier)
+    return mod_uuid
+
+
+def force_spell_attack_crit(entity: Entity) -> UUID:
+    """
+    Add AUTOCRIT modifier to spell attacks to guarantee critical hits.
+    NOTE: Also call force_spell_attack_hit() to prevent nat-1 misses.
+
+    Args:
+        entity: The caster entity
+
+    Returns:
+        UUID of the modifier for later cleanup via remove_spell_attack_modifier()
+    """
+    modifier = CriticalModifier(
+        name="Forced Spell Crit",
+        value=CriticalStatus.AUTOCRIT,
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid
+    )
+    mod_uuid = entity.spellcasting.spell_attack_bonus.self_static.add_critical_modifier(modifier)
+    return mod_uuid
+
+
+def remove_spell_attack_modifier(entity: Entity, modifier_uuid: UUID):
+    """
+    Remove a previously added spell attack modifier.
+
+    Args:
+        entity: The entity with the modifier
+        modifier_uuid: UUID returned from force_spell_attack_* function
+    """
+    entity.spellcasting.spell_attack_bonus.self_static.remove_modifier(modifier_uuid)
+
+
 def remove_attack_modifier(entity: Entity, modifier_uuid: UUID):
     """
     Remove a previously added attack modifier.

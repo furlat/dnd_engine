@@ -675,7 +675,7 @@ torch.ignite(carrier.uuid)
 check("Torch is now lit", torch.is_lit)
 
 carrier_tile = tile_at(10, 10)
-check("Carrier tile BRIGHT after igniting torch", carrier_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT)
+check("Carrier tile VERY_BRIGHT after igniting torch", carrier_tile.resolved_light_level == LightLevel.VERY_BRIGHT)
 
 # Get use actions when lit
 actions_lit = torch.get_use_actions(carrier.uuid)

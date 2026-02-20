@@ -83,7 +83,7 @@ setup_standard_actions(observer)
 Entity.update_all_entities_senses()
 
 # Right side of door should be lit
-check("Tile (10,7) is BRIGHT_LIGHT (torch location)", tile_light(10, 7) == LightLevel.BRIGHT_LIGHT)
+check("Tile (10,7) is VERY_BRIGHT (torch location)", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
 check("Tile (9,7) has light", tile_light(9, 7) != LightLevel.DARKNESS)
 
 # Left side of door should be dark — door blocks light
@@ -109,7 +109,7 @@ door.blocks_vision_field = False
 door._notify_blocking_changed(old_bm, old_bv)
 
 # Right side should still be lit
-check("Tile (10,7) still BRIGHT after open", tile_light(10, 7) == LightLevel.BRIGHT_LIGHT)
+check("Tile (10,7) still BRIGHT after open", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
 
 # Tiles between door and torch should still be lit
 check("Tile (8,7) has light after open", tile_light(8, 7) != LightLevel.DARKNESS)
@@ -136,7 +136,7 @@ door.blocks_vision_field = True
 door._notify_blocking_changed(old_bm, old_bv)
 
 # Right side still lit
-check("Tile (10,7) still BRIGHT after close", tile_light(10, 7) == LightLevel.BRIGHT_LIGHT)
+check("Tile (10,7) still BRIGHT after close", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
 
 # Left side should revert to darkness
 check("Tile (6,7) reverts to DARKNESS after close", tile_light(6, 7) == LightLevel.DARKNESS)
@@ -170,7 +170,7 @@ check("(7,7) has light after open (adjacent torch)", tile_light(7, 7) != LightLe
 
 # Tile just past door should get light (if within radius)
 # Torch at (8,7) bright 10ft=2tiles: (7,7) is 1 tile away = bright range
-check("(7,7) is BRIGHT from adjacent torch", tile_light(7, 7) == LightLevel.BRIGHT_LIGHT)
+check("(7,7) is BRIGHT from adjacent torch", tile_light(7, 7) == LightLevel.VERY_BRIGHT)
 
 # Close again
 old_bm = door.blocks_movement
@@ -197,8 +197,8 @@ wt_left = create_wall_torch(position=(4, 7), owner_uuid=uuid4(), lit=True)
 Entity.update_all_entities_senses()
 
 # With door closed, each side is independently lit
-check("(10,7) bright (right torch)", tile_light(10, 7) == LightLevel.BRIGHT_LIGHT)
-check("(4,7) bright (left torch)", tile_light(4, 7) == LightLevel.BRIGHT_LIGHT)
+check("(10,7) bright (right torch)", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
+check("(4,7) bright (left torch)", tile_light(4, 7) == LightLevel.VERY_BRIGHT)
 check("(6,7) has light from left torch (closed door)", tile_light(6, 7) != LightLevel.DARKNESS)
 check("(8,7) has light from right torch (closed door)", tile_light(8, 7) != LightLevel.DARKNESS)
 
@@ -212,8 +212,8 @@ door._notify_blocking_changed(old_bm, old_bv)
 
 check("(7,7) has light after open (both torches)", tile_light(7, 7) != LightLevel.DARKNESS)
 # Both sides should still be lit
-check("(10,7) still bright after open", tile_light(10, 7) == LightLevel.BRIGHT_LIGHT)
-check("(4,7) still bright after open", tile_light(4, 7) == LightLevel.BRIGHT_LIGHT)
+check("(10,7) still bright after open", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
+check("(4,7) still bright after open", tile_light(4, 7) == LightLevel.VERY_BRIGHT)
 
 # Close door — revert
 old_bm = door.blocks_movement
@@ -223,8 +223,8 @@ door.blocks_movement = True
 door.blocks_vision_field = True
 door._notify_blocking_changed(old_bm, old_bv)
 
-check("(10,7) still bright after close", tile_light(10, 7) == LightLevel.BRIGHT_LIGHT)
-check("(4,7) still bright after close", tile_light(4, 7) == LightLevel.BRIGHT_LIGHT)
+check("(10,7) still bright after close", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
+check("(4,7) still bright after close", tile_light(4, 7) == LightLevel.VERY_BRIGHT)
 
 
 # =============================================================================
@@ -335,7 +335,7 @@ wt_tile = create_wall_torch(position=(3, 7), owner_uuid=uuid4(), lit=True)
 Entity.update_all_entities_senses()
 
 # Left side lit, right side blocked by wall
-check("(3,7) bright (torch position)", tile_light(3, 7) == LightLevel.BRIGHT_LIGHT)
+check("(3,7) bright (torch position)", tile_light(3, 7) == LightLevel.VERY_BRIGHT)
 check("(4,7) has light (before wall)", tile_light(4, 7) != LightLevel.DARKNESS)
 check("(6,7) dark (wall blocks light)", tile_light(6, 7) == LightLevel.DARKNESS)
 
@@ -356,7 +356,7 @@ grid.set_tile(5, 7, walkable=False, visible=False, name="Wall")
 check("(6,7) dark after floor->wall", tile_light(6, 7) == LightLevel.DARKNESS)
 check("(7,7) dark after floor->wall", tile_light(7, 7) == LightLevel.DARKNESS)
 # Left side should still be lit
-check("(3,7) still bright after floor->wall", tile_light(3, 7) == LightLevel.BRIGHT_LIGHT)
+check("(3,7) still bright after floor->wall", tile_light(3, 7) == LightLevel.VERY_BRIGHT)
 
 
 
@@ -394,7 +394,7 @@ check("(6,7) has light after wall destroyed (propagated)", tile_light(6, 7) != L
 
 # Tiles that were lit before should still be lit
 check("(4,7) still has light", tile_light(4, 7) != LightLevel.DARKNESS)
-check("(3,7) still bright", tile_light(3, 7) == LightLevel.BRIGHT_LIGHT)
+check("(3,7) still bright", tile_light(3, 7) == LightLevel.VERY_BRIGHT)
 
 
 # =============================================================================

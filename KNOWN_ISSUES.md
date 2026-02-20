@@ -15,12 +15,6 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 
 ## Open Issues
 
-### Combat log leaks information about non-visible entities
-- **Found**: 2026-02-17 PvP session
-- **Error**: When an entity goes invisible/hidden and moves, the combat log still reports their exact position and actions (e.g., "Hero moved to (0,7)"). Any player reading the combat log gets perfect information about enemies they can't see — effectively wallhacks.
-- **Hypothesis**: The combat log entries are generated at COMPLETION phase without any perceivability filtering. The server `/combat_log` endpoint returns all entries to all sessions regardless of what each faction can actually see. Need per-session or per-faction filtering: only show combat log entries for events involving entities that the requesting session's entities can perceive.
-- **Status**: OPEN
-
 ### Combat log shows pre-resistance damage instead of actual damage taken
 - **Found**: 2026-02-18, observed during barbarian frenzy (rage resistance active)
 - **Error**: Combat log displays full raw damage (e.g., 12) instead of resistance-reduced damage (e.g., 6 after rage halving). Actual HP reduction is correct — only the log is wrong.
@@ -45,27 +39,4 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Suggested fix**: Two-part problem requiring a configurable approach. (1) The mover shouldn't be threatened by creatures it can't perceive — but a blanket `senses.entities` check is too blunt since some homebrew/monster abilities may want imperceivable OAs. (2) The invisible creature shouldn't automatically make OAs that reveal it — in D&D 5e you can *choose* not to make an OA. The better design is a **reaction policy** system: conditions like Invisible could set a flag (e.g., `suppress_reactions=True`) that the OA processor checks. This way, Invisible/Hidden entities opt out of OAs by default (staying hidden), but the mechanism is general enough for other use cases. The perception check (mover can't see attacker) is the D&D RAW fix, while reaction suppression is the tactical fix (invisible entity *chooses* not to reveal itself).
 - **Impact**: In PvP or AI combat, invisible creatures next to an enemy will incorrectly make OAs when the enemy moves, revealing themselves in the process. This punishes movement near invisible creatures and breaks stealth tactics.
 - **Status**: OPEN
-
-### Cloudkill initial damage not applied to creatures in zone on cast
-- **Found**: 2026-02-19, zone spell test fixes
-- **Test file**: `examples/test_cloudkill.py` (`test_cloudkill_initial_damage`)
-- **Error**: `assert damage_taken >= 5` fails — creature in zone at cast time takes 0 damage. Zone creation itself works fine.
-- **Hypothesis**: The on-cast damage logic in Cloudkill may not be triggering the spatial entry handler for creatures already in the zone when it's created.
-- **Status**: OPEN
-
-### Web escape action doesn't remove Restrained condition
-- **Found**: 2026-02-19, zone spell test fixes
-- **Test file**: `examples/test_web.py` (`test_web_escape_action`)
-- **Error**: `assert not has_condition(target, "Web Restrained")` fails — after successfully escaping via Athletics check, the restrained condition persists.
-- **Hypothesis**: The escape action's success path may not be calling `remove_condition` properly, or the condition name used in removal doesn't match the applied condition name.
-- **Status**: OPEN
-
-
-
-
-
-
-
-
-
 

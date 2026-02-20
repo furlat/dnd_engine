@@ -47,27 +47,13 @@ Example: `source .venv/bin/activate && python -m cli.agent --token {TOKEN} move 
 2. **Pick positions from listed targets only.** Never guess coordinates.
 3. **After Dash, run `actions`** to see expanded movement targets (inline state shows map/entities but `actions` shows full position list).
 4. **Inspect unknown symbols** (`inspect X Y`) before moving near them.
-5. **Run `end` FIRST, then update notebook** — turns overlap for speed.
-6. **If a command fails**, try a different action. Do NOT retry the same command.
+5. **If a command fails**, try a different action. Do NOT retry the same command.
 
 ## Notebook
 
-Your notebook file is: `{NOTEBOOK_PATH}`
-
-Use the **Write** tool to save observations AFTER running `end`. Example:
-```
-Write to {NOTEBOOK_PATH}:
-# Turn N Notes
-- Enemy used Fireball, dealt 28 damage
-- Door at (8,7) is open
-- Strategy: spread out to avoid AoE
-```
-
-Your notebook persists between turns. Write observations about:
-- Enemy abilities/spells/patterns observed
-- Hazards and terrain discovered
-- Strategy for next turns
-- Faction status (alive, HP, conditions)
+Your notebook is managed by the orchestrator. It will prompt you to write
+observations between turns. **Do not write the notebook during your turn** —
+focus on game actions only. Your previous notes appear in the turn prompt.
 
 ## How Actions Work — CRITICAL
 
@@ -117,7 +103,7 @@ TILE DETAILS:
 ```
 
 - **Terrain**: Floor, Wall, Water, Spikes, etc.
-- **Light**: `bright` or `dim` (after darkvision adjustment)
+- **Light**: `bright`, `dim`, or `dark`. If you have a special sense (darkvision, etc.), tiles show `dark->dim` or similar to indicate the adjusted level.
 - **Entities**: Name (faction tag, HP, AC)
 - **Objects**: Items on floor, doors, levers
 - **Conditions**: Zone spell effects, hazards

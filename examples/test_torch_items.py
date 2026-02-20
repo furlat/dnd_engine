@@ -237,8 +237,8 @@ check("Tile (5,5) starts as DARKNESS", tile_55.resolved_light_level == LightLeve
 wt2 = create_wall_torch(position=(5, 5), owner_uuid=uuid4(), lit=True)
 # After adding light source, tile should be bright
 tile_55_after = tile_at(5, 5)
-check("Tile (5,5) is BRIGHT_LIGHT after wall torch lit",
-      tile_55_after.resolved_light_level == LightLevel.BRIGHT_LIGHT)
+check("Tile (5,5) is VERY_BRIGHT after wall torch lit",
+      tile_55_after.resolved_light_level == LightLevel.VERY_BRIGHT)
 
 # Adjacent tile should be bright or dim (within 15ft = 3 tiles)
 tile_adjacent = tile_at(5, 6)
@@ -256,8 +256,8 @@ torch2 = create_torch(entity2.uuid)
 entity2.loot_item(torch2)
 torch2.ignite(entity2.uuid)
 tile_55_torch = tile_at(5, 5)
-check("Tile (5,5) is BRIGHT_LIGHT after carried torch lit",
-      tile_55_torch.resolved_light_level == LightLevel.BRIGHT_LIGHT)
+check("Tile (5,5) is VERY_BRIGHT after carried torch lit",
+      tile_55_torch.resolved_light_level == LightLevel.VERY_BRIGHT)
 
 torch2.extinguish()
 tile_55_ext2 = tile_at(5, 5)
