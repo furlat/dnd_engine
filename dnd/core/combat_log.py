@@ -559,7 +559,7 @@ def format_attack_verbose(
 
     # Attack line
     attack_label = "Attack (OA)" if is_opportunity_attack else "Attack"
-    d20_str = md_d20_roll(attack_roll, include_advantage=False)  # We show ADV/DIS in header
+    d20_str = md_d20_roll(attack_roll)
     bonus_str = f"+{attack_roll.bonus}" if attack_roll.bonus >= 0 else str(attack_roll.bonus)
     outcome_md = md_outcome(outcome)
     lines.append(f"  {attack_label}: {d20_str} {bonus_str} = {attack_roll.total} vs AC {target_ac} → {outcome_md}")
@@ -608,7 +608,7 @@ def format_attack_detailed(
 
     # Attack line with breakdowns
     attack_label = "Attack (OA)" if is_opportunity_attack else "Attack"
-    d20_str = md_d20_roll(attack_roll, include_advantage=False)
+    d20_str = md_d20_roll(attack_roll)
     bonus_str = f"+{attack_roll.bonus}" if attack_roll.bonus >= 0 else str(attack_roll.bonus)
     atk_breakdown = md_breakdown(attack_breakdown)
     ac_bd = md_breakdown(ac_breakdown)

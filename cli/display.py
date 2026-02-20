@@ -1912,10 +1912,12 @@ def display_combat_log_entry(entry: Dict[str, Any]):
     Args:
         entry: A CombatLogEntry.to_dict() from the server
     """
-    # Apply FOW filtering if enabled (skip turn_start/turn_end — these are
-    # system events that always show the real name regardless of visibility)
+    # Apply FOW filtering if enabled (skip system events that always show
+    # the real name regardless of visibility: turn boundaries and condition
+    # expiration between turns)
     entry_type = entry.get("entry_type", "").lower()
-    if _fow_enabled and _fow_controlled_uuids and entry_type not in ("turn_start", "turn_end"):
+    _skip_fow_types = ("turn_start", "turn_end", "condition_removed", "condition_applied")
+    if _fow_enabled and _fow_controlled_uuids and entry_type not in _skip_fow_types:
         from cli.log_filter import filter_combat_log
         filtered = filter_combat_log(
             [entry], _fow_controlled_uuids, _fow_visible_entity_uuids or None,

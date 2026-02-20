@@ -1261,7 +1261,11 @@ class Hidden(BaseCondition):
 
 
 # Actions that do NOT break stealth (everything else reveals)
-NON_REVEALING_ACTIONS = {"Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone", "Open Door", "Close Door"}
+NON_REVEALING_ACTIONS = {
+    "Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone",
+    "Open Door", "Close Door",
+    "Ignite Torch", "Extinguish Torch", "Light Wall Torch", "Extinguish Wall Torch",
+}
 
 
 def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
