@@ -35,7 +35,10 @@ from dnd.core.events import Event, EventQueue, EventType, EventPhase
 from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
-from dnd.monsters.bestiary import create_goblin, create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import (
+    create_goblin, create_skeleton, create_sorcerer,
+    create_skeleton_warrior, create_skeleton_archer, create_skeleton_warlock,
+)
 from dnd.classes.fighter_factory import create_fighter, FighterConfig
 from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
 from dnd.items import create_shortsword, create_dagger, create_longbow
@@ -344,17 +347,17 @@ def setup_arena_combat(
         lever_pos = (5, 12)
         grid.place_object(lever.uuid, lever_pos)
 
-    # Create 3 Skeletons (monsters faction) at different positions
-    skeleton_positions = [(12, 5), (12, 7), (12, 9)]
-    skeletons = []
-    for i, pos in enumerate(skeleton_positions):
-        skeleton = create_skeleton(
-            name=f"Skeleton {i+1}",
-            position=pos,
-            faction="monsters",
-            darkvision=True
-        )
-        skeletons.append(skeleton)
+    # Create 3 specialized Skeletons (monsters faction) at different positions
+    warrior = create_skeleton_warrior(
+        name="Skeleton Warrior", position=(12, 5), faction="monsters", darkvision=True
+    )
+    archer = create_skeleton_archer(
+        name="Skeleton Archer", position=(12, 7), faction="monsters", darkvision=True
+    )
+    warlock = create_skeleton_warlock(
+        name="Skeleton Warlock", position=(12, 9), faction="monsters", darkvision=True
+    )
+    skeletons = [warrior, archer, warlock]
 
     # Register opportunity attack handlers
     add_opportunity_attack_handler(player)
@@ -747,6 +750,10 @@ async def get_visibility():
             "visible_cells": visible_positions,
             "visible_entities": [str(uuid) for uuid in entity.senses.entities.keys()],
             "seen_cells": [list(pos) for pos in entity.senses.seen],
+            "sense_modes": [
+                {"sense_type": sm.sense_type.value, "range_feet": sm.range_feet}
+                for sm in entity.senses.get_sense_modes()
+            ],
         }
     return result
 

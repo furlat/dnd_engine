@@ -6,26 +6,29 @@ These are pattern examples, not final game items.
 """
 
 import random
-from typing import Optional, List, Tuple, cast as type_cast
+from typing import Any, Optional, List, Tuple, cast as type_cast
 from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
-from dnd.core.events import Event, EventPhase, EventQueue, WeaponSlot, SkillName
+from dnd.core.events import Event, EventPhase, EventQueue, WeaponSlot, SkillName, RangeType, Range, Damage
 from dnd.core.modifiers import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.core.gridmap import get_map
+from dnd.core.aoe import AoEShape, Cube
+from dnd.core.dice import AttackOutcome
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
-from dnd.actions import entity_action_economy_cost_evaluator, SpellAction
+from dnd.actions import entity_action_economy_cost_evaluator, SpellAction, SpellEvent
 from dnd.conditions import Concentrating, GreaterInvisibilityEffect
 from dnd.spells.evocation import BurningHands, FireBolt, Fireball, MagicMissile
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.abjuration import MageArmor
+from dnd.spells.illusion import Invisibility
 from dnd.spells.transmutation import SpikeGrowth
 
 
@@ -464,6 +467,158 @@ def create_wand_of_fire(owner_uuid: UUID, charges: int = 7) -> SpellScroll:
         scroll_cast_level=1, charges=charges, max_charges=charges,
         is_pickable=True, is_consumable=False,
         use_action_templates=[burning, fireball, fireball_l4],
+    )
+
+
+# =============================================================================
+# Acid Flask (throwable consumable AoE)
+# =============================================================================
+
+class AcidFlaskSpell(SpellAction):
+    """Acid Flask — throwable AoE that deals 2d4 acid damage in a 2x2 area.
+    DEX save DC 11 for half damage. Used as an item, not a real spell."""
+    name: str = Field(default="Acid Flask")
+    description: str = Field(default="Throw a flask of acid (2x2 area, 2d4 acid, DEX DC 11 half)")
+    spell_level: int = Field(default=0)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=40)
+    )
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+    include_self: bool = Field(default=False)
+    valid_target_filter: str = Field(default="all")
+    _fixed_dc: int = 11
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cube(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0),
+                size_feet=10,
+                centered=True
+            )
+
+    def get_range(self) -> Range:
+        return self.spell_range
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position specified")
+
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(
+                status_message=f"Target position {target_pos} not in line of sight"
+            )
+
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # Fixed DC 11 (item-based, not caster spell DC)
+        dc = self._fixed_dc
+
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="dexterity",
+            dc=dc,
+            parent_event=execution_event.uuid
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="dexterity",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
+            status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+        )
+
+        # 2d4 acid damage, no scaling, no bonus
+        no_bonus = ModifiableValue.create(
+            source_entity_uuid=caster.uuid, base_value=0, value_name="Acid Flask Damage"
+        )
+        acid_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=4,
+            dice_numbers=2,
+            damage_bonus=no_bonus,
+            damage_type=DamageType.ACID
+        )
+
+        damage_dice = acid_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+        damage_roll = damage_dice.roll
+
+        final_damage = damage_roll.total // 2 if success else damage_roll.total
+
+        if final_damage > 0:
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.ACID,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
+
+        save_text = " (saved for half)" if success else ""
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[acid_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,
+            status_message=f"Acid Flask deals {final_damage} acid damage to {target.name}{save_text}"
+        )
+
+
+def create_acid_flask(owner_uuid: UUID) -> SpellScroll:
+    """Create a throwable Acid Flask (consumable, 2d4 acid AoE, DEX DC 11)."""
+    spell = AcidFlaskSpell(source_entity_uuid=uuid4(), caster_level=1, template=True)
+    return SpellScroll(
+        source_entity_uuid=owner_uuid,
+        name="Acid Flask",
+        scroll_cast_level=0,
+        use_action_templates=[spell],
+        stack_id="acid_flask",
+        map_char="!",
+    )
+
+
+# =============================================================================
+# Scroll of Invisibility
+# =============================================================================
+
+def create_scroll_of_invisibility(owner_uuid: UUID, cast_level: int = 2) -> SpellScroll:
+    """Create a Scroll of Invisibility (consumable, no spell slot cost)."""
+    spell = Invisibility(source_entity_uuid=uuid4(), caster_level=3, template=True)
+    return SpellScroll(
+        source_entity_uuid=owner_uuid,
+        name="Scroll of Invisibility",
+        scroll_cast_level=cast_level,
+        use_action_templates=[spell],
+        stack_id=f"scroll_invisibility_l{cast_level}",
     )
 
 
@@ -943,16 +1098,17 @@ class ExtinguishTorchAction(BaseAction):
 class Torch(UsableItem):
     """A torch that provides light when ignited.
 
-    Bright light in 20ft radius, dim light in additional 20ft.
+    Very bright light in 10ft, bright light in additional 10ft, dim light in additional 20ft.
     When ignited, creates a light source anchored to the carrying entity.
     Light follows the entity as they move.
     """
     name: str = Field(default="Torch")
-    description: str = Field(default="A torch that provides bright light in 20ft and dim light in 20ft")
+    description: str = Field(default="A torch that provides very bright light in 10ft, bright light in 10ft, and dim light in 20ft")
     is_equippable: bool = Field(default=False)
     is_pickable: bool = Field(default=True)
     map_char: str = Field(default="\u2666")
 
+    very_bright_radius_feet: int = Field(default=10)
     bright_radius_feet: int = Field(default=20)
     dim_radius_feet: int = Field(default=20)
     is_lit: bool = Field(default=False)
@@ -980,6 +1136,7 @@ class Torch(UsableItem):
         if entity:
             self._light_source_uuid = grid.add_light_source(
                 position=entity.position,
+                very_bright_radius_feet=self.very_bright_radius_feet,
                 bright_radius_feet=self.bright_radius_feet,
                 dim_radius_feet=self.dim_radius_feet,
                 anchor_uuid=carrier_entity_uuid
@@ -1073,6 +1230,7 @@ class WallTorch(UsableItem):
     is_equippable: bool = Field(default=False)
     map_char: str = Field(default="\u2666")
 
+    very_bright_radius_feet: int = Field(default=5)
     bright_radius_feet: int = Field(default=10)
     dim_radius_feet: int = Field(default=10)
     is_lit: bool = Field(default=False)
@@ -1100,6 +1258,7 @@ class WallTorch(UsableItem):
             grid = get_map()
             self._light_source_uuid = grid.add_light_source(
                 position=self._wall_torch_position,
+                very_bright_radius_feet=self.very_bright_radius_feet,
                 bright_radius_feet=self.bright_radius_feet,
                 dim_radius_feet=self.dim_radius_feet,
             )

@@ -136,23 +136,20 @@ class FireBolt(SpellAction):
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
-        # Extra crit dice
+        # Create damage object (un-doubled; get_dice handles crit doubling)
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
-        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
-
-        # Create damage object
         damage_bonus = caster.get_spell_damage_bonus()
         fire_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=10,
-            dice_numbers=total_dice,
+            dice_numbers=num_dice,
             damage_bonus=damage_bonus,
             damage_type=DamageType.FIRE
         )
 
         # Roll damage
-        damage_dice = fire_damage.get_dice(attack_outcome=outcome)
+        damage_dice = fire_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
         # Apply damage
@@ -302,19 +299,17 @@ class RayOfFrost(SpellAction):
         is_crit = outcome == AttackOutcome.CRIT
 
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
-        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
-
         damage_bonus = caster.get_spell_damage_bonus()
         cold_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=8,
-            dice_numbers=total_dice,
+            dice_numbers=num_dice,
             damage_bonus=damage_bonus,
             damage_type=DamageType.COLD
         )
 
-        damage_dice = cold_damage.get_dice(attack_outcome=outcome)
+        damage_dice = cold_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
         # Apply damage
@@ -719,19 +714,18 @@ class ScorchingRay(SpellAction):
         # 6. On hit: roll 2d6 fire damage
         is_crit = outcome == AttackOutcome.CRIT
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
-        total_dice = 2 * (2 if is_crit else 1) + crit_extra
 
         damage_bonus = caster.get_spell_damage_bonus()
         fire_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=6,
-            dice_numbers=total_dice,
+            dice_numbers=2,
             damage_bonus=damage_bonus,
             damage_type=DamageType.FIRE
         )
 
-        damage_dice = fire_damage.get_dice(attack_outcome=outcome)
+        damage_dice = fire_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
         # Apply damage (child of effect event)
@@ -2219,19 +2213,17 @@ class ShockingGrasp(SpellAction):
         is_crit = outcome == AttackOutcome.CRIT
 
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
-        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
-
         damage_bonus = caster.get_spell_damage_bonus()
         lightning_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=8,
-            dice_numbers=total_dice,
+            dice_numbers=num_dice,
             damage_bonus=damage_bonus,
             damage_type=DamageType.LIGHTNING
         )
 
-        damage_dice = lightning_damage.get_dice(attack_outcome=outcome)
+        damage_dice = lightning_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
         # Apply damage (child of effect event)
@@ -2451,19 +2443,17 @@ class GuidingBolt(SpellAction):
         is_crit = outcome == AttackOutcome.CRIT
 
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
-        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
-
         damage_bonus = caster.get_spell_damage_bonus()
         radiant_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=6,
-            dice_numbers=total_dice,
+            dice_numbers=num_dice,
             damage_bonus=damage_bonus,
             damage_type=DamageType.RADIANT
         )
 
-        damage_dice = radiant_damage.get_dice(attack_outcome=outcome)
+        damage_dice = radiant_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
         # Apply damage (child of effect event)
@@ -2495,4 +2485,115 @@ class GuidingBolt(SpellAction):
             damages=[radiant_damage],
             damage_rolls=[damage_roll],
             status_message=f"{self.name} hit for {damage_roll.total} radiant damage, next attack has advantage"
+        )
+
+
+class EldritchBlast(SpellAction):
+    """Eldritch Blast - Evocation cantrip
+
+    A beam of crackling energy streaks toward a creature within range.
+    Make a ranged spell attack. On hit, target takes 1d10 force damage.
+    Damage scales with caster level: 2d10 at 5th, 3d10 at 11th, 4d10 at 17th.
+    """
+    name: str = Field(default="Eldritch Blast")
+    description: str = Field(default="A beam of crackling force energy")
+    spell_level: int = Field(default=0)
+    spell_school: str = Field(default="evocation")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+    )
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate range and line of sight."""
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source_entity or not target_entity:
+            return declaration_event.cancel(status_message="Source or target entity not found")
+
+        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Execute the spell attack."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate bonuses
+        attack_bonus = caster.spell_attack_bonus(target.uuid)
+        target_ac = target.ac_bonus(caster.uuid)
+
+        # 2. Cross-propagate modifiers
+        attack_bonus.set_from_target(target_ac)
+        target_ac.set_from_target(attack_bonus)
+
+        # 3. Roll attack
+        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
+        crit_threshold = caster.get_spell_crit_threshold()
+        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
+
+        # 4. Clean up cross-propagation
+        attack_bonus.reset_from_target()
+        target_ac.reset_from_target()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            attack_bonus=attack_bonus,
+            ac=target_ac,
+            dice_roll=dice_roll,
+            attack_outcome=outcome,
+            status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
+        )
+
+        # 5. On miss, complete without damage
+        if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{self.name} missed"
+            )
+
+        # 6. On hit: roll damage
+        num_dice = self._get_cantrip_dice_count(self.caster_level)
+        is_crit = outcome == AttackOutcome.CRIT
+
+        crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
+        damage_bonus = caster.get_spell_damage_bonus()
+        force_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=10,
+            dice_numbers=num_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.FORCE
+        )
+
+        damage_dice = force_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
+        damage_roll = damage_dice.roll
+
+        target.receive_damage(
+            amount=damage_roll.total,
+            damage_type=DamageType.FORCE,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[force_damage],
+            damage_rolls=[damage_roll],
+            status_message=f"{self.name} hit for {damage_roll.total} force damage"
         )

@@ -743,7 +743,7 @@ def wait_for_opponent_turn(client: APIClient, state: GameState, hero_uuid: str) 
                 need_redraw = True
 
             # Update combat log index to total (new format doesn't have per-entry index)
-            combat_log_index = log_response.get("total", combat_log_index)
+            combat_log_index = int(log_response.get("total", combat_log_index))
 
             # Check PvP status AFTER processing combat log
             response = httpx.get(f"{client.base_url}/pvp/status", timeout=5.0)
@@ -1198,12 +1198,15 @@ def spectate(
     port: int = typer.Option(8000, "--port", "-p", help="Server port"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Skip Claude subprocesses (test the loop)"),
     model: str = typer.Option("", "--model", "-m", help="Claude model for subprocesses (e.g. claude-sonnet-4-5-20250929)"),
+    best_of: int = typer.Option(1, "--best-of", help="Run a best-of-N series (default: 1 = single match)"),
+    fov: str = typer.Option("global", "--fov", help="FOV mode: global (see everything) or self (active entity's perspective)"),
 ):
     """
     Watch Claude vs Claude play D&D. Spawns orchestrator, shows Rich display.
 
     Usage: python -m cli spectate [fighter|barbarian|sorcerer]
            python -m cli spectate sorcerer --model claude-sonnet-4-5-20250929
+           python -m cli spectate sorcerer --fov self  (see from active entity's POV)
     """
     import os
     import signal
@@ -1238,6 +1241,8 @@ def spectate(
         orch_cmd.append("--dry-run")
     if model:
         orch_cmd += ["--model", model]
+    if best_of > 1:
+        orch_cmd += ["--best-of", str(best_of)]
 
     orch_log_path = run_dir / "orchestrator_output.log"
     orch_log = open(orch_log_path, "w")
@@ -1288,17 +1293,28 @@ def spectate(
         state = GameState()
         state.update_from_state(state_data)
         state.turn = client.get_current_turn()
-        combat_log_index = 0
+        combat_log_index: int = 0
         last_positions = {e["uuid"]: tuple(e["position"]) for e in state.entities}
         last_hp = {e["uuid"]: e.get("hp", 0) for e in state.entities}
         last_turn_uuid = state.turn.get("current_entity_uuid")
 
-        # Initial render
+        # Configure FOV mode
+        use_fov = (fov == "self")
+        if use_fov:
+            display.set_fov_mode("self")
+            display.set_fow_enabled(True)
+        else:
+            display.set_fov_mode("global")
+            display.set_fow_enabled(False)
+
+        spectate_visibility: Optional[dict] = None
+
         def _render_spectator():
+            active_uuid = state.turn.get("current_entity_uuid") if use_fov else None
             display.render_full_screen(
                 grid=state.grid, entities=state.entities, turn=state.turn,
-                current_entity_uuid=None, actions=None,
-                visibility=None, is_my_turn=False,
+                current_entity_uuid=active_uuid, actions=None,
+                visibility=spectate_visibility, is_my_turn=False,
                 floor_objects=state.floor_objects,
             )
             display.console.print("[dim]q=quit  pt/nt/ft/ct=history[/dim]")
@@ -1306,78 +1322,205 @@ def spectate(
         _render_spectator()
         display.save_turn_snapshot(state.turn, state.entities, state.grid)
 
-        # 6. Poll loop — no user input during live game (like wait_for_opponent_turn)
+        # 6. Match loop — handles best-of-N series
         #    Ctrl+C sets _interrupted flag via SIGINT handler.
+        match_num = 0
+        series_score: dict[str, int] = {}
+        wins_needed = (best_of + 1) // 2
+        winner_msg = "[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]"
         while not _interrupted:
-            # Poll combat log for new entries
-            try:
-                log_response = client.get_combat_log(since=combat_log_index)
-            except (OSError, httpx.HTTPError):
-                time.sleep(0.5)
-                continue
-            new_entries = log_response.get("entries", [])
-            need_redraw = False
-            for entry in new_entries:
-                display.show_opponent_action(entry)
-                need_redraw = True
-            combat_log_index = log_response.get("total", combat_log_index)
+            match_num += 1
 
-            # Poll full state for position/HP changes
-            try:
-                full_state = client.get_state()
-            except (OSError, httpx.HTTPError):
-                time.sleep(0.5)
-                continue
-            for e in full_state.get("entities", []):
-                uuid = e["uuid"]
-                if last_positions.get(uuid) != tuple(e["position"]):
-                    last_positions[uuid] = tuple(e["position"])
-                    need_redraw = True
-                if last_hp.get(uuid) != e.get("hp", 0):
-                    last_hp[uuid] = e.get("hp", 0)
-                    need_redraw = True
+            # Between-match reset (skip for first match — already initialized above)
+            if match_num > 1:
+                display.reset_seen_tiles()
+                display.clear_combat_log()
+                combat_log_index = 0
+                spectate_visibility = None
 
-            state.update_from_state(full_state)
-            state.turn = client.get_current_turn()
-            new_turn_uuid = state.turn.get("current_entity_uuid")
-            if new_turn_uuid != last_turn_uuid:
+                # Wait for new encounter to become active
+                # No fixed timeout — poll as long as orchestrator is alive
+                # (transition prompts to Claude can take several minutes)
+                new_game_started = False
+                while not _interrupted:
+                    if orch_proc.poll() is not None:
+                        break  # orchestrator exited = series over
+                    try:
+                        state_data = client.get_state()
+                        enc = state_data.get("encounter", {})
+                        if enc.get("state") == "active":
+                            new_game_started = True
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(1.0)
+
+                if not new_game_started:
+                    break  # interrupted or orchestrator exited
+
+                # Re-init tracking vars for new match
+                state.update_from_state(state_data)
+                state.turn = client.get_current_turn()
+                last_positions = {e["uuid"]: tuple(e["position"]) for e in state.entities}
+                last_hp = {e["uuid"]: e.get("hp", 0) for e in state.entities}
+                last_turn_uuid = state.turn.get("current_entity_uuid")
+                display.clear_history()
                 display.save_turn_snapshot(state.turn, state.entities, state.grid)
-                last_turn_uuid = new_turn_uuid
-                need_redraw = True
-
-            if need_redraw:
                 _render_spectator()
 
-            # Encounter ended?
-            if not state.turn.get("encounter_active", False):
-                display.save_turn_snapshot(state.turn, state.entities, state.grid)
-                break
+            # Poll loop for this match
+            prev_thinking_text = ""
+            while not _interrupted:
+                # Poll combat log for new entries
+                try:
+                    log_response = client.get_combat_log(since=combat_log_index)
+                except (OSError, httpx.HTTPError):
+                    time.sleep(0.5)
+                    continue
+                new_entries = log_response.get("entries", [])
+                need_redraw = False
+                for entry in new_entries:
+                    display.show_opponent_action(entry)
+                    need_redraw = True
+                combat_log_index = int(log_response.get("total", combat_log_index))
 
-            # Orchestrator process died?
-            if orch_proc.poll() is not None:
-                time.sleep(1)
+                # Poll full state for position/HP changes
                 try:
                     full_state = client.get_state()
-                    state.update_from_state(full_state)
-                    state.turn = client.get_current_turn()
-                except Exception:
-                    pass
+                except (OSError, httpx.HTTPError):
+                    time.sleep(0.5)
+                    continue
+                for e in full_state.get("entities", []):
+                    uuid = e["uuid"]
+                    if last_positions.get(uuid) != tuple(e["position"]):
+                        last_positions[uuid] = tuple(e["position"])
+                        need_redraw = True
+                    if last_hp.get(uuid) != e.get("hp", 0):
+                        last_hp[uuid] = e.get("hp", 0)
+                        need_redraw = True
+
+                state.update_from_state(full_state)
+                state.turn = client.get_current_turn()
+                new_turn_uuid = state.turn.get("current_entity_uuid")
+                if new_turn_uuid != last_turn_uuid:
+                    display.save_turn_snapshot(state.turn, state.entities, state.grid)
+                    last_turn_uuid = new_turn_uuid
+                    need_redraw = True
+
+                # Fetch visibility for FOV self mode
+                if use_fov:
+                    try:
+                        spectate_visibility = client.get_visibility()
+                    except (OSError, httpx.HTTPError):
+                        pass
+                    # Update FOW context for combat log filtering
+                    fov_active = state.turn.get("current_entity_uuid")
+                    if spectate_visibility and fov_active and fov_active in spectate_visibility:
+                        vis_data = spectate_visibility[fov_active]
+                        vis_set: set = set(vis_data.get("visible_entities", []))
+                        vis_set.add(fov_active)
+                        display.set_fow_visibility(vis_set, [fov_active])
+
+                # Read latest Claude thinking from orchestrator's shared file
+                active_entity = state.turn.get("current_entity_uuid")
+                slot_id = "monsters"
+                for e in state.entities:
+                    if e.get("uuid") == active_entity and e.get("faction") == "heroes":
+                        slot_id = "hero"
+                        break
+                thinking_file = run_dir / f"thinking_{slot_id}.txt"
+                try:
+                    thinking_text = thinking_file.read_text() if thinking_file.exists() else ""
+                except OSError:
+                    thinking_text = ""
+                display.set_thinking_text(thinking_text)
+                if thinking_text != prev_thinking_text:
+                    prev_thinking_text = thinking_text
+                    need_redraw = True
+
+                if need_redraw:
+                    _render_spectator()
+
+                # Encounter ended?
+                if not state.turn.get("encounter_active", False):
+                    # Final combat log poll — server may have pending entries
+                    # (damage taken, death) that arrived after the last poll
+                    for _retry in range(3):
+                        try:
+                            log_response = client.get_combat_log(since=combat_log_index)
+                        except (OSError, httpx.HTTPError):
+                            time.sleep(0.3)
+                            continue
+                        final_entries = log_response.get("entries", [])
+                        for entry in final_entries:
+                            display.show_opponent_action(entry)
+                        combat_log_index = int(log_response.get("total", combat_log_index))
+                        if final_entries:
+                            time.sleep(0.3)  # Brief pause, then poll again for stragglers
+                        else:
+                            break  # No more entries
+                    display.save_turn_snapshot(state.turn, state.entities, state.grid)
+                    break
+
+                # Orchestrator process died?
+                if orch_proc.poll() is not None:
+                    time.sleep(1)
+                    try:
+                        full_state = client.get_state()
+                        state.update_from_state(full_state)
+                        state.turn = client.get_current_turn()
+                    except Exception:
+                        pass
+                    break
+
+                time.sleep(0.5)
+
+            # Match ended — show result
+            _render_spectator()
+            alive = [e for e in state.entities if not e.get("is_dead", False)]
+            factions = set(e.get("faction", "?") for e in alive)
+            match_winner = ""
+            if len(factions) == 1:
+                match_winner = list(factions)[0]
+                winner_msg = f"[bold green]*** MATCH {match_num}: {match_winner.upper()} WINS! ***[/bold green]"
+            elif len(factions) == 0:
+                winner_msg = f"[bold red]*** MATCH {match_num}: EVERYONE IS DEAD ***[/bold red]"
+            else:
+                winner_msg = f"[bold yellow]*** MATCH {match_num}: ENCOUNTER ENDED ***[/bold yellow]"
+
+            # Track series score
+            if match_winner:
+                series_score[match_winner] = series_score.get(match_winner, 0) + 1
+
+            # Check if series is clinched
+            series_clinched = match_winner and series_score.get(match_winner, 0) >= wins_needed
+            if series_clinched and best_of > 1:
+                loser_faction = "monsters" if match_winner == "heroes" else "heroes"
+                winner_msg = (
+                    f"[bold green]*** {match_winner.upper()} WINS THE SERIES "
+                    f"{series_score[match_winner]}-{series_score.get(loser_faction, 0)} ***[/bold green]"
+                )
+            display.console.print(f"\n{winner_msg}")
+
+            if series_clinched:
+                # Series decided — wait for orchestrator to finish reflections
+                # then break (don't show "Next match starting...")
+                break
+            if _interrupted:
                 break
 
-            time.sleep(0.5)
+            # Is the series continuing? Give orchestrator a moment to process.
+            time.sleep(1.5)
+            if orch_proc.poll() is not None:
+                break  # orchestrator exited = series over (or single game)
 
-        # 7. Game over — determine winner
-        _render_spectator()
-        alive = [e for e in state.entities if not e.get("is_dead", False)]
-        factions = set(e.get("faction", "?") for e in alive)
-        if len(factions) == 1:
-            winner_msg = f"[bold green]*** {list(factions)[0].upper()} WINS! ***[/bold green]"
-        elif len(factions) == 0:
-            winner_msg = "[bold red]*** EVERYONE IS DEAD ***[/bold red]"
-        else:
-            winner_msg = "[bold yellow]*** ENCOUNTER ENDED ***[/bold yellow]"
+            if best_of > 1:
+                score_str = ", ".join(f"{k}: {v}" for k, v in series_score.items())
+                display.console.print(f"[cyan]Next match starting... (Series: {score_str})[/cyan]")
+            else:
+                display.console.print("[cyan]Next match starting...[/cyan]")
 
-        # 8. Post-game history navigation loop (uses prompt_command like normal play)
+        # 7. Series over — post-series history navigation
         viewing_history = False
         while True:
             if viewing_history:

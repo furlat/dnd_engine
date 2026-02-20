@@ -29,6 +29,7 @@ from dnd.items import (
     create_shortsword,
     create_shortbow,
     create_dagger,
+    create_longsword,
     create_leather_armor,
     create_wooden_shield,
 )
@@ -40,7 +41,13 @@ from dnd.spells.evocation import (
 )
 from dnd.actions_functional import register_spell
 from dnd.spells.illusion import Invisibility, GreaterInvisibility
-from dnd.items.test_items import create_potion_of_greater_invisibility
+from dnd.spells.evocation import EldritchBlast
+from dnd.items.test_items import (
+    create_potion_of_greater_invisibility,
+    create_acid_flask, create_scroll_of_invisibility,
+)
+from dnd.items.weapons import create_arcane_staff
+from dnd.monsters.skeleton_abilities import MarkTargetAction
 
 
 def create_armor_scraps(source_id: UUID) -> BodyArmor:
@@ -463,6 +470,288 @@ def create_sorcerer(
     # Add Greater Invisibility potions to inventory
     potion = create_potion_of_greater_invisibility(entity.uuid)
     entity.loot_item(potion)
+
+    return entity
+
+
+def create_skeleton_warrior(
+    source_id: Optional[UUID] = None,
+    name: str = "Skeleton Warrior",
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    weight: int = 120,
+    darkvision: bool = False
+) -> Entity:
+    """
+    Creates a Skeleton Warrior — frontline tank with shield and acid flask.
+
+    Stats:
+    - STR 10 (+0), DEX 14 (+2), CON 15 (+2), INT 6 (-2), WIS 8 (-1), CHA 5 (-3)
+    - HP: 24 (4d8+8)
+    - AC: 15 (armor scraps 13 + shield +2)
+    - Weapon: Longsword (1d8 slashing)
+    - Shield: Wooden Shield (+2 AC)
+    - Item: Acid Flask (throwable 2x2 AoE, 2d4 acid, DEX DC 11)
+    - Vulnerabilities: Bludgeoning
+    - Immunities: Poison
+    """
+    if source_id is None:
+        source_id = uuid4()
+
+    ability_scores_config = AbilityScoresConfig(
+        strength=AbilityConfig(ability_score=10),
+        dexterity=AbilityConfig(ability_score=14),
+        constitution=AbilityConfig(ability_score=15),
+        intelligence=AbilityConfig(ability_score=6),
+        wisdom=AbilityConfig(ability_score=8),
+        charisma=AbilityConfig(ability_score=5)
+    )
+
+    # 4d8+8 = 26 average, but we'll use 4 hit dice with CON +2 each
+    health_config = HealthConfig(
+        hit_dices=[HitDiceConfig(
+            hit_dice_value=8,
+            hit_dice_count=4,
+            mode="average",
+            ignore_first_level=False
+        )],
+        vulnerabilities=[DamageType.BLUDGEONING],
+        immunities=[DamageType.POISON]
+    )
+
+    equipment_config = EquipmentConfig()
+    action_economy_config = ActionEconomyConfig()
+
+    entity_config = EntityConfig(
+        ability_scores=ability_scores_config,
+        health=health_config,
+        equipment=equipment_config,
+        action_economy=action_economy_config,
+        proficiency_bonus=2,
+        position=position,
+        faction=faction,
+        weight=weight,
+        creature_type=CreatureType.UNDEAD
+    )
+
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        description="A heavily armored skeleton wielding a longsword and shield.",
+        config=entity_config
+    )
+
+    setup_standard_actions(entity)
+
+    if darkvision:
+        entity.senses.sense_modes.append(
+            SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
+        )
+
+    # Equip weapons and armor
+    longsword = create_longsword(entity.uuid)
+    shield = create_wooden_shield(entity.uuid)
+    armor_scraps = create_armor_scraps(entity.uuid)
+
+    entity.equipment.equip(armor_scraps)
+    entity.equipment.equip(longsword, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
+
+    # Add acid flask to inventory
+    acid_flask = create_acid_flask(entity.uuid)
+    entity.loot_item(acid_flask)
+
+    return entity
+
+
+def create_skeleton_archer(
+    source_id: Optional[UUID] = None,
+    name: str = "Skeleton Archer",
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    weight: int = 120,
+    darkvision: bool = False
+) -> Entity:
+    """
+    Creates a Skeleton Archer — ranged DPS with Mark Target support.
+
+    Stats:
+    - STR 10 (+0), DEX 16 (+3), CON 15 (+2), INT 6 (-2), WIS 8 (-1), CHA 5 (-3)
+    - HP: 20 (3d8+6)
+    - AC: 13 (armor scraps, no shield)
+    - Weapons: Shortbow (RANGED_MAIN), Dagger x2 (MELEE_MAIN + MELEE_OFF)
+    - Special: Mark Target (bonus action, concentration, grants advantage to attackers)
+    - Vulnerabilities: Bludgeoning
+    - Immunities: Poison
+    """
+    if source_id is None:
+        source_id = uuid4()
+
+    ability_scores_config = AbilityScoresConfig(
+        strength=AbilityConfig(ability_score=10),
+        dexterity=AbilityConfig(ability_score=16),
+        constitution=AbilityConfig(ability_score=15),
+        intelligence=AbilityConfig(ability_score=6),
+        wisdom=AbilityConfig(ability_score=8),
+        charisma=AbilityConfig(ability_score=5)
+    )
+
+    # 3d8+6 = 19.5 ≈ 20
+    health_config = HealthConfig(
+        hit_dices=[HitDiceConfig(
+            hit_dice_value=8,
+            hit_dice_count=3,
+            mode="average",
+            ignore_first_level=False
+        )],
+        vulnerabilities=[DamageType.BLUDGEONING],
+        immunities=[DamageType.POISON]
+    )
+
+    equipment_config = EquipmentConfig()
+    action_economy_config = ActionEconomyConfig()
+
+    entity_config = EntityConfig(
+        ability_scores=ability_scores_config,
+        health=health_config,
+        equipment=equipment_config,
+        action_economy=action_economy_config,
+        proficiency_bonus=2,
+        position=position,
+        faction=faction,
+        weight=weight,
+        creature_type=CreatureType.UNDEAD
+    )
+
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        description="A skeleton archer that can mark targets for its allies.",
+        config=entity_config
+    )
+
+    setup_standard_actions(entity)
+
+    if darkvision:
+        entity.senses.sense_modes.append(
+            SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
+        )
+
+    # Equip weapons and armor
+    shortbow = create_shortbow(entity.uuid)
+    dagger1 = create_dagger(entity.uuid)
+    dagger2 = create_dagger(entity.uuid)
+    armor_scraps = create_armor_scraps(entity.uuid)
+
+    entity.equipment.equip(armor_scraps)
+    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
+    entity.equipment.equip(dagger1, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(dagger2, WeaponSlot.MELEE_OFF)
+
+    # Register Mark Target ability as template action
+    mark_action = MarkTargetAction(
+        source_entity_uuid=entity.uuid,
+        template=True
+    )
+    entity.register_action(mark_action)
+
+    return entity
+
+
+def create_skeleton_warlock(
+    source_id: Optional[UUID] = None,
+    name: str = "Skeleton Warlock",
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    weight: int = 120,
+    darkvision: bool = False
+) -> Entity:
+    """
+    Creates a Skeleton Warlock — glass cannon caster with Eldritch Blast.
+
+    Stats:
+    - STR 10 (+0), DEX 14 (+2), CON 15 (+2), INT 6 (-2), WIS 8 (-1), CHA 14 (+2)
+    - HP: 13 (2d8+4)
+    - AC: 13 (armor scraps)
+    - Weapon: Arcane Staff (1d6 bludgeoning, +1 spell attack)
+    - Spells: Eldritch Blast (cantrip), Burning Hands (L1), Thunderwave (L1)
+    - Spell Slots: 2x Level 1
+    - Item: Scroll of Invisibility
+    - Spellcasting ability: Charisma
+    - Vulnerabilities: Bludgeoning
+    - Immunities: Poison
+    """
+    if source_id is None:
+        source_id = uuid4()
+
+    ability_scores_config = AbilityScoresConfig(
+        strength=AbilityConfig(ability_score=10),
+        dexterity=AbilityConfig(ability_score=14),
+        constitution=AbilityConfig(ability_score=15),
+        intelligence=AbilityConfig(ability_score=6),
+        wisdom=AbilityConfig(ability_score=8),
+        charisma=AbilityConfig(ability_score=14)
+    )
+
+    # Standard 2d8+4 = 13 HP
+    health_config = HealthConfig(
+        hit_dices=[HitDiceConfig(
+            hit_dice_value=8,
+            hit_dice_count=2,
+            mode="average",
+            ignore_first_level=False
+        )],
+        vulnerabilities=[DamageType.BLUDGEONING],
+        immunities=[DamageType.POISON]
+    )
+
+    equipment_config = EquipmentConfig()
+    action_economy_config = ActionEconomyConfig(
+        spell_slots={1: 2}
+    )
+
+    entity_config = EntityConfig(
+        ability_scores=ability_scores_config,
+        health=health_config,
+        equipment=equipment_config,
+        action_economy=action_economy_config,
+        spellcasting=SpellcastingConfig(spellcasting_ability="charisma"),
+        proficiency_bonus=2,
+        position=position,
+        faction=faction,
+        weight=weight,
+        creature_type=CreatureType.UNDEAD
+    )
+
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        description="A skeleton crackling with dark arcane energy.",
+        config=entity_config
+    )
+
+    setup_standard_actions(entity)
+
+    if darkvision:
+        entity.senses.sense_modes.append(
+            SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
+        )
+
+    # Equip arcane staff
+    staff = create_arcane_staff(entity.uuid)
+    armor_scraps = create_armor_scraps(entity.uuid)
+
+    entity.equipment.equip(armor_scraps)
+    entity.equipment.equip(staff, WeaponSlot.MELEE_MAIN)
+
+    # Register spells
+    register_spell(entity, EldritchBlast, caster_level=1)
+    register_spell(entity, BurningHands, caster_level=1)
+    register_spell(entity, Thunderwave, caster_level=1)
+
+    # Add Scroll of Invisibility to inventory
+    scroll = create_scroll_of_invisibility(entity.uuid)
+    entity.loot_item(scroll)
 
     return entity
 

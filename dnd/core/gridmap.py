@@ -28,7 +28,8 @@ class LightSourceData(BaseModel):
     """Tracks a light source and its affected tiles."""
     uuid: UUID = Field(default_factory=uuid4)
     position: Tuple[int, int] = Field(description="Current position of the light source")
-    bright_radius_feet: int = Field(description="Radius of bright light in feet")
+    very_bright_radius_feet: int = Field(default=0, description="Radius of very bright light in feet (innermost zone)")
+    bright_radius_feet: int = Field(description="Radius of bright light in feet (extends beyond very bright)")
     dim_radius_feet: int = Field(description="Radius of dim light in feet (extends beyond bright)")
     anchor_uuid: Optional[UUID] = Field(default=None, description="BaseBlock this light is attached to (follows its movement)")
     affected_tiles: Dict[Tuple[int, int], LightLevel] = Field(default_factory=dict, description="pos -> level applied")
@@ -729,23 +730,26 @@ class GridMap:
     # =========================================================================
 
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
-                         dim_radius_feet: int, anchor_uuid: Optional[UUID] = None) -> UUID:
+                         dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
+                         very_bright_radius_feet: int = 0) -> UUID:
         """Add a light source at a position.
 
         Computes illuminated area via FOV from position.
-        Bright radius -> BRIGHT_LIGHT, dim annulus -> DIM_LIGHT.
+        Very bright radius -> VERY_BRIGHT, bright annulus -> BRIGHT_LIGHT, dim annulus -> DIM_LIGHT.
 
         Args:
             position: Center of the light source
             bright_radius_feet: Radius of bright light in feet
             dim_radius_feet: Radius of dim light in feet (total radius = bright + dim)
             anchor_uuid: If set, light follows this BaseBlock's movement
+            very_bright_radius_feet: Radius of very bright light in feet (innermost zone)
 
         Returns:
             UUID of the light source
         """
         source = LightSourceData(
             position=position,
+            very_bright_radius_feet=very_bright_radius_feet,
             bright_radius_feet=bright_radius_feet,
             dim_radius_feet=dim_radius_feet,
             anchor_uuid=anchor_uuid
@@ -861,6 +865,7 @@ class GridMap:
         total_radius_feet = source.bright_radius_feet + source.dim_radius_feet
         total_radius_tiles = max(total_radius_feet // 5, 1)
         bright_radius_tiles = max(source.bright_radius_feet // 5, 1)
+        very_bright_radius_tiles = source.very_bright_radius_feet / 5 if source.very_bright_radius_feet > 0 else 0
 
         visible_positions = self.compute_fov(pos, total_radius_tiles)
         result: Dict[Tuple[int, int], LightLevel] = {}
@@ -870,7 +875,9 @@ class GridMap:
             dx = tile_pos[0] - pos[0]
             dy = tile_pos[1] - pos[1]
             dist_tiles = math.sqrt(dx * dx + dy * dy)
-            if dist_tiles <= bright_radius_tiles:
+            if very_bright_radius_tiles > 0 and dist_tiles <= very_bright_radius_tiles:
+                result[tile_pos] = LightLevel.VERY_BRIGHT
+            elif dist_tiles <= bright_radius_tiles:
                 result[tile_pos] = LightLevel.BRIGHT_LIGHT
             else:
                 result[tile_pos] = LightLevel.DIM_LIGHT

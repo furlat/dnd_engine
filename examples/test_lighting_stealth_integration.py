@@ -21,6 +21,7 @@ from dnd.conditions import Hidden, Invisible
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index
 from dnd.actions import Hide
 from dnd.monsters.bestiary import create_skeleton
+from dnd.items.test_items import Torch, create_torch
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
 
@@ -756,6 +757,144 @@ def test_devils_sight_sees_through_magical_darkness() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Section 7: Torch + Stealth Interaction (three-zone light: very bright / bright / dim)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_torch_three_light_zones() -> None:
+    """Torch produces VERY_BRIGHT (10ft), BRIGHT_LIGHT (20ft), DIM_LIGHT (40ft)."""
+    section("Torch three light zones")
+    reset_combat_state()
+    grid = get_map()
+    create_dark_grid(12, 3)
+
+    carrier = create_skeleton(name="TorchCarrier", position=(0, 1), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    torch = create_torch(carrier.uuid)
+    carrier.loot_item(torch)
+    torch.ignite(carrier.uuid)
+
+    # Carrier tile (0,1) should be VERY_BRIGHT (within 10ft = 2 tiles)
+    carrier_tile = grid.get_tile(0, 1)
+    assert carrier_tile is not None
+    check("Carrier tile is VERY_BRIGHT",
+          carrier_tile.resolved_light_level == LightLevel.VERY_BRIGHT)
+
+    # Tile at 1 tile away (5ft) — still within very bright radius (10ft)
+    tile_1 = grid.get_tile(1, 1)
+    assert tile_1 is not None
+    check("Tile 5ft away is VERY_BRIGHT",
+          tile_1.resolved_light_level == LightLevel.VERY_BRIGHT)
+
+    # Tile at 3 tiles away (15ft) — beyond very bright (10ft), within bright (20ft)
+    tile_3 = grid.get_tile(3, 1)
+    assert tile_3 is not None
+    check("Tile 15ft away is BRIGHT_LIGHT",
+          tile_3.resolved_light_level == LightLevel.BRIGHT_LIGHT)
+
+    # Tile at 5 tiles away (25ft) — beyond bright (20ft), within dim (40ft)
+    tile_5 = grid.get_tile(5, 1)
+    assert tile_5 is not None
+    check("Tile 25ft away is DIM_LIGHT",
+          tile_5.resolved_light_level == LightLevel.DIM_LIGHT)
+
+    # Tile at 9 tiles away (45ft) — beyond total range (40ft), should be DARKNESS
+    tile_9 = grid.get_tile(9, 1)
+    assert tile_9 is not None
+    check("Tile 45ft away is DARKNESS (beyond range)",
+          tile_9.resolved_light_level == LightLevel.DARKNESS)
+
+
+def test_torch_very_bright_reveals_hidden_enemy() -> None:
+    """When torch carrier moves near a hidden enemy, VERY_BRIGHT zone reveals them."""
+    section("Torch VERY_BRIGHT reveals hidden enemy")
+    reset_combat_state()
+    grid = get_map()
+    create_dark_grid(10, 3)
+
+    carrier = create_skeleton(name="TorchCarrier", position=(0, 1), faction="heroes")
+    # Give carrier darkvision so they can see in dim/dark
+    carrier.senses.sense_modes = [SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)]
+    hidden_enemy = create_skeleton(name="HiddenEnemy", position=(5, 1), faction="monsters")
+
+    Entity.update_all_entities_senses()
+
+    # Hide the enemy with very high stealth (impossible to beat with passive perception)
+    hidden_cond = Hidden(
+        source_entity_uuid=hidden_enemy.uuid,
+        target_entity_uuid=hidden_enemy.uuid,
+        stealth_result=99,
+    )
+    hidden_enemy.add_condition(hidden_cond)
+    check("Enemy is hidden", has_condition(hidden_enemy, "Hidden"))
+    check("Enemy NOT visible to carrier (high stealth DC)",
+          hidden_enemy.uuid not in carrier.senses.entities)
+
+    # Ignite torch on carrier — enemy at 5 tiles (25ft) is in DIM zone (beyond 20ft bright)
+    torch = create_torch(carrier.uuid)
+    carrier.loot_item(torch)
+    torch.ignite(carrier.uuid)
+
+    enemy_tile = grid.get_tile(5, 1)
+    assert enemy_tile is not None
+    check("Enemy tile is DIM_LIGHT (25ft, beyond bright radius)",
+          enemy_tile.resolved_light_level == LightLevel.DIM_LIGHT)
+    check("Enemy still hidden in DIM_LIGHT",
+          has_condition(hidden_enemy, "Hidden"))
+
+    # Move carrier closer so enemy is within VERY_BRIGHT (10ft = 2 tiles)
+    Entity.update_entity_position(carrier, (4, 1))
+    Entity.update_all_entities_senses()
+
+    # Enemy at (5,1), carrier at (4,1) — 1 tile = 5ft, within very bright
+    enemy_tile_after = grid.get_tile(5, 1)
+    assert enemy_tile_after is not None
+    check("Enemy tile is now VERY_BRIGHT after carrier moved close",
+          enemy_tile_after.resolved_light_level == LightLevel.VERY_BRIGHT)
+    check("Hidden removed by VERY_BRIGHT torch light",
+          not has_condition(hidden_enemy, "Hidden"))
+    check("Enemy now visible to carrier",
+          hidden_enemy.uuid in carrier.senses.entities)
+
+
+def test_torch_bright_zone_does_not_reveal_hidden() -> None:
+    """BRIGHT_LIGHT from torch does NOT auto-reveal hidden enemies (only VERY_BRIGHT does)."""
+    section("Torch BRIGHT zone does NOT reveal hidden")
+    reset_combat_state()
+    grid = get_map()
+    create_dark_grid(10, 3)
+
+    carrier = create_skeleton(name="TorchCarrier", position=(0, 1), faction="heroes")
+    carrier.senses.sense_modes = [SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)]
+    hidden_enemy = create_skeleton(name="HiddenEnemy", position=(3, 1), faction="monsters")
+
+    Entity.update_all_entities_senses()
+
+    # Hide the enemy
+    hidden_cond = Hidden(
+        source_entity_uuid=hidden_enemy.uuid,
+        target_entity_uuid=hidden_enemy.uuid,
+        stealth_result=99,
+    )
+    hidden_enemy.add_condition(hidden_cond)
+    check("Enemy is hidden", has_condition(hidden_enemy, "Hidden"))
+
+    # Ignite torch — enemy at 3 tiles (15ft) is in BRIGHT zone (10-20ft)
+    torch = create_torch(carrier.uuid)
+    carrier.loot_item(torch)
+    torch.ignite(carrier.uuid)
+
+    enemy_tile = grid.get_tile(3, 1)
+    assert enemy_tile is not None
+    check("Enemy tile is BRIGHT_LIGHT (15ft from torch)",
+          enemy_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT)
+    check("Enemy still hidden — BRIGHT_LIGHT does not auto-reveal",
+          has_condition(hidden_enemy, "Hidden"))
+    check("Enemy NOT visible (stealth DC too high)",
+          hidden_enemy.uuid not in carrier.senses.entities)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Run all tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -792,6 +931,11 @@ if __name__ == "__main__":
     # Section 6: Magical darkness
     test_magical_darkness_blocks_targeting()
     test_devils_sight_sees_through_magical_darkness()
+
+    # Section 7: Torch + stealth interaction
+    test_torch_three_light_zones()
+    test_torch_very_bright_reveals_hidden_enemy()
+    test_torch_bright_zone_does_not_reveal_hidden()
 
     # Results
     print(f"\n{'='*60}")

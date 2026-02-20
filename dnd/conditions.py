@@ -1025,13 +1025,10 @@ class Concentrating(BaseCondition):
 
         # Register the concentration break handler
         def concentration_break_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-            """On damage, make CON save or lose concentration."""
+            """On damage, make CON save or lose concentration. On death, auto-break."""
 
-            # Only trigger for the concentrating entity taking damage
+            # Only trigger for the concentrating entity
             if event.target_entity_uuid != source_entity_uuid:
-                return None
-
-            if not isinstance(event, TakeDamageEvent):
                 return None
 
             # Get the entity
@@ -1041,6 +1038,19 @@ class Concentrating(BaseCondition):
 
             # Check if still concentrating
             if "Concentrating" not in entity.active_conditions:
+                return None
+
+            # Death: auto-break concentration (no save)
+            if isinstance(event, DeathEvent):
+                conc = entity.active_conditions.get("Concentrating")
+                spell_name = "spell"
+                if conc is not None and isinstance(conc, Concentrating):
+                    spell_name = conc.spell_name
+                entity.remove_condition("Concentrating", parent_event=event)
+                return None
+
+            # Damage: CON save to maintain
+            if not isinstance(event, TakeDamageEvent):
                 return None
 
             # Calculate DC: 10 or half damage, whichever is higher
@@ -1058,7 +1068,6 @@ class Concentrating(BaseCondition):
                 ability_name="constitution",
                 dc=dc,
                 source_entity_name=entity.name,
-                use_register=False,  # Don't register in global registry
                 parent_event=event.uuid  # Link to damage event
             )
 
@@ -1085,6 +1094,11 @@ class Concentrating(BaseCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.TAKE_DAMAGE,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=self.target_entity_uuid
+                ),
+                Trigger(
+                    event_type=EventType.DEATH,
                     event_phase=EventPhase.EFFECT,
                     event_target_entity_uuid=self.target_entity_uuid
                 )
@@ -1247,7 +1261,7 @@ class Hidden(BaseCondition):
 
 
 # Actions that do NOT break stealth (everything else reveals)
-NON_REVEALING_ACTIONS = {"Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone"}
+NON_REVEALING_ACTIONS = {"Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone", "Open Door", "Close Door"}
 
 
 def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:

@@ -16,6 +16,7 @@ def build_turn_prompt(
     entity_table_text: str,
     map_text: str,
     action_text: str,
+    series_info: str = "",
 ) -> str:
     """Build a complete turn prompt for a Claude subprocess.
 
@@ -25,10 +26,13 @@ def build_turn_prompt(
     sections: List[str] = []
 
     # 1. Header
-    sections.append(
+    header = (
         f"## {entity_name}'s Turn — Round {round_number}\n"
         f"You control the **{faction}** faction."
     )
+    if series_info:
+        header += f"\n{series_info}"
+    sections.append(header)
 
     # 2. Notebook
     nb = notebook_content.strip() if notebook_content else ""
@@ -54,8 +58,7 @@ def build_turn_prompt(
         "## Reminders\n"
         "- Use commands with your token (see system prompt)\n"
         "- After Dash, run `actions` to see expanded movement targets\n"
-        "- Run `end` first, then write notebook observations\n"
-        "- **Always run `end` before writing notebook**"
+        "- **Always run `end` as your last action**"
     )
 
     return "\n\n".join(sections)

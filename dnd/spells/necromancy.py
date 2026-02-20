@@ -315,19 +315,17 @@ class ChillTouch(SpellAction):
         is_crit = outcome == AttackOutcome.CRIT
 
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
-        total_dice = num_dice * (2 if is_crit else 1) + crit_extra
-
         damage_bonus = caster.get_spell_damage_bonus()
         necrotic_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=8,
-            dice_numbers=total_dice,
+            dice_numbers=num_dice,
             damage_bonus=damage_bonus,
             damage_type=DamageType.NECROTIC
         )
 
-        damage_dice = necrotic_damage.get_dice(attack_outcome=outcome)
+        damage_dice = necrotic_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
         # Apply damage (child of effect event)
