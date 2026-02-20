@@ -73,7 +73,9 @@
       "Bash(for f in examples/test_second_wind.py examples/test_saving_throw_events.py examples/test_great_weapon_fighting.py examples/test_indomitable.py examples/test_barbarian_rage.py examples/test_relentless_rage_intimidating.py examples/test_action_surge.py examples/test_barbarian_fast_movement.py examples/test_improved_critical.py examples/test_action_surge_extra_attack.py)",
       "Bash(for f in examples/test_barbarian_unarmored_defense.py examples/test_barbarian_minor_features.py examples/test_barbarian_persistent_rage.py examples/test_brutal_critical.py examples/test_barbarian_retaliation.py examples/test_extra_attack.py examples/test_easy_tier_spells.py examples/test_jump.py examples/test_spell_system.py examples/test_thunderwave.py)",
       "Bash(for f in examples/test_shove.py examples/test_spike_growth.py examples/test_grease.py examples/test_spirit_guardians.py examples/test_cloudkill.py examples/test_web.py examples/test_info_leak_fixes.py examples/test_available_actions_perf.py examples/test_light_source_cleanup.py examples/test_lighting_system.py)",
-      "Bash(for f in examples/combat_basic.py examples/combat_ranged.py examples/combat_conditions.py examples/spatial_events_test.py)"
+      "Bash(for f in examples/combat_basic.py examples/combat_ranged.py examples/combat_conditions.py examples/spatial_events_test.py)",
+      "Bash(xargs cat:*)",
+      "Bash(/tmp/detailed_analysis.md:*)"
     ]
   }
 }

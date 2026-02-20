@@ -7,7 +7,7 @@ from dnd.spells.evocation import (
     FireBolt, SacredFlame, MagicMissile, Fireball,
     BurningHands, LightningBolt, Thunderwave, Shatter, Sunburst,
     ConeOfCold, CircleOfDeath, RayOfFrost, ScorchingRay,
-    ShockingGrasp, GuidingBolt, GuidingBoltMarked
+    ShockingGrasp, GuidingBolt, GuidingBoltMarked, EldritchBlast
 )
 from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
@@ -25,6 +25,7 @@ CANTRIPS = {
     "Acid Splash": AcidSplash,
     "Chill Touch": ChillTouch,
     "Shocking Grasp": ShockingGrasp,
+    "Eldritch Blast": EldritchBlast,
 }
 
 LEVEL_1_SPELLS = {
@@ -114,6 +115,7 @@ __all__ = [
     "AcidSplash",
     "ChillTouch",
     "ShockingGrasp",
+    "EldritchBlast",
     # Spell-specific conditions
     "NoHealing",
     "GuidingBoltMarked",

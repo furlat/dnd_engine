@@ -162,6 +162,7 @@ def show_inline_state(result: dict, client: APIClient) -> None:
     visible_entity_uuids = None
     visible_cells = None
     memory_cells = None
+    sense_modes: list = []
     if my_entity_uuid and my_entity_uuid in visibility:
         my_vis = visibility[my_entity_uuid]
         visible_entity_uuids = set(my_vis.get("visible_entities", []))
@@ -169,12 +170,14 @@ def show_inline_state(result: dict, client: APIClient) -> None:
         visible_cells = set(tuple(c) for c in my_vis.get("visible_cells", []))
         seen_cells = set(tuple(c) for c in my_vis.get("seen_cells", []))
         memory_cells = seen_cells - visible_cells
+        sense_modes = my_vis.get("sense_modes", [])
 
     actions_data = result.get("available_actions", {})
     pos_actions = actions_data.get("position_actions", []) if actions_data else []
 
     print("")
-    print(format_map(state, visible_entity_uuids, my_entity_uuid, visible_cells, memory_cells, pos_actions))
+    print(format_map(state, visible_entity_uuids, my_entity_uuid, visible_cells, memory_cells, pos_actions,
+                     sense_modes=sense_modes))
     print("")
 
     entities = state.get("entities", [])
@@ -268,19 +271,20 @@ def is_my_turn(client: APIClient) -> bool:
 
 
 def get_visibility_data(client: APIClient) -> Tuple[
-    Optional[set], Optional[set], Optional[set]
+    Optional[set], Optional[set], Optional[set], list
 ]:
-    """Get visibility data (visible entities, visible cells, memory cells).
+    """Get visibility data (visible entities, visible cells, memory cells, sense_modes).
 
-    Returns (visible_entity_uuids, visible_cells, memory_cells).
-    All are None if no visibility data available (omniscient view).
+    Returns (visible_entity_uuids, visible_cells, memory_cells, sense_modes).
+    First three are None if no visibility data available (omniscient view).
+    sense_modes is always a list (empty if unavailable).
     """
     my_entity_uuid = client.current_entity_uuid
     controlled_uuids = getattr(client, '_controlled_entity_uuids', [])
     visibility = client.get_visibility() or {}
 
     if not my_entity_uuid or my_entity_uuid not in visibility:
-        return None, None, None
+        return None, None, None, []
 
     my_vis = visibility[my_entity_uuid]
     vis_set: set = set(my_vis.get("visible_entities", []))
@@ -288,14 +292,16 @@ def get_visibility_data(client: APIClient) -> Tuple[
     vis_cells = set(tuple(c) for c in my_vis.get("visible_cells", []))
     seen_cells = set(tuple(c) for c in my_vis.get("seen_cells", []))
     mem_cells = seen_cells - vis_cells
-    return vis_set, vis_cells, mem_cells
+    sense_modes = my_vis.get("sense_modes", [])
+    return vis_set, vis_cells, mem_cells, sense_modes
 
 
 def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
                my_entity_uuid: Optional[str] = None,
                visible_cells: Optional[set] = None,
                memory_cells: Optional[set] = None,
-               position_actions: Optional[list] = None) -> str:
+               position_actions: Optional[list] = None,
+               sense_modes: Optional[list] = None) -> str:
     """Format map as structured data + ASCII grid for AI consumption.
 
     Outputs two sections:
@@ -472,16 +478,29 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
         raw_light = tile.get("light_level", 3)
         objective_label = _LIGHT_LABELS.get(raw_light, f"light-{raw_light}")
 
-        # Detect sense-mode shift: if tile is visible but objectively dark,
-        # entity must have darkvision/devil's sight — show "dark->dim" etc.
-        if visible_cells is not None and raw_light == 0:
-            # Magical darkness + visible = devil's sight/truesight -> bright
-            light_label = f"{objective_label}->bright"
-        elif visible_cells is not None and raw_light == 1:
-            # Darkness + visible = darkvision -> dim
-            light_label = f"{objective_label}->dim"
-        else:
-            light_label = objective_label
+        # Show sense-mode shift only when we have real sense mode data.
+        # Matches priority order from base_tiles.get_effective_light_for():
+        #   Truesight/Blindsight → bright (any darkness)
+        #   Devil's Sight → bright (any darkness including magical)
+        #   Darkvision → dark->dim, dim->bright (NOT magical darkness)
+        #   No sense mode → show raw label
+        light_label = objective_label
+        if sense_modes and visible_cells is not None:
+            sense_types = {sm.get("sense_type", "") for sm in sense_modes}
+            has_true_or_blind = bool(sense_types & {"Truesight", "Blindsight"})
+            has_devils_sight = "Devils Sight" in sense_types
+            has_darkvision = "Darkvision" in sense_types
+            if raw_light == 0:  # Magical darkness
+                if has_true_or_blind or has_devils_sight:
+                    light_label = f"{objective_label}->bright"
+            elif raw_light == 1:  # Darkness
+                if has_true_or_blind or has_devils_sight:
+                    light_label = f"{objective_label}->bright"
+                elif has_darkvision:
+                    light_label = f"{objective_label}->dim"
+            elif raw_light == 2:  # Dim light
+                if has_darkvision:
+                    light_label = f"{objective_label}->bright"
 
         pos_entities = entity_pos_map.get(pos, [])
         pos_objects = obj_pos_map.get(pos, [])
@@ -708,9 +727,10 @@ def format_entities(entities: list, visible_entity_uuids: Optional[set] = None,
     for i, e in enumerate(entities):
         e_uuid = e.get("uuid")
 
-        # Visibility filtering
+        # Visibility filtering (dead entities always shown — bodies are visible)
+        is_dead = e.get("is_dead", False)
         is_mine = e_uuid == my_entity_uuid or e_uuid in controlled
-        if visible_entity_uuids is not None and not is_mine:
+        if visible_entity_uuids is not None and not is_mine and not is_dead:
             if e_uuid not in visible_entity_uuids:
                 # Not visible — show as "[NOT VISIBLE]" with position only
                 name = e.get("name", "???")
@@ -971,6 +991,7 @@ def cmd_state(client: APIClient) -> int:
     visible_entity_uuids: Optional[set] = None
     visible_cells: Optional[set] = None
     memory_cells: Optional[set] = None
+    sense_modes: list = []
     if my_entity_uuid and my_entity_uuid in visibility:
         my_vis = visibility[my_entity_uuid]
         visible_entity_uuids = set(my_vis.get("visible_entities", []))
@@ -983,6 +1004,7 @@ def cmd_state(client: APIClient) -> int:
             tuple(c) for c in my_vis.get("seen_cells", [])
         )
         memory_cells = seen_cells - visible_cells
+        sense_modes = my_vis.get("sense_modes", [])
 
     # Check if it's my turn using session
     my_turn = is_my_turn(client)
@@ -1005,7 +1027,8 @@ def cmd_state(client: APIClient) -> int:
     print("")
 
     # Map (filtered by visibility)
-    print(format_map(state, visible_entity_uuids, my_entity_uuid, visible_cells, memory_cells))
+    print(format_map(state, visible_entity_uuids, my_entity_uuid, visible_cells, memory_cells,
+                     sense_modes=sense_modes))
     print("")
 
     # Entities (filtered by visibility, sorted by initiative)
@@ -1743,7 +1766,7 @@ def cmd_end(client: APIClient) -> int:
     if ai_actions:
         from cli.log_filter import filter_combat_log as _filter_log
         controlled = getattr(client, '_controlled_entity_uuids', [])
-        vis_set, _, _ = get_visibility_data(client)
+        vis_set, _, _, _ = get_visibility_data(client)
         filtered_ai = _filter_log(ai_actions, controlled, vis_set)
         if filtered_ai:
             print("")
@@ -1856,7 +1879,7 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
                             break
 
                 # Get visibility
-                vis_set, vis_cells, mem_cells = get_visibility_data(client)
+                vis_set, vis_cells, mem_cells, vis_sense_modes = get_visibility_data(client)
 
                 # Get combat log entries since last seen
                 log_data = client.get_combat_log(since=combat_log_index)
@@ -1894,6 +1917,7 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
                     ),
                     map_text=format_map(
                         state or {}, vis_set, my_entity_uuid, vis_cells, mem_cells, pos_actions,
+                        sense_modes=vis_sense_modes,
                     ),
                     action_text=format_actions(actions, my_entity_name),
                 )
@@ -1918,7 +1942,7 @@ def cmd_watch(client: APIClient, poll_interval: float = 2.0) -> int:
 
             # Poll combat log for opponent actions (filtered)
             try:
-                vis_set_poll, _, _ = get_visibility_data(client)
+                vis_set_poll, _, _, _ = get_visibility_data(client)
                 log_data = client.get_combat_log(since=combat_log_index)
                 new_entries = log_data.get("entries", [])
                 if new_entries:

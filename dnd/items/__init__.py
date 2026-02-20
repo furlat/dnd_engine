@@ -27,6 +27,8 @@ from dnd.items.weapons import (
     # Martial Ranged
     create_longbow,
     create_heavy_crossbow,
+    # Arcane
+    create_arcane_staff,
 )
 
 from dnd.items.armors import (
@@ -124,6 +126,8 @@ __all__ = [
     # Martial Ranged
     "create_longbow",
     "create_heavy_crossbow",
+    # Arcane
+    "create_arcane_staff",
     # Light Armor
     "create_padded_armor",
     "create_leather_armor",

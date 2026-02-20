@@ -1295,21 +1295,49 @@ def _apply(self, execution_event):
     caster = Entity.get(self.source_entity_uuid)
     target = Entity.get(self.target_entity_uuid)
 
+    # 1. Cross-propagate attack/AC modifiers
     attack_bonus = caster.spell_attack_bonus(target.uuid)
     ac = target.ac_bonus(caster.uuid)
     ac.set_from_target(attack_bonus)
     attack_bonus.set_from_target(ac)
 
+    # 2. Roll attack
     dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
     crit_threshold = caster.get_spell_crit_threshold()
     outcome = determine_attack_outcome(dice_roll, ac, crit_threshold)
 
+    # 3. Clean up cross-propagation
     ac.reset_from_target()
     attack_bonus.reset_from_target()
 
-    if outcome != AttackOutcome.MISS:
-        target.receive_damage(..., parent_event=execution_event.uuid)
+    if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+        return ...  # miss handling
+
+    # 4. Roll damage — CRITICAL: do NOT manually double dice_numbers!
+    #    Pass un-doubled dice count; get_dice() handles crit doubling internally.
+    num_dice = ...  # base dice count (e.g., _get_cantrip_dice_count)
+    is_crit = outcome == AttackOutcome.CRIT
+    crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
+
+    damage = Damage(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        damage_dice=10,           # die size (d10)
+        dice_numbers=num_dice,    # UN-DOUBLED base count
+        damage_bonus=caster.get_spell_damage_bonus(),
+        damage_type=DamageType.FIRE
+    )
+    damage_dice = damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
+    damage_roll = damage_dice.roll
+
+    target.receive_damage(
+        amount=damage_roll.total, damage_type=DamageType.FIRE,
+        source_entity_uuid=caster.uuid, parent_event=effect_event.uuid
+    )
 ```
+
+**WRONG (double-doubling bug):** `dice_numbers=num_dice * (2 if is_crit else 1)` then `get_dice(attack_outcome=outcome)` — this doubles twice (4x on crit).
+**CORRECT:** `dice_numbers=num_dice` (un-doubled) then `get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)` — `Dice._roll()` handles the single doubling.
 
 ### Concentration Pattern
 

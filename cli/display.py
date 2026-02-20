@@ -72,6 +72,9 @@ MAX_COMBAT_LOG = 5  # Max entries to show
 _output_buffer: List[str] = []
 MAX_OUTPUT_LINES = 6
 
+# Claude thinking text (shared file bridge from orchestrator)
+_thinking_text: str = ""
+
 # Session/connection info for header
 _session_info: Dict[str, Any] = {
     "hero_connected": False,
@@ -782,9 +785,15 @@ def render_combatants_panel(
     entities: List[Dict[str, Any]],
     turn: Dict[str, Any],
     current_entity_uuid: Optional[str] = None,
-    is_my_turn: bool = True
+    is_my_turn: bool = True,
+    visible_uuids: Optional[Set[str]] = None,
 ) -> Panel:
-    """Render the combatants table panel with turn info in title."""
+    """Render the combatants table panel with turn info in title.
+
+    Args:
+        visible_uuids: If provided (FOV self mode), entities not in this set
+            are anonymized (name/HP/AC/pos hidden). Initiative order preserved.
+    """
     # Sort entities by initiative order
     initiative_order = turn.get("initiative_order", [])
     if initiative_order:
@@ -800,10 +809,13 @@ def render_combatants_panel(
 
     active_uuid = turn.get("current_entity_uuid")
     for e in entities:
+        is_visible = visible_uuids is None or e["uuid"] in visible_uuids
+        is_dead = e.get("is_dead", False)
         is_active = e["uuid"] == active_uuid
         is_me = e["uuid"] == current_entity_uuid
+
         name = e['name']
-        if e.get("is_dead"):
+        if is_dead:
             name = f"[dim strike]{name}[/dim strike]"
         elif is_active and is_my_turn:
             name = f"[bold green]► {name}[/bold green]"
@@ -819,7 +831,10 @@ def render_combatants_panel(
         hp = f"[{hp_color}]{hp_val}/{max_hp}[/{hp_color}]"
 
         conditions = _format_conditions_rich(e) or "-"
-        pos = f"({e['position'][0]},{e['position'][1]})"
+        if is_visible or is_dead:
+            pos = f"({e['position'][0]},{e['position'][1]})"
+        else:
+            pos = "[dim]?[/dim]"
         table.add_row(name, hp, str(e.get("ac", "?")), pos, conditions)
 
     # Build title with round and turn info
@@ -1150,6 +1165,23 @@ def render_combat_log_panel(max_entries: Optional[int] = None) -> Panel:
             _render_log_entry(entry, content)
 
     return Panel(content, title="Combat Log", box=box.ROUNDED, border_style="blue")
+
+
+def set_thinking_text(text: str) -> None:
+    """Set the latest Claude thinking text (called from spectate poll loop)."""
+    global _thinking_text
+    _thinking_text = text
+
+
+def render_thinking_panel(max_chars: int = 600) -> Optional[Panel]:
+    """Render Claude's latest thinking as a compact panel."""
+    if not _thinking_text:
+        return None
+    display_text = _thinking_text[:max_chars]
+    if len(_thinking_text) > max_chars:
+        display_text += "..."
+    content = Text(display_text, style="italic")
+    return Panel(content, title="Claude Thinking", box=box.ROUNDED, border_style="magenta", padding=(0, 1))
 
 
 def _categorize_actions(actions: Dict[str, Any], entities: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1721,18 +1753,43 @@ def render_full_screen(
     map_panel = Panel(map_content, title="Battlefield", box=box.ROUNDED, border_style="cyan")
 
     # 3. Combatants panel (entity table with turn info in title)
-    combatants_panel = render_combatants_panel(entities, turn, current_entity_uuid, is_my_turn)
+    # In FOV self mode, build set of visible entity UUIDs for anonymization
+    fov_visible_uuids: Optional[Set[str]] = None
+    if _fov_mode == "self" and visibility and current_entity_uuid:
+        vis_data = visibility.get(current_entity_uuid, {})
+        fov_visible_uuids = set(vis_data.get("visible_entities", []))
+        fov_visible_uuids.add(current_entity_uuid)
+    combatants_panel = render_combatants_panel(
+        entities, turn, current_entity_uuid, is_my_turn,
+        visible_uuids=fov_visible_uuids,
+    )
 
     # 4. Available actions panel (only on player's turn, with economy in title)
     actions_panel = None
     if is_my_turn and actions:
         actions_panel = render_available_actions_panel(actions, entities, turn, shortcut_registry)
 
-    # 5. Combat log panel (larger when no actions panel, e.g. spectator mode)
-    log_max = 15 if not actions_panel else None
+    # 5. Thinking panel (above combat log for readability)
+    thinking_panel = render_thinking_panel()
+
+    # 6. Combat log panel — fit to remaining terminal height
+    _, term_height = get_terminal_size()
+    # Estimate lines used: header(3) + map + combatants + margins(4)
+    map_lines = map_content.plain.count("\n") + 5  # +borders
+    entity_count = len(entities)
+    combatant_lines = entity_count + 4  # +header+borders
+    fixed_lines = 3 + map_lines + combatant_lines + 4
+    if thinking_panel:
+        # Estimate thinking panel height from content
+        thinking_lines = _thinking_text.count("\n") + 4  # +borders+padding
+        thinking_lines = min(thinking_lines, 15)  # Cap estimate
+        fixed_lines += thinking_lines
+    remaining = max(3, term_height - fixed_lines)
+    # Each log entry ~2 lines on average; cap between 3 and 10
+    log_max = min(10, max(3, remaining // 2))
     log_panel = render_combat_log_panel(max_entries=log_max)
 
-    # 6. Output panel (command feedback - only if there's content)
+    # 7. Output panel (command feedback - only if there's content)
     output_panel = render_output_panel()
 
     # Print all panels in order (with top padding to avoid cutoff)
@@ -1740,6 +1797,8 @@ def render_full_screen(
     console.print(header_panel)
     console.print(map_panel)
     console.print(combatants_panel)
+    if thinking_panel:
+        console.print(thinking_panel)
     console.print(log_panel)
     if actions_panel:
         console.print(actions_panel)
@@ -1853,8 +1912,10 @@ def display_combat_log_entry(entry: Dict[str, Any]):
     Args:
         entry: A CombatLogEntry.to_dict() from the server
     """
-    # Apply FOW filtering if enabled
-    if _fow_enabled and _fow_controlled_uuids:
+    # Apply FOW filtering if enabled (skip turn_start/turn_end — these are
+    # system events that always show the real name regardless of visibility)
+    entry_type = entry.get("entry_type", "").lower()
+    if _fow_enabled and _fow_controlled_uuids and entry_type not in ("turn_start", "turn_end"):
         from cli.log_filter import filter_combat_log
         filtered = filter_combat_log(
             [entry], _fow_controlled_uuids, _fow_visible_entity_uuids or None,
