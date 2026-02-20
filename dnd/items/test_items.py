@@ -311,7 +311,11 @@ class RestAction(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
         heal_amount = random.randint(1, 6)
-        entity.health.heal(heal_amount)
+        entity.receive_healing(
+            heal_amount, entity.uuid,
+            source_description="Campfire Rest",
+            parent_event=execution_event.uuid
+        )
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message=f"Healed {heal_amount}")
         return effect.phase_to(
@@ -677,7 +681,11 @@ class DrinkPotionAction(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
-        entity.health.heal(self.heal_amount)
+        entity.receive_healing(
+            self.heal_amount, entity.uuid,
+            source_description="Potion of Healing",
+            parent_event=execution_event.uuid
+        )
         effect = execution_event.phase_to(EventPhase.EFFECT,
             status_message=f"Healed {self.heal_amount} HP")
         return effect.phase_to(EventPhase.COMPLETION,
@@ -945,7 +953,11 @@ class ActivateDeviceAction(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
-        entity.health.heal(self.heal_amount)
+        entity.receive_healing(
+            self.heal_amount, entity.uuid,
+            source_description="Arcane Device",
+            parent_event=execution_event.uuid
+        )
         effect = execution_event.phase_to(EventPhase.EFFECT,
             status_message=f"Healed {self.heal_amount} HP")
         return effect.phase_to(EventPhase.COMPLETION,

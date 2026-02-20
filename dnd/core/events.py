@@ -42,7 +42,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
-    SavingThrowLogData, SkillCheckLogData,
+    SavingThrowLogData, SkillCheckLogData, HealLogData,
     md_color, md_d20_roll, md_breakdown
 )
 from dnd.core.modifiers import DamageType
@@ -2286,6 +2286,64 @@ class TakeDamageEvent(Event):
                 "damage_type": damage_type_str,
                 "source_name": source_name,
             },
+            success=True
+        )
+
+
+# =============================================================================
+# Heal Event
+# =============================================================================
+
+class HealEvent(Event):
+    """Fired when an entity receives healing."""
+    name: str = Field(default="Heal", description="Healing event")
+    event_type: EventType = Field(default=EventType.HEAL)
+    total_healing: int = Field(default=0, description="Healing amount requested")
+    actual_healing: int = Field(default=0, description="Actual HP restored (after cap)")
+    source_description: str = Field(default="", description="Description of healing source (e.g. 'Second Wind: d10(7)+1')")
+    was_blocked: bool = Field(default=False, description="True if healing was blocked (e.g. Chill Touch)")
+
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
+        target_name = self.target_entity_name or "Unknown"
+
+        if self.was_blocked:
+            text = f"{md_color(target_name, 'cyan')} healing blocked!"
+            return CombatLogEntry(
+                entry_type=CombatLogEntryType.HEAL,
+                source_name=target_name,
+                source_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+                compact=text,
+                verbose=text,
+                detailed=text,
+                data=HealLogData(
+                    entity_name=target_name,
+                    entity_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+                    amount=0,
+                    source_description=self.source_description
+                ).model_dump(),
+                success=False
+            )
+
+        amount = self.actual_healing
+        compact = f"{md_color(target_name, 'cyan')} heals for {md_color(str(amount), 'green')} HP"
+        verbose = compact
+        if self.source_description:
+            verbose = f"{compact} ({self.source_description})"
+        detailed = verbose
+
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.HEAL,
+            source_name=target_name,
+            source_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+            compact=compact,
+            verbose=verbose,
+            detailed=detailed,
+            data=HealLogData(
+                entity_name=target_name,
+                entity_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+                amount=amount,
+                source_description=self.source_description
+            ).model_dump(),
             success=True
         )
 

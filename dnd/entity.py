@@ -13,7 +13,7 @@ from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 from dnd.core.events import (
     Event, EventPhase, EventQueue, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
-    TakeDamageEvent, DeathEvent, EquipmentSlot
+    TakeDamageEvent, DeathEvent, HealEvent, EquipmentSlot
 )
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
@@ -903,36 +903,87 @@ class Entity(BaseBlock):
                 damage_type,
                 source_entity_uuid=source_entity_uuid
             )
+            # Update event with actual damage after resistances so combat log is accurate
+            take_damage_event = take_damage_event.model_copy(
+                update={"final_damage": actual_damage}
+            )
 
-        # Complete the event
-        # NOTE: Combat log auto-captured via callback in phase_to() for top-level events.
-        # Sub-events (with parent_event) are collected by their parent's sub_entries.
-        take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
-
-        # Handle death if HP <= 0
-        # Note: Relentless Rage already had its chance at EFFECT phase
-        # If HP <= 0 here, the save either failed or wasn't triggered
+        # Handle death BEFORE completing TakeDamageEvent so DeathEvent appears
+        # as a sub-entry in the damage combat log (collected by _collect_child_combat_logs)
+        # Relentless Rage already had its chance at EFFECT phase above.
         if not self.has_hp and "Dead" not in self.active_conditions:
-            # Fire DeathEvent through phases - death_handler applies Dead condition at EXECUTION
-            # NOTE: Combat log auto-captured via callback in phase_to() at COMPLETION
-            # DeathEvent is a child of the TakeDamageEvent that caused it
+            killer = Entity.get(source_entity_uuid)
+            killer_name = killer.name if killer and isinstance(killer, Entity) else ""
             death_event = DeathEvent(
                 source_entity_uuid=source_entity_uuid,
                 target_entity_uuid=self.uuid,
                 entity_uuid=self.uuid,
                 entity_name=self.name,
                 killer_uuid=source_entity_uuid,
+                killer_name=killer_name,
                 final_hp=self.get_hp(),
                 phase=EventPhase.DECLARATION,
                 parent_event=take_damage_event.uuid
             )
-            # Progress through phases - death_handler applies Dead condition at EXECUTION
             death_event = death_event.phase_to(EventPhase.EXECUTION)
             death_event = death_event.phase_to(EventPhase.EFFECT)
-            # phase_to(COMPLETION) auto-generates combat_log and calls callback
             death_event = death_event.phase_to(EventPhase.COMPLETION)
 
+        # Complete the TakeDamageEvent — collects DeathEvent (if any) as sub_entry
+        take_damage_event = take_damage_event.phase_to(EventPhase.COMPLETION)
+
         return actual_damage
+
+    def receive_healing(
+        self,
+        amount: int,
+        source_entity_uuid: UUID,
+        source_description: str = "",
+        parent_event: Optional[UUID] = None
+    ) -> int:
+        """
+        Apply healing with proper event firing.
+
+        Fires HealEvent through phases, allowing handlers to modify or cancel.
+        Generates combat log entry at COMPLETION.
+
+        Args:
+            amount: Healing amount to apply
+            source_entity_uuid: UUID of the entity/source providing healing
+            source_description: Description for combat log (e.g. "Second Wind: d10(7)+1")
+            parent_event: Optional parent event UUID for combat log nesting
+
+        Returns:
+            Actual HP restored (may be less than amount due to max HP cap or blocking)
+        """
+        heal_event = HealEvent(
+            name="Heal",
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=self.uuid,
+            target_entity_name=self.name,
+            total_healing=amount,
+            source_description=source_description,
+            parent_event=parent_event,
+            phase=EventPhase.DECLARATION
+        )
+
+        heal_event = heal_event.phase_to(EventPhase.EXECUTION)
+        heal_event = heal_event.phase_to(EventPhase.EFFECT)
+
+        # Apply healing if not canceled
+        actual_healing = 0
+        if not heal_event.canceled:
+            if self.health.is_healing_blocked():
+                heal_event = heal_event.model_copy(update={"was_blocked": True})
+            else:
+                hp_before = self.get_hp()
+                self.health.heal(amount)
+                actual_healing = self.get_hp() - hp_before
+
+        heal_event = heal_event.model_copy(update={"actual_healing": actual_healing})
+        heal_event.phase_to(EventPhase.COMPLETION)
+
+        return actual_healing
 
     def get_senses(self) -> Senses:
         """Override BaseBlock virtual — returns Senses block for subjective perception."""
