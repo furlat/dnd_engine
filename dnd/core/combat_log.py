@@ -186,6 +186,14 @@ class EntitySpottedLogData(BaseModel):
     stealth_dc: int
 
 
+class HealLogData(BaseModel):
+    """Structured data for healing events."""
+    entity_name: str
+    entity_uuid: str
+    amount: int
+    source_description: str
+
+
 class SelfActionLogData(BaseModel):
     """Structured data for self-targeting actions."""
     entity_name: str

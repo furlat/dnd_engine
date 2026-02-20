@@ -774,11 +774,17 @@ class SecondWind(BaseAction):
         healing_roll = healing_dice.roll
         total_healing = healing_roll.total
 
-        # Apply healing
-        hp_before = entity.get_hp()
-        entity.health.heal(total_healing)
-        hp_after = entity.get_hp()
-        actual_healing = hp_after - hp_before
+        # Build source description from roll for combat log
+        roll_results = healing_roll.results
+        roll_str = str(roll_results[0]) if isinstance(roll_results, list) and roll_results else "?"
+        source_desc = f"Second Wind: d10({roll_str})+{self.fighter_level}"
+
+        # Apply healing via event system
+        actual_healing = entity.receive_healing(
+            total_healing, entity.uuid,
+            source_description=source_desc,
+            parent_event=execution_event.uuid
+        )
 
         effect_event = execution_event.phase_to(
             EventPhase.EFFECT,
@@ -1696,9 +1702,11 @@ def survivor_processor(
     con_mod = entity.ability_scores.constitution.modifier
     healing = 5 + con_mod
 
-    hp_before = current_hp
-    entity.health.heal(healing)
-    actual_healed = entity.get_hp() - hp_before
+    actual_healed = entity.receive_healing(
+        healing, entity.uuid,
+        source_description=f"Survivor: 5+{con_mod}",
+        parent_event=event.uuid
+    )
 
     return event.model_copy(update={
         "modified": True,
