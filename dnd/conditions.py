@@ -1068,6 +1068,7 @@ class Concentrating(BaseCondition):
                 ability_name="constitution",
                 dc=dc,
                 source_entity_name=entity.name,
+                target_entity_name=entity.name,
                 parent_event=event.uuid  # Link to damage event
             )
 
