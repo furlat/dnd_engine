@@ -75,7 +75,9 @@
       "Bash(for f in examples/test_shove.py examples/test_spike_growth.py examples/test_grease.py examples/test_spirit_guardians.py examples/test_cloudkill.py examples/test_web.py examples/test_info_leak_fixes.py examples/test_available_actions_perf.py examples/test_light_source_cleanup.py examples/test_lighting_system.py)",
       "Bash(for f in examples/combat_basic.py examples/combat_ranged.py examples/combat_conditions.py examples/spatial_events_test.py)",
       "Bash(xargs cat:*)",
-      "Bash(/tmp/detailed_analysis.md:*)"
+      "Bash(/tmp/detailed_analysis.md:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(do python examples/test_stealth_system.py)"
     ]
   }
 }

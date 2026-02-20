@@ -1535,6 +1535,9 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
     dc = condition.base_dc + condition.check_count
     skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
     stealth_roll, check_event = entity.roll_d20_event(skill_bonus, RollType.CHECK, skill_name="stealth")
+    # Link as child of the triggering event so it appears as a sub-entry in combat log
+    check_event.parent_event = event.uuid
+    event.add_child_event(check_event)
     success = stealth_roll.total >= dc
 
     if success:
