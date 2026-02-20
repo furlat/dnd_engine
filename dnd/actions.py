@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent
 from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_block import LightLevel
@@ -1386,10 +1386,28 @@ class Hide(BaseAction):
         if not entity or not isinstance(entity, Entity):
             return execution_event.cancel(status_message="Entity not found")
 
-        # Roll Stealth check (d20 + stealth bonus, fires D20RollResultEvent for handlers)
+        # Roll Stealth check via SkillCheckEvent (generates combat log with roll details)
         skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
         stealth_roll = entity.roll_d20(skill_bonus, RollType.CHECK, skill_name="stealth")
         stealth_result = stealth_roll.total
+
+        # Create SkillCheckEvent as child — no DC (Hide sets stealth DC, not pass/fail)
+        check_event = SkillCheckEvent(
+            name="Stealth Check",
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid,
+            skill_name="stealth",
+            bonus=skill_bonus,
+            dice_roll=stealth_roll,
+            parent_event=execution_event.uuid,
+            source_entity_name=entity.name,
+            phase=EventPhase.EFFECT,
+        )
+        # Phase to COMPLETION to generate combat log
+        check_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Stealth check: {stealth_result}"
+        )
 
         # Apply Hidden condition (no duration — removed by triggers)
         hidden = Hidden(
