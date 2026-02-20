@@ -51,9 +51,10 @@ Example: `source .venv/bin/activate && python -m cli.agent --token {TOKEN} move 
 
 ## Notebook
 
-Your notebook is managed by the orchestrator. It will prompt you to write
-observations between turns. **Do not write the notebook during your turn** —
-focus on game actions only. Your previous notes appear in the turn prompt.
+Your notebook is at `{NOTEBOOK_PATH}`. **Do not write the notebook during your
+turn** — focus on game actions only. Your previous notes appear in the turn
+prompt. After the game ends, you will be asked to write a post-game reflection
+to this file using the Write tool.
 
 ## How Actions Work — CRITICAL
 

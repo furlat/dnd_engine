@@ -978,17 +978,19 @@ def run_post_game_reflection(
     if combat_log_text:
         sections.append(f"Combat log (final turns):\n{combat_log_text}")
 
+    notebook_path = slot.notebook_path or "(unknown)"
     prompt = (
         f"The game is over.\n\n"
         + "\n\n".join(sections)
         + "\n\n"
-        f"Please write a post-game reflection to your notebook. Include:\n"
+        f"Please write a post-game reflection to your notebook at "
+        f"`{notebook_path}` using the Write tool. Include:\n"
         f"1. What strategies worked and what didn't\n"
         f"2. Things you didn't understand about the game mechanics\n"
         f"3. Commands that behaved unexpectedly or bugs you think you found\n"
         f"4. What you would do differently next time\n"
         f"5. Any confusion about the rules or available actions\n\n"
-        f"Write your reflections to your notebook, then you're done."
+        f"Use the Write tool to write the full reflection to `{notebook_path}`."
     )
     result = run_claude_turn(slot, prompt, max_turns=5)
     result.wait_for_drain(timeout=60)
