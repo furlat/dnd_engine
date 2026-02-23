@@ -229,6 +229,10 @@ When an event is registered with EventQueue, it finds matching handlers by trigg
 
 **DO NOT call both** - this registers the handler twice and it will fire twice!
 
+**`enabled` toggle**: Every handler has `enabled: bool = True`. When disabled, `__call__` returns `None` immediately. Use `entity.set_handler_enabled("Shield", False)` to toggle. See `claude_docs/HANDLERS.md` for the full handler catalog and toggle API.
+
+**Handler discovery**: `entity.get_event_handler_by_name(name)`, `entity.get_event_handlers_by_name(name)`, `entity.set_handler_enabled_by_uuid(uuid, enabled)`.
+
 For dice manipulation patterns (Great Weapon Fighting, etc.), see `claude_docs/IMPLEMENTATION_GUIDE.md`.
 
 ### SpatialHandlers (Zone Spells)
@@ -430,24 +434,36 @@ return outs, [], sub_conditions_uuids, [], effect_event  # 5-tuple
 
 ```
 BaseBlock.remove_condition(name) → BaseBlock._remove_condition_tree(condition)
-  ├── Recurse into sub_conditions (same block, parent-child)
-  ├── Recurse into linked_conditions (other BaseBlocks via BaseBlock.remove_condition_by_uuid)
-  └── Call condition.cleanup_own_state() (removes own modifiers/handlers only)
+  ├── 1. Recurse into sub_conditions (same block, parent-child)
+  ├── 2. Recurse into linked_conditions (other BaseBlocks via BaseBlock.remove_condition_by_uuid)
+  ├── 3. Call condition.cleanup_own_state() (removes own modifiers/handlers only)
+  └── 4. Notify parent via reverse link (parent_link + child_removal_policy)
 ```
 
-**Two condition linkage types on BaseCondition:**
-- `sub_conditions: List[UUID]` - Child conditions on **same block** (e.g., Paralyzed → Incapacitated)
+**Three condition linkage types on BaseCondition:**
+- `sub_conditions: List[UUID]` - Child conditions on **same block** (e.g., Paralyzed → Incapacitated). Parent tracks children, `parent_condition` field provides reverse link.
 - `linked_conditions: List[Tuple[UUID, UUID]]` - Conditions on **other BaseBlocks** (entities, tiles, items) (e.g., Concentrating → HoldPersonEffect on target, zone spells → tile conditions). Added via `add_linked_condition(target_block_uuid, condition_uuid)`.
+- `parent_link: Optional[Tuple[UUID, UUID]]` - **Reverse link** `(parent_block_uuid, parent_condition_uuid)` set automatically by `add_linked_condition()`. Enables child→parent notification when a linked child is removed.
+
+**`child_removal_policy`** on the parent condition controls what happens when a linked child is removed:
+- `"none"` (default) — No notification. Parent stays active.
+- `"any"` — Remove parent when **any** child is removed. Cascades to remaining siblings via forward `linked_conditions`.
+- `"last"` — Remove parent when the **last** applied child is removed. Used by `Concentrating`.
 
 **Example - Concentration Spell cleanup chain:**
 ```
-Caster: Concentrating(spell_name="Hold Person")
-            │ linked_conditions
-            └──► Target: HoldPersonEffect
+Caster: Concentrating(spell_name="Hold Person", child_removal_policy="last")
+            │ linked_conditions (forward)          ▲ parent_link (reverse)
+            └──► Target: HoldPersonEffect ─────────┘
                         │ sub_conditions
                         └──► Paralyzed
 ```
-When concentration breaks, `BaseBlock._remove_condition_tree()` traverses the entire tree: removes HoldPersonEffect from target, which removes Paralyzed as sub-condition.
+
+**Two cleanup directions:**
+- **Forward (parent→child)**: Concentration breaks → `_remove_condition_tree()` removes HoldPersonEffect via `linked_conditions` → Paralyzed removed as sub-condition.
+- **Reverse (child→parent)**: HoldPersonEffect removed (e.g., target saves/dispel) → step 4 checks `parent_link` → policy is `"last"`, no remaining siblings → `Concentrating` auto-removed from caster.
+
+**Recursion safety**: `remove_condition()` pops from `active_conditions` + `active_conditions_by_uuid` BEFORE calling `_remove_condition_tree()`. The reverse link guard checks `parent_cond.name in parent_block.active_conditions` — if the parent is already mid-removal (popped), the guard skips. This prevents infinite loops in both directions.
 
 ### Modifier Placement Guide
 
@@ -513,7 +529,7 @@ Entity.action_templates → get_available_actions() → AvailableActionsResult
 Use actions have `is_item_use=True` and `source_item_uuid` on `AvailableActionInfo`. They are routed by `execute_by_index()` to `execute_use_action()` automatically.
 
 **Functional API** (`dnd/actions_functional.py`):
-- `setup_standard_actions(entity)` - Registers Move, Jump, Dash, Dodge, Disengage + weapon attacks
+- `setup_standard_actions(entity)` - Registers Move, Jump, Dash, Dodge, Disengage, DropConcentration + weapon attacks
 - `execute_by_index(entity, name, idx)` - Execute by target index (routes item use actions automatically)
 - `execute_use_action(entity, item_uuid, action_name, target)` - Execute a use action from a UsableItem
 
@@ -536,13 +552,13 @@ Attack validates range and LOS, then:
 
 All D&D conditions are in `dnd/conditions.py` — read the class definitions for effect details (self effects, attacker effects, sub-conditions).
 
-Fighter features (L1-18 + Champion): `dnd/classes/fighter.py`, `dnd/classes/fighter_factory.py`. Barbarian features (L1-20 + Berserker): `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`, `dnd/classes/rage.py`.
+Fighter features (L1-18 + Champion): `dnd/classes/fighter.py`, `dnd/classes/fighter_factory.py`. Barbarian features (L1-20 + Berserker): `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`, `dnd/classes/rage.py`. Paladin features (Divine Smite): `dnd/classes/paladin.py`.
 
 See `claude_docs/CLASS_SYSTEM.md` for complete feature tables, the `_remove()` cleanup pattern, and implementation examples.
 
 ### Spell System
 
-40+ spells across 7 schools. See `dnd/spells/__init__.py` for `CANTRIPS` through `LEVEL_9_SPELLS` dictionaries and `ALL_SPELLS` lookup.
+40+ spells across 7 schools. See `dnd/spells/__init__.py` for `CANTRIPS` through `LEVEL_9_SPELLS` dictionaries and `ALL_SPELLS` lookup. Shield spell (reaction, +5 AC): `register_shield_reaction(entity)` in `dnd/spells/abjuration.py`. Divine Smite (per-level handlers): `register_divine_smite(entity)` in `dnd/classes/paladin.py`.
 
 **Base classes**: `SpellAction(BaseAction)` and `SpellEvent(ActionEvent)` in `dnd/actions.py`.
 
@@ -565,10 +581,12 @@ register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
 Concentration spells are fully implemented:
 - **One spell limit**: Casting a new concentration spell ends the old one
 - **CON saves on damage**: DC = max(10, damage/2)
-- **Automatic cleanup**: Uses `linked_conditions` to clean up spell effects on targets when concentration breaks
+- **Forward cleanup**: `linked_conditions` removes spell effects when concentration breaks (damage, new spell, death)
+- **Reverse cleanup**: `parent_link` + `child_removal_policy="last"` auto-removes `Concentrating` when spell effects end independently (target saves, dispel, effect removed)
 - **Spell-specific effects**: Each concentration spell creates a spell-specific condition (e.g., `HoldPersonEffect`) with the actual effect (e.g., `Paralyzed`) as a sub-condition
+- **DropConcentration action**: Free action (0 cost) to voluntarily end concentration. Registered via `setup_standard_actions()`, validates that entity is concentrating.
 
-See `examples/test_concentration.py` and `examples/test_concentration_spells.py` for tests.
+See `examples/test_concentration.py`, `examples/test_concentration_spells.py`, and `examples/test_child_parent_notification.py` for tests.
 
 #### Stealth System (Layer 1)
 
@@ -947,7 +965,7 @@ See `claude_docs/CLI_GUIDE.md` for full agent command reference and session deta
 **Entity & Blocks**: `dnd/entity.py`, `dnd/blocks/` (abilities, skills, saving_throws, health, equipment, inventory, action_economy, sensory, spellcasting, base_item)
 **Actions**: `dnd/actions.py`, `dnd/actions_functional.py`, `dnd/reactions.py`
 **Conditions**: `dnd/conditions.py`, `dnd/core/base_conditions.py`
-**Classes**: `dnd/classes/` (fighter, barbarian, rage, feats, dice_processor_utils + factories)
+**Classes**: `dnd/classes/` (fighter, barbarian, paladin, rage, feats, dice_processor_utils + factories)
 **Items**: `dnd/items/` (weapons, armors, test_items, test_reactions)
 **Spells**: `dnd/spells/` (evocation, abjuration, enchantment, conjuration, necromancy, illusion, transmutation)
 **Spatial**: `dnd/core/gridmap.py`, `dnd/core/shadowcast.py`, `dnd/core/dijkstra.py`, `dnd/tiles.py`, `dnd/tile_conditions.py`
@@ -964,6 +982,7 @@ See `claude_docs/CLI_GUIDE.md` for full agent command reference and session deta
 | `claude_docs/LIGHTING_SYSTEM.md` | Working on lighting, darkvision, or incremental senses updates |
 | `claude_docs/VISION_HIDING_COVER_PLAN.md` | Working on stealth, invisibility, or cover |
 | `claude_docs/TERRAIN_MOVEMENT_SYSTEM.md` | Working on terrain, movement costs, or zone spells |
+| `claude_docs/HANDLERS.md` | Working on event handlers, reactions, or the enabled toggle system |
 | `claude_docs/CLI_GUIDE.md` | Using or modifying the CLI or agent commands |
 | `claude_docs/archive/MASTER_SUMMARY.md` | Project status, what's implemented, roadmap |
 

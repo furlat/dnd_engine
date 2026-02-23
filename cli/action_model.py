@@ -30,6 +30,8 @@ class ShortcutRegistry:
         # Meta commands
         "s", "h", "q", "?",
         "la", "list",
+        # Toggle
+        "tog",
         # History
         "pt", "nt", "ct", "ft",
     }

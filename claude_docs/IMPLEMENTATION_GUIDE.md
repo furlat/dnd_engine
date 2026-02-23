@@ -355,7 +355,8 @@ def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[E
 Entity.remove_condition(name) → BaseBlock._remove_condition_tree(condition)
   ├── 1. Recurse into sub_conditions (same block, parent-child)
   ├── 2. Recurse into linked_conditions (other blocks via block.remove_condition_by_uuid)
-  └── 3. Call condition.cleanup_own_state() (removes own modifiers/handlers/spatial_handlers only)
+  ├── 3. Call condition.cleanup_own_state() (removes own modifiers/handlers/spatial_handlers only)
+  └── 4. Notify parent via reverse link (parent_link + child_removal_policy)
 ```
 
 **BaseBlock._remove_condition_tree():**
@@ -375,6 +376,22 @@ def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
 
     # 3. Clean up this condition's OWN state only
     condition.cleanup_own_state(expire=expire, parent_event=parent_event)
+
+    # 4. Notify linked parent of child removal (reverse link)
+    if condition.parent_link is not None:
+        parent_block_uuid, parent_cond_uuid = condition.parent_link
+        parent_cond = BaseCondition.get(parent_cond_uuid)
+        if (parent_cond and parent_cond.applied and parent_cond.name):
+            parent_block = BaseBlock.get(parent_block_uuid)
+            if parent_block and parent_cond.name in parent_block.active_conditions:
+                policy = parent_cond.child_removal_policy
+                if policy == "any":
+                    parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
+                elif policy == "last":
+                    remaining = sum(1 for _, cid in parent_cond.linked_conditions
+                                    if (c := BaseCondition.get(cid)) and c.applied)
+                    if remaining == 0:
+                        parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
 ```
 
 **cleanup_own_state()** removes:
@@ -382,6 +399,8 @@ def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
 - All event handlers via `remove_event_handlers()`
 - All spatial handlers via `remove_spatial_handlers()`
 - Sets `self.applied = False`
+
+**Step 4 recursion safety**: `remove_condition()` pops from `active_conditions` BEFORE calling `_remove_condition_tree()`. The reverse link guard checks `parent_cond.name in parent_block.active_conditions` — if parent is mid-removal (already popped), guard skips. No infinite loops.
 
 **Important**: Never call the old `condition.remove()` directly - use `Entity.remove_condition(name)`.
 
@@ -568,15 +587,24 @@ Use `linked_conditions` when Block A causes a condition on Block B, and removing
 ```python
 # BaseCondition fields:
 linked_conditions: List[Tuple[UUID, UUID]] = []  # (target_block_uuid, condition_uuid)
+parent_link: Optional[Tuple[UUID, UUID]] = None   # (parent_block_uuid, parent_condition_uuid) — auto-set
+child_removal_policy: Literal["none", "any", "last"] = "none"  # parent notification policy
 
 # Methods:
 condition.add_linked_condition(target_block_uuid, effect_condition_uuid)
+# ^^ also auto-sets child.parent_link = (self.target_entity_uuid, self.uuid)
 ```
+
+**Reverse link system**: `add_linked_condition()` automatically sets `parent_link` on the child condition, enabling child→parent notification. The `child_removal_policy` on the parent controls what happens:
+- `"none"` (default) — No notification. Use for fire-and-forget links.
+- `"any"` — Remove parent when any child removed. Cascades to all remaining siblings.
+- `"last"` — Remove parent when the last applied child removed. Used by `Concentrating`.
 
 **Example - Concentration Spell:**
 ```python
-# Structure:
-# Caster: Concentrating → linked_conditions → Target: SpellEffect → sub_conditions → Paralyzed
+# Structure (bidirectional):
+# Caster: Concentrating ──linked_conditions──► Target: SpellEffect ──sub_conditions──► Paralyzed
+#                        ◄──parent_link───────
 
 # In spell's _apply():
 # 1. Apply spell-specific effect to target
@@ -586,15 +614,24 @@ target.add_condition(spell_effect)
 # 2. Apply Concentrating to caster
 concentration = Concentrating(source=caster.uuid, target=caster.uuid, spell_name="Hold Person")
 caster.add_condition(concentration)
+# Concentrating has child_removal_policy="last" by default
 
-# 3. Link via linked_conditions
+# 3. Link via linked_conditions (auto-sets spell_effect.parent_link)
 concentration.add_linked_condition(target.uuid, spell_effect.uuid)
 
-# Cleanup chain when concentration breaks:
-# Entity.remove_condition("Concentrating") → BaseBlock._remove_condition_tree()
-#   → removes linked conditions on other blocks (HoldPersonEffect on target entity)
-#   → HoldPersonEffect removal removes sub-conditions (Paralyzed)
-#   → calls condition.cleanup_own_state() for modifiers/handlers
+# Forward cleanup (concentration breaks from damage/new spell/death):
+# caster.remove_condition("Concentrating") → _remove_condition_tree()
+#   → removes HoldPersonEffect from target via linked_conditions
+#   → Paralyzed removed as sub-condition
+#   → step 4: child's parent_link checked, but parent already popped → guard skips (no loop)
+
+# Reverse cleanup (target saves/dispelled/effect removed):
+# target.remove_condition("Hold Person") → _remove_condition_tree()
+#   → Paralyzed removed as sub-condition
+#   → cleanup_own_state()
+#   → step 4: parent_link → Concentrating, policy "last", remaining=0
+#     → caster.remove_condition("Concentrating")
+#       → linked_conditions tries HoldPersonEffect (by_uuid=None, already removed) → no-op
 ```
 
 **Example - Zone Spell (Tile Conditions):**
@@ -603,14 +640,15 @@ concentration.add_linked_condition(target.uuid, spell_effect.uuid)
 condition.add_linked_condition(tile.uuid, tile_condition.uuid)
 ```
 
-When the condition is removed, `_remove_condition_tree()` iterates `linked_conditions` and removes each linked condition from its target block (whether Entity or Tile).
+When the condition is removed, `_remove_condition_tree()` iterates `linked_conditions` and removes each linked condition from its target block (whether Entity or Tile). If the child has a `parent_link`, it can notify the parent via `child_removal_policy`.
 
-### Two Linkage Types Summary
+### Three Linkage Types Summary
 
-| Field | Target | Use Case | Cleanup |
-|-------|--------|----------|---------|
-| `sub_conditions` | Same block | Paralyzed → Incapacitated | BaseBlock recurses same-block |
-| `linked_conditions` | Other blocks (entities, tiles, etc.) | Concentrating → spell effect on target, zone spell → tile conditions | BaseBlock calls `target_block.remove_condition_by_uuid()` |
+| Field | Target | Direction | Use Case | Cleanup |
+|-------|--------|-----------|----------|---------|
+| `sub_conditions` | Same block | Parent→child (`parent_condition` reverse) | Paralyzed → Incapacitated | BaseBlock recurses same-block |
+| `linked_conditions` | Other blocks | Parent→child (forward) | Concentrating → spell effect, zone → tiles | `target_block.remove_condition_by_uuid()` |
+| `parent_link` | Parent block | Child→parent (reverse) | SpellEffect → Concentrating | Step 4: check `child_removal_policy` |
 
 ---
 

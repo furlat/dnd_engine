@@ -1,21 +1,177 @@
 """Abjuration spells - protection and defense.
 
-Contains: MageArmor, ProtectionFromEnergy, Stoneskin
+Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin
 """
 from typing import Optional, List, Tuple
 from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType
+from dnd.core.base_actions import TargetType, spell_slot_cost_type
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range
-from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
+from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier
 from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.conditions import Concentrating
+
+
+# =============================================================================
+# SHIELD SPELL (1st-level Abjuration, Reaction)
+# =============================================================================
+
+class ShieldBuff(BaseCondition):
+    """Shield spell AC buff. +5 AC until start of caster's next turn.
+
+    Applied by the Shield reaction handler when an attack targets the entity.
+    Removed at turn start via a turn-start handler.
+    """
+    name: str = "Shield"
+    description: str = "+5 AC until start of your next turn"
+    condition_category: str = "status"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target or not isinstance(target, Entity):
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        target_uuid = self.target_entity_uuid
+        outs: List[Tuple[UUID, UUID]] = []
+        handler_uuids: List[UUID] = []
+
+        # Add +5 AC modifier
+        mod = NumericalModifier.create(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target_uuid,
+            name="Shield",
+            value=5
+        )
+        mod_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(mod)
+        outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
+
+        # Turn-start handler to remove this condition
+        def shield_turn_start_processor(event: Event, handler_source_uuid: UUID) -> Optional[Event]:
+            """Remove Shield buff at the start of the caster's turn."""
+            _ = handler_source_uuid
+            if event.source_entity_uuid != target_uuid:
+                return None
+            entity = Entity.get(target_uuid)
+            if entity and "Shield" in entity.active_conditions:
+                entity.remove_condition("Shield", parent_event=event)
+            return None
+
+        handler = EventHandler(
+            name="Shield: Turn Start Removal",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_START,
+                    event_phase=EventPhase.EXECUTION,
+                    event_source_entity_uuid=target_uuid
+                )
+            ],
+            event_processor=shield_turn_start_processor
+        )
+        target.add_event_handler(handler)
+        handler_uuids.append(handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Shield: +5 AC to {target.name}"
+        )
+        return outs, handler_uuids, [], [], effect_event
+
+
+def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """Shield reaction: when attacked, spend reaction + spell slot for +5 AC.
+
+    Fires at ATTACK @ EXECUTION phase (before roll and AC comparison).
+    Adds +5 to the event's AC ModifiableValue and applies ShieldBuff condition.
+    """
+    # Only react to attacks targeting this entity
+    if event.target_entity_uuid != source_entity_uuid:
+        return None
+
+    entity = Entity.get(source_entity_uuid)
+    if not entity or not isinstance(entity, Entity):
+        return None
+
+    # Already have Shield buff active — skip
+    if "Shield" in entity.active_conditions:
+        return None
+
+    # Need reaction
+    if not entity.action_economy.can_afford("reactions", 1):
+        return None
+
+    # Need a spell slot (level 1+)
+    slot_level = entity.get_lowest_spell_slot(1)
+    if slot_level is None:
+        return None
+
+    # Must be an AttackEvent with AC to modify
+    if not isinstance(event, AttackEvent) or not event.ac:
+        return None
+
+    # All checks passed — apply Shield
+
+    # 1. Add +5 AC directly to the event's AC ModifiableValue (affects this attack)
+    event.ac.self_static.add_value_modifier(
+        NumericalModifier.create(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=source_entity_uuid,
+            name="Shield (reaction)",
+            value=5
+        )
+    )
+
+    # 2. Consume reaction + spell slot
+    entity.action_economy.consume("reactions", 1)
+    entity.action_economy.consume(spell_slot_cost_type(slot_level), 1)
+
+    # 3. Apply ShieldBuff condition for subsequent attacks until turn start
+    buff = ShieldBuff(
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=source_entity_uuid
+    )
+    entity.add_condition(buff, parent_event=event)
+
+    return event.model_copy(update={
+        "modified": True,
+        "status_message": f"{entity.name} casts Shield (+5 AC)"
+    })
+
+
+def create_shield_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
+    """Create a Shield reaction handler for an entity."""
+    return EventHandler(
+        name="Shield",
+        source_entity_uuid=source_entity_uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.ATTACK,
+                event_phase=EventPhase.EXECUTION,
+                event_target_entity_uuid=source_entity_uuid
+            )
+        ],
+        event_processor=shield_reaction_processor,
+        player_toggleable=True
+    )
+
+
+def register_shield_reaction(entity: Entity) -> None:
+    """Register the Shield reaction handler on an entity.
+
+    The entity must be a spellcaster with spell slots.
+    The handler can be toggled via entity.set_handler_enabled("Shield", enabled).
+    """
+    handler = create_shield_reaction_handler(entity.uuid)
+    entity.add_event_handler(handler)
 
 
 # =============================================================================

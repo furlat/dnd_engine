@@ -136,6 +136,14 @@ from dnd.classes.rage import (
     FrenzyFeature,
 )
 
+# Paladin features
+from dnd.classes.paladin import (
+    create_divine_smite_processor,
+    create_divine_smite_handler,
+    register_divine_smite,
+    MAX_SMITE_DICE,
+)
+
 __all__ = [
     # Dice manipulation - core utility
     "create_modified_dice_roll",
@@ -222,4 +230,9 @@ __all__ = [
     "FrenziedStrike",
     "Frenzy",
     "FrenzyFeature",
+    # Paladin features
+    "create_divine_smite_processor",
+    "create_divine_smite_handler",
+    "register_divine_smite",
+    "MAX_SMITE_DICE",
 ]

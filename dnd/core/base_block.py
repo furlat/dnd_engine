@@ -691,6 +691,35 @@ class BaseBlock(BaseModel):
             return None
         event_handler.remove() #this is already handling the removal from the event queue and the dicts
 
+    def get_event_handler_by_name(self, name: str) -> Optional[EventHandler]:
+        """Find the first event handler on this block matching the given name (case-insensitive)."""
+        name_lower = name.lower()
+        for handler in self.event_handlers.values():
+            if handler.name.lower() == name_lower:
+                return handler
+        return None
+
+    def get_event_handlers_by_name(self, name: str) -> List[EventHandler]:
+        """Find all event handlers on this block matching the given name (case-insensitive)."""
+        name_lower = name.lower()
+        return [h for h in self.event_handlers.values() if h.name.lower() == name_lower]
+
+    def set_handler_enabled(self, name: str, enabled: bool) -> bool:
+        """Enable or disable the first player-toggleable handler matching the given name. Returns True if found."""
+        handler = self.get_event_handler_by_name(name)
+        if handler is not None and handler.player_toggleable:
+            handler.enabled = enabled
+            return True
+        return False
+
+    def set_handler_enabled_by_uuid(self, handler_uuid: UUID, enabled: bool) -> bool:
+        """Enable or disable a specific player-toggleable handler by UUID. Returns True if found."""
+        handler = self.event_handlers.get(handler_uuid)
+        if handler is not None and handler.player_toggleable:
+            handler.enabled = enabled
+            return True
+        return False
+
     def _remove_condition_from_dicts(self, condition: BaseCondition) -> None:
         if not self.allow_events_conditions:
             return None
@@ -753,7 +782,8 @@ class BaseBlock(BaseModel):
         # Full tree traversal cleanup
         self._remove_condition_tree(condition, expire=expire, parent_event=parent_event)
 
-    def remove_condition_by_uuid(self, condition_uuid: UUID) -> None:
+    def remove_condition_by_uuid(self, condition_uuid: UUID,
+                                 parent_event: Optional[Event] = None) -> None:
         """Remove a condition by UUID. Used for cross-block cleanup."""
         if not self.allow_events_conditions:
             return
@@ -761,7 +791,7 @@ class BaseBlock(BaseModel):
         if condition is None:
             return
         if condition.name is not None:
-            self.remove_condition(condition.name)
+            self.remove_condition(condition.name, parent_event=parent_event)
 
     def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
                                parent_event: Optional[Event] = None) -> None:
@@ -781,10 +811,33 @@ class BaseBlock(BaseModel):
         for target_uuid, cond_uuid in condition.linked_conditions:
             target_block = BaseBlock.get(target_uuid)
             if target_block is not None:
-                target_block.remove_condition_by_uuid(cond_uuid)
+                target_block.remove_condition_by_uuid(cond_uuid, parent_event=parent_event)
 
         # 3. Own state cleanup
         condition.cleanup_own_state(expire=expire, parent_event=parent_event)
+
+        # 4. Notify linked parent of child removal (reverse link)
+        if condition.parent_link is not None:
+            parent_block_uuid, parent_cond_uuid = condition.parent_link
+            parent_cond = BaseCondition.get(parent_cond_uuid)
+            if (parent_cond is not None
+                    and isinstance(parent_cond, BaseCondition)
+                    and parent_cond.applied
+                    and parent_cond.name is not None):
+                parent_block = BaseBlock.get(parent_block_uuid)
+                if parent_block is not None and parent_cond.name in parent_block.active_conditions:
+                    # Guard passed: parent is still active (not mid-removal)
+                    policy = parent_cond.child_removal_policy
+                    if policy == "any":
+                        parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
+                    elif policy == "last":
+                        remaining = sum(
+                            1 for _, cid in parent_cond.linked_conditions
+                            if (c := BaseCondition.get(cid)) is not None
+                            and isinstance(c, BaseCondition) and c.applied
+                        )
+                        if remaining == 0:
+                            parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
 
     def advance_duration(self, condition_name: str) -> bool:
         """Progress condition duration, remove if expired. No saving throws.

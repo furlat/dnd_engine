@@ -886,6 +886,20 @@ def format_actions(actions: dict, entity_name: str) -> str:
             tag_str = " " + tag_str
         lines.append(f"  {action_name} ({cost_label}): {status}{tag_str}")
 
+    # Reactions/Handlers (private to this entity)
+    handler_details = actions.get("handler_details", [])
+    if handler_details:
+        lines.append("")
+        lines.append("REACTIONS:")
+        for h in handler_details:
+            name = h.get("name", "???")
+            enabled = h.get("enabled", True)
+            status = "[ON] " if enabled else "[OFF]"
+            trigger = h.get("trigger_event", "")
+            trigger_str = f" ({trigger})" if trigger else ""
+            lines.append(f"  {status} {name}{trigger_str}")
+        lines.append("  Toggle: toggle \"<name>\" on/off")
+
     # Object actions (Pick Up, Open Door, Attack Object)
     object_actions = actions.get("object_actions", [])
     if object_actions:
@@ -1108,6 +1122,61 @@ def cmd_actions(client: APIClient) -> int:
         return 1
 
     print(format_actions(actions, entity_name))
+    return 0
+
+
+def cmd_handlers(client: APIClient) -> int:
+    """Display all handlers for my entity with enabled/disabled state."""
+    if not ensure_session(client):
+        print("ERROR: Not connected. Run 'connect' first.")
+        return 1
+
+    entity_uuid = client.current_entity_uuid
+    if not entity_uuid:
+        print("ERROR: No entity assigned")
+        return 1
+
+    try:
+        data = client.get_handlers(entity_uuid)
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return 1
+
+    handlers = data.get("handlers", [])
+    if not handlers:
+        print("No handlers registered.")
+        return 0
+
+    print("Handlers:")
+    for h in handlers:
+        name = h.get("name", "???")
+        enabled = h.get("enabled", True)
+        status = "[ON] " if enabled else "[OFF]"
+        trigger = h.get("trigger_event", "")
+        trigger_str = f" ({trigger})" if trigger else ""
+        print(f"  {status} {name}{trigger_str}")
+    return 0
+
+
+def cmd_toggle_handler(client: APIClient, handler_name: str, enabled: bool) -> int:
+    """Toggle a handler on or off."""
+    if not ensure_session(client):
+        print("ERROR: Not connected. Run 'connect' first.")
+        return 1
+
+    entity_uuid = client.current_entity_uuid
+    if not entity_uuid:
+        print("ERROR: No entity assigned")
+        return 1
+
+    try:
+        client.toggle_handler(handler_name, enabled, entity_uuid)
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return 1
+
+    state_str = "enabled" if enabled else "disabled"
+    print(f"OK: {handler_name} {state_str}")
     return 0
 
 
@@ -2021,6 +2090,10 @@ def main():
         print("Items & Environment:")
         print("  use <name|N>         Use object action by name or index")
         print("")
+        print("Reactions/Handlers:")
+        print("  handlers             Show all handlers with enabled/disabled state")
+        print("  toggle <name> on/off Toggle a handler on or off")
+        print("")
         print("Turn:")
         print("  end                  End turn")
         return 1
@@ -2090,6 +2163,20 @@ def main():
         elif command in ["dash", "dodge", "disengage"]:
             # Shortcuts that route to self-action
             return cmd_self_action(client, command.capitalize())
+
+        elif command == "handlers":
+            return cmd_handlers(client)
+
+        elif command == "toggle":
+            if len(sys.argv) < 4:
+                print("Usage: python -m cli.agent toggle <handler_name> on/off")
+                return 1
+            handler_name = sys.argv[2]
+            toggle_state = sys.argv[3].lower()
+            if toggle_state not in ("on", "off"):
+                print("ERROR: toggle state must be 'on' or 'off'")
+                return 1
+            return cmd_toggle_handler(client, handler_name, toggle_state == "on")
 
         elif command == "end":
             return cmd_end(client)

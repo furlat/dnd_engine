@@ -2,7 +2,7 @@ from pydantic import Field
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, DurationType, ConditionApplicationEvent
 
 from dnd.entity import Entity
-from typing import Dict, Any, Optional, List, Tuple, Type
+from typing import Dict, Any, Optional, List, Literal, Tuple, Type
 from dnd.core.modifiers import (  AdvantageModifier, ContextAwareAdvantage,
                                  AutoHitModifier, AdvantageStatus, AdvantageModifier, AutoHitStatus,
                                    ContextualNumericalModifier, NumericalModifier,
@@ -1005,6 +1005,7 @@ class Concentrating(BaseCondition):
     name: str = "Concentrating"
     description: str = "Concentrating on a spell"
     condition_category: ConditionCategory = ConditionCategory.STATUS
+    child_removal_policy: Literal["none", "any", "last"] = "last"
 
     # What spell is being concentrated on
     spell_name: str = ""

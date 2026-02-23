@@ -379,6 +379,30 @@ class APIClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_handlers(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+        """Get all event handlers for an entity."""
+        uuid = entity_uuid or self._current_entity_uuid
+        if not uuid:
+            raise ValueError("No entity UUID")
+        resp = self.client.get(f"/entity/{uuid}/handlers")
+        resp.raise_for_status()
+        return resp.json()
+
+    def toggle_handler(self, handler_name: str, enabled: bool,
+                       entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+        """Toggle a handler's enabled state."""
+        session_id = self._require_session()
+        uuid = entity_uuid or self._current_entity_uuid
+        if not uuid:
+            raise ValueError("No entity UUID")
+        resp = self.client.post(f"/entity/{uuid}/handlers/{handler_name}/toggle", json={
+            "session_id": session_id,
+            "entity_uuid": uuid,
+            "enabled": enabled,
+        })
+        resp.raise_for_status()
+        return resp.json()
+
     @property
     def current_entity_uuid(self) -> Optional[str]:
         """Get the current entity UUID."""

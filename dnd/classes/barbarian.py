@@ -1201,7 +1201,8 @@ def create_retaliation_handler(source_entity_uuid: UUID) -> EventHandler:
                 event_phase=EventPhase.EFFECT
             )
         ],
-        event_processor=retaliation_processor
+        event_processor=retaliation_processor,
+        player_toggleable=True
     )
 
 

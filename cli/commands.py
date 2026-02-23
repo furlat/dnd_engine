@@ -47,6 +47,9 @@ class MetaCommand(Enum):
     FILTER_ITEMS = "filter_items"
     FILTER_ATTACKS = "filter_attacks"
     FILTER_MOVE = "filter_move"
+    # Handler toggle
+    HANDLERS = "handlers"
+    TOGGLE = "toggle"
 
 
 # Command aliases
@@ -88,6 +91,11 @@ ALIASES: Dict[str, str] = {
     "spells": "filter_spells",
     "items": "filter_items",
     "attacks": "filter_attacks",
+    # Handler toggle
+    "handlers": "handlers",
+    "reactions": "handlers",
+    "toggle": "toggle",
+    "tog": "toggle",
 }
 
 
@@ -279,6 +287,12 @@ def execute_meta_command(
 
         elif cmd.command == MetaCommand.FOW_MODE.value:
             return handle_fow_mode(cmd)
+
+        elif cmd.command == MetaCommand.HANDLERS.value:
+            return handle_handlers(client, state)
+
+        elif cmd.command == MetaCommand.TOGGLE.value:
+            return handle_toggle(cmd, client, state)
 
         elif cmd.command in (MetaCommand.FILTER_ACTIONS.value, MetaCommand.FILTER_SPELLS.value,
                              MetaCommand.FILTER_ITEMS.value, MetaCommand.FILTER_ATTACKS.value,
@@ -495,6 +509,72 @@ def handle_history_first(state: GameState) -> Optional[str]:
 # =============================================================================
 # Tile Inspection
 # =============================================================================
+
+def handle_handlers(client: APIClient, state: GameState) -> Optional[str]:
+    """Show all event handlers with enabled/disabled state."""
+    entity_uuid = state.turn.get("current_entity_uuid") if state.turn else None
+    if not entity_uuid:
+        display.set_output(["No active entity."])
+        return "refresh"
+
+    try:
+        data = client.get_handlers(entity_uuid)
+    except Exception as e:
+        display.set_output([f"Error getting handlers: {e}"])
+        return "refresh"
+
+    handlers = data.get("handlers", [])
+    if not handlers:
+        display.set_output(["No handlers registered."])
+        return "refresh"
+
+    lines = ["[bold]Handlers:[/bold]"]
+    for h in handlers:
+        name = h.get("name", "???")
+        enabled = h.get("enabled", True)
+        trigger = h.get("trigger_event", "")
+        if enabled:
+            status = "[green][ON][/green] "
+        else:
+            status = "[red][OFF][/red]"
+        trigger_str = f" [dim]({trigger})[/dim]" if trigger else ""
+        lines.append(f"  {status} {name}{trigger_str}")
+    lines.append("[dim]Toggle: toggle <name> on/off[/dim]")
+
+    for line in lines:
+        display.console.print(line)
+    return None
+
+
+def handle_toggle(cmd: ParsedCommand, client: APIClient, state: GameState) -> Optional[str]:
+    """Toggle a handler on or off."""
+    if len(cmd.args) < 2:
+        display.set_output(["Usage: toggle <handler_name> on/off"])
+        return "refresh"
+
+    toggle_state = cmd.args[-1].lower()
+    if toggle_state not in ("on", "off"):
+        display.set_output(["Toggle state must be 'on' or 'off'"])
+        return "refresh"
+
+    handler_name = display.resolve_handler_name(" ".join(cmd.args[:-1]))
+    enabled = toggle_state == "on"
+
+    entity_uuid = state.turn.get("current_entity_uuid") if state.turn else None
+    if not entity_uuid:
+        display.set_output(["No active entity."])
+        return "refresh"
+
+    try:
+        client.toggle_handler(handler_name, enabled, entity_uuid)
+    except Exception as e:
+        display.set_output([f"Toggle error: {e}"])
+        return "refresh"
+
+    state_str = "ON" if enabled else "OFF"
+    display.set_output([f"{handler_name} [{state_str}]"])
+    return "refresh"
+
 
 def handle_tile_inspect(cmd: ParsedCommand, client: APIClient) -> Optional[str]:
     """Handle tile inspection command (? X Y).

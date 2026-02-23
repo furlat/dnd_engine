@@ -137,7 +137,8 @@ def create_intercept_handler(source_entity_uuid: UUID, charge_destination: Tuple
             event_type=EventType.STEP_MOVEMENT,
             event_phase=EventPhase.EFFECT
         )],
-        event_processor=create_intercept_processor(charge_destination)
+        event_processor=create_intercept_processor(charge_destination),
+        player_toggleable=True
     )
 
 
@@ -344,7 +345,8 @@ def create_dodge_roll_handler(source_entity_uuid: UUID) -> EventHandler:
             event_type=EventType.ATTACK,
             event_phase=EventPhase.EXECUTION
         )],
-        event_processor=dodge_roll_processor
+        event_processor=dodge_roll_processor,
+        player_toggleable=True
     )
 
 

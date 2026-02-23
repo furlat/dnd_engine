@@ -9,7 +9,7 @@ from dnd.spells.evocation import (
     ConeOfCold, CircleOfDeath, RayOfFrost, ScorchingRay,
     ShockingGrasp, GuidingBolt, GuidingBoltMarked, EldritchBlast
 )
-from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin
+from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing
@@ -179,4 +179,6 @@ __all__ = [
     "LEVEL_8_SPELLS",
     "LEVEL_9_SPELLS",
     "ALL_SPELLS",
+    # Reaction spells
+    "register_shield_reaction",
 ]

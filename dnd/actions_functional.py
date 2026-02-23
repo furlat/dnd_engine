@@ -28,7 +28,7 @@ from dnd.core.base_actions import (
 from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
-from dnd.actions import Move, Dash, Dodge, Disengage, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop
+from dnd.actions import Move, Dash, Dodge, Disengage, DropConcentration, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop
 from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler, create_death_handler
 from dnd.spells import ALL_SPELLS
 from dnd.blocks.base_item import UsableItem
@@ -59,6 +59,7 @@ def setup_standard_actions(entity: Entity) -> None:
     entity.register_action(Dodge(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Hide(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(DropConcentration(source_entity_uuid=entity.uuid, template=True))
     # Note: StandUp is no longer registered - Prone auto-stands at turn start (BG3 style)
     entity.register_action(Shove(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(PickUp(source_entity_uuid=entity.uuid, template=True))

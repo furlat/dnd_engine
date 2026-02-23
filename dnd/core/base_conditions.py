@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 from pydantic import Field, computed_field
-from typing import Dict, Any, Optional, Self, Union, List, Tuple
+from typing import Dict, Any, Optional, Self, Union, List, Tuple, Literal
 
 from pydantic import  model_validator
 from enum import Enum
@@ -192,6 +192,14 @@ class BaseCondition(BaseObject):
         default_factory=list,
         description="(target_block_uuid, condition_uuid) pairs for conditions placed on OTHER BaseBlocks (entities, tiles, items). Removed when this condition is removed."
     )
+    parent_link: Optional[Tuple[UUID, UUID]] = Field(
+        default=None,
+        description="(parent_block_uuid, parent_condition_uuid) — reverse link set by add_linked_condition()"
+    )
+    child_removal_policy: Literal["none", "any", "last"] = Field(
+        default="none",
+        description="'none'=no notification, 'any'=remove parent when any child removed, 'last'=remove parent when last child removed"
+    )
     
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
@@ -340,11 +348,18 @@ class BaseCondition(BaseObject):
         When this condition is removed, the linked condition will also be removed
         from the target block. Works for entities, tiles, and future items.
 
+        Also sets the reverse link (parent_link) on the child condition so that
+        when the child is removed, it can notify this parent based on child_removal_policy.
+
         Args:
             target_block_uuid: The UUID of the BaseBlock that has the condition
             condition_uuid: The UUID of the condition on that block
         """
         self.linked_conditions.append((target_block_uuid, condition_uuid))
+        # Set reverse link on child
+        child = BaseCondition.get(condition_uuid)
+        if child is not None and isinstance(child, BaseCondition) and self.target_entity_uuid is not None:
+            child.parent_link = (self.target_entity_uuid, self.uuid)
 
     def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
         
