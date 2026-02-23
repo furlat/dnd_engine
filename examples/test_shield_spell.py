@@ -264,6 +264,129 @@ def test_shield_buff_persists_for_ac():
     print("  PASSED: Shield buff persists for subsequent attacks")
 
 
+def test_shield_no_stacking_with_extra_reactions():
+    """Test 8: Shield does not stack to +10 AC even with 2 reactions available.
+
+    If Shield already applied +5 AC (condition active), a second attack
+    must NOT trigger Shield again — AC stays at +5, not +10.
+    """
+    print("\n=== Test 8: Shield Does Not Stack With Extra Reactions ===")
+    caster, enemy = setup_shield_scenario()
+
+    ac_base = caster.equipment.ac_bonus.normalized_score
+    print(f"  Base AC: {ac_base}")
+
+    # Give caster 2 reactions (hypothetical scenario)
+    caster.action_economy.reactions.self_static.add_value_modifier(
+        __import__('dnd.core.modifiers', fromlist=['NumericalModifier']).NumericalModifier.create(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            name="Extra Reaction",
+            value=1
+        )
+    )
+    assert caster.action_economy.reactions.normalized_score == 2, "Should have 2 reactions"
+    print(f"  Reactions available: {caster.action_economy.reactions.normalized_score}")
+
+    # First attack — Shield fires, +5 AC, consumes 1 reaction + 1 slot
+    mod_id = force_attack_hit(enemy)
+    attack1 = Attack(
+        source_entity_uuid=enemy.uuid,
+        target_entity_uuid=caster.uuid,
+        weapon_slot=WeaponSlot.MELEE_MAIN
+    )
+    attack1.apply()
+    remove_attack_modifier(enemy, mod_id)
+
+    ac_after_first = caster.equipment.ac_bonus.normalized_score
+    reactions_after_first = caster.action_economy.reactions.normalized_score
+    assert ac_after_first == ac_base + 5, f"AC should be +5: got {ac_after_first}"
+    assert "Shield" in caster.active_conditions, "Shield condition should be active"
+    print(f"  After 1st attack: AC={ac_after_first}, Reactions={reactions_after_first}")
+
+    # Second attack — Shield should NOT fire (condition already active)
+    enemy.action_economy.reset_all_costs()
+    mod_id = force_attack_hit(enemy)
+    attack2 = Attack(
+        source_entity_uuid=enemy.uuid,
+        target_entity_uuid=caster.uuid,
+        weapon_slot=WeaponSlot.MELEE_MAIN
+    )
+    attack2.apply()
+    remove_attack_modifier(enemy, mod_id)
+
+    ac_after_second = caster.equipment.ac_bonus.normalized_score
+    reactions_after_second = caster.action_economy.reactions.normalized_score
+    assert ac_after_second == ac_base + 5, f"AC must NOT stack to +10: got {ac_after_second}"
+    assert reactions_after_second == reactions_after_first, "No additional reaction consumed"
+    print(f"  After 2nd attack: AC={ac_after_second}, Reactions={reactions_after_second}")
+
+    print("  PASSED: Shield does not stack even with extra reactions")
+
+
+def test_shield_can_refire_after_buff_removed():
+    """Test 9: Shield CAN fire again if the buff was removed (e.g. counterspell/dispel).
+
+    If the first Shield's condition gets removed before the next attack,
+    the handler should fire again and apply a fresh +5 AC.
+    """
+    print("\n=== Test 9: Shield Refires After Buff Removed ===")
+    caster, enemy = setup_shield_scenario()
+
+    ac_base = caster.equipment.ac_bonus.normalized_score
+
+    # Give caster 2 reactions + extra spell slots
+    from dnd.core.modifiers import NumericalModifier
+    caster.action_economy.reactions.self_static.add_value_modifier(
+        NumericalModifier.create(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            name="Extra Reaction",
+            value=1
+        )
+    )
+
+    # First attack — Shield fires
+    mod_id = force_attack_hit(enemy)
+    attack1 = Attack(
+        source_entity_uuid=enemy.uuid,
+        target_entity_uuid=caster.uuid,
+        weapon_slot=WeaponSlot.MELEE_MAIN
+    )
+    attack1.apply()
+    remove_attack_modifier(enemy, mod_id)
+
+    assert "Shield" in caster.active_conditions
+    ac_after_first = caster.equipment.ac_bonus.normalized_score
+    assert ac_after_first == ac_base + 5
+    print(f"  After 1st Shield: AC={ac_after_first}")
+
+    # Simulate buff removal (e.g. counterspell, dispel magic, etc.)
+    caster.remove_condition("Shield")
+    assert "Shield" not in caster.active_conditions
+    ac_after_removal = caster.equipment.ac_bonus.normalized_score
+    assert ac_after_removal == ac_base, f"AC should revert to base: got {ac_after_removal}"
+    print(f"  After buff removed: AC={ac_after_removal}")
+
+    # Second attack — Shield should fire again since condition is gone
+    enemy.action_economy.reset_all_costs()
+    mod_id = force_attack_hit(enemy)
+    attack2 = Attack(
+        source_entity_uuid=enemy.uuid,
+        target_entity_uuid=caster.uuid,
+        weapon_slot=WeaponSlot.MELEE_MAIN
+    )
+    attack2.apply()
+    remove_attack_modifier(enemy, mod_id)
+
+    ac_after_second = caster.equipment.ac_bonus.normalized_score
+    assert ac_after_second == ac_base + 5, f"Shield should refire: AC expected {ac_base + 5}, got {ac_after_second}"
+    assert "Shield" in caster.active_conditions, "Shield buff should be active again"
+    print(f"  After 2nd Shield: AC={ac_after_second}")
+
+    print("  PASSED: Shield refires after buff removal")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("Shield Spell Tests")
@@ -276,6 +399,8 @@ if __name__ == "__main__":
     test_shield_no_spell_slots()
     test_shield_only_fires_once_per_round()
     test_shield_buff_persists_for_ac()
+    test_shield_no_stacking_with_extra_reactions()
+    test_shield_can_refire_after_buff_removed()
 
     print("\n" + "=" * 60)
     print("All Shield spell tests passed!")
