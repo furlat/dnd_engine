@@ -3,7 +3,7 @@
 Contains: SpikeGrowth
 """
 import random
-from typing import Optional, List
+from typing import Any, Optional, List
 from uuid import UUID
 
 from pydantic import Field
@@ -16,6 +16,7 @@ from dnd.core.modifiers import DamageType
 from dnd.entity import Entity
 from dnd.conditions import Concentrating
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.core.base_conditions import HazardFilter
 from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
 
 
@@ -35,9 +36,18 @@ class SpikeGrowthZone(ZoneControlCondition):
     zone_radius_feet: int = Field(default=20)
     adds_difficult_terrain: bool = Field(default=True)
 
+    # Tile markers — hazardous to everyone except caster, hidden (perception check)
+    marker_name: Optional[str] = Field(default="Spike Growth")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.NON_SOURCE)
+
     # Spell parameters
     spell_dc: int = Field(default=10, description="Spell DC for perception to notice")
     damage_dice: str = Field(default="2d4")
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        # Sync marker_stealth_dc from spell_dc (SRD: Perception check vs spell DC)
+        self.marker_stealth_dc = self.spell_dc
 
     def _has_entry_effect(self) -> bool:
         """Spike Growth damages entities when they enter."""

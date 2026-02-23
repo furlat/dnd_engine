@@ -154,6 +154,9 @@ class ActionTarget:
     affected_entity_names: Optional[List[str]] = None
     affected_count: Optional[int] = None
     affected_positions: Optional[List[Tuple[int, int]]] = None
+    # Hazard pathfinding fields
+    is_path_hazardous: bool = False
+    safe_path_cost: Optional[int] = None
 
     @classmethod
     def from_server(cls, data: Dict[str, Any]) -> 'ActionTarget':
@@ -170,7 +173,10 @@ class ActionTarget:
             affected_entity_uuids=data.get("affected_entity_uuids"),
             affected_entity_names=data.get("affected_entity_names"),
             affected_count=data.get("affected_count"),
-            affected_positions=[tuple(p) for p in data.get("affected_positions", [])] if data.get("affected_positions") else None
+            affected_positions=[tuple(p) for p in data.get("affected_positions", [])] if data.get("affected_positions") else None,
+            # Hazard fields
+            is_path_hazardous=data.get("is_path_hazardous", False),
+            safe_path_cost=data.get("safe_path_cost"),
         )
 
 

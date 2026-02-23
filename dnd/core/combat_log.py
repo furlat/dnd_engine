@@ -29,6 +29,7 @@ class CombatLogEntryType(str, Enum):
     SPELL_SAVE = "spell_save"  # Save-based spell effect on single target
     SPELL_DAMAGE = "spell_damage"  # Auto-hit spell damage (Magic Missile dart)
     ENTITY_SPOTTED = "entity_spotted"  # Observer spots a hiding entity
+    HAZARD_DETECTED = "hazard_detected"  # Observer detects a previously hidden hazard
 
 
 class CombatLogVerbosity(str, Enum):
@@ -182,6 +183,16 @@ class EntitySpottedLogData(BaseModel):
     target_name: str
     target_uuid: str
     target_position: Tuple[int, int]
+    passive_perception: int
+    stealth_dc: int
+
+
+class HazardDetectedLogData(BaseModel):
+    """Structured data for when an observer detects a hidden hazard."""
+    observer_name: str
+    observer_uuid: str
+    hazard_name: str
+    position: Tuple[int, int]
     passive_perception: int
     stealth_dc: int
 

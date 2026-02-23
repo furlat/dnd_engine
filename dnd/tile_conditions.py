@@ -25,7 +25,7 @@ from dnd.core.base_tiles import Tile
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, ConditionCategory, HazardFilter
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQueue, SpatialChangeEvent, SensesUpdateHint
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
@@ -87,6 +87,37 @@ class TileEffectCondition(BaseCondition):
         return super()._remove(event)
 
 
+class ZoneMarkerCondition(TileEffectCondition):
+    """Lightweight marker applied to tiles in a zone spell.
+    Pure data — no handlers, no modifiers. Just carries:
+    - name (zone spell name shown in API)
+    - hazard_filter (pathfinding avoidance)
+    - condition_stealth_dc (perception check to detect)
+    """
+    condition_category: ConditionCategory = ConditionCategory.CONDITION
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], [], [], [], effect_event
+
+
+class SpikeTrapCondition(TileEffectCondition):
+    """Marker condition on spike trap tiles. Does NOT create handlers —
+    the shared spatial handler handles damage. This is purely for:
+    - hazard_filter → pathfinding knows to avoid
+    - condition_stealth_dc → perception check to detect
+    - condition shows in API → display/agent sees "Spike Trap"
+    """
+    name: str = "Spike Trap"
+    description: str = "Sharp spikes deal damage when stepped on"
+    hazard_filter: HazardFilter = HazardFilter.ALL
+    condition_category: ConditionCategory = ConditionCategory.CONDITION
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], [], [], [], effect_event
+
+
 class ZoneControlCondition(BaseCondition):
     """
     Base condition for controlling a zone of tile effects.
@@ -136,6 +167,11 @@ class ZoneControlCondition(BaseCondition):
     # Light modifier tracking (separate from handlers)
     # Maps tile position -> light modifier UUID used with add_illumination/add_obscurement
     _light_modifier_uuids: Dict[Tuple[int, int], UUID] = PrivateAttr(default_factory=dict)
+
+    # Tile marker fields — subclasses set these for pathfinding/display
+    marker_name: Optional[str] = Field(default=None, description="Name for ZoneMarkerCondition on each tile (e.g. 'Spike Growth'). None = no markers.")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=None, description="HazardFilter for tile markers")
+    marker_stealth_dc: Optional[int] = Field(default=None, description="Stealth DC for tile markers (perception to detect)")
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -288,6 +324,44 @@ class ZoneControlCondition(BaseCondition):
                 EventQueue.register(event)
 
     # =========================================================================
+    # Tile Markers (zone name + hazard info on each tile)
+    # =========================================================================
+
+    def _apply_tile_markers(self, parent_event: Optional[Event] = None) -> None:
+        """Apply ZoneMarkerCondition to each tile in the zone.
+        Markers are tracked via linked_conditions → auto-cleanup when zone ends."""
+        if self.marker_name is None:
+            return
+
+        grid = get_map()
+        for pos in self.affected_positions:
+            tile = grid.get_tile(*pos)
+            if tile is None:
+                continue
+            marker = ZoneMarkerCondition(
+                name=self.marker_name,
+                hazard_filter=self.marker_hazard_filter,
+                condition_stealth_dc=self.marker_stealth_dc,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=tile.uuid,
+            )
+            tile.add_condition(marker, event=parent_event)
+            self.add_linked_condition(tile.uuid, marker.uuid)
+
+        # Fire batched path notification so safe paths recompute
+        if self.affected_positions and self.marker_hazard_filter is not None:
+            hint = SensesUpdateHint(requires_paths=True)
+            representative_pos = next(iter(self.affected_positions))
+            tile = grid.get_tile(*representative_pos)
+            if tile:
+                event = SpatialChangeEvent.tile_changed(
+                    representative_pos, walkable=True, visible=True,
+                    senses_hint=hint,
+                )
+                event = event.phase_to(EventPhase.COMPLETION)
+                EventQueue.register(event)
+
+    # =========================================================================
     # Light Modifiers (separate from terrain modifiers)
     # =========================================================================
 
@@ -382,6 +456,9 @@ class ZoneControlCondition(BaseCondition):
 
         # Apply light modifiers to zone tiles
         self._apply_light_modifiers()
+
+        # Apply tile markers (zone name + hazard info for pathfinding/display)
+        self._apply_tile_markers(parent_event=declaration_event)
 
         if declaration_event is not None:
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})

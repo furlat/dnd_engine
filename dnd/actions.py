@@ -176,6 +176,7 @@ class Move(BaseAction):
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="The end position of the movement")
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="The path of the movement")
     use_movement_cost: bool = Field(default=True, description="Whether to use the movement cost")
+    prefer_safe: bool = Field(default=True, description="If True, uses safe path avoiding hazards when available")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -208,7 +209,10 @@ class Move(BaseAction):
             source_entity = Entity.get(self.source_entity_uuid)
             if source_entity is None or not isinstance(source_entity, Entity):
                 return None
-            if self.end_position in source_entity.senses.paths:
+            # Prefer safe path when available and prefer_safe is True
+            if self.prefer_safe and self.end_position in source_entity.senses.safe_paths:
+                self.path = source_entity.senses.safe_paths[self.end_position]
+            elif self.end_position in source_entity.senses.paths:
                 self.path = source_entity.senses.paths[self.end_position]
 
     def set_target_position(self, position: Tuple[int, int]) -> None:
@@ -3041,7 +3045,7 @@ class PickUp(BaseAction):
             status_message=f"Validated Pick Up {item.name}"
         )
 
-    def _apply(self, execution_event: ActionEvent, **kwargs) -> ActionEvent:
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -3088,7 +3092,7 @@ class AttackObject(BaseAction):
             status_message=f"Validated Attack Object {item.name}"
         )
 
-    def _apply(self, execution_event: ActionEvent, **kwargs) -> ActionEvent:
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -3168,7 +3172,7 @@ class Drop(BaseAction):
             status_message="Validated Drop"
         )
 
-    def _apply(self, execution_event: ActionEvent, **kwargs) -> ActionEvent:
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if not entity or self.item_uuid is None:
             return execution_event.cancel(status_message="Entity or item not found")
