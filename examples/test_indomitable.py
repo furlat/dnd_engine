@@ -131,21 +131,27 @@ def test_indomitable_no_trigger_on_success():
 
     initial_uses = fighter.action_economy.resources["indomitable"].current
 
-    # Make an easy save (DC 1) - guaranteed to pass
-    request = caster.create_saving_throw_request(
-        target_entity_uuid=fighter.uuid,
-        ability_name="wisdom",
-        dc=1
-    )
-    _outcome, roll, success = fighter.saving_throw(request)
+    # Make an easy save (DC 1) - reroll if natural 1 (always fails in 5e)
+    for attempt in range(20):
+        # Reset indomitable resource each attempt in case nat-1 consumed it
+        fighter.action_economy.resources["indomitable"].current = initial_uses
+
+        request = caster.create_saving_throw_request(
+            target_entity_uuid=fighter.uuid,
+            ability_name="wisdom",
+            dc=1
+        )
+        _outcome, roll, success = fighter.saving_throw(request)
+        if success:
+            break
 
     final_uses = fighter.action_economy.resources["indomitable"].current
 
-    print(f"  Roll total: {roll.total}, DC: 1")
+    print(f"  Roll total: {roll.total}, DC: 1 (attempt {attempt + 1})")
     print(f"  Success: {success}")
     print(f"  Uses before: {initial_uses}, after: {final_uses}")
 
-    assert success, "Save should have succeeded with DC 1"
+    assert success, "Save should have succeeded with DC 1 (non-nat-1 roll)"
     assert final_uses == initial_uses, "Indomitable should NOT be used on success"
 
     print("  PASSED: Indomitable not consumed on successful save")

@@ -244,7 +244,8 @@ class APIClient:
 
     def execute_action(self, template_name: str, target_index: int = 0,
                         entity_uuid: Optional[str] = None,
-                        extra_target_uuids: Optional[List[str]] = None) -> Dict[str, Any]:
+                        extra_target_uuids: Optional[List[str]] = None,
+                        prefer_safe: bool = True) -> Dict[str, Any]:
         """Execute any action by template name and target index.
 
         This is the unified action execution method that works with all action types:
@@ -258,6 +259,7 @@ class APIClient:
             target_index: Index in valid_targets list (default 0 for self actions)
             entity_uuid: Entity performing action (defaults to current entity)
             extra_target_uuids: Additional target UUIDs for multi-target spells (e.g., Magic Missile darts)
+            prefer_safe: Use safe path avoiding hazards (default True). False = force shortest path.
         """
         session_id = self._require_session()
         uuid = entity_uuid or self._current_entity_uuid
@@ -267,7 +269,8 @@ class APIClient:
             "session_id": session_id,
             "entity_uuid": uuid,
             "template_name": template_name,
-            "target_index": target_index
+            "target_index": target_index,
+            "prefer_safe": prefer_safe
         }
         if extra_target_uuids:
             payload["extra_target_uuids"] = extra_target_uuids

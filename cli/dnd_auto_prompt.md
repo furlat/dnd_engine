@@ -20,7 +20,9 @@ The turn prompt includes initial state. After each action, the output shows upda
 
 | Command | Purpose |
 |---------|---------|
-| `move X Y` | Move to position — pick from listed targets |
+| `move X Y` | Move to position — auto-avoids hazards via safe path |
+| `move X Y short` | Move via shortest path (ignores hazards) |
+| `move ? X Y` | Preview path to position with hazard info |
 | `jump X Y` | Jump to position |
 | `attack N [T]` | Attack: N=action index, T=target index (default 0) |
 | `cast <spell> [N\|X Y]` | Cast spell at target index or position |
@@ -85,7 +87,7 @@ Your REACTIONS section (in available actions) shows handlers like Shield, Divine
 1. Scout: `inspect` unknowns, check map layout
 2. Environment: doors, levers, deactivate traps
 3. Focus fire: concentrate attacks on one target
-4. Avoid hazards: don't repeat a path that killed an ally
+4. Avoid hazards: `move` auto-uses safe path. Check `move ? X Y` for path details. Use `move X Y short` only if the hazard cost is worth it.
 5. Dash wisely: extra movement but costs your action
 
 ## Map Format
@@ -109,7 +111,7 @@ TILE DETAILS:
   (5,5): Floor, bright | [Fireball: Skeleton 1, Skeleton 2]
 ```
 
-- **Terrain**: Floor, Wall, Water, Spikes, etc.
+- **Terrain**: Floor, Wall, Water, etc.
 - **Light**: `bright`, `dim`, or `dark`. If you have a special sense (darkvision, etc.), tiles show `dark->dim` or similar to indicate the adjusted level.
 - **Entities**: Name (faction tag, HP, AC)
 - **Objects**: Items on floor, doors, levers
@@ -126,7 +128,7 @@ MEMORY (previously seen, not currently visible):
 
 ### ASCII Grid (use for spatial awareness)
 Below the data is an ASCII grid showing the same map visually.
-- `@` = You, `%` = Dead, `#` = Wall, `~` = Water, `^` = Hazard, `,` = Slow, `.` = Floor, `φ` = Item
+- `@` = You, `%` = Dead, `#` = Wall, `~` = Water, `^` = Hazard (avoid!), `,` = Slow, `.` = Floor, `φ` = Item
 - Letters/numbers = entities (see LEGEND line)
 - Dark tiles appear as spaces
 - **Always use coordinates from TILE DETAILS for commands, not grid counting.**

@@ -301,14 +301,36 @@ class GridMap:
             return False
         return not tile.blocks_walking(mode=mode)
 
+    def is_position_hazardous_for(self, x: int, y: int,
+                                  entity_uuid: Optional[UUID] = None) -> bool:
+        """Check if position is hazardous for a specific entity.
+        Checks tile conditions AND object conditions at position (not entities)."""
+        tile = self.get_tile(x, y)
+        if tile is not None and tile.is_hazardous_for(entity_uuid):
+            return True
+
+        # Check objects on tile (items placed on grid — e.g., bear traps, caltrops)
+        for obj_uuid in self._objects_by_position.get((x, y), set()):
+            obj = BaseBlock.get(obj_uuid)
+            if obj is not None and obj.is_hazardous_for(entity_uuid):
+                return True
+
+        return False
+
+    def is_position_hazardous(self, x: int, y: int) -> bool:
+        """Non-entity-aware hazard check. True if ANY hazard condition exists."""
+        return self.is_position_hazardous_for(x, y, entity_uuid=None)
+
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
-                        mode: MovementMode = MovementMode.WALKING) -> bool:
+                        mode: MovementMode = MovementMode.WALKING,
+                        walk_in_danger: bool = True) -> bool:
         """
         Check if position is walkable for a specific entity.
 
         Considers:
         1. Tile must exist and be walkable for the given movement mode
         2. Position must not be occupied by another blocking entity
+        3. If walk_in_danger=False, hazardous positions are treated as unwalkable
 
         Uses polymorphic dispatch: BaseBlock.get(uuid).blocks_walking() routes
         to Entity, Tile, or future item overrides. GridMap stays type-unaware.
@@ -325,6 +347,11 @@ class GridMap:
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+                return False
+
+        # Hazard avoidance when walk_in_danger=False
+        if not walk_in_danger:
+            if self.is_position_hazardous_for(x, y, requesting_entity_uuid):
                 return False
 
         return True
@@ -645,7 +672,8 @@ class GridMap:
 
     def compute_paths(self, start: Tuple[int, int], max_distance: Optional[int] = None,
                       requesting_entity_uuid: Optional[UUID] = None,
-                      movement_mode: MovementMode = MovementMode.WALKING
+                      movement_mode: MovementMode = MovementMode.WALKING,
+                      walk_in_danger: bool = True
                       ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
         """
         Compute all reachable positions and paths from start using Dijkstra.
@@ -656,6 +684,7 @@ class GridMap:
             requesting_entity_uuid: If provided, treats cells occupied by OTHER entities as blocked.
                                     The requesting entity's own position is always walkable.
             movement_mode: The movement mode to use for pathfinding (affects terrain costs)
+            walk_in_danger: If False, hazardous positions are treated as unwalkable
 
         Returns (distances_dict, paths_dict) where distances account for terrain costs.
         """
@@ -670,7 +699,7 @@ class GridMap:
         # Choose walkability function based on whether we're checking occupancy
         if requesting_entity_uuid is not None:
             def walkable_check(x: int, y: int) -> bool:
-                return self.is_walkable_for(x, y, requesting_entity_uuid, movement_mode)
+                return self.is_walkable_for(x, y, requesting_entity_uuid, movement_mode, walk_in_danger)
         else:
             def walkable_check(x: int, y: int) -> bool:
                 return self.is_walkable(x, y, movement_mode)

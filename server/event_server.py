@@ -1355,6 +1355,11 @@ def _serialize_target(t: AvailableTarget) -> dict:
         result["affected_count"] = t.affected_count
     if t.affected_positions:
         result["affected_positions"] = [list(p) for p in t.affected_positions]
+    # Hazard pathfinding fields
+    if t.is_path_hazardous:
+        result["is_path_hazardous"] = True
+        if t.safe_path_cost is not None:
+            result["safe_path_cost"] = t.safe_path_cost
     return result
 
 
@@ -1761,6 +1766,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
             request.target_index,
             extra_target_uuids=request.extra_target_uuids,
             available=available,
+            prefer_safe=request.prefer_safe,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1866,7 +1872,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
                 map_char=map_char,
             ))
     game_state = APIGameState(
-        grid=APIGrid.create(grid),
+        grid=APIGrid.create(grid, requesting_entity_uuid=entity.uuid),
         entities=[APIEntitySummary.create(e) for e in Entity.get_all_entities()],
         encounter=APIEncounter.create(sim.encounter) if sim.encounter else None,
         floor_objects=floor_objects,

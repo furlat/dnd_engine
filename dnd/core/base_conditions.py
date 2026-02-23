@@ -11,6 +11,13 @@ from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, Even
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 
 
+class HazardFilter(str, Enum):
+    """Who a hazardous condition affects. Used by pathfinding to determine safe routes."""
+    ALL = "all"                # Hazardous to everyone (Grease, Web, Spike Trap)
+    ENEMIES = "enemies"        # Hazardous to enemies of source (Spirit Guardians)
+    NON_SOURCE = "non_source"  # Hazardous to everyone except source (Spike Growth)
+
+
 class ConditionCategory(str, Enum):
     CONDITION = "condition"      # Real D&D conditions: Blinded, Prone, Paralyzed, etc.
     STATUS = "status"            # Turn-scoped action effects: Dashing, Dodging, Disengaging, Concentrating
@@ -199,6 +206,14 @@ class BaseCondition(BaseObject):
     child_removal_policy: Literal["none", "any", "last"] = Field(
         default="none",
         description="'none'=no notification, 'any'=remove parent when any child removed, 'last'=remove parent when last child removed"
+    )
+    hazard_filter: Optional[HazardFilter] = Field(
+        default=None,
+        description="Who this condition is hazardous to. None = not hazardous."
+    )
+    condition_stealth_dc: Optional[int] = Field(
+        default=None,
+        description="Perception DC to detect this condition on a tile. None = always visible."
     )
     
     @model_validator(mode="after")

@@ -220,7 +220,8 @@ def get_available_actions(entity: Entity) -> AvailableActionsResult:
     return entity.get_available_actions()
 
 
-def execute_action(entity: Entity, template_name: str, target: AvailableTarget) -> Optional[Event]:
+def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
+                    prefer_safe: bool = True) -> Optional[Event]:
     """Execute an action from template + target.
 
     This is the main execution API that creates an instance and applies it.
@@ -229,6 +230,7 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget) 
         entity: The entity executing the action
         template_name: Name of the action template to execute
         target: The target for the action
+        prefer_safe: For Move actions, use safe path avoiding hazards when available
 
     Returns:
         The resulting event, or None if the action failed
@@ -241,6 +243,9 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget) 
         raise ValueError(f"No template named {template_name}")
 
     # Create instance with appropriate target
+    # prefer_safe is only relevant for position-based movement actions (Move)
+    # but passing it generically is harmless — instantiate ignores unknown fields
+    # via model_copy(update=...). We only pass it for POSITION types.
     if template.target_type == TargetType.ENTITY:
         if target.target_uuid is None:
             raise ValueError("ENTITY action requires target_uuid")
@@ -259,13 +264,12 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget) 
     elif template.target_type == TargetType.POSITION_AOE:
         if target.position is None:
             raise ValueError("POSITION_AOE action requires position")
-        # Position is used, shape computes entities internally via get_all_targets()
         instance = template.instantiate(end_position=target.position)
 
     elif template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         if target.position is None:
             raise ValueError("POSITION action requires position")
-        instance = template.instantiate(end_position=target.position)
+        instance = template.instantiate(end_position=target.position, prefer_safe=prefer_safe)
 
     elif template.target_type == TargetType.OBJECT:
         if target.target_uuid is None:
@@ -284,6 +288,7 @@ def execute_by_index(
     target_index: int,
     extra_target_uuids: Optional[List[str]] = None,
     available: Optional[AvailableActionsResult] = None,
+    prefer_safe: bool = True,
 ) -> Optional[Event]:
     """Execute action by template name and target index.
 
@@ -345,7 +350,7 @@ def execute_by_index(
         # Convert string UUIDs to UUID objects
         target.extra_target_uuids = [UUID(uid) for uid in extra_target_uuids]
 
-    return execute_action(entity, template_name, target)
+    return execute_action(entity, template_name, target, prefer_safe=prefer_safe)
 
 
 # =============================================================================

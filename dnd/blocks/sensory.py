@@ -7,8 +7,9 @@ from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent, DeathEvent
+from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent, DeathEvent, EventQueue
 from dnd.core.base_block import SensesType, SenseMode, LightLevel
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData, HazardDetectedLogData
 
 
 class Senses(BaseBlock):
@@ -18,10 +19,23 @@ class Senses(BaseBlock):
     visible: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     walkable: Dict[Tuple[int,int],bool] = Field(default_factory=dict)
     paths: DefaultDict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=lambda: defaultdict(list))
+    safe_paths: Dict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=dict, description="Paths avoiding hazardous tiles (empty if no hazards)")
     sense_modes: List[SenseMode] = Field(default_factory=list, description="Special sense modes (Darkvision, Blindsight, etc.) with ranges")
     seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
     _paths_dirty: bool = PrivateAttr(default=False)
+    _last_passive_perception: int = PrivateAttr(default=0)
+    _last_sense_modes_hash: int = PrivateAttr(default=0)
 
+    def compute_sense_modes_hash(self) -> int:
+        """Hash of current sense modes for quick change detection."""
+        return hash(tuple(sorted(
+            (sm.sense_type.value, sm.range_feet) for sm in self.sense_modes
+        )))
+
+    def snapshot_perception(self, passive_perception: int) -> None:
+        """Store current perception state for change detection."""
+        self._last_passive_perception = passive_perception
+        self._last_sense_modes_hash = self.compute_sense_modes_hash()
 
     def has_sense(self, sense_type: SensesType) -> bool:
         """Check if entity has a sense type (any range)."""
@@ -207,6 +221,13 @@ class SpatialSensesCallback:
         # Handle DEATH events - dead entity no longer blocks paths
         if event.event_type == EventType.DEATH:
             self._handle_death_event(event)
+            return
+
+        # Handle condition changes on self → check perception capabilities update
+        if event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL):
+            if event.phase == EventPhase.COMPLETION:
+                if event.target_entity_uuid == self.owner_uuid:
+                    self._handle_own_perception_change()
             return
 
         # Handle spatial events only
@@ -429,3 +450,130 @@ class SpatialSensesCallback:
             if effective_light.value <= LightLevel.DARKNESS.value:
                 return  # Too dark to see
         self.senses.objects[object_uuid] = position
+
+    def _handle_own_perception_change(self) -> None:
+        """Check if a condition change on self affected our perception capabilities.
+
+        Compares current perception state against snapshot. If changed:
+        - Sense modes changed → full visibility recompute (light filtering changes)
+        - Only passive perception changed → refilter entities + mark paths dirty
+        """
+        owner = BaseBlock.get(self.owner_uuid)
+        if owner is None:
+            return
+
+        current_perception = owner.get_passive_perception()
+        current_modes_hash = self.senses.compute_sense_modes_hash()
+
+        perception_changed = current_perception != self.senses._last_passive_perception
+        modes_changed = current_modes_hash != self.senses._last_sense_modes_hash
+
+        if not perception_changed and not modes_changed:
+            return  # No perception change — skip
+
+        # Save old values for combat log comparison
+        old_perception = self.senses._last_passive_perception
+
+        # Update snapshots
+        self.senses._last_passive_perception = current_perception
+        self.senses._last_sense_modes_hash = current_modes_hash
+
+        if modes_changed:
+            # Sense modes changed (Darkvision, Truesight, etc.)
+            # → Full visibility recompute (light filtering changes)
+            if self.update_visibility_func:
+                self.update_visibility_func()
+            self.senses._paths_dirty = True
+        else:
+            # Only passive perception changed → just refilter entities + hazard paths
+            self._refilter_all_visible_entities(old_perception, current_perception)
+            self.senses._paths_dirty = True
+
+    def _refilter_all_visible_entities(self, old_perception: int, new_perception: int) -> None:
+        """Re-check all entities in visible area for perceivability changes.
+
+        Also logs ENTITY_SPOTTED for newly visible hidden enemies and
+        HAZARD_DETECTED for newly detectable hidden hazards.
+        """
+        grid = get_map()
+        old_entities = set(self.senses.entities.keys())
+
+        new_entities: Dict[UUID, Tuple[int, int]] = {}
+        for pos in self.senses.visible:
+            for ent_uuid in grid.get_entities_at(pos):
+                if ent_uuid != self.owner_uuid:
+                    block = BaseBlock.get(ent_uuid)
+                    if block and block.is_perceivable_by(self.owner_uuid):
+                        tile = grid.get_tile(*pos)
+                        if tile:
+                            eff = tile.get_effective_light_for(self.owner_uuid, self.senses.position)
+                            if eff.value > LightLevel.DARKNESS.value:
+                                new_entities[ent_uuid] = pos
+                        else:
+                            new_entities[ent_uuid] = pos
+
+        self.senses.entities = new_entities
+
+        # Log newly spotted hidden enemies
+        newly_spotted = set(new_entities.keys()) - old_entities
+        owner = BaseBlock.get(self.owner_uuid)
+        if owner and newly_spotted:
+            for spotted_uuid in newly_spotted:
+                spotted = BaseBlock.get(spotted_uuid)
+                if spotted and spotted.stealth_dc is not None:
+                    log_entry = CombatLogEntry(
+                        entry_type=CombatLogEntryType.ENTITY_SPOTTED,
+                        source_name=owner.name,
+                        source_uuid=str(self.owner_uuid),
+                        target_name=spotted.name,
+                        target_uuid=str(spotted_uuid),
+                        compact=f"{{cyan:{owner.name}}} spots {{yellow:{spotted.name}}} (Perception {new_perception} vs Stealth DC {spotted.stealth_dc})",
+                        verbose=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {new_perception} vs Stealth DC {spotted.stealth_dc})",
+                        detailed=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {new_perception} vs Stealth DC {spotted.stealth_dc})",
+                        data=EntitySpottedLogData(
+                            observer_name=owner.name,
+                            observer_uuid=str(self.owner_uuid),
+                            target_name=spotted.name,
+                            target_uuid=str(spotted_uuid),
+                            target_position=spotted.position,
+                            passive_perception=new_perception,
+                            stealth_dc=spotted.stealth_dc
+                        ).model_dump()
+                    )
+                    EventQueue.push_combat_log(log_entry, self.owner_uuid)
+
+        # Log newly detected hidden hazards (perception increased)
+        if new_perception > old_perception and owner:
+            self._log_newly_detected_hazards(old_perception, new_perception)
+
+    def _log_newly_detected_hazards(self, old_pp: int, new_pp: int) -> None:
+        """Log hazards that became detectable due to perception increase."""
+        grid = get_map()
+        owner = BaseBlock.get(self.owner_uuid)
+        if not owner:
+            return
+        for pos in self.senses.visible:
+            tile = grid.get_tile(*pos)
+            if tile is None:
+                continue
+            for cond in tile.active_conditions.values():
+                if cond.condition_stealth_dc is not None and cond.hazard_filter is not None:
+                    # Was hidden before, visible now?
+                    if cond.condition_stealth_dc > old_pp and cond.condition_stealth_dc <= new_pp:
+                        log_entry = CombatLogEntry(
+                            entry_type=CombatLogEntryType.HAZARD_DETECTED,
+                            source_name=owner.name,
+                            source_uuid=str(self.owner_uuid),
+                            compact=f"{{cyan:{owner.name}}} detects {{red:{cond.name}}} at ({pos[0]},{pos[1]})",
+                            verbose=f"{{cyan:{owner.name}}} spots hidden {{red:{cond.name}}} at ({pos[0]},{pos[1]}) (Perception {new_pp} vs DC {cond.condition_stealth_dc})",
+                            detailed=f"{{cyan:{owner.name}}} spots hidden {{red:{cond.name}}} at ({pos[0]},{pos[1]}) (Perception {new_pp} vs DC {cond.condition_stealth_dc})",
+                            data=HazardDetectedLogData(
+                                observer_name=owner.name,
+                                observer_uuid=str(self.owner_uuid),
+                                hazard_name=cond.name if cond.name else "Unknown",
+                                position=pos,
+                                passive_perception=new_pp,
+                                stealth_dc=cond.condition_stealth_dc
+                            ).model_dump()
+                        )
+                        EventQueue.push_combat_log(log_entry, self.owner_uuid)

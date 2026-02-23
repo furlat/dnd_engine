@@ -39,7 +39,8 @@ def safe_execute_action(
     client: APIClient,
     template_name: str,
     target_index: int,
-    extra_target_uuids: Optional[List[str]] = None
+    extra_target_uuids: Optional[List[str]] = None,
+    prefer_safe: bool = True
 ) -> Optional[dict]:
     """Execute action with error handling. Returns result or None on error.
 
@@ -48,9 +49,12 @@ def safe_execute_action(
         template_name: Action template name
         target_index: Primary target index
         extra_target_uuids: Additional target UUIDs for multi-target spells (Magic Missile)
+        prefer_safe: Use safe path avoiding hazards (default True)
     """
     try:
-        return client.execute_action(template_name, target_index, extra_target_uuids=extra_target_uuids)
+        return client.execute_action(template_name, target_index,
+                                     extra_target_uuids=extra_target_uuids,
+                                     prefer_safe=prefer_safe)
     except httpx.HTTPStatusError as e:
         # Extract error detail from response if available
         try:
@@ -185,19 +189,49 @@ def try_execute_dynamic_position_action(cmd_str: str, args: List[str], client: A
         ])
         return "refresh"
 
+    # move ? X Y → path preview
+    if args[0] == "?" and len(args) >= 3:
+        try:
+            x, y = int(args[1]), int(args[2])
+        except ValueError:
+            display.set_output(["Invalid position. Usage: move ? X Y"])
+            return "refresh"
+        position = (x, y)
+        for target in action.valid_targets:
+            if target.position == position:
+                cost = target.path_cost or "?"
+                is_haz = target.is_path_hazardous
+                safe_cost = target.safe_path_cost
+                lines = [f"Path to ({x},{y}): {cost}ft" + (" [HAZARDOUS]" if is_haz else "")]
+                if is_haz:
+                    if safe_cost is not None:
+                        lines.append(f"Safe path: {safe_cost}ft (use 'move {x} {y}' for safe, 'move {x} {y} short' for shortest)")
+                    else:
+                        lines.append("No safe path — must cross hazard")
+                else:
+                    lines.append("Path is clear (no hazards)")
+                display.set_output(lines)
+                return "refresh"
+        display.set_output([f"({x},{y}) not reachable"])
+        return "refresh"
+
     # Parse coordinates
     try:
         x, y = int(args[0]), int(args[1])
     except ValueError:
         shortcut = registry.get_or_create_shortcut(action.template_name)
-        display.set_output([f"Invalid position. Usage: {shortcut} X Y"])
+        display.set_output([f"Invalid position. Usage: {shortcut} X Y [short]"])
         return "refresh"
+
+    # 'short' flag = force shortest path through hazards
+    prefer_safe = not (len(args) >= 3 and args[2].lower() == "short")
 
     # Execute
     position = (x, y)
     for target in action.valid_targets:
         if target.position == position:
-            result = safe_execute_action(client, action.template_name, target.index)
+            result = safe_execute_action(client, action.template_name, target.index,
+                                         prefer_safe=prefer_safe)
             if result is None:
                 return "refresh"  # Error already shown by safe_execute_action
             display.show_action_result(result, state.turn.get("current_entity_name", "You"))

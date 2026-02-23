@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from enum import Enum
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, HazardFilter
 from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
 
 from collections import defaultdict
@@ -474,6 +474,37 @@ class BaseBlock(BaseModel):
                 return False
 
         return True
+
+    def is_enemy_of(self, other_uuid: UUID) -> bool:
+        """Whether this block considers other_uuid an enemy.
+        Default: True (unknown blocks are enemies).
+        Entity overrides with faction-based logic."""
+        return True
+
+    def is_hazardous_for(self, entity_uuid: Optional[UUID] = None) -> bool:
+        """Whether this block has conditions that are hazardous to the given entity.
+        Checks hazard_filter and condition_stealth_dc on each active condition."""
+        for cond in self.active_conditions.values():
+            if cond.hazard_filter is None:
+                continue
+
+            # Can entity perceive this hazard?
+            if cond.condition_stealth_dc is not None and entity_uuid is not None:
+                observer = BaseBlock.get(entity_uuid)
+                if observer is not None and cond.condition_stealth_dc > observer.get_passive_perception():
+                    continue  # Can't see it → don't avoid it
+
+            # Who does it affect?
+            if cond.hazard_filter == HazardFilter.ALL:
+                return True
+            if cond.hazard_filter == HazardFilter.NON_SOURCE and entity_uuid != cond.source_entity_uuid:
+                return True
+            if cond.hazard_filter == HazardFilter.ENEMIES and entity_uuid is not None:
+                observer = BaseBlock.get(entity_uuid)
+                if observer is not None and observer.is_enemy_of(cond.source_entity_uuid):
+                    return True
+
+        return False
 
     def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
         """

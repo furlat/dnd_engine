@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, BaseCost
-from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent
+from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent, HazardFilter
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent, SpatialChangeEvent
 from dnd.core.modifiers import DamageType, NumericalModifier
@@ -41,15 +41,14 @@ class CallLightningStrike(BaseAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
 
-    def _create_event(self, **kwargs) -> Event:
+    def _create_event(self) -> Event:
         """Create a generic action event."""
         return Event(
             name=self.name,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             event_type=EventType.CAST_SPELL,
-            phase=EventPhase.DECLARATION,
-            **kwargs
+            phase=EventPhase.DECLARATION
         )
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:
@@ -681,6 +680,10 @@ class GreaseZone(ZoneControlCondition):
     zone_radius_feet: int = Field(default=10)
     adds_difficult_terrain: bool = Field(default=True)
 
+    # Tile markers — hazardous to everyone, always visible
+    marker_name: Optional[str] = Field(default="Grease")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+
     # Spell parameters
     spell_dc: int = Field(default=10)
 
@@ -1076,6 +1079,10 @@ class WebZone(ZoneControlCondition):
     zone_radius_feet: int = Field(default=20)
     adds_difficult_terrain: bool = Field(default=True)
 
+    # Tile markers — hazardous to everyone, always visible
+    marker_name: Optional[str] = Field(default="Web")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+
     # Spell parameters
     spell_dc: int = Field(default=10)
 
@@ -1290,6 +1297,10 @@ class CloudkillZone(ZoneControlCondition):
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=20)
     adds_difficult_terrain: bool = Field(default=False)  # Just obscured, not difficult
+
+    # Tile markers — hazardous to everyone, always visible
+    marker_name: Optional[str] = Field(default="Cloudkill")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
 
     # Spell parameters
     spell_dc: int = Field(default=10)
@@ -1710,6 +1721,10 @@ class SpiritGuardiansZone(ZoneControlCondition):
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=15)
     adds_difficult_terrain: bool = Field(default=False)
+
+    # Tile markers — hazardous to enemies only, always visible
+    marker_name: Optional[str] = Field(default="Spirit Guardians")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ENEMIES)
 
     # Spell parameters
     spell_dc: int = Field(default=10)

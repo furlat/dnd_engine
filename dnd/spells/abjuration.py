@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType, spell_slot_cost_type
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, ConditionCategory
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier
 from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
@@ -30,7 +30,7 @@ class ShieldBuff(BaseCondition):
     """
     name: str = "Shield"
     description: str = "+5 AC until start of your next turn"
-    condition_category: str = "status"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:

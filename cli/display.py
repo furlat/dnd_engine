@@ -460,7 +460,7 @@ def _get_terrain_char(tile: Dict[str, Any]) -> Tuple[str, str]:
     is_hazardous = tile.get("is_hazardous", False)
     walking_cost = tile.get("walking_cost", 1)
 
-    if is_hazardous or tile_name == "Spikes":
+    if is_hazardous:
         return "^", f"red dim {FOG_BG}"
     elif walking_cost > 1 or tile_name == "Difficult Terrain":
         return ",", f"yellow dim {FOG_BG}"
@@ -670,7 +670,7 @@ def render_map_content(
                 is_hazardous = tile.get("is_hazardous", False)
                 walking_cost = tile.get("walking_cost", 1)
 
-                if is_hazardous or tile_name == "Spikes":
+                if is_hazardous:
                     char, style = "^", f"bold red {light_bg}".strip()
                 elif walking_cost > 1 or tile_name == "Difficult Terrain":
                     char, style = ",", f"yellow {light_bg}".strip()
@@ -721,7 +721,7 @@ def render_map_content(
     result.append(", ", style="yellow")
     result.append("Slow  ")
     result.append("^ ", style="bold red")
-    result.append("Spikes  ")
+    result.append("Hazard  ")
     if object_at:
         item_legend: Dict[str, str] = {}
         for obj in object_at.values():
@@ -2256,7 +2256,9 @@ def show_help():
 [bold underline]Commands:[/bold underline]
 
 [bold cyan]Position Actions:[/bold cyan]
-  m X Y / move X Y    Move to position (X, Y)
+  m X Y / move X Y    Move to position (auto-avoids hazards)
+  m X Y short         Move via shortest path (through hazards)
+  m ? X Y             Preview path to (X,Y) with hazard info
   j X Y / jump X Y    Jump to position (X, Y)
   <cmd>               Show valid positions on map (e.g., 'm' or 'j')
 
