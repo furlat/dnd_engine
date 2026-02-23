@@ -364,16 +364,52 @@ class SpatialSensesCallback:
             self.senses.entities[entity_uuid] = position
 
     def _refilter_entities_at(self, position: Tuple[int, int]) -> None:
-        """Re-check all entities at position. Add/remove from senses.entities."""
+        """Re-check all entities at position. Add/remove from senses.entities.
+
+        Generates ENTITY_SPOTTED combat logs for newly visible hidden enemies
+        (e.g., light change illuminates a hidden entity).
+        """
         grid = get_map()
+        # Capture old entities at this position
+        old_at_pos = {uuid for uuid, pos in self.senses.entities.items() if pos == position}
         # Remove entities currently tracked at this position
-        to_remove = [uuid for uuid, pos in self.senses.entities.items() if pos == position]
-        for uuid in to_remove:
+        for uuid in old_at_pos:
             del self.senses.entities[uuid]
         # Re-add entities that pass light + perceivability check
         for ent_uuid in grid.get_entities_at(position):
             if ent_uuid != self.owner_uuid:
                 self._try_add_visible_entity(ent_uuid, position)
+
+        # Log newly spotted hidden enemies
+        new_at_pos = {uuid for uuid, pos in self.senses.entities.items() if pos == position}
+        newly_spotted = new_at_pos - old_at_pos
+        if newly_spotted:
+            owner = BaseBlock.get(self.owner_uuid)
+            if owner:
+                pp = owner.get_passive_perception()
+                for spotted_uuid in newly_spotted:
+                    spotted = BaseBlock.get(spotted_uuid)
+                    if spotted and spotted.stealth_dc is not None:
+                        log_entry = CombatLogEntry(
+                            entry_type=CombatLogEntryType.ENTITY_SPOTTED,
+                            source_name=owner.name,
+                            source_uuid=str(self.owner_uuid),
+                            target_name=spotted.name,
+                            target_uuid=str(spotted_uuid),
+                            compact=f"{{cyan:{owner.name}}} spots {{yellow:{spotted.name}}} (Perception {pp} vs Stealth DC {spotted.stealth_dc})",
+                            verbose=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {pp} vs Stealth DC {spotted.stealth_dc})",
+                            detailed=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {pp} vs Stealth DC {spotted.stealth_dc})",
+                            data=EntitySpottedLogData(
+                                observer_name=owner.name,
+                                observer_uuid=str(self.owner_uuid),
+                                target_name=spotted.name,
+                                target_uuid=str(spotted_uuid),
+                                target_position=position,
+                                passive_perception=pp,
+                                stealth_dc=spotted.stealth_dc
+                            ).model_dump()
+                        )
+                        EventQueue.push_combat_log(log_entry, self.owner_uuid)
 
     def _recheck_entity_perceivability(self, entity_uuid: UUID) -> None:
         """Re-check if a specific entity should be in visible set."""

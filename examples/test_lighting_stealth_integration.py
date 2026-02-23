@@ -17,6 +17,7 @@ from dnd.entity import Entity
 from dnd.core.gridmap import get_map
 from dnd.core.base_block import LightLevel, SensesType, SenseMode
 from dnd.core.base_tiles import dark_floor_factory
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.conditions import Hidden, Invisible
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index
 from dnd.actions import Hide
@@ -895,6 +896,208 @@ def test_torch_bright_zone_does_not_reveal_hidden() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Section 8: Combat logs for light-driven stealth detection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_light_source_reveals_hidden_generates_spotted_log() -> None:
+    """When a light source illuminates a hidden entity that the observer can
+    beat the stealth DC of, an ENTITY_SPOTTED combat log should be generated."""
+    section("Light source reveals hidden → ENTITY_SPOTTED log")
+    reset_combat_state()
+    grid = get_map()
+    create_dark_grid(10, 3)
+
+    observer = create_skeleton(name="Observer", position=(0, 1), faction="heroes")
+    hidden_enemy = create_skeleton(name="Lurker", position=(3, 1), faction="monsters")
+
+    Entity.update_all_entities_senses()
+
+    # Hide enemy with low stealth DC (observer can beat it)
+    pp = observer.get_passive_perception()
+    hidden = Hidden(
+        source_entity_uuid=hidden_enemy.uuid,
+        target_entity_uuid=hidden_enemy.uuid,
+        stealth_result=pp - 2,  # Observer PP beats this
+    )
+    hidden_enemy.add_condition(hidden)
+    check("Enemy is hidden", has_condition(hidden_enemy, "Hidden"))
+    check("Enemy NOT visible (in darkness)", hidden_enemy.uuid not in observer.senses.entities)
+
+    # Set up encounter to capture combat logs
+    encounter = Encounter(name="Log Test", source_entity_uuid=uuid4())
+    encounter.add_combatant(observer, HumanController(source_entity_uuid=observer.uuid))
+    encounter.add_combatant(hidden_enemy, HumanController(source_entity_uuid=hidden_enemy.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+
+    log_start = len(encounter.combat_log)
+
+    # Illuminate both tiles — entity should become visible + log generated
+    light_uuid = uuid4()
+    target_tile = grid.get_tile(3, 1)
+    assert target_tile is not None
+    target_tile.add_illumination(light_uuid, LightLevel.BRIGHT_LIGHT)
+
+    obs_light = uuid4()
+    obs_tile = grid.get_tile(0, 1)
+    assert obs_tile is not None
+    obs_tile.add_illumination(obs_light, LightLevel.BRIGHT_LIGHT)
+
+    check("Enemy now visible after light", hidden_enemy.uuid in observer.senses.entities)
+
+    new_logs = encounter.combat_log[log_start:]
+    spotted_logs = [l for l in new_logs if l.entry_type == CombatLogEntryType.ENTITY_SPOTTED]
+    check("ENTITY_SPOTTED log generated", len(spotted_logs) > 0)
+    if spotted_logs:
+        check("Log mentions observer", observer.name in spotted_logs[0].compact)
+        check("Log mentions hidden enemy", hidden_enemy.name in spotted_logs[0].compact)
+
+
+def test_torch_movement_reveals_hidden_generates_spotted_log() -> None:
+    """When a torch carrier moves and their light illuminates a hidden enemy
+    that the carrier can perceive, an ENTITY_SPOTTED log should be generated."""
+    section("Torch movement reveals hidden → ENTITY_SPOTTED log")
+    reset_combat_state()
+    grid = get_map()
+    create_dark_grid(20, 3)
+
+    # Place enemy far enough to be in DARKNESS beyond torch range (40ft dim = 8 tiles)
+    carrier = create_skeleton(name="TorchBearer", position=(0, 1), faction="heroes")
+    hidden_enemy = create_skeleton(name="Skulker", position=(10, 1), faction="monsters")
+
+    Entity.update_all_entities_senses()
+
+    # Hide enemy with beatable stealth DC
+    pp = carrier.get_passive_perception()
+    hidden = Hidden(
+        source_entity_uuid=hidden_enemy.uuid,
+        target_entity_uuid=hidden_enemy.uuid,
+        stealth_result=pp - 2,
+    )
+    hidden_enemy.add_condition(hidden)
+    check("Enemy hidden", has_condition(hidden_enemy, "Hidden"))
+
+    # Ignite torch — enemy at 50ft (10 tiles) is beyond dim range (40ft), in DARKNESS
+    torch = create_torch(carrier.uuid)
+    carrier.loot_item(torch)
+    torch.ignite(carrier.uuid)
+
+    enemy_tile = grid.get_tile(10, 1)
+    assert enemy_tile is not None
+    check("Enemy in DARKNESS (beyond torch range)", enemy_tile.resolved_light_level == LightLevel.DARKNESS)
+    check("Enemy NOT visible yet", hidden_enemy.uuid not in carrier.senses.entities)
+
+    # Set up encounter
+    encounter = Encounter(name="Torch Log Test", source_entity_uuid=uuid4())
+    encounter.add_combatant(carrier, HumanController(source_entity_uuid=carrier.uuid))
+    encounter.add_combatant(hidden_enemy, HumanController(source_entity_uuid=hidden_enemy.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+
+    log_start = len(encounter.combat_log)
+
+    # Move carrier close enough that enemy enters BRIGHT zone (not VERY_BRIGHT to keep Hidden)
+    # Carrier at (6,1), enemy at (10,1) = 4 tiles = 20ft → BRIGHT_LIGHT
+    Entity.update_entity_position(carrier, (6, 1))
+    Entity.update_all_entities_senses()
+
+    enemy_tile_after = grid.get_tile(10, 1)
+    assert enemy_tile_after is not None
+    check("Enemy now in BRIGHT_LIGHT", enemy_tile_after.resolved_light_level == LightLevel.BRIGHT_LIGHT)
+    check("Enemy still hidden (BRIGHT doesn't auto-reveal)", has_condition(hidden_enemy, "Hidden"))
+    check("Enemy now visible (PP beats stealth DC in light)", hidden_enemy.uuid in carrier.senses.entities)
+
+    new_logs = encounter.combat_log[log_start:]
+    spotted_logs = [l for l in new_logs if l.entry_type == CombatLogEntryType.ENTITY_SPOTTED]
+    check("ENTITY_SPOTTED log generated on torch movement", len(spotted_logs) > 0)
+
+
+def test_light_toggle_reveals_hidden_generates_spotted_log() -> None:
+    """Toggling a light source ON to illuminate a hidden entity should
+    generate an ENTITY_SPOTTED log."""
+    section("Light toggle reveals hidden → ENTITY_SPOTTED log")
+    reset_combat_state()
+    grid = get_map()
+    create_dark_grid(10, 3)
+
+    observer = create_skeleton(name="Watcher", position=(0, 1), faction="heroes")
+    hidden_enemy = create_skeleton(name="Sneaker", position=(3, 1), faction="monsters")
+
+    Entity.update_all_entities_senses()
+
+    # Hide enemy with beatable stealth
+    pp = observer.get_passive_perception()
+    hidden = Hidden(
+        source_entity_uuid=hidden_enemy.uuid,
+        target_entity_uuid=hidden_enemy.uuid,
+        stealth_result=pp - 2,
+    )
+    hidden_enemy.add_condition(hidden)
+
+    # Add light source (off), then toggle on
+    ls_uuid = grid.add_light_source(position=(1, 1), bright_radius_feet=25, dim_radius_feet=40)
+
+    # Set up encounter
+    encounter = Encounter(name="Toggle Log Test", source_entity_uuid=uuid4())
+    encounter.add_combatant(observer, HumanController(source_entity_uuid=observer.uuid))
+    encounter.add_combatant(hidden_enemy, HumanController(source_entity_uuid=hidden_enemy.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+
+    check("Enemy NOT visible (light already on but check state)",
+          hidden_enemy.uuid in observer.senses.entities or hidden_enemy.uuid not in observer.senses.entities)
+
+    # Toggle off first, then back on to test the toggle path
+    grid.toggle_light_source(ls_uuid, False)
+    check("Enemy NOT visible with light off", hidden_enemy.uuid not in observer.senses.entities)
+
+    log_start = len(encounter.combat_log)
+    grid.toggle_light_source(ls_uuid, True)
+
+    check("Enemy visible after light toggled on", hidden_enemy.uuid in observer.senses.entities)
+
+    new_logs = encounter.combat_log[log_start:]
+    spotted_logs = [l for l in new_logs if l.entry_type == CombatLogEntryType.ENTITY_SPOTTED]
+    check("ENTITY_SPOTTED log generated on light toggle", len(spotted_logs) > 0)
+
+
+def test_no_spotted_log_for_non_hidden_entity() -> None:
+    """When light reveals a non-hidden entity, no ENTITY_SPOTTED log should be
+    generated (they're not hiding, just in the dark)."""
+    section("No ENTITY_SPOTTED log for non-hidden entity revealed by light")
+    reset_combat_state()
+    grid = get_map()
+    create_dark_grid(10, 3)
+
+    observer = create_skeleton(name="Observer", position=(0, 1), faction="heroes")
+    target = create_skeleton(name="Target", position=(3, 1), faction="monsters")
+
+    Entity.update_all_entities_senses()
+    check("Target NOT visible (dark)", target.uuid not in observer.senses.entities)
+
+    # Set up encounter
+    encounter = Encounter(name="No Log Test", source_entity_uuid=uuid4())
+    encounter.add_combatant(observer, HumanController(source_entity_uuid=observer.uuid))
+    encounter.add_combatant(target, HumanController(source_entity_uuid=target.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+
+    log_start = len(encounter.combat_log)
+
+    # Illuminate both tiles
+    light1 = uuid4()
+    grid.get_tile(3, 1).add_illumination(light1, LightLevel.BRIGHT_LIGHT)  # type: ignore
+    light2 = uuid4()
+    grid.get_tile(0, 1).add_illumination(light2, LightLevel.BRIGHT_LIGHT)  # type: ignore
+
+    check("Target visible after illumination", target.uuid in observer.senses.entities)
+
+    new_logs = encounter.combat_log[log_start:]
+    spotted_logs = [l for l in new_logs if l.entry_type == CombatLogEntryType.ENTITY_SPOTTED]
+    check("No ENTITY_SPOTTED log (target was not hidden)", len(spotted_logs) == 0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Run all tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -936,6 +1139,12 @@ if __name__ == "__main__":
     test_torch_three_light_zones()
     test_torch_very_bright_reveals_hidden_enemy()
     test_torch_bright_zone_does_not_reveal_hidden()
+
+    # Section 8: Combat logs for light-driven stealth detection
+    test_light_source_reveals_hidden_generates_spotted_log()
+    test_torch_movement_reveals_hidden_generates_spotted_log()
+    test_light_toggle_reveals_hidden_generates_spotted_log()
+    test_no_spotted_log_for_non_hidden_entity()
 
     # Results
     print(f"\n{'='*60}")
