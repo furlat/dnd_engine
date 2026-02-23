@@ -18,3 +18,8 @@ TOGGLE: name='Opportunity Attack Handler' enabled=False entity='c28f1601-5b2e-43
 TOGGLE: SUCCESS
 raw='dgip' cmd='dgip' is_meta=False args=[]
 raw='dash' cmd='dash' is_meta=False args=[]
+raw='' cmd='unknown' is_meta=True args=[]
+raw='toggle sh on' cmd='toggle' is_meta=True args=['sh', 'on']
+TOGGLE: name='Shield' enabled=True entity='c28f1601-5b2e-4374-bce8-eb91c2e24f8f'
+TOGGLE: SUCCESS
+raw='' cmd='unknown' is_meta=True args=[]

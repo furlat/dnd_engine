@@ -8,6 +8,7 @@ Each model has a .create() classmethod that takes the game object and
 extracts the relevant data.
 """
 
+from uuid import UUID
 from pydantic import BaseModel
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
@@ -45,7 +46,7 @@ class APIEntitySummary(BaseModel):
             ac=entity.ac_bonus().normalized_score,
             conditions=list(entity.active_conditions.keys()),
             condition_details=[
-                {"name": c.name, "category": c.condition_category.value}
+                {"name": c.name, "category": c.condition_category.value if hasattr(c.condition_category, 'value') else str(c.condition_category)}
                 for c in entity.active_conditions.values()
             ],
             is_dead=not entity.has_hp,
@@ -117,18 +118,36 @@ class APIGrid(BaseModel):
     tiles: List[APITile]
 
     @classmethod
-    def create(cls, grid: 'GridMap') -> 'APIGrid':
+    def create(cls, grid: 'GridMap', requesting_entity_uuid: Optional[UUID] = None) -> 'APIGrid':
+        from dnd.core.base_block import BaseBlock
+        from dnd.core.base_conditions import ConditionCategory
+
         bounds = grid.bounds  # Returns (min_x, min_y, max_x, max_y)
+
+        # Get observer's passive perception for condition filtering
+        observer_perception = 0
+        if requesting_entity_uuid:
+            obs = BaseBlock.get(requesting_entity_uuid)
+            if obs is not None:
+                observer_perception = obs.get_passive_perception()
+
         tiles = []
         for (x, y), td in grid._tiles.items():
             # Get walking cost (normalized score, usually 1 or 2)
             walking_cost = int(td.walking_cost.normalized_score) if hasattr(td, 'walking_cost') else 1
 
-            # Check if tile has any event handlers (hazardous)
-            is_hazardous = len(td.event_handlers) > 0 if hasattr(td, 'event_handlers') else False
+            # Entity-aware hazard check
+            is_hazardous = grid.is_position_hazardous_for(x, y, requesting_entity_uuid)
 
-            # Get active conditions
-            conditions = list(td.active_conditions.keys()) if hasattr(td, 'active_conditions') else []
+            # Filter conditions by category and perception (stealth_dc)
+            conditions: List[str] = []
+            if hasattr(td, 'active_conditions'):
+                for cond_name, cond in td.active_conditions.items():
+                    if cond.condition_category == ConditionCategory.INTERNAL:
+                        continue
+                    if cond.condition_stealth_dc is not None and cond.condition_stealth_dc > observer_perception:
+                        continue  # Hidden condition not perceivable
+                    conditions.append(cond_name)
 
             tiles.append(APITile(
                 x=x, y=y,
@@ -351,6 +370,7 @@ class ExecuteByIndexRequest(BaseModel):
     template_name: str  # Action template name
     target_index: int   # Index from valid_targets list
     extra_target_uuids: Optional[List[str]] = None  # Additional target UUIDs for MULTI_ENTITY actions
+    prefer_safe: bool = True  # Use safe path (avoiding hazards) when available. False = force shortest path.
 
 
 class ToggleHandlerRequest(BaseModel):

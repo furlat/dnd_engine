@@ -195,13 +195,15 @@ class TestDoorB(UsableItem):
 # =============================================================================
 
 class PullLeverAction(BaseAction):
-    """Pulls a lever to remove a spatial handler (deactivate a trap)."""
+    """Pulls a lever to remove a spatial handler (deactivate a trap).
+    Also removes SpikeTrapCondition markers from linked tiles."""
     name: str = Field(default="Pull Lever")
     description: str = Field(default="Deactivates a trap")
     target_type: TargetType = Field(default=TargetType.SELF)
     costs: List[Cost] = Field(default_factory=list)
     source_item_uuid: Optional[UUID] = Field(default=None)
     trap_handler_uuid: Optional[UUID] = Field(default=None)
+    trap_tile_uuids: List[UUID] = Field(default_factory=list, description="UUIDs of tiles with SpikeTrapCondition markers")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if not self.trap_handler_uuid:
@@ -211,6 +213,11 @@ class PullLeverAction(BaseAction):
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         if self.trap_handler_uuid:
             EventQueue.remove_spatial_handler(self.trap_handler_uuid)
+        # Remove SpikeTrapCondition markers from linked tiles
+        for tile_uuid in self.trap_tile_uuids:
+            tile = BaseBlock.get(tile_uuid)
+            if tile is not None and "Spike Trap" in tile.active_conditions:
+                tile.remove_condition("Spike Trap")
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Trap deactivated")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Lever pulled")
 

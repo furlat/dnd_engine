@@ -15,45 +15,44 @@ for N tiles causes O(N) event processing overhead.
 
 import random
 import warnings
-from typing import List, Set, Tuple
+from typing import List, Optional, Set, Tuple
 from uuid import UUID, uuid4
 
 from dnd.core.base_tiles import Tile
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, SpatialChangeEvent
+    Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, SpatialChangeEvent, SensesUpdateHint
 )
 from dnd.core.modifiers import DamageType
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
+from dnd.tile_conditions import SpikeTrapCondition
 
 
-def create_spike_zone(positions: Set[Tuple[int, int]]) -> Tuple[List[Tile], EventHandler]:
+def create_spike_zone(positions: Set[Tuple[int, int]],
+                      stealth_dc: Optional[int] = None) -> Tuple[List[Tile], EventHandler]:
     """
-    Create spike tiles with ONE shared damage handler for all positions.
+    Create Floor tiles with SpikeTrapCondition markers + ONE shared damage handler.
 
-    This is the correct pattern for permanent terrain - ONE handler monitors
-    ALL positions in the zone, not one handler per tile.
+    The SpikeTrapCondition is a pure marker for:
+    - hazard_filter → pathfinding knows to avoid
+    - condition_stealth_dc → perception check to detect hidden traps
+    - API visibility → display/agent sees "Spike Trap" condition
 
     Args:
         positions: Set of (x, y) positions for spike tiles
+        stealth_dc: Optional perception DC to detect the trap (None = always visible)
 
     Returns:
         Tuple of (list of Tile objects, the shared EventHandler)
-
-    Example:
-        spike_positions = {(x, y) for x in range(5) for y in range(10, 15)}
-        tiles, handler = create_spike_zone(spike_positions)
-        for tile in tiles:
-            grid._tiles[tile.position] = tile
     """
-    # Create all tiles first
+    # Create Floor tiles (not "Spikes" — tile name stays generic)
     tiles = []
     for pos in positions:
         tile = Tile.create(
             pos,
             walkable=True,
             visible=True,
-            name="Spikes",
-            sprite_name="spikes.png"
+            name="Floor",
         )
         tiles.append(tile)
 
@@ -75,6 +74,22 @@ def create_spike_zone(positions: Set[Tuple[int, int]]) -> Tuple[List[Tile], Even
         # Pass the spatial event's parent (StepMovement) so TakeDamage links to it
         entity.receive_damage(damage, DamageType.PIERCING, zone_uuid, parent_event=event.parent_event)
 
+        # Reveal hidden trap after damage — clear stealth DC so everyone can see it
+        grid = get_map()
+        tile = grid.get_tile(event.position[0], event.position[1])
+        if tile is not None:
+            cond = tile.active_conditions.get("Spike Trap")
+            if cond is not None and cond.condition_stealth_dc is not None:
+                cond.condition_stealth_dc = None
+                # Fire SPATIAL_TILE_CHANGED so safe paths recompute (trap now visible)
+                hint = SensesUpdateHint(requires_paths=True)
+                reveal_event = SpatialChangeEvent.tile_changed(
+                    event.position, walkable=True, visible=True,
+                    senses_hint=hint,
+                )
+                reveal_event = reveal_event.phase_to(EventPhase.COMPLETION)
+                EventQueue.register(reveal_event)
+
         return None
 
     handler = EventHandler(
@@ -95,11 +110,44 @@ def create_spike_zone(positions: Set[Tuple[int, int]]) -> Tuple[List[Tile], Even
         event_phase=EventPhase.EFFECT
     )
 
-    # Store handler reference on first tile for inspection/cleanup
+    # Apply SpikeTrapCondition marker to each tile
+    for tile in tiles:
+        cond = SpikeTrapCondition(
+            source_entity_uuid=tile.uuid,
+            target_entity_uuid=tile.uuid,
+            condition_stealth_dc=stealth_dc,
+        )
+        tile.add_condition(cond)
+
+    # Fire SPATIAL_TILE_CHANGED so entities recompute safe paths
     if tiles:
-        tiles[0].event_handlers[handler.uuid] = handler
+        hint = SensesUpdateHint(requires_paths=True)
+        event = SpatialChangeEvent.tile_changed(
+            tiles[0].position, walkable=True, visible=True,
+            senses_hint=hint,
+        )
+        event = event.phase_to(EventPhase.COMPLETION)
+        EventQueue.register(event)
 
     return tiles, handler
+
+
+def deactivate_spike_zone(tiles: List[Tile], handler: EventHandler) -> None:
+    """Deactivate: remove shared handler + marker conditions from tiles."""
+    EventQueue.remove_spatial_handler(handler.uuid)
+    for tile in tiles:
+        if "Spike Trap" in tile.active_conditions:
+            tile.remove_condition("Spike Trap")
+
+    # Fire SPATIAL_TILE_CHANGED so entities recompute safe paths
+    if tiles:
+        hint = SensesUpdateHint(requires_paths=True)
+        event = SpatialChangeEvent.tile_changed(
+            tiles[0].position, walkable=True, visible=True,
+            senses_hint=hint,
+        )
+        event = event.phase_to(EventPhase.COMPLETION)
+        EventQueue.register(event)
 
 
 # Keep old factory for backward compatibility but mark as deprecated

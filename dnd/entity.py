@@ -1235,6 +1235,13 @@ class Entity(BaseBlock):
             return True  # No faction = enemy to everyone
         return self.faction != other.faction
 
+    def is_enemy_of(self, other_uuid: UUID) -> bool:
+        """Faction-based enemy check (BaseBlock override)."""
+        other = Entity.get(other_uuid)
+        if not other or not isinstance(other, Entity):
+            return True
+        return self.is_enemy(other)
+
     def get_visible_enemies(self, include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]:
         """Get visible entities that are enemies.
 
@@ -1701,7 +1708,7 @@ class Entity(BaseBlock):
         seen: Set[Tuple[int, int]],
         max_distance: int = 10,
         entity_uuid: Optional[UUID] = None
-    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]], Dict[UUID, Tuple[int, int]], List[Tuple[int, int]]]:
+    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]], Dict[UUID, Tuple[int, int]], List[Tuple[int, int]], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
         """
         Compute senses data from a position.
 
@@ -1712,9 +1719,10 @@ class Entity(BaseBlock):
             entity_uuid: If provided, pathfinding will exclude cells occupied by other entities
 
         Returns:
-            (visible_dict, paths, walkable, visible_entities, visible_objects, fov_positions)
+            (visible_dict, paths, walkable, visible_entities, visible_objects, fov_positions, safe_paths)
             visible_dict is filtered by effective light (only tiles the observer can actually see).
             fov_positions is the full geometric FOV (for subscriptions to detect light changes).
+            safe_paths avoids hazardous tiles (empty dict if no hazards on normal paths).
         """
         grid = get_map()
 
@@ -1745,6 +1753,27 @@ class Entity(BaseBlock):
             if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
                 filtered_paths[pos] = path
 
+        # Two-pass safe paths: only compute if any normal path crosses a hazard
+        safe_paths: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
+        has_any_hazardous = False
+        for pos, path in filtered_paths.items():
+            for step in path[1:]:  # Skip starting position
+                if grid.is_position_hazardous_for(step[0], step[1], entity_uuid):
+                    has_any_hazardous = True
+                    break
+            if has_any_hazardous:
+                break
+
+        if has_any_hazardous:
+            _, safe_raw = grid.compute_paths(
+                position, max_distance, requesting_entity_uuid=entity_uuid,
+                walk_in_danger=False
+            )
+            # Filter safe paths same as normal paths (visible + known)
+            for pos, path in safe_raw.items():
+                if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
+                    safe_paths[pos] = path
+
         # Get entities at visible (lit) positions (filtered by perceivability)
         visible_entities: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_dict:
@@ -1767,13 +1796,13 @@ class Entity(BaseBlock):
         # Build walkable dict from full geometric FOV (for map rendering)
         walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in fov_positions}
 
-        return visible_dict, filtered_paths, walkable, visible_entities, visible_objects, fov_positions
+        return visible_dict, filtered_paths, walkable, visible_entities, visible_objects, fov_positions, safe_paths
 
     def create_senses_copy_at_position(self, position: Tuple[int, int], max_distance: int = 10) -> 'Senses':
         """Create a copy of senses as if entity were at a different position."""
         senses = self.senses.model_copy(deep=True)
         senses.position = position
-        visible_dict, filtered_paths, walkable, visible_entities, visible_objects, _fov = Entity.compute_senses_from_position(
+        visible_dict, filtered_paths, walkable, visible_entities, visible_objects, _fov, safe_paths = Entity.compute_senses_from_position(
             position, self.senses.seen, max_distance, entity_uuid=self.uuid
         )
 
@@ -1784,6 +1813,7 @@ class Entity(BaseBlock):
             paths=filtered_paths,
             objects=visible_objects
         )
+        senses.safe_paths = safe_paths
         return senses
 
     def update_entity_senses(self, max_distance: int = 10):
@@ -1801,7 +1831,7 @@ class Entity(BaseBlock):
         Args:
             max_distance: Maximum view/movement distance (default 10)
         """
-        visible_dict, filtered_paths, walkable, visible_entities, visible_objects, fov_positions = Entity.compute_senses_from_position(
+        visible_dict, filtered_paths, walkable, visible_entities, visible_objects, fov_positions, safe_paths = Entity.compute_senses_from_position(
             self.position, self.senses.seen, max_distance, entity_uuid=self.uuid
         )
         # Update the senses block
@@ -1812,6 +1842,9 @@ class Entity(BaseBlock):
             paths=filtered_paths,
             objects=visible_objects
         )
+        self.senses.safe_paths = safe_paths
+        # Snapshot perception state for change detection by SpatialSensesCallback
+        self.senses.snapshot_perception(self.get_passive_perception())
         # Subscribe to FULL geometric FOV (detect light changes in dark areas)
         get_map().subscribe_to_cells(self.uuid, set(fov_positions))
 
@@ -2200,13 +2233,14 @@ class Entity(BaseBlock):
 
     def _collect_path_actions(self, remaining_movement: int) -> List[AvailableActionInfo]:
         """Collect POSITION_PATH actions (Move)."""
+        grid = get_map()
         actions: List[AvailableActionInfo] = []
         for template in self.position_actions:
             if template.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
                 continue
             valid_positions: List[AvailableTarget] = []
             idx = 0
-            for pos, _ in self.senses.paths.items():
+            for pos, normal_path in self.senses.paths.items():
                 if pos == self.senses.position:
                     continue
                 template.set_target_position(pos)
@@ -2216,11 +2250,36 @@ class Entity(BaseBlock):
                         if cost.cost_type == "movement":
                             path_cost = cost.cost
                             break
+
+                    # Check if normal path crosses hazardous tile
+                    is_hazardous = any(
+                        grid.is_position_hazardous_for(step[0], step[1], self.uuid)
+                        for step in normal_path[1:]  # Skip starting position
+                    )
+
+                    # Safe alternative
+                    safe_cost: Optional[int] = None
+                    safe_path_list: Optional[List[Tuple[int, int]]] = None
+                    if is_hazardous and pos in self.senses.safe_paths:
+                        safe_path_list = list(self.senses.safe_paths[pos])
+                        safe_cost = 0
+                        for step in safe_path_list[1:]:
+                            tile = grid.get_tile(*step)
+                            if tile:
+                                safe_cost += int(tile.get_movement_cost(MovementMode.WALKING))
+                            else:
+                                safe_cost += 1
+                        safe_cost *= 5  # Convert to feet
+
                     valid_positions.append(AvailableTarget(
                         index=idx,
                         position=pos,
                         distance=self.senses.get_feet_distance(pos),
-                        path_cost=path_cost
+                        path_cost=path_cost,
+                        is_path_hazardous=is_hazardous,
+                        safe_path_cost=safe_cost,
+                        path=list(normal_path),
+                        safe_path=safe_path_list,
                     ))
                     idx += 1
 

@@ -671,7 +671,7 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
                     row_chars.append("~")
                 else:
                     row_chars.append("#")
-            elif tile.get("is_hazardous", False) or tile.get("name") == "Spikes":
+            elif tile.get("is_hazardous", False):
                 row_chars.append("^")
             elif tile.get("walking_cost", 1) > 1 or tile.get("name") == "Difficult Terrain":
                 row_chars.append(",")
@@ -839,9 +839,23 @@ def format_actions(actions: dict, entity_name: str) -> str:
                 # Just show usage hint here
                 lines.append(f"    Usage: cast {display_name} X Y (see TILE DETAILS for targeting positions)")
             else:
-                # Non-spell position actions (Move, Jump): show full position list
-                pos_strs = [f"({t.get('position', [0,0])[0]},{t.get('position', [0,0])[1]})" for t in valid_targets]
-                lines.append(f"    Targets: {', '.join(pos_strs)}")
+                # Non-spell position actions (Move, Jump): show full position list with hazard info
+                pos_strs = []
+                for t in valid_targets:
+                    p = t.get("position", [0, 0])
+                    cost = t.get("path_cost")
+                    tag = f"({p[0]},{p[1]})"
+                    if cost is not None:
+                        tag += f"/{cost}ft"
+                    if t.get("is_path_hazardous", False):
+                        safe_cost = t.get("safe_path_cost")
+                        if safe_cost is not None:
+                            tag += f"[!hazard,safe:{safe_cost}ft]"
+                        else:
+                            tag += "[!hazard,no safe path]"
+                    pos_strs.append(tag)
+                remaining = actions.get("remaining_movement", 0)
+                lines.append(f"    Targets: {', '.join(pos_strs)}  [{remaining}ft remaining]")
 
     lines.append("")
 
@@ -1221,7 +1235,8 @@ def cmd_move(client: APIClient, x: int, y: int) -> int:
     return 0
 
 
-def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> int:
+def cmd_position_action(client: APIClient, action_name: str, x: int, y: int,
+                         prefer_safe: bool = True) -> int:
     """Execute any position-based action by name (Move, Jump, etc.)."""
     if not validate_my_turn(client):
         return 1
@@ -1276,7 +1291,8 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
                 result = client.execute_action(
                     action.get("template_name"),
                     target.get("index"),
-                    entity_uuid
+                    entity_uuid,
+                    prefer_safe=prefer_safe
                 )
             except Exception as e:
                 print(f"ERROR: {e}")
@@ -1303,6 +1319,66 @@ def cmd_position_action(client: APIClient, action_name: str, x: int, y: int) -> 
     nearest_strs = [f"({t.get('position', [0,0])[0]},{t.get('position', [0,0])[1]})" for t in nearest]
     print(f"ERROR: ({x},{y}) not in range for {action_name}. {len(valid_targets)} valid positions. Nearest: {', '.join(nearest_strs)}")
     return 1
+
+
+def cmd_move_preview(client: APIClient, action_name: str, x: int, y: int) -> int:
+    """Preview path to position, showing hazard info and safe alternatives."""
+    if not ensure_session(client):
+        print("ERROR: Not connected. Run 'connect' first.")
+        return 1
+
+    entity_uuid = client.current_entity_uuid
+    if not entity_uuid:
+        print("ERROR: No controlled entity")
+        return 1
+
+    actions = client.get_available_actions(entity_uuid)
+    if not actions:
+        print("ERROR: Could not get available actions")
+        return 1
+
+    position_actions = actions.get("position_actions", [])
+    action = None
+    for a in position_actions:
+        if a.get("template_name", "").lower() == action_name.lower():
+            action = a
+            break
+
+    if not action:
+        print(f"ERROR: No {action_name} action available")
+        return 1
+
+    valid_targets = action.get("valid_targets", [])
+    position = (x, y)
+    target = None
+    for t in valid_targets:
+        target_pos = t.get("position")
+        if target_pos and tuple(target_pos) == position:
+            target = t
+            break
+
+    if target is None:
+        nearest = sorted(valid_targets, key=lambda t: abs(t.get("position", [0, 0])[0] - x) + abs(t.get("position", [0, 0])[1] - y))[:5]
+        nearest_strs = [f"({t.get('position', [0, 0])[0]},{t.get('position', [0, 0])[1]})" for t in nearest]
+        print(f"ERROR: ({x},{y}) not reachable. Nearest: {', '.join(nearest_strs)}")
+        return 1
+
+    cost = target.get("path_cost", "?")
+    is_hazardous = target.get("is_path_hazardous", False)
+    safe_cost = target.get("safe_path_cost")
+
+    print(f"PATH PREVIEW: {action_name} to ({x},{y})")
+    print(f"  Shortest path cost: {cost}ft" + (" [HAZARDOUS]" if is_hazardous else ""))
+    if is_hazardous:
+        if safe_cost is not None:
+            print(f"  Safe path cost: {safe_cost}ft (avoids hazards)")
+            print(f"  Default: safe path used. Use 'move {x} {y} short' to force shortest.")
+        else:
+            print(f"  No safe path available — must cross hazard.")
+    else:
+        print(f"  Path is clear (no hazards).")
+
+    return 0
 
 
 def cmd_attack(client: APIClient, action_index: int, target_index: int = 0) -> int:
@@ -2074,7 +2150,9 @@ def main():
         print("  inspect X Y          Inspect tile at position (X, Y)")
         print("")
         print("Position Actions:")
-        print("  move X Y             Move to position (X, Y)")
+        print("  move X Y             Move to position (X, Y) — auto-avoids hazards")
+        print("  move X Y short       Move via shortest path (through hazards)")
+        print("  move ? X Y           Preview path to (X, Y) with hazard info")
         print("  jump X Y             Jump to position (X, Y)")
         print("")
         print("Combat:")
@@ -2127,13 +2205,21 @@ def main():
 
         # Generic position action routing
         elif command in POSITION_COMMANDS:
+            # move ? X Y → preview path to position
+            if len(sys.argv) >= 5 and sys.argv[2] == "?":
+                x = int(sys.argv[3])
+                y = int(sys.argv[4])
+                action_name = command.capitalize()
+                return cmd_move_preview(client, action_name, x, y)
             if len(sys.argv) < 4:
-                print(f"Usage: python -m cli.agent {command} X Y")
+                print(f"Usage: python -m cli.agent {command} X Y [short]")
                 return 1
             x = int(sys.argv[2])
             y = int(sys.argv[3])
+            # move X Y short → force shortest path (through hazards)
+            force_short = len(sys.argv) >= 5 and sys.argv[4].lower() == "short"
             action_name = command.capitalize()
-            return cmd_position_action(client, action_name, x, y)
+            return cmd_position_action(client, action_name, x, y, prefer_safe=not force_short)
 
         elif command == "attack":
             if len(sys.argv) < 3:

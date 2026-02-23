@@ -88,22 +88,28 @@ class ActionExecutor:
         args: List[str],
         actions: AvailableActionsState
     ) -> Dict[str, Any]:
-        """Execute a move action."""
+        """Execute a move action. Use 'move X Y short' to force shortest path."""
         if len(args) < 2:
-            raise ValueError("Move requires position. Usage: move X Y")
+            raise ValueError("Move requires position. Usage: move X Y [short]")
 
         try:
             x = int(args[0])
             y = int(args[1])
         except ValueError:
-            raise ValueError("Invalid position. Usage: move X Y")
+            raise ValueError("Invalid position. Usage: move X Y [short]")
+
+        # 'short' flag forces shortest path (through hazards)
+        prefer_safe = not (len(args) >= 3 and args[2].lower() == "short")
 
         # Find position in valid targets
         position = (x, y)
         for move_action in actions.movement:
             for target in move_action.valid_targets:
                 if target.position == position:
-                    return self.client.execute_action(move_action.template_name, target.index)
+                    return self.client.execute_action(
+                        move_action.template_name, target.index,
+                        prefer_safe=prefer_safe
+                    )
 
         raise ValueError(f"Position ({x}, {y}) is not reachable")
 

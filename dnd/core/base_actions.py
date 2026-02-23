@@ -783,6 +783,12 @@ class AvailableTarget(BaseModel):
     # MULTI_ENTITY: additional targets beyond primary (for spells like Magic Missile)
     extra_target_uuids: Optional[List[UUID]] = Field(default=None, description="Additional targets for MULTI_ENTITY actions")
     # AoE-specific fields (for POSITION_AOE actions)
+    # Hazard pathfinding fields
+    is_path_hazardous: bool = Field(default=False, description="Whether shortest path crosses a hazardous tile")
+    safe_path_cost: Optional[int] = Field(default=None, description="Movement cost of safe alternative path (None if no safe path)")
+    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Shortest path to this target")
+    safe_path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Safe alternative path avoiding hazards")
+    # AoE-specific fields (for POSITION_AOE actions)
     affected_entity_uuids: Optional[List[UUID]] = Field(default=None, description="UUIDs of entities affected by AoE")
     affected_entity_names: Optional[List[str]] = Field(default=None, description="Names of entities affected by AoE")
     affected_count: Optional[int] = Field(default=None, description="Number of entities affected by AoE")
