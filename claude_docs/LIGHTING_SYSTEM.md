@@ -451,3 +451,25 @@ Used by `BaseItem._notify_blocking_changed()` — standard pattern for items to 
 | `dnd/blocks/base_item.py` | +_notify_blocking_changed() method |
 | `dnd/items/test_items.py` | Door actions: use _notify_blocking_changed() instead of update_all_entities_senses() |
 | `dnd/tile_conditions.py` | Zone terrain: fire batched path event. Zone light: batch pattern. |
+
+### Observer Perception Change Detection
+
+`SpatialSensesCallback` also handles `CONDITION_APPLICATION` / `CONDITION_REMOVAL` events on self (not just spatial events). When a condition changes the observer's perception capabilities, cached senses are re-evaluated:
+
+**Snapshot fields on Senses**:
+- `_last_passive_perception: int` — stored after each `update_entity_senses()`
+- `_last_sense_modes_hash: int` — hash of `(sense_type, range)` tuples
+
+**Flow**: Condition added/removed on self → `_handle_own_perception_change()`:
+1. Compare current perception vs snapshot
+2. If sense modes changed (Darkvision, Truesight gained/lost) → full `update_visibility_func()` recompute
+3. If only passive perception changed → `_refilter_all_visible_entities()` (lighter, only re-checks entities in visible area)
+4. Either way → `_paths_dirty = True` (safe paths may change)
+
+### Light-Driven Stealth Detection Combat Logs
+
+When light changes (torch movement, light spell, light toggle) cause `_refilter_entities_at()` to run, newly visible hidden entities (those with `stealth_dc` set) generate `ENTITY_SPOTTED` combat logs via `EventQueue.push_combat_log()`.
+
+When perception changes reveal hidden hazards (`condition_stealth_dc`), `HAZARD_DETECTED` combat logs are generated via `_log_newly_detected_hazards()`.
+
+**Tests**: `examples/test_lighting_stealth_integration.py` Section 8 (light-driven stealth detection logs), `examples/test_perception_staleness.py` (observer perception changes).

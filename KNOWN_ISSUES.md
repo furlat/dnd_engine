@@ -25,10 +25,16 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Fix**: Spike traps reworked to Floor tiles + SpikeTrapCondition. Deactivation removes the condition, tile stays Floor. Inspect shows active conditions.
 - **Status**: FIXED (2026-02-23, hazard system refactor)
 
-
 ### Pathfinding is agnostic to tile conditions (routes through traps/hazards)
 - **Found**: 2026-02-20, observed during gameplay
 - **Files**: `dnd/core/dijkstra.py`, `dnd/core/gridmap.py`
 - **Error**: Dijkstra pathfinding only considers walkability (walls, entities) when computing shortest paths. It is completely unaware of tile conditions like spike traps, fire, Spike Growth zones, Web, etc.
 - **Fix**: Two-pass Dijkstra with `walk_in_danger=False` default. Safe paths avoid hazardous tiles, auto-safe movement uses safe paths when available. HazardFilter enum + is_hazardous_for() for subjective hazard detection. condition_stealth_dc for perception-gated hazard visibility.
 - **Status**: FIXED (2026-02-23, hazard system refactor)
+
+### ShieldBuff condition_category uses raw string instead of enum
+- **Found**: 2026-02-23, PvP session
+- **Error**: `ShieldBuff` in `dnd/spells/abjuration.py` had `condition_category: str = "status"` instead of `ConditionCategory.STATUS`. Caused `AttributeError: 'str' object has no attribute 'value'` in `server/api_models.py:49` when serializing condition details.
+- **Fix**: Changed to `condition_category: ConditionCategory = ConditionCategory.STATUS` and added defensive handling in API serialization.
+- **Status**: FIXED (2026-02-23)
+

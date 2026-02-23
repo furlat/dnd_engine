@@ -2261,6 +2261,30 @@ class TakeDamageEvent(Event):
         if self.damages:
             damage_type_str = str(self.damages[0].damage_type.value).lower()
 
+        # Canceled damage (e.g., Shield blocks Magic Missile)
+        if self.canceled:
+            reason = self.status_message or "blocked"
+            compact_text = f"{md_color(target_name, 'yellow')} takes {md_color('0', 'green')} {damage_type_str} ({reason})"
+            return CombatLogEntry(
+                entry_type=CombatLogEntryType.DAMAGE_TAKEN,
+                source_name=source_name,
+                source_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
+                target_name=target_name,
+                target_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else "",
+                compact=compact_text,
+                verbose=compact_text,
+                detailed=compact_text,
+                data={
+                    "target_name": target_name,
+                    "damage": 0,
+                    "damage_type": damage_type_str,
+                    "source_name": source_name,
+                    "blocked": True,
+                    "blocked_reason": reason,
+                },
+                success=False
+            )
+
         # COMPACT: "Skeleton takes 5 piercing"
         compact_text = f"{md_color(target_name, 'yellow')} takes {md_color(str(damage), 'red')} {damage_type_str}"
 

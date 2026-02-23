@@ -46,6 +46,7 @@ class ShortcutRegistry:
         "Dash": "d",
         "Dodge": "do",
         "Disengage": "di",
+        "Hide": "hi",
         # Entity actions
         "Shove": "sh",
         # Spells - AoE

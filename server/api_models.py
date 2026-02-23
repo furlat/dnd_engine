@@ -145,7 +145,7 @@ class APIGrid(BaseModel):
                 for cond_name, cond in td.active_conditions.items():
                     if cond.condition_category == ConditionCategory.INTERNAL:
                         continue
-                    if cond.condition_stealth_dc is not None and cond.condition_stealth_dc > observer_perception:
+                    if cond.condition_stealth_dc is not None and cond.condition_stealth_dc >= observer_perception:
                         continue  # Hidden condition not perceivable
                     conditions.append(cond_name)
 

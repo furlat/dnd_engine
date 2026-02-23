@@ -433,13 +433,36 @@ class StealthDisadvantageBodyArmor(BodyArmor):
 
 **7 armor factories** use `StealthDisadvantageBodyArmor`: padded (L46), scale mail (L116), half plate (L143), ring mail (L161), chain mail (L175), splint (L190), plate (L205).
 
-### 1h. "Newly Spotted" Combat Log
+### 1h. "Newly Spotted" and "Hazard Detected" Combat Logs
 
-When `update_entity_visibility()` detects a hidden enemy that becomes newly visible (entity appears in updated senses but wasn't in previous senses), it generates `ENTITY_SPOTTED` combat log entries (entity.py:1792-1820).
+`ENTITY_SPOTTED` logs are generated from three code paths:
 
-This fires when an entity's passive perception exceeds a hidden entity's stealth DC — e.g., the hidden entity moves closer to an observer with high Perception, or the observer updates senses after gaining a perception bonus.
+1. **Movement** — `update_entity_visibility()` (entity.py:1906-1934) compares old vs new `senses.entities` during step-by-step movement. Fires when moving entity's passive perception exceeds a hidden entity's stealth DC.
 
-Uses `CombatLogEntryType.ENTITY_SPOTTED` with `EntitySpottedLogData` (combat_log.py:178).
+2. **Light changes** — `SpatialSensesCallback._refilter_entities_at()` (sensory.py) generates logs when light changes (torch movement, light spell, light toggle) reveal a hidden entity that the observer can perceive.
+
+3. **Observer perception changes** — `SpatialSensesCallback._refilter_all_visible_entities()` (sensory.py) generates logs when conditions on the observer change their perception capabilities (WIS buff, Darkvision gained, etc.) and previously invisible hidden enemies become detectable.
+
+`HAZARD_DETECTED` logs are generated when perception changes reveal hidden tile hazards:
+- `SpatialSensesCallback._log_newly_detected_hazards()` — compares old vs new passive perception against `condition_stealth_dc` on tile conditions.
+
+Both use `EventQueue.push_combat_log()` for standalone delivery. Entry types: `CombatLogEntryType.ENTITY_SPOTTED` with `EntitySpottedLogData`, `CombatLogEntryType.HAZARD_DETECTED` with `HazardDetectedLogData`.
+
+### 1h-2. Observer Perception Change Detection
+
+When conditions are added/removed on an entity, the `SpatialSensesCallback` detects changes to perception capabilities via snapshot comparison:
+
+- `Senses._last_passive_perception` / `_last_sense_modes_hash` — snapshots stored after each `update_entity_senses()`
+- `_handle_own_perception_change()` fires on `CONDITION_APPLICATION`/`CONDITION_REMOVAL` at COMPLETION phase when `target_entity_uuid == self.owner_uuid`
+- **Sense modes changed** (Darkvision, Truesight gained/lost) → full visibility recompute
+- **Passive perception changed** → `_refilter_all_visible_entities()` (lighter, re-checks visible area only)
+- Both paths set `_paths_dirty = True` (safe paths may change with perception)
+
+**Tests**: `examples/test_perception_staleness.py` (37 tests), `examples/test_lighting_stealth_integration.py` Section 8 (light-driven stealth detection logs)
+
+### 1h-3. `condition_stealth_dc` on BaseCondition
+
+Separate from `stealth_dc` on BaseBlock (which is for entity/item perceivability), `condition_stealth_dc` on BaseCondition gates **hazard detection** at the condition level. Used by hidden traps and zone spells. When set, the observer's passive perception must be ≥ the DC to detect the hazard for safe pathfinding. See `claude_docs/TERRAIN_MOVEMENT_SYSTEM.md` for hazard system details.
 
 ### 1i. Tests
 
@@ -473,6 +496,8 @@ All in `examples/test_stealth_system.py` — 44 tests, all passing.
 | `dnd/actions_functional.py` | +Hide import, +registration |
 | `dnd/items/armors.py` | +StealthDisadvantageBodyArmor, +imports, updated 7 factories |
 | `examples/test_stealth_system.py` | New: 44 tests |
+| `examples/test_lighting_stealth_integration.py` | New: 98 tests (light+stealth cross-cutting, light-driven combat logs) |
+| `examples/test_perception_staleness.py` | New: 37 tests (observer perception change detection) |
 
 ### 1k. Design Decisions (Divergences from Original Plan)
 

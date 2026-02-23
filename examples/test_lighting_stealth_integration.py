@@ -176,13 +176,12 @@ def test_hidden_reactive_with_different_perception_observers() -> None:
     hidden2 = Hidden(
         source_entity_uuid=target.uuid,
         target_entity_uuid=target.uuid,
-        stealth_result=low_pp,  # Equal to PP - NOT hidden (DC must exceed PP)
+        stealth_result=low_pp,  # Equal to PP - hider wins ties (DC >= PP means hidden)
     )
     target.add_condition(hidden2)
-    # stealth_dc == PP: is_perceivable_by checks stealth_dc > passive_perception
-    # So equal means still perceivable
-    check("Target visible when stealth DC equals PP (reactive)",
-          target.uuid in low_obs.senses.entities)
+    # stealth_dc == PP: hider wins ties in 5e (DC must be EXCEEDED to detect)
+    check("Target hidden when stealth DC equals PP (hider wins ties)",
+          target.uuid not in low_obs.senses.entities)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

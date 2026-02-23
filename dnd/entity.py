@@ -907,6 +907,11 @@ class Entity(BaseBlock):
             take_damage_event = take_damage_event.model_copy(
                 update={"final_damage": actual_damage}
             )
+        else:
+            # Canceled (e.g., Shield blocks Magic Missile) — set final_damage=0 for combat log
+            take_damage_event = take_damage_event.model_copy(
+                update={"final_damage": 0}
+            )
 
         # Handle death BEFORE completing TakeDamageEvent so DeathEvent appears
         # as a sub-entry in the damage combat log (collected by _collect_child_combat_logs)
