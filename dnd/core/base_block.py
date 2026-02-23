@@ -470,7 +470,7 @@ class BaseBlock(BaseModel):
                 return False
 
         if self.stealth_dc is not None:
-            if self.stealth_dc > observer.get_passive_perception():
+            if self.stealth_dc >= observer.get_passive_perception():
                 return False
 
         return True
@@ -491,7 +491,7 @@ class BaseBlock(BaseModel):
             # Can entity perceive this hazard?
             if cond.condition_stealth_dc is not None and entity_uuid is not None:
                 observer = BaseBlock.get(entity_uuid)
-                if observer is not None and cond.condition_stealth_dc > observer.get_passive_perception():
+                if observer is not None and cond.condition_stealth_dc >= observer.get_passive_perception():
                     continue  # Can't see it → don't avoid it
 
             # Who does it affect?

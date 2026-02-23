@@ -590,6 +590,14 @@ linked_conditions: List[Tuple[UUID, UUID]] = []  # (target_block_uuid, condition
 parent_link: Optional[Tuple[UUID, UUID]] = None   # (parent_block_uuid, parent_condition_uuid) — auto-set
 child_removal_policy: Literal["none", "any", "last"] = "none"  # parent notification policy
 
+# Categorization:
+condition_category: ConditionCategory = ConditionCategory.CONDITION  # CONDITION, STATUS, or INTERNAL
+# CONDITION = D&D conditions (Blinded, Paralyzed). STATUS = engine states (Dashing, ShieldBuff). INTERNAL = markers (HasAttacked) — suppressed from combat logs.
+
+# Hazard awareness (for tile conditions):
+hazard_filter: Optional[HazardFilter] = None  # ALL, ENEMIES, NON_SOURCE — marks condition as hazardous
+condition_stealth_dc: Optional[int] = None     # Perception DC to detect (hidden traps)
+
 # Methods:
 condition.add_linked_condition(target_block_uuid, effect_condition_uuid)
 # ^^ also auto-sets child.parent_link = (self.target_entity_uuid, self.uuid)

@@ -13,9 +13,24 @@ from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger,
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier
 from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
+from dnd.core.dice import AttackOutcome
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.conditions import Concentrating
+
+
+def _is_magic_missile_damage(event: Event) -> bool:
+    """Check if a TakeDamageEvent originates from Magic Missile by tracing parent events."""
+    from dnd.core.events import EventQueue
+    parent_uuid = event.parent_event
+    while parent_uuid is not None:
+        parent = EventQueue.get_event_by_uuid(parent_uuid)
+        if parent is None:
+            break
+        if isinstance(parent, SpellEvent) and parent.name == "Magic Missile":
+            return True
+        parent_uuid = parent.parent_event
+    return False
 
 
 # =============================================================================
@@ -54,6 +69,31 @@ class ShieldBuff(BaseCondition):
         mod_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(mod)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
+        # Magic Missile immunity handler (5e SRD: "you take no damage from magic missile")
+        def shield_magic_missile_blocker(event: Event, handler_source_uuid: UUID) -> Optional[Event]:
+            """Block Magic Missile damage while Shield is active."""
+            _ = handler_source_uuid
+            if event.target_entity_uuid != target_uuid:
+                return None
+            if not _is_magic_missile_damage(event):
+                return None
+            return event.cancel(status_message=f"Shield blocks Magic Missile dart")
+
+        mm_handler = EventHandler(
+            name="Shield: Magic Missile Block",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TAKE_DAMAGE,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=target_uuid
+                )
+            ],
+            event_processor=shield_magic_missile_blocker
+        )
+        target.add_event_handler(mm_handler)
+        handler_uuids.append(mm_handler.uuid)
+
         # Turn-start handler to remove this condition
         def shield_turn_start_processor(event: Event, handler_source_uuid: UUID) -> Optional[Event]:
             """Remove Shield buff at the start of the caster's turn."""
@@ -88,12 +128,13 @@ class ShieldBuff(BaseCondition):
 
 
 def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """Shield reaction: when attacked, spend reaction + spell slot for +5 AC.
+    """Shield reaction: when attacked or hit by Magic Missile, spend reaction + spell slot.
 
-    Fires at ATTACK @ EXECUTION phase (before roll and AC comparison).
-    Adds +5 to the event's AC ModifiableValue and applies ShieldBuff condition.
+    Two trigger paths:
+    - ATTACK @ EXECUTION: Adds +5 AC before roll/comparison, applies ShieldBuff.
+    - TAKE_DAMAGE @ DECLARATION: Blocks Magic Missile darts, applies ShieldBuff.
     """
-    # Only react to attacks targeting this entity
+    # Only react to events targeting this entity
     if event.target_entity_uuid != source_entity_uuid:
         return None
 
@@ -114,41 +155,82 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     if slot_level is None:
         return None
 
-    # Must be an AttackEvent with AC to modify
-    if not isinstance(event, AttackEvent) or not event.ac:
-        return None
+    # Branch 1: Attack event — 5e: react after seeing the roll, only if +5 helps
+    if isinstance(event, AttackEvent) and event.ac:
+        # Wait until the d20 roll and outcome are determined (fires twice at EXECUTION:
+        # once before roll with ac set, once after roll via post() with dice_roll set)
+        if event.dice_roll is None or event.attack_outcome is None:
+            return None  # Roll not made yet — wait
 
-    # All checks passed — apply Shield
+        # Only react to normal hits (not crits, not auto-hits — can't Shield those)
+        if event.attack_outcome != AttackOutcome.HIT:
+            return None
 
-    # 1. Add +5 AC directly to the event's AC ModifiableValue (affects this attack)
-    event.ac.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=source_entity_uuid,
-            name="Shield (reaction)",
-            value=5
+        # Auto-hit bypasses AC entirely — Shield can't help
+        from dnd.core.modifiers import AutoHitStatus
+        if event.dice_roll.auto_hit_status == AutoHitStatus.AUTOHIT:
+            return None
+
+        # Only use Shield if +5 would actually turn the hit into a miss
+        current_ac = event.ac.normalized_score
+        if event.dice_roll.total >= current_ac + 5:
+            return None  # Even with +5 AC, attack still hits — save the slot
+
+        # Shield would help — apply it
+
+        # 1. Add +5 AC to the event and change outcome to MISS
+        event.ac.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=source_entity_uuid,
+                target_entity_uuid=source_entity_uuid,
+                name="Shield (reaction)",
+                value=5
+            )
         )
-    )
 
-    # 2. Consume reaction + spell slot
-    entity.action_economy.consume("reactions", 1)
-    entity.action_economy.consume(spell_slot_cost_type(slot_level), 1)
+        # 2. Consume reaction + spell slot
+        entity.action_economy.consume("reactions", 1)
+        entity.action_economy.consume(spell_slot_cost_type(slot_level), 1)
 
-    # 3. Apply ShieldBuff condition for subsequent attacks until turn start
-    buff = ShieldBuff(
-        source_entity_uuid=source_entity_uuid,
-        target_entity_uuid=source_entity_uuid
-    )
-    entity.add_condition(buff, parent_event=event)
+        # 3. Apply ShieldBuff condition for subsequent attacks until turn start
+        buff = ShieldBuff(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=source_entity_uuid
+        )
+        entity.add_condition(buff, parent_event=event)
 
-    return event.model_copy(update={
-        "modified": True,
-        "status_message": f"{entity.name} casts Shield (+5 AC)"
-    })
+        return event.model_copy(update={
+            "modified": True,
+            "attack_outcome": AttackOutcome.MISS,
+            "status_message": f"{entity.name} casts Shield (+5 AC, attack blocked)"
+        })
+
+    # Branch 2: Magic Missile damage — block all darts (5e SRD)
+    if _is_magic_missile_damage(event):
+        # 1. Consume reaction + spell slot
+        entity.action_economy.consume("reactions", 1)
+        entity.action_economy.consume(spell_slot_cost_type(slot_level), 1)
+
+        # 2. Apply ShieldBuff (includes MM blocker handler for subsequent darts)
+        buff = ShieldBuff(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=source_entity_uuid
+        )
+        entity.add_condition(buff, parent_event=event)
+
+        # 3. Cancel THIS dart's damage directly (ShieldBuff's handler catches the rest)
+        return event.cancel(status_message=f"{entity.name} casts Shield, blocking Magic Missile")
+
+    return None
 
 
 def create_shield_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create a Shield reaction handler for an entity."""
+    """Create a Shield reaction handler for an entity.
+
+    Two triggers:
+    - ATTACK @ EXECUTION: React to weapon/spell attacks (+5 AC)
+    - TAKE_DAMAGE @ DECLARATION: React to Magic Missile (block all darts)
+    """
     return EventHandler(
         name="Shield",
         source_entity_uuid=source_entity_uuid,
@@ -156,6 +238,11 @@ def create_shield_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
             Trigger(
                 event_type=EventType.ATTACK,
                 event_phase=EventPhase.EXECUTION,
+                event_target_entity_uuid=source_entity_uuid
+            ),
+            Trigger(
+                event_type=EventType.TAKE_DAMAGE,
+                event_phase=EventPhase.EFFECT,
                 event_target_entity_uuid=source_entity_uuid
             )
         ],
