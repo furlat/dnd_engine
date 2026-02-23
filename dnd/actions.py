@@ -1,4 +1,4 @@
-from dnd.core.base_actions import BaseAction, CostType, Cost, BaseCost, ActionEvent, TargetType, ActionCategory
+from dnd.core.base_actions import BaseAction, CostType, Cost, BaseCost, ActionEvent, TargetType, ActionCategory, spell_slot_cost_type
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -1304,6 +1304,63 @@ class Disengage(BaseAction):
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+class DropConcentration(BaseAction):
+    """Drop concentration on a spell voluntarily.
+
+    D&D 5e allows ending concentration at any time (no action required).
+    Removes the Concentrating condition and all linked spell effects.
+    """
+    name: str = Field(default="Drop Concentration")
+    description: str = Field(default="End concentration on current spell")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    action_category: ActionCategory = ActionCategory.ABILITY
+    costs: List[Cost] = Field(default_factory=list)
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+
+        return ActionEvent(
+            name=self.name or "Drop Concentration",
+            description=self.description,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register,
+            source_entity_name=source_name
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        if "Concentrating" not in entity.active_conditions:
+            return declaration_event.cancel(status_message="Not concentrating on any spell")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        entity.remove_condition("Concentrating", parent_event=execution_event)
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message="Dropped concentration"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return completion_event  # No costs
 
 
 # =============================================================================
@@ -2819,7 +2876,7 @@ class SpellAction(BaseAction):
             # Append spell slot cost if not already present
             has_slot_cost = any(c.cost_type.startswith("spell_slot") for c in self.costs)
             if not has_slot_cost:
-                cost_type = cast(CostType, f"spell_slot_{self.cast_at_level}")
+                cost_type = spell_slot_cost_type(self.cast_at_level)
                 self.costs.append(Cost(
                     name=f"Spell Slot L{self.cast_at_level}",
                     cost_type=cost_type,
@@ -2900,8 +2957,8 @@ class SpellAction(BaseAction):
         )
         costs = [base_cost.model_copy()]
         if level > 0:
-            cost_type = cast(CostType, f"spell_slot_{level}")
-            costs.append(Cost(name=f"Spell Slot L{level}", cost_type=cost_type, cost=1, evaluator=entity_action_economy_cost_evaluator))
+            slot_cost_type = spell_slot_cost_type(level)
+            costs.append(Cost(name=f"Spell Slot L{level}", cost_type=slot_cost_type, cost=1, evaluator=entity_action_economy_cost_evaluator))
         return costs
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:

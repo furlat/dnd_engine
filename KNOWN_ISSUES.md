@@ -15,12 +15,7 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 
 ## Open Issues
 
-### Combat log shows pre-resistance damage instead of actual damage taken
-- **Found**: 2026-02-18, observed during barbarian frenzy (rage resistance active)
-- **Error**: Combat log displays full raw damage (e.g., 12) instead of resistance-reduced damage (e.g., 6 after rage halving). Actual HP reduction is correct — only the log is wrong.
-- **Hypothesis**: Confirmed structural bug. The disconnect is in `dnd/actions.py` (`attack_consequences`): `target_entity.receive_damage(...)` returns the post-resistance `actual_damage` from `health.take_damage()`, but **the return value is discarded** — never captured or stored. Meanwhile, `AttackEvent.generate_combat_log()` computes `total_damage` by summing `self.damage_rolls[i].total` — these are the raw pre-resistance dice rolls. The resistance multiplier (0.5 for resistance, 0 for immunity, 2 for vulnerability) is applied deep inside `Health.take_damage()` (`dnd/blocks/health.py` ~line 351) and never flows back to the event or combat log. This affects ALL damage resistance/vulnerability/immunity display, not just barbarian rage — any condition that grants resistance (e.g., `Bear Totem`, `Protection from Energy`, `Absorb Elements`) will show wrong damage in the log.
-- **Fix approach**: Capture `actual_damage = target_entity.receive_damage(...)` in `actions.py`, add an `actual_damage` field to `AttackEvent`, and use it in `generate_combat_log()` for the displayed total. The per-roll breakdown can stay raw for verbose mode, but the headline damage number should reflect what was actually taken.
-- **Status**: OPEN
+
 
 ### Trap lever deactivation doesn't update tile name (LOW PRIORITY)
 - **Found**: 2026-02-17 PvP session
@@ -39,6 +34,8 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Suggested fix**: Two-part problem requiring a configurable approach. (1) The mover shouldn't be threatened by creatures it can't perceive — but a blanket `senses.entities` check is too blunt since some homebrew/monster abilities may want imperceivable OAs. (2) The invisible creature shouldn't automatically make OAs that reveal it — in D&D 5e you can *choose* not to make an OA. The better design is a **reaction policy** system: conditions like Invisible could set a flag (e.g., `suppress_reactions=True`) that the OA processor checks. This way, Invisible/Hidden entities opt out of OAs by default (staying hidden), but the mechanism is general enough for other use cases. The perception check (mover can't see attacker) is the D&D RAW fix, while reaction suppression is the tactical fix (invisible entity *chooses* not to reveal itself).
 - **Impact**: In PvP or AI combat, invisible creatures next to an enemy will incorrectly make OAs when the enemy moves, revealing themselves in the process. This punishes movement near invisible creatures and breaks stealth tactics.
 - **Status**: OPEN
+
+
 
 ### Pathfinding is agnostic to tile conditions (routes through traps/hazards)
 - **Found**: 2026-02-20, observed during gameplay

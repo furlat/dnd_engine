@@ -414,7 +414,8 @@ class GreatWeaponFighting(BaseCondition):
                     event_phase=EventPhase.EFFECT
                 )
             ],
-            event_processor=great_weapon_fighting_processor
+            event_processor=great_weapon_fighting_processor,
+            player_toggleable=True
         )
 
         # Register the handler (add_event_handler internally calls EventQueue.add_event_handler)
@@ -523,7 +524,8 @@ def create_protection_handler(source_entity_uuid: UUID) -> EventHandler:
                 event_phase=EventPhase.EXECUTION
             )
         ],
-        event_processor=protection_processor
+        event_processor=protection_processor,
+        player_toggleable=True
     )
 
 
@@ -1541,7 +1543,8 @@ def create_indomitable_handler(source_entity_uuid: UUID) -> EventHandler:
                 event_phase=EventPhase.EFFECT  # After roll, can see result
             )
         ],
-        event_processor=indomitable_processor
+        event_processor=indomitable_processor,
+        player_toggleable=True
     )
 
 

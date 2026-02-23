@@ -2641,4 +2641,18 @@ class Entity(BaseBlock):
         result.object_actions = self._collect_object_actions()
         self._collect_use_actions(result, potential_targets, include_dead, fov_cache, barrier_positions)
 
+        # Populate handler details (only player-toggleable handlers)
+        for handler in self.event_handlers.values():
+            if not handler.player_toggleable:
+                continue
+            trigger_event = ""
+            if handler.trigger_conditions:
+                trigger_event = handler.trigger_conditions[0].event_type.value
+            result.handler_details.append({
+                "name": handler.name,
+                "uuid": str(handler.uuid),
+                "enabled": handler.enabled,
+                "trigger_event": trigger_event,
+            })
+
         return result
