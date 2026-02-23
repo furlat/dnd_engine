@@ -935,10 +935,6 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
                     display.set_output(["No preview to execute. Use '?' to preview first (e.g., 'fb ? 5 3')"])
                     continue
 
-            # Debug: log command routing to file
-            with open("cli_debug.log", "a") as _dbg:
-                _dbg.write(f"raw={cmd_str!r} cmd={cmd.command!r} is_meta={cmd.is_meta} args={cmd.args}\n")
-
             # Handle toggle/handlers directly (like "la" above)
             if cmd.command == "toggle" and len(cmd.args) >= 2:
                 toggle_state = cmd.args[-1]
@@ -948,18 +944,10 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
                     entity_uuid = state.turn.get("current_entity_uuid") if state.turn else None
                     if entity_uuid:
                         try:
-                            with open("cli_debug.log", "a") as _dbg:
-                                _dbg.write(f"TOGGLE: name={handler_name!r} enabled={enabled} entity={entity_uuid!r}\n")
                             client.toggle_handler(handler_name, enabled, entity_uuid)
-                            with open("cli_debug.log", "a") as _dbg:
-                                _dbg.write(f"TOGGLE: SUCCESS\n")
                             if not refresh_state(client, state):
                                 break
                         except Exception as e:
-                            with open("cli_debug.log", "a") as _dbg:
-                                import traceback
-                                _dbg.write(f"TOGGLE: ERROR {e}\n")
-                                traceback.print_exc(file=_dbg)
                             display.set_output([f"Toggle error: {e}"])
                 continue
 
