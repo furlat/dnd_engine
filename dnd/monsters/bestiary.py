@@ -47,6 +47,7 @@ from dnd.items.test_items import (
     create_acid_flask, create_scroll_of_invisibility,
 )
 from dnd.items.weapons import create_arcane_staff
+from dnd.spells.abjuration import register_shield_reaction
 from dnd.monsters.skeleton_abilities import MarkTargetAction
 
 
@@ -463,6 +464,9 @@ def create_sorcerer(
     register_spell(entity, Invisibility, caster_level=level)          # Stealth utility (L2)
     register_spell(entity, GreaterInvisibility, caster_level=level)  # BG3-style (L4)
 
+    # Register Shield reaction
+    register_shield_reaction(entity)
+
     # Equip a dagger for melee
     dagger = create_dagger(entity.uuid)
     entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
@@ -748,6 +752,9 @@ def create_skeleton_warlock(
     register_spell(entity, EldritchBlast, caster_level=1)
     register_spell(entity, BurningHands, caster_level=1)
     register_spell(entity, Thunderwave, caster_level=1)
+
+    # Register Shield reaction
+    register_shield_reaction(entity)
 
     # Add Scroll of Invisibility to inventory
     scroll = create_scroll_of_invisibility(entity.uuid)

@@ -308,12 +308,8 @@ class HoldPersonEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if success:
-                # Remove concentration from caster - this will automatically
-                # remove HoldPersonEffect via linked_conditions, which removes Paralyzed via sub_conditions
-                if "Concentrating" in caster.active_conditions:
-                    conc = caster.active_conditions.get("Concentrating")
-                    if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Person":
-                        caster.remove_condition("Concentrating", parent_event=event)
+                # Remove the effect from the target — reverse link auto-removes Concentrating from caster
+                target.remove_condition("Hold Person", parent_event=event)
 
             return None
 
@@ -553,11 +549,8 @@ class HoldMonsterEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if success:
-                # Remove concentration (auto-cleans up via linked_conditions)
-                if "Concentrating" in caster.active_conditions:
-                    conc = caster.active_conditions.get("Concentrating")
-                    if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hold Monster":
-                        caster.remove_condition("Concentrating", parent_event=event)
+                # Remove the effect from the target — reverse link auto-removes Concentrating from caster
+                target.remove_condition("Hold Monster", parent_event=event)
             return None
 
         return EventHandler(

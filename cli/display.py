@@ -28,6 +28,42 @@ COST_TYPE_COLORS = {
 }
 DEFAULT_ACTION_COLOR = "bold white"
 
+# Handler shortcut registry — maps shortcut -> handler name and vice versa
+# Populated dynamically from handler_details each render
+_handler_shortcut_to_name: dict[str, str] = {}
+_handler_name_to_shortcut: dict[str, str] = {}
+
+def _generate_handler_shortcut(name: str) -> str:
+    """Generate a shortcut from handler name using initials (same logic as actions)."""
+    words = name.split()
+    if len(words) > 1:
+        return "".join(w[0].lower() for w in words)
+    return name[:2].lower() if len(name) > 1 else name.lower()
+
+def build_handler_shortcuts(handler_details: list[dict]) -> None:
+    """Build shortcut mappings from handler_details list. Handles collisions."""
+    _handler_shortcut_to_name.clear()
+    _handler_name_to_shortcut.clear()
+    for h in handler_details:
+        name = h.get("name", "")
+        shortcut = _generate_handler_shortcut(name)
+        # Handle collision by appending numbers
+        base = shortcut
+        i = 2
+        while shortcut in _handler_shortcut_to_name:
+            shortcut = f"{base}{i}"
+            i += 1
+        _handler_shortcut_to_name[shortcut] = name
+        _handler_name_to_shortcut[name.lower()] = shortcut
+
+def resolve_handler_name(user_input: str) -> str:
+    """Resolve a handler shortcut to full name. Returns input as-is if not a shortcut."""
+    return _handler_shortcut_to_name.get(user_input.lower(), user_input)
+
+def get_handler_shortcut(name: str) -> str:
+    """Get the shortcut for a handler name."""
+    return _handler_name_to_shortcut.get(name.lower(), name.lower())
+
 # Combat log verbosity setting
 COMBAT_LOG_VERBOSITY = CombatLogVerbosity.VERBOSE
 
@@ -1585,6 +1621,23 @@ def render_available_actions_panel(
             content.append(f" {key}", style="dim")
         content.append("\n")
 
+    # Reactions (handler toggle state)
+    handler_details = actions.get("handler_details", [])
+    if handler_details:
+        build_handler_shortcuts(handler_details)
+        content.append("REACTIONS:", style="bold magenta")
+        content.append("  tog <shortcut> on/off\n", style="dim")
+        for h in handler_details:
+            name = h.get("name", "?")
+            shortcut = get_handler_shortcut(name)
+            enabled = h.get("enabled", True)
+            if enabled:
+                content.append("  [ON]  ", style="bold green")
+            else:
+                content.append("  [OFF] ", style="bold red")
+            content.append(f"{name} ", style="white")
+            content.append(f"[{shortcut}]\n", style="dim")
+
     # Always available
     content.append("END", style="bold white")
     content.append(" [e]  ", style="dim")
@@ -2246,6 +2299,11 @@ def show_help():
   fov self            Your entity's vision (fog of war)
   fov global          All entities merged (default)
   fov N               Enemy N's vision (legend numbering)
+
+[bold cyan]Reactions:[/bold cyan]
+  handlers / reactions  Show all handlers (ON/OFF state)
+  toggle <name> on/off  Toggle a handler on or off
+  t <name> on/off       Shortcut for toggle
 
 [bold cyan]Game:[/bold cyan]
   q / quit            Exit the game

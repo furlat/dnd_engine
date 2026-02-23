@@ -64,7 +64,8 @@ from server.api_models import (
     APICurrentTurn, SimpleActionRequest, ActionResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
-    SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest
+    SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest,
+    ToggleHandlerRequest
 )
 from server.session import (
     SessionManager, GameSession,
@@ -295,7 +296,7 @@ def setup_arena_combat(
             grid._tiles_by_uuid[tile.uuid] = tile.position
 
     # Whole arena is dark — torch is the only light source
-    for pos, tile in grid._tiles.items():
+    for tile in grid._tiles.values():
         tile.default_light = LightLevel.DARKNESS
 
     # Wall-mounted torches at dark side corners (visible on map, toggleable)
@@ -1395,6 +1396,10 @@ def _serialize_available_actions(entity: Entity, actions: AvailableActionsResult
         "reactions_remaining": ae.reactions.normalized_score,
         "extra_attacks_remaining": ae.get_resource_current("extra_attacks"),
     }
+    # Add handler details (private to acting entity)
+    if actions.handler_details:
+        result["handler_details"] = actions.handler_details
+
     # Add spell slots for spellcasters
     if entity.is_spellcaster:
         spell_slots = {}
@@ -1431,6 +1436,57 @@ async def get_entity_available_actions(entity_uuid: str):
     _available_actions_cache[entity_uuid] = actions
 
     return _serialize_available_actions(entity, actions)
+
+
+@app.get("/entity/{entity_uuid}/handlers")
+async def get_entity_handlers(entity_uuid: str):
+    """Get all event handlers for an entity with their enabled state."""
+    try:
+        uuid_obj = UUID(entity_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    entity = Entity.get(uuid_obj)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    handlers = []
+    for handler in entity.event_handlers.values():
+        if not handler.player_toggleable:
+            continue
+        trigger_event = ""
+        if handler.trigger_conditions:
+            trigger_event = handler.trigger_conditions[0].event_type.value
+        handlers.append({
+            "name": handler.name,
+            "uuid": str(handler.uuid),
+            "enabled": handler.enabled,
+            "trigger_event": trigger_event,
+        })
+    return {"entity_uuid": entity_uuid, "handlers": handlers}
+
+
+@app.post("/entity/{entity_uuid}/handlers/{handler_name}/toggle")
+async def toggle_entity_handler(entity_uuid: str, handler_name: str, request: ToggleHandlerRequest):
+    """Toggle a handler's enabled state by name.
+
+    Validates that the session owns the entity and it's their turn.
+    """
+    entity = validate_session_action(request.session_id, request.entity_uuid)
+
+    # Verify path entity_uuid matches request body
+    if entity_uuid != request.entity_uuid:
+        raise HTTPException(status_code=400, detail="Entity UUID mismatch")
+
+    found = entity.set_handler_enabled(handler_name, request.enabled)
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Handler '{handler_name}' not found")
+
+    return {
+        "success": True,
+        "handler_name": handler_name,
+        "enabled": request.enabled,
+    }
 
 
 @app.post("/action/end-turn")

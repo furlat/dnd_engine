@@ -21,7 +21,7 @@ from dnd.conditions import Hidden, Invisible
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index
 from dnd.actions import Hide
 from dnd.monsters.bestiary import create_skeleton
-from dnd.items.test_items import Torch, create_torch
+from dnd.items.test_items import create_torch
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
 

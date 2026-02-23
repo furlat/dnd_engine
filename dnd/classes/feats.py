@@ -121,7 +121,8 @@ class LuckyFeature(BaseCondition):
                     event_source_entity_uuid=self.target_entity_uuid
                 ),
             ],
-            event_processor=lucky_processor
+            event_processor=lucky_processor,
+            player_toggleable=True
         )
 
         target.add_event_handler(handler)

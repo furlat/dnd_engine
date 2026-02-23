@@ -353,6 +353,13 @@ class ExecuteByIndexRequest(BaseModel):
     extra_target_uuids: Optional[List[str]] = None  # Additional target UUIDs for MULTI_ENTITY actions
 
 
+class ToggleHandlerRequest(BaseModel):
+    """Request to toggle a handler's enabled state."""
+    session_id: str
+    entity_uuid: str
+    enabled: bool
+
+
 # Response models
 
 class ActionResult(BaseModel):

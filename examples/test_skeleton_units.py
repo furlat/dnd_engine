@@ -122,7 +122,7 @@ def test_skeleton_warrior_creation():
     grid.create_rectangle(0, 0, 15, 15)
 
     warrior = create_skeleton_warrior(name="Test Warrior", position=(0, 0), faction="monsters")
-    _target = create_skeleton(name="Target", position=(1, 0), faction="heroes")
+    create_skeleton(name="Target", position=(1, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     warrior_hp = get_max_hp(warrior)
@@ -156,7 +156,7 @@ def test_skeleton_archer_creation():
 
     archer = create_skeleton_archer(name="Test Archer", position=(0, 0), faction="monsters")
     # Need a target for available actions
-    target = create_skeleton(name="Target", position=(5, 0), faction="heroes")
+    create_skeleton(name="Target", position=(5, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     archer_hp = get_max_hp(archer)
@@ -190,7 +190,7 @@ def test_skeleton_warlock_creation():
 
     warlock = create_skeleton_warlock(name="Test Warlock", position=(0, 0), faction="monsters")
     # Target at (2,0) = 10ft, within Burning Hands cone (15ft) and Thunderwave cube (15ft)
-    _target = create_skeleton(name="Target", position=(2, 0), faction="heroes")
+    create_skeleton(name="Target", position=(2, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     warlock_hp = get_max_hp(warlock)
@@ -272,7 +272,7 @@ def test_eldritch_blast_miss():
         target_entity_uuid=target.uuid,
         caster_level=1
     )
-    result = blast.apply()
+    blast.apply()
 
     remove_spell_modifier(warlock, mod_uuid)
 
@@ -323,7 +323,7 @@ def test_acid_flask_single_target():
         caster_level=1,
         end_position=(5, 5)
     )
-    result = spell.apply()
+    spell.apply()
 
     check(get_hp(target) < initial_hp, f"Target took acid damage (HP {initial_hp} -> {get_hp(target)})")
 
@@ -348,7 +348,7 @@ def test_acid_flask_aoe_multiple_targets():
         caster_level=1,
         end_position=(5, 5)
     )
-    result = spell.apply()
+    spell.apply()
 
     check(get_hp(target1) < initial_hp1, f"Target 1 took damage (HP {initial_hp1} -> {get_hp(target1)})")
     check(get_hp(target2) < initial_hp2, f"Target 2 took damage (HP {initial_hp2} -> {get_hp(target2)})")
@@ -367,9 +367,10 @@ def test_acid_flask_consumable():
     inventory_before = [item.name for item in warrior.inventory.items.values()]
     check("Acid Flask" in inventory_before, "Acid Flask in inventory before use")
 
+    from dnd.blocks.base_item import UsableItem
     flask = next((item for item in warrior.inventory.items.values() if item.name == "Acid Flask"), None)
     check(flask is not None, "Found Acid Flask")
-    if flask:
+    if flask and isinstance(flask, UsableItem):
         check(flask.charges == 1, f"Flask has 1 charge (got {flask.charges})")
         check(flask.is_consumable, "Flask is consumable")
 
@@ -486,7 +487,7 @@ def test_mark_prevents_future_invisibility():
         source_entity_uuid=target.uuid,
         target_entity_uuid=target.uuid,
     )
-    result = target.add_condition(invis)
+    target.add_condition(invis)
 
     # Condition immunity blocks the application
     check("Invisible" not in target.active_conditions, "Invisible prevented by Mark (immunity)")
@@ -806,7 +807,7 @@ def test_scroll_of_invisibility_use():
         from dnd.actions_functional import execute_use_action
         from dnd.core.base_actions import AvailableTarget
         target = AvailableTarget(index=0, target_uuid=warlock.uuid, target_name=warlock.name)
-        result = execute_use_action(warlock, scroll.uuid, "Invisibility", target)
+        execute_use_action(warlock, scroll.uuid, "Invisibility", target)
 
         check("Invisible" in warlock.active_conditions, "Warlock gained Invisible condition")
         check(warlock.is_invisible, "Warlock is_invisible == True")
@@ -858,7 +859,7 @@ def test_warlock_burning_hands():
         end_position=(6, 5),
         cast_at_level=1,
     )
-    result = spell.apply()
+    spell.apply()
 
     check(get_hp(target) < initial_hp, f"Target took fire damage (HP {initial_hp} -> {get_hp(target)})")
     slots_after = warlock.action_economy._get_spell_slot_value(1).normalized_score

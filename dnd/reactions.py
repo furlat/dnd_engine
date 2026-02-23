@@ -65,7 +65,8 @@ def create_opportunity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
             event_phase=EventPhase.EFFECT
         )],
         event_processor=opportunity_attack_processor,
-        source_entity_uuid=source_entity_uuid
+        source_entity_uuid=source_entity_uuid,
+        player_toggleable=True
     )
 
 

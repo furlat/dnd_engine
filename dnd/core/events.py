@@ -519,9 +519,13 @@ class BaseHandler(BaseObject):
     """
     name: str = Field(default="BaseHandler", description="The name of the handler")
     event_processor: EventProcessor = Field(description="The event processor to handle the event")
+    enabled: bool = Field(default=True, description="Whether this handler is active. Disabled handlers are skipped during event dispatch.")
+    player_toggleable: bool = Field(default=False, description="Whether the player can toggle this handler on/off. Only True for reactions and optional features like Divine Smite.")
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
         """Execute the event processor."""
+        if not self.enabled:
+            return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
         return self.event_processor(event, source_entity_uuid)
@@ -550,6 +554,8 @@ class EventHandler(BaseHandler):
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
         """Check triggers then execute processor if any match."""
+        if not self.enabled:
+            return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
         # Empty trigger_conditions means this handler always fires when called
@@ -590,6 +596,8 @@ class SpatialHandler(BaseHandler):
     # No trigger check - position filtering is done by registry lookup
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
         """Execute the event processor (position already validated by registry)."""
+        if not self.enabled:
+            return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
         return self.event_processor(event, source_entity_uuid)

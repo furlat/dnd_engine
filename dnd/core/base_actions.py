@@ -5,7 +5,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SelfActionLogData, MultiEntityLogData, md_color
 from dnd.core.aoe import AoEShape
 from dnd.blocks.sensory import Senses
-from typing import Optional, Callable, OrderedDict, List, Literal, Set, Tuple, cast
+from typing import Optional, Callable, OrderedDict, List, Dict, Literal, Set, Tuple, cast
 from uuid import UUID, uuid4
 from enum import Enum
 
@@ -14,6 +14,23 @@ CostType = Literal[
     "spell_slot_1", "spell_slot_2", "spell_slot_3", "spell_slot_4",
     "spell_slot_5", "spell_slot_6", "spell_slot_7", "spell_slot_8", "spell_slot_9"
 ]
+
+SPELL_SLOT_COST_TYPES: Dict[int, CostType] = {
+    1: "spell_slot_1", 2: "spell_slot_2", 3: "spell_slot_3",
+    4: "spell_slot_4", 5: "spell_slot_5", 6: "spell_slot_6",
+    7: "spell_slot_7", 8: "spell_slot_8", 9: "spell_slot_9",
+}
+
+
+def spell_slot_cost_type(level: int) -> CostType:
+    """Convert a spell slot level (1-9) to its CostType.
+
+    Raises ValueError if level is not 1-9.
+    """
+    result = SPELL_SLOT_COST_TYPES.get(level)
+    if result is None:
+        raise ValueError(f"Invalid spell slot level: {level}")
+    return result
 
 
 class ActionCategory(str, Enum):
@@ -826,6 +843,9 @@ class AvailableActionsResult(BaseModel):
 
     # State info
     remaining_movement: int = Field(default=0, description="Remaining movement in feet")
+
+    # Handler details (private to acting entity — not shown in public entity summary)
+    handler_details: List[dict] = Field(default_factory=list, description="Event handlers with enabled state [{name, uuid, enabled, trigger_event}]")
 
     @property
     def all_actions(self) -> List[AvailableActionInfo]:

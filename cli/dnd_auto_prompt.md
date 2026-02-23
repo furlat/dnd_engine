@@ -30,6 +30,8 @@ The turn prompt includes initial state. After each action, the output shows upda
 | `inspect X Y` | Inspect unknown tile/symbol |
 | `state` | Refresh full state (rarely needed — state updates inline after every action) |
 | `actions` | Refresh full action list (after Dash, or for all AoE positions) |
+| `handlers` | Show all reaction handlers with ON/OFF state |
+| `toggle <name> on/off` | Toggle a reaction handler on or off |
 | `end` | **End your turn — REQUIRED, always run this last** |
 
 Example: `source .venv/bin/activate && python -m cli.agent --token {TOKEN} move 5 3`
@@ -73,6 +75,10 @@ to this file using the Write tool.
 - **Spell slots** shown in RESOURCES line for spellcasters: `Slots: L1:3/4 L2:2/2`
 - **Conditions**: Internal engine markers are hidden. Status effects like Dashing shown in parentheses.
 - **AoE spell targets** are shown in TILE DETAILS as `[SpellName: target1, target2]` annotations on the tiles where you can aim. Cast with `cast <spell> X Y` using the tile coordinates.
+
+## Reactions
+
+Your REACTIONS section (in available actions) shows handlers like Shield, Divine Smite, and Opportunity Attack with [ON]/[OFF] state. These fire automatically when their trigger condition is met. Toggle them with `toggle <name> off` to prevent them from firing (e.g., to avoid breaking invisibility with an opportunity attack). By default all reactions are ON.
 
 ## Tactical Priorities
 
