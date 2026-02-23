@@ -2246,7 +2246,7 @@ def main():
             target_arg = " ".join(sys.argv[2:])
             return cmd_use(client, target_arg)
 
-        elif command in ["dash", "dodge", "disengage"]:
+        elif command in ["dash", "dodge", "disengage", "hide"]:
             # Shortcuts that route to self-action
             return cmd_self_action(client, command.capitalize())
 

@@ -595,7 +595,7 @@ class SpatialSensesCallback:
             for cond in tile.active_conditions.values():
                 if cond.condition_stealth_dc is not None and cond.hazard_filter is not None:
                     # Was hidden before, visible now?
-                    if cond.condition_stealth_dc > old_pp and cond.condition_stealth_dc <= new_pp:
+                    if cond.condition_stealth_dc >= old_pp and cond.condition_stealth_dc < new_pp:
                         log_entry = CombatLogEntry(
                             entry_type=CombatLogEntryType.HAZARD_DETECTED,
                             source_name=owner.name,

@@ -574,7 +574,7 @@ class MagicMissile(SpellAction):
         damage_roll = damage_dice.roll
 
         # Apply damage (child of execution event since no effect phase for auto-hit)
-        target.receive_damage(
+        actual_damage = target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.FORCE,
             source_entity_uuid=caster.uuid,
@@ -586,8 +586,8 @@ class MagicMissile(SpellAction):
             target_entity_name=target.name,
             damages=[dart_damage],
             damage_rolls=[damage_roll],
-            total_damage=damage_roll.total,
-            status_message=f"Dart hits {target.name} for {damage_roll.total} force damage"
+            total_damage=actual_damage,
+            status_message=f"Dart hits {target.name} for {actual_damage} force damage"
         )
 
 

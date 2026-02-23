@@ -23,6 +23,12 @@ This document describes the terrain movement cost system, zone spell conditions,
 - [x] **EventHandler-based entry damage** - No more callbacks needed
 - [x] **Position-indexed spatial handlers** - O(1) handler lookup via `EventQueue.add_spatial_handler()`
 - [x] **Prone auto-stand (BG3 style)** - `dnd/conditions.py:632`
+- [x] **HazardFilter enum** - `dnd/core/base_conditions.py` (ALL, ENEMIES, NON_SOURCE)
+- [x] **condition_stealth_dc** - Perception-gated hazard detection
+- [x] **is_hazardous_for()** - Entity-subjective hazard checks on BaseBlock/GridMap
+- [x] **Safe pathfinding** - Two-pass Dijkstra with `walk_in_danger=False`
+- [x] **SpikeTrapCondition / ZoneMarkerCondition** - Lightweight tile hazard markers
+- [x] **prefer_safe on Move** - Auto-safe movement with safe_paths fallback
 
 ### Zone Spells (Complete)
 
@@ -703,6 +709,88 @@ All tests passing.
 **Helper Conditions**:
 - `SpiritGuardiansTriggered` - Marker removed at target's turn end
 - `SpiritGuardiansSlowed` - Speed halving, removed on zone exit
+
+---
+
+## Hazard Detection & Safe Pathfinding
+
+### Overview
+
+Hazard-aware pathfinding allows entities to avoid dangerous tile conditions (traps, zone spells) when safe alternatives exist. The system is **subjective** — what counts as hazardous depends on the observer's faction and perception.
+
+### HazardFilter Enum (`dnd/core/base_conditions.py`)
+
+Controls which entities consider a condition hazardous:
+
+| Value | Meaning | Example |
+|-------|---------|---------|
+| `ALL` | Hazardous to everyone | Grease, Web |
+| `ENEMIES` | Only hazardous to enemies of the source | Spirit Guardians |
+| `NON_SOURCE` | Hazardous to everyone except the caster | Spike Growth |
+
+Set on `BaseCondition.hazard_filter`. Conditions without `hazard_filter = None` are not hazards.
+
+### Condition Stealth DC (`BaseCondition.condition_stealth_dc`)
+
+Optional perception DC to detect the hazard. If set, the hazard is only visible/avoidable when the observer's passive perception ≥ the DC. Used for hidden traps.
+
+### Key Methods
+
+**BaseBlock** (`dnd/core/base_block.py`):
+- `is_hazardous_for(entity_uuid)` — checks own conditions for hazards, evaluates `hazard_filter` + `condition_stealth_dc` vs observer's perception
+- `is_enemy_of(entity_uuid)` — faction check. BaseBlock defaults to `True`, Entity overrides with faction logic.
+
+**GridMap** (`dnd/core/gridmap.py`):
+- `is_position_hazardous_for(x, y, entity_uuid)` — delegates to tile's `is_hazardous_for()`
+- `is_position_hazardous(x, y)` — non-entity-aware check (any hazard present)
+- `is_walkable_for(x, y, entity_uuid, walk_in_danger=True)` — when `walk_in_danger=False`, hazardous tiles treated as impassable
+- `compute_paths(position, max_distance, ..., walk_in_danger=True)` — Dijkstra with hazard avoidance
+
+### Safe Pathfinding (Two-Pass Dijkstra)
+
+In `Entity.compute_senses_from_position()`:
+
+1. **Pass 1**: Normal Dijkstra → `paths` (all reachable tiles)
+2. **Check**: Do any paths cross hazardous tiles?
+3. **Pass 2** (only if needed): Dijkstra with `walk_in_danger=False` → `safe_paths` (hazard-avoiding routes)
+
+`Senses.safe_paths` is empty when no hazards affect the entity's paths.
+
+### Move Action Integration
+
+- `Move` has `prefer_safe: bool = True` (default). When True, uses `safe_paths` if available, falls back to `paths`.
+- `execute_by_index()` and `ExecuteByIndexRequest` accept `prefer_safe` parameter.
+- CLI: `move ? X Y` previews path, `move X Y short` forces shortest (through hazards).
+
+### Spike Trap Rework
+
+Old: `Spikes` tile type with hardcoded behavior.
+New: `Floor` tile + `SpikeTrapCondition` marker + shared `SpatialHandler` for damage.
+
+- `create_spike_zone(positions, ...)` in `dnd/tiles.py` creates the zone
+- `SpikeTrapCondition` (`dnd/tile_conditions.py`) — marker with `hazard_filter=HazardFilter.ALL`
+- Deactivation removes the condition, tile stays Floor
+
+### Zone Spell Markers
+
+`ZoneControlCondition` has marker fields for hazard detection:
+- `marker_name: Optional[str]` — display name for the marker condition
+- `marker_hazard_filter: Optional[HazardFilter]` — hazard classification
+- `marker_stealth_dc: Optional[int]` — perception DC to detect
+
+`_apply_tile_markers()` creates `ZoneMarkerCondition` on each affected tile.
+
+| Zone Spell | HazardFilter | stealth_dc |
+|-----------|-------------|-----------|
+| Spike Growth | NON_SOURCE | 15 (hidden) |
+| Grease | ALL | None |
+| Web | ALL | None |
+| Cloudkill | ALL | None |
+| Spirit Guardians | ENEMIES | None |
+
+### Tests
+
+- `examples/test_hazard_pathfinding.py` — 48 assertions covering all hazard scenarios
 
 ---
 
