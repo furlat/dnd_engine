@@ -13,8 +13,8 @@ from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, re
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing
-from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility
-from dnd.spells.transmutation import SpikeGrowth
+from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage
+from dnd.spells.transmutation import SpikeGrowth, Slow, Haste
 
 # Lookup dictionaries (like dnd/items/__init__.py)
 CANTRIPS = {
@@ -53,6 +53,7 @@ LEVEL_2_SPELLS = {
     "Web": Web,
     "Invisibility": Invisibility,
     "Darkness": Darkness,
+    "Mirror Image": MirrorImage,
 }
 
 LEVEL_3_SPELLS = {
@@ -64,6 +65,8 @@ LEVEL_3_SPELLS = {
     "Hypnotic Pattern": HypnoticPattern,
     "Spirit Guardians": SpiritGuardians,
     "Daylight": Daylight,
+    "Slow": Slow,
+    "Haste": Haste,
 }
 
 LEVEL_4_SPELLS = {
@@ -143,6 +146,7 @@ __all__ = [
     "Web",
     "Invisibility",
     "Darkness",
+    "MirrorImage",
     # Level 3
     "CallLightning",
     "CallLightningStrike",
@@ -153,6 +157,8 @@ __all__ = [
     "HypnoticPattern",
     "SpiritGuardians",
     "Daylight",
+    "Slow",
+    "Haste",
     # Level 4
     "Blight",
     "Stoneskin",

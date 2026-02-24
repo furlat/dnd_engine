@@ -1,6 +1,6 @@
 """Illusion spells - deceiving the senses and mind.
 
-Contains: Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility
+Contains: Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage
 """
 import random
 from typing import Any, Optional, List, Tuple
@@ -12,10 +12,11 @@ from typing import cast as type_cast
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
+from dnd.core.dice import AttackOutcome
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.conditions import Concentrating, Frightened, Charmed, Incapacitated, Blinded, InvisibilityEffect, GreaterInvisibilityEffect
 
 
@@ -908,4 +909,178 @@ class GreaterInvisibility(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{caster.name} casts Greater Invisibility on {target.name} (concentration)"
+        )
+
+
+# =============================================================================
+# Mirror Image (2nd-level Illusion, NO Concentration) — BG3 Version
+# =============================================================================
+
+class MirrorImageEffect(BaseCondition):
+    """Effect from Mirror Image spell (BG3 version).
+
+    Creates 3 illusory duplicates. Each duplicate grants +3 AC.
+    When an attack misses the caster, one duplicate disappears (AC drops by 3).
+    Condition removed when all duplicates are destroyed or after 10 rounds.
+
+    - 3 duplicates: +9 AC
+    - 2 duplicates: +6 AC
+    - 1 duplicate:  +3 AC
+    - 0 duplicates: condition ends
+    """
+    name: str = "Mirror Image"
+    description: str = "Illusory duplicates increase AC by 3 each"
+
+    duplicates: int = Field(default=3, description="Number of remaining duplicates")
+
+    # Track the AC modifier UUID so we can update it when duplicates are destroyed
+    _ac_modifier_uuid: Optional[UUID] = None
+    _ac_mv_uuid: Optional[UUID] = None
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Target not found"
+            )
+
+        self.duplicates = 3
+
+        # Duration: 10 rounds
+        self.duration.duration_type = DurationType.ROUNDS
+        self.duration.duration = 10
+
+        outs: List[Tuple[UUID, UUID]] = []
+        handler_uuids: List[UUID] = []
+
+        # +9 AC (3 duplicates × 3)
+        ac_mod = NumericalModifier(
+            name="Mirror Image",
+            value=9,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid
+        )
+        mod_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(ac_mod)
+        outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
+        self._ac_modifier_uuid = ac_mod.uuid
+        self._ac_mv_uuid = target.equipment.ac_bonus.uuid
+
+        # Handler: on attack miss, destroy a duplicate
+        miss_handler = self._create_miss_handler()
+        target.add_event_handler(miss_handler)
+        handler_uuids.append(miss_handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied Mirror Image (+9 AC, 3 duplicates) to {target.name}"
+        )
+        return outs, handler_uuids, [], [], effect_event
+
+    def _create_miss_handler(self) -> EventHandler:
+        """When an attack misses the caster, destroy one duplicate."""
+        target_uuid = self.target_entity_uuid
+        condition = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.target_entity_uuid != target_uuid:
+                return None
+
+            if not isinstance(event, AttackEvent):
+                return None
+            if event.attack_outcome is None:
+                return None
+
+            # Only trigger on misses (the attack was evaded thanks to high AC)
+            if event.attack_outcome not in (AttackOutcome.MISS, AttackOutcome.CRIT_MISS):
+                return None
+
+            if condition.duplicates <= 0:
+                return None
+
+            # Destroy one duplicate
+            condition.duplicates -= 1
+            remaining = condition.duplicates
+
+            # Update AC modifier: new value = remaining * 3
+            if condition._ac_modifier_uuid and condition._ac_mv_uuid:
+                from dnd.core.values import ModifiableValue
+                mv = ModifiableValue.get(condition._ac_mv_uuid)
+                if mv:
+                    mod = mv.self_static.value_modifiers.get(condition._ac_modifier_uuid)
+                    if mod:
+                        mod.value = remaining * 3
+
+            # Remove condition if no duplicates left
+            if remaining <= 0:
+                target = Entity.get(target_uuid)
+                if target:
+                    target.remove_condition("Mirror Image", parent_event=event)
+
+            return None
+
+        return EventHandler(
+            name="Mirror Image: Evade",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=target_uuid
+                )
+            ],
+            event_processor=processor
+        )
+
+
+class MirrorImage(SpellAction):
+    """Mirror Image - 2nd level Illusion (NO Concentration) — BG3 Version
+
+    Create 3 illusory duplicates of yourself to distract attackers.
+    Each duplicate increases your AC by 3. When you successfully evade
+    an attack, one of the duplicates disappears.
+
+    Duration: 10 turns. No concentration.
+    """
+    name: str = Field(default="Mirror Image")
+    description: str = Field(default="3 duplicates, +3 AC each, lost on evade")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="illusion")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.SELF)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Self-targeting spell — minimal validation."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply Mirror Image to self."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} creates mirror images"
+        )
+
+        mirror_effect = MirrorImageEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid
+        )
+        caster.add_condition(mirror_effect, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{caster.name} casts Mirror Image (3 duplicates, +9 AC)"
         )
