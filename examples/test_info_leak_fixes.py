@@ -840,6 +840,422 @@ def test_movement_hidden_positions():
 
 
 # =========================================================================
+# Test 7: AoE reveals hidden target — combat log shows real name
+# =========================================================================
+def test_aoe_reveals_hidden_target():
+    """When Fireball hits a Hidden entity and damage breaks Hidden,
+    the combat log sub-entry should show the real target name (not '???')
+    via the revealed_entity_uuids mechanism."""
+    print("\n" + "=" * 60)
+    print("TEST 7: AoE reveals hidden target — revealed_entity_uuids")
+    print("=" * 60)
+
+    from cli.log_filter import filter_combat_log as _filter
+
+    reset_combat_state()
+    setup_arena(20, 20)
+
+    caster = create_caster(name="Wizard", position=(5, 5))
+    hidden_target = create_target(name="Sneaky Rogue", position=(8, 5), faction="monsters")
+    visible_target = create_target(name="Open Skeleton", position=(9, 5), faction="monsters")
+
+    register_spell(caster, Fireball, caster_level=5)
+
+    # Apply Hidden condition with high stealth DC
+    hidden_cond = Hidden(
+        source_entity_uuid=hidden_target.uuid,
+        target_entity_uuid=hidden_target.uuid,
+        stealth_result=30,
+    )
+    hidden_target.add_condition(hidden_cond)
+    Entity.update_all_entities_senses()
+
+    # Verify hidden target not in caster's senses
+    test("Hidden target NOT visible to caster before fireball",
+         hidden_target.uuid not in caster.senses.entities)
+
+    # Set up encounter
+    encounter = Encounter(name="Test Reveal", source_entity_uuid=uuid4())
+    encounter.add_combatant(caster, PassController(source_entity_uuid=caster.uuid))
+    encounter.add_combatant(hidden_target, PassController(source_entity_uuid=hidden_target.uuid))
+    encounter.add_combatant(visible_target, PassController(source_entity_uuid=visible_target.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+    while encounter.get_current_entity() != caster:
+        encounter.next_turn()
+
+    log_start = len(encounter.combat_log)
+
+    # Cast Fireball at hidden target's position
+    fireball = Fireball(
+        source_entity_uuid=caster.uuid,
+        end_position=(8, 5),
+        cast_at_level=3,
+        template=False,
+    )
+    result = fireball.apply()
+    test("Fireball succeeded", result is not None and not result.canceled)
+
+    # Hidden condition should be removed (damage breaks Hidden)
+    test("Hidden condition removed after taking damage",
+         "Hidden" not in hidden_target.active_conditions)
+
+    # Check combat log entries
+    new_entries = encounter.get_combat_log(since=log_start)
+    test("Combat log entries generated", len(new_entries) > 0)
+
+    if new_entries:
+        top_entry = new_entries[0]
+
+        # Check revealed_entity_uuids is populated on top-level entry
+        test("revealed_entity_uuids field exists",
+             hasattr(top_entry, "revealed_entity_uuids"))
+        hidden_uuid_str = str(hidden_target.uuid)
+        test("Hidden target UUID in revealed_entity_uuids",
+             hidden_uuid_str in top_entry.revealed_entity_uuids)
+
+        # Visible target should NOT be in revealed set (was never hidden)
+        visible_uuid_str = str(visible_target.uuid)
+        test("Visible target NOT in revealed_entity_uuids",
+             visible_uuid_str not in top_entry.revealed_entity_uuids)
+
+        # Now test the filter: caster can see visible_target but NOT hidden_target
+        # in the stale snapshot. But revealed_entity_uuids should override.
+        caster_uuid_str = str(caster.uuid)
+        stale_visible = {caster_uuid_str, visible_uuid_str}  # stale: hidden not visible
+
+        entry_dict = top_entry.model_dump()
+        entry_dict["perceiver_uuids"] = list(top_entry.perceiver_uuids)
+        entry_dict["revealed_entity_uuids"] = list(top_entry.revealed_entity_uuids)
+        # Convert sub_entries too
+        for sub in entry_dict.get("sub_entries", []):
+            if isinstance(sub.get("perceiver_uuids"), set):
+                sub["perceiver_uuids"] = list(sub["perceiver_uuids"])
+            if isinstance(sub.get("revealed_entity_uuids"), set):
+                sub["revealed_entity_uuids"] = list(sub["revealed_entity_uuids"])
+
+        filtered = _filter([entry_dict], [caster_uuid_str], stale_visible)
+        test("Filtered log has entry", len(filtered) == 1)
+
+        # Check sub-entries: revealed target should show real name
+        subs = filtered[0].get("sub_entries", [])
+        found_revealed_with_real_name = False
+        found_visible_with_real_name = False
+        for sub in subs:
+            tn = sub.get("target_name", "")
+            if tn == "Sneaky Rogue":
+                found_revealed_with_real_name = True
+            if tn == "Open Skeleton":
+                found_visible_with_real_name = True
+
+        test("Revealed target shows real name (not '???')", found_revealed_with_real_name)
+        test("Visible target shows real name", found_visible_with_real_name)
+
+
+# =========================================================================
+# Test 8: revealed_entity_uuids filter unit tests
+# =========================================================================
+def test_revealed_filter_unit():
+    """Unit tests for revealed_entity_uuids in filter_combat_log."""
+    print("\n" + "=" * 60)
+    print("TEST 8: revealed_entity_uuids filter unit tests")
+    print("=" * 60)
+
+    from cli.log_filter import filter_combat_log as _filter, ANON_NAME as _ANON
+
+    hero_uuid = str(uuid4())
+    revealed_uuid = str(uuid4())
+    still_hidden_uuid = str(uuid4())
+
+    controlled = [hero_uuid]
+    visible_set = {hero_uuid}  # only hero visible in stale snapshot
+
+    # --- Entry with revealed target: should show real name ---
+    entry_revealed = {
+        "source_uuid": hero_uuid, "target_uuid": revealed_uuid,
+        "source_name": "Hero", "target_name": "Revealed Rogue",
+        "verbose": "Hero hits Revealed Rogue for 15 damage",
+        "compact": "Hero hits Revealed Rogue", "detailed": "Hero hits Revealed Rogue",
+        "sub_entries": [],
+        "revealed_entity_uuids": [revealed_uuid],
+    }
+    result = _filter([entry_revealed], controlled, visible_set)
+    test("Revealed target: name NOT anonymized",
+         result[0]["target_name"] == "Revealed Rogue")
+    test("Revealed target: text NOT anonymized",
+         "Revealed Rogue" in result[0]["verbose"])
+
+    # --- Entry with still-hidden target: should still anonymize ---
+    entry_still_hidden = {
+        "source_uuid": hero_uuid, "target_uuid": still_hidden_uuid,
+        "source_name": "Hero", "target_name": "Still Hidden",
+        "verbose": "Hero hits Still Hidden", "compact": "Hero hits Still Hidden",
+        "detailed": "Hero hits Still Hidden",
+        "sub_entries": [],
+        "revealed_entity_uuids": [],  # NOT revealed
+    }
+    result = _filter([entry_still_hidden], controlled, visible_set)
+    test("Still-hidden target: name IS anonymized",
+         result[0]["target_name"] == _ANON)
+
+    # --- Sub-entries inherit parent's revealed set ---
+    entry_parent_with_reveal = {
+        "source_uuid": hero_uuid, "target_uuid": None,
+        "source_name": "Hero", "target_name": None,
+        "verbose": "Hero casts Fireball", "compact": "Fireball", "detailed": "Fireball",
+        "revealed_entity_uuids": [revealed_uuid],
+        "sub_entries": [
+            {"source_uuid": hero_uuid, "target_uuid": revealed_uuid,
+             "source_name": "Hero", "target_name": "Revealed Rogue",
+             "verbose": "Revealed Rogue: DEX save FAIL", "compact": "save",
+             "detailed": "save", "sub_entries": []},
+            {"source_uuid": hero_uuid, "target_uuid": still_hidden_uuid,
+             "source_name": "Hero", "target_name": "Still Hidden",
+             "verbose": "Still Hidden: DEX save SAVE", "compact": "save",
+             "detailed": "save", "sub_entries": []},
+        ],
+    }
+    result = _filter([entry_parent_with_reveal], controlled, visible_set)
+    subs = result[0].get("sub_entries", [])
+    test("Sub-entry revealed target: name shown",
+         subs[0]["target_name"] == "Revealed Rogue")
+    test("Sub-entry still-hidden target: name anonymized",
+         subs[1]["target_name"] == _ANON)
+
+    # --- Non-perceived entry: revealed_entity_uuids doesn't override Layer 1 ---
+    entry_not_perceived = {
+        "source_uuid": revealed_uuid, "target_uuid": hero_uuid,
+        "source_name": "Revealed Rogue", "target_name": "Hero",
+        "verbose": "Revealed Rogue attacks Hero",
+        "compact": "attack", "detailed": "attack",
+        "sub_entries": [],
+        "perceiver_uuids": [revealed_uuid],  # hero NOT in perceivers
+        "revealed_entity_uuids": [revealed_uuid],
+    }
+    result = _filter([entry_not_perceived], controlled, visible_set)
+    test("Not-perceived + revealed: revealed entity name shown (revealed overrides Layer 1)",
+         result[0]["source_name"] == "Revealed Rogue")
+
+
+# =========================================================================
+# Test 9: condition_name in CONDITION_REMOVED combat log data
+# =========================================================================
+def test_condition_removal_log_data():
+    """ConditionRemovalEvent.generate_combat_log() should include condition_name in data."""
+    print("\n" + "=" * 60)
+    print("TEST 9: condition_name in removal combat log data")
+    print("=" * 60)
+
+    reset_combat_state()
+    setup_arena(20, 20)
+
+    target = create_target(name="Target", position=(5, 5))
+    Entity.update_all_entities_senses()
+
+    # Set up encounter for combat log capture
+    encounter = Encounter(name="Test Removal", source_entity_uuid=uuid4())
+    encounter.add_combatant(target, PassController(source_entity_uuid=target.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+    encounter.start_turn()
+
+    # Apply and then remove a Hidden condition
+    hidden_cond = Hidden(
+        source_entity_uuid=target.uuid,
+        target_entity_uuid=target.uuid,
+        stealth_result=20,
+    )
+    target.add_condition(hidden_cond)
+    test("Hidden condition applied", "Hidden" in target.active_conditions)
+
+    log_before = len(encounter.combat_log)
+    target.remove_condition("Hidden")
+    test("Hidden condition removed", "Hidden" not in target.active_conditions)
+
+    # Check combat log for condition_name in data
+    new_logs = encounter.get_combat_log(since=log_before)
+    found_removal_with_name = False
+    for log_entry in new_logs:
+        if log_entry.entry_type.value == "condition_removed":
+            data = log_entry.data
+            if data.get("condition_name") == "Hidden":
+                found_removal_with_name = True
+                break
+        # Also check sub_entries
+        for sub in log_entry.sub_entries:
+            if sub.entry_type.value == "condition_removed":
+                data = sub.data
+                if data.get("condition_name") == "Hidden":
+                    found_removal_with_name = True
+                    break
+
+    test("CONDITION_REMOVED log has condition_name='Hidden' in data", found_removal_with_name)
+
+
+# =========================================================================
+# Test 10: Killing invisible unit — all sub-events show real name
+# =========================================================================
+def test_invisible_kill_reveals_sub_events():
+    """When Fireball kills an invisible (concentration) entity, ALL sub-events
+    in the combat log should show the entity's real name — including deep
+    sub-events like concentration check, Invisible removal, Dead application.
+
+    This is the end-to-end test for the 'Layer 1 trumps revealed' bug fix.
+    """
+    print("\n" + "=" * 60)
+    print("TEST 10: Killing invisible unit — all sub-events show real name")
+    print("=" * 60)
+
+    from cli.log_filter import filter_combat_log as _filter, ANON_NAME as _ANON
+    from dnd.spells.illusion import Invisibility
+    from dnd.conditions import Concentrating
+
+    reset_combat_state()
+    setup_arena(20, 20)
+
+    # Hero (caster) and invisible enemy
+    hero = create_caster(name="Hero Wizard", position=(5, 5), hp=200)
+    enemy = create_caster(name="Sneaky Mage", position=(8, 5), faction="monsters", hp=20)
+
+    register_spell(hero, Fireball, caster_level=5)
+    register_spell(enemy, Invisibility, caster_level=3)
+
+    Entity.update_all_entities_senses()
+
+    # Enemy casts Invisibility on self (concentration spell)
+    invis_spell = Invisibility(
+        source_entity_uuid=enemy.uuid,
+        target_entity_uuid=enemy.uuid,
+        cast_at_level=2,
+        template=False,
+    )
+    invis_result = invis_spell.apply()
+    test("Invisibility spell succeeded", invis_result is not None and not invis_result.canceled)
+    test("Enemy has Invisible condition", "Invisible" in enemy.active_conditions)
+    test("Enemy has Concentrating condition", "Concentrating" in enemy.active_conditions)
+
+    Entity.update_all_entities_senses()
+
+    # Verify enemy not visible to hero
+    test("Invisible enemy NOT in hero's senses",
+         enemy.uuid not in hero.senses.entities)
+
+    # Set up encounter
+    encounter = Encounter(name="Test Invisible Kill", source_entity_uuid=uuid4())
+    encounter.add_combatant(hero, PassController(source_entity_uuid=hero.uuid))
+    encounter.add_combatant(enemy, PassController(source_entity_uuid=enemy.uuid))
+    encounter.roll_initiative()
+    encounter.start_encounter()
+    while encounter.get_current_entity() != hero:
+        encounter.next_turn()
+
+    log_start = len(encounter.combat_log)
+
+    # Cast Fireball at enemy position — should deal lethal damage (enemy has 20 HP)
+    fireball = Fireball(
+        source_entity_uuid=hero.uuid,
+        end_position=(8, 5),
+        cast_at_level=3,
+        template=False,
+    )
+    result = fireball.apply()
+    test("Fireball succeeded", result is not None and not result.canceled)
+
+    # Enemy should be dead (20 HP, Fireball does 8d6 avg ~28 damage)
+    enemy_dead = not enemy.has_hp
+    test("Enemy took damage from Fireball", get_hp(enemy) < 20)
+
+    # Invisible should be removed (either from death or concentration break)
+    test("Invisible condition removed", "Invisible" not in enemy.active_conditions)
+    test("Concentrating condition removed", "Concentrating" not in enemy.active_conditions)
+
+    # Check combat log
+    new_entries = encounter.get_combat_log(since=log_start)
+    test("Combat log entries generated", len(new_entries) > 0)
+
+    if not new_entries:
+        return
+
+    top_entry = new_entries[0]
+
+    # Check revealed_entity_uuids is populated
+    enemy_uuid_str = str(enemy.uuid)
+    test("Enemy UUID in revealed_entity_uuids",
+         enemy_uuid_str in top_entry.revealed_entity_uuids)
+
+    # Now filter the log from hero's perspective with STALE visible set
+    # (enemy was invisible, so NOT in the visible set at snapshot time)
+    hero_uuid_str = str(hero.uuid)
+    stale_visible = {hero_uuid_str}  # only hero visible
+
+    # Convert to dict for filtering
+    def entry_to_dict(entry):
+        d = entry.model_dump()
+        d["perceiver_uuids"] = list(entry.perceiver_uuids)
+        d["revealed_entity_uuids"] = list(entry.revealed_entity_uuids)
+        for sub in d.get("sub_entries", []):
+            _convert_sub_sets(sub)
+        return d
+
+    def _convert_sub_sets(sub):
+        if isinstance(sub.get("perceiver_uuids"), set):
+            sub["perceiver_uuids"] = list(sub["perceiver_uuids"])
+        if isinstance(sub.get("revealed_entity_uuids"), set):
+            sub["revealed_entity_uuids"] = list(sub["revealed_entity_uuids"])
+        for child in sub.get("sub_entries", []):
+            _convert_sub_sets(child)
+
+    entry_dict = entry_to_dict(top_entry)
+    filtered = _filter([entry_dict], [hero_uuid_str], stale_visible)
+    test("Filtered log has entry", len(filtered) == 1)
+
+    # Recursively check ALL sub-entries — none should show "???" for the enemy's name
+    def check_no_anon_for_enemy(entries, depth=0):
+        """Recursively check no sub-entry anonymizes the revealed enemy."""
+        anon_found = []
+        for e in entries:
+            prefix = "  " * depth
+            sn = e.get("source_name", "")
+            tn = e.get("target_name", "")
+            etype = e.get("entry_type", "?")
+            compact = e.get("compact", "")
+
+            # Check source/target name fields
+            if e.get("source_uuid") == enemy_uuid_str and sn == _ANON:
+                anon_found.append(f"{prefix}source_name='???' in {etype}: {compact}")
+            if e.get("target_uuid") == enemy_uuid_str and tn == _ANON:
+                anon_found.append(f"{prefix}target_name='???' in {etype}: {compact}")
+
+            # Check text fields for "???"
+            for field in ("compact", "verbose", "detailed"):
+                text = e.get(field, "")
+                if _ANON in text and (e.get("source_uuid") == enemy_uuid_str
+                                       or e.get("target_uuid") == enemy_uuid_str):
+                    anon_found.append(f"{prefix}{field} has '???' in {etype}: {text}")
+                    break  # one field is enough to flag
+
+            # Recurse
+            anon_found.extend(check_no_anon_for_enemy(e.get("sub_entries", []), depth + 1))
+        return anon_found
+
+    anon_issues = check_no_anon_for_enemy(filtered)
+    if anon_issues:
+        print("  ANONYMIZATION ISSUES FOUND:")
+        for issue in anon_issues:
+            print(f"    - {issue}")
+    test("No sub-entry anonymizes the revealed enemy (zero '???' for Sneaky Mage)",
+         len(anon_issues) == 0)
+
+    # Also verify: top-level entry shows enemy name
+    top_compact = filtered[0].get("compact", "")
+    test("Top-level entry shows enemy name in text",
+         "Sneaky Mage" in top_compact or any(
+             "Sneaky Mage" in s.get("target_name", "") or "Sneaky Mage" in s.get("compact", "")
+             for s in filtered[0].get("sub_entries", [])
+         ))
+
+
+# =========================================================================
 # Run all tests
 # =========================================================================
 if __name__ == "__main__":
@@ -849,6 +1265,10 @@ if __name__ == "__main__":
     test_temporal_filtering()
     test_engine_perceiver_stamping()
     test_movement_hidden_positions()
+    test_aoe_reveals_hidden_target()
+    test_revealed_filter_unit()
+    test_condition_removal_log_data()
+    test_invisible_kill_reveals_sub_events()
 
     print("\n" + "=" * 60)
     total = passed + failed

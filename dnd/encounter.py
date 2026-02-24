@@ -38,6 +38,31 @@ from dnd.controller import Controller, TurnContext
 from dnd.actions_functional import execute_by_index
 
 
+def _scan_logs_for_reveals(logs: List[CombatLogEntry], revealed: Set[str]) -> None:
+    """Recursively scan combat log tree for Hidden/Invisible condition removals."""
+    from dnd.core.combat_log import CombatLogEntryType
+    for log in logs:
+        if log.entry_type == CombatLogEntryType.CONDITION_REMOVED:
+            cond_name = log.data.get("condition_name", "")
+            if cond_name in ("Hidden", "Invisible") and log.target_uuid:
+                target = Entity.get(UUID(log.target_uuid))
+                if target and not target.stealth_dc and not target.is_invisible:
+                    revealed.add(log.target_uuid)
+        _scan_logs_for_reveals(log.sub_entries, revealed)
+
+
+def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -> Set[str]:
+    """Find entities revealed during event chain, checking post-event state.
+
+    Walks the combat log sub_entries tree looking for CONDITION_REMOVED entries
+    where Hidden or Invisible was removed. For each, checks the entity's current
+    state to verify they're truly perceivable (not still hidden by another condition).
+    """
+    revealed: Set[str] = set()
+    _scan_logs_for_reveals(child_logs, revealed)
+    return revealed
+
+
 def _compute_perceivers(event: Event) -> Set[str]:
     """Completely generic: event positions + entity UUIDs -> GridMap subscribers.
 
@@ -382,6 +407,9 @@ class Encounter(BaseObject):
         # Register perceiver computer for temporal visibility on combat logs
         EventQueue.set_perceiver_computer(_compute_perceivers)
 
+        # Register revealed-entity computer for mid-event-chain reveals
+        EventQueue.set_revealed_computer(_compute_revealed_entities)
+
         # Notify controllers
         self._notify_controllers_encounter_start()
 
@@ -423,9 +451,10 @@ class Encounter(BaseObject):
         if Encounter._active_encounter is self:
             Encounter._active_encounter = None
 
-        # Unregister combat log callback and perceiver computer
+        # Unregister combat log callback, perceiver computer, and revealed computer
         EventQueue.set_combat_log_callback(None)
         EventQueue.set_perceiver_computer(None)
+        EventQueue.set_revealed_computer(None)
 
         # Notify controllers
         self._notify_controllers_encounter_end()

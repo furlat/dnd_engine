@@ -455,7 +455,7 @@ def test_f_safe_paths():
     Entity.update_all_entities_senses()
 
     # Check that entity has safe_paths computed
-    has_safe_paths = len(entity.senses.safe_paths) > 0
+    _has_safe_paths = len(entity.senses.safe_paths) > 0
     print(f"  Normal paths: {len(entity.senses.paths)}")
     print(f"  Safe paths: {len(entity.senses.safe_paths)}")
 
@@ -494,7 +494,7 @@ def test_f_no_hazard_no_safe_paths():
     """When no hazards exist, safe_paths should be empty (optimization)."""
     print("\n=== F: No Hazards → No Safe Paths ===")
     reset_combat_state()
-    grid = setup_arena(10)
+    _grid = setup_arena(10)
 
     entity = create_skeleton(name="Test", position=(5, 5))
     Entity.update_all_entities_senses()

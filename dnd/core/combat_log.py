@@ -303,6 +303,14 @@ class CombatLogEntry(BaseModel):
         description="Entity UUIDs that could perceive this event when it happened"
     )
 
+    # Entities revealed (Hidden/Invisible removed) during this event chain.
+    # Used by CLI log_filter to avoid anonymizing entities that were revealed
+    # mid-event (e.g., AoE damage breaks Hidden on a target).
+    revealed_entity_uuids: Set[str] = Field(
+        default_factory=set,
+        description="Entity UUIDs revealed (Hidden/Invisible removed) during this event chain"
+    )
+
     def get_text(self, verbosity: CombatLogVerbosity) -> str:
         """Get formatted text at specified verbosity level."""
         if verbosity == CombatLogVerbosity.COMPACT:

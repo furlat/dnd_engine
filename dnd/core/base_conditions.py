@@ -178,6 +178,7 @@ class ConditionRemovalEvent(Event):
             verbose=verbose,
             detailed=verbose,
             success=True,
+            data={"condition_name": condition_name},
         )
 
 
