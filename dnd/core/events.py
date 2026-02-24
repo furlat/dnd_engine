@@ -172,6 +172,7 @@ class EventType(str, Enum):
     SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"  # Entity's perceivability changed (hidden/invisible)
     SPATIAL_LIGHT_CHANGED = "spatial_light_changed"  # Tile's resolved light level changed
     SPATIAL_OBJECT_CHANGED = "spatial_object_changed"  # Object blocking state changed (door open/close)
+    MOVEMENT_COLLISION = "movement_collision"  # Entity bumped into imperceivable blocker
 
     # Encounter/Turn events
     ENCOUNTER_START = "encounter_start"
@@ -195,6 +196,7 @@ class SpatialChangeType(str, Enum):
     PERCEIVABILITY_CHANGED = "perceivability_changed"
     LIGHT_CHANGED = "light_changed"
     OBJECT_CHANGED = "object_changed"
+    MOVEMENT_COLLISION = "movement_collision"
 
 
 class EventPhase(str, Enum):
@@ -1778,6 +1780,7 @@ class SpatialChangeEvent(Event):
         """
         hint = SensesUpdateHint(
             perceivability_entity=entity_uuid,
+            requires_paths=True,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
@@ -1836,6 +1839,28 @@ class SpatialChangeEvent(Event):
             object_uuid=object_uuid,
             phase=EventPhase.DECLARATION,
             use_register=False,
+            senses_hint=hint,
+        )
+
+    @classmethod
+    def movement_collision(cls, position: Tuple[int, int], mover_uuid: UUID,
+                           source_entity_uuid: Optional[UUID] = None,
+                           parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        """Create an event for an entity bumping into an imperceivable blocker.
+
+        Fired when objective walkability blocks but subjective would allow.
+        Hidden entities at this position will be de-stealthed by their reveal handler.
+        """
+        hint = SensesUpdateHint(requires_paths=True)
+        return cls(
+            source_entity_uuid=source_entity_uuid or mover_uuid,
+            event_type=EventType.MOVEMENT_COLLISION,
+            change_type=SpatialChangeType.MOVEMENT_COLLISION,
+            position=position,
+            entity_uuid=mover_uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+            parent_event=parent_event,
             senses_hint=hint,
         )
 

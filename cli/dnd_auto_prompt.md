@@ -25,7 +25,7 @@ The turn prompt includes initial state. After each action, the output shows upda
 | `move ? X Y` | Preview path to position with hazard info |
 | `jump X Y` | Jump to position |
 | `attack N [T]` | Attack: N=action index, T=target index (default 0) |
-| `cast <spell> [N\|X Y]` | Cast spell at target index or position |
+| `cast <spell> [N\|X Y]` | Cast spell at target index or position (e.g. `cast Fireball 5 3`, `cast Magic Missile 0`) |
 | `self <name>` | Self-action (Dash, Dodge, Disengage, Hide) |
 | `dash` / `dodge` / `disengage` | Shortcuts |
 | `use <name\|N>` | Use object/item (Open Door, Pull Lever, etc.) |

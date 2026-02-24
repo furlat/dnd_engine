@@ -573,6 +573,9 @@ class Encounter(BaseObject):
 
         # NOTE: Combat log auto-captured via callback in phase_to()
 
+        # Clear stale collision data from previous turn (invisible entity may have moved)
+        entity.senses.collision_blocked.clear()
+
         # Update senses (use larger range to cover typical combat arenas)
         entity.update_entity_senses(max_distance=20)
 
