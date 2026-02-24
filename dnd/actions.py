@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent
 from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_block import LightLevel
@@ -399,6 +399,14 @@ class Move(BaseAction):
                 # Check if next step is still valid (tile walkable, not blocked by entity)
                 # Handles: tile destroyed, enemy moved into path, etc.
                 if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
+                    # Check if blocked by imperceivable blocker (would be walkable subjectively)
+                    if grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid, subjective=True):
+                        source_entity.senses.collision_blocked.add(to_pos)
+                        collision_event = SpatialChangeEvent.movement_collision(
+                            position=to_pos, mover_uuid=source_entity.uuid,
+                            parent_event=effect_event.uuid
+                        )
+                        grid._fire_spatial_event(collision_event)
                     break
 
                 # Get step cost from terrain
@@ -1234,9 +1242,14 @@ class Dodge(BaseAction):
         dodging.duration.duration_type = DurationType.ROUNDS
         dodging.duration.duration = 1
 
-        entity.add_condition(dodging, parent_event=execution_event)
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message="Applying Dodging condition"
+        )
 
-        return execution_event.phase_to(
+        entity.add_condition(dodging, parent_event=effect_event)
+
+        return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message="Applied Dodging - attackers have disadvantage"
         )

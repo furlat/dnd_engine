@@ -835,7 +835,7 @@ def format_actions(actions: dict, entity_name: str) -> str:
             if is_spell:
                 # AoE targets are shown in TILE DETAILS with spell#index annotations
                 # Just show usage hint here
-                lines.append(f"    Usage: cast {display_name} X Y (see TILE DETAILS for targeting positions)")
+                lines.append(f"    Usage: cast {_spell_cmd_name(display_name)} X Y (see TILE DETAILS for targeting positions)")
             else:
                 # Non-spell position actions (Move, Jump): show full position list with hazard info
                 pos_strs = []
@@ -1671,6 +1671,17 @@ def cmd_use(client: APIClient, target_arg: str) -> int:
     return 0
 
 
+def _spell_cmd_name(display_name: str) -> str:
+    """Extract the command-friendly spell name from display_name.
+
+    display_name may include an item source like "Acid Flask (Acid Flask)"
+    or "Fireball (Scroll of Fireball)". Strip the parenthetical since the
+    greedy partial matcher handles bare names, and parentheses cause shell issues.
+    """
+    idx = display_name.find(" (")
+    return display_name[:idx] if idx != -1 else display_name
+
+
 def cmd_cast(client: APIClient, args: List[str]) -> int:
     """Cast a spell. Usage: cast <spell_name> [target_index | X Y]"""
     if not validate_my_turn(client):
@@ -1783,13 +1794,13 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
             print(f"TARGETS for {spell_display}:")
             for i, t in enumerate(valid_targets):
                 print(f"  [{i}] {t.get('target_name', '?')}")
-            print(f"Usage: cast {spell_display} <target_index>")
+            print(f"Usage: cast {_spell_cmd_name(spell_display)} <target_index>")
             return 1
 
         try:
             target_num = int(remaining_args[0])
         except ValueError:
-            print(f"ERROR: Target must be a number. Usage: cast {spell_display} <target_index>")
+            print(f"ERROR: Target must be a number. Usage: cast {_spell_cmd_name(spell_display)} <target_index>")
             return 1
 
         if target_num < 0 or target_num >= len(valid_targets):
@@ -1824,13 +1835,13 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
                 print(f"  ({pos[0]},{pos[1]}){extra_str}")
             if len(valid_targets) > 8:
                 print(f"  ... and {len(valid_targets) - 8} more")
-            print(f"Usage: cast {spell_display} X Y")
+            print(f"Usage: cast {_spell_cmd_name(spell_display)} X Y")
             return 1
 
         try:
             x, y = int(remaining_args[0]), int(remaining_args[1])
         except ValueError:
-            print(f"ERROR: Position must be numbers. Usage: cast {spell_display} X Y")
+            print(f"ERROR: Position must be numbers. Usage: cast {_spell_cmd_name(spell_display)} X Y")
             return 1
 
         # Find matching position in prefiltered valid_targets

@@ -22,6 +22,7 @@ class Senses(BaseBlock):
     safe_paths: Dict[Tuple[int,int],List[Tuple[int,int]]] = Field(default_factory=dict, description="Paths avoiding hazardous tiles (empty if no hazards)")
     sense_modes: List[SenseMode] = Field(default_factory=list, description="Special sense modes (Darkvision, Blindsight, etc.) with ranges")
     seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
+    collision_blocked: Set[Tuple[int,int]] = Field(default_factory=set, description="Positions discovered blocked by imperceivable entities/objects during movement")
     _paths_dirty: bool = PrivateAttr(default=False)
     _last_passive_perception: int = PrivateAttr(default=0)
     _last_sense_modes_hash: int = PrivateAttr(default=0)

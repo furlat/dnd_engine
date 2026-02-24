@@ -323,7 +323,9 @@ class GridMap:
 
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
                         mode: MovementMode = MovementMode.WALKING,
-                        walk_in_danger: bool = True) -> bool:
+                        walk_in_danger: bool = True,
+                        subjective: bool = False,
+                        collision_blocked: Optional[Set[Tuple[int, int]]] = None) -> bool:
         """
         Check if position is walkable for a specific entity.
 
@@ -341,18 +343,26 @@ class GridMap:
         for entity_uuid in self._entities_by_position.get((x, y), set()):
             block = BaseBlock.get(entity_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+                if subjective and not block.is_perceivable_by(requesting_entity_uuid):
+                    continue
                 return False
 
         # Check objects at this position (e.g., large boulder blocks walking)
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
+                if subjective and not block.is_perceivable_by(requesting_entity_uuid):
+                    continue
                 return False
 
         # Hazard avoidance when walk_in_danger=False
         if not walk_in_danger:
             if self.is_position_hazardous_for(x, y, requesting_entity_uuid):
                 return False
+
+        # Positions remembered as blocked from previous collisions
+        if collision_blocked and (x, y) in collision_blocked:
+            return False
 
         return True
 
@@ -673,7 +683,9 @@ class GridMap:
     def compute_paths(self, start: Tuple[int, int], max_distance: Optional[int] = None,
                       requesting_entity_uuid: Optional[UUID] = None,
                       movement_mode: MovementMode = MovementMode.WALKING,
-                      walk_in_danger: bool = True
+                      walk_in_danger: bool = True,
+                      subjective: bool = False,
+                      collision_blocked: Optional[Set[Tuple[int, int]]] = None
                       ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
         """
         Compute all reachable positions and paths from start using Dijkstra.
@@ -699,7 +711,8 @@ class GridMap:
         # Choose walkability function based on whether we're checking occupancy
         if requesting_entity_uuid is not None:
             def walkable_check(x: int, y: int) -> bool:
-                return self.is_walkable_for(x, y, requesting_entity_uuid, movement_mode, walk_in_danger)
+                return self.is_walkable_for(x, y, requesting_entity_uuid, movement_mode,
+                                            walk_in_danger, subjective, collision_blocked)
         else:
             def walkable_check(x: int, y: int) -> bool:
                 return self.is_walkable(x, y, movement_mode)

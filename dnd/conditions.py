@@ -1244,6 +1244,7 @@ class Hidden(BaseCondition):
                     Trigger(event_type=EventType.SPATIAL_LIGHT_CHANGED, event_phase=EventPhase.EFFECT),
                     Trigger(event_type=EventType.SPATIAL_ENTITY_ENTERED, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
+                    Trigger(event_type=EventType.MOVEMENT_COLLISION, event_phase=EventPhase.EFFECT),
                 ],
                 event_processor=hidden_reveal_processor
             )
@@ -1275,6 +1276,14 @@ def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[
     or when tile becomes VERY_BRIGHT (light change or movement)."""
     # Only reveal on the last EFFECT event (after damage is fully applied)
     if not event.is_last:
+        return None
+
+    # For MOVEMENT_COLLISION: de-stealth hidden entity if collision at their position
+    if event.event_type == EventType.MOVEMENT_COLLISION:
+        entity = Entity.get(source_entity_uuid)
+        if entity and isinstance(entity, Entity) and isinstance(event, SpatialChangeEvent):
+            if event.position == entity.position and "Hidden" in entity.active_conditions:
+                entity.remove_condition("Hidden", parent_event=event)
         return None
 
     # For SPATIAL_LIGHT_CHANGED: check if tile under hidden entity became VERY_BRIGHT

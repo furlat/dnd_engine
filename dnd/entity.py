@@ -1747,7 +1747,14 @@ class Entity(BaseBlock):
             visible_dict[pos] = True
 
         # Get walkable paths using dijkstra (with occupancy check if entity_uuid provided)
-        _, paths = grid.compute_paths(position, max_distance, requesting_entity_uuid=entity_uuid)
+        # Subjective: imperceivable blockers are transparent so paths don't leak positions
+        collision: Set[Tuple[int, int]] = set()
+        if entity_uuid:
+            ent = Entity._entity_registry.get(entity_uuid)
+            if ent is not None:
+                collision = ent.senses.collision_blocked
+        _, paths = grid.compute_paths(position, max_distance, requesting_entity_uuid=entity_uuid,
+                                      subjective=True, collision_blocked=collision)
 
         # Filter paths to only include those where:
         # 1. The destination is currently visible (lit)
@@ -1772,7 +1779,7 @@ class Entity(BaseBlock):
         if has_any_hazardous:
             _, safe_raw = grid.compute_paths(
                 position, max_distance, requesting_entity_uuid=entity_uuid,
-                walk_in_danger=False
+                walk_in_danger=False, subjective=True, collision_blocked=collision
             )
             # Filter safe paths same as normal paths (visible + known)
             for pos, path in safe_raw.items():
