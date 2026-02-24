@@ -199,6 +199,7 @@ def test_toggle_back_on(session_id: str, hero_uuid: str, handler_name: str):
     resp = requests.get(f"{BASE_URL}/entity/{hero_uuid}/handlers")
     handlers = resp.json()["handlers"]
     handler = next((h for h in handlers if h["name"] == handler_name), None)
+    assert handler is not None, f"Handler '{handler_name}' not found after toggling back on"
     assert handler["enabled"] is True
 
     print(f"  PASSED: '{handler_name}' back ON")

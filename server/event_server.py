@@ -50,7 +50,7 @@ from dnd.items.test_items import (
 )
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
-from dnd.actions_functional import get_available_actions, execute_action, execute_by_index
+from dnd.actions_functional import get_available_actions, execute_action, execute_by_index, execute_use_action
 from dnd.actions import MovementEvent, JumpEvent
 from dnd.core.base_actions import TargetType, AvailableTarget, AvailableActionsResult
 from dnd.core.base_block import BaseBlock, LightLevel
@@ -1651,7 +1651,52 @@ async def execute_position_action(request: PositionActionRequest):
     # Get and validate the template
     template = entity.get_action_template(request.action_name)
     if template is None:
-        raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
+        # Check for scroll/item use actions (template_name contains __item_<uuid>)
+        if "__item_" in request.action_name:
+            item_uuid_str = request.action_name.split("__item_")[1]
+            item_uuid = UUID(item_uuid_str)
+            action_name = request.action_name.split("__item_")[0]
+            pos = (request.position[0], request.position[1])
+            action_target = AvailableTarget(index=0, position=pos)
+
+            log_start_index = len(sim.encounter.combat_log) if sim.encounter else 0
+
+            try:
+                event = execute_use_action(entity, item_uuid, action_name, action_target)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+            # Invalidate cache after execution
+            _available_actions_cache.pop(request.entity_uuid, None)
+
+            deaths = sim.encounter.check_deaths() if sim.encounter else []
+            death_names = [d.entity_name for d in deaths]
+            encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
+
+            event_data = None
+            if event and event.combat_log:
+                event_data = dict(event.combat_log.data)
+
+            action_log_entries: list = []
+            if sim.encounter:
+                for entry in sim.encounter.combat_log[log_start_index:]:
+                    action_log_entries.append(entry.to_dict())
+            if not action_log_entries and event and event.combat_log:
+                action_log_entries.append(event.combat_log.to_dict())
+
+            return ActionResult(
+                success=not event.canceled if event else False,
+                message=(event.status_message if event else None) or "Action executed",
+                event_type=action_name.lower().replace("_", " "),
+                event_data=event_data,
+                entity_hp=entity.get_hp(),
+                deaths=death_names,
+                turn_continues=not encounter_ended and entity.has_hp,
+                encounter_ended=encounter_ended,
+                combat_log_entries=action_log_entries
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
 
     # Accept POSITION_PATH (path-based like Move), POSITION_LOS (LOS-based like Jump), and POSITION_AOE (AoE spells)
     if template.target_type not in (TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE):

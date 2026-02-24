@@ -336,6 +336,11 @@ class Event(BaseObject):
                         # was perceivable, the parent is too
                         for child_log in child_logs:
                             combat_log.perceiver_uuids |= child_log.perceiver_uuids
+                            combat_log.revealed_entity_uuids |= child_log.revealed_entity_uuids
+
+                    # Compute revealed entities from condition removal logs in tree
+                    if EventQueue._revealed_computer:
+                        combat_log.revealed_entity_uuids |= EventQueue._revealed_computer(temp_event, child_logs or [])
 
                     phase_updates['combat_log'] = combat_log
 
@@ -659,6 +664,11 @@ class EventQueue:
     # Takes an Event, returns Set[str] of entity UUIDs that can perceive it.
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
 
+    # Callback for computing revealed entity UUIDs at COMPLETION phase.
+    # Takes an Event and child combat logs, returns Set[str] of entity UUIDs
+    # that were revealed (Hidden/Invisible removed) during the event chain.
+    _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
+
     @classmethod
     def set_combat_log_callback(cls, callback: Optional[Callable[['Event'], None]]) -> None:
         """Register callback for auto-adding events to combat log.
@@ -677,6 +687,16 @@ class EventQueue:
         perceive it (based on GridMap subscriber lookups at affected positions).
         """
         cls._perceiver_computer = func
+
+    @classmethod
+    def set_revealed_computer(cls, func: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]]) -> None:
+        """Register callback for computing revealed entity UUIDs on combat log entries.
+
+        Called at COMPLETION phase when a combat log with child logs is generated.
+        The callback receives the event and child combat logs, returns entity UUID
+        strings that were revealed (Hidden/Invisible removed) during the event chain.
+        """
+        cls._revealed_computer = func
 
     @classmethod
     def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
@@ -1213,6 +1233,7 @@ class EventQueue:
         # Clear event callbacks (spatial senses callbacks, etc.)
         cls._on_event_callbacks.clear()
         cls._perceiver_computer = None
+        cls._revealed_computer = None
 
 
     @classmethod

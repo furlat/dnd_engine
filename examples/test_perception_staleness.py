@@ -12,14 +12,14 @@ J. Combat Logs for Perception Events
 K. Edge Cases
 """
 
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.utils import reset_combat_state
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, HazardFilter
-from dnd.core.base_block import BaseBlock, SensesType, SenseMode, LightLevel
-from dnd.core.events import Event, EventPhase, EventQueue
+from dnd.core.base_block import SensesType, SenseMode
+from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.entity import Entity
@@ -65,6 +65,7 @@ class PerceptionBoostCondition(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], None
@@ -96,6 +97,7 @@ class PerceptionDebuffCondition(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], None
@@ -126,6 +128,7 @@ class TruesightCondition(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], None
@@ -149,6 +152,7 @@ class DarkvisionCondition(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], None
@@ -189,7 +193,7 @@ def test_h1_wis_buff_reveals_hidden_enemy():
     """WIS buff reveals hidden enemy via perception staleness detection."""
     print("\n=== H1: WIS buff reveals hidden enemy ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0))
     enemy = create_skeleton(name="Hidden Enemy", position=(3, 0), faction="evil")
@@ -234,7 +238,7 @@ def test_h2_wis_debuff_hides_previously_visible_enemy():
     """WIS debuff hides a previously visible enemy."""
     print("\n=== H2: WIS debuff hides previously visible enemy ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0))
     enemy = create_skeleton(name="Hidden Enemy", position=(3, 0), faction="evil")
@@ -291,7 +295,7 @@ def test_h3_varying_stealth_dc():
     """Multiple hidden enemies with different stealth DCs."""
     print("\n=== H3: Varying stealth DCs with changing perception ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0))
     enemy_a = create_skeleton(name="Enemy A", position=(3, 0), faction="evil")
@@ -354,7 +358,7 @@ def test_h4_truesight_reveals_invisible():
     """Truesight sense mode reveals invisible entity."""
     print("\n=== H4: Truesight reveals invisible entity ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0))
     enemy = create_skeleton(name="Invisible Enemy", position=(3, 0), faction="evil")
@@ -562,7 +566,7 @@ def test_j1_entity_spotted_on_perception_buff():
     """ENTITY_SPOTTED combat log generated when buff reveals hidden enemy."""
     print("\n=== J1: ENTITY_SPOTTED on perception buff ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0), faction="good")
     enemy = create_skeleton(name="Hidden Rogue", position=(3, 0), faction="evil")
@@ -677,7 +681,7 @@ def test_j3_no_false_positives():
     """Condition that doesn't affect perception produces no perception logs."""
     print("\n=== J3: No false positives ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0), faction="good")
     enemy = create_skeleton(name="Hidden Enemy", position=(3, 0), faction="evil")
@@ -736,7 +740,7 @@ def test_k1_snapshot_initialized_correctly():
     """After first update_all_entities_senses, snapshot matches actual perception."""
     print("\n=== K1: Snapshot initialized correctly ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0))
     Entity.update_all_entities_senses()
@@ -759,7 +763,7 @@ def test_k2_multiple_conditions_in_sequence():
     """Multiple condition changes settle to final state correctly."""
     print("\n=== K2: Multiple condition changes in sequence ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0))
     enemy = create_skeleton(name="Hidden Enemy", position=(3, 0), faction="evil")
@@ -809,7 +813,7 @@ def test_k3_condition_on_other_entity_no_self_recheck():
     """Condition on another entity doesn't trigger observer's perception recheck."""
     print("\n=== K3: Condition on other entity doesn't trigger self-recheck ===")
     reset_combat_state()
-    grid = setup_arena()
+    _grid = setup_arena()
 
     observer = create_skeleton(name="Observer", position=(0, 0))
     other = create_skeleton(name="Other", position=(3, 0))

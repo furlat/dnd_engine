@@ -11,6 +11,7 @@ def filter_combat_log(
     entries: List[dict],
     controlled_uuids: List[str],
     visible_entity_uuids: Optional[Set[str]] = None,
+    parent_revealed: Optional[Set[str]] = None,
 ) -> List[dict]:
     """Combat log filtering: temporal visibility + entity anonymization.
 
@@ -20,7 +21,9 @@ def filter_combat_log(
     the player knows something happened.
 
     Layer 2 (identity): Anonymize entity names for entities the observer
-    can't currently identify (not in visible_entity_uuids).
+    can't currently identify (not in visible_entity_uuids). Entities in
+    revealed_entity_uuids (Hidden/Invisible removed mid-event) are treated
+    as visible.
 
     Movement: hidden positions in parent text are replaced with (?,?).
 
@@ -33,21 +36,38 @@ def filter_combat_log(
     result: List[dict] = []
 
     for entry in entries:
+        # Collect revealed entity UUIDs (entities whose Hidden/Invisible was removed mid-event)
+        # Merge with parent's revealed set so sub-entries inherit reveals
+        revealed = set(entry.get("revealed_entity_uuids", []))
+        if parent_revealed:
+            revealed |= parent_revealed
+
         # Layer 1: temporal — could observer perceive this event?
         perceiver_uuids = set(entry.get("perceiver_uuids", []))
         not_perceived = bool(perceiver_uuids) and not (perceiver_uuids & controlled_set)
 
         if not_perceived:
-            # Fully anonymize: names + ALL positions + text
-            anon = _full_anonymize(entry)
+            # Check if entry involves a revealed entity — if so, bypass full anonymization
+            # (revealed entities were exposed during the parent event chain, observer knows about them)
+            source_uuid = entry.get("source_uuid", "")
+            target_uuid = entry.get("target_uuid")
+            involves_revealed = bool(revealed) and (
+                source_uuid in revealed or (target_uuid is not None and target_uuid in revealed)
+            )
+            if involves_revealed:
+                anon = _anonymize_entry(entry, visible_entity_uuids, revealed)
+            else:
+                # Fully anonymize: names + ALL positions + text
+                anon = _full_anonymize(entry)
         else:
             # Layer 2: identity — anonymize hidden entity names only
-            anon = _anonymize_entry(entry, visible_entity_uuids)
+            # Revealed entities are treated as visible for identity purposes
+            anon = _anonymize_entry(entry, visible_entity_uuids, revealed)
 
-        # Recurse into sub_entries
+        # Recurse into sub_entries (pass revealed set down)
         subs = entry.get("sub_entries", [])
         if subs:
-            filtered_subs = filter_combat_log(subs, controlled_uuids, visible_entity_uuids)
+            filtered_subs = filter_combat_log(subs, controlled_uuids, visible_entity_uuids, revealed)
             anon = {**anon, "sub_entries": filtered_subs}
 
             # Movement: anonymize hidden positions in parent text
@@ -86,15 +106,21 @@ def _full_anonymize(entry: dict) -> dict:
     return anon
 
 
-def _anonymize_entry(entry: dict, visible_uuids: Set[str]) -> dict:
-    """Replace hidden entity names with '???' and positions in movement entries."""
+def _anonymize_entry(entry: dict, visible_uuids: Set[str], revealed_uuids: Optional[Set[str]] = None) -> dict:
+    """Replace hidden entity names with '???' and positions in movement entries.
+
+    Entities in revealed_uuids are treated as visible (they were revealed
+    mid-event-chain, e.g., AoE damage broke Hidden condition).
+    """
+    effective_visible = (visible_uuids | revealed_uuids) if revealed_uuids else visible_uuids
+
     source_uuid = entry.get("source_uuid", "")
     target_uuid = entry.get("target_uuid")
     source_name = entry.get("source_name", "")
     target_name = entry.get("target_name")
 
-    source_hidden = bool(source_uuid) and source_uuid not in visible_uuids
-    target_hidden = bool(target_uuid) and target_uuid not in visible_uuids
+    source_hidden = bool(source_uuid) and source_uuid not in effective_visible
+    target_hidden = bool(target_uuid) and target_uuid not in effective_visible
 
     if not source_hidden and not target_hidden:
         return entry
