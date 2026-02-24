@@ -42,8 +42,8 @@ Handlers that respond to events targeting or affecting the entity. These consume
 | Handler | File | Trigger | Phase | Description |
 |---------|------|---------|-------|-------------|
 | Opportunity Attack Handler | `reactions.py:60` | STEP_MOVEMENT | EFFECT | OA when enemy leaves threatened position |
-| Shield | `spells/abjuration.py:152` | ATTACK | EXECUTION | +5 AC reaction, costs reaction + spell slot |
-| Protection | `classes/fighter.py:517` | ATTACK | EXECUTION | Impose disadvantage on attacks against nearby ally |
+| Shield | `spells/abjuration.py:234` | ATTACK / TAKE_DAMAGE | EXECUTION / EFFECT | +5 AC reaction (dual trigger: ATTACK for weapon attacks, TAKE_DAMAGE for Magic Missile block) |
+| Protection | `classes/fighter.py:518` | ATTACK | EXECUTION | Impose disadvantage on attacks against nearby ally |
 | Intercept | `items/test_reactions.py:132` | STEP_MOVEMENT | EFFECT | Charge to intercept moving enemy |
 | Dodge Roll | `items/test_reactions.py:339` | ATTACK | EFFECT | Dodge away from attacker |
 | Retaliation | `classes/barbarian.py:1195` | TAKE_DAMAGE | EFFECT | Reaction melee attack when hit (Berserker L14) |
@@ -67,17 +67,19 @@ Handlers that fire in response to the entity's own actions or state changes.
 | Handler | File | Trigger | Phase | Description |
 |---------|------|---------|-------|-------------|
 | HasAttacked Tracker | `conditions.py:154` | ATTACK | EXECUTION | Marks entity as having attacked (for Extra Attack, Rage) |
-| HasTakenDamage Tracker | `conditions.py:167` | TAKE_DAMAGE | EFFECT | Marks entity as having taken damage (for Rage) |
-| Death Condition Handler | `conditions.py:966` | DEATH | EXECUTION | Applies Dead condition |
-| Prone Auto-Stand | `actions_functional.py:120` | TURN_START | EFFECT | Auto-stand at turn start (BG3 style) |
-| Extra Attack Resource | `classes/fighter.py:1242` | ATTACK | EXECUTION | Manage extra_attacks resource on attack |
-| Survivor | `classes/fighter.py:1719` | TURN_START | EXECUTION | Heal at turn start if HP < max (Champion L18) |
-| Rage Maintenance | `classes/rage.py:183` | TURN_START | EFFECT | Check attack/damage to maintain rage |
+| HasTakenDamage Tracker | `conditions.py:169` | TAKE_DAMAGE | EFFECT | Marks entity as having taken damage (for Rage) |
+| Death Condition Handler | `conditions.py:972` | DEATH | EXECUTION | Applies Dead condition |
+| Prone Auto-Stand | `actions_functional.py:87` | TURN_START | EFFECT | Auto-stand at turn start (BG3 style) |
+| Weapon Equip Handler | `actions_functional.py:160` | WEAPON_EQUIP | EFFECT | Auto-update attack templates on weapon equip |
+| Weapon Unequip Handler | `actions_functional.py:166` | WEAPON_UNEQUIP | EFFECT | Auto-update attack templates on weapon unequip |
+| Extra Attack Resource | `classes/fighter.py:1244` | TURN_START | EXECUTION | Manage extra_attacks resource on attack |
+| Survivor | `classes/fighter.py:1722` | TURN_START | EXECUTION | Heal at turn start if HP ≤ 50% (Champion L18) |
+| Rage Maintenance | `classes/rage.py:183` | TURN_START | EXECUTION | Check attack/damage to maintain rage |
 | Rage Armor Watch | `classes/rage.py:198` | ARMOR_EQUIP | EXECUTION | End rage if heavy armor equipped |
 | Rage Death End | `classes/rage.py:246` | DEATH | EXECUTION | End rage on death |
 | Relentless Rage | `classes/barbarian.py:906` | TAKE_DAMAGE | EFFECT | CON save to stay at 1 HP instead of dying |
-| Indomitable Might | `classes/barbarian.py:1018` | SKILL_CHECK | EXECUTION | STR check minimum roll |
-| Intimidating Presence End | `classes/barbarian.py:1347` | TURN_END | EFFECT | Remove Frightened if out of range/LOS |
+| Indomitable Might | `classes/barbarian.py:1018` | SKILL_CHECK | EFFECT | STR check minimum = STR score (Barbarian L18) |
+| Intimidating Presence End | `classes/barbarian.py:1348` | TURN_START | EXECUTION | Remove Frightened if out of range/LOS (Berserker L10) |
 
 ### Spell Effect Handlers
 
@@ -85,8 +87,9 @@ Handlers registered by spell conditions for duration management and repeat saves
 
 | Handler | File | Trigger | Phase | Description |
 |---------|------|---------|-------|-------------|
-| Shield: Turn Start Removal | `spells/abjuration.py:68` | TURN_START | EXECUTION | Remove Shield buff at caster's turn start |
-| Mage Armor Watch | `spells/abjuration.py:252` | ARMOR_EQUIP | EFFECT | Cancel Mage Armor if armor equipped |
+| Shield: Magic Missile Block | `spells/abjuration.py:82` | TAKE_DAMAGE | EFFECT | Block Magic Missile darts while Shield active |
+| Shield: Turn Start Removal | `spells/abjuration.py:108` | TURN_START | EXECUTION | Remove Shield buff at caster's turn start |
+| Mage Armor Watch | `spells/abjuration.py:340` | ARMOR_EQUIP | EXECUTION | Cancel Mage Armor if armor equipped |
 | Hold Person Repeat Save | `spells/enchantment.py:316` | TURN_END | EFFECT | WIS save to break paralysis |
 | Hold Monster Repeat Save | `spells/enchantment.py:556` | TURN_END | EFFECT | WIS save to break paralysis |
 | Sleep Wake Handler | `spells/enchantment.py:938` | TAKE_DAMAGE | EFFECT | Wake on damage |
@@ -115,19 +118,21 @@ SpatialHandlers indexed by grid position for zone spell effects.
 | Spirit Guardians Turn Start | `spells/conjuration.py:1877` | TURN_START | EFFECT | Save vs radiant damage each turn |
 | Spirit Guardians Exit | `spells/conjuration.py:1905` | SPATIAL_ENTITY_LEFT | EFFECT | Remove slow on exit |
 | Spirit Guardians Follow | `spells/conjuration.py:1931` | SPATIAL_ENTITY_ENTERED | EFFECT | Move zone with caster |
+| Fog Cloud Zone | `spells/conjuration.py:2105` | — | — | Light-level passive zone (DARKNESS + obscurement), no event handlers |
+| Darkness Zone | `spells/conjuration.py:2215` | — | — | Light-level passive zone (MAGICAL_DARKNESS + obscurement), no event handlers |
 | Spike Zone | `tiles.py:80` | SPATIAL_ENTITY_ENTERED | EFFECT | Tile-based spike damage |
 | Spikes Entry | `tiles.py:154` | SPATIAL_ENTITY_ENTERED | EFFECT | Spike trap on single tile |
 
 ### Hidden/Invisibility Reveal Handlers
 
-Registered by Hidden, InvisibilityEffect, and GreaterInvisibilityEffect conditions.
+Registered by Hidden, InvisibilityEffect, and GreaterInvisibilityEffect conditions. All use `creation_lineage_uuid` to prevent self-triggering (the action that applied the condition doesn't immediately reveal it).
 
 | Handler | File | Trigger | Phase | Description |
 |---------|------|---------|-------|-------------|
-| Hidden Reveal | `conditions.py` | ATTACK/CAST_SPELL/BASE_ACTION | EFFECT | Remove Hidden on attack/spell/action |
-| Invisibility Reveal | `conditions.py` | ATTACK/CAST_SPELL/BASE_ACTION | EFFECT | Remove Invisible on attack/spell/action |
-| Greater Invisibility Check | `conditions.py` | ATTACK/CAST_SPELL/BASE_ACTION | EFFECT | Stealth check vs escalating DC |
-| Concentration Check | `conditions.py` | TAKE_DAMAGE | EFFECT | CON save DC max(10, dmg/2) to maintain concentration |
+| Hidden Reveal | `conditions.py:1230` | ATTACK/TAKE_DAMAGE/CONDITION_APPLICATION/CAST_SPELL/BASE_ACTION/SPATIAL_LIGHT_CHANGED/SPATIAL_ENTITY_ENTERED | EFFECT | Remove Hidden on attack/spell/action/light exposure. Respects NON_REVEALING_ACTIONS whitelist. |
+| Invisibility Reveal | `conditions.py:1375` | ATTACK/CAST_SPELL/BASE_ACTION | EFFECT | Remove InvisibilityEffect on attack/spell/action. Respects NON_REVEALING_ACTIONS whitelist. |
+| Greater Invisibility Check | `conditions.py:1484` | ATTACK/CAST_SPELL/BASE_ACTION | EFFECT | Stealth check vs escalating DC (base 15, +1 per success). Respects NON_REVEALING_ACTIONS whitelist. |
+| Concentration Check | `conditions.py:1093` | TAKE_DAMAGE/DEATH | EFFECT | CON save DC max(10, dmg/2) to maintain concentration. Auto-breaks on death. Dynamic name includes spell name. |
 
 ---
 
@@ -165,6 +170,18 @@ for level in range(max_level, 0, -1):
 ```
 
 Highest fires first. Sets a flag in `event.context` to prevent lower handlers from double-dipping. Disabling the highest causes the next-highest to fire.
+
+### Direct EventQueue Registration (Weapon Handlers, Zone Auto-Move)
+
+Some handlers use `EventQueue.add_event_handler()` directly instead of `entity.add_event_handler()`. These are NOT tracked on the entity and won't show in handler lists:
+- **WeaponEquipHandler / WeaponUnequipHandler** — auto-update attack templates on equip/unequip
+- **Cloudkill Auto-Move** — moves zone on caster's turn
+- **Spirit Guardians Follow** — moves zone with caster
+- **Call Lightning Cleanup** — unregisters action on condition removal
+
+### Light-Level Passive Zones (Fog Cloud, Darkness)
+
+Some zone spells have **no EventHandlers at all**. Fog Cloud and Darkness work purely through the light system — they set tile light levels (DARKNESS / MAGICAL_DARKNESS) via `ZoneControlCondition`, which the senses system picks up automatically. No entry/exit/turn-start handlers needed.
 
 ---
 

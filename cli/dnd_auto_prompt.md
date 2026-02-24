@@ -48,7 +48,7 @@ Example: `source .venv/bin/activate && python -m cli.agent --token {TOKEN} move 
 ## Rules
 
 1. **ALWAYS run `end`** as your LAST command. If you don't, the system force-ends your turn.
-2. **Pick positions from listed targets only.** Never guess coordinates.
+2. **Pick positions from listed targets.** For AoE spells, you can also target any visible position within range (not just annotated ones) — useful for area denial or flushing hidden enemies.
 3. **After Dash, run `actions`** to see expanded movement targets (inline state shows map/entities but `actions` shows full position list).
 4. **Inspect unknown symbols** (`inspect X Y`) before moving near them.
 5. **If a command fails**, try a different action. Do NOT retry the same command.
@@ -76,7 +76,7 @@ to this file using the Write tool.
 - **Actions show cost** in parentheses: `(action)`, `(bonus)`, `(FREE)`. `FREE` = no action economy cost.
 - **Spell slots** shown in RESOURCES line for spellcasters: `Slots: L1:3/4 L2:2/2`
 - **Conditions**: Internal engine markers are hidden. Status effects like Dashing shown in parentheses.
-- **AoE spell targets** are shown in TILE DETAILS as `[SpellName: target1, target2]` annotations on the tiles where you can aim. Cast with `cast <spell> X Y` using the tile coordinates.
+- **AoE spell targets** are shown in TILE DETAILS as `[SpellName: target1, target2]` annotations on tiles where entities would be hit. You can also target ANY visible position within range — for area denial or flushing hidden enemies. Cast with `cast <spell> X Y`.
 
 ## Reactions
 

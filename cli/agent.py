@@ -427,9 +427,7 @@ def format_map(state: dict, visible_entity_uuids: Optional[set] = None,
                 count = t.get("affected_count", 0)
                 if not count:
                     continue
-                # Skip self-only targets
-                if count == 1 and affected_uuids and affected_uuids[0] == my_entity_uuid:
-                    continue
+                # Self-only targets still shown (for area denial / flushing hidden enemies)
                 # Build name list: "self" for caster, actual names for others
                 name_list: List[str] = []
                 for uid, uname in zip(affected_uuids, affected_names):
