@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, get_natural_roll
 from dnd.monsters.bestiary import create_sorcerer, create_goblin
 from dnd.spells.evocation import IceStorm, IceStormTerrain
