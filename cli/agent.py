@@ -1692,7 +1692,7 @@ def _spell_cmd_name(display_name: str) -> str:
 
 
 def cmd_cast(client: APIClient, args: List[str]) -> int:
-    """Cast a spell. Usage: cast <spell_name> [target_index | X Y]"""
+    """Cast a spell. Usage: cast <spell_name> [target_index | X Y] or cast ? <spell_name> X Y to preview"""
     if not validate_my_turn(client):
         return 1
 
@@ -1704,6 +1704,14 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
     if not args:
         print("Usage: cast <spell_name> [target_index | X Y]")
         return 1
+
+    # Strip preview flag from args before spell name matching
+    cast_preview_mode = args[0] == "?"
+    if cast_preview_mode:
+        args = args[1:]
+        if not args:
+            print("Usage: cast ? <spell_name> X Y")
+            return 1
 
     actions = client.get_available_actions(entity_uuid)
     if not actions:
@@ -1853,9 +1861,12 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
 
     elif spell_source == "position":
         # Position-targeting spell (AoE), needs X Y
+        preview_mode = cast_preview_mode
+
         if not valid_targets and len(remaining_args) < 2:
             print(f"No precomputed positions for {spell_display}.")
             print(f"Aim at a position: cast {_spell_cmd_name(spell_display)} X Y")
+            print(f"Preview first: cast ? {_spell_cmd_name(spell_display)} X Y")
             return 1
 
         if len(remaining_args) < 2:
@@ -1881,6 +1892,29 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
         except ValueError:
             print(f"ERROR: Position must be numbers. Usage: cast {_spell_cmd_name(spell_display)} X Y")
             return 1
+
+        if preview_mode:
+            # Preview: compute AoE shape without executing
+            try:
+                preview = client.preview_position_action(template_name, (x, y), entity_uuid)
+            except Exception as e:
+                print(f"ERROR: Cannot preview {spell_display} at ({x},{y}): {e}")
+                return 1
+            if preview.get("success"):
+                positions = preview.get("affected_positions", [])
+                names = preview.get("affected_entity_names", [])
+                count = preview.get("affected_count", 0)
+                cell_strs = [f"({p[0]},{p[1]})" for p in positions]
+                print(f"PREVIEW: {spell_display} at ({x},{y}) \u2014 {len(positions)} cells, {count} targets")
+                if names:
+                    for name in names:
+                        print(f"  \u2022 {name}")
+                else:
+                    print("  (no targets)")
+                print(f"Cells: {', '.join(cell_strs)}")
+            else:
+                print(f"ERROR: {preview.get('message', 'preview failed')}")
+            return 0
 
         # Find matching position in prefiltered valid_targets
         target = None

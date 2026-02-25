@@ -382,6 +382,28 @@ class APIClient:
         resp.raise_for_status()
         return resp.json()
 
+    def preview_position_action(self, action_name: str, position: Tuple[int, int],
+                                entity_uuid: Optional[str] = None) -> Dict[str, Any]:
+        """Preview AoE at a position: returns affected cells and entities without executing.
+
+        Args:
+            action_name: Template name (e.g., "Burning Hands")
+            position: Target (x, y) position
+            entity_uuid: Entity performing the action
+        """
+        session_id = self._require_session()
+        uuid = entity_uuid or self._current_entity_uuid
+        if not uuid:
+            raise ValueError("No entity UUID")
+        resp = self.client.post("/action/position/preview", json={
+            "session_id": session_id,
+            "entity_uuid": uuid,
+            "action_name": action_name,
+            "position": list(position),
+        })
+        resp.raise_for_status()
+        return resp.json()
+
     def get_handlers(self, entity_uuid: Optional[str] = None) -> Dict[str, Any]:
         """Get all event handlers for an entity."""
         uuid = entity_uuid or self._current_entity_uuid

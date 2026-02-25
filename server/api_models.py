@@ -307,6 +307,15 @@ class ControlledEntitiesResponse(BaseModel):
     controlled_entities: List[dict]  # [{uuid, name, faction, hp, position}]
 
 
+class AoEPreviewResult(BaseModel):
+    """Result of an AoE position preview (no execution)."""
+    success: bool
+    message: str = ""
+    affected_positions: List[Tuple[int, int]] = []
+    affected_entity_names: List[str] = []
+    affected_count: int = 0
+
+
 # =============================================================================
 # Request models for action endpoints (with session support)
 # =============================================================================
