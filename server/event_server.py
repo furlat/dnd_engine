@@ -1378,6 +1378,11 @@ def _serialize_action(a) -> dict:
         "weapon_name": a.weapon_name,
         "action_category": a.action_category.value
     }
+    # Multi-target fields
+    if a.num_projectiles is not None:
+        result["num_projectiles"] = a.num_projectiles
+    if a.allow_same_target is not None:
+        result["allow_same_target"] = a.allow_same_target
     # Item use fields
     if a.is_item_use:
         result["is_item_use"] = True

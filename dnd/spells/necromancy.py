@@ -1,6 +1,6 @@
 """Necromancy spells - manipulating life force and death.
 
-Contains: Blight, BlindnessDeafness, FalseLife, ChillTouch
+Contains: Blight, BlindnessDeafness, FalseLife, ChillTouch, NecroticBless
 """
 from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID
@@ -21,7 +21,8 @@ from typing import Any, Dict
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import SpellAction, SpellEvent
 from dnd.spells.evocation import validate_line_of_sight
-from dnd.conditions import Blinded, Deafened
+from dnd.conditions import Blinded, Deafened, Concentrating
+from dnd.spells.enchantment import BaneEffect, BlessEffect
 
 
 class FalseLife(SpellAction):
@@ -674,6 +675,9 @@ class BlindnessDeafness(SpellAction):
         """1 target base + 1 per upcast level."""
         return 1 + self.get_upcast_bonus()
 
+    def get_multi_target_count(self) -> Optional[int]:
+        return self.get_num_projectiles()
+
     def get_all_targets(self) -> List[UUID]:
         """Return all targets."""
         targets: List[UUID] = []
@@ -771,3 +775,118 @@ class BlindnessDeafness(SpellAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"{target.name} is {self.effect_type.capitalize()} by Blindness/Deafness"
         )
+
+
+# =============================================================================
+# NECROTIC BLESS (Homebrew)
+# =============================================================================
+
+class NecroticBless(SpellAction):
+    """Necrotic Bless — 2nd-level Necromancy (Concentration, Homebrew)
+
+    Target up to 4 creatures. Undead targets gain BlessEffect (no save).
+    Non-undead targets must succeed on a CHA save or suffer BaneEffect.
+    """
+    name: str = Field(default="Necrotic Bless")
+    description: str = Field(default="4 targets: undead get +1d4, others CHA save or -1d4")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="necromancy")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    )
+
+    # Multi-target configuration
+    allow_same_target: bool = Field(default=False)
+    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=True)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return 4
+
+    def get_all_targets(self) -> List[UUID]:
+        targets: List[UUID] = []
+        if self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+        for extra in self.extra_target_entity_uuids:
+            if extra not in targets:
+                targets.append(extra)
+        return targets[:4]
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+
+        # Create or find Concentrating condition
+        if "Concentrating" not in caster.active_conditions:
+            concentration = Concentrating(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=caster.uuid,
+                spell_name="Necrotic Bless",
+            )
+            caster.add_condition(concentration, parent_event=execution_event)
+        concentration = caster.active_conditions["Concentrating"]
+
+        is_undead = target.creature_type == CreatureType.UNDEAD
+
+        if is_undead:
+            # Undead: auto-apply BlessEffect (no save)
+            bless_effect = BlessEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+            )
+            target.add_condition(bless_effect, parent_event=execution_event)
+            concentration.add_linked_condition(target.uuid, bless_effect.uuid)
+
+            effect_event = execution_event.phase_to(
+                new_phase=EventPhase.EFFECT,
+                target_entity_name=target.name,
+                status_message=f"Necrotic Bless - {target.name} (undead) is blessed",
+            )
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Necrotic Bless - {target.name} (undead) is blessed",
+            )
+        else:
+            # Non-undead: CHA save or BaneEffect
+            save_request = caster.create_saving_throw_request(
+                target_entity_uuid=target.uuid,
+                ability_name="charisma",
+                dc=dc,
+                parent_event=execution_event.uuid,
+            )
+            _, save_roll, success = target.saving_throw(save_request)
+
+            effect_event = execution_event.phase_to(
+                new_phase=EventPhase.EFFECT,
+                save_ability="charisma",
+                save_dc=dc,
+                save_success=success,
+                save_roll=save_roll,
+                target_entity_name=target.name,
+                status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}",
+            )
+
+            if success:
+                return effect_event.phase_to(
+                    new_phase=EventPhase.COMPLETION,
+                    status_message=f"Necrotic Bless - {target.name} resists",
+                )
+
+            bane_effect = BaneEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+            )
+            target.add_condition(bane_effect, parent_event=effect_event)
+            concentration.add_linked_condition(target.uuid, bane_effect.uuid)
+
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Necrotic Bless - {target.name} is baned",
+            )

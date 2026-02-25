@@ -1242,7 +1242,10 @@ def _categorize_actions(actions: Dict[str, Any], entities: List[Dict[str, Any]])
     spell_actions_from_position = [a for a in position_actions if a.get("action_category", "ability") == "spell"]
     spell_actions_from_self = [a for a in all_self_actions if a.get("action_category", "ability") == "spell"]
     all_spell_actions = spell_actions_from_entity + spell_actions_from_position + spell_actions_from_self
-    valid_spells = [a for a in all_spell_actions if a.get("valid_targets") and a.get("can_afford")]
+    valid_spells = [a for a in all_spell_actions if a.get("can_afford") and (
+        a.get("valid_targets")
+        or a.get("target_type") == "position_aoe"  # SELF-range AOE: castable at any visible pos
+    )]
 
     # Attacks
     non_spell_entity_actions = [a for a in all_entity_actions if a.get("action_category", "ability") != "spell"]
@@ -1347,7 +1350,10 @@ def render_available_actions_panel(
     spell_actions_from_position = [a for a in position_actions if a.get("action_category", "ability") == "spell"]
     spell_actions_from_self = [a for a in all_self_actions if a.get("action_category", "ability") == "spell"]
     all_spell_actions = spell_actions_from_entity + spell_actions_from_position + spell_actions_from_self
-    valid_spells = [a for a in all_spell_actions if a.get("valid_targets") and a.get("can_afford")]
+    valid_spells = [a for a in all_spell_actions if a.get("can_afford") and (
+        a.get("valid_targets")
+        or a.get("target_type") == "position_aoe"  # SELF-range AOE: castable at any visible pos
+    )]
 
     def is_attack_action(action: Dict[str, Any]) -> bool:
         """Check if action is an attack using explicit is_attack field.
@@ -1470,7 +1476,10 @@ def render_available_actions_panel(
                 content.append(f"] ", style="dim")
                 content.append(f"{cost_label[0]} ", style=cost_label[1])
                 content.append(f"{display_name}", style="bold")
-                content.append(f" ({len(targets)} pos) [{cmd} X Y] or [{cmd} ? X Y] preview\n", style="dim")
+                if targets:
+                    content.append(f" ({len(targets)} pos) [{cmd} X Y] or [{cmd} ? X Y] preview\n", style="dim")
+                else:
+                    content.append(f" [{cmd} X Y] aim direction\n", style="dim")
 
             # Entity-targeting spells (single or multi)
             elif target_type in ("entity", "multi_entity"):

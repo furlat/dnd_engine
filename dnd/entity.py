@@ -2050,6 +2050,8 @@ class Entity(BaseBlock):
             weapon_slot=weapon_slot,
             weapon_name=weapon_name,
             action_category=template.action_category,
+            num_projectiles=template.get_multi_target_count() if target_type == TargetType.MULTI_ENTITY else None,
+            allow_same_target=template.allow_same_target if target_type == TargetType.MULTI_ENTITY else None,
             is_item_use=is_item_use,
             source_item_uuid=source_item_uuid,
             item_stack_count=item_stack_count,
@@ -2391,7 +2393,17 @@ class Entity(BaseBlock):
                     candidates = grid.get_positions_near_entities(prefilter_positions, radius)
                     valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
                 else:
-                    continue  # No entities to hit
+                    # No entities to hit — SELF-range AOE still castable at any visible position
+                    action_range = template.get_range()
+                    if action_range and action_range.type == RangeType.SELF:
+                        actions.append(self._make_action_info(
+                            template_name=template_name,
+                            target_type=TargetType.POSITION_AOE,
+                            valid_targets=[],
+                            can_afford=True,
+                            template=template,
+                        ))
+                    continue
 
             valid_positions: List[AvailableTarget] = []
             idx = 0
@@ -2562,6 +2574,20 @@ class Entity(BaseBlock):
                         candidates = grid.get_positions_near_entities(prefilter_positions, radius)
                         valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
                     else:
+                        # No entities to hit — SELF-range AOE still castable at any visible position
+                        use_action_range = use_template.get_range()
+                        if use_action_range and use_action_range.type == RangeType.SELF:
+                            result.position_actions.append(self._make_action_info(
+                                template_name=template_name,
+                                target_type=TargetType.POSITION_AOE,
+                                valid_targets=[],
+                                can_afford=True,
+                                template=use_template,
+                                display_name=display_name,
+                                is_item_use=True,
+                                source_item_uuid=item_uuid,
+                                item_stack_count=stack_count_field,
+                            ))
                         continue
 
                 use_valid_positions: List[AvailableTarget] = []
