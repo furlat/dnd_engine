@@ -11,21 +11,21 @@ Tests:
 7. Haste + Slow + Action Surge (3 actions, no EA on any)
 """
 
+from typing import cast as type_cast
 from uuid import uuid4, UUID
 from dnd.utils import (
     reset_combat_state, set_hp, has_condition, get_hp,
     force_attack_hit, remove_attack_modifier, deal_damage_to
 )
 from dnd.core.gridmap import get_map
+from dnd.core.events import AbilityName
 from dnd.core.modifiers import DamageType, NumericalModifier, AdvantageStatus
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.conditions import Concentrating
 from dnd.spells import Haste, Slow
-from dnd.spells.transmutation import HasteEffect, SlowedEffect
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_action
 from dnd.core.base_actions import AvailableTarget
 from dnd.core.events import WeaponSlot
@@ -42,7 +42,7 @@ from dnd.actions import DropConcentration
 
 def force_save_fail(entity: Entity, ability: str = "wisdom") -> UUID:
     """Add -100 to saving throw to guarantee failure. Returns modifier UUID."""
-    save = entity.saving_throws.get_saving_throw(ability)
+    save = entity.saving_throws.get_saving_throw(type_cast(AbilityName, ability))
     mod = NumericalModifier(name="Force Fail", value=-100,
                             source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
     save.bonus.self_static.add_value_modifier(mod)
@@ -51,7 +51,7 @@ def force_save_fail(entity: Entity, ability: str = "wisdom") -> UUID:
 
 def force_save_succeed(entity: Entity, ability: str = "wisdom") -> UUID:
     """Add +100 to saving throw to guarantee success. Returns modifier UUID."""
-    save = entity.saving_throws.get_saving_throw(ability)
+    save = entity.saving_throws.get_saving_throw(type_cast(AbilityName, ability))
     mod = NumericalModifier(name="Force Succeed", value=100,
                             source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
     save.bonus.self_static.add_value_modifier(mod)
@@ -60,7 +60,7 @@ def force_save_succeed(entity: Entity, ability: str = "wisdom") -> UUID:
 
 def remove_save_modifier(entity: Entity, mod_uuid: UUID, ability: str = "wisdom"):
     """Remove a force save modifier."""
-    save = entity.saving_throws.get_saving_throw(ability)
+    save = entity.saving_throws.get_saving_throw(type_cast(AbilityName, ability))
     save.bonus.self_static.remove_value_modifier(mod_uuid)
 
 
@@ -222,7 +222,7 @@ def _attack_until_done(fighter, dummy):
 def _navigate_to_turn(encounter: Encounter, entity: Entity):
     """Navigate encounter to the given entity's turn."""
     encounter.start_turn()
-    while encounter.get_current_entity().uuid != entity.uuid:
+    while (ce := encounter.get_current_entity()) and ce.uuid != entity.uuid:
         encounter.end_turn()
         encounter.next_turn()
 
@@ -508,6 +508,80 @@ def test_7_haste_slow_action_surge():
 
 
 # =============================================================================
+# Test 8: Lethargy on direct removal (dispel)
+# =============================================================================
+def test_8_lethargy_on_dispel():
+    """Directly removing HasteEffect triggers lethargy."""
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
+
+    caster = create_caster("Wizard", (0, 0))
+    target = create_target("Fighter", (3, 0))
+    Entity.update_all_entities_senses()
+
+    cast_haste(caster, target)
+    assert has_condition(target, "Haste")
+
+    # Directly remove HasteEffect (simulating dispel magic)
+    target.remove_condition("Haste")
+
+    assert not has_condition(target, "Haste"), "Haste should be removed"
+    assert has_condition(target, "Incapacitated"), \
+        "Lethargy should fire on direct removal too"
+
+    print("PASSED: test_8_lethargy_on_dispel")
+
+
+# =============================================================================
+# Test 9: Lethargy on duration expiry
+# =============================================================================
+def test_9_lethargy_on_expiry():
+    """Haste expires after duration — lethargy still applies."""
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
+
+    caster = create_caster("Wizard", (0, 0))
+    target = create_target("Fighter", (3, 0))
+    dummy = create_dummy("Dummy", (5, 0))
+    Entity.update_all_entities_senses()
+
+    cast_haste(caster, target)
+    assert has_condition(target, "Haste"), "Should have Haste after cast"
+
+    encounter = setup_encounter(caster, target, dummy)
+
+    # Navigate to target's first turn
+    encounter.start_turn()
+    while (ce := encounter.get_current_entity()) and ce.uuid != target.uuid:
+        encounter.end_turn()
+        encounter.next_turn()
+
+    # Haste should still be active (concentration, permanent duration)
+    assert has_condition(target, "Haste"), "Haste should still be active"
+
+    # NOW set it to expire in 1 round (will tick on next turn start)
+    haste_cond = target.active_conditions.get("Haste")
+    assert haste_cond is not None
+    from dnd.core.base_conditions import DurationType
+    haste_cond.duration.duration_type = DurationType.ROUNDS
+    haste_cond.duration.duration = 1
+
+    # End target's turn, cycle through other entities, back to target
+    encounter.end_turn()
+    encounter.next_turn()
+    while (ce := encounter.get_current_entity()) and ce.uuid != target.uuid:
+        encounter.end_turn()
+        encounter.next_turn()
+
+    # Haste should have expired at this turn start
+    assert not has_condition(target, "Haste"), "Haste should expire after 1 round"
+    assert has_condition(target, "Incapacitated"), \
+        "Lethargy should fire on duration expiry"
+
+    print("PASSED: test_9_lethargy_on_expiry")
+
+
+# =============================================================================
 # Run all tests
 # =============================================================================
 if __name__ == "__main__":
@@ -519,6 +593,8 @@ if __name__ == "__main__":
         test_5_lethargy_on_ally,
         test_6_haste_slow_interaction,
         test_7_haste_slow_action_surge,
+        test_8_lethargy_on_dispel,
+        test_9_lethargy_on_expiry,
     ]
 
     passed = 0

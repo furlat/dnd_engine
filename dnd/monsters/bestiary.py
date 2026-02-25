@@ -44,6 +44,7 @@ from dnd.spells.illusion import Invisibility, GreaterInvisibility
 from dnd.spells.evocation import EldritchBlast
 from dnd.items.test_items import (
     create_potion_of_greater_invisibility,
+    create_potion_of_haste,
     create_acid_flask, create_scroll_of_invisibility,
 )
 from dnd.items.weapons import create_arcane_staff
@@ -474,6 +475,10 @@ def create_sorcerer(
     # Add Greater Invisibility potions to inventory
     potion = create_potion_of_greater_invisibility(entity.uuid)
     entity.loot_item(potion)
+
+    # Add Potion of Haste to inventory
+    haste_potion = create_potion_of_haste(entity.uuid)
+    entity.loot_item(haste_potion)
 
     return entity
 
