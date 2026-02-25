@@ -324,6 +324,17 @@ class BaseAction(BaseObject):
             valid.append(pos)
         return valid
 
+    def get_multi_target_count(self) -> Optional[int]:
+        """Get the number of targets/projectiles for MULTI_ENTITY actions.
+
+        Returns None for non-MULTI_ENTITY actions.
+        Returns 1 as default for MULTI_ENTITY actions.
+        Subclasses override to return their specific count.
+        """
+        if self.target_type != TargetType.MULTI_ENTITY:
+            return None
+        return 1
+
     def get_all_targets(self) -> List[UUID]:
         """Get all target UUIDs for multi-target actions.
 
@@ -826,6 +837,10 @@ class AvailableActionInfo(BaseModel):
     @property
     def is_spell(self) -> bool:
         return self.action_category == ActionCategory.SPELL
+
+    # Multi-target info (for MULTI_ENTITY actions)
+    num_projectiles: Optional[int] = Field(default=None, description="Number of projectiles/targets for MULTI_ENTITY actions")
+    allow_same_target: Optional[bool] = Field(default=None, description="Whether same target can be selected multiple times")
 
     # Item use classification
     is_item_use: bool = Field(default=False, description="True for use actions from items")

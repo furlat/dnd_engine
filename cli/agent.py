@@ -872,7 +872,16 @@ def format_actions(actions: dict, entity_name: str) -> str:
         spell_tag = "[SPELL] " if is_spell else ""
         target_parts = [f"[{t.get('index', j)}]{t.get('target_name', '?')}" for j, t in enumerate(valid_targets)]
         targets_str = f" -> {', '.join(target_parts)}" if target_parts else ""
-        lines.append(f"  [{i}] {spell_tag}{name} ({cost_label}) - {num_targets} targets ({status}){targets_str}")
+        # Multi-target info for MULTI_ENTITY spells
+        multi_info = ""
+        num_proj = atk.get("num_projectiles")
+        allow_same = atk.get("allow_same_target")
+        if num_proj is not None:
+            if allow_same:
+                multi_info = f" [{num_proj} projectiles, {num_targets} targets]"
+            else:
+                multi_info = f" [up to {num_proj} targets, {num_targets} in range]"
+        lines.append(f"  [{i}] {spell_tag}{name} ({cost_label}) - {num_targets} targets ({status}){multi_info}{targets_str}")
 
     lines.append("")
 
@@ -1784,40 +1793,69 @@ def cmd_cast(client: APIClient, args: List[str]) -> int:
             return 1
 
     elif spell_source == "entity":
-        # Entity-targeting spell, needs target index
+        # Entity-targeting spell, needs target index (supports multi-target)
         if not valid_targets:
             print(f"ERROR: No valid targets for {spell_display}")
             return 1
 
+        num_projectiles = spell_match.get("num_projectiles")
+        allow_same = spell_match.get("allow_same_target", True)
+
         if not remaining_args:
-            # Show available targets
+            # Show available targets with multi-target hints
             print(f"TARGETS for {spell_display}:")
             for i, t in enumerate(valid_targets):
                 print(f"  [{i}] {t.get('target_name', '?')}")
-            print(f"Usage: cast {_spell_cmd_name(spell_display)} <target_index>")
+            if num_projectiles is not None and num_projectiles > 1:
+                if allow_same:
+                    print(f"Usage: cast {_spell_cmd_name(spell_display)} <idx> [idx ...] ({num_projectiles} projectiles, can repeat)")
+                else:
+                    print(f"Usage: cast {_spell_cmd_name(spell_display)} <idx> [idx ...] (up to {num_projectiles} unique targets)")
+            else:
+                print(f"Usage: cast {_spell_cmd_name(spell_display)} <target_index>")
             return 1
 
+        # Parse all remaining args as target indices
         try:
-            target_num = int(remaining_args[0])
+            target_indices = [int(a) for a in remaining_args]
         except ValueError:
-            print(f"ERROR: Target must be a number. Usage: cast {_spell_cmd_name(spell_display)} <target_index>")
+            print(f"ERROR: Targets must be numbers. Usage: cast {_spell_cmd_name(spell_display)} <idx> [idx ...]")
             return 1
 
-        if target_num < 0 or target_num >= len(valid_targets):
-            print(f"ERROR: Target index {target_num} out of range. Valid: 0-{len(valid_targets)-1}")
+        # Validate indices in range
+        for idx in target_indices:
+            if idx < 0 or idx >= len(valid_targets):
+                print(f"ERROR: Target index {idx} out of range. Valid: 0-{len(valid_targets)-1}")
+                return 1
+
+        # Validate count
+        if num_projectiles is not None and len(target_indices) > num_projectiles:
+            print(f"ERROR: Too many targets. {spell_display} allows {num_projectiles}.")
             return 1
 
-        target = valid_targets[target_num]
+        # Validate no duplicates if allow_same_target=False
+        if not allow_same and len(set(target_indices)) != len(target_indices):
+            print(f"ERROR: {spell_display} cannot target the same creature multiple times.")
+            return 1
+
+        # First index is primary target, rest are extra targets
+        primary_target = valid_targets[target_indices[0]]
+        extra_uuids = [valid_targets[idx].get("target_uuid") for idx in target_indices[1:]] if len(target_indices) > 1 else None
+
         try:
-            result = client.execute_action(template_name, target.get("index", 0), entity_uuid)
+            result = client.execute_action(
+                template_name, primary_target.get("index", 0), entity_uuid,
+                extra_target_uuids=extra_uuids,
+            )
         except Exception as e:
             print(f"ERROR: {e}")
             return 1
 
     elif spell_source == "position":
         # Position-targeting spell (AoE), needs X Y
-        if not valid_targets:
-            print(f"ERROR: No valid positions for {spell_display}")
+        if not valid_targets and len(remaining_args) < 2:
+            print(f"No precomputed positions for {spell_display}.")
+            print(f"Aim at a position: cast {_spell_cmd_name(spell_display)} X Y")
             return 1
 
         if len(remaining_args) < 2:

@@ -489,6 +489,9 @@ class MagicMissile(SpellAction):
         """3 darts base + 1 per upcast level."""
         return 3 + self.get_upcast_bonus()
 
+    def get_multi_target_count(self) -> Optional[int]:
+        return self.get_num_projectiles()
+
     def get_all_targets(self) -> List[UUID]:
         """Override: Return targets for each dart (can have repeats).
 
@@ -616,6 +619,9 @@ class ScorchingRay(SpellAction):
     def get_num_projectiles(self) -> int:
         """3 rays base + 1 per upcast level."""
         return 3 + self.get_upcast_bonus()
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return self.get_num_projectiles()
 
     def get_all_targets(self) -> List[UUID]:
         """Return targets for each ray (can have repeats)."""
