@@ -29,6 +29,7 @@ from dnd.items import (
     create_studded_leather,
     create_shield,
 )
+from dnd.items.test_items import create_potion_of_haste
 
 # Import fighter features
 from dnd.classes.fighter import (
@@ -497,6 +498,10 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
 
     # 9. Apply all fighter features
     apply_fighter_features(entity, config)
+
+    # 10. Add Potion of Haste to inventory
+    haste_potion = create_potion_of_haste(entity.uuid)
+    entity.loot_item(haste_potion)
 
     return entity
 

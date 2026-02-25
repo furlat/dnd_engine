@@ -26,6 +26,7 @@ from dnd.items import (
     create_longsword,
     create_shield,
 )
+from dnd.items.test_items import create_potion_of_haste
 
 # Import rage/frenzy features (from rage.py)
 from dnd.classes.rage import (
@@ -550,6 +551,10 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
 
     # 9. Apply all barbarian features
     apply_barbarian_features(entity, config)
+
+    # 10. Add Potion of Haste to inventory
+    haste_potion = create_potion_of_haste(entity.uuid)
+    entity.loot_item(haste_potion)
 
     return entity
 

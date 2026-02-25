@@ -1108,8 +1108,6 @@ def test_invisible_kill_reveals_sub_events():
 
     from cli.log_filter import filter_combat_log as _filter, ANON_NAME as _ANON
     from dnd.spells.illusion import Invisibility
-    from dnd.conditions import Concentrating
-
     reset_combat_state()
     setup_arena(20, 20)
 
@@ -1162,7 +1160,7 @@ def test_invisible_kill_reveals_sub_events():
     test("Fireball succeeded", result is not None and not result.canceled)
 
     # Enemy should be dead (20 HP, Fireball does 8d6 avg ~28 damage)
-    enemy_dead = not enemy.has_hp
+    _enemy_dead = not enemy.has_hp
     test("Enemy took damage from Fireball", get_hp(enemy) < 20)
 
     # Invisible should be removed (either from death or concentration break)

@@ -940,7 +940,7 @@ class MirrorImageEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(type_cast(UUID, self.target_entity_uuid))
         if not target:
             return [], [], [], [], declaration_event.cancel(
                 status_message="Target not found"
@@ -981,7 +981,7 @@ class MirrorImageEffect(BaseCondition):
 
     def _create_miss_handler(self) -> EventHandler:
         """When an attack misses the caster, destroy one duplicate."""
-        target_uuid = self.target_entity_uuid
+        target_uuid = type_cast(UUID, self.target_entity_uuid)
         condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:

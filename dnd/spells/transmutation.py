@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType, Cost, ActionEvent
-from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent, HazardFilter, DurationType
+from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent
 )
@@ -221,7 +221,7 @@ class SlowedEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(type_cast(UUID, self.target_entity_uuid))
         if not target:
             return [], [], [], [], declaration_event.cancel(
                 status_message="Target not found"
@@ -305,7 +305,7 @@ class SlowedEffect(BaseCondition):
 
     def _create_action_bonus_lockout_handler(self) -> EventHandler:
         """When entity uses action → lock bonus actions, and vice versa."""
-        target_uuid = self.target_entity_uuid
+        target_uuid = type_cast(UUID, self.target_entity_uuid)
         condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
@@ -366,7 +366,7 @@ class SlowedEffect(BaseCondition):
 
     def _create_turn_start_reset_handler(self) -> EventHandler:
         """Reset the action/bonus lockout at turn start."""
-        target_uuid = self.target_entity_uuid
+        target_uuid = type_cast(UUID, self.target_entity_uuid)
         condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
@@ -402,7 +402,7 @@ class SlowedEffect(BaseCondition):
 
     def _create_no_extra_attack_handler(self) -> EventHandler:
         """Zero the extra_attacks resource after it's granted, preventing Extra Attack."""
-        target_uuid = self.target_entity_uuid
+        target_uuid = type_cast(UUID, self.target_entity_uuid)
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if event.source_entity_uuid != target_uuid:
@@ -632,18 +632,19 @@ class HasteEffect(BaseCondition):
     3. Advantage on DEX saving throws
     4. +1 action (but haste action limited to single weapon attack)
 
-    When concentration ends, target suffers lethargy (Incapacitated for 1 round).
-    Lethargy is handled by the Haste spell action via a handler on the caster.
+    When Haste ends (any reason: concentration, expiry, dispel), target suffers
+    lethargy (Incapacitated for 1 round). Handled via _remove().
     """
     name: str = "Haste"
     description: str = "Speed doubled, +2 AC, advantage on DEX saves, +1 action"
 
     caster_uuid: Optional[UUID] = Field(default=None, description="UUID of the caster")
+    apply_lethargy: bool = Field(default=True, description="Apply Incapacitated when Haste ends")
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
-        target = Entity.get(self.target_entity_uuid)
+        target = Entity.get(type_cast(UUID, self.target_entity_uuid))
         if not target:
             return [], [], [], [], declaration_event.cancel(
                 status_message="Target not found"
@@ -714,7 +715,7 @@ class HasteEffect(BaseCondition):
         Logic: When remaining_actions <= 1, this is the haste action — suppress EA.
         Otherwise, normal action — EA allowed.
         """
-        target_uuid = self.target_entity_uuid
+        target_uuid = type_cast(UUID, self.target_entity_uuid)
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if event.source_entity_uuid != target_uuid:
@@ -753,6 +754,19 @@ class HasteEffect(BaseCondition):
             ],
             event_processor=processor
         )
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Apply lethargy (Incapacitated 1 round) when Haste ends, if apply_lethargy is True."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.apply_lethargy and target and target.is_active:
+            lethargy = Incapacitated(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid
+            )
+            lethargy.duration.duration_type = DurationType.ROUNDS
+            lethargy.duration.duration = 1
+            target.add_condition(lethargy, parent_event=event)
+        return super()._remove(event)
 
 
 class Haste(SpellAction):
@@ -838,51 +852,8 @@ class Haste(SpellAction):
         if conc and isinstance(conc, Concentrating) and conc.spell_name == "Haste":
             conc.add_linked_condition(target.uuid, haste_effect.uuid)
 
-        # Register lethargy handler on caster (same pattern as Call Lightning cleanup)
-        self._register_lethargy_handler(caster, target.uuid)
-
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{target.name} is Hasted"
         )
 
-    def _register_lethargy_handler(self, caster: Entity, haste_target_uuid: UUID) -> None:
-        """Register cleanup handler: when Concentrating on Haste ends, apply lethargy."""
-        caster_uuid = caster.uuid
-
-        def lethargy_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.target_entity_uuid != caster_uuid:
-                return None
-            if not isinstance(event, ConditionRemovalEvent):
-                return None
-            if not isinstance(event.condition, Concentrating):
-                return None
-            if event.condition.spell_name != "Haste":
-                return None
-
-            # Apply Incapacitated (lethargy) to the haste target for 1 round
-            target = Entity.get(haste_target_uuid)
-            if target and target.is_active:
-                lethargy = Incapacitated(
-                    source_entity_uuid=caster_uuid,
-                    target_entity_uuid=haste_target_uuid
-                )
-                lethargy.duration.duration_type = DurationType.ROUNDS
-                lethargy.duration.duration = 1
-                target.add_condition(lethargy, parent_event=event)
-
-            return None
-
-        handler = EventHandler(
-            name=f"Haste: Lethargy ({haste_target_uuid})",
-            source_entity_uuid=caster_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.CONDITION_REMOVAL,
-                    event_phase=EventPhase.EFFECT
-                )
-            ],
-            event_processor=lethargy_processor
-        )
-
-        caster.add_event_handler(handler)
