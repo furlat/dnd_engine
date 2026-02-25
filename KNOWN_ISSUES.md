@@ -60,6 +60,14 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 
 ## Fixed Issues
 
+### Torch-driven Hidden removal during movement has no visible combat log
+- **Found**: 2026-02-25, PvP session (Match 2, Round 3)
+- **Fixed**: 2026-02-25
+- **Root cause**: `_on_light_movement_event` callback called `move_light_source()` → `_fire_light_batch_events()` without passing `parent_event`. The `SPATIAL_LIGHT_CHANGED` events were orphaned from the movement event tree. When `hidden_reveal_processor` called `remove_condition("Hidden", parent_event=light_change_event)`, the ConditionRemovalEvent was a child of the orphaned light event — invisible to `StepMovementEvent._collect_child_combat_logs()`.
+- **Fix**: Threaded `parent_event` through the light callback chain (`_on_light_movement_event` → `move_light_source` → `_fire_light_batch_events` → Tier 1 SPATIAL_LIGHT_CHANGED events). In `hidden_reveal_processor`, walk up to the parent event (step event) for the removal so ConditionRemovalEvent becomes a direct child of StepMovementEvent. This makes the removal appear in the movement combat log and propagates `revealed_entity_uuids` correctly.
+- **Files**: `dnd/core/gridmap.py`, `dnd/conditions.py`
+- **Status**: FIXED
+
 ### Killing invisible units shows "???" for sub-events in combat log
 - **Found**: 2026-02-24, PvP session
 - **Fixed**: 2026-02-24

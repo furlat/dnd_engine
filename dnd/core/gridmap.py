@@ -836,7 +836,8 @@ class GridMap:
         for light_uuid in block.get_attached_light_sources():
             self.remove_light_source(light_uuid)
 
-    def move_light_source(self, light_uuid: UUID, new_position: Tuple[int, int]) -> None:
+    def move_light_source(self, light_uuid: UUID, new_position: Tuple[int, int],
+                          parent_event: Optional[UUID] = None) -> None:
         """Move a light source to a new position using delta computation.
 
         Only touches tiles that actually change — tiles in the overlap area
@@ -879,7 +880,7 @@ class GridMap:
         source.affected_tiles = new_affected
 
         # Fire events for changed tiles
-        self._fire_light_batch_events(changed_positions)
+        self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
     def toggle_light_source(self, light_uuid: UUID, active: bool) -> None:
         """Toggle a light source on/off without destroying it."""
@@ -949,7 +950,8 @@ class GridMap:
         source.affected_tiles.clear()
         self._fire_light_batch_events(changed_positions)
 
-    def _fire_light_batch_events(self, changed_positions: List[Tuple[int, int]]) -> None:
+    def _fire_light_batch_events(self, changed_positions: List[Tuple[int, int]],
+                                  parent_event: Optional[UUID] = None) -> None:
         """Fire efficient events after a batch light change.
 
         Two-tier approach:
@@ -993,6 +995,7 @@ class GridMap:
                         light_changed_positions={pos},
                     )
                     event = SpatialChangeEvent.light_changed(pos, tile.uuid, senses_hint=per_pos_hint)
+                    event.parent_event = parent_event
                     self._fire_spatial_event(event)
 
         # Tier 2: Single COMPLETION event for senses refresh
@@ -1035,7 +1038,7 @@ class GridMap:
             return
         for light_uuid in anchor.get_attached_light_sources():
             if light_uuid in self._light_sources:
-                self.move_light_source(light_uuid, new_pos)
+                self.move_light_source(light_uuid, new_pos, parent_event=event.parent_event)
 
     def _ensure_blocking_callback(self) -> None:
         """Register vision-blocking callback for light recomputation (once)."""
