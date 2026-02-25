@@ -1,6 +1,7 @@
 """Enchantment spells - affecting minds and behavior.
 
-Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep
+Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep,
+          Bane, BaneEffect, Bless, BlessEffect
 """
 import random
 from typing import Any, Optional, List, Tuple, cast as type_cast
@@ -10,7 +11,10 @@ from pydantic import Field
 
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger
+from dnd.core.events import (
+    Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
+    D20RollResultEvent,
+)
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, CreatureType, DamageType
 from dnd.core.aoe import AoEShape, Sphere
 
@@ -53,6 +57,9 @@ class CharmPerson(SpellAction):
     def get_num_targets(self) -> int:
         """1 target base + 1 per upcast level."""
         return 1 + max(0, self.cast_at_level - self.spell_level)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return self.get_num_targets()
 
     def get_all_targets(self) -> List[UUID]:
         """Return all targets up to max for cast level."""
@@ -592,6 +599,9 @@ class HoldMonster(SpellAction):
         """1 target at level 5, +1 per level above 5th."""
         return 1 + max(0, self.cast_at_level - self.spell_level)
 
+    def get_multi_target_count(self) -> Optional[int]:
+        return self.get_max_targets_for_level()
+
     def get_all_targets(self) -> List[UUID]:
         """Return targets up to max for cast level."""
         targets: List[UUID] = []
@@ -804,6 +814,9 @@ class TestBless(SpellAction):
     allow_same_target: bool = Field(default=False)  # Must target different creatures
     valid_target_filter: str = Field(default="self_or_allies")  # Self or allies only
     max_targets: int = Field(default=3)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return self.max_targets
 
     def get_all_targets(self) -> List[UUID]:
         """Override: Return primary + extra targets (no repeats allowed)."""
@@ -1292,3 +1305,291 @@ class PowerWordStun(SpellAction):
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Power Word Stun has no effect - {target.name} has {current_hp} HP (threshold: {self.hp_threshold})"
             )
+
+
+# =============================================================================
+# BANE / BLESS CONDITIONS AND SPELLS
+# =============================================================================
+
+def _bane_processor(
+    event: D20RollResultEvent,
+    source_entity_uuid: UUID,
+) -> Optional[D20RollResultEvent]:
+    """Subtract 1d4 from d20 roll (attack or save)."""
+    if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    d4_value = random.randint(1, 4)
+    effective = event.get_effective_roll()
+    new_total = effective.total - d4_value
+    new_roll = effective.model_copy(update={"total": new_total})
+    event.replace_roll(new_roll, "Bane", f"-{d4_value} (1d4)")
+    return event.model_copy(update={"modified": True})
+
+
+def _bless_processor(
+    event: D20RollResultEvent,
+    source_entity_uuid: UUID,
+) -> Optional[D20RollResultEvent]:
+    """Add 1d4 to d20 roll (attack or save)."""
+    if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    d4_value = random.randint(1, 4)
+    effective = event.get_effective_roll()
+    new_total = effective.total + d4_value
+    new_roll = effective.model_copy(update={"total": new_total})
+    event.replace_roll(new_roll, "Bless", f"+{d4_value} (1d4)")
+    return event.model_copy(update={"modified": True})
+
+
+class BaneEffect(BaseCondition):
+    """Bane spell effect — subtract 1d4 from attack rolls and saving throws."""
+    name: str = "Bane"
+    description: str = "Subtract 1d4 from attack rolls and saving throws"
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="No target")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        handler = EventHandler(
+            name="Bane",
+            source_entity_uuid=self.target_entity_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK_D20_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=self.target_entity_uuid,
+                ),
+                Trigger(
+                    event_type=EventType.SAVE_D20_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=self.target_entity_uuid,
+                ),
+            ],
+            event_processor=_bane_processor,
+        )
+        target.add_event_handler(handler)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Applied Bane to {target.name}",
+        )
+        return [], [handler.uuid], [], [], effect_event
+
+
+class BlessEffect(BaseCondition):
+    """Bless spell effect — add 1d4 to attack rolls and saving throws."""
+    name: str = "Bless"
+    description: str = "Add 1d4 to attack rolls and saving throws"
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="No target")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        handler = EventHandler(
+            name="Bless",
+            source_entity_uuid=self.target_entity_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK_D20_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=self.target_entity_uuid,
+                ),
+                Trigger(
+                    event_type=EventType.SAVE_D20_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=self.target_entity_uuid,
+                ),
+            ],
+            event_processor=_bless_processor,
+        )
+        target.add_event_handler(handler)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Applied Bless to {target.name}",
+        )
+        return [], [handler.uuid], [], [], effect_event
+
+
+class Bane(SpellAction):
+    """Bane — 1st-level Enchantment (Concentration)
+
+    Up to 3 creatures must succeed on a CHA saving throw or subtract 1d4
+    from attack rolls and saving throws. At Higher Levels: +1 target per
+    slot level above 1st.
+    """
+    name: str = Field(default="Bane")
+    description: str = Field(default="Up to 3 enemies: CHA save or -1d4 on attacks and saves")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="enchantment")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    )
+
+    # Multi-target configuration
+    allow_same_target: bool = Field(default=False)
+    valid_target_filter: str = Field(default="enemies")
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return 3 + self.get_upcast_bonus()
+
+    def get_all_targets(self) -> List[UUID]:
+        max_targets = 3 + self.get_upcast_bonus()
+        targets: List[UUID] = []
+        if self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+        for extra in self.extra_target_entity_uuids:
+            if extra not in targets:
+                targets.append(extra)
+        return targets[:max_targets]
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+
+        # Create or find Concentrating condition
+        if "Concentrating" not in caster.active_conditions:
+            concentration = Concentrating(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=caster.uuid,
+                spell_name="Bane",
+            )
+            caster.add_condition(concentration, parent_event=execution_event)
+        concentration = caster.active_conditions["Concentrating"]
+
+        # CHA saving throw
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="charisma",
+            dc=dc,
+            parent_event=execution_event.uuid,
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="charisma",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            target_entity_name=target.name,
+            status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}",
+        )
+
+        if success:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Bane - {target.name} resists",
+            )
+
+        # Apply BaneEffect
+        bane_effect = BaneEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+        )
+        target.add_condition(bane_effect, parent_event=effect_event)
+        concentration.add_linked_condition(target.uuid, bane_effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Bane - {target.name} is baned",
+        )
+
+
+class Bless(SpellAction):
+    """Bless — 1st-level Enchantment (Concentration)
+
+    Up to 3 creatures gain +1d4 to attack rolls and saving throws.
+    No save required. At Higher Levels: +1 target per slot level above 1st.
+    """
+    name: str = Field(default="Bless")
+    description: str = Field(default="Up to 3 allies: +1d4 on attacks and saves")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="enchantment")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    )
+
+    # Multi-target configuration
+    allow_same_target: bool = Field(default=False)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return 3 + self.get_upcast_bonus()
+
+    def get_all_targets(self) -> List[UUID]:
+        max_targets = 3 + self.get_upcast_bonus()
+        targets: List[UUID] = []
+        if self.target_entity_uuid:
+            targets.append(self.target_entity_uuid)
+        for extra in self.extra_target_entity_uuids:
+            if extra not in targets:
+                targets.append(extra)
+        return targets[:max_targets]
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # Create or find Concentrating condition
+        if "Concentrating" not in caster.active_conditions:
+            concentration = Concentrating(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=caster.uuid,
+                spell_name="Bless",
+            )
+            caster.add_condition(concentration, parent_event=execution_event)
+        concentration = caster.active_conditions["Concentrating"]
+
+        # No save — auto-apply BlessEffect
+        bless_effect = BlessEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+        )
+        target.add_condition(bless_effect, parent_event=execution_event)
+        concentration.add_linked_condition(target.uuid, bless_effect.uuid)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Bless - {target.name} is blessed",
+        )
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Bless - {target.name} is blessed",
+        )

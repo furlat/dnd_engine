@@ -10,9 +10,9 @@ from dnd.spells.evocation import (
     ShockingGrasp, GuidingBolt, GuidingBoltMarked, EldritchBlast
 )
 from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction
-from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep
+from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep, Bane, BaneEffect, Bless, BlessEffect
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight
-from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing
+from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing, NecroticBless
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage
 from dnd.spells.transmutation import SpikeGrowth, Slow, Haste
 
@@ -40,6 +40,8 @@ LEVEL_1_SPELLS = {
     "Guiding Bolt": GuidingBolt,
     "Grease": Grease,
     "Fog Cloud": FogCloud,
+    "Bane": Bane,
+    "Bless": Bless,
 }
 
 LEVEL_2_SPELLS = {
@@ -54,6 +56,7 @@ LEVEL_2_SPELLS = {
     "Invisibility": Invisibility,
     "Darkness": Darkness,
     "Mirror Image": MirrorImage,
+    "Necrotic Bless": NecroticBless,
 }
 
 LEVEL_3_SPELLS = {
@@ -135,6 +138,10 @@ __all__ = [
     "GuidingBolt",
     "Grease",
     "FogCloud",
+    "Bane",
+    "BaneEffect",
+    "Bless",
+    "BlessEffect",
     # Level 2
     "HoldPerson",
     "Shatter",
@@ -147,6 +154,7 @@ __all__ = [
     "Invisibility",
     "Darkness",
     "MirrorImage",
+    "NecroticBless",
     # Level 3
     "CallLightning",
     "CallLightningStrike",

@@ -25,7 +25,7 @@ The turn prompt includes initial state. After each action, the output shows upda
 | `move ? X Y` | Preview path to position with hazard info |
 | `jump X Y` | Jump to position |
 | `attack N [T]` | Attack: N=action index, T=target index (default 0) |
-| `cast <spell> [N\|X Y]` | Cast spell at target index or position (e.g. `cast Fireball 5 3`, `cast Magic Missile 0`) |
+| `cast <spell> [N [N ...]\|X Y]` | Cast spell at target(s) or position. Multi-target: `cast Magic Missile 0 0 1` (2 darts at [0], 1 at [1]). See "Multi-Target Spells" below. **If a spell exists as both a spell-slot version and a scroll/item version, use the FULL name to disambiguate** (e.g. `cast Fireball (Scroll of Fireball) 5 3` to use the scroll instead of a spell slot). |
 | `self <name>` | Self-action (Dash, Dodge, Disengage, Hide) |
 | `dash` / `dodge` / `disengage` | Shortcuts |
 | `use <name\|N>` | Use object/item (Open Door, Pull Lever, etc.) |
@@ -77,6 +77,31 @@ to this file using the Write tool.
 - **Spell slots** shown in RESOURCES line for spellcasters: `Slots: L1:3/4 L2:2/2`
 - **Conditions**: Internal engine markers are hidden. Status effects like Dashing shown in parentheses.
 - **AoE spell targets** are shown in TILE DETAILS as `[SpellName: target1, target2]` annotations on tiles where entities would be hit. You can also target ANY visible position within range — for area denial or flushing hidden enemies. Cast with `cast <spell> X Y`.
+
+## Multi-Target Spells
+
+Watch output shows `[N projectiles, M targets]` or `[up to N targets, M in range]` for multi-target spells.
+
+**Projectile spells** (can repeat targets — Magic Missile, Scorching Ray):
+```
+cast Magic Missile 0           # all 3 darts at target [0]
+cast Magic Missile 0 0 1       # 2 darts at [0], 1 at [1]
+cast Scorching Ray 0 1 2       # 1 ray per target
+```
+Unassigned projectiles auto-fill to primary target.
+
+**Offensive unique-target spells** (no repeats — Bane, Hold Monster, Charm Person, Blindness/Deafness):
+```
+cast Bane 0 1 2                # bane targets [0], [1], [2]
+cast Hold Monster 0 1          # hold targets [0] and [1]
+```
+
+**Buff/ally-targeting spells** (no repeats, targets allies — Bless, Necrotic Bless):
+```
+cast Bless 0 1 2               # bless allies [0], [1], [2]
+cast Necrotic Bless 0 1 2 3    # undead=bless, others=CHA save or bane
+```
+Target list shows allies instead of enemies for these spells.
 
 ## Reactions
 

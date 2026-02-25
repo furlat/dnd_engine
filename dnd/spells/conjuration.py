@@ -445,6 +445,9 @@ class AcidSplash(SpellAction):
         """1-2 targets (max 2)."""
         return min(2, 1 + len(self.extra_target_entity_uuids))
 
+    def get_multi_target_count(self) -> Optional[int]:
+        return 2  # Max possible targets
+
     def get_all_targets(self) -> List[UUID]:
         """Return all targets (1-2)."""
         targets: List[UUID] = []

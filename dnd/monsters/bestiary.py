@@ -49,6 +49,7 @@ from dnd.items.test_items import (
 )
 from dnd.items.weapons import create_arcane_staff
 from dnd.spells.abjuration import register_shield_reaction
+from dnd.spells.necromancy import NecroticBless
 from dnd.monsters.skeleton_abilities import MarkTargetAction
 
 
@@ -716,7 +717,7 @@ def create_skeleton_warlock(
 
     equipment_config = EquipmentConfig()
     action_economy_config = ActionEconomyConfig(
-        spell_slots={1: 2}
+        spell_slots={1: 2, 2: 1}
     )
 
     entity_config = EntityConfig(
@@ -757,6 +758,7 @@ def create_skeleton_warlock(
     register_spell(entity, EldritchBlast, caster_level=1)
     register_spell(entity, BurningHands, caster_level=1)
     register_spell(entity, Thunderwave, caster_level=1)
+    register_spell(entity, NecroticBless, caster_level=1)
 
     # Register Shield reaction
     register_shield_reaction(entity)

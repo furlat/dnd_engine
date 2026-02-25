@@ -356,7 +356,23 @@ def try_execute_dynamic_spell_action(cmd_str: str, args: List[str], client: APIC
                     return "encounter_ended"
                 return "refresh"
 
-        display.set_output([f"Position ({x}, {y}) is not valid. Type '{shortcut}' to see valid positions."])
+        # Position not in prefiltered list — try direct position execution
+        # (D&D 5e allows targeting any visible point in range, even empty ground)
+        try:
+            result = client.execute_position_action(action.template_name, (x, y))
+        except Exception as e:
+            display.set_output([f"Position ({x}, {y}) not valid for {action.display_name}: {e}"])
+            return "refresh"
+        if result is None:
+            return "refresh"
+        success = result.get("success", False)
+        if success:
+            display.show_action_result(result, state.turn.get("current_entity_name", "You"))
+            state.add_to_log(f"{state.turn.get('current_entity_name', 'You')} casts {action.display_name} at ({x}, {y}).")
+            if result.get("encounter_ended"):
+                return "encounter_ended"
+        else:
+            display.set_output([f"Position ({x}, {y}) not valid for {action.display_name}: {result.get('message', 'Unknown error')}"])
         return "refresh"
 
     # === Entity-targeting spells (Fire Bolt, Magic Missile, etc.) ===
