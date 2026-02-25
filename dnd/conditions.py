@@ -1293,7 +1293,10 @@ def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[
             if isinstance(event, SpatialChangeEvent) and event.position == entity.position:
                 tile = get_map().get_tile(*entity.position)
                 if tile and tile.resolved_light_level == LightLevel.VERY_BRIGHT:
-                    entity.remove_condition("Hidden", parent_event=event)
+                    # Use movement event as parent (not light event) so removal
+                    # appears in movement combat log tree
+                    removal_parent = event.get_parent_event() or event
+                    entity.remove_condition("Hidden", parent_event=removal_parent)
         return None
 
     # For SPATIAL_ENTITY_ENTERED: check if entity moved into VERY_BRIGHT tile

@@ -61,7 +61,7 @@ from dnd.core.base_tiles import difficult_terrain_factory
 from server.api_models import (
     APIEntitySummary, APIEntityFull, APIGrid, APIEncounter, APIFloorObject,
     APIGameState, APISimulationStatus,
-    APICurrentTurn, SimpleActionRequest, ActionResult,
+    APICurrentTurn, SimpleActionRequest, ActionResult, AoEPreviewResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
     SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest,
@@ -1942,6 +1942,70 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         combat_log_entries=action_log_entries,
         available_actions=updated_actions,
         state=game_state,
+    )
+
+
+@app.post("/action/position/preview")
+async def preview_position_action(request: PositionActionRequest) -> AoEPreviewResult:
+    """Preview AoE at a position: returns affected cells and entities without executing."""
+    entity = validate_session_action(request.session_id, request.entity_uuid)
+
+    template = entity.get_action_template(request.action_name)
+    if template is None:
+        return AoEPreviewResult(success=False, message=f"Unknown action: {request.action_name}")
+
+    if template.target_type != TargetType.POSITION_AOE or template.aoe_shape is None:
+        return AoEPreviewResult(success=False, message=f"{request.action_name} is not a position AoE action")
+
+    pos = (request.position[0], request.position[1])
+    grid = get_map()
+
+    # Compute shape at position (same as _compute_aoe_at_position but skip aoe_require_targets)
+    shape = template.aoe_shape.model_copy(update={'target': pos})
+    shape.compute_subjective(
+        entity.position, entity.senses,
+        fov_cache={}, barrier_positions=grid.get_barrier_positions(),
+        caster_uuid=entity.uuid,
+    )
+
+    affected_uuids = list(shape.affected_entity_uuids)
+
+    # Apply include_self filter
+    if not template.include_self:
+        affected_uuids = [uid for uid in affected_uuids if uid != entity.uuid]
+
+    # Apply valid_target_filter
+    vtf = template.valid_target_filter
+    if vtf != "all":
+        filtered = []
+        for uid in affected_uuids:
+            ent = Entity.get(uid)
+            if ent:
+                if vtf == "enemies" and entity.is_enemy(ent):
+                    filtered.append(uid)
+                elif vtf == "allies" and entity.is_ally(ent):
+                    filtered.append(uid)
+                elif vtf == "self_or_allies":
+                    if uid == entity.uuid or entity.is_ally(ent):
+                        filtered.append(uid)
+        affected_uuids = filtered
+
+    # Filter dead entities
+    if not template.include_dead:
+        affected_uuids = [uid for uid in affected_uuids if (ent := Entity.get(uid)) and ent.has_hp]
+
+    # Build names
+    affected_names = []
+    for uid in affected_uuids:
+        ent = Entity.get(uid)
+        if ent:
+            affected_names.append(ent.name or "Unknown")
+
+    return AoEPreviewResult(
+        success=True,
+        affected_positions=list(shape.affected_positions),
+        affected_entity_names=affected_names,
+        affected_count=len(affected_uuids),
     )
 
 

@@ -26,6 +26,7 @@ The turn prompt includes initial state. After each action, the output shows upda
 | `jump X Y` | Jump to position |
 | `attack N [T]` | Attack: N=action index, T=target index (default 0) |
 | `cast <spell> [N [N ...]\|X Y]` | Cast spell at target(s) or position. Multi-target: `cast Magic Missile 0 0 1` (2 darts at [0], 1 at [1]). See "Multi-Target Spells" below. **If a spell exists as both a spell-slot version and a scroll/item version, use the FULL name to disambiguate** (e.g. `cast Fireball (Scroll of Fireball) 5 3` to use the scroll instead of a spell slot). |
+| `cast ? <spell> X Y` | Preview AoE: shows affected cells and targets without casting |
 | `self <name>` | Self-action (Dash, Dodge, Disengage, Hide) |
 | `dash` / `dodge` / `disengage` | Shortcuts |
 | `use <name\|N>` | Use object/item (Open Door, Pull Lever, etc.) |
@@ -76,7 +77,7 @@ to this file using the Write tool.
 - **Actions show cost** in parentheses: `(action)`, `(bonus)`, `(FREE)`. `FREE` = no action economy cost.
 - **Spell slots** shown in RESOURCES line for spellcasters: `Slots: L1:3/4 L2:2/2`
 - **Conditions**: Internal engine markers are hidden. Status effects like Dashing shown in parentheses.
-- **AoE spell targets** are shown in TILE DETAILS as `[SpellName: target1, target2]` annotations on tiles where entities would be hit. You can also target ANY visible position within range — for area denial or flushing hidden enemies. Cast with `cast <spell> X Y`.
+- **AoE spell targets** are shown in TILE DETAILS as `[SpellName: target1, target2]` annotations on tiles where entities would be hit. You can also target ANY visible position within range — for area denial or flushing hidden enemies. For spells with no precomputed targets (0 pos), use `cast ? <spell> X Y` to preview the affected area, then `cast <spell> X Y` to cast.
 
 ## Multi-Target Spells
 

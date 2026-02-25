@@ -432,6 +432,17 @@ class BaseAction(BaseObject):
         if source_block is None:
             return "Source entity not found"
 
+        # Visibility check: MULTI_ENTITY targets must be visible to caster
+        senses: Optional[Senses] = getattr(source_block, 'senses', None)
+        if senses is not None:
+            for target_uuid in all_targets:
+                if target_uuid == self.source_entity_uuid:
+                    continue  # Can always target self
+                if target_uuid not in senses.entities:
+                    target = BaseBlock.get(target_uuid)
+                    target_name = target.name if target else str(target_uuid)
+                    return f"{target_name} is not visible"
+
         source_faction = source_block.faction
 
         for target_uuid in all_targets:

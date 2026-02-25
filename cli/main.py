@@ -331,14 +331,16 @@ def try_execute_dynamic_spell_action(cmd_str: str, args: List[str], client: APIC
                     # Build preview message for output panel
                     affected = target.affected_entity_names or []
                     count = target.affected_count or len(affected)
+                    aoe_cells = target.affected_positions or []
+                    cell_strs = [f"({p[0]},{p[1]})" for p in aoe_cells]
                     if count > 0:
                         lines = [f"{action.display_name} at ({x}, {y}) would affect {count} targets:"]
                         for name in affected:
                             lines.append(f"  • {name}")
-                        lines.append("[dim]Type '!' to cast[/dim]")
                     else:
-                        lines = [f"{action.display_name} at ({x}, {y}) would affect no targets"]
-                        lines.append("[dim]Type '!' to cast anyway[/dim]")
+                        lines = [f"{action.display_name} at ({x}, {y}) — no targets"]
+                    lines.append(f"Cells ({len(aoe_cells)}): {', '.join(cell_strs)}")
+                    lines.append("[dim]Type '!' to cast[/dim]")
 
                     display.set_output(lines)
                     # Use "preview" to refresh display but keep output text
@@ -356,8 +358,41 @@ def try_execute_dynamic_spell_action(cmd_str: str, args: List[str], client: APIC
                     return "encounter_ended"
                 return "refresh"
 
-        # Position not in prefiltered list — try direct position execution
-        # (D&D 5e allows targeting any visible point in range, even empty ground)
+        # Position not in prefiltered list
+        if preview_mode:
+            # Ask server to compute AoE shape at this position
+            try:
+                preview = client.preview_position_action(action.template_name, (x, y))
+            except Exception:
+                display.set_output([f"Cannot preview {action.display_name} at ({x}, {y})"])
+                return "refresh"
+            if preview.get("success"):
+                positions = [tuple(p) for p in preview.get("affected_positions", [])]
+                state.valid_move_positions = positions
+                names = preview.get("affected_entity_names", [])
+                count = preview.get("affected_count", 0)
+                state.last_preview = {
+                    "template_name": action.template_name,
+                    "display_name": action.display_name,
+                    "position": (x, y),
+                    "execute_position": True,
+                }
+                cell_strs = [f"({p[0]},{p[1]})" for p in positions]
+                if count > 0:
+                    lines = [f"{action.display_name} at ({x}, {y}) would affect {count} targets:"]
+                    for name in names:
+                        lines.append(f"  \u2022 {name}")
+                else:
+                    lines = [f"{action.display_name} at ({x}, {y}) \u2014 no targets"]
+                lines.append(f"Cells ({len(positions)}): {', '.join(cell_strs)}")
+                lines.append("[dim]Type '!' to cast[/dim]")
+                display.set_output(lines)
+                return "preview"
+            else:
+                display.set_output([f"Cannot preview: {preview.get('message', 'unknown error')}"])
+                return "refresh"
+
+        # Direct position execution (D&D 5e allows targeting any visible point in range)
         try:
             result = client.execute_position_action(action.template_name, (x, y))
         except Exception as e:
@@ -967,7 +1002,16 @@ def game_loop(client: APIClient, initial_ai_path: Optional[list] = None, pvp_mod
             if cmd_str.strip() == "!":
                 if state.last_preview:
                     preview = state.last_preview
-                    result = safe_execute_action(client, preview["template_name"], preview["target_index"])
+                    if preview.get("execute_position"):
+                        # Position-based preview (not in precomputed targets)
+                        try:
+                            result = client.execute_position_action(preview["template_name"], preview["position"])
+                        except Exception as e:
+                            display.set_output([f"Execution failed: {e}"])
+                            state.last_preview = None
+                            continue
+                    else:
+                        result = safe_execute_action(client, preview["template_name"], preview["target_index"])
                     state.last_preview = None  # Clear after use
                     if result is None:
                         continue
