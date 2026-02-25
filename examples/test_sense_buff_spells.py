@@ -12,9 +12,7 @@ Tests cover:
 """
 import sys
 import traceback
-from uuid import uuid4
-
-from dnd.core.events import EventQueue, EventPhase
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_block import SensesType, LightLevel
 from dnd.core.base_tiles import dark_floor_factory
@@ -23,12 +21,15 @@ from dnd.core.modifiers import DamageType
 from dnd.entity import Entity, get_natural_roll
 from dnd.monsters.bestiary import create_sorcerer, create_goblin
 from dnd.conditions import Concentrating, Invisible
-from dnd.spells.transmutation import DarkvisionSpell, DarkvisionEffect
-from dnd.spells.divination import SeeInvisibility, SeeInvisibilityEffect, TrueSeeing, TrueSeeingEffect
-from dnd.actions_functional import setup_standard_actions
+from dnd.spells.transmutation import DarkvisionSpell
+from dnd.spells.divination import SeeInvisibility, TrueSeeing
+from typing import cast as type_cast
+from dnd.spells.illusion import Invisibility as InvisibilitySpell
+from dnd.spells.evocation import FireBolt
+from dnd.actions_functional import register_spell, execute_by_index
 from dnd.utils import (
     reset_combat_state, get_hp, set_hp, has_condition,
-    deal_damage_to, move_entity,
+    deal_damage_to,
 )
 
 
@@ -160,8 +161,8 @@ def test_darkvision_on_ally():
     )
     result2 = spell2.apply()
     assert result2 is not None and result2.canceled, \
-        f"Should fail at 10ft range (touch range), got: {result2.status_message}"
-    print(f"  Out-of-range message: {result2.status_message}")
+        f"Should fail at 10ft range (touch range)"
+    print(f"  Out-of-range: canceled={result2.canceled}")
 
     # Verify nothing applied
     assert not has_condition(far_ally, "Darkvision"), "Far ally should NOT have darkvision"
@@ -181,7 +182,7 @@ def test_darkvision_concentration_replacement():
 
     caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
     ally = create_sorcerer(name="Cleric", position=(6, 5), level=5, faction="heroes")
-    target = create_goblin(name="Goblin", position=(8, 5), faction="monsters")
+    _target = create_goblin(name="Goblin", position=(8, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
     # Cast Darkvision on ally
@@ -196,7 +197,6 @@ def test_darkvision_concentration_replacement():
     assert has_condition(ally, "Darkvision"), "Ally should have darkvision"
 
     # Cast another concentration spell (e.g., Invisibility on self)
-    from dnd.spells.illusion import Invisibility as InvisibilitySpell
     caster.action_economy.reset_all_costs()
     invis_spell = InvisibilitySpell(
         source_entity_uuid=caster.uuid,
@@ -216,7 +216,7 @@ def test_darkvision_concentration_replacement():
     # New concentration should be active
     conc = caster.active_conditions.get("Concentrating")
     if conc:
-        print(f"  Now concentrating on: {conc.spell_name}")
+        print(f"  Now concentrating on: {type_cast(Concentrating, conc).spell_name}")
 
     print("  PASS: Concentration replacement removes darkvision")
 
@@ -312,7 +312,7 @@ def test_see_invisibility_duration():
     assert enemy.uuid in caster.senses.entities, "Enemy should be visible with See Invis (reactive)"
 
     # Tick 9 rounds — should still be active
-    for i in range(9):
+    for _ in range(9):
         caster.advance_duration("See Invisibility")
     assert has_condition(caster, "See Invisibility"), "Should still be active after 9 rounds"
 
@@ -413,7 +413,7 @@ def test_true_seeing_duration():
     spell.apply()
 
     # Tick through 10 rounds
-    for i in range(10):
+    for _ in range(10):
         ally.advance_duration("True Seeing")
 
     assert not has_condition(ally, "True Seeing"), "True Seeing should expire after 10 rounds"
@@ -445,8 +445,8 @@ def test_true_seeing_range():
     )
     result = spell.apply()
     assert result is not None and result.canceled, \
-        f"True Seeing at 15ft should fail, got: {result.status_message}"
-    print(f"  Out-of-range message: {result.status_message}")
+        f"True Seeing at 15ft should fail"
+    print(f"  Out-of-range: canceled={result.canceled}")
 
     assert not has_condition(far_ally, "True Seeing"), "Far ally should NOT have True Seeing"
     print("  PASS: Touch range validation works for True Seeing")
@@ -712,7 +712,7 @@ def test_true_seeing_reactive():
     """
     print("\n=== Test 13: True Seeing reactive senses (darkness + invisibility) ===")
     reset_combat_state()
-    grid = create_dark_grid(15, 5)
+    create_dark_grid(15, 5)
 
     caster = create_sorcerer(name="Wizard", position=(2, 2), level=5, faction="heroes")
     ally = create_sorcerer(name="Fighter", position=(3, 2), level=5, faction="heroes")
@@ -773,7 +773,7 @@ def test_darkvision_ally_reactive():
     """Cast Darkvision on an ally in darkness - ally should see enemies reactively."""
     print("\n=== Test 14: Darkvision on ally - reactive senses ===")
     reset_combat_state()
-    grid = create_dark_grid(15, 5)
+    create_dark_grid(15, 5)
 
     caster = create_sorcerer(name="Wizard", position=(2, 2), level=5, faction="heroes")
     ally = create_sorcerer(name="Fighter", position=(3, 2), level=5, faction="heroes")
@@ -826,9 +826,7 @@ def test_darkvision_attack_integration():
     """
     print("\n=== Test 15: Darkvision - attack and available actions integration ===")
     reset_combat_state()
-    grid = create_dark_grid(15, 5)
-
-    from dnd.actions_functional import execute_by_index
+    create_dark_grid(15, 5)
 
     # Place observer and enemy 3 tiles apart (15ft) - beyond adjacent rule (1 tile)
     # Adjacent rule: within 1 tile, DARKNESS → DIM_LIGHT, so must use distance > 1
@@ -910,9 +908,6 @@ def test_see_invisibility_spell_targeting():
     print("\n=== Test 16: See Invisibility - spell targeting integration ===")
     reset_combat_state()
     setup_arena()
-
-    from dnd.actions_functional import register_spell, execute_by_index
-    from dnd.spells.evocation import FireBolt
 
     caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
     enemy = create_goblin(name="Sneaky", position=(8, 5), faction="monsters")

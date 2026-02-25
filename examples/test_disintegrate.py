@@ -14,12 +14,12 @@ from uuid import uuid4
 
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, get_natural_roll
 from dnd.monsters.bestiary import create_sorcerer, create_goblin
 from dnd.spells.transmutation import Disintegrate
 from dnd.utils import (
-    reset_combat_state, get_hp, set_hp, has_condition, deal_damage_to,
+    reset_combat_state, get_hp, set_hp, has_condition,
 )
 
 
@@ -113,7 +113,6 @@ def test_disintegrate_successful_save():
         Entity.update_all_entities_senses()
 
         # Force save to succeed with massive bonus (+100)
-        from dnd.core.modifiers import NumericalModifier
         save_bonus = NumericalModifier.create(
             source_entity_uuid=target.uuid, name="Force Pass", value=100
         )
@@ -287,7 +286,7 @@ def test_disintegrate_kills_target():
             template=False,
             costs=Disintegrate(source_entity_uuid=caster.uuid)._get_costs_for_level(6)
         )
-        result = spell.apply()
+        spell.apply()
 
         if had_critical_d20():
             print(f"  Attempt {attempt+1}: nat 1/20, retrying...")

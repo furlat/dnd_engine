@@ -12,16 +12,17 @@ import sys
 import traceback
 from uuid import uuid4
 
-from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
+from dnd.core.base_actions import TargetType
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_sorcerer
 from dnd.spells.transmutation import ExpeditiousRetreat
-from dnd.conditions import Concentrating, Dashing
-from dnd.actions_functional import setup_standard_actions
+from dnd.spells.illusion import Invisibility as InvisibilitySpell
+from dnd.conditions import Concentrating
+from dnd.actions_functional import execute_by_index
 from dnd.utils import (
-    reset_combat_state, get_hp, has_condition, deal_damage_to,
+    reset_combat_state, has_condition, deal_damage_to,
 )
 
 
@@ -60,7 +61,7 @@ def test_expeditious_retreat_basic():
 
     # Verify action registered
     action_names = [a.name for a in caster.registered_actions]
-    print(f"  Actions after cast: {[n for n in action_names if 'Dash' in n]}")
+    print(f"  Actions after cast: {[n for n in action_names if 'Dash' in str(n)]}")
     assert "Dash (Bonus)" in action_names, "Should have Dash (Bonus) after casting"
 
     # Verify concentration
@@ -100,8 +101,6 @@ def test_bonus_dash_works():
     caster.action_economy.reset_all_costs()
 
     # Find and use the Dash (Bonus) action via execute_by_index
-    from dnd.actions_functional import execute_by_index
-
     avail = caster.get_available_actions()
     # Find "Dash (Bonus)" in self_actions
     dash_bonus_info = None
@@ -157,7 +156,7 @@ def test_concentration_break_removes_action():
 
     # Verify action removed
     action_names = [a.name for a in caster.registered_actions]
-    print(f"  Actions after conc break: {[n for n in action_names if 'Dash' in n]}")
+    print(f"  Actions after conc break: {[n for n in action_names if 'Dash' in str(n)]}")
     assert "Dash (Bonus)" not in action_names, "Dash (Bonus) should be removed"
 
     # Verify conditions removed
@@ -175,7 +174,6 @@ def test_expeditious_retreat_self_only():
     print("\n=== Test 4: Expeditious Retreat is self-only ===")
 
     spell = ExpeditiousRetreat(source_entity_uuid=uuid4())
-    from dnd.core.base_actions import TargetType
     assert spell.target_type == TargetType.SELF, "Should be SELF target"
     print(f"  Target type: {spell.target_type}")
     print("  PASS: Self-only targeting")
@@ -250,7 +248,6 @@ def test_expeditious_retreat_concentration_replacement():
     assert has_condition(caster, "Expeditious Retreat"), "Should have effect"
 
     # Cast another concentration spell
-    from dnd.spells.illusion import Invisibility as InvisibilitySpell
     caster.action_economy.reset_all_costs()
     invis = InvisibilitySpell(
         source_entity_uuid=caster.uuid,

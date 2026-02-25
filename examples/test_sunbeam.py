@@ -15,15 +15,16 @@ import traceback
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
+from dnd.core.modifiers import DamageType
 from dnd.entity import Entity, get_natural_roll
 from dnd.monsters.bestiary import create_sorcerer, create_goblin
-from dnd.spells.evocation import Sunbeam
-from dnd.conditions import Blinded
+from dnd.spells.evocation import Sunbeam, SunbeamStrike
+from dnd.conditions import Concentrating
 from dnd.utils import (
     reset_combat_state, get_hp, set_hp, has_condition,
-    deal_damage_to, get_position,
+    deal_damage_to,
 )
-from dnd.core.events import DamageType
+from typing import cast as type_cast
 
 
 def setup_arena(size: int = 25):
@@ -231,8 +232,9 @@ def test_sunbeam_concentration_and_strike():
     assert has_condition(caster, "Concentrating"), "Should be concentrating"
     conc = caster.active_conditions.get("Concentrating")
     assert conc is not None
-    assert conc.spell_name == "Sunbeam"
-    print(f"  Concentrating on: {conc.spell_name}")
+    conc_typed = type_cast(Concentrating, conc)
+    assert conc_typed.spell_name == "Sunbeam"
+    print(f"  Concentrating on: {conc_typed.spell_name}")
 
     # Verify SunbeamStrike registered
     strike = caster.get_action_template("Sunbeam Strike")
@@ -289,11 +291,10 @@ def test_sunbeam_strike_reuse():
         hp_before_strike = get_hp(target)
 
         # Create a fresh strike action instance
-        from dnd.spells.evocation import SunbeamStrike
         strike = SunbeamStrike(
             source_entity_uuid=caster.uuid,
             end_position=(20, 10),
-            spell_dc=strike_template.spell_dc,
+            spell_dc=type_cast(SunbeamStrike, strike_template).spell_dc,
             template=False,
         )
         result = strike.apply()
@@ -429,7 +430,6 @@ def test_sunbeam_strike_requires_concentration():
     assert not has_condition(caster, "Concentrating")
 
     # Try to use SunbeamStrike — should fail validation
-    from dnd.spells.evocation import SunbeamStrike
     strike = SunbeamStrike(
         source_entity_uuid=caster.uuid,
         end_position=(20, 10),

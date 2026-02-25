@@ -406,6 +406,7 @@ def test_available_actions_expanded_targets():
 
     max_dist = 0
     for target in jump_after.valid_targets:
+        assert target.position is not None
         dist = entity.senses.get_feet_distance(target.position)
         if dist > max_dist:
             max_dist = dist
