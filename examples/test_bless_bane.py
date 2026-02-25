@@ -117,7 +117,7 @@ def test_bane_save_fail():
             target_entity_uuid=enemy.uuid,
             cast_at_level=1,
         )
-        result = spell.apply(parent_event=None)
+        spell.apply(parent_event=None)
         if has_condition(enemy, "Bane"):
             break
 
@@ -158,7 +158,7 @@ def test_bane_save_success():
             target_entity_uuid=tough_enemy.uuid,
             cast_at_level=1,
         )
-        result = spell.apply(parent_event=None)
+        spell.apply(parent_event=None)
 
         # Check if save succeeded (no Bane condition)
         if not has_condition(tough_enemy, "Bane"):
@@ -189,7 +189,7 @@ def test_bane_concentration_break():
             extra_target_entity_uuids=[enemy2.uuid],
             cast_at_level=1,
         )
-        result = spell.apply(parent_event=None)
+        spell.apply(parent_event=None)
         # Both must have Bane
         if has_condition(enemy1, "Bane") and has_condition(enemy2, "Bane"):
             break
@@ -227,7 +227,7 @@ def test_bless_auto_apply():
         extra_target_entity_uuids=[ally2.uuid],
         cast_at_level=1,
     )
-    result = spell.apply(parent_event=None)
+    spell.apply(parent_event=None)
 
     check(has_condition(ally1, "Bless"), "Ally 1 has Bless")
     check(has_condition(ally2, "Bless"), "Ally 2 has Bless")
@@ -301,7 +301,7 @@ def test_necrotic_bless_dual_effect():
             extra_target_entity_uuids=[living.uuid],
             cast_at_level=2,
         )
-        result = spell.apply(parent_event=None)
+        spell.apply(parent_event=None)
 
         # Undead should always get Bless (no save), living should get Bane on fail
         if has_condition(undead, "Bless") and has_condition(living, "Bane"):
@@ -347,7 +347,7 @@ def test_necrotic_bless_save_success():
             target_entity_uuid=strong_target.uuid,
             cast_at_level=2,
         )
-        result = spell.apply(parent_event=None)
+        spell.apply(parent_event=None)
 
         if not has_condition(strong_target, "Bane"):
             break
@@ -403,7 +403,7 @@ def test_bless_modifies_save_roll():
 
     caster = create_caster("Cleric", (0, 0), "heroes")
     ally = create_fighter("Fighter", (2, 0), "heroes")
-    enemy = create_fighter("Enemy Caster", (0, 4), "monsters")
+    _enemy = create_fighter("Enemy Caster", (0, 4), "monsters")
 
     Entity.update_all_entities_senses()
 
@@ -441,7 +441,7 @@ def test_bless_self():
         target_entity_uuid=caster.uuid,  # Self-target
         cast_at_level=1,
     )
-    result = spell.apply(parent_event=None)
+    spell.apply(parent_event=None)
 
     check(has_condition(caster, "Bless"), "Caster can bless self")
     check(has_condition(caster, "Concentrating"), "Caster concentrating")

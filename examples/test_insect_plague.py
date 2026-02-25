@@ -10,7 +10,6 @@ Tests cover:
 """
 import sys
 import traceback
-from uuid import uuid4
 
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map

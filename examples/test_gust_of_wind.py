@@ -13,6 +13,8 @@ Tests cover:
 import sys
 import traceback
 
+from typing import cast as type_cast
+
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
@@ -180,7 +182,7 @@ def test_gust_zone_created():
     assert has_condition(caster, "Gust of Wind Zone"), "Should have zone"
     assert has_condition(caster, "Concentrating"), "Should be concentrating"
 
-    zone = caster.active_conditions.get("Gust of Wind Zone")
+    zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
     assert isinstance(zone, GustOfWindZone)
     print(f"  Zone center: {zone.zone_center}")
     print(f"  Zone positions: {len(zone.affected_positions)}")
@@ -219,7 +221,7 @@ def test_gust_entry_push():
         force_str_fail(target)
 
         # Pick a position in the zone (ahead of caster in the wind line)
-        zone = caster.active_conditions.get("Gust of Wind Zone")
+        zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
         assert zone is not None
         # Find a zone position to move into
         zone_pos = None
@@ -284,7 +286,7 @@ def test_gust_turn_start_push():
         print(f"  Position after cast: {pos_after_cast}")
 
         # If target is still in zone, turn start should push again
-        zone = caster.active_conditions.get("Gust of Wind Zone")
+        zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
         if pos_after_cast in zone.affected_positions:
             target.on_turn_start()
             pos_after_turn = get_position(target)
@@ -362,6 +364,7 @@ def test_gust_difficult_terrain():
 
     # Check base cost
     tile = grid.get_tile(8, 10)
+    assert tile is not None
     cost_before = tile.walking_cost.normalized_score
     print(f"  Tile (8,10) cost before: {cost_before}")
 
@@ -374,7 +377,7 @@ def test_gust_difficult_terrain():
     )
     spell.apply()
 
-    zone = caster.active_conditions.get("Gust of Wind Zone")
+    zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
     assert zone is not None
 
     # Check a tile IN the zone
@@ -415,9 +418,10 @@ def test_gust_concentration_break():
     spell.apply()
 
     # Record a zone tile for terrain check
-    zone = caster.active_conditions.get("Gust of Wind Zone")
+    zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
     zone_pos = next(iter(zone.affected_positions))
     zone_tile = grid.get_tile(*zone_pos)
+    assert zone_tile is not None
     assert zone_tile.walking_cost.normalized_score == 2
 
     # Break concentration
@@ -573,8 +577,8 @@ def test_gust_exit_no_effect():
             continue
 
         # Target was pushed out. Now move target to zone edge and out.
-        pushed_pos = get_position(target)
-        zone = caster.active_conditions.get("Gust of Wind Zone")
+        _pushed_pos = get_position(target)
+        zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
         assert zone is not None
 
         # Find a zone position and a non-zone position adjacent to it

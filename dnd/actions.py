@@ -1487,7 +1487,7 @@ class Hide(BaseAction):
         hidden = Hidden(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            stealth_result=stealth_result
+            stealth_result=stealth_result  # type: ignore[call-arg]
         )
         entity.add_condition(hidden, parent_event=execution_event)
 
