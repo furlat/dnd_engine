@@ -43,6 +43,7 @@ class SensesType(str, Enum):
     TREMORSENSE = "Tremorsense"
     TRUESIGHT = "Truesight"
     DEVILS_SIGHT = "Devils Sight"
+    SEE_INVISIBLE = "See Invisible"
 
 
 class SenseMode(BaseModel):

@@ -1739,26 +1739,26 @@ class Jump(BaseAction):
     ])
 
     def get_range(self) -> Optional[Range]:
-        """Calculate jump range based on STR.
+        """Calculate jump range: (15 + STR_bonus + additive) * multiplier.
 
-        Base range: 15ft
-        STR bonus: +5ft per point of STR modifier above 0
+        STR component computed dynamically (like AC reads DEX).
+        jump_distance_additive (base=0): extra flat bonus from spells/conditions.
+        jump_distance_multiplier (base=1): Jump spell adds +2 → 3x.
 
-        Examples:
+        Examples (no modifiers):
         - STR 10 (mod +0): 15ft
         - STR 14 (mod +2): 25ft
-        - STR 18 (mod +4): 35ft
         - STR 20 (mod +5): 40ft
+        With Jump spell (multiplier=3): all values tripled.
         """
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return Range(type=RangeType.REACH, normal=15)
 
-        base_range = 15
-        str_mod = entity.ability_scores.strength.modifier
-        str_bonus = max(0, str_mod) * 5  # +5ft per positive STR mod point
-
-        total_range = base_range + str_bonus
+        base = 15 + max(0, entity.ability_scores.strength.modifier) * 5
+        additive = entity.jump_distance_additive.normalized_score
+        multiplier = entity.jump_distance_multiplier.normalized_score
+        total_range = (base + additive) * multiplier
         return Range(type=RangeType.REACH, normal=total_range)
 
     def get_valid_positions(self) -> List[Tuple[int, int]]:

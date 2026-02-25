@@ -142,6 +142,15 @@ class Entity(BaseBlock):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
 
+    # Jump distance: (15 + max(0, STR_mod)*5 + additive.normalized_score) * multiplier.normalized_score
+    # STR component computed dynamically in Jump.get_range(). These are pure spell/condition channels.
+    jump_distance_additive: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Additive)", base_value=0)
+    )
+    jump_distance_multiplier: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Multiplier)", base_value=1)
+    )
+
     # Turn tracking - True during this entity's turn (set by on_turn_start, cleared by on_turn_end)
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
 
@@ -677,7 +686,8 @@ class Entity(BaseBlock):
         """Entity can bypass invisibility with special senses."""
         return (self.senses.has_sense(SensesType.TRUESIGHT) or
                 self.senses.has_sense(SensesType.BLINDSIGHT) or
-                self.senses.has_sense(SensesType.TREMORSENSE))
+                self.senses.has_sense(SensesType.TREMORSENSE) or
+                self.senses.has_sense(SensesType.SEE_INVISIBLE))
 
     def can_pierce_magical_darkness(self) -> bool:
         """Entity can see through magical darkness with TRUESIGHT or DEVILS_SIGHT."""
