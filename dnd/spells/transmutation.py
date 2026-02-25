@@ -1,6 +1,6 @@
 """Transmutation spells - transforming matter and energy.
 
-Contains: SpikeGrowth, Slow, Haste
+Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate
 """
 import random
 from typing import Any, Optional, List, Tuple, cast as type_cast
@@ -8,17 +8,19 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType, Cost, ActionEvent
+from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, ActionCategory
 from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType
+from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent
+    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage
 )
+from dnd.core.dice import AttackOutcome
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, DamageType
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.entity import Entity
-from dnd.conditions import Concentrating, Incapacitated
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.conditions import Concentrating, Incapacitated, Dashing
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
 
 
@@ -855,5 +857,453 @@ class Haste(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{target.name} is Hasted"
+        )
+
+
+# =============================================================================
+# Darkvision Spell (Level 2, Transmutation, Concentration)
+# =============================================================================
+
+class DarkvisionEffect(BaseCondition):
+    """Grants 60ft darkvision to the target creature."""
+    name: str = "Darkvision"
+    description: str = "You can see in darkness within 60 feet"
+    _granted_sense_type: Optional[SensesType] = None
+    _granted_range: int = 60
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], None
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], None
+
+        target.senses.sense_modes.append(SenseMode(sense_type=SensesType.DARKVISION, range_feet=60))
+        self._granted_sense_type = SensesType.DARKVISION
+        target._notify_perceivability_changed()
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self}
+        ) if declaration_event else None
+
+        return [], [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        if self._granted_sense_type is not None and self.target_entity_uuid:
+            target = Entity.get(self.target_entity_uuid)
+            if target:
+                target.senses.sense_modes = [
+                    sm for sm in target.senses.sense_modes
+                    if not (sm.sense_type == self._granted_sense_type
+                            and sm.range_feet == self._granted_range)
+                ]
+                target._notify_perceivability_changed()
+        return super()._remove(event)
+
+
+class DarkvisionSpell(SpellAction):
+    """Darkvision - 2nd level Transmutation (Concentration)
+
+    Grant 60ft darkvision to a willing creature you touch.
+    """
+    name: str = Field(default="Darkvision")
+    description: str = Field(default="Grant 60ft darkvision to a willing creature")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="transmutation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return declaration_event.cancel(status_message="Caster or target not found")
+
+        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+            return declaration_event.cancel(status_message="Target not visible")
+
+        distance = caster.senses.get_feet_distance(target.position)
+        if distance > 5:
+            return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} grants darkvision to {target.name}"
+        )
+
+        darkvision_effect = DarkvisionEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(darkvision_effect, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Darkvision"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(target.uuid, darkvision_effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} gains darkvision (60ft)"
+        )
+
+
+# =============================================================================
+# Disintegrate Spell (Level 6, Transmutation)
+# =============================================================================
+
+class Disintegrate(SpellAction):
+    """Disintegrate - 6th level Transmutation
+
+    A thin green ray springs from your pointing finger. DEX save or
+    10d6+40 force damage. On a successful save, the target takes no damage.
+
+    At Higher Levels: +3d6 per slot level above 6th.
+    """
+    name: str = Field(default="Disintegrate")
+    description: str = Field(default="DEX save or 10d6+40 force damage. 0 on save.")
+    spell_level: int = Field(default=6)
+    spell_school: str = Field(default="transmutation")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+
+    include_self: bool = Field(default=False)
+    valid_target_filter: str = Field(default="enemies")
+
+    base_damage_dice: int = Field(default=10)
+    base_damage_bonus: int = Field(default=40)
+
+    def get_damage_dice_count(self) -> int:
+        """10d6 base + 3d6 per level above 6th."""
+        upcast_bonus = max(0, self.cast_at_level - self.spell_level)
+        return self.base_damage_dice + upcast_bonus * 3
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        from dnd.spells.evocation import validate_line_of_sight
+
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source or not target:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        distance = source.senses.get_feet_distance(target.position)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(
+                status_message=f"Out of range ({distance}ft > {self.spell_range.normal}ft)"
+            )
+
+        return los_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+        num_dice = self.get_damage_dice_count()
+
+        # DEX save
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="dexterity",
+            dc=dc,
+            parent_event=execution_event.uuid
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="dexterity",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            target_entity_name=target.name,
+            status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+        )
+
+        if success:
+            # Disintegrate does ZERO damage on save (not half!)
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{target.name} dodges the ray"
+            )
+
+        # Roll damage: num_dice d6 + 40
+        damage_bonus = caster.get_spell_damage_bonus()
+        force_damage = Damage(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            damage_dice=6,
+            dice_numbers=num_dice,
+            damage_bonus=damage_bonus,
+            damage_type=DamageType.FORCE
+        )
+        damage_dice = force_damage.get_dice(attack_outcome=AttackOutcome.HIT)
+        damage_roll = damage_dice.roll
+        final_damage = damage_roll.total + self.base_damage_bonus
+
+        target.receive_damage(
+            amount=final_damage,
+            damage_type=DamageType.FORCE,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[force_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,
+            status_message=f"Disintegrate deals {final_damage} force damage to {target.name}"
+        )
+
+
+# =============================================================================
+# Jump Spell (Level 1, Transmutation, Concentration)
+# =============================================================================
+
+class JumpEffect(BaseCondition):
+    """Triples the target's jump distance.
+
+    Adds +2 to entity.jump_distance_multiplier (base 1 → total 3).
+    """
+    name: str = "Jump"
+    description: str = "Jump distance tripled"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], None
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], None
+
+        outs: List[Tuple[UUID, UUID]] = []
+        mod = NumericalModifier(
+            name="Jump Spell",
+            value=2,  # base 1 + 2 = 3x multiplier
+            source_entity_uuid=self.source_entity_uuid or target.uuid,
+            target_entity_uuid=target.uuid
+        )
+        mod_uuid = target.jump_distance_multiplier.self_static.add_value_modifier(mod)
+        outs.append((target.jump_distance_multiplier.uuid, mod_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self}
+        ) if declaration_event else None
+
+        return outs, [], [], [], effect_event
+
+
+class JumpSpell(SpellAction):
+    """Jump - 1st level Transmutation (Concentration)
+
+    Triple a creature's jump distance for the duration.
+    """
+    name: str = Field(default="Jump")
+    description: str = Field(default="Triple a creature's jump distance")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="transmutation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return declaration_event.cancel(status_message="Caster or target not found")
+
+        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+            return declaration_event.cancel(status_message="Target not visible")
+
+        distance = caster.senses.get_feet_distance(target.position)
+        if distance > 5:
+            return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Jump on {target.name}"
+        )
+
+        jump_effect = JumpEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(jump_effect, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Jump"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(target.uuid, jump_effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name}'s jump distance tripled"
+        )
+
+
+# =============================================================================
+# Expeditious Retreat (Level 1, Transmutation, Concentration)
+# =============================================================================
+
+class BonusDash(BaseAction):
+    """Bonus action Dash granted by Expeditious Retreat."""
+    name: str = Field(default="Dash (Bonus)")
+    description: str = Field(default="Dash as a bonus action")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Bonus Dash", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        from dnd.core.base_actions import BaseCost
+        source_entity = Entity.get(self.source_entity_uuid)
+        source_name = source_entity.name if source_entity else None
+        return ActionEvent(
+            name=self.name or "Dash (Bonus)",
+            description=self.description,
+            parent_event=parent_event.uuid if parent_event else None,
+            phase=EventPhase.DECLARATION,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            use_register=use_register,
+            source_entity_name=source_name
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return execution_event.cancel(status_message="Entity not found")
+
+        dashing = Dashing(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid
+        )
+        dashing.duration.duration_type = DurationType.ROUNDS
+        dashing.duration.duration = 1
+        entity.add_condition(dashing, parent_event=execution_event)
+
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{entity.name} dashes as a bonus action"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+class ExpeditiousRetreatEffect(BaseCondition):
+    """Grants a bonus action Dash each turn."""
+    name: str = "Expeditious Retreat"
+    description: str = "You can Dash as a bonus action"
+    _action_name: str = "Dash (Bonus)"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], None
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], None
+
+        bonus_dash = BonusDash(source_entity_uuid=target.uuid, template=True)
+        target.register_action(bonus_dash)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self}
+        ) if declaration_event else None
+
+        return [], [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        if self.target_entity_uuid:
+            target = Entity.get(self.target_entity_uuid)
+            if target:
+                target.unregister_action(self._action_name)
+        return super()._remove(event)
+
+
+class ExpeditiousRetreat(SpellAction):
+    """Expeditious Retreat - 1st level Transmutation (Concentration)
+
+    You can Dash as a bonus action on each of your turns until the spell ends.
+    """
+    name: str = Field(default="Expeditious Retreat")
+    description: str = Field(default="Bonus action Dash each turn")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="transmutation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.SELF)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Expeditious Retreat"
+        )
+
+        retreat_effect = ExpeditiousRetreatEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid
+        )
+        caster.add_condition(retreat_effect, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Expeditious Retreat"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, retreat_effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{caster.name} can now Dash as a bonus action"
         )
 

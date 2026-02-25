@@ -2,28 +2,29 @@
 
 Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           LightningBolt, Thunderwave, Shatter, Sunburst, RayOfFrost, ScorchingRay,
-          ShockingGrasp, GuidingBolt
+          ShockingGrasp, GuidingBolt, GustOfWind, IceStorm, Sunbeam
 """
-from typing import Any, Optional, List, Tuple
+import random
+from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType
+from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, ActionCategory
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType
+from dnd.core.base_conditions import BaseCondition, Duration, DurationType, ConditionRemovalEvent, HazardFilter
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome, RollType
 from typing import cast as type_cast
-from dnd.core.events import EventPhase, RangeType, Range, Damage, ForcedMovementEvent, EventType, EventHandler, Trigger, Event
+from dnd.core.events import EventPhase, RangeType, Range, Damage, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent
 from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType, NumericalModifier
-from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube
+from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import ArmorType
 
 from dnd.entity import Entity, determine_attack_outcome
-from dnd.actions import SpellAction, SpellEvent
-from dnd.conditions import Blinded, NoReactions
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.conditions import Blinded, NoReactions, Concentrating
 
 
 def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
@@ -2603,3 +2604,594 @@ class EldritchBlast(SpellAction):
             damage_rolls=[damage_roll],
             status_message=f"{self.name} hit for {damage_roll.total} force damage"
         )
+
+
+# =============================================================================
+# Gust of Wind (Level 2, Evocation, Concentration)
+# =============================================================================
+
+from dnd.tile_conditions import ZoneControlCondition
+
+
+class GustOfWindZone(ZoneControlCondition):
+    """Zone for Gust of Wind - 60ft line of wind that pushes creatures."""
+    name: str = "Gust of Wind Zone"
+    description: str = "Strong wind pushes creatures and costs extra movement"
+
+    zone_shape: str = Field(default="line")
+    zone_radius_feet: int = Field(default=60)
+    adds_difficult_terrain: bool = Field(default=True)
+
+    marker_name: Optional[str] = Field(default="Gust of Wind")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+
+    spell_dc: int = Field(default=10)
+    caster_position: Tuple[int, int] = Field(default=(0, 0))
+
+    def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Compute line from caster in the chosen direction."""
+        if not self.zone_direction:
+            return {self.zone_center}
+        dx, dy = self.zone_direction
+        length_tiles = self.zone_radius_feet // 5  # 60ft / 5 = 12 tiles
+        target = (self.zone_center[0] + dx * length_tiles,
+                  self.zone_center[1] + dy * length_tiles)
+
+        line = Line(
+            source_entity_uuid=self.source_entity_uuid,
+            target=target,
+            length_feet=self.zone_radius_feet,
+            width_feet=10
+        )
+        line.compute_objective(caster_pos=self.zone_center)
+        return set(line.affected_positions)
+
+    def _has_entry_effect(self) -> bool:
+        return True
+
+    def _has_turn_start_effect(self) -> bool:
+        return True
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+        caster_pos = self.caster_position
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
+                return None
+            entity = Entity.get(event.entity_uuid)
+            if not entity or not entity.has_hp:
+                return None
+
+            _apply_gust_push(entity, dc, caster_pos, source_uuid, event)
+            return None
+
+        return EventHandler(
+            name="Gust of Wind Entry Push",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+        caster_pos = self.caster_position
+        zone_condition = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type != EventType.TURN_START:
+                return None
+            entity = Entity.get(event.source_entity_uuid)
+            if not entity or not entity.has_hp:
+                return None
+            if entity.senses.position not in zone_condition.affected_positions:
+                return None
+
+            _apply_gust_push(entity, dc, caster_pos, source_uuid, event)
+            return None
+
+        return EventHandler(
+            name="Gust of Wind Turn Start Push",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+
+def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
+                      source_uuid: UUID, parent_event: Event) -> None:
+    """STR save or pushed 15ft away from caster."""
+    save_request = entity.create_saving_throw_request(
+        target_entity_uuid=entity.uuid,
+        ability_name="strength",
+        dc=dc,
+        parent_event=parent_event.uuid
+    )
+    _, _, success = entity.saving_throw(save_request)
+    if success:
+        return
+
+    # Push 3 tiles (15ft) away from caster
+    entity_pos = entity.senses.position
+    dx = entity_pos[0] - caster_pos[0]
+    dy = entity_pos[1] - caster_pos[1]
+    length = max(abs(dx), abs(dy), 1)
+    push_dx = round(dx / length) if dx != 0 else 0
+    push_dy = round(dy / length) if dy != 0 else 0
+    if push_dx == 0 and push_dy == 0:
+        push_dx = 1  # Default push direction
+
+    grid = get_map()
+    current_pos = entity_pos
+    for _ in range(3):
+        next_pos = (current_pos[0] + push_dx, current_pos[1] + push_dy)
+        if not grid.is_walkable_for(next_pos[0], next_pos[1], entity.uuid):
+            break
+        current_pos = next_pos
+
+    if current_pos != entity_pos:
+        push_dist = (abs(current_pos[0] - entity_pos[0]) + abs(current_pos[1] - entity_pos[1])) * 5
+        forced_event = ForcedMovementEvent(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=entity.uuid,
+            source_entity_name="Gust of Wind",
+            target_entity_name=entity.name,
+            start_position=entity_pos,
+            end_position=current_pos,
+            direction=(push_dx, push_dy),
+            intended_distance=15,
+            actual_distance=push_dist,
+            blocked_by_obstacle=push_dist < 15,
+            cause="gust_of_wind",
+            phase=EventPhase.DECLARATION,
+            parent_event=parent_event.uuid
+        )
+        forced_event.phase_to(EventPhase.COMPLETION)
+        Entity.update_entity_position(entity, current_pos, parent_event=parent_event.uuid)
+
+
+class GustOfWind(SpellAction):
+    """Gust of Wind - 2nd level Evocation (Concentration)
+
+    A line of strong wind 60ft long and 10ft wide blasts from you.
+    STR save or pushed 15ft away. Difficult terrain toward caster.
+    """
+    name: str = Field(default="Gust of Wind")
+    description: str = Field(default="60ft line of wind, STR save or pushed 15ft, difficult terrain")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="evocation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    include_self: bool = Field(default=False)
+    valid_target_filter: str = Field(default="all")
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Line(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
+                length_feet=60,
+                width_feet=10
+            )
+
+    def get_range(self) -> Range:
+        return self.spell_range
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not self.end_position:
+            return declaration_event.cancel(status_message="No direction specified")
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Per-target apply: push each creature in the line."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="strength", save_dc=dc,
+            status_message=f"Gust of Wind hits {target.name}"
+        )
+
+        _apply_gust_push(target, dc, caster.senses.position, caster.uuid, effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Gust of Wind pushes {target.name}"
+        )
+
+    def apply(self) -> Optional[SpellEvent]:
+        """Override to create zone after convolution completes."""
+        result = type_cast(Optional[SpellEvent], super().apply())
+        if result and not result.canceled:
+            self._setup_zone()
+        return result
+
+    def _setup_zone(self) -> None:
+        """Set up the persistent zone condition after initial push."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return
+
+        dc = caster.spell_save_dc()
+        target_pos = self.end_position or (caster.senses.position[0] + 1, caster.senses.position[1])
+
+        # Compute direction for zone
+        dx = target_pos[0] - caster.senses.position[0]
+        dy = target_pos[1] - caster.senses.position[1]
+        length = max(abs(dx), abs(dy), 1)
+        direction = (round(dx / length), round(dy / length))
+
+        zone = GustOfWindZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=caster.senses.position,
+            zone_direction=direction,
+            spell_dc=dc,
+            caster_position=caster.senses.position
+        )
+        caster.add_condition(zone)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Gust of Wind"
+        )
+        caster.add_condition(concentration)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+
+# =============================================================================
+# Ice Storm (Level 4, Evocation, NOT concentration)
+# =============================================================================
+
+class IceStormTerrain(ZoneControlCondition):
+    """Temporary difficult terrain from Ice Storm. Lasts 1 round."""
+    name: str = "Ice Storm Terrain"
+    description: str = "Ground covered in ice - difficult terrain"
+
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=20)
+    adds_difficult_terrain: bool = Field(default=True)
+
+    marker_name: Optional[str] = Field(default="Ice Storm")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+
+
+class IceStorm(SpellAction):
+    """Ice Storm - 4th level Evocation
+
+    Hail pounds a 20ft-radius, 40ft-high cylinder. DEX save or
+    2d8 bludgeoning + 4d6 cold (half on save). Ground becomes difficult terrain for 1 round.
+
+    At Higher Levels: +1d8 bludgeoning per level above 4th.
+    """
+    name: str = Field(default="Ice Storm")
+    description: str = Field(default="20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), difficult terrain 1 round")
+    spell_level: int = Field(default=4)
+    spell_school: str = Field(default="evocation")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="all")
+
+    base_bludg_dice: int = Field(default=2)
+    cold_dice: int = Field(default=4)
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Cylinder(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0),
+                radius_feet=20,
+                height_feet=40
+            )
+
+    def get_range(self) -> Range:
+        return self.spell_range
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not self.end_position:
+            return declaration_event.cancel(status_message="No target position")
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Per-target: DEX save, bludgeoning + cold damage."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+        upcast_bonus = self.get_upcast_bonus()
+
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="dexterity",
+            dc=dc,
+            parent_event=execution_event.uuid
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="dexterity", save_dc=dc,
+            save_success=success, save_roll=save_roll,
+            target_entity_name=target.name,
+            status_message=f"DEX save: {save_roll.total} vs DC {dc}"
+        )
+
+        # 2d8 bludgeoning (+ upcast) + 4d6 cold
+        bludg_count = self.base_bludg_dice + upcast_bonus
+        bludg_damage = sum(random.randint(1, 8) for _ in range(bludg_count))
+        cold_damage = sum(random.randint(1, 6) for _ in range(self.cold_dice))
+        total = bludg_damage + cold_damage
+        if success:
+            total = total // 2
+
+        target.receive_damage(
+            amount=total,
+            damage_type=DamageType.COLD,
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event.uuid
+        )
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=total,
+            status_message=f"Ice Storm deals {total} damage to {target.name}"
+        )
+
+    def apply(self) -> Optional[SpellEvent]:
+        """Override to apply difficult terrain zone after convolution."""
+        result = type_cast(Optional[SpellEvent], super().apply())
+        if result and not result.canceled:
+            self._setup_terrain()
+        return result
+
+    def _setup_terrain(self) -> None:
+        """Apply 1-round difficult terrain at the target area."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return
+
+        target_pos = self.end_position
+        if not target_pos:
+            return
+
+        terrain = IceStormTerrain(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=target_pos
+        )
+        terrain.duration.duration_type = DurationType.ROUNDS
+        terrain.duration.duration = 1
+        caster.add_condition(terrain)
+
+
+# =============================================================================
+# Sunbeam (Level 6, Evocation, Concentration)
+# =============================================================================
+
+class SunbeamStrike(BaseAction):
+    """Action granted by Sunbeam to fire a beam of radiant light each turn."""
+    name: str = Field(default="Sunbeam Strike")
+    description: str = Field(default="Fire a beam of brilliant light - 60ft line")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    aoe_shape: Optional[AoEShape] = Field(default=None)
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Sunbeam Strike", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+    spell_dc: int = Field(default=10)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    include_self: bool = Field(default=False)
+    valid_target_filter: str = Field(default="all")
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Line(
+                source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0),
+                length_feet=60,
+                width_feet=5
+            )
+
+    def get_range(self) -> Range:
+        return self.spell_range
+
+    def _create_event(self) -> Event:
+        return Event(
+            name=self.name,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            event_type=EventType.CAST_SPELL,
+            phase=EventPhase.DECLARATION
+        )
+
+    def _validate(self, declaration_event: Event) -> Optional[Event]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        if "Concentrating" not in caster.active_conditions:
+            return declaration_event.cancel(status_message="Not concentrating on Sunbeam")
+
+        conc = caster.active_conditions.get("Concentrating")
+        if not isinstance(conc, Concentrating) or conc.spell_name != "Sunbeam":
+            return declaration_event.cancel(status_message="Not concentrating on Sunbeam")
+
+        if not self.end_position:
+            return declaration_event.cancel(status_message="No direction specified")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: Event) -> Optional[Event]:
+        """Per-target: CON save, 6d8 radiant, Blinded on fail."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="constitution",
+            dc=self.spell_dc,
+            parent_event=execution_event.uuid
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"CON save: {save_roll.total} vs DC {self.spell_dc}"
+        )
+
+        damage = sum(random.randint(1, 8) for _ in range(6))
+        if success:
+            damage = damage // 2
+        target.receive_damage(damage, DamageType.RADIANT, caster.uuid, parent_event=effect_event.uuid)
+
+        # Blinded on failed save (1 round)
+        if not success:
+            blinded = Blinded(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+            blinded.duration.duration_type = DurationType.ROUNDS
+            blinded.duration.duration = 1
+            target.add_condition(blinded, parent_event=effect_event)
+
+        save_text = " (saved for half)" if success else " + Blinded"
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Sunbeam deals {damage} radiant to {target.name}{save_text}"
+        )
+
+
+class Sunbeam(SpellAction):
+    """Sunbeam - 6th level Evocation (Concentration)
+
+    A beam of brilliant light flashes out in a 60ft line.
+    CON save or 6d8 radiant + Blinded (half on save, no blind).
+    You can create a new beam each turn as an action.
+    """
+    name: str = Field(default="Sunbeam")
+    description: str = Field(default="60ft line beam, 6d8 radiant + Blinded (CON half), repeatable")
+    spell_level: int = Field(default=6)
+    spell_school: str = Field(default="evocation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.SELF)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        dc = caster.spell_save_dc()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Sunbeam"
+        )
+
+        # Register Sunbeam Strike action
+        strike = SunbeamStrike(
+            source_entity_uuid=caster.uuid,
+            spell_dc=dc,
+            template=True
+        )
+        caster.register_action(strike)
+
+        # Apply Concentrating
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Sunbeam"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+
+        # Register cleanup to remove strike action when concentration breaks
+        self._register_action_cleanup(caster, strike.name)
+
+        # Fire the first beam immediately on cast (D&D 5e: beam flashes on cast)
+        if self.end_position:
+            first_strike = SunbeamStrike(
+                source_entity_uuid=caster.uuid,
+                end_position=self.end_position,
+                spell_dc=dc,
+                template=False,
+                costs=[],  # No additional cost — already paid by casting Sunbeam
+            )
+            first_strike.apply()
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{caster.name} channels Sunbeam - can fire a beam each turn"
+        )
+
+    def _register_action_cleanup(self, caster: Entity, action_name: str) -> None:
+        """Remove Sunbeam Strike when concentration breaks."""
+        caster_uuid = caster.uuid
+
+        def cleanup_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.target_entity_uuid != caster_uuid:
+                return None
+            if not isinstance(event, ConditionRemovalEvent):
+                return None
+            if not isinstance(event.condition, Concentrating):
+                return None
+            if event.condition.spell_name != "Sunbeam":
+                return None
+            entity = Entity.get(caster_uuid)
+            if entity:
+                entity.unregister_action(action_name)
+            return None
+
+        cleanup_handler = EventHandler(
+            name=f"Sunbeam Cleanup ({caster_uuid})",
+            source_entity_uuid=caster_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.CONDITION_REMOVAL,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=cleanup_processor
+        )
+        caster.add_event_handler(cleanup_handler)
