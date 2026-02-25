@@ -29,7 +29,7 @@ from dnd.spells.evocation import BurningHands, FireBolt, Fireball, MagicMissile
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.abjuration import MageArmor
 from dnd.spells.illusion import Invisibility
-from dnd.spells.transmutation import SpikeGrowth
+from dnd.spells.transmutation import SpikeGrowth, HasteEffect
 
 
 # =============================================================================
@@ -1302,3 +1302,64 @@ def create_wall_torch(position: Tuple[int, int], owner_uuid: UUID, lit: bool = T
     if lit:
         torch.light()
     return torch
+
+
+# =============================================================================
+# Potion of Haste — Applies Haste effect (no concentration, no lethargy)
+# =============================================================================
+
+class DrinkHastePotionAction(BaseAction):
+    """Drink a potion to gain Haste (no concentration, no lethargy)."""
+    name: str = Field(default="Drink Haste Potion")
+    description: str = Field(default="Drink to gain doubled speed, +2 AC, DEX advantage, +1 action for 10 rounds")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    costs: List[Cost] = Field(default_factory=list)
+    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity or not isinstance(entity, Entity):
+            return execution_event.cancel(status_message="Entity not found")
+
+        # Apply HasteEffect directly — no Concentrating, no lethargy
+        haste = HasteEffect(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid,
+            caster_uuid=entity.uuid,
+        )
+        haste.duration.duration_type = DurationType.ROUNDS
+        haste.duration.duration = 10
+        entity.add_condition(haste, parent_event=execution_event)
+
+        effect = execution_event.phase_to(EventPhase.EFFECT,
+            status_message=f"{entity.name} gains Haste")
+        return effect.phase_to(EventPhase.COMPLETION,
+            status_message="Drank Potion of Haste")
+
+
+class PotionOfHaste(UsableItem):
+    """Potion of Haste. Single use, consumable."""
+    name: str = Field(default="Potion of Haste")
+    is_pickable: bool = Field(default=True)
+    map_char: str = Field(default="\u03b8")
+    is_consumable: bool = Field(default=True)
+    charges: int = Field(default=1)
+    max_charges: int = Field(default=1)
+    max_stack: int = Field(default=5)
+
+
+def create_potion_of_haste(owner_uuid: UUID) -> PotionOfHaste:
+    action = DrinkHastePotionAction(
+        source_entity_uuid=uuid4(), source_item_uuid=uuid4(), template=True,
+    )
+    return PotionOfHaste(
+        source_entity_uuid=owner_uuid,
+        use_action_templates=[action],
+        stack_id="potion_of_haste"
+    )

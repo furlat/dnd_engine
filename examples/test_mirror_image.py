@@ -15,13 +15,12 @@ Tests:
 6. Duration expires after 10 rounds
 """
 
-from uuid import uuid4, UUID
+from uuid import uuid4
 from dnd.utils import (
-    reset_combat_state, set_hp, has_condition, get_hp,
+    reset_combat_state, has_condition, get_hp,
     force_attack_hit, force_attack_miss, remove_attack_modifier
 )
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
@@ -112,7 +111,7 @@ def get_mirror_condition(entity: Entity) -> MirrorImageEffect:
 def navigate_to_turn(encounter: Encounter, entity: Entity):
     """Navigate to the given entity's turn."""
     encounter.start_turn()
-    while encounter.get_current_entity().uuid != entity.uuid:
+    while (ce := encounter.get_current_entity()) and ce.uuid != entity.uuid:
         encounter.end_turn()
         encounter.next_turn()
 
@@ -209,7 +208,7 @@ def test_3_all_duplicates_destroyed():
         if i < 2:
             encounter.end_turn()
             encounter.next_turn()
-            while encounter.get_current_entity().uuid != attacker.uuid:
+            while (ce := encounter.get_current_entity()) and ce.uuid != attacker.uuid:
                 encounter.end_turn()
                 encounter.next_turn()
 
@@ -302,7 +301,7 @@ def test_6_duration_expires():
 
     # Run 10 full rounds — advance_duration ticks at turn start for the condition owner
     navigate_to_turn(encounter, caster)
-    for i in range(10):
+    for _ in range(10):
         encounter.end_turn()
         encounter.next_turn()
         # Attacker's turn

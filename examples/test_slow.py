@@ -10,13 +10,14 @@ Tests:
 6. Multiple targets linked to concentration
 """
 
+from typing import cast as type_cast
 from uuid import uuid4, UUID
 from dnd.utils import (
     reset_combat_state, set_hp, has_condition, get_hp,
     force_attack_hit, remove_attack_modifier, deal_damage_to
 )
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType
+from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
@@ -24,20 +25,18 @@ from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.conditions import Concentrating
 from dnd.spells import Slow
-from dnd.spells.transmutation import SlowedEffect
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_action
 from dnd.core.base_actions import AvailableTarget
-from dnd.core.events import WeaponSlot
+from dnd.core.events import WeaponSlot, AbilityName
 from dnd.items.weapons import create_longsword, create_greatsword
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
 from dnd.classes.fighter import ExtraAttackFeature, ActionSurgeFeature, ActionSurge
-from dnd.core.modifiers import NumericalModifier
 
 
 def force_save_fail(entity: Entity, ability: str = "wisdom") -> UUID:
     """Add -100 to saving throw to guarantee failure. Returns modifier UUID."""
-    save = entity.saving_throws.get_saving_throw(ability)
+    save = entity.saving_throws.get_saving_throw(type_cast(AbilityName, ability))
     mod = NumericalModifier(name="Force Fail", value=-100,
                             source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
     save.bonus.self_static.add_value_modifier(mod)
@@ -46,7 +45,7 @@ def force_save_fail(entity: Entity, ability: str = "wisdom") -> UUID:
 
 def force_save_succeed(entity: Entity, ability: str = "wisdom") -> UUID:
     """Add +100 to saving throw to guarantee success. Returns modifier UUID."""
-    save = entity.saving_throws.get_saving_throw(ability)
+    save = entity.saving_throws.get_saving_throw(type_cast(AbilityName, ability))
     mod = NumericalModifier(name="Force Succeed", value=100,
                             source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
     save.bonus.self_static.add_value_modifier(mod)
@@ -55,7 +54,7 @@ def force_save_succeed(entity: Entity, ability: str = "wisdom") -> UUID:
 
 def remove_save_modifier(entity: Entity, mod_uuid: UUID, ability: str = "wisdom"):
     """Remove a force save modifier."""
-    save = entity.saving_throws.get_saving_throw(ability)
+    save = entity.saving_throws.get_saving_throw(type_cast(AbilityName, ability))
     save.bonus.self_static.remove_value_modifier(mod_uuid)
 
 
@@ -196,7 +195,7 @@ def test_2_action_bonus_lockout():
 
     # Navigate to target's turn
     encounter.start_turn()
-    while encounter.get_current_entity().uuid != target.uuid:
+    while (ce := encounter.get_current_entity()) and ce.uuid != target.uuid:
         encounter.end_turn()
         encounter.next_turn()
 
@@ -214,7 +213,7 @@ def test_2_action_bonus_lockout():
     # End turn and go to target's next turn — lockout should reset
     encounter.end_turn()
     encounter.next_turn()
-    while encounter.get_current_entity().uuid != target.uuid:
+    while (ce := encounter.get_current_entity()) and ce.uuid != target.uuid:
         encounter.end_turn()
         encounter.next_turn()
 
@@ -265,7 +264,7 @@ def test_3_no_extra_attack():
 
     # --- Phase 1: Attack WITHOUT Slow (should get 2 hits: 1 normal + 1 Extra Attack) ---
     encounter.start_turn()
-    while encounter.get_current_entity().uuid != fighter.uuid:
+    while (ce := encounter.get_current_entity()) and ce.uuid != fighter.uuid:
         encounter.end_turn()
         encounter.next_turn()
 
@@ -286,7 +285,7 @@ def test_3_no_extra_attack():
 
     # Cycle to fighter's turn
     encounter.next_turn()
-    while encounter.get_current_entity().uuid != fighter.uuid:
+    while (ce := encounter.get_current_entity()) and ce.uuid != fighter.uuid:
         encounter.end_turn()
         encounter.next_turn()
 
@@ -327,7 +326,7 @@ def test_4_repeat_save():
     saved = False
     encounter.start_turn()
     for _ in range(20):
-        if encounter.get_current_entity().uuid == target.uuid:
+        if (ce := encounter.get_current_entity()) and ce.uuid == target.uuid:
             encounter.end_turn()
             if not has_condition(target, "Slowed"):
                 saved = True
@@ -461,7 +460,7 @@ def test_7_slow_action_surge():
 
     # Navigate to fighter's turn
     encounter.start_turn()
-    while encounter.get_current_entity().uuid != fighter.uuid:
+    while (ce := encounter.get_current_entity()) and ce.uuid != fighter.uuid:
         encounter.end_turn()
         encounter.next_turn()
 
