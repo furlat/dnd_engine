@@ -7,14 +7,16 @@ from dnd.spells.evocation import (
     FireBolt, SacredFlame, MagicMissile, Fireball,
     BurningHands, LightningBolt, Thunderwave, Shatter, Sunburst,
     ConeOfCold, CircleOfDeath, RayOfFrost, ScorchingRay,
-    ShockingGrasp, GuidingBolt, GuidingBoltMarked, EldritchBlast
+    ShockingGrasp, GuidingBolt, GuidingBoltMarked, EldritchBlast,
+    GustOfWind, IceStorm, Sunbeam
 )
 from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep, Bane, BaneEffect, Bless, BlessEffect
-from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight
+from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing, NecroticBless
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage
-from dnd.spells.transmutation import SpikeGrowth, Slow, Haste
+from dnd.spells.transmutation import SpikeGrowth, Slow, Haste, DarkvisionSpell, Disintegrate, JumpSpell, ExpeditiousRetreat
+from dnd.spells.divination import SeeInvisibility, TrueSeeing
 
 # Lookup dictionaries (like dnd/items/__init__.py)
 CANTRIPS = {
@@ -42,6 +44,8 @@ LEVEL_1_SPELLS = {
     "Fog Cloud": FogCloud,
     "Bane": Bane,
     "Bless": Bless,
+    "Jump": JumpSpell,
+    "Expeditious Retreat": ExpeditiousRetreat,
 }
 
 LEVEL_2_SPELLS = {
@@ -57,6 +61,9 @@ LEVEL_2_SPELLS = {
     "Darkness": Darkness,
     "Mirror Image": MirrorImage,
     "Necrotic Bless": NecroticBless,
+    "Darkvision": DarkvisionSpell,
+    "See Invisibility": SeeInvisibility,
+    "Gust of Wind": GustOfWind,
 }
 
 LEVEL_3_SPELLS = {
@@ -76,21 +83,27 @@ LEVEL_4_SPELLS = {
     "Blight": Blight,
     "Stoneskin": Stoneskin,
     "Greater Invisibility": GreaterInvisibility,
+    "Ice Storm": IceStorm,
 }
 
 LEVEL_5_SPELLS = {
     "Hold Monster": HoldMonster,
     "Cone of Cold": ConeOfCold,
     "Cloudkill": Cloudkill,
+    "Insect Plague": InsectPlague,
 }
 
 LEVEL_6_SPELLS = {
     "Circle of Death": CircleOfDeath,
+    "Disintegrate": Disintegrate,
+    "True Seeing": TrueSeeing,
+    "Sunbeam": Sunbeam,
 }
 
 LEVEL_8_SPELLS = {
     "Sunburst": Sunburst,
     "Power Word Stun": PowerWordStun,
+    "Incendiary Cloud": IncendiaryCloud,
 }
 
 LEVEL_9_SPELLS = {
@@ -142,6 +155,8 @@ __all__ = [
     "BaneEffect",
     "Bless",
     "BlessEffect",
+    "JumpSpell",
+    "ExpeditiousRetreat",
     # Level 2
     "HoldPerson",
     "Shatter",
@@ -155,6 +170,9 @@ __all__ = [
     "Darkness",
     "MirrorImage",
     "NecroticBless",
+    "DarkvisionSpell",
+    "SeeInvisibility",
+    "GustOfWind",
     # Level 3
     "CallLightning",
     "CallLightningStrike",
@@ -171,15 +189,21 @@ __all__ = [
     "Blight",
     "Stoneskin",
     "GreaterInvisibility",
+    "IceStorm",
     # Level 5
     "HoldMonster",
     "ConeOfCold",
     "Cloudkill",
+    "InsectPlague",
     # Level 6
     "CircleOfDeath",
+    "Disintegrate",
+    "TrueSeeing",
+    "Sunbeam",
     # Level 8
     "Sunburst",
     "PowerWordStun",
+    "IncendiaryCloud",
     # Level 9
     "PowerWordKill",
     # Lookup dicts

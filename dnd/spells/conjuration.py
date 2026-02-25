@@ -1,6 +1,7 @@
 """Conjuration spells - creating objects and summoning creatures.
 
-Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web
+Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
+          SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
 import random
 from typing import Optional, List, Tuple, cast as type_cast
@@ -14,6 +15,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent, SpatialChangeEvent
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.base_block import LightLevel
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Concentrating, Prone, Restrained
@@ -2428,4 +2430,437 @@ class Daylight(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"Daylight active: 60ft sphere at {target_pos}"
+        )
+
+
+# =============================================================================
+# Insect Plague (Level 5, Conjuration, Concentration)
+# =============================================================================
+
+class InsectPlagueZone(ZoneControlCondition):
+    """Zone for Insect Plague - swarming locusts deal piercing damage."""
+    name: str = "Insect Plague Zone"
+    description: str = "Swarming biting locusts - CON save or 4d10 piercing"
+
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=20)
+    adds_difficult_terrain: bool = Field(default=False)
+
+    marker_name: Optional[str] = Field(default="Insect Plague")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+
+    spell_dc: int = Field(default=10)
+    base_dice: int = Field(default=4)
+    upcast_dice: int = Field(default=0)
+
+    def _has_entry_effect(self) -> bool:
+        return True
+
+    def _has_turn_start_effect(self) -> bool:
+        return True
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+        num_dice = self.base_dice + self.upcast_dice
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
+                return None
+            entity = Entity.get(event.entity_uuid)
+            if not entity or not entity.has_hp:
+                return None
+
+            save_request = entity.create_saving_throw_request(
+                target_entity_uuid=entity.uuid,
+                ability_name="constitution",
+                dc=dc,
+                parent_event=event.uuid
+            )
+            _, _, success = entity.saving_throw(save_request)
+
+            damage = sum(random.randint(1, 10) for _ in range(num_dice))
+            if success:
+                damage = damage // 2
+            entity.receive_damage(damage, DamageType.PIERCING, source_uuid, parent_event=event.uuid)
+            return None
+
+        return EventHandler(
+            name="Insect Plague Entry Damage",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+        num_dice = self.base_dice + self.upcast_dice
+        zone_condition = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type != EventType.TURN_START:
+                return None
+            entity_uuid = event.source_entity_uuid
+            entity = Entity.get(entity_uuid)
+            if not entity or not entity.has_hp:
+                return None
+            if entity.senses.position not in zone_condition.affected_positions:
+                return None
+
+            save_request = entity.create_saving_throw_request(
+                target_entity_uuid=entity.uuid,
+                ability_name="constitution",
+                dc=dc,
+                parent_event=event.uuid
+            )
+            _, _, success = entity.saving_throw(save_request)
+
+            damage = sum(random.randint(1, 10) for _ in range(num_dice))
+            if success:
+                damage = damage // 2
+            entity.receive_damage(damage, DamageType.PIERCING, source_uuid, parent_event=event.uuid)
+            return None
+
+        return EventHandler(
+            name="Insect Plague Turn Start Damage",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+
+class InsectPlague(SpellAction):
+    """Insect Plague - 5th level Conjuration (Concentration)
+
+    Swarming locusts fill a 20ft sphere. CON save or 4d10 piercing (half on save).
+    Damages on entry and turn start. At Higher Levels: +1d10 per level above 5th.
+    """
+    name: str = Field(default="Insect Plague")
+    description: str = Field(default="20ft sphere swarming locusts, 4d10 piercing (CON half)")
+    spell_level: int = Field(default=5)
+    spell_school: str = Field(default="conjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.POSITION)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Insect Plague Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position")
+
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
+
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
+
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return execution_event.cancel(status_message="No target position")
+
+        dc = caster.spell_save_dc()
+        upcast_bonus = self.get_upcast_bonus()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="constitution", save_dc=dc,
+            status_message=f"{caster.name} casts Insect Plague at {target_pos}"
+        )
+
+        zone = InsectPlagueZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=target_pos,
+            spell_dc=dc,
+            upcast_dice=upcast_bonus
+        )
+        caster.add_condition(zone, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Insect Plague"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+        # Damage creatures already in zone
+        grid = get_map()
+        base_dice = 4 + upcast_bonus
+        for pos in zone.affected_positions:
+            for ent_uuid in grid.get_entities_at(pos):
+                ent = Entity.get(ent_uuid)
+                if not ent or not ent.has_hp:
+                    continue
+                save_request = caster.create_saving_throw_request(
+                    target_entity_uuid=ent.uuid, ability_name="constitution",
+                    dc=dc, parent_event=effect_event.uuid
+                )
+                _, _, success = ent.saving_throw(save_request)
+                damage = sum(random.randint(1, 10) for _ in range(base_dice))
+                if success:
+                    damage = damage // 2
+                ent.receive_damage(damage, DamageType.PIERCING, caster.uuid, parent_event=effect_event.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Insect Plague active: 20ft sphere at {target_pos}"
+        )
+
+
+# =============================================================================
+# Incendiary Cloud (Level 8, Conjuration, Concentration)
+# =============================================================================
+
+class IncendiaryCloudZone(ZoneControlCondition):
+    """Zone for Incendiary Cloud - roiling fire cloud deals fire damage."""
+    name: str = "Incendiary Cloud Zone"
+    description: str = "Roiling fire cloud - DEX save or 10d8 fire"
+
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=20)
+    adds_difficult_terrain: bool = Field(default=False)
+    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS)
+    light_is_obscurement: bool = Field(default=True)
+
+    marker_name: Optional[str] = Field(default="Incendiary Cloud")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+
+    spell_dc: int = Field(default=10)
+    base_dice: int = Field(default=10)
+
+    def _has_entry_effect(self) -> bool:
+        return True
+
+    def _has_turn_start_effect(self) -> bool:
+        return True
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        outs, handler_uuids, sub_conditions_uuids, external_uuids, effect_event = super()._apply(declaration_event)
+        auto_move_handler = self._create_auto_move_handler()
+        EventQueue.add_event_handler(auto_move_handler)
+        handler_uuids.append(auto_move_handler.uuid)
+        return outs, handler_uuids, sub_conditions_uuids, external_uuids, effect_event
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+        num_dice = self.base_dice
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
+                return None
+            entity = Entity.get(event.entity_uuid)
+            if not entity or not entity.has_hp:
+                return None
+
+            save_request = entity.create_saving_throw_request(
+                target_entity_uuid=entity.uuid, ability_name="dexterity",
+                dc=dc, parent_event=event.uuid
+            )
+            _, _, success = entity.saving_throw(save_request)
+            damage = sum(random.randint(1, 8) for _ in range(num_dice))
+            if success:
+                damage = damage // 2
+            entity.receive_damage(damage, DamageType.FIRE, source_uuid, parent_event=event.uuid)
+            return None
+
+        return EventHandler(
+            name="Incendiary Cloud Entry Damage",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        source_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+        num_dice = self.base_dice
+        zone_condition = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type != EventType.TURN_START:
+                return None
+            entity_uuid = event.source_entity_uuid
+            entity = Entity.get(entity_uuid)
+            if not entity or not entity.has_hp:
+                return None
+            if entity.senses.position not in zone_condition.affected_positions:
+                return None
+
+            save_request = entity.create_saving_throw_request(
+                target_entity_uuid=entity.uuid, ability_name="dexterity",
+                dc=dc, parent_event=event.uuid
+            )
+            _, _, success = entity.saving_throw(save_request)
+            damage = sum(random.randint(1, 8) for _ in range(num_dice))
+            if success:
+                damage = damage // 2
+            entity.receive_damage(damage, DamageType.FIRE, source_uuid, parent_event=event.uuid)
+            return None
+
+        return EventHandler(
+            name="Incendiary Cloud Turn Start Damage",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+    def _create_auto_move_handler(self) -> EventHandler:
+        """Move cloud 10ft away from caster at caster's turn start."""
+        caster_uuid = self.source_entity_uuid
+        zone_condition = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type != EventType.TURN_START:
+                return None
+            if event.source_entity_uuid != caster_uuid:
+                return None
+            caster = Entity.get(caster_uuid)
+            if not caster:
+                return None
+
+            cx, cy = caster.senses.position
+            zx, zy = zone_condition.zone_center
+            dx = zx - cx
+            dy = zy - cy
+            if dx == 0 and dy == 0:
+                dx = 1
+            length = max(abs(dx), abs(dy), 1)
+            move_x = int(dx / length * 2) if dx != 0 else 0
+            move_y = int(dy / length * 2) if dy != 0 else 0
+            zone_condition.move_zone((zx + move_x, zy + move_y))
+            return None
+
+        return EventHandler(
+            name="Incendiary Cloud Auto-Move",
+            source_entity_uuid=caster_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=caster_uuid
+            )],
+            event_processor=processor
+        )
+
+
+class IncendiaryCloud(SpellAction):
+    """Incendiary Cloud - 8th level Conjuration (Concentration)
+
+    A cloud of roiling fire fills a 20ft sphere. DEX save or 10d8 fire (half on save).
+    Damages on entry and turn start. Cloud moves 10ft away from caster each turn.
+    Heavily obscured area.
+    """
+    name: str = Field(default="Incendiary Cloud")
+    description: str = Field(default="20ft sphere fire cloud, 10d8 fire (DEX half), heavily obscured")
+    spell_level: int = Field(default=8)
+    spell_school: str = Field(default="conjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.POSITION)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Incendiary Cloud Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return declaration_event.cancel(status_message="No target position")
+
+        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
+            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
+
+        distance = caster.senses.get_feet_distance(target_pos)
+        if distance > self.spell_range.normal:
+            return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
+
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        target_pos = self.end_position
+        if not target_pos:
+            return execution_event.cancel(status_message="No target position")
+
+        dc = caster.spell_save_dc()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="dexterity", save_dc=dc,
+            status_message=f"{caster.name} casts Incendiary Cloud at {target_pos}"
+        )
+
+        zone = IncendiaryCloudZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=target_pos,
+            spell_dc=dc
+        )
+        caster.add_condition(zone, parent_event=effect_event)
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name="Incendiary Cloud"
+        )
+        caster.add_condition(concentration, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+        # Damage creatures already in zone
+        grid = get_map()
+        for pos in zone.affected_positions:
+            for ent_uuid in grid.get_entities_at(pos):
+                ent = Entity.get(ent_uuid)
+                if not ent or not ent.has_hp:
+                    continue
+                save_request = caster.create_saving_throw_request(
+                    target_entity_uuid=ent.uuid, ability_name="dexterity",
+                    dc=dc, parent_event=effect_event.uuid
+                )
+                _, _, success = ent.saving_throw(save_request)
+                damage = sum(random.randint(1, 8) for _ in range(10))
+                if success:
+                    damage = damage // 2
+                ent.receive_damage(damage, DamageType.FIRE, caster.uuid, parent_event=effect_event.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Incendiary Cloud active: 20ft sphere at {target_pos}"
         )

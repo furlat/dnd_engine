@@ -7,7 +7,7 @@ These are thin wrappers around geometry.py functions that add:
 3. Subjective (from caster's perspective) and objective (from shape origin) computation
 
 Usage:
-    from dnd.core.aoe import Sphere, Cone, Line, Cube
+    from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
 
     # Create shape targeting a position
     shape = Sphere(source_entity_uuid=caster.uuid, target=(5, 5), radius_feet=20)
@@ -303,3 +303,72 @@ class Cube(AoEShape):
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         direction = None if self.centered else self.target
         return rectangle_positions(origin, self.size_feet // 5, direction, self.centered)
+
+
+class Cylinder(AoEShape):
+    """Cylindrical area centered on target position.
+
+    On 2D grid: identical to Sphere (circle of given radius).
+    Height stored for future Z-axis support.
+
+    IMPORTANT: Cylinders come from above/below, so they ignore physical
+    barriers (walls) within the area — no shadowcast/LOS filtering.
+    A cylinder hits everything in its geometric circle, even behind corners.
+    """
+
+    name: str = "Cylinder"
+    radius_feet: int = Field(default=20)
+    height_feet: int = Field(default=40)
+
+    def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
+        return self.target
+
+    def _get_max_radius_tiles(self) -> int:
+        return self.radius_feet // 5
+
+    def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        return circle_positions(origin, self.radius_feet // 5, include_center=True)
+
+    def compute_for_targeting(
+        self,
+        caster_pos: Tuple[int, int],
+        senses: "Senses",
+        fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
+        barrier_positions: Optional[Set[Tuple[int, int]]] = None,
+        caster_uuid: Optional[UUID] = None,
+    ) -> "AoEShape":
+        """Cylinder ignores barriers — hits full geometric area from above/below.
+
+        Only filters entities by caster perception (can't target what you can't see).
+        """
+        self.computed_origin = self.get_origin(caster_pos)
+        geometric = self._get_positions_in_shape(self.computed_origin)
+        self.affected_positions = geometric
+
+        # Still filter entities by caster's perception (can't knowingly target invisible)
+        self.affected_entity_uuids = set()
+        grid = get_map()
+        for pos in self.affected_positions:
+            for entity_uuid in grid.get_entities_at(pos):
+                if entity_uuid in senses.entities or entity_uuid == caster_uuid:
+                    self.affected_entity_uuids.add(entity_uuid)
+
+        return self
+
+    def compute_objective(self, caster_pos: Tuple[int, int]) -> "AoEShape":
+        """Cylinder ignores barriers — hits full geometric area from above/below.
+
+        No shadowcast/LOS filtering: the effect rains down vertically.
+        """
+        self.computed_origin = self.get_origin(caster_pos)
+        geometric = self._get_positions_in_shape(self.computed_origin)
+        self.affected_positions = geometric
+
+        # All entities in the geometric area are affected
+        grid = get_map()
+        self.affected_entity_uuids = set()
+        for pos in self.affected_positions:
+            for uuid in grid.get_entities_at(pos):
+                self.affected_entity_uuids.add(uuid)
+
+        return self
