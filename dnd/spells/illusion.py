@@ -483,7 +483,7 @@ class HypnoticPattern(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
         parent_result = super()._validate(declaration_event)
@@ -781,9 +781,9 @@ class Invisibility(SpellAction):
         # Self-cast is always valid
         if target.uuid != caster.uuid:
             distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft, max {self.spell_range.normal}ft)"
+                    status_message=f"Target out of range ({distance}ft, max {self.effective_range}ft)"
                 )
 
         return declaration_event.phase_to(
@@ -863,9 +863,9 @@ class GreaterInvisibility(SpellAction):
         # Self-cast is always valid
         if target.uuid != caster.uuid:
             distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft, max {self.spell_range.normal}ft)"
+                    status_message=f"Target out of range ({distance}ft, max {self.effective_range}ft)"
                 )
 
         return declaration_event.phase_to(

@@ -261,9 +261,9 @@ class ChillTouch(SpellAction):
 
         # Check range
         distance = source.senses.get_feet_distance(target.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -433,9 +433,9 @@ class Blight(SpellAction):
 
         # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -714,9 +714,9 @@ class BlindnessDeafness(SpellAction):
 
             # Check range
             distance = source.senses.get_feet_distance(target.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"{target.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                    status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
         # Call parent validation

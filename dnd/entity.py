@@ -2004,7 +2004,7 @@ class Entity(BaseBlock):
     def entity_actions(self) -> List[BaseAction]:
         """Actions that target other entities (Attack, multi-target spells)."""
         return [a for a in self.registered_actions
-                if a.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY)]
+                if a.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY)]
 
     @property
     def position_actions(self) -> List[BaseAction]:
@@ -2014,17 +2014,17 @@ class Entity(BaseBlock):
         and POSITION_AOE (AoE spells with shape preview).
         """
         return [a for a in self.registered_actions
-                if a.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)]
+                if a.effective_target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)]
 
     @property
     def self_actions(self) -> List[BaseAction]:
         """Actions that target self (Dash, Dodge, etc.)."""
-        return [a for a in self.registered_actions if a.target_type == TargetType.SELF]
+        return [a for a in self.registered_actions if a.effective_target_type == TargetType.SELF]
 
     @property
     def object_actions(self) -> List[BaseAction]:
         """Actions that target objects on the grid (Pick Up, Attack Object)."""
-        return [a for a in self.registered_actions if a.target_type == TargetType.OBJECT]
+        return [a for a in self.registered_actions if a.effective_target_type == TargetType.OBJECT]
 
     # =========================================================================
     # get_available_actions helpers (private)
@@ -2046,8 +2046,9 @@ class Entity(BaseBlock):
         item_stack_count: Optional[int] = None,
     ) -> AvailableActionInfo:
         """Build an AvailableActionInfo, extracting cost from template."""
-        cost_type = template.costs[0].cost_type if template.costs else "actions"
-        cost_amount = template.costs[0].cost if template.costs else 0
+        eff_costs = template.effective_costs
+        cost_type = eff_costs[0].cost_type if eff_costs else "actions"
+        cost_amount = eff_costs[0].cost if eff_costs else 0
         return AvailableActionInfo(
             template_name=template_name,
             target_type=target_type,
@@ -2245,7 +2246,7 @@ class Entity(BaseBlock):
 
                 actions.append(self._make_action_info(
                     template_name=template_name,
-                    target_type=template.target_type,
+                    target_type=template.effective_target_type,
                     valid_targets=valid_targets,
                     can_afford=template.check_costs(),
                     template=template,
@@ -2260,7 +2261,7 @@ class Entity(BaseBlock):
         grid = get_map()
         actions: List[AvailableActionInfo] = []
         for template in self.position_actions:
-            if template.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
+            if template.effective_target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
                 continue
             valid_positions: List[AvailableTarget] = []
             idx = 0
@@ -2311,7 +2312,7 @@ class Entity(BaseBlock):
                 template_name = template.name or "Unknown"
                 actions.append(AvailableActionInfo(
                     template_name=template_name,
-                    target_type=template.target_type,
+                    target_type=template.effective_target_type,
                     valid_targets=valid_positions,
                     can_afford=True,
                     display_name=template_name,
@@ -2326,7 +2327,7 @@ class Entity(BaseBlock):
         """Collect POSITION_LOS actions (Jump, Teleport)."""
         actions: List[AvailableActionInfo] = []
         for template in self.position_actions:
-            if template.target_type != TargetType.POSITION_LOS:
+            if template.effective_target_type != TargetType.POSITION_LOS:
                 continue
             valid_pos_list = template.get_valid_positions()
             valid_positions: List[AvailableTarget] = []
@@ -2371,7 +2372,7 @@ class Entity(BaseBlock):
             entity_positions.add(pos)
 
         for template in self.position_actions:
-            if template.target_type != TargetType.POSITION_AOE:
+            if template.effective_target_type != TargetType.POSITION_AOE:
                 continue
 
             shape_template = template.aoe_shape
@@ -2543,7 +2544,7 @@ class Entity(BaseBlock):
                 if valid_targets:
                     result.entity_actions.append(self._make_action_info(
                         template_name=template_name,
-                        target_type=use_template.target_type,
+                        target_type=use_template.effective_target_type,
                         valid_targets=valid_targets,
                         can_afford=can_afford,
                         template=use_template,
@@ -2673,7 +2674,7 @@ class Entity(BaseBlock):
                 if use_valid_positions_pos:
                     result.position_actions.append(self._make_action_info(
                         template_name=template_name,
-                        target_type=use_template.target_type,
+                        target_type=use_template.effective_target_type,
                         valid_targets=use_valid_positions_pos,
                         can_afford=can_afford,
                         template=use_template,

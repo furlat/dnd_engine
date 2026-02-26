@@ -19,11 +19,11 @@ Usage:
     event = execute_action(entity, "Attack_MELEE_MAIN", target)
 """
 
-from typing import Optional, List, Tuple
+from typing import Any, Callable, Dict, Optional, List, Tuple
 from uuid import UUID
 
 from dnd.core.base_actions import (
-    TargetType, AvailableTarget, AvailableActionInfo, AvailableActionsResult
+    BaseAction, TargetType, AvailableTarget, AvailableActionInfo, AvailableActionsResult
 )
 from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
@@ -246,12 +246,13 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
     # prefer_safe is only relevant for position-based movement actions (Move)
     # but passing it generically is harmless — instantiate ignores unknown fields
     # via model_copy(update=...). We only pass it for POSITION types.
-    if template.target_type == TargetType.ENTITY:
+    eff_tt = template.effective_target_type
+    if eff_tt == TargetType.ENTITY:
         if target.target_uuid is None:
             raise ValueError("ENTITY action requires target_uuid")
         instance = template.instantiate(target_entity_uuid=target.target_uuid)
 
-    elif template.target_type == TargetType.MULTI_ENTITY:
+    elif eff_tt == TargetType.MULTI_ENTITY:
         if target.target_uuid is None:
             raise ValueError("MULTI_ENTITY action requires target_uuid")
         # Extra targets come from target.extra_target_uuids if provided
@@ -261,17 +262,17 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
             extra_target_entity_uuids=extra
         )
 
-    elif template.target_type == TargetType.POSITION_AOE:
+    elif eff_tt == TargetType.POSITION_AOE:
         if target.position is None:
             raise ValueError("POSITION_AOE action requires position")
         instance = template.instantiate(end_position=target.position)
 
-    elif template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
+    elif eff_tt in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         if target.position is None:
             raise ValueError("POSITION action requires position")
         instance = template.instantiate(end_position=target.position, prefer_safe=prefer_safe)
 
-    elif template.target_type == TargetType.OBJECT:
+    elif eff_tt == TargetType.OBJECT:
         if target.target_uuid is None:
             raise ValueError("OBJECT action requires target_uuid")
         instance = template.instantiate(target_entity_uuid=target.target_uuid)
@@ -498,3 +499,48 @@ def execute_use_action(
         item.consume_charge(charge_cost)
 
     return result
+
+
+# =============================================================================
+# Action Override Helpers (for metamagic, item effects, class abilities)
+# =============================================================================
+
+def apply_action_overrides(
+    entity: Entity,
+    filter_fn: Callable[[BaseAction], bool],
+    overrides: Dict[str, Any],
+) -> List[UUID]:
+    """Set temporary override fields on matching action templates.
+
+    Returns list of modified template UUIDs for cleanup tracking.
+    """
+    modified: List[UUID] = []
+    for template in entity.registered_actions:
+        if filter_fn(template):
+            for key, value in overrides.items():
+                setattr(template, key, value)
+            modified.append(template.uuid)
+    return modified
+
+
+def clear_action_overrides(entity: Entity, template_uuids: List[UUID]) -> None:
+    """Clear all temporary override fields from specified templates."""
+    defaults: Dict[str, Any] = {
+        "alt_cost_type": None,
+        "alt_extra_costs": [],
+        "alt_target_type": None,
+        "alt_target_count": None,
+        "alt_range": None,
+        "alt_skip_slot": False,
+    }
+    for uid in template_uuids:
+        # Find template by UUID in registered_actions
+        for template in entity.registered_actions:
+            if template.uuid == uid:
+                for field, default in defaults.items():
+                    if hasattr(template, field):
+                        if isinstance(default, list):
+                            setattr(template, field, list(default))
+                        else:
+                            setattr(template, field, default)
+                break

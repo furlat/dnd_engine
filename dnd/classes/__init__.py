@@ -144,6 +144,31 @@ from dnd.classes.paladin import (
     MAX_SMITE_DICE,
 )
 
+# Sorcerer factory
+from dnd.classes.sorcerer_factory import (
+    SorcererConfig,
+    SorcererOriginChoice,
+    SorcererEquipmentPreset,
+    create_sorcerer as create_sorcerer_class,
+    get_sorcery_points,
+    get_sorcerer_spell_slots,
+    get_metamagic_count,
+)
+
+# Sorcerer features
+from dnd.classes.sorcerer import (
+    DraconicResilience,
+    ElementalAffinity,
+    SorceryPointsFeature,
+    MetamagicActive,
+    QuickenedSpell,
+    TwinnedSpell,
+    DistantSpell,
+    METAMAGIC_ACTIONS,
+    ConvertSlotToSP,
+    ConvertSPToSlot,
+)
+
 __all__ = [
     # Dice manipulation - core utility
     "create_modified_dice_roll",
@@ -235,4 +260,23 @@ __all__ = [
     "create_divine_smite_handler",
     "register_divine_smite",
     "MAX_SMITE_DICE",
+    # Sorcerer Factory
+    "SorcererConfig",
+    "SorcererOriginChoice",
+    "SorcererEquipmentPreset",
+    "create_sorcerer_class",
+    "get_sorcery_points",
+    "get_sorcerer_spell_slots",
+    "get_metamagic_count",
+    # Sorcerer Features
+    "DraconicResilience",
+    "ElementalAffinity",
+    "SorceryPointsFeature",
+    "MetamagicActive",
+    "QuickenedSpell",
+    "TwinnedSpell",
+    "DistantSpell",
+    "METAMAGIC_ACTIONS",
+    "ConvertSlotToSP",
+    "ConvertSPToSlot",
 ]

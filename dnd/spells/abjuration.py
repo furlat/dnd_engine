@@ -419,8 +419,8 @@ class MageArmor(SpellAction):
         # Validate range (touch = 5ft, or self)
         if target_entity.uuid != source_entity.uuid:
             distance = source_entity.senses.get_feet_distance(target_entity.position)
-            if distance > self.spell_range.normal:
-                return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+            if distance > self.effective_range:
+                return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
         # Check if target is wearing armor
         if not target_entity.equipment.is_unarmored():
@@ -551,9 +551,9 @@ class ProtectionFromEnergy(SpellAction):
         # Validate range (touch = 5ft, or self)
         if target.uuid != caster.uuid:
             distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                    status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
         # Validate energy type is one of the allowed types
@@ -693,9 +693,9 @@ class Stoneskin(SpellAction):
         # Validate range (touch = 5ft, or self)
         if target.uuid != caster.uuid:
             distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                    status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
         return declaration_event.phase_to(

@@ -1113,7 +1113,7 @@ def test_invisible_kill_reveals_sub_events():
 
     # Hero (caster) and invisible enemy
     hero = create_caster(name="Hero Wizard", position=(5, 5), hp=200)
-    enemy = create_caster(name="Sneaky Mage", position=(8, 5), faction="monsters", hp=20)
+    enemy = create_caster(name="Sneaky Mage", position=(8, 5), faction="monsters", hp=1)
 
     register_spell(hero, Fireball, caster_level=5)
     register_spell(enemy, Invisibility, caster_level=3)
@@ -1159,9 +1159,9 @@ def test_invisible_kill_reveals_sub_events():
     result = fireball.apply()
     test("Fireball succeeded", result is not None and not result.canceled)
 
-    # Enemy should be dead (20 HP, Fireball does 8d6 avg ~28 damage)
+    # Enemy should be dead (1 HP, Fireball does 8d6 — guaranteed lethal even on save)
     _enemy_dead = not enemy.has_hp
-    test("Enemy took damage from Fireball", get_hp(enemy) < 20)
+    test("Enemy took damage from Fireball", get_hp(enemy) < 1)
 
     # Invisible should be removed (either from death or concentration break)
     test("Invisible condition removed", "Invisible" not in enemy.active_conditions)

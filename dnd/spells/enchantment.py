@@ -20,7 +20,7 @@ from dnd.core.aoe import AoEShape, Sphere
 
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
-from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned, Concentrating
+from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned
 from dnd.spells.evocation import validate_line_of_sight
 
 
@@ -106,9 +106,9 @@ class CharmPerson(SpellAction):
 
         # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         # For multi-target: validate all targets are within 30ft of each other
@@ -376,9 +376,9 @@ class HoldPerson(SpellAction):
             )
 
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -412,12 +412,8 @@ class HoldPerson(SpellAction):
 
         # 2. Apply Concentrating condition FIRST (breaks existing concentration)
         # This happens regardless of whether the target saves
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Hold Person"
-        )
-        caster.add_condition(concentration, parent_event=execution_event)
+        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
+        concentration = self.ensure_concentration(execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -633,9 +629,9 @@ class HoldMonster(SpellAction):
 
         # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
@@ -651,18 +647,8 @@ class HoldMonster(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # Apply Concentrating ONCE (check if already concentrating on this spell)
-        existing_conc = caster.active_conditions.get("Concentrating")
-        if not existing_conc or not isinstance(existing_conc, Concentrating) or existing_conc.spell_name != "Hold Monster":
-            concentration = Concentrating(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
-                spell_name="Hold Monster"
-            )
-            caster.add_condition(concentration, parent_event=execution_event)
-            concentration_condition = concentration
-        else:
-            concentration_condition = existing_conc
+        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
+        concentration_condition = self.ensure_concentration(execution_event)
 
         # Request WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
@@ -697,8 +683,7 @@ class HoldMonster(SpellAction):
         target.add_condition(hold_effect, parent_event=effect_event)
 
         # Link to concentration
-        if isinstance(concentration_condition, Concentrating):
-            concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
+        concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -745,9 +730,9 @@ class PowerWordKill(SpellAction):
 
         # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -854,9 +839,9 @@ class TestBless(SpellAction):
 
             # Check range
             distance = source_entity.senses.get_feet_distance(target_entity.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
         # Call parent validation for MULTI_ENTITY checks (same-target, target filter)
@@ -1085,9 +1070,9 @@ class Sleep(SpellAction):
 
         # Check range
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         # Let parent handle POSITION_AOE multi-target validation
@@ -1256,9 +1241,9 @@ class PowerWordStun(SpellAction):
 
         # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -1476,15 +1461,8 @@ class Bane(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # Create or find Concentrating condition
-        if "Concentrating" not in caster.active_conditions:
-            concentration = Concentrating(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
-                spell_name="Bane",
-            )
-            caster.add_condition(concentration, parent_event=execution_event)
-        concentration = caster.active_conditions["Concentrating"]
+        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
+        concentration = self.ensure_concentration(execution_event)
 
         # CHA saving throw
         save_request = caster.create_saving_throw_request(
@@ -1565,15 +1543,8 @@ class Bless(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Create or find Concentrating condition
-        if "Concentrating" not in caster.active_conditions:
-            concentration = Concentrating(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
-                spell_name="Bless",
-            )
-            caster.add_condition(concentration, parent_event=execution_event)
-        concentration = caster.active_conditions["Concentrating"]
+        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
+        concentration = self.ensure_concentration(execution_event)
 
         # No save — auto-apply BlessEffect
         bless_effect = BlessEffect(
