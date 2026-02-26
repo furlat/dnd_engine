@@ -181,9 +181,9 @@ class CallLightning(SpellAction):
             return declaration_event.cancel(status_message="Source or target entity not found")
 
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -479,9 +479,9 @@ class AcidSplash(SpellAction):
 
             # Check range
             distance = source.senses.get_feet_distance(target.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"{target.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                    status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
             target_entities.append(target)
 
@@ -841,9 +841,9 @@ class Grease(SpellAction):
 
         # Check range (60ft = 12 tiles)
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return declaration_event.phase_to(
@@ -1195,9 +1195,9 @@ class Web(SpellAction):
 
         # Check range (60ft = 12 tiles)
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return declaration_event.phase_to(
@@ -1527,9 +1527,9 @@ class Cloudkill(SpellAction):
 
         # Check range (120ft = 24 tiles)
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return declaration_event.phase_to(
@@ -2163,9 +2163,9 @@ class FogCloud(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return declaration_event.phase_to(
@@ -2276,9 +2276,9 @@ class Darkness(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return declaration_event.phase_to(
@@ -2387,9 +2387,9 @@ class Daylight(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return declaration_event.phase_to(
@@ -2566,7 +2566,7 @@ class InsectPlague(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
@@ -2804,7 +2804,7 @@ class IncendiaryCloud(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")

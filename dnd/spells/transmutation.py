@@ -139,9 +139,9 @@ class SpikeGrowth(SpellAction):
 
         # Check range (150ft = 30 tiles)
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Position out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return declaration_event.phase_to(
@@ -546,7 +546,7 @@ class Slow(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft)"
             )
@@ -811,7 +811,7 @@ class Haste(SpellAction):
             return declaration_event.cancel(status_message=f"{target.name} not visible")
 
         distance = caster.senses.get_feet_distance(target.senses.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft)"
             )
@@ -1009,9 +1009,9 @@ class Disintegrate(SpellAction):
             return declaration_event.cancel(status_message="Entity not found")
 
         distance = source.senses.get_feet_distance(target.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
