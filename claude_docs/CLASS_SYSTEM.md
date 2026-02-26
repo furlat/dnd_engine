@@ -665,88 +665,55 @@ See `CLAUDE.md` for full concentration system documentation. Key points:
 
 ---
 
-## 10. Sorcerer (Partial Implementation)
+## 10. Sorcerer Implementation (L1-L20 Draconic Bloodline)
 
-### Current State: Bestiary Factory Only
+Full documentation in **`claude_docs/SORCERER.md`**. Summary below.
 
-The sorcerer exists as a `create_sorcerer()` function in `dnd/monsters/bestiary.py` - a minimal factory for testing AoE spells. It has **no class features**.
+### Key Innovation: Action Override Pattern
 
-```python
-from dnd.monsters.bestiary import create_sorcerer
+Metamagic uses **temporary alt fields on action templates** rather than creating new spell objects. `MetamagicActive` condition sets `alt_cost_type`, `alt_target_type`, `alt_target_count`, `alt_extra_costs`, `alt_range` on spell templates. System uses `effective_*` properties that prefer alt fields. Auto-removed on `CAST_SPELL` event via handler, `cleanup_own_state()` calls `clear_action_overrides()`.
 
-sorcerer = create_sorcerer(
-    name="Sorcerer",
-    position=(5, 5),
-    faction="heroes",
-    level=5        # Only level 5 is meaningfully configured
-)
-```
+See `claude_docs/SORCERER.md` Section 2 for the full pattern.
 
-**Factory configuration (Level 5 defaults):**
-- Ability Scores: STR 8, DEX 14, CON 14, INT 10, WIS 10, **CHA 18**
-- Health: `level` d6 hit dice
-- Proficiency Bonus: 3
-- Spell Slots: `{1: 4, 2: 3, 3: 2}`
-- Spellcasting: `spellcasting_ability="charisma"`
-- Registered Spells: Magic Missile, Fireball, Burning Hands, Lightning Bolt, Shatter, Thunderwave
+### Level Progression
 
-### What Exists: Full Spell Infrastructure
+| Level | Feature | Type | Implementation |
+|-------|---------|------|----------------|
+| 1 | Draconic Resilience | Modifier condition | HP bonus + contextual AC (13+DEX unarmored) |
+| 2 | Sorcery Points + Font of Magic | Feature condition | Resource + slot↔SP conversion actions |
+| 3 | Metamagic (2 choices) | Actions via SorceryPointsFeature | Quickened/Twinned/Distant |
+| 4/8/12/16/19 | ASI | Via factory | +2 ability points |
+| 6 | Elemental Affinity | Modifier condition | Damage resistance |
+| 10 | Metamagic (3rd choice) | Via factory config | Additional option |
+| 17 | Metamagic (4th choice) | Via factory config | Additional option |
 
-41 spells are implemented across all schools (see `SORCERER_SPELL_ANALYSIS.md` for complete breakdown):
-- 7 cantrips, 10 level 1, 8 level 2, 7 level 3, 2 level 4, 3 level 5, 1 level 6, 2 level 8, 1 level 9
-- All spell patterns working: attack, save, AoE, multi-target, buff, concentration, zone, HP-threshold
-- Complete upcasting/variant generation
-- Full concentration system with cleanup chains
+### Metamagic Types
 
-Spell dictionaries in `dnd/spells/__init__.py`: `CANTRIPS`, `LEVEL_1_SPELLS` through `LEVEL_9_SPELLS`, and `ALL_SPELLS`.
+| Type | SP Cost | Filter | Override |
+|------|---------|--------|----------|
+| Quickened | 2 | Spells with action cost | `alt_cost_type="bonus_actions"` |
+| Twinned | spell level (min 1) | Single-target (ENTITY) spells | `alt_target_type=MULTI_ENTITY`, `alt_target_count=2`, `alt_extra_costs` |
+| Distant | 1 | RANGE/REACH spells | `alt_range=range*2` or `alt_range=30` (touch) |
 
-### What's Missing: Sorcerer Class Features
-
-No sorcerer-specific class features exist yet. These would follow the same condition pattern as Fighter/Barbarian:
-
-**Font of Magic (L2):**
-- Sorcery Points resource in ActionEconomy
-- Flexible Casting actions: convert slots to sorcery points and vice versa
-
-**Metamagic (L3):**
-- Each metamagic option = an EventHandler on spell events (same pattern as GWF on damage rolls)
-- **Empowered Spell**: Reroll damage dice (handler on `DAMAGE_ROLL_RESULT`)
-- **Quickened Spell**: Cast as bonus action (modify spell cost)
-- **Heightened Spell**: Target has disadvantage on save (modify save event)
-- **Careful Spell**: Allies auto-succeed on saves (modify AoE targeting)
-- **Twinned Spell**: Duplicate single-target spell (clone spell event)
-- **Distant/Extended/Subtle**: Modify spell parameters
-
-**Draconic Bloodline (Subclass):**
-- L1 Draconic Resilience: AC = 13 + DEX when unarmored (same pattern as Barbarian's UnarmoredDefense)
-- L6 Elemental Affinity: Add CHA to chosen element damage (spell damage modifier)
-- L14 Dragon Wings: Fly speed (movement modifier)
-- L18 Draconic Presence: AoE frighten/charm (same pattern as Intimidating Presence)
-
-**Implementation approach**: Same `BaseCondition` pattern used for Fighter/Barbarian:
-- Each feature = a condition
-- Sorcery Points = resource in ActionEconomy (like rage uses)
-- Metamagic = event handlers (like GWF, Indomitable)
-- Subclass features = modifier conditions (like fighting styles)
-
-### Sorcerer Factory (Future)
-
-Would follow the same `Config` + `create_` pattern as Fighter/Barbarian:
+### Factory
 
 ```python
-# Future pattern (not yet implemented):
-from dnd.classes.sorcerer_factory import create_sorcerer, SorcererConfig
+from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
 
 config = SorcererConfig(
     level=5,
     name="Draconic Sorcerer",
     position=(5, 5),
     faction="heroes",
-    sorcerous_origin="draconic_bloodline",
-    dragon_ancestor_element="fire",
+    metamagic_choices=["quickened", "twinned"],
+    asi_4=[("charisma", 2)],
 )
 sorcerer = create_sorcerer(config)
 ```
+
+**Signature**: `create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) -> Entity`
+
+**Note**: The bestiary factory `dnd/monsters/bestiary.py:create_sorcerer()` still exists as a simpler option for testing (no class features, just spells). The class factory is aliased as `create_sorcerer_class` in `dnd/classes/__init__.py` to avoid naming collision.
 
 ---
 
@@ -786,20 +753,22 @@ sorcerer = create_sorcerer(config)
 | 18 | Indomitable Might | Done |
 | 20 | Primal Champion | Done |
 
-### Sorcerer (Infrastructure Only)
+### Sorcerer (L1-L20 Draconic Bloodline)
 
-| Component | Status |
-|-----------|--------|
-| SpellcastingBlock | Done |
-| Spell slots in ActionEconomy | Done |
-| Spell registration API | Done |
-| 41 spells across all schools | Done |
-| Bestiary factory (create_sorcerer L5) | Done |
-| Sorcerer class features | Not started |
-| Font of Magic / Sorcery Points | Not started |
-| Metamagic | Not started |
-| Draconic Bloodline subclass | Not started |
-| Sorcerer factory (SorcererConfig) | Not started |
+| Level | Feature | Status |
+|-------|---------|--------|
+| 1 | Draconic Resilience (HP + AC) | Done |
+| 2 | Sorcery Points + Font of Magic | Done |
+| 3 | Metamagic (Quickened/Twinned/Distant) | Done |
+| 4/8/12/16/19 | ASI | Done (via factory) |
+| 6 | Elemental Affinity (resistance) | Done |
+| 10/17 | Additional Metamagic choices | Done (via factory) |
+| 14 | Dragon Wings | Not started |
+| 18 | Draconic Presence | Not started |
+| 20 | Sorcerous Restoration | Not started |
+| - | Action Override System (alt fields) | Done |
+| - | SorcererConfig + create_sorcerer factory | Done |
+| - | 77 tests (18 categories) | Done |
 
 ### Feats
 
@@ -820,6 +789,8 @@ sorcerer = create_sorcerer(config)
 | `dnd/classes/barbarian.py` | All Barbarian features + Berserker path conditions |
 | `dnd/classes/barbarian_factory.py` | `BarbarianConfig` + `create_barbarian()` factory |
 | `dnd/classes/rage.py` | Rage system: RageFeature, Raging, Frenzied, FrenzyFeature |
+| `dnd/classes/sorcerer.py` | All Sorcerer conditions + actions (MetamagicActive, SorceryPointsFeature, Font of Magic, Draconic Bloodline) |
+| `dnd/classes/sorcerer_factory.py` | `SorcererConfig` + `create_sorcerer()` factory |
 | `dnd/classes/feats.py` | Lucky feat |
 | `dnd/classes/dice_processor_utils.py` | Shared dice manipulation utilities (GWF, Brutal Critical) |
 | `dnd/classes/__init__.py` | Module exports |

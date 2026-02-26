@@ -23,11 +23,10 @@ from dnd.core.events import (
     RangeType,
 )
 from dnd.core.modifiers import (
-    NumericalModifier, ContextualNumericalModifier, DamageType,
+    NumericalModifier, DamageType,
     ResistanceModifier, ResistanceStatus,
 )
 from dnd.entity import Entity
-from dnd.blocks.equipment import ArmorType
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
@@ -35,37 +34,6 @@ from dnd.actions import (
     SpellAction,
 )
 from dnd.actions_functional import apply_action_overrides, clear_action_overrides
-
-
-# =============================================================================
-# DRACONIC RESILIENCE: AC check (analogous to barbarian's unarmored_defense_check)
-# =============================================================================
-
-def draconic_resilience_ac_check(
-    source_entity_uuid: UUID,
-    target_entity_uuid: Optional[UUID] = None,
-    context: Optional[dict] = None
-) -> Optional[NumericalModifier]:
-    """Contextual AC check for Draconic Resilience.
-
-    AC = 13 + DEX when not wearing armor.
-    Since base AC is 10 + DEX, we add +3 when unarmored.
-    """
-    _ = target_entity_uuid, context
-
-    entity = Entity.get(source_entity_uuid)
-    if not entity:
-        return None
-
-    body_armor = entity.equipment.body_armor
-    if body_armor is not None and body_armor.type != ArmorType.CLOTH:
-        return None  # Wearing armor — doesn't apply
-
-    return NumericalModifier.create(
-        source_entity_uuid=source_entity_uuid,
-        name="Draconic Resilience AC",
-        value=3
-    )
 
 
 # =============================================================================
@@ -105,16 +73,6 @@ class DraconicResilience(BaseCondition):
         )
         mod_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(hp_mod)
         outs.append((target.health.max_hit_points_bonus.uuid, mod_uuid))
-
-        # AC = 13 + DEX when unarmored (contextual: +3 only when no armor)
-        ac_mod = ContextualNumericalModifier(
-            name="Draconic Resilience AC",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=draconic_resilience_ac_check,
-        )
-        mod_uuid = target.equipment.ac_bonus.self_contextual.add_value_modifier(ac_mod)
-        outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,

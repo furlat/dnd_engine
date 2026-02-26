@@ -14,7 +14,7 @@ from uuid import uuid4
 from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import EquipmentConfig, UnarmoredAc
 from dnd.core.events import BodyPart
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.events import WeaponSlot
@@ -23,8 +23,6 @@ from dnd.utils import reset_combat_state
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.weapons import create_greataxe
 from dnd.items.armors import create_leather_armor, create_chain_shirt, create_shield, create_cloth_armor
-
-from dnd.classes.barbarian import UnarmoredDefense
 
 
 def create_test_barbarian(
@@ -50,7 +48,7 @@ def create_test_barbarian(
             hit_dice_count=1,
             mode="average"
         )]),
-        equipment=EquipmentConfig(),
+        equipment=EquipmentConfig(unarmored_ac_type=UnarmoredAc.BARBARIAN),
         action_economy=ActionEconomyConfig(),
         proficiency_bonus=2,
         position=position
@@ -80,30 +78,18 @@ def test_unarmored_defense_basic():
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
 
-    # Base AC without Unarmored Defense: 10 + DEX = 10 + 2 = 12
-    base_ac = barbarian.ac_bonus().normalized_score
-    print(f"  Base AC (10 + DEX +2): {base_ac}")
-    assert base_ac == 12, f"Expected base AC 12, got {base_ac}"
-
-    # Apply Unarmored Defense
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
-
-    # New AC should be 10 + DEX + CON = 10 + 2 + 3 = 15
-    new_ac = barbarian.ac_bonus().normalized_score
+    # AC should be 10 + DEX + CON = 10 + 2 + 3 = 15 from creation
+    ac = barbarian.ac_bonus().normalized_score
     con_mod = barbarian.ability_scores.constitution.modifier
     dex_mod = barbarian.ability_scores.dexterity.modifier
     expected_ac = 10 + dex_mod + con_mod
 
     print(f"  DEX modifier: +{dex_mod}")
     print(f"  CON modifier: +{con_mod}")
-    print(f"  AC with Unarmored Defense: {new_ac}")
+    print(f"  AC with Unarmored Defense: {ac}")
     print(f"  Expected: 10 + {dex_mod} + {con_mod} = {expected_ac}")
 
-    assert new_ac == expected_ac, f"Expected AC {expected_ac}, got {new_ac}"
+    assert ac == expected_ac, f"Expected AC {expected_ac}, got {ac}"
     print("  [PASS] Unarmored Defense correctly adds CON modifier")
 
 
@@ -115,13 +101,6 @@ def test_unarmored_defense_disabled_by_armor():
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
-
-    # Apply Unarmored Defense first
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
 
     # AC with Unarmored Defense: 10 + 2 + 3 = 15
     unarmored_ac = barbarian.ac_bonus().normalized_score
@@ -154,13 +133,6 @@ def test_unarmored_defense_with_shield():
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
 
-    # Apply Unarmored Defense
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
-
     # AC with Unarmored Defense: 10 + 2 + 3 = 15
     unarmored_ac = barbarian.ac_bonus().normalized_score
     print(f"  AC with Unarmored Defense (no shield): {unarmored_ac}")
@@ -187,13 +159,6 @@ def test_removing_armor_restores_unarmored():
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
-
-    # Apply Unarmored Defense
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
 
     initial_ac = barbarian.ac_bonus().normalized_score
     print(f"  Initial AC (Unarmored): {initial_ac}")
@@ -227,13 +192,6 @@ def test_unarmored_defense_high_con():
     # DEX 16 (+3), CON 20 (+5) - like a high-level barbarian
     barbarian = create_test_barbarian(dex_score=16, con_score=20)
 
-    # Apply Unarmored Defense
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
-
     # AC should be: 10 + DEX + CON = 10 + 3 + 5 = 18
     ac = barbarian.ac_bonus().normalized_score
     dex_mod = barbarian.ability_scores.dexterity.modifier
@@ -257,25 +215,16 @@ def test_unarmored_defense_low_con():
     # DEX 14 (+2), CON 10 (+0)
     barbarian = create_test_barbarian(dex_score=14, con_score=10)
 
-    base_ac = barbarian.ac_bonus().normalized_score
-    print(f"  Base AC (no Unarmored Defense): {base_ac}")
-
-    # Apply Unarmored Defense
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
-
-    # AC should be: 10 + DEX + CON = 10 + 2 + 0 = 12 (same as base!)
+    # AC should be: 10 + DEX + CON = 10 + 2 + 0 = 12
     ac = barbarian.ac_bonus().normalized_score
     con_mod = barbarian.ability_scores.constitution.modifier
 
     print(f"  CON modifier: +{con_mod}")
     print(f"  AC with Unarmored Defense: {ac}")
 
-    # With +0 CON, Unarmored Defense provides no benefit
-    assert ac == base_ac, f"Expected AC {base_ac} (no change), got {ac}"
+    # With +0 CON, Unarmored Defense provides no benefit over base
+    expected_ac = 10 + 2 + 0  # 12
+    assert ac == expected_ac, f"Expected AC {expected_ac}, got {ac}"
     print("  [PASS] Low CON Unarmored Defense correctly provides no bonus")
 
 
@@ -287,13 +236,6 @@ def test_unarmored_defense_with_cloth_armor():
 
     # DEX 14 (+2), CON 16 (+3)
     barbarian = create_test_barbarian(dex_score=14, con_score=16)
-
-    # Apply Unarmored Defense
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
 
     # AC with Unarmored Defense: 10 + 2 + 3 = 15
     unarmored_ac = barbarian.ac_bonus().normalized_score

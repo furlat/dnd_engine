@@ -28,8 +28,9 @@ from dnd.items.weapons import create_greatsword
 from dnd.items.armors import create_chain_mail
 
 from dnd.classes.rage import RageFeature, Raging
+from dnd.blocks.equipment import UnarmoredAc
 from dnd.classes.barbarian import (
-    UnarmoredDefense, RecklessAttackFeature, DangerSense
+    RecklessAttackFeature, DangerSense
 )
 
 
@@ -56,7 +57,7 @@ def create_test_barbarian(
             hit_dice_count=level,
             mode="average"
         )]),
-        equipment=EquipmentConfig(),
+        equipment=EquipmentConfig(unarmored_ac_type=UnarmoredAc.BARBARIAN),
         action_economy=ActionEconomyConfig(),
         proficiency_bonus=2,
         position=position
@@ -436,7 +437,7 @@ def test_cannot_rage_heavy_armor():
 
 
 def test_unarmored_defense():
-    """Test Unarmored Defense adds CON to AC."""
+    """Test Unarmored Defense adds CON to AC via EquipmentConfig."""
     print("\n=== Test: Unarmored Defense ===")
 
     reset_combat_state()
@@ -444,28 +445,18 @@ def test_unarmored_defense():
 
     barbarian = create_test_barbarian("Unarmored Barbarian")
 
-    # Base AC without Unarmored Defense (10 + DEX)
-    base_ac = barbarian.equipment.ac_bonus.normalized_score
-    print(f"  Base AC (10 + DEX 2): {base_ac}")
-
-    # Apply Unarmored Defense
-    unarmored = UnarmoredDefense(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid
-    )
-    barbarian.add_condition(unarmored)
-
-    # New AC should include CON modifier
-    new_ac = barbarian.equipment.ac_bonus.normalized_score
+    # AC should be 10 + DEX + CON = 10 + 2 + 3 = 15 (set via EquipmentConfig)
+    ac = barbarian.ac_bonus().normalized_score
     con_mod = barbarian.ability_scores.constitution.modifier
-    print(f"  AC with Unarmored Defense: {new_ac}")
-    print(f"  CON modifier: {con_mod}")
+    dex_mod = barbarian.ability_scores.dexterity.modifier
+    expected_ac = 10 + dex_mod + con_mod
+    print(f"  AC with Unarmored Defense: {ac}")
+    print(f"  DEX modifier: {dex_mod}, CON modifier: {con_mod}")
 
-    expected_ac = base_ac + con_mod
-    if new_ac == expected_ac:
+    if ac == expected_ac:
         print(f"  ✓ Unarmored Defense correctly adds CON ({con_mod}) to AC")
     else:
-        print(f"  ✗ Expected AC {expected_ac}, got {new_ac}")
+        print(f"  ✗ Expected AC {expected_ac}, got {ac}")
 
 
 
