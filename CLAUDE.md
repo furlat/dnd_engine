@@ -548,15 +548,28 @@ Attack validates range and LOS, then:
 
 `actions`, `bonus_actions`, `reactions`, `movement` + optional `resource_name/resource_cost`
 
+### Action Override Pattern (Alt Fields)
+
+Actions have temporary override fields for metamagic and similar effects. When set, `effective_*` properties prefer these over base values.
+
+**BaseAction alt fields**: `alt_cost_type`, `alt_extra_costs`, `alt_target_type`, `alt_target_count`
+**SpellAction alt fields**: `alt_range`, `alt_skip_slot`
+
+**Helpers** (`dnd/actions_functional.py`):
+- `apply_action_overrides(entity, filter_fn, overrides)` → `List[UUID]` of modified templates
+- `clear_action_overrides(entity, template_uuids)` → resets all alt fields to defaults
+
+**Used by**: `MetamagicActive` condition in `dnd/classes/sorcerer.py`. See `claude_docs/SORCERER.md` for the full pattern.
+
 ## Implemented Features
 
 ### Conditions & Class Features
 
 All D&D conditions are in `dnd/conditions.py` — read the class definitions for effect details (self effects, attacker effects, sub-conditions).
 
-Fighter features (L1-18 + Champion): `dnd/classes/fighter.py`, `dnd/classes/fighter_factory.py`. Barbarian features (L1-20 + Berserker): `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`, `dnd/classes/rage.py`. Paladin features (Divine Smite): `dnd/classes/paladin.py`.
+Fighter features (L1-18 + Champion): `dnd/classes/fighter.py`, `dnd/classes/fighter_factory.py`. Barbarian features (L1-20 + Berserker): `dnd/classes/barbarian.py`, `dnd/classes/barbarian_factory.py`, `dnd/classes/rage.py`. Sorcerer features (L1-20 Draconic + Metamagic): `dnd/classes/sorcerer.py`, `dnd/classes/sorcerer_factory.py`. Paladin features (Divine Smite): `dnd/classes/paladin.py`.
 
-See `claude_docs/CLASS_SYSTEM.md` for complete feature tables, the `_remove()` cleanup pattern, and implementation examples.
+See `claude_docs/CLASS_SYSTEM.md` for complete feature tables, the `_remove()` cleanup pattern, and implementation examples. See `claude_docs/SORCERER.md` for the action override pattern and metamagic system.
 
 ### Spell System
 
@@ -765,8 +778,8 @@ entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
 
 All factories use **keyword args**: `create_goblin(name="Name", position=(0,0), faction=None)`
 
-**Bestiary** (`dnd/monsters/bestiary.py`): `create_goblin`, `create_skeleton`, `create_goblin_archer`, `create_sorcerer(level=5)`
-**Classes** (`dnd/classes/`): `create_fighter(level, name, position, faction)`, `create_barbarian(level, name, position, faction)`
+**Bestiary** (`dnd/monsters/bestiary.py`): `create_goblin`, `create_skeleton`, `create_goblin_archer`, `create_sorcerer(level=5)` (simple, no class features)
+**Classes** (`dnd/classes/`): `create_fighter(config)`, `create_barbarian(config)`, `create_sorcerer(config)` (full class features via `SorcererConfig`)
 
 ### Setting Up Tests
 
@@ -992,7 +1005,7 @@ See `claude_docs/CLI_GUIDE.md` for full agent command reference and session deta
 **Entity & Blocks**: `dnd/entity.py`, `dnd/blocks/` (abilities, skills, saving_throws, health, equipment, inventory, action_economy, sensory, spellcasting, base_item)
 **Actions**: `dnd/actions.py`, `dnd/actions_functional.py`, `dnd/reactions.py`
 **Conditions**: `dnd/conditions.py`, `dnd/core/base_conditions.py`
-**Classes**: `dnd/classes/` (fighter, barbarian, paladin, rage, feats, dice_processor_utils + factories)
+**Classes**: `dnd/classes/` (fighter, barbarian, sorcerer, paladin, rage, feats, dice_processor_utils + factories)
 **Items**: `dnd/items/` (weapons, armors, test_items, test_reactions)
 **Spells**: `dnd/spells/` (evocation, abjuration, enchantment, conjuration, necromancy, illusion, transmutation)
 **Spatial**: `dnd/core/gridmap.py`, `dnd/core/shadowcast.py`, `dnd/core/dijkstra.py`, `dnd/tiles.py`, `dnd/tile_conditions.py`
@@ -1005,7 +1018,8 @@ See `claude_docs/CLI_GUIDE.md` for full agent command reference and session deta
 | Doc | Read when... |
 |-----|-------------|
 | `claude_docs/IMPLEMENTATION_GUIDE.md` | Implementing any condition, action, or event handler (**read first**) |
-| `claude_docs/CLASS_SYSTEM.md` | Working on Fighter/Barbarian features or adding a new class |
+| `claude_docs/CLASS_SYSTEM.md` | Working on Fighter/Barbarian/Sorcerer features or adding a new class |
+| `claude_docs/SORCERER.md` | Working on Sorcerer features, metamagic, or the action override pattern |
 | `claude_docs/LIGHTING_SYSTEM.md` | Working on lighting, darkvision, or incremental senses updates |
 | `claude_docs/VISION_HIDING_COVER_PLAN.md` | Working on stealth, invisibility, or cover |
 | `claude_docs/TERRAIN_MOVEMENT_SYSTEM.md` | Working on terrain, movement costs, or zone spells |

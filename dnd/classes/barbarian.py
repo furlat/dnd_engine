@@ -4,7 +4,7 @@ Barbarian Class Features
 Implements Barbarian-specific features as conditions that can be applied to entities.
 Organized by D&D 5e level progression.
 
-Level 1: Rage, Unarmored Defense
+Level 1: Rage (Unarmored Defense handled via EquipmentConfig)
 Level 2: Reckless Attack, Danger Sense
 Level 3: Berserker Path - Frenzy (BG3 version - no exhaustion)
 Level 5: Extra Attack (reuses Fighter's ExtraAttackFeature), Fast Movement
@@ -88,9 +88,6 @@ __all__ = [
     "FrenziedStrike",
     "Frenzy",
     "FrenzyFeature",
-    # Level 1
-    "unarmored_defense_check",
-    "UnarmoredDefense",
     # Level 2
     "RecklessAttacking",
     "RecklessAttack",
@@ -135,92 +132,6 @@ __all__ = [
 # =============================================================================
 # LEVEL 1: Unarmored Defense
 # =============================================================================
-
-def unarmored_defense_check(
-    source_entity_uuid: UUID,
-    target_entity_uuid: Optional[UUID] = None,
-    context: Optional[dict] = None
-) -> Optional[NumericalModifier]:
-    """
-    Contextual check for Unarmored Defense.
-
-    AC = 10 + DEX + CON when not wearing armor.
-
-    Since base AC calculation is typically 10 + DEX (or armor AC + DEX),
-    we only need to add the CON modifier when not wearing armor.
-    """
-    _ = target_entity_uuid, context  # Suppress unused warnings
-
-    entity = Entity.get(source_entity_uuid)
-    if not entity:
-        return None
-
-    # Only applies when NOT wearing armor (cloth doesn't count as armor)
-    body_armor = entity.equipment.body_armor
-    if body_armor is not None and body_armor.type != ArmorType.CLOTH:
-        return None  # Wearing armor - Unarmored Defense doesn't apply
-
-    # Add CON modifier to AC
-    con_mod = entity.ability_scores.constitution.modifier
-
-    return NumericalModifier.create(
-        source_entity_uuid=source_entity_uuid,
-        name="Unarmored Defense",
-        value=con_mod
-    )
-
-
-class UnarmoredDefense(BaseCondition):
-    """
-    Barbarian Level 1: Unarmored Defense
-
-    While you are not wearing any armor, your Armor Class equals
-    10 + your Dexterity modifier + your Constitution modifier.
-    You can use a shield and still gain this benefit.
-
-    Note: The base AC calculation already includes 10 + DEX,
-    so this condition only adds the CON modifier when unarmored.
-    """
-    name: str = "Unarmored Defense"
-    description: str = "AC = 10 + DEX + CON when not wearing armor"
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        # Add contextual CON modifier to AC (only when unarmored)
-        unarmored_mod = ContextualNumericalModifier(
-            name="Unarmored Defense",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=unarmored_defense_check
-        )
-        mod_uuid = target.equipment.ac_bonus.self_contextual.add_value_modifier(unarmored_mod)
-        outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Unarmored Defense to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
-
 
 # =============================================================================
 # LEVEL 2: Reckless Attack

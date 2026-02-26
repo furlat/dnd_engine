@@ -15,7 +15,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import setup_standard_actions, register_spells_by_name
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig, WeaponSlot
+from dnd.blocks.equipment import EquipmentConfig, WeaponSlot, UnarmoredAc
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.events import AbilityName
@@ -371,7 +371,7 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         health=health_config,
-        equipment=EquipmentConfig(),
+        equipment=EquipmentConfig(unarmored_ac_type=UnarmoredAc.DRACONIC_SORCERER),
         action_economy=action_economy_config,
         spellcasting=spellcasting_config,
         proficiency_bonus=prof_bonus,
