@@ -1,6 +1,8 @@
 # Metamagic & Action Overrides Plan
 
-See the implementation plan in the conversation transcript. This file archives the approved plan for reference.
+**Status: IMPLEMENTED.** Full documentation in `claude_docs/SORCERER.md` (Section 2: The Action Override Pattern).
+
+This file archives the original design plan for reference.
 
 ## Summary
 

@@ -15,7 +15,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig, WeaponSlot
+from dnd.blocks.equipment import EquipmentConfig, WeaponSlot, UnarmoredAc
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.events import AbilityName
 
@@ -36,8 +36,6 @@ from dnd.classes.rage import (
 
 # Import other barbarian features
 from dnd.classes.barbarian import (
-    # Level 1
-    UnarmoredDefense,
     # Level 2
     RecklessAttackFeature,
     DangerSense,
@@ -361,12 +359,6 @@ def apply_barbarian_features(entity: Entity, config: BarbarianConfig):
         rage_damage=rage_damage
     ))
 
-    # L1: Unarmored Defense
-    entity.add_condition(UnarmoredDefense(
-        source_entity_uuid=entity.uuid,
-        target_entity_uuid=entity.uuid
-    ))
-
     # L2+: Reckless Attack
     if level >= 2:
         entity.add_condition(RecklessAttackFeature(
@@ -521,7 +513,7 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
     )
 
     # 5. Create entity config
-    equipment_config = EquipmentConfig()
+    equipment_config = EquipmentConfig(unarmored_ac_type=UnarmoredAc.BARBARIAN)
     action_economy_config = ActionEconomyConfig()
 
     entity_config = EntityConfig(
