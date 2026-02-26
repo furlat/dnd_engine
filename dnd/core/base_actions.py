@@ -247,7 +247,31 @@ class BaseAction(BaseObject):
                     "Good for AI (don't waste spells on empty squares). Set False for zone/wall spells targeting positions."
     )
 
+    # Temporary overrides (set by conditions like metamagic, cleared on removal)
+    alt_cost_type: Optional[str] = Field(default=None, description="Replace primary action cost type")
+    alt_extra_costs: List[Cost] = Field(default_factory=list, description="Additional costs appended (SP, etc.)")
+    alt_target_type: Optional[TargetType] = Field(default=None, description="Replace target type")
+    alt_target_count: Optional[int] = Field(default=None, description="Multi-target count override")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @property
+    def effective_target_type(self) -> TargetType:
+        """Target type with alt override applied."""
+        return self.alt_target_type if self.alt_target_type is not None else self.target_type
+
+    @property
+    def effective_costs(self) -> List["Cost"]:
+        """Build costs incorporating all active overrides."""
+        costs = list(self.costs)
+        if self.alt_cost_type is not None:
+            # Replace the primary cost type (first cost entry that's "actions")
+            costs = [c.model_copy(update={"cost_type": self.alt_cost_type})
+                     if c.cost_type == "actions" else c for c in costs]
+        if getattr(self, 'alt_skip_slot', False):
+            costs = [c for c in costs if not c.cost_type.startswith("spell_slot")]
+        costs.extend(self.alt_extra_costs)
+        return costs
 
     def set_target_entity(self, target_uuid: UUID) -> None:
         """Set target entity for ENTITY, MULTI_ENTITY, or OBJECT type actions.
@@ -256,8 +280,8 @@ class BaseAction(BaseObject):
         For MULTI_ENTITY, this sets the primary target.
         For OBJECT, this sets the item UUID (items are BaseBlocks in _registry).
         """
-        if self.target_type not in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.OBJECT):
-            raise ValueError(f"Action {self.name} doesn't target entities (target_type={self.target_type})")
+        if self.effective_target_type not in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.OBJECT):
+            raise ValueError(f"Action {self.name} doesn't target entities (target_type={self.effective_target_type})")
         self.target_entity_uuid = target_uuid
 
     def set_target_position(self, position: Tuple[int, int]) -> None:
@@ -266,8 +290,8 @@ class BaseAction(BaseObject):
         Used with templates to set the target before pre_validate() or instantiate().
         Supports POSITION, POSITION_PATH, POSITION_LOS, and POSITION_AOE target types.
         """
-        if self.target_type not in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
-            raise ValueError(f"Action {self.name} doesn't target positions (target_type={self.target_type})")
+        if self.effective_target_type not in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
+            raise ValueError(f"Action {self.name} doesn't target positions (target_type={self.effective_target_type})")
         self.end_position = position
 
     def get_range(self) -> Optional[Range]:
@@ -289,7 +313,7 @@ class BaseAction(BaseObject):
         Returns:
             List of valid positions this action can target.
         """
-        if self.target_type not in (TargetType.POSITION_LOS, TargetType.POSITION_AOE):
+        if self.effective_target_type not in (TargetType.POSITION_LOS, TargetType.POSITION_AOE):
             return []
 
         # Get the entity
@@ -329,9 +353,12 @@ class BaseAction(BaseObject):
 
         Returns None for non-MULTI_ENTITY actions.
         Returns 1 as default for MULTI_ENTITY actions.
+        Alt override takes priority when set.
         Subclasses override to return their specific count.
         """
-        if self.target_type != TargetType.MULTI_ENTITY:
+        if self.alt_target_count is not None:
+            return self.alt_target_count
+        if self.effective_target_type != TargetType.MULTI_ENTITY:
             return None
         return 1
 
@@ -348,7 +375,7 @@ class BaseAction(BaseObject):
             List of target UUIDs in order they should be processed.
         """
         # POSITION_AOE: compute targets from shape
-        if self.target_type == TargetType.POSITION_AOE:
+        if self.effective_target_type == TargetType.POSITION_AOE:
             if self.aoe_shape and self.end_position:
                 source_block = BaseBlock.get(self.source_entity_uuid)
                 if source_block:
@@ -425,7 +452,7 @@ class BaseAction(BaseObject):
             Error message string if validation fails, None if all valid.
         """
         # POSITION_AOE already filtered targets in get_all_targets(), skip validation
-        if self.target_type == TargetType.POSITION_AOE:
+        if self.effective_target_type == TargetType.POSITION_AOE:
             return None
 
         source_block = BaseBlock.get(self.source_entity_uuid)
@@ -498,7 +525,7 @@ class BaseAction(BaseObject):
 
     def check_costs(self) -> bool:
         """Check if entity can afford all costs (turn-based and resource-based)."""
-        for cost in self.costs:
+        for cost in self.effective_costs:
             # Check turn-based cost via evaluator
             if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid, cost.cost_type, cost.cost):
                 return False
@@ -511,7 +538,7 @@ class BaseAction(BaseObject):
 
     def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
         """Create the declaration event for this action. Override in subclasses if needed."""
-        event = ActionEvent.from_costs(self.costs,self.source_entity_uuid,self.target_entity_uuid,parent_event,use_register=use_register)
+        event = ActionEvent.from_costs(self.effective_costs,self.source_entity_uuid,self.target_entity_uuid,parent_event,use_register=use_register)
         # Populate event with action info for combat log generation
         event.name = self.name or "Action"
         event.description = self.description
@@ -532,7 +559,8 @@ class BaseAction(BaseObject):
         - valid_target_filter constraint
         """
         # Multi-target validation (both MULTI_ENTITY and POSITION_AOE)
-        if self.target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
+        effective_tt = self.effective_target_type
+        if effective_tt in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             all_targets = self.get_all_targets()
 
             # Check: Do we have targets?
@@ -541,11 +569,11 @@ class BaseAction(BaseObject):
             # flushing hidden enemies). The aoe_require_targets flag is only used by the preview
             # prefilter in _collect_aoe_actions() for performance; execution allows empty targets.
             if not all_targets:
-                if self.target_type == TargetType.MULTI_ENTITY:
+                if effective_tt == TargetType.MULTI_ENTITY:
                     return declaration_event.cancel(status_message="No targets specified")
 
             # Check: Same-target constraint (only for MULTI_ENTITY - AoE uses set, no duplicates)
-            if self.target_type == TargetType.MULTI_ENTITY and not self.allow_same_target:
+            if effective_tt == TargetType.MULTI_ENTITY and not self.allow_same_target:
                 if len(set(all_targets)) != len(all_targets):
                     return declaration_event.cancel(
                         status_message="This action cannot target the same entity multiple times"
@@ -588,6 +616,14 @@ class BaseAction(BaseObject):
             status_message=f"Succesfully applied action {self.name} for {execution_event.source_entity_uuid}"
         )
 
+    def _finalize_aoe(self, effect_event: ActionEvent) -> None:
+        """Post-convolution hook for POSITION_AOE actions. Override for terrain/zone setup.
+
+        Called after all per-target _apply() calls complete, before COMPLETION phase.
+        Only called when target_type is POSITION_AOE.
+        """
+        pass
+
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the costs of the action - implemented in subclasses"""
         return completion_event.phase_to(
@@ -626,7 +662,7 @@ class BaseAction(BaseObject):
             raise ValueError(f"Action {self.name} can only be applied in the execution phase")
 
         # === MULTI_ENTITY / POSITION_AOE convolution ===
-        if self.target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
+        if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             all_target_uuids = self.get_all_targets()
 
             # Store original target for restoration after loop
@@ -675,6 +711,10 @@ class BaseAction(BaseObject):
                 aoe_position=self.end_position,
                 status_message=f"{self.name} affected {len(all_target_uuids)} targets for {total_damage} total damage"
             )
+
+            # Post-convolution hook for POSITION_AOE terrain/zone setup
+            if self.effective_target_type == TargetType.POSITION_AOE:
+                self._finalize_aoe(effect_event)
 
             # Parent completion - _collect_child_combat_logs() will find per-target children
             # via parent_event relationship (no target_results field needed)

@@ -779,6 +779,14 @@ from dnd.utils import reset_combat_state
 reset_combat_state()  # Clears EventQueue, Entity registries, GridMap
 ```
 
+**CRITICAL: Create tiles for the grid.** Without tiles, entities cannot see anything (no LOS, no visibility). Always create a floor grid after `reset_combat_state()`:
+
+```python
+from dnd.core.gridmap import get_map
+grid = get_map()
+grid.create_rectangle(0, 0, 20, 20)  # 20x20 walkable floor with tiles
+```
+
 #### Step 2: Create Entities
 
 Use the factories above, then **update senses** (MANDATORY):

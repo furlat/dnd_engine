@@ -19,7 +19,7 @@ from typing import Any, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
-from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden
+from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
 
 
 def entity_resource_cost_evaluator(entity_uuid: UUID, resource_name: str, resource_cost: int) -> bool:
@@ -2878,6 +2878,13 @@ class SpellAction(BaseAction):
     # Caster level (for cantrip scaling)
     caster_level: int = Field(default=1, description="Level of the caster (for cantrip scaling)")
 
+    # Concentration tracking (reset each cast, reused across convolution loop targets)
+    cast_concentrating_uuid: Optional[UUID] = Field(default=None, exclude=True)
+
+    # Spell-specific alt overrides (set by conditions like metamagic)
+    alt_range: Optional[int] = Field(default=None, description="Override spell_range.normal")
+    alt_skip_slot: bool = Field(default=False, description="Skip spell slot cost")
+
     # Default cost is 1 action (no spell slot for cantrips)
     costs: List[Cost] = Field(
         default_factory=lambda: [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
@@ -2901,9 +2908,44 @@ class SpellAction(BaseAction):
                     evaluator=entity_action_economy_cost_evaluator
                 ))
 
+    @property
+    def effective_range(self) -> int:
+        """Spell range with alt override applied."""
+        if self.alt_range is not None:
+            return self.alt_range
+        return self.spell_range.normal
+
     def get_upcast_bonus(self) -> int:
         """Get levels above base spell level (for upcast scaling)."""
         return max(0, self.cast_at_level - self.spell_level)
+
+    def ensure_concentration(self, parent_event: Event) -> "Concentrating":
+        """Create or reuse Concentrating for this cast. Safe for convolution loop.
+
+        On first call per cast: creates new Concentrating (replacing any existing).
+        On subsequent calls (same convolution loop): reuses via UUID match.
+        """
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            raise ValueError("Caster not found")
+
+        # Reuse if UUID matches (same convolution loop)
+        if self.cast_concentrating_uuid:
+            existing = caster.active_conditions_by_uuid.get(self.cast_concentrating_uuid)
+            if existing and isinstance(existing, Concentrating):
+                return existing
+
+        # New cast → create (add_condition replaces any existing Concentrating)
+        conc = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name=self.name or "Unknown",
+        )
+        caster.add_condition(conc, parent_event=parent_event)
+        self.cast_concentrating_uuid = conc.uuid
+        result = caster.active_conditions["Concentrating"]
+        assert isinstance(result, Concentrating)
+        return result
 
     def generate_variants(self, entity: Entity) -> List['SpellAction']:
         """Generate spell variants for available spell slots.
@@ -2960,6 +3002,7 @@ class SpellAction(BaseAction):
         """Get costs for casting at a specific level.
 
         Preserves the spell's actual action cost type (action vs bonus_action).
+        Respects alt overrides (alt_cost_type, alt_skip_slot, alt_extra_costs).
 
         Args:
             level: The spell slot level (0 for cantrips)
@@ -2972,10 +3015,15 @@ class SpellAction(BaseAction):
             name="Cast Spell", cost_type="actions", cost=1,
             evaluator=entity_action_economy_cost_evaluator
         )
-        costs = [base_cost.model_copy()]
-        if level > 0:
+        cost = base_cost.model_copy()
+        # Apply alt_cost_type override
+        if self.alt_cost_type is not None and cost.cost_type == "actions":
+            cost = cost.model_copy(update={"cost_type": self.alt_cost_type})
+        costs = [cost]
+        if level > 0 and not self.alt_skip_slot:
             slot_cost_type = spell_slot_cost_type(level)
             costs.append(Cost(name=f"Spell Slot L{level}", cost_type=slot_cost_type, cost=1, evaluator=entity_action_economy_cost_evaluator))
+        costs.extend(self.alt_extra_costs)
         return costs
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
@@ -2992,7 +3040,7 @@ class SpellAction(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_name,
             target_entity_name=target_name,

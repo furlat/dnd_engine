@@ -78,7 +78,10 @@
       "Bash(/tmp/detailed_analysis.md:*)",
       "Bash(for i in 1 2 3)",
       "Bash(do python examples/test_stealth_system.py)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(echo === $spell ===:*)",
+      "Bash(cat:*)",
+      "Bash(source:*)"
     ]
   }
 }

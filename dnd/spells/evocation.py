@@ -82,8 +82,8 @@ class FireBolt(SpellAction):
             return declaration_event.cancel(status_message="Source or target entity not found")
 
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+        if distance > self.effective_range:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
         return los_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -245,8 +245,8 @@ class RayOfFrost(SpellAction):
             return declaration_event.cancel(status_message="Source or target entity not found")
 
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+        if distance > self.effective_range:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
         return los_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -378,8 +378,8 @@ class SacredFlame(SpellAction):
             return declaration_event.cancel(status_message="Source or target entity not found")
 
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+        if distance > self.effective_range:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
         return los_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -538,9 +538,9 @@ class MagicMissile(SpellAction):
 
             # Check range
             distance = source_entity.senses.get_feet_distance(target_entity.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
         # Call parent validation for MULTI_ENTITY checks (same-target, target filter)
@@ -665,9 +665,9 @@ class ScorchingRay(SpellAction):
 
             # Check range
             distance = source_entity.senses.get_feet_distance(target_entity.position)
-            if distance > self.spell_range.normal:
+            if distance > self.effective_range:
                 return declaration_event.cancel(
-                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.spell_range.normal}ft)"
+                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
         # Call parent validation for MULTI_ENTITY checks
@@ -819,9 +819,9 @@ class Fireball(SpellAction):
 
         # Check range
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         # Let parent handle POSITION_AOE multi-target validation
@@ -1466,9 +1466,9 @@ class Shatter(SpellAction):
 
         # Check range
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         # Let parent handle POSITION_AOE multi-target validation
@@ -1612,9 +1612,9 @@ class CircleOfDeath(SpellAction):
 
         # Check range
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         # Let parent handle POSITION_AOE multi-target validation
@@ -1980,7 +1980,7 @@ class Sunburst(SpellAction):
             return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
 
         distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
         parent_result = super()._validate(declaration_event)
@@ -2393,9 +2393,9 @@ class GuidingBolt(SpellAction):
             return declaration_event.cancel(status_message="Source or target entity not found")
 
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -2524,8 +2524,8 @@ class EldritchBlast(SpellAction):
             return declaration_event.cancel(status_message="Source or target entity not found")
 
         distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)")
+        if distance > self.effective_range:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
         return los_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -2822,14 +2822,11 @@ class GustOfWind(SpellAction):
             status_message=f"Gust of Wind pushes {target.name}"
         )
 
-    def apply(self) -> Optional[SpellEvent]:
-        """Override to create zone after convolution completes."""
-        result = type_cast(Optional[SpellEvent], super().apply())
-        if result and not result.canceled:
-            self._setup_zone()
-        return result
+    def _finalize_aoe(self, effect_event: Any) -> None:
+        """Create persistent zone after convolution completes."""
+        self._setup_zone(effect_event)
 
-    def _setup_zone(self) -> None:
+    def _setup_zone(self, parent_event: Any) -> None:
         """Set up the persistent zone condition after initial push."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -2852,14 +2849,9 @@ class GustOfWind(SpellAction):
             spell_dc=dc,
             caster_position=caster.senses.position
         )
-        caster.add_condition(zone)
+        caster.add_condition(zone, parent_event=parent_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Gust of Wind"
-        )
-        caster.add_condition(concentration)
+        concentration = self.ensure_concentration(parent_event)
         concentration.add_linked_condition(caster.uuid, zone.uuid)
 
 
@@ -2974,12 +2966,9 @@ class IceStorm(SpellAction):
             status_message=f"Ice Storm deals {total} damage to {target.name}"
         )
 
-    def apply(self) -> Optional[SpellEvent]:
-        """Override to apply difficult terrain zone after convolution."""
-        result = type_cast(Optional[SpellEvent], super().apply())
-        if result and not result.canceled:
-            self._setup_terrain()
-        return result
+    def _finalize_aoe(self, effect_event: Any) -> None:
+        """Apply difficult terrain zone after convolution completes."""
+        self._setup_terrain()
 
     def _setup_terrain(self) -> None:
         """Apply 1-round difficult terrain at the target area."""
