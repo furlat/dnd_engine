@@ -10,14 +10,14 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, BaseCost
-from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent, HazardFilter
+from dnd.core.base_conditions import BaseCondition, HazardFilter
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent, SpatialChangeEvent
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.conditions import Concentrating, Prone, Restrained
+from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone, Restrained
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition
 from dnd.spells.evocation import validate_line_of_sight
@@ -66,7 +66,7 @@ class CallLightningStrike(BaseAction):
             return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
 
         conc = caster.active_conditions.get("Concentrating")
-        if not isinstance(conc, Concentrating) or conc.spell_name != "Call Lightning":
+        if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Call Lightning") is None:
             return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
 
         # Check LOS
@@ -260,17 +260,15 @@ class CallLightning(SpellAction):
         )
         caster.register_action(strike_action)
 
-        # 3. Apply Concentrating condition (no linked effect - the action is the effect)
-        concentration = Concentrating(
+        # 3. Apply Concentrating + marker condition for action cleanup
+        concentration = self.ensure_concentration(effect_event)
+        marker = ConcentrationActionMarker(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            spell_name="Call Lightning"
-            # No spell_effect_uuid - we handle cleanup via handler instead
+            action_name=strike_action.name
         )
-        caster.add_condition(concentration, parent_event=effect_event)
-
-        # 4. Register cleanup handler to remove the action when concentration breaks
-        self._register_action_cleanup(caster, strike_action.name)
+        caster.add_condition(marker, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, marker.uuid)
 
         save_text = " (save for half)" if success else ""
         return effect_event.phase_to(
@@ -279,50 +277,6 @@ class CallLightning(SpellAction):
             damage_rolls=[damage_roll],
             status_message=f"{self.name} dealt {final_damage} lightning damage{save_text} - can strike again each turn"
         )
-
-    def _register_action_cleanup(self, caster, action_name: str) -> None:
-        """Register cleanup to remove Call Lightning Strike when concentration breaks."""
-
-        caster_uuid = caster.uuid
-
-        def cleanup_processor(event, _source_entity_uuid: UUID):
-            """When Concentrating on Call Lightning is removed, remove the strike action."""
-    
-            # Only trigger for caster's condition removal
-            if event.target_entity_uuid != caster_uuid:
-                return None
-
-            # Check if this is the Concentrating condition for Call Lightning
-            if not isinstance(event, ConditionRemovalEvent):
-                return None
-
-            if not isinstance(event.condition, Concentrating):
-                return None
-
-            if event.condition.spell_name != "Call Lightning":
-                return None
-
-            # Remove the Call Lightning Strike action
-            entity = Entity.get(caster_uuid)
-            if entity:
-                entity.unregister_action(action_name)
-
-            return None
-
-        cleanup_handler = EventHandler(
-            name=f"Call Lightning Cleanup ({caster_uuid})",
-            source_entity_uuid=caster_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.CONDITION_REMOVAL,
-                    event_phase=EventPhase.EFFECT
-                )
-            ],
-            event_processor=cleanup_processor
-        )
-
-        caster.add_event_handler(cleanup_handler)
-
 
 class PoisonSpray(SpellAction):
     """Poison Spray - Conjuration Cantrip
@@ -880,12 +834,7 @@ class Grease(SpellAction):
         caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Grease"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_linked_condition(caster.uuid, zone.uuid)
@@ -1234,12 +1183,7 @@ class Web(SpellAction):
         caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Web"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_linked_condition(caster.uuid, zone.uuid)
@@ -1568,12 +1512,7 @@ class Cloudkill(SpellAction):
         caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Cloudkill"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_linked_condition(caster.uuid, zone.uuid)
@@ -2037,12 +1976,7 @@ class SpiritGuardians(SpellAction):
         caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Spirit Guardians"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_linked_condition(caster.uuid, zone.uuid)
@@ -2198,12 +2132,7 @@ class FogCloud(SpellAction):
         )
         caster.add_condition(zone, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Fog Cloud"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         return effect_event.phase_to(
@@ -2307,12 +2236,7 @@ class Darkness(SpellAction):
         )
         caster.add_condition(zone, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Darkness"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         return effect_event.phase_to(
@@ -2418,12 +2342,7 @@ class Daylight(SpellAction):
         )
         caster.add_condition(zone, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Daylight"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         return effect_event.phase_to(
@@ -2598,12 +2517,7 @@ class InsectPlague(SpellAction):
         )
         caster.add_condition(zone, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Insect Plague"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         # Damage creatures already in zone
@@ -2834,12 +2748,7 @@ class IncendiaryCloud(SpellAction):
         )
         caster.add_condition(zone, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Incendiary Cloud"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, zone.uuid)
 
         # Damage creatures already in zone

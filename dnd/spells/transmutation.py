@@ -19,7 +19,7 @@ from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageSt
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.entity import Entity
-from dnd.conditions import Concentrating, Incapacitated, Dashing
+from dnd.conditions import Incapacitated, Dashing
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
 
@@ -176,12 +176,7 @@ class SpikeGrowth(SpellAction):
         caster.add_condition(zone, parent_event=effect_event)
 
         # Apply Concentrating condition
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Spike Growth"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link zone to concentration for cleanup
         concentration.add_linked_condition(caster.uuid, zone.uuid)
@@ -598,19 +593,11 @@ class Slow(SpellAction):
         )
         target.add_condition(slowed, parent_event=effect_event)
 
-        # Apply Concentrating (only on first target)
-        if "Concentrating" not in caster.active_conditions:
-            concentration = Concentrating(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
-                spell_name="Slow"
-            )
-            caster.add_condition(concentration, parent_event=effect_event)
+        # Apply Concentrating (safe for convolution via ensure_concentration)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link effect to concentration
-        conc = caster.active_conditions.get("Concentrating")
-        if conc and isinstance(conc, Concentrating) and conc.spell_name == "Slow":
-            conc.add_linked_condition(target.uuid, slowed.uuid)
+        concentration.add_linked_condition(target.uuid, slowed.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -836,17 +823,10 @@ class Haste(SpellAction):
         target.add_condition(haste_effect, parent_event=effect_event)
 
         # Apply Concentrating to caster
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Haste"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link HasteEffect to Concentrating
-        conc = caster.active_conditions.get("Concentrating")
-        if conc and isinstance(conc, Concentrating) and conc.spell_name == "Haste":
-            conc.add_linked_condition(target.uuid, haste_effect.uuid)
+        concentration.add_linked_condition(target.uuid, haste_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -945,12 +925,7 @@ class DarkvisionSpell(SpellAction):
         )
         target.add_condition(darkvision_effect, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Darkvision"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(target.uuid, darkvision_effect.uuid)
 
         return effect_event.phase_to(
@@ -1162,12 +1137,7 @@ class JumpSpell(SpellAction):
         )
         target.add_condition(jump_effect, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Jump"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(target.uuid, jump_effect.uuid)
 
         return effect_event.phase_to(
@@ -1288,12 +1258,7 @@ class ExpeditiousRetreat(SpellAction):
         )
         caster.add_condition(retreat_effect, parent_event=effect_event)
 
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Expeditious Retreat"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, retreat_effect.uuid)
 
         return effect_event.phase_to(

@@ -1327,13 +1327,15 @@ class DropConcentration(BaseAction):
     """Drop concentration on a spell voluntarily.
 
     D&D 5e allows ending concentration at any time (no action required).
-    Removes the Concentrating condition and all linked spell effects.
+    If target_spell is set, drops only that spell's slot (multi-slot support).
+    Otherwise removes the entire Concentrating condition and all linked spell effects.
     """
     name: str = Field(default="Drop Concentration")
     description: str = Field(default="End concentration on current spell")
     target_type: TargetType = Field(default=TargetType.SELF)
     action_category: ActionCategory = ActionCategory.ABILITY
     costs: List[Cost] = Field(default_factory=list)
+    target_spell: Optional[str] = Field(default=None, description="Specific spell to drop (multi-slot). None = drop all.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         source_entity = Entity.get(self.source_entity_uuid)
@@ -1369,11 +1371,20 @@ class DropConcentration(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        entity.remove_condition("Concentrating", parent_event=execution_event)
+        if self.target_spell:
+            # Drop a specific spell slot (multi-slot)
+            conc = entity.active_conditions.get("Concentrating")
+            if conc and isinstance(conc, Concentrating):
+                slot_uuid = conc.get_slot_by_spell_name(self.target_spell)
+                if slot_uuid is not None:
+                    conc.drop_slot(slot_uuid, parent_event=execution_event)
+        else:
+            # Drop all concentration
+            entity.remove_condition("Concentrating", parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            status_message="Dropped concentration"
+            status_message=f"Dropped concentration{' on ' + self.target_spell if self.target_spell else ''}"
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
@@ -2893,6 +2904,9 @@ class SpellAction(BaseAction):
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
+        # Concentration spells need cleanup hook
+        if self.concentration:
+            self.requires_concentration = True
         # For leveled spells, ensure cast_at_level is set and spell slot cost is included
         if self.spell_level > 0:
             if self.cast_at_level == 0:
@@ -2950,6 +2964,28 @@ class SpellAction(BaseAction):
         result = caster.active_conditions["Concentrating"]
         assert isinstance(result, Concentrating)
         return result
+
+    def _cleanup_concentration(self, completion_event: ActionEvent) -> None:
+        """Remove Concentrating if all targets saved (0-children bug fix).
+        Also clean up empty slots in multi-slot scenarios."""
+        if not self.cast_concentrating_uuid:
+            return
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster or "Concentrating" not in caster.active_conditions:
+            return
+        conc = caster.active_conditions["Concentrating"]
+        if not isinstance(conc, Concentrating) or conc.uuid != self.cast_concentrating_uuid:
+            return
+        # Remove if ALL slots empty (0-children bug)
+        conc.cleanup_if_no_effects(parent_event=completion_event)
+        # Clean up individual empty slots (multi-slot: some spells' targets all saved)
+        if "Concentrating" in caster.active_conditions:
+            empty_slot_uuids = [slot_uuid for slot_uuid, slot in conc.concentration_slots.items() if not slot.linked_entries]
+            for slot_uuid in empty_slot_uuids:
+                conc.concentration_slots[slot_uuid].remove_from_register()
+                del conc.concentration_slots[slot_uuid]
+            if empty_slot_uuids:
+                conc._sync_spell_name()
 
     def generate_variants(self, entity: Entity) -> List['SpellAction']:
         """Generate spell variants for available spell slots.

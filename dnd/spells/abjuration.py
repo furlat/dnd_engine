@@ -16,7 +16,6 @@ from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 from dnd.core.dice import AttackOutcome
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
-from dnd.conditions import Concentrating
 
 
 def _is_magic_missile_damage(event: Event) -> bool:
@@ -578,12 +577,7 @@ class ProtectionFromEnergy(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         # 1. Apply Concentrating condition to caster
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Protection from Energy"
-        )
-        caster.add_condition(concentration, parent_event=execution_event)
+        concentration = self.ensure_concentration(execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -713,12 +707,7 @@ class Stoneskin(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         # 1. Apply Concentrating condition to caster
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Stoneskin"
-        )
-        caster.add_condition(concentration, parent_event=execution_event)
+        concentration = self.ensure_concentration(execution_event)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

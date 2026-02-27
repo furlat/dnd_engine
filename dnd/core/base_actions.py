@@ -247,6 +247,9 @@ class BaseAction(BaseObject):
                     "Good for AI (don't waste spells on empty squares). Set False for zone/wall spells targeting positions."
     )
 
+    # Concentration cleanup hook
+    requires_concentration: bool = Field(default=False, description="If True, _cleanup_concentration is called after COMPLETION")
+
     # Temporary overrides (set by conditions like metamagic, cleared on removal)
     alt_cost_type: Optional[str] = Field(default=None, description="Replace primary action cost type")
     alt_extra_costs: List[Cost] = Field(default_factory=list, description="Additional costs appended (SP, etc.)")
@@ -624,6 +627,10 @@ class BaseAction(BaseObject):
         """
         pass
 
+    def _cleanup_concentration(self, completion_event: ActionEvent) -> None:
+        """Post-completion concentration cleanup hook. Override in SpellAction."""
+        pass
+
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the costs of the action - implemented in subclasses"""
         return completion_event.phase_to(
@@ -730,6 +737,8 @@ class BaseAction(BaseObject):
             return completion_event
         if completion_event.phase not in [EventPhase.COMPLETION]:
             raise ValueError(f"Action {self.name} can only be completed in the completion phase")
+        if self.requires_concentration:
+            self._cleanup_concentration(completion_event)
         cost_event = self._apply_costs(completion_event)
         if cost_event is None or cost_event.canceled:
             return cost_event

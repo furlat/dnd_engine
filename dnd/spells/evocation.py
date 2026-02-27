@@ -12,7 +12,7 @@ from pydantic import Field
 
 from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionCategory
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType, ConditionRemovalEvent, HazardFilter
+from dnd.core.base_conditions import BaseCondition, Duration, DurationType, HazardFilter
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome, RollType
 from typing import cast as type_cast
@@ -24,7 +24,7 @@ from dnd.blocks.equipment import ArmorType
 
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.conditions import Blinded, NoReactions, Concentrating
+from dnd.conditions import Blinded, NoReactions, Concentrating, ConcentrationActionMarker
 
 
 def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
@@ -3000,7 +3000,7 @@ class SunbeamStrike(BaseAction):
             return declaration_event.cancel(status_message="Not concentrating on Sunbeam")
 
         conc = caster.active_conditions.get("Concentrating")
-        if not isinstance(conc, Concentrating) or conc.spell_name != "Sunbeam":
+        if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Sunbeam") is None:
             return declaration_event.cancel(status_message="Not concentrating on Sunbeam")
 
         if not self.end_position:
@@ -3089,16 +3089,15 @@ class Sunbeam(SpellAction):
         )
         caster.register_action(strike)
 
-        # Apply Concentrating
-        concentration = Concentrating(
+        # Apply Concentrating + marker condition for action cleanup
+        concentration = self.ensure_concentration(effect_event)
+        marker = ConcentrationActionMarker(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            spell_name="Sunbeam"
+            action_name=strike.name
         )
-        caster.add_condition(concentration, parent_event=effect_event)
-
-        # Register cleanup to remove strike action when concentration breaks
-        self._register_action_cleanup(caster, strike.name)
+        caster.add_condition(marker, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, marker.uuid)
 
         # Fire the first beam immediately on cast (D&D 5e: beam flashes on cast)
         if self.end_position:
@@ -3116,31 +3115,3 @@ class Sunbeam(SpellAction):
             status_message=f"{caster.name} channels Sunbeam - can fire a beam each turn"
         )
 
-    def _register_action_cleanup(self, caster: Entity, action_name: str) -> None:
-        """Remove Sunbeam Strike when concentration breaks."""
-        caster_uuid = caster.uuid
-
-        def cleanup_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.target_entity_uuid != caster_uuid:
-                return None
-            if not isinstance(event, ConditionRemovalEvent):
-                return None
-            if not isinstance(event.condition, Concentrating):
-                return None
-            if event.condition.spell_name != "Sunbeam":
-                return None
-            entity = Entity.get(caster_uuid)
-            if entity:
-                entity.unregister_action(action_name)
-            return None
-
-        cleanup_handler = EventHandler(
-            name=f"Sunbeam Cleanup ({caster_uuid})",
-            source_entity_uuid=caster_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.CONDITION_REMOVAL,
-                event_phase=EventPhase.EFFECT
-            )],
-            event_processor=cleanup_processor
-        )
-        caster.add_event_handler(cleanup_handler)

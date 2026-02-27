@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, DurationType, ConditionApplicationEvent
 
 from dnd.entity import Entity
@@ -17,6 +17,7 @@ from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger,
 from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay
 from enum import Enum
 
@@ -983,32 +984,137 @@ def create_death_handler(source_entity_uuid: UUID) -> EventHandler:
 # CONCENTRATION SYSTEM
 # =============================================================================
 
+class ConcentrationSlot(BaseObject):
+    """A single concentration slot tracking one spell's linked conditions.
+
+    Inherits from BaseObject for UUID registry integration.
+    source_entity_uuid = caster UUID.
+    """
+    name: Optional[str] = "Concentration Slot"
+    spell_name: str = ""
+    linked_entries: List[Tuple[UUID, UUID]] = Field(default_factory=list)
+    # each entry: (target_block_uuid, condition_uuid)
+
+
 class Concentrating(BaseCondition):
     """
     Tracks concentration on a spell.
 
     When a caster concentrates on a spell:
-    - Only one concentration spell can be active at a time
+    - Only one concentration spell can be active at a time (configurable via max_concentration_slots)
     - Taking damage requires a CON save (DC = max(10, damage/2))
     - Failing the save or casting another concentration spell ends this effect
     - When concentration ends, the spell effect is also removed via linked_conditions
 
-    This condition is applied when a concentration spell is cast, not directly.
-    The spell's _apply() should:
-    1. Create this condition on the caster
-    2. Apply the spell effect condition to the target
-    3. Call concentration.add_linked_condition(target.uuid, effect.uuid)
+    All spells should use SpellAction.ensure_concentration() which:
+    1. Creates or reuses this condition on the caster
+    2. Returns it for linking via add_linked_condition()
 
-    The linked_conditions mechanism (inherited from BaseCondition) handles
-    cross-block cleanup automatically when concentration breaks.
+    Multi-slot support: When max_concentration_slots > 1, multiple different spells
+    can coexist via concentration_slots dict. Each slot tracks one spell's linked conditions.
     """
     name: str = "Concentrating"
     description: str = "Concentrating on a spell"
     condition_category: ConditionCategory = ConditionCategory.STATUS
     child_removal_policy: Literal["none", "any", "last"] = "last"
 
-    # What spell is being concentrated on
+    # What spell is being concentrated on (synced from slots)
     spell_name: str = ""
+
+    # Multi-slot support: slot_uuid → ConcentrationSlot
+    concentration_slots: Dict[UUID, ConcentrationSlot] = Field(default_factory=dict)
+
+    # Routes add_linked_condition() calls to the correct slot
+    _active_slot_uuid: Optional[UUID] = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        # Auto-create slot from spell_name (single path to slot creation)
+        if self.spell_name and not self.concentration_slots:
+            self._active_slot_uuid = self.add_slot(self.spell_name)
+
+    def _sync_spell_name(self) -> None:
+        """Keep spell_name field in sync with slots (slots are source of truth)."""
+        self.spell_name = ", ".join(slot.spell_name for slot in self.concentration_slots.values()) or ""
+
+    def get_slot_by_spell_name(self, spell_name: str) -> Optional[UUID]:
+        """Find a slot UUID by spell name. Returns None if not found."""
+        for slot_uuid, slot in self.concentration_slots.items():
+            if slot.spell_name == spell_name:
+                return slot_uuid
+        return None
+
+    def add_slot(self, spell_name: str) -> UUID:
+        """Add a new concentration slot for a spell. Returns the slot UUID."""
+        # Check if slot for this spell already exists
+        existing = self.get_slot_by_spell_name(spell_name)
+        if existing is not None:
+            self._active_slot_uuid = existing
+            self._sync_spell_name()
+            return existing
+        source_uuid = self.source_entity_uuid if self.source_entity_uuid else self.target_entity_uuid
+        assert source_uuid is not None
+        slot = ConcentrationSlot(
+            source_entity_uuid=source_uuid,
+            spell_name=spell_name,
+        )
+        self.concentration_slots[slot.uuid] = slot
+        self._active_slot_uuid = slot.uuid
+        self._sync_spell_name()
+        return slot.uuid
+
+    def drop_slot(self, slot_uuid: UUID, parent_event: Optional[Event] = None) -> None:
+        """Remove a single spell slot and its linked conditions.
+
+        If this is the last slot, removes the entire Concentrating condition.
+        Otherwise, removes just this slot's conditions and updates state.
+        """
+        if slot_uuid not in self.concentration_slots:
+            return
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return
+
+        if len(self.concentration_slots) <= 1:
+            # Last slot — remove entire Concentrating (full cascade)
+            target.remove_condition("Concentrating", parent_event=parent_event)
+            return
+
+        # Remove this slot's linked conditions
+        slot = self.concentration_slots[slot_uuid]
+        for block_uuid, condition_uuid in slot.linked_entries:
+            # Clear parent_link to prevent policy cascade back to us
+            child = BaseCondition.get(condition_uuid)
+            if child is not None and isinstance(child, BaseCondition):
+                child.parent_link = None
+            # Remove from our linked_conditions list
+            pair = (block_uuid, condition_uuid)
+            if pair in self.linked_conditions:
+                self.linked_conditions.remove(pair)
+            # Remove the actual condition
+            block = BaseBlock.get(block_uuid)
+            if block:
+                block.remove_condition_by_uuid(condition_uuid, parent_event=parent_event)
+
+        # Unregister slot from BaseObject registry, delete, and sync
+        slot.remove_from_register()
+        del self.concentration_slots[slot_uuid]
+        self._sync_spell_name()
+
+    def cleanup_if_no_effects(self, parent_event: Optional[Event] = None) -> None:
+        """Remove Concentrating if it has no linked children (0-children bug fix)."""
+        if not self.linked_conditions:
+            target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+            if target and "Concentrating" in target.active_conditions:
+                target.remove_condition("Concentrating", parent_event=parent_event)
+
+    def add_linked_condition(self, target_block_uuid: UUID, condition_uuid: UUID) -> None:
+        """Override to also route into the active slot."""
+        super().add_linked_condition(target_block_uuid, condition_uuid)
+        # Route into active slot
+        if self._active_slot_uuid and self._active_slot_uuid in self.concentration_slots:
+            self.concentration_slots[self._active_slot_uuid].linked_entries.append((target_block_uuid, condition_uuid))
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1016,13 +1122,49 @@ class Concentrating(BaseCondition):
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [],[], declaration_event.cancel(status_message="Target not found")
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         handler_uuids: List[UUID] = []
 
-        # End any existing concentration first
-        if "Concentrating" in target.active_conditions:
-            target.remove_condition("Concentrating")
+        # Check for existing concentration
+        existing = target.active_conditions.get("Concentrating")
+        if existing and isinstance(existing, Concentrating):
+            max_slots = target.max_concentration_slots.normalized_score
+
+            # Evict oldest slots until under limit
+            while len(existing.concentration_slots) >= max_slots:
+                oldest_uuid = next(iter(existing.concentration_slots))
+                existing.drop_slot(oldest_uuid, parent_event=declaration_event)
+                # Re-check: drop_slot of last slot removes entire Concentrating
+                existing = target.active_conditions.get("Concentrating")
+                if not existing or not isinstance(existing, Concentrating):
+                    break
+
+            # Re-check after eviction loop
+            existing = target.active_conditions.get("Concentrating")
+            if existing and isinstance(existing, Concentrating):
+                # MERGE: transfer existing's slots + linked_conditions to self
+                for slot_uuid, slot in existing.concentration_slots.items():
+                    if slot_uuid not in self.concentration_slots:
+                        self.concentration_slots[slot_uuid] = slot
+                    else:
+                        self.concentration_slots[slot_uuid].linked_entries.extend(slot.linked_entries)
+                for pair in existing.linked_conditions:
+                    if pair not in self.linked_conditions:
+                        self.linked_conditions.append(pair)
+                # Update parent_links on children to point to self
+                for _, condition_uuid in existing.linked_conditions:
+                    child = BaseObject.get(condition_uuid)
+                    if child and isinstance(child, BaseCondition):
+                        child.parent_link = (target.uuid, self.uuid)
+                # Clear existing to prevent cascade on removal
+                existing.linked_conditions.clear()
+                existing.sub_conditions.clear()
+                # Don't unregister transferred slots — they're now ours
+                existing.concentration_slots.clear()
+                self._sync_spell_name()
+                # Remove old Concentrating (no cascade since we cleared linked/sub)
+                target.remove_condition("Concentrating", parent_event=declaration_event)
 
         # Register the concentration break handler
         def concentration_break_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
@@ -1120,16 +1262,35 @@ class Concentrating(BaseCondition):
         return [], handler_uuids, [], [], effect_event
 
     def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        """When concentration ends, spell effects are cleaned up via linked_conditions.
+        """When concentration ends, spell effects are cleaned up via linked_conditions."""
+        # Unregister all ConcentrationSlot objects from BaseObject registry
+        for slot in self.concentration_slots.values():
+            slot.remove_from_register()
+        return super()._remove(removal_event)
 
-        IMPORTANT: Must call super()._remove() to trigger EXECUTION and EFFECT phases
-        so cleanup handlers can respond to the condition removal event.
 
-        Note: Cross-entity spell effect cleanup is now handled automatically by
-        BaseCondition.remove_linked_conditions() - no manual cleanup needed here.
-        """
-        # Call parent to trigger event phase transitions (EXECUTION -> EFFECT)
-        # This allows cleanup handlers subscribed to CONDITION_REMOVAL at EFFECT to fire
+class ConcentrationActionMarker(BaseCondition):
+    """Marker condition for action-grant concentration spells (CallLightning, Sunbeam).
+
+    When removed (via concentration break), deregisters the granted action template.
+    """
+    name: str = "Concentration Action"
+    description: str = "Tracking concentration on an action-grant spell"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    action_name: str = ""
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Tracking concentration on {self.action_name}"
+        )
+        return [], [], [], [], effect_event
+
+    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
+        entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if entity and self.action_name:
+            entity.unregister_action(self.action_name)
         return super()._remove(removal_event)
 
 

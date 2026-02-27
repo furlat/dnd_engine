@@ -463,7 +463,7 @@ def test_sf_d2_twinned_cast():
     # Instantiate with first target and extra targets
     hp_instance = hp_template.instantiate(
         target_entity_uuid=t1.uuid,
-        extra_targets=[t2.uuid],
+        extra_target_entity_uuids=[t2.uuid],
     )
     hp_instance.apply()
 
@@ -501,7 +501,7 @@ def test_sf_d3_twinned_auto_removed():
     assert hp_template is not None
     hp_instance = hp_template.instantiate(
         target_entity_uuid=t1.uuid,
-        extra_targets=[t2.uuid],
+        extra_target_entity_uuids=[t2.uuid],
     )
     hp_instance.apply()
 
@@ -964,81 +964,106 @@ def test_sf_i3_twinned_no_modify_self():
 
 
 def test_sf_i4_twinned_hold_person_both_paralyzed():
-    """Twinned Hold Person — both targets make saves."""
-    config = SorcererConfig(
-        level=5, name="TS HP Both",
-        metamagic_choices=["quickened", "twinned"],
-        asi_4=[("charisma", 2)],
-    )
-    sorc = create_sorcerer(config)
+    """Twinned Hold Person — both targets fail saves, both paralyzed."""
+    from dnd.utils import has_condition
     from dnd.monsters.bestiary import create_goblin
-    t1 = create_goblin(name="Goblin1", position=(2, 0))
-    t2 = create_goblin(name="Goblin2", position=(3, 0))
-    Entity.update_all_entities_senses()
 
-    encounter = setup_combat_arena(sorc, t1)
-    encounter.add_combatant(t2, PassController(source_entity_uuid=t2.uuid))
-    encounter.roll_initiative()
-    encounter.start_encounter()
-    get_to_turn(encounter, sorc)
+    # Retry loop: goblins have low WIS (-1 vs DC 15) but nat 20 auto-succeeds
+    for _ in range(20):
+        reset_combat_state()
+        setup_arena()
 
-    ts = sorc.get_action_template("Twinned Spell")
-    assert ts is not None
-    ts.instantiate().apply()
+        config = SorcererConfig(
+            level=5, name="TS HP Both",
+            metamagic_choices=["quickened", "twinned"],
+            asi_4=[("charisma", 2)],
+        )
+        sorc = create_sorcerer(config)
+        t1 = create_goblin(name="Goblin1", position=(2, 0))
+        t2 = create_goblin(name="Goblin2", position=(3, 0))
+        Entity.update_all_entities_senses()
 
-    hp_tmpl = sorc.get_action_template("Hold Person")
-    assert hp_tmpl is not None
-    hp_instance = hp_tmpl.instantiate(
-        target_entity_uuid=t1.uuid,
-        extra_targets=[t2.uuid],
-    )
-    hp_instance.apply()
+        encounter = setup_combat_arena(sorc, t1)
+        encounter.add_combatant(t2, PassController(source_entity_uuid=t2.uuid))
+        encounter.roll_initiative()
+        encounter.start_encounter()
+        get_to_turn(encounter, sorc)
 
-    # Sorcerer should be concentrating
+        ts = sorc.get_action_template("Twinned Spell")
+        assert ts is not None
+        ts.instantiate().apply()
+
+        hp_tmpl = sorc.get_action_template("Hold Person")
+        assert hp_tmpl is not None
+        hp_instance = hp_tmpl.instantiate(
+            target_entity_uuid=t1.uuid,
+            extra_target_entity_uuids=[t2.uuid],
+        )
+        hp_instance.apply()
+
+        # Both targets must fail — retry if either saved (nat 20)
+        if has_condition(t1, "Hold Person") and has_condition(t2, "Hold Person"):
+            break
+    else:
+        raise AssertionError("Could not get both targets to fail saves in 20 attempts")
+
     assert "Concentrating" in sorc.active_conditions
-
-    # At least one target should have HoldPersonEffect (depending on saves)
-    # We just verify the spell resolved and concentration is established
-    # (Save outcomes are random, so we just check the spell executed)
+    assert has_condition(t1, "Hold Person"), "Target 1 should have Hold Person"
+    assert has_condition(t2, "Hold Person"), "Target 2 should have Hold Person"
+    assert has_condition(t1, "Paralyzed"), "Target 1 should be Paralyzed"
+    assert has_condition(t2, "Paralyzed"), "Target 2 should be Paralyzed"
 
 
 def test_sf_i5_twinned_hold_person_concentration():
     """Twinned Hold Person — both targets attempted, concentration established."""
-    config = SorcererConfig(
-        level=5, name="TS HP Conc",
-        metamagic_choices=["quickened", "twinned"],
-        asi_4=[("charisma", 2)],
-    )
-    sorc = create_sorcerer(config)
+    from dnd.utils import has_condition
     from dnd.monsters.bestiary import create_goblin
-    t1 = create_goblin(name="Gob1", position=(2, 0))
-    t2 = create_goblin(name="Gob2", position=(3, 0))
-    Entity.update_all_entities_senses()
 
-    encounter = setup_combat_arena(sorc, t1)
-    encounter.add_combatant(t2, PassController(source_entity_uuid=t2.uuid))
-    encounter.roll_initiative()
-    encounter.start_encounter()
-    get_to_turn(encounter, sorc)
+    # Retry loop: at least one goblin must fail WIS save (avoid double nat 20)
+    for _ in range(20):
+        reset_combat_state()
+        setup_arena()
 
-    ts = sorc.get_action_template("Twinned Spell")
-    assert ts is not None
-    ts.instantiate().apply()
+        config = SorcererConfig(
+            level=5, name="TS HP Conc",
+            metamagic_choices=["quickened", "twinned"],
+            asi_4=[("charisma", 2)],
+        )
+        sorc = create_sorcerer(config)
+        t1 = create_goblin(name="Gob1", position=(2, 0))
+        t2 = create_goblin(name="Gob2", position=(3, 0))
+        Entity.update_all_entities_senses()
 
-    # Verify Hold Person is now MULTI_ENTITY with count 2
-    hp_tmpl = sorc.get_action_template("Hold Person")
-    assert hp_tmpl is not None
-    assert hp_tmpl.alt_target_type == TargetType.MULTI_ENTITY
-    assert hp_tmpl.alt_target_count == 2
+        encounter = setup_combat_arena(sorc, t1)
+        encounter.add_combatant(t2, PassController(source_entity_uuid=t2.uuid))
+        encounter.roll_initiative()
+        encounter.start_encounter()
+        get_to_turn(encounter, sorc)
 
-    # Cast it
-    hp_instance = hp_tmpl.instantiate(
-        target_entity_uuid=t1.uuid,
-        extra_targets=[t2.uuid],
-    )
-    hp_instance.apply()
+        ts = sorc.get_action_template("Twinned Spell")
+        assert ts is not None
+        ts.instantiate().apply()
 
-    # Concentration should be active regardless of save outcomes
+        # Verify Hold Person is now MULTI_ENTITY with count 2
+        hp_tmpl = sorc.get_action_template("Hold Person")
+        assert hp_tmpl is not None
+        assert hp_tmpl.alt_target_type == TargetType.MULTI_ENTITY
+        assert hp_tmpl.alt_target_count == 2
+
+        # Cast it
+        hp_instance = hp_tmpl.instantiate(
+            target_entity_uuid=t1.uuid,
+            extra_target_entity_uuids=[t2.uuid],
+        )
+        hp_instance.apply()
+
+        # At least one target must fail — retry if both saved (double nat 20)
+        if has_condition(t1, "Hold Person") or has_condition(t2, "Hold Person"):
+            break
+    else:
+        raise AssertionError("Could not get at least one target to fail save in 20 attempts")
+
+    # Concentration established (at least one linked child)
     assert "Concentrating" in sorc.active_conditions, \
         "Twinned Hold Person should establish concentration"
 
@@ -1946,37 +1971,52 @@ def test_sf_r1_full_turn_quickened_plus_action():
 
 def test_sf_r2_twinned_concentration_break():
     """Twinned Hold Person + concentration break = both effects end."""
-    config = SorcererConfig(
-        level=5, name="Twin Conc Break",
-        metamagic_choices=["quickened", "twinned"],
-        asi_4=[("charisma", 2)],
-    )
-    sorc = create_sorcerer(config)
+    from dnd.utils import has_condition
     from dnd.monsters.bestiary import create_goblin
-    t1 = create_goblin(name="G1", position=(2, 0))
-    t2 = create_goblin(name="G2", position=(3, 0))
-    Entity.update_all_entities_senses()
 
-    encounter = setup_combat_arena(sorc, t1)
-    encounter.add_combatant(t2, PassController(source_entity_uuid=t2.uuid))
-    encounter.roll_initiative()
-    encounter.start_encounter()
-    get_to_turn(encounter, sorc)
+    # Retry loop: both goblins must fail WIS save (avoid nat 20 auto-success)
+    for _ in range(20):
+        reset_combat_state()
+        setup_arena()
 
-    # Twinned Hold Person
-    ts = sorc.get_action_template("Twinned Spell")
-    assert ts is not None
-    ts.instantiate().apply()
+        config = SorcererConfig(
+            level=5, name="Twin Conc Break",
+            metamagic_choices=["quickened", "twinned"],
+            asi_4=[("charisma", 2)],
+        )
+        sorc = create_sorcerer(config)
+        t1 = create_goblin(name="G1", position=(2, 0))
+        t2 = create_goblin(name="G2", position=(3, 0))
+        Entity.update_all_entities_senses()
 
-    hp_tmpl = sorc.get_action_template("Hold Person")
-    assert hp_tmpl is not None
-    hp_instance = hp_tmpl.instantiate(
-        target_entity_uuid=t1.uuid,
-        extra_targets=[t2.uuid],
-    )
-    hp_instance.apply()
+        encounter = setup_combat_arena(sorc, t1)
+        encounter.add_combatant(t2, PassController(source_entity_uuid=t2.uuid))
+        encounter.roll_initiative()
+        encounter.start_encounter()
+        get_to_turn(encounter, sorc)
+
+        # Twinned Hold Person
+        ts = sorc.get_action_template("Twinned Spell")
+        assert ts is not None
+        ts.instantiate().apply()
+
+        hp_tmpl = sorc.get_action_template("Hold Person")
+        assert hp_tmpl is not None
+        hp_instance = hp_tmpl.instantiate(
+            target_entity_uuid=t1.uuid,
+            extra_target_entity_uuids=[t2.uuid],
+        )
+        hp_instance.apply()
+
+        # Both targets must fail — retry if either saved (nat 20)
+        if has_condition(t1, "Hold Person") and has_condition(t2, "Hold Person"):
+            break
+    else:
+        raise AssertionError("Could not get both targets to fail saves in 20 attempts")
 
     assert "Concentrating" in sorc.active_conditions
+    assert has_condition(t1, "Hold Person"), "G1 should be held"
+    assert has_condition(t2, "Hold Person"), "G2 should be held"
 
     # Break concentration by dealing massive damage
     deal_damage_to(sorc, 200, DamageType.FORCE)
@@ -1988,6 +2028,10 @@ def test_sf_r2_twinned_concentration_break():
         # If survived, concentration save with DC 100 would fail
         assert "Concentrating" not in sorc.active_conditions, \
             "Concentration should break after massive damage"
+
+    # Both targets should lose Hold Person when concentration breaks
+    assert not has_condition(t1, "Hold Person"), "G1 Hold Person should be removed"
+    assert not has_condition(t2, "Hold Person"), "G2 Hold Person should be removed"
 
 
 def test_sf_r3_font_then_quickened_same_turn():
