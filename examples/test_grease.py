@@ -13,7 +13,7 @@ Tests:
 import pytest
 
 from dnd.utils import reset_combat_state, has_condition
-from dnd.monsters.bestiary import create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_skeleton, create_caster
 from dnd.entity import Entity, get_natural_roll
 from dnd.spells.conjuration import Grease
 from dnd.core.gridmap import get_map, reset_map
@@ -56,7 +56,7 @@ def test_grease_zone_creation():
     setup_arena()
 
     # Create caster
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=20)
 
     # Cast Grease at position (5, 5)
@@ -104,7 +104,7 @@ def test_grease_entry_prone():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Caster", position=(0, 0))
+        caster = create_caster(name="Caster", position=(0, 0))
         target = create_skeleton(name="Target", position=(10, 5))
         caster.update_entity_senses(max_distance=20)
 
@@ -150,7 +150,7 @@ def test_grease_turn_start_prone():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Caster", position=(0, 0))
+        caster = create_caster(name="Caster", position=(0, 0))
         target = create_skeleton(name="Target", position=(5, 5))
         caster.update_entity_senses(max_distance=20)
 
@@ -203,7 +203,7 @@ def test_grease_turn_start_no_movement():
     setup_arena()
 
     # Create caster and target
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     target = create_skeleton(name="Target", position=(5, 5))
     caster.update_entity_senses(max_distance=20)
 
@@ -266,7 +266,7 @@ def test_grease_not_own_turn():
     setup_arena()
 
     # Create caster and target
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     target = create_skeleton(name="Target", position=(10, 10))  # Outside zone initially
     caster.update_entity_senses(max_distance=20)
 
@@ -313,7 +313,7 @@ def test_grease_concentration_break():
     setup_arena()
 
     # Create caster
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=20)
 
     # Cast Grease

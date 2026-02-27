@@ -13,7 +13,7 @@ from typing import Any, Optional, List, Tuple, Dict
 from uuid import UUID
 from pydantic import Field
 
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, ConditionCategory
 from dnd.core.base_actions import (
     BaseAction, ActionCategory, TargetType, Cost, CostType,
     ActionEvent, spell_slot_cost_type,
@@ -138,6 +138,7 @@ class MetamagicActive(BaseCondition):
     """
     name: str = "MetamagicActive"
     description: str = "Metamagic is active — next spell cast will be modified"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
     metamagic_type: str = "quickened"  # "quickened", "twinned", "distant"
 
     # Track modified template UUIDs for cleanup (exclude from serialization)
@@ -440,10 +441,10 @@ class ConvertSlotToSP(BaseAction):
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         slot_cost_type = spell_slot_cost_type(self.slot_level)
-        self.name = f"Convert L{self.slot_level} Slot to SP"
+        self.name = f"Slot\u2192SP L{self.slot_level}"
         self.costs = [
             Cost(
-                name=f"Convert L{self.slot_level} Slot",
+                name=f"Slot\u2192SP L{self.slot_level}",
                 cost_type="bonus_actions",
                 cost=1,
                 evaluator=entity_action_economy_cost_evaluator,
@@ -457,7 +458,7 @@ class ConvertSlotToSP(BaseAction):
         ]
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Convert L{self.slot_level} slot validated")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Slot\u2192SP L{self.slot_level} validated")
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -471,7 +472,7 @@ class ConvertSlotToSP(BaseAction):
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,
-            status_message=f"Converted L{self.slot_level} slot to {self.slot_level} SP",
+            status_message=f"Slot\u2192SP L{self.slot_level}: gained {self.slot_level} SP",
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
@@ -493,10 +494,10 @@ class ConvertSPToSlot(BaseAction):
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         sp_cost = SP_TO_SLOT_COST.get(self.slot_level, 2)
-        self.name = f"Convert SP to L{self.slot_level} Slot"
+        self.name = f"{sp_cost}SP\u2192Slot L{self.slot_level}"
         self.costs = [
             Cost(
-                name=f"Convert SP to L{self.slot_level}",
+                name=f"{sp_cost}SP\u2192Slot L{self.slot_level}",
                 cost_type="bonus_actions",
                 cost=1,
                 resource_name="sorcery_points",
@@ -518,7 +519,7 @@ class ConvertSPToSlot(BaseAction):
         return self.check_costs()
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Convert SP to L{self.slot_level} validated")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"{SP_TO_SLOT_COST.get(self.slot_level, 2)}SP\u2192Slot L{self.slot_level} validated")
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -537,7 +538,7 @@ class ConvertSPToSlot(BaseAction):
 
         return execution_event.phase_to(
             EventPhase.COMPLETION,
-            status_message=f"Created L{self.slot_level} spell slot",
+            status_message=f"{SP_TO_SLOT_COST.get(self.slot_level, 2)}SP\u2192Slot L{self.slot_level}: created slot",
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
@@ -623,8 +624,9 @@ class SorceryPointsFeature(BaseCondition):
 
             # Unregister Font of Magic actions
             for slot_level in range(1, 6):
-                target.unregister_action(f"Convert L{slot_level} Slot to SP")
-                target.unregister_action(f"Convert SP to L{slot_level} Slot")
+                target.unregister_action(f"Slot\u2192SP L{slot_level}")
+                sp_cost = SP_TO_SLOT_COST.get(slot_level, 2)
+                target.unregister_action(f"{sp_cost}SP\u2192Slot L{slot_level}")
 
             # Remove MetamagicActive if present
             if "MetamagicActive" in target.active_conditions:

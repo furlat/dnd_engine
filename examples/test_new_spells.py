@@ -22,7 +22,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.actions_functional import setup_standard_actions
-from dnd.monsters.bestiary import create_sorcerer
+from dnd.monsters.bestiary import create_caster
 from dnd.core.events import EventPhase
 from dnd.core.modifiers import NumericalModifier, AdvantageStatus, AutoHitModifier, AutoHitStatus
 from dnd.blocks.equipment import WeaponSlot
@@ -79,7 +79,7 @@ def test_ray_of_frost_hit_damage():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Low DEX = low AC, easier to hit
     target = create_test_target("Target", (2, 0), dex=1)
 
@@ -111,7 +111,7 @@ def test_ray_of_frost_speed_reduction():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), dex=1)
 
     Entity.update_all_entities_senses()
@@ -149,7 +149,7 @@ def test_ray_of_frost_duration():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), dex=1)
 
     Entity.update_all_entities_senses()
@@ -211,7 +211,7 @@ def test_acid_splash_single_target():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         target = create_test_target("Target", (2, 0), dex=1)
 
         Entity.update_all_entities_senses()
@@ -243,7 +243,7 @@ def test_acid_splash_two_targets():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         target1 = create_test_target("Target1", (2, 0), dex=1)
         target2 = create_test_target("Target2", (2, 1), dex=1)
 
@@ -285,7 +285,7 @@ def test_acid_splash_rejects_distant_targets():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target1 = create_test_target("Target1", (2, 0), dex=1)
     target2 = create_test_target("Target2", (5, 0), dex=1)  # Too far from target1
 
@@ -319,7 +319,7 @@ def test_scorching_ray_three_rays():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), dex=1)
 
     Entity.update_all_entities_senses()
@@ -377,7 +377,7 @@ def test_blur_applies_disadvantage():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     attacker = create_test_target("Attacker", (1, 0), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -410,7 +410,7 @@ def test_blur_concentration():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     blur = Blur(source_entity_uuid=caster.uuid, caster_level=5)
@@ -438,7 +438,7 @@ def test_misty_step_teleport():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     start_pos = get_position(caster)
@@ -465,7 +465,7 @@ def test_misty_step_range_limit():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     target_pos = (8, 0)  # 40ft away (8 tiles * 5ft)
@@ -489,7 +489,7 @@ def test_misty_step_bonus_action():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     initial_actions = caster.action_economy.actions.normalized_score
@@ -522,7 +522,7 @@ def test_blindness_deafness_applies_blinded():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         target = create_test_target("Target", (2, 0), con=1)
 
         Entity.update_all_entities_senses()
@@ -556,7 +556,7 @@ def test_blindness_deafness_applies_deafened():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         target = create_test_target("Target", (2, 0), con=1)
 
         Entity.update_all_entities_senses()
@@ -589,7 +589,7 @@ def test_blindness_deafness_not_concentration():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), con=1)
 
     Entity.update_all_entities_senses()
@@ -620,7 +620,7 @@ def test_fear_applies_frightened():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         target = create_test_target("Target", (2, 0), wis=1)
 
         Entity.update_all_entities_senses()
@@ -650,7 +650,7 @@ def test_fear_cone_shape():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
+        caster = create_caster(name="Caster", position=(5, 5), faction="heroes")
         target_in_cone = create_test_target("InCone", (8, 5), wis=1)
         target_outside = create_test_target("Outside", (2, 5), wis=1)
 
@@ -684,7 +684,7 @@ def test_hypnotic_pattern_applies_conditions():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         target = create_test_target("Target", (5, 0), wis=1)
 
         Entity.update_all_entities_senses()
@@ -714,7 +714,7 @@ def test_hypnotic_pattern_concentration_cleanup():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         target = create_test_target("Target", (5, 0), wis=1)
 
         Entity.update_all_entities_senses()

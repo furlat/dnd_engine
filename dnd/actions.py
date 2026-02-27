@@ -2915,6 +2915,10 @@ class SpellAction(BaseAction):
             return self.alt_range
         return self.spell_range.normal
 
+    def get_range(self) -> Range:
+        """Return spell range with alt_range override for position filtering."""
+        return Range(type=self.spell_range.type, normal=self.effective_range, long=self.spell_range.long)
+
     def get_upcast_bonus(self) -> int:
         """Get levels above base spell level (for upcast scaling)."""
         return max(0, self.cast_at_level - self.spell_level)

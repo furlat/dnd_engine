@@ -19,7 +19,7 @@ from dnd.core.base_tiles import dark_floor_factory
 from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity, get_natural_roll
-from dnd.monsters.bestiary import create_sorcerer, create_goblin
+from dnd.monsters.bestiary import create_caster, create_goblin
 from dnd.conditions import Concentrating, Invisible
 from dnd.spells.transmutation import DarkvisionSpell
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
@@ -66,7 +66,7 @@ def test_darkvision_basic():
     setup_arena()
 
     # Create sorcerer without darkvision
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
     Entity.update_all_entities_senses()
 
     # Verify no darkvision initially
@@ -121,8 +121,8 @@ def test_darkvision_on_ally():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
-    ally = create_sorcerer(name="Cleric", position=(6, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    ally = create_caster(name="Cleric", position=(6, 5), level=5, faction="heroes")
     Entity.update_all_entities_senses()
 
     # Cast on adjacent ally (5ft = 1 tile)
@@ -148,8 +148,8 @@ def test_darkvision_on_ally():
     reset_combat_state()
     setup_arena()
 
-    caster2 = create_sorcerer(name="Wizard2", position=(5, 5), level=5, faction="heroes")
-    far_ally = create_sorcerer(name="Far Cleric", position=(7, 5), level=5, faction="heroes")
+    caster2 = create_caster(name="Wizard2", position=(5, 5), level=5, faction="heroes")
+    far_ally = create_caster(name="Far Cleric", position=(7, 5), level=5, faction="heroes")
     Entity.update_all_entities_senses()
 
     spell2 = DarkvisionSpell(
@@ -180,8 +180,8 @@ def test_darkvision_concentration_replacement():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
-    ally = create_sorcerer(name="Cleric", position=(6, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    ally = create_caster(name="Cleric", position=(6, 5), level=5, faction="heroes")
     _target = create_goblin(name="Goblin", position=(8, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
@@ -230,7 +230,7 @@ def test_see_invisibility_basic():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     enemy = create_goblin(name="Sneaky Goblin", position=(8, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
@@ -291,7 +291,7 @@ def test_see_invisibility_duration():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     enemy = create_goblin(name="Sneaky", position=(8, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
@@ -344,8 +344,8 @@ def test_true_seeing_basic():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
-    ally = create_sorcerer(name="Fighter", position=(6, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    ally = create_caster(name="Fighter", position=(6, 5), level=5, faction="heroes")
     enemy = create_goblin(name="Sneaky", position=(9, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
@@ -399,8 +399,8 @@ def test_true_seeing_duration():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
-    ally = create_sorcerer(name="Fighter", position=(6, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    ally = create_caster(name="Fighter", position=(6, 5), level=5, faction="heroes")
     Entity.update_all_entities_senses()
 
     spell = TrueSeeing(
@@ -432,8 +432,8 @@ def test_true_seeing_range():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
-    far_ally = create_sorcerer(name="Far Ally", position=(8, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    far_ally = create_caster(name="Far Ally", position=(8, 5), level=5, faction="heroes")
     Entity.update_all_entities_senses()
 
     spell = TrueSeeing(
@@ -461,8 +461,8 @@ def test_darkvision_cleanup_chain():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
-    ally = create_sorcerer(name="Cleric", position=(6, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    ally = create_caster(name="Cleric", position=(6, 5), level=5, faction="heroes")
     Entity.update_all_entities_senses()
 
     spell = DarkvisionSpell(
@@ -501,7 +501,7 @@ def test_multiple_sense_buffs():
     reset_combat_state()
     setup_arena()
 
-    entity = create_sorcerer(name="MultiSense", position=(5, 5), level=5)
+    entity = create_caster(name="MultiSense", position=(5, 5), level=5)
     Entity.update_all_entities_senses()
 
     # Apply See Invisibility (duration-based)
@@ -573,7 +573,7 @@ def test_darkvision_darkness_reactive():
     grid = create_dark_grid(15, 5)
 
     # Place observer and target in the dark, 3 tiles apart (15ft)
-    observer = create_sorcerer(name="Wizard", position=(2, 2), level=5, faction="heroes")
+    observer = create_caster(name="Wizard", position=(2, 2), level=5, faction="heroes")
     enemy = create_goblin(name="Goblin", position=(5, 2), faction="monsters")
 
     # Initial senses setup - establishes baseline snapshot for change detection
@@ -651,7 +651,7 @@ def test_see_invisibility_reactive():
     reset_combat_state()
     setup_arena()  # Bright light grid
 
-    observer = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    observer = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     enemy = create_goblin(name="Sneaky", position=(8, 5), faction="monsters")
 
     # Initial senses - enemy visible in bright light
@@ -714,8 +714,8 @@ def test_true_seeing_reactive():
     reset_combat_state()
     create_dark_grid(15, 5)
 
-    caster = create_sorcerer(name="Wizard", position=(2, 2), level=5, faction="heroes")
-    ally = create_sorcerer(name="Fighter", position=(3, 2), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(2, 2), level=5, faction="heroes")
+    ally = create_caster(name="Fighter", position=(3, 2), level=5, faction="heroes")
     enemy = create_goblin(name="Ghost", position=(6, 2), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -775,8 +775,8 @@ def test_darkvision_ally_reactive():
     reset_combat_state()
     create_dark_grid(15, 5)
 
-    caster = create_sorcerer(name="Wizard", position=(2, 2), level=5, faction="heroes")
-    ally = create_sorcerer(name="Fighter", position=(3, 2), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(2, 2), level=5, faction="heroes")
+    ally = create_caster(name="Fighter", position=(3, 2), level=5, faction="heroes")
     enemy = create_goblin(name="Goblin", position=(6, 2), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -830,7 +830,7 @@ def test_darkvision_attack_integration():
 
     # Place observer and enemy 3 tiles apart (15ft) - beyond adjacent rule (1 tile)
     # Adjacent rule: within 1 tile, DARKNESS → DIM_LIGHT, so must use distance > 1
-    observer = create_sorcerer(name="Wizard", position=(2, 2), level=5, faction="heroes")
+    observer = create_caster(name="Wizard", position=(2, 2), level=5, faction="heroes")
     enemy = create_goblin(name="Goblin", position=(5, 2), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -909,7 +909,7 @@ def test_see_invisibility_spell_targeting():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     enemy = create_goblin(name="Sneaky", position=(8, 5), faction="monsters")
     Entity.update_all_entities_senses()
 

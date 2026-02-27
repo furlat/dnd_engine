@@ -980,9 +980,6 @@ class Sleep(SpellAction):
                 radius_feet=20
             )
 
-    def get_range(self) -> Range:
-        return self.spell_range
-
     def get_hp_pool_dice(self) -> Tuple[int, int]:
         """Returns (dice_count, dice_value). 5d8 base + 2d8 per upcast."""
         base_dice = 5

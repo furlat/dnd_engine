@@ -81,7 +81,8 @@
       "Bash(git:*)",
       "Bash(echo === $spell ===:*)",
       "Bash(cat:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(.venv/bin/python:*)"
     ]
   }
 }

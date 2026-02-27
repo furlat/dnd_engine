@@ -17,7 +17,7 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, get_natural_roll
-from dnd.monsters.bestiary import create_sorcerer, create_goblin
+from dnd.monsters.bestiary import create_caster, create_goblin
 from dnd.spells.evocation import IceStorm, IceStormTerrain
 from dnd.utils import (
     reset_combat_state, get_hp, set_hp, has_condition,
@@ -72,7 +72,7 @@ def test_ice_storm_failed_save():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses()
 
@@ -118,7 +118,7 @@ def test_ice_storm_passed_save():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses()
 
@@ -164,7 +164,7 @@ def test_ice_storm_upcast():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses()
 
@@ -209,7 +209,7 @@ def test_ice_storm_difficult_terrain():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
@@ -253,7 +253,7 @@ def test_ice_storm_not_concentration():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
@@ -288,7 +288,7 @@ def test_cylinder_ignores_walls():
         reset_combat_state()
         grid = setup_arena(size=25)
 
-        caster = create_sorcerer(name="Wizard", position=(3, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(3, 10), level=5, faction="heroes")
 
         # Place a wall in the middle of the target area
         # Cylinder centered at (10, 10) with radius 4 tiles (20ft)
@@ -407,7 +407,7 @@ def test_ice_storm_multiple_targets():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(2, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(2, 10), level=5, faction="heroes")
         g1 = create_goblin(name="Goblin1", position=(10, 10), faction="monsters")
         g2 = create_goblin(name="Goblin2", position=(11, 10), faction="monsters")
         g3 = create_goblin(name="Goblin3", position=(10, 11), faction="monsters")
@@ -456,7 +456,7 @@ def test_ice_storm_terrain_movement_cost():
     reset_combat_state()
     grid = setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(2, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(2, 10), level=5, faction="heroes")
     mover = create_goblin(name="Mover", position=(15, 10), faction="monsters")
     Entity.update_all_entities_senses(max_distance=15)
 
@@ -529,7 +529,7 @@ def test_ice_storm_terrain_affects_pathing():
         grid.set_tile(x, 9, walkable=False, visible=False, name="Wall")
         grid.set_tile(x, 11, walkable=False, visible=False, name="Wall")
 
-    caster = create_sorcerer(name="Wizard", position=(0, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(0, 10), level=5, faction="heroes")
     # Goblin has 30ft = 6 tiles of movement.
     mover = create_goblin(name="Mover", position=(5, 10), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)

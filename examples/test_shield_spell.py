@@ -23,7 +23,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import spell_slot_cost_type
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_skeleton, create_caster
 from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
 from dnd.utils import reset_combat_state, get_hp
@@ -57,7 +57,7 @@ def setup_shield_scenario():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
     enemy = create_skeleton(name="Skeleton", position=(5, 6))
     setup_standard_actions(enemy)
 
@@ -442,8 +442,8 @@ def setup_shield_vs_mm_scenario():
     grid = get_map()
     grid.create_rectangle(-5, -5, 25, 25)
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
-    enemy = create_sorcerer(name="Enemy Mage", position=(5, 10), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
+    enemy = create_caster(name="Enemy Mage", position=(5, 10), level=5)
     enemy.faction = None
     register_spell(enemy, MagicMissile, caster_level=5)
 

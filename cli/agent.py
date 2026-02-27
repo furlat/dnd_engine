@@ -203,7 +203,12 @@ def show_remaining_actions(result: dict) -> None:
     if spell_slots:
         slot_parts = [f"L{lvl}:{info['current']}/{info['max']}" for lvl, info in sorted(spell_slots.items())]
         slots_str = f"  Slots: {' '.join(slot_parts)}"
-    print(f"REMAINING: Actions:{act}  Bonus:{bonus}  Movement:{movement}ft{extra_str}{slots_str}")
+    resources = actions.get("resources", {})
+    res_str = ""
+    if resources:
+        res_parts = [f"{rname.replace('_', ' ').upper()}:{rinfo['current']}/{rinfo['max']}" for rname, rinfo in resources.items()]
+        res_str = f"  {' '.join(res_parts)}"
+    print(f"REMAINING: Actions:{act}  Bonus:{bonus}  Movement:{movement}ft{extra_str}{slots_str}{res_str}")
 
     # Show ready entity actions (attacks) with targets
     entity_actions = actions.get("entity_actions", [])
@@ -803,7 +808,13 @@ def format_actions(actions: dict, entity_name: str) -> str:
     if spell_slots:
         slot_parts = [f"L{lvl}:{info['current']}/{info['max']}" for lvl, info in sorted(spell_slots.items())]
         slots_str = f"  Slots: {' '.join(slot_parts)}"
-    lines.append(f"RESOURCES: Actions:{act}  Bonus:{bonus}  Reactions:{react}  Movement:{movement}ft{extra_str}{slots_str}")
+    # Custom resources (sorcery points, rage, etc.)
+    resources = actions.get("resources", {})
+    res_str = ""
+    if resources:
+        res_parts = [f"{rname.replace('_', ' ').upper()}:{rinfo['current']}/{rinfo['max']}" for rname, rinfo in resources.items()]
+        res_str = f"  {' '.join(res_parts)}"
+    lines.append(f"RESOURCES: Actions:{act}  Bonus:{bonus}  Reactions:{react}  Movement:{movement}ft{extra_str}{slots_str}{res_str}")
     lines.append("")
 
     # Position-based actions (Move, Jump, AoE spells)
@@ -888,8 +899,11 @@ def format_actions(actions: dict, entity_name: str) -> str:
     # Self actions (Dash, Dodge, Disengage, class features, self spells)
     self_actions = actions.get("self_actions", [])
     lines.append("SELF ACTIONS:")
+    fom_slot_to_sp = []
+    fom_sp_to_slot = []
     for action in self_actions:
         action_name = action.get("display_name", action.get("template_name", "???"))
+        template_name = action.get("template_name", "")
         can_afford = action.get("can_afford", False)
         is_item = action.get("is_item_use", False)
         is_spell = action.get("action_category") == "spell"
@@ -897,6 +911,13 @@ def format_actions(actions: dict, entity_name: str) -> str:
         cost_amount = action.get("cost_amount", 1)
         cost_label = _format_cost_label(cost_type, cost_amount)
         status = "READY" if can_afford else "NO ACTION"
+        # Collect Font of Magic actions for grouped display
+        if can_afford and "\u2192SP" in template_name:
+            fom_slot_to_sp.append(template_name)
+            continue
+        if can_afford and "\u2192Slot" in template_name:
+            fom_sp_to_slot.append(template_name)
+            continue
         tags = []
         if is_spell:
             tags.append("[SPELL]")
@@ -906,6 +927,16 @@ def format_actions(actions: dict, entity_name: str) -> str:
         if tag_str:
             tag_str = " " + tag_str
         lines.append(f"  {action_name} ({cost_label}): {status}{tag_str}")
+    # Font of Magic grouped display
+    if fom_slot_to_sp or fom_sp_to_slot:
+        parts = []
+        if fom_slot_to_sp:
+            levels = ",".join(f"L{n.split('L')[-1]}" for n in fom_slot_to_sp)
+            parts.append(f"Slot\u2192SP [{levels}] bonus+slot\u2192SP")
+        if fom_sp_to_slot:
+            costs = ",".join(n.split("\u2192")[0] for n in fom_sp_to_slot)
+            parts.append(f"SP\u2192Slot [{costs}] bonus")
+        lines.append(f"  Font: {' | '.join(parts)}")
 
     # Reactions/Handlers (private to this entity)
     handler_details = actions.get("handler_details", [])

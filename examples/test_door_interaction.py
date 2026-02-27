@@ -9,7 +9,7 @@ from uuid import uuid4
 from dnd.utils import reset_combat_state, setup_combat_arena, get_position, move_entity
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_sorcerer, create_skeleton
+from dnd.monsters.bestiary import create_caster, create_skeleton
 from dnd.items.test_items import TestDoorA
 from dnd.actions_functional import get_available_actions, execute_use_action
 
@@ -42,7 +42,7 @@ def setup():
     grid.place_object(door.uuid, (7, 7))
 
     # Sorcerer on the left side, skeleton on the right
-    sorcerer = create_sorcerer(name="Sorcerer", position=(5, 7), faction="heroes")
+    sorcerer = create_caster(name="Sorcerer", position=(5, 7), faction="heroes")
     skeleton = create_skeleton(name="Skeleton", position=(12, 7), faction="monsters")
 
     Entity.update_all_entities_senses()

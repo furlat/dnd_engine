@@ -19,7 +19,7 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, get_natural_roll
-from dnd.monsters.bestiary import create_sorcerer, create_goblin
+from dnd.monsters.bestiary import create_caster, create_goblin
 from dnd.spells.evocation import GustOfWind, GustOfWindZone
 from dnd.utils import (
     reset_combat_state, get_hp, set_hp, has_condition, get_position,
@@ -73,7 +73,7 @@ def test_gust_push_on_cast():
         setup_arena()
 
         # Caster at (5, 10), line goes east toward (20, 10)
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(8, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
 
@@ -124,7 +124,7 @@ def test_gust_no_push_on_save():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Strong Goblin", position=(8, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
 
@@ -167,7 +167,7 @@ def test_gust_zone_created():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
     spell = GustOfWind(
@@ -202,7 +202,7 @@ def test_gust_entry_push():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(2, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
 
@@ -261,7 +261,7 @@ def test_gust_turn_start_push():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(8, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
 
@@ -313,7 +313,7 @@ def test_gust_push_blocked_by_wall():
         reset_combat_state()
         grid = setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(8, 10), faction="monsters")
 
         # Wall 2 tiles east of target
@@ -359,7 +359,7 @@ def test_gust_difficult_terrain():
     reset_combat_state()
     grid = setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
     # Check base cost
@@ -405,7 +405,7 @@ def test_gust_concentration_break():
     reset_combat_state()
     grid = setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
     spell = GustOfWind(
@@ -447,7 +447,7 @@ def test_gust_no_push_after_removal():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     target = create_goblin(name="Goblin", position=(2, 10), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -490,7 +490,7 @@ def test_gust_terrain_reactive_paths():
 
     # Caster at west end, mover IN the zone but force STR pass so not pushed on cast.
     # Wind blows east. Mover at (5,10) with 30ft (6 tiles) budget.
-    caster = create_sorcerer(name="Wizard", position=(1, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(1, 10), level=5, faction="heroes")
     mover = create_goblin(name="Mover", position=(5, 10), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
     set_hp(mover, 200)
@@ -556,7 +556,7 @@ def test_gust_exit_no_effect():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(8, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
         set_hp(target, 200)

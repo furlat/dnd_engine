@@ -17,7 +17,7 @@ from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity, get_natural_roll
-from dnd.monsters.bestiary import create_sorcerer, create_goblin
+from dnd.monsters.bestiary import create_caster, create_goblin
 from dnd.spells.evocation import Sunbeam, SunbeamStrike
 from dnd.conditions import Concentrating
 from dnd.utils import (
@@ -73,7 +73,7 @@ def test_sunbeam_initial_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -118,7 +118,7 @@ def test_sunbeam_half_on_save():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -166,7 +166,7 @@ def test_sunbeam_blinded_on_fail():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -213,7 +213,7 @@ def test_sunbeam_concentration_and_strike():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=15)
 
     # Verify no SunbeamStrike before cast
@@ -266,7 +266,7 @@ def test_sunbeam_strike_reuse():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -325,7 +325,7 @@ def test_sunbeam_concentration_break():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=15)
 
     set_hp(caster, 200)
@@ -365,7 +365,7 @@ def test_sunbeam_multiple_targets():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
         g1 = create_goblin(name="Goblin1", position=(8, 10), faction="monsters")
         g2 = create_goblin(name="Goblin2", position=(12, 10), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
@@ -411,7 +411,7 @@ def test_sunbeam_strike_requires_concentration():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     target = create_goblin(name="Goblin", position=(10, 10), faction="monsters")
     Entity.update_all_entities_senses(max_distance=15)
     set_hp(target, 200)
@@ -455,7 +455,7 @@ def test_sunbeam_drop_concentration():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 10), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 10), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=15)
 
     spell = Sunbeam(

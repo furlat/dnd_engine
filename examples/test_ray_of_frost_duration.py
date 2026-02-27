@@ -12,7 +12,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.actions_functional import setup_standard_actions
-from dnd.monsters.bestiary import create_sorcerer
+from dnd.monsters.bestiary import create_caster
 from dnd.core.modifiers import NumericalModifier
 from dnd.spells.evocation import RayOfFrost
 
@@ -41,7 +41,7 @@ def test_ray_of_frost_duration_debug():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_test_target("Target", (2, 0), dex=1)
     base_speed = target.action_economy.movement.normalized_score  # Should be 30
 
