@@ -336,6 +336,22 @@ class Entity(BaseBlock):
         declaration_event = condition.declare_event(parent_event)
 
         if self.check_condition_immunity(condition.name):
+            # Push combat log so players/AIs know the condition was blocked
+            target_name = self.name
+            condition_name = condition.name
+            entry = CombatLogEntry(
+                entry_type=CombatLogEntryType.CONDITION_APPLIED,
+                source_name=target_name,
+                source_uuid=str(self.uuid),
+                target_name=target_name,
+                target_uuid=str(self.uuid),
+                compact=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
+                verbose=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
+                detailed=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
+                success=False,
+            )
+            EventQueue.push_combat_log(entry, self.uuid)
+
             if declaration_event is not None:
                 return declaration_event.cancel(status_message=f"Condition {condition.name} is immune")
             else:

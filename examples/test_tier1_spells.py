@@ -23,7 +23,7 @@ from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowConfig
 from dnd.actions_functional import setup_standard_actions
 from dnd.core.modifiers import CreatureType, NumericalModifier
 from dnd.conditions import Concentrating
-from dnd.monsters.bestiary import create_goblin, create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_goblin, create_skeleton, create_caster
 from dnd.spells import HoldPerson, HoldMonster, Sunburst, PoisonSpray
 from dnd.core.events import EventQueue
 from dnd.entity import get_natural_roll
@@ -123,7 +123,7 @@ def test_hold_person_rejects_non_humanoid():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     skeleton = create_skeleton(name="Skeleton", position=(1, 0), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -153,7 +153,7 @@ def test_hold_person_accepts_humanoid():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     goblin = create_goblin(name="Goblin", position=(1, 0), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -185,7 +185,7 @@ def test_hold_person_applies_paralyzed():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
         # Boost DC to 16 so that WIS -5 + nat 20 = 15 < 16 (guaranteed fail)
         # But nat 20 auto-succeeds in BG3-style, so we retry on nat 20
@@ -250,7 +250,7 @@ def test_hold_person_concentration():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
     # Create weak target to guarantee effect applies
     weak_config = EntityConfig(
@@ -292,7 +292,7 @@ def test_hold_monster_rejects_undead():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Give caster a level 5 spell slot
     caster.action_economy.spell_slot_5.self_static.add_value_modifier(
         NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
@@ -325,7 +325,7 @@ def test_hold_monster_accepts_non_undead():
     grid = get_map()
     grid.create_rectangle(0, 0, 20, 20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_5.self_static.add_value_modifier(
         NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
     )
@@ -379,7 +379,7 @@ def test_hold_monster_applies_paralyzed():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         caster.action_economy.spell_slot_5.self_static.add_value_modifier(
             NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
         )
@@ -429,7 +429,7 @@ def test_hold_monster_concentration_cleanup():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         caster.action_economy.spell_slot_5.self_static.add_value_modifier(
             NumericalModifier.create(source_entity_uuid=caster.uuid, name="L5 Slot", value=1)
         )
@@ -493,7 +493,7 @@ def test_sunburst_full_damage_and_blind_on_fail():
 
         # Caster at (0,0), target at (14,0) = 70ft apart
         # Caster is OUTSIDE the 60ft sphere but within 150ft spell range
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         caster.action_economy.spell_slot_8.self_static.add_value_modifier(
             NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
         )
@@ -551,7 +551,7 @@ def test_sunburst_half_damage_no_blind_on_success():
         grid.create_rectangle(0, 0, 30, 30)
 
         # Caster outside 60ft sphere AoE
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         caster.action_economy.spell_slot_8.self_static.add_value_modifier(
             NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
         )
@@ -619,7 +619,7 @@ def test_sunburst_undead_gets_disadvantage():
     grid.create_rectangle(0, 0, 30, 30)
 
     # Caster outside 60ft sphere AoE
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     caster.action_economy.spell_slot_8.self_static.add_value_modifier(
         NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
     )
@@ -661,7 +661,7 @@ def test_sunburst_sub_condition_cleanup():
         grid.create_rectangle(0, 0, 30, 30)
 
         # Caster outside 60ft sphere AoE
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
         caster.action_economy.spell_slot_8.self_static.add_value_modifier(
             NumericalModifier.create(source_entity_uuid=caster.uuid, name="L8 Slot", value=1)
         )
@@ -720,7 +720,7 @@ def test_poison_spray_works_at_10ft():
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_goblin(name="Target", position=(2, 0), faction="monsters")  # 10ft
 
     caster.update_entity_senses(max_distance=10)
@@ -746,7 +746,7 @@ def test_poison_spray_fails_at_15ft_with_range_error():
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_goblin(name="Target", position=(3, 0), faction="monsters")  # 15ft
 
     caster.update_entity_senses(max_distance=10)  # 50ft visibility
@@ -781,7 +781,7 @@ def test_poison_spray_no_damage_on_save():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
         # CON 30 (+10) + proficiency (+2) + bonus (+6) = +18
         # Always passes unless nat 1 (BG3 auto-fail)
@@ -836,7 +836,7 @@ def test_poison_spray_deals_damage_on_failed_save():
         grid = get_map()
         grid.create_rectangle(0, 0, 20, 20)
 
-        caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+        caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
         # CON 1 = -5 mod, GUARANTEED to fail (unless nat 20)
         weak_config = EntityConfig(

@@ -791,10 +791,6 @@ class Fireball(SpellAction):
                 radius_feet=20
             )
 
-    def get_range(self) -> Range:
-        """Return spell range for POSITION_AOE target resolution."""
-        return self.spell_range
-
     def get_damage_dice_count(self) -> int:
         """8d6 base + 1d6 per level above 3rd."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
@@ -937,10 +933,6 @@ class BurningHands(SpellAction):
                 length_feet=15
             )
 
-    def get_range(self) -> Range:
-        """Return spell range for POSITION_AOE target resolution."""
-        return self.spell_range
-
     def get_damage_dice_count(self) -> int:
         """3d6 base + 1d6 per level above 1st."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
@@ -1071,10 +1063,6 @@ class LightningBolt(SpellAction):
                 width_feet=5
             )
 
-    def get_range(self) -> Range:
-        """Return spell range for POSITION_AOE target resolution."""
-        return self.spell_range
-
     def get_damage_dice_count(self) -> int:
         """8d6 base + 1d6 per level above 3rd."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
@@ -1204,10 +1192,6 @@ class Thunderwave(SpellAction):
                 size_feet=15,
                 centered=False
             )
-
-    def get_range(self) -> Range:
-        """Return spell range for POSITION_AOE target resolution."""
-        return self.spell_range
 
     def get_damage_dice_count(self) -> int:
         """2d8 base + 1d8 per level above 1st."""
@@ -1438,10 +1422,6 @@ class Shatter(SpellAction):
                 radius_feet=10
             )
 
-    def get_range(self) -> Range:
-        """Return spell range for POSITION_AOE target resolution."""
-        return self.spell_range
-
     def get_damage_dice_count(self) -> int:
         """3d8 base + 1d8 per level above 2nd."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
@@ -1584,10 +1564,6 @@ class CircleOfDeath(SpellAction):
                 radius_feet=60
             )
 
-    def get_range(self) -> Range:
-        """Return spell range for POSITION_AOE target resolution."""
-        return self.spell_range
-
     def get_damage_dice_count(self) -> int:
         """8d6 base + 2d6 per level above 6th."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
@@ -1728,10 +1704,6 @@ class ConeOfCold(SpellAction):
                 target=self.end_position or (1, 0),
                 length_feet=60
             )
-
-    def get_range(self) -> Range:
-        """Return spell range for POSITION_AOE target resolution."""
-        return self.spell_range
 
     def get_damage_dice_count(self) -> int:
         """8d8 base + 1d8 per level above 5th."""
@@ -1961,9 +1933,6 @@ class Sunburst(SpellAction):
                 target=self.end_position or (0, 0),
                 radius_feet=60
             )
-
-    def get_range(self) -> Range:
-        return self.spell_range
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position LOS and range."""
@@ -2786,9 +2755,6 @@ class GustOfWind(SpellAction):
                 width_feet=10
             )
 
-    def get_range(self) -> Range:
-        return self.spell_range
-
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -2905,9 +2871,6 @@ class IceStorm(SpellAction):
                 height_feet=40
             )
 
-    def get_range(self) -> Range:
-        return self.spell_range
-
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -3018,9 +2981,6 @@ class SunbeamStrike(BaseAction):
                 length_feet=60,
                 width_feet=5
             )
-
-    def get_range(self) -> Range:
-        return self.spell_range
 
     def _create_event(self) -> Event:
         return Event(

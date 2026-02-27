@@ -376,17 +376,19 @@ def create_goblin_archer(
     return entity
 
 
-def create_sorcerer(
+def create_caster(
     source_id: Optional[UUID] = None,
-    name: str = "Sorcerer",
+    name: str = "Caster",
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
     level: int = 5
 ) -> Entity:
     """
-    Create a Sorcerer with AoE spells (Fireball, Magic Missile, etc.).
+    Create a generic spellcaster with AoE spells (Fireball, Magic Missile, etc.).
 
-    Level 5 Sorcerer with:
+    No class features — use sorcerer_factory.create_sorcerer() for a real Sorcerer.
+
+    Level 5 caster with:
     - CHA 18 (primary casting stat)
     - DEX 14, CON 14 (survivability)
     - Spell slots: 4/3/2 for levels 1/2/3
@@ -394,13 +396,13 @@ def create_sorcerer(
 
     Args:
         source_id: UUID for the entity (generated if not provided)
-        name: Name for the sorcerer
+        name: Name for the caster
         position: Starting grid position
         faction: Optional faction identifier
-        level: Sorcerer level (default 5)
+        level: Caster level (default 5)
 
     Returns:
-        Entity: A configured sorcerer entity
+        Entity: A configured spellcaster entity (no class features)
     """
     if source_id is None:
         source_id = uuid4()

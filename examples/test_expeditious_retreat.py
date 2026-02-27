@@ -16,7 +16,7 @@ from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_actions import TargetType
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_sorcerer
+from dnd.monsters.bestiary import create_caster
 from dnd.spells.transmutation import ExpeditiousRetreat
 from dnd.spells.illusion import Invisibility as InvisibilitySpell
 from dnd.conditions import Concentrating
@@ -42,7 +42,7 @@ def test_expeditious_retreat_basic():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
     Entity.update_all_entities_senses()
 
     # Verify no bonus dash initially
@@ -85,7 +85,7 @@ def test_bonus_dash_works():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
     Entity.update_all_entities_senses()
 
     # Cast Expeditious Retreat
@@ -136,7 +136,7 @@ def test_concentration_break_removes_action():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
     Entity.update_all_entities_senses()
 
     spell = ExpeditiousRetreat(
@@ -188,7 +188,7 @@ def test_available_actions_shows_bonus_dash():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
     Entity.update_all_entities_senses()
 
     # Check before
@@ -234,7 +234,7 @@ def test_expeditious_retreat_concentration_replacement():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5)
+    caster = create_caster(name="Wizard", position=(5, 5), level=5)
     Entity.update_all_entities_senses()
 
     # Cast Expeditious Retreat

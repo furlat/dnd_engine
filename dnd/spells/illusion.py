@@ -261,9 +261,6 @@ class Fear(SpellAction):
                 length_feet=30
             )
 
-    def get_range(self) -> Range:
-        return self.spell_range
-
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction."""
         caster = Entity.get(self.source_entity_uuid)
@@ -466,9 +463,6 @@ class HypnoticPattern(SpellAction):
                 centered=True
             )
 
-    def get_range(self) -> Range:
-        return self.spell_range
-
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
         caster = Entity.get(self.source_entity_uuid)
@@ -624,9 +618,6 @@ class ColorSpray(SpellAction):
                 target=self.end_position or (1, 0),
                 length_feet=15
             )
-
-    def get_range(self) -> Range:
-        return self.spell_range
 
     def get_hp_pool_dice(self) -> Tuple[int, int]:
         """Returns (dice_count, dice_value). 6d10 base + 2d10 per upcast."""

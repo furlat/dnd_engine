@@ -24,7 +24,7 @@ from dnd.core.aoe import AoEShape
 from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import HumanController, MeleeAIController, Controller
-from dnd.monsters.bestiary import create_sorcerer, create_skeleton
+from dnd.monsters.bestiary import create_caster, create_skeleton
 from dnd.items.test_items import (
     TestDoorA, Torch, create_torch, create_wall_torch,
     create_scroll_of_magic_missile, create_scroll_of_fireball,
@@ -101,7 +101,7 @@ def setup_sorcerer_arena() -> Tuple[Entity, List[Entity], "Encounter", "Torch", 
     create_wall_torch(position=(14, 13), owner_uuid=uuid4(), lit=True)
 
     # Create sorcerer hero
-    player = create_sorcerer(name="Hero", position=(2, 7), faction="heroes")
+    player = create_caster(name="Hero", position=(2, 7), faction="heroes")
 
     # Give hero a lit torch
     torch = create_torch(player.uuid)

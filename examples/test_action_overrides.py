@@ -29,8 +29,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.gridmap import get_map
-from dnd.core.base_actions import BaseAction, TargetType, Cost, ActionCategory
-from dnd.core.events import Range, RangeType
+from dnd.core.base_actions import TargetType, Cost
 from dnd.actions import SpellAction, entity_action_economy_cost_evaluator
 from dnd.actions_functional import (
     setup_standard_actions, register_spell,
@@ -38,16 +37,15 @@ from dnd.actions_functional import (
 )
 from dnd.spells.evocation import (
     FireBolt, Fireball, IceStorm, MagicMissile,
-    EldritchBlast, ShockingGrasp, GustOfWind,
+    EldritchBlast, GustOfWind,
 )
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.conjuration import Web
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
 from dnd.utils import (
-    get_hp, set_hp, get_max_hp, has_condition,
+    get_hp, has_condition,
     force_spell_attack_hit, remove_spell_attack_modifier,
-    force_attack_hit, remove_attack_modifier,
 )
 from dnd.core.modifiers import CreatureType
 
@@ -69,7 +67,7 @@ def test(name: str):
             fn()
             passed += 1
             print(f"  PASS: {name}")
-        except Exception as e:
+        except Exception as _e:
             failed += 1
             print(f"  FAIL: {name}")
             import traceback
@@ -136,10 +134,11 @@ def make_target(name: str, position: tuple, faction: str = "monsters") -> Entity
     return entity
 
 
-def find_template(entity: Entity, name: str) -> BaseAction:
-    """Find a registered action template by name."""
+def find_template(entity: Entity, name: str) -> SpellAction:
+    """Find a registered spell action template by name."""
     for t in entity.registered_actions:
         if t.name == name:
+            assert isinstance(t, SpellAction), f"Expected SpellAction, got {type(t)}"
             return t
     raise ValueError(f"Template '{name}' not found on {entity.name}")
 
@@ -259,8 +258,8 @@ def _():
 def _():
     fresh_state()
     caster = make_caster("Mage", (0, 0))
-    t1 = make_target("T1", (1, 0))
-    t2 = make_target("T2", (0, 1))
+    make_target("T1", (1, 0))
+    make_target("T2", (0, 1))
     register_spell(caster, FireBolt, caster_level=5)
     Entity.update_all_entities_senses(max_distance=SENSES_DISTANCE)
 
@@ -389,7 +388,7 @@ def _():
 def _():
     fresh_state()
     caster = make_caster("Mage", (0, 0))
-    target = make_target("Target", (1, 0))
+    make_target("Target", (1, 0))
     register_spell(caster, FireBolt, caster_level=5)
     Entity.update_all_entities_senses(max_distance=SENSES_DISTANCE)
 
@@ -624,7 +623,7 @@ print("\n=== Category C: Concentration + Multi-Target ===")
 @test("C16: Hold Person + MULTI_ENTITY → one Concentrating, linked to all")
 def _():
     """ensure_concentration reuses across convolution loop."""
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         # Targets have WIS 3 (from make_target default) → very likely to fail save
@@ -667,7 +666,7 @@ def _():
 @test("C17: Concentration partial removal — Concentrating survives")
 def _():
     """Remove one target's effect, Concentrating survives (policy='last')."""
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         t1 = make_target("T1", (1, 0))
@@ -1037,7 +1036,7 @@ def _():
     """
     fresh_state()
     caster = make_caster("Mage", (0, 0))
-    target = make_target("Target", (1, 0))
+    make_target("Target", (1, 0))
     register_spell(caster, FireBolt, caster_level=5)
     Entity.update_all_entities_senses(max_distance=SENSES_DISTANCE)
 
@@ -1074,8 +1073,8 @@ def _():
 def _():
     fresh_state()
     caster = make_caster("Mage", (0, 0))
-    t1 = make_target("T1", (1, 0))
-    t2 = make_target("T2", (0, 1))
+    make_target("T1", (1, 0))
+    make_target("T2", (0, 1))
     register_spell(caster, FireBolt, caster_level=5)
     Entity.update_all_entities_senses(max_distance=SENSES_DISTANCE)
 

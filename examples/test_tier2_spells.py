@@ -22,7 +22,7 @@ from dnd.entity import Entity, EntityConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.actions_functional import setup_standard_actions
 from dnd.core.modifiers import CreatureType, DamageType
-from dnd.monsters.bestiary import create_sorcerer, create_skeleton, create_goblin
+from dnd.monsters.bestiary import create_caster, create_skeleton, create_goblin
 from dnd.spells import (
     ConeOfCold, CircleOfDeath, Blight, PowerWordKill,
     ProtectionFromEnergy, Stoneskin
@@ -57,7 +57,7 @@ def test_cone_of_cold_shape():
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
 
-    caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
+    caster = create_caster(name="Caster", position=(5, 5), faction="heroes")
     Entity.update_all_entities_senses()
 
     # Create spell targeting east direction
@@ -82,7 +82,7 @@ def test_cone_of_cold_damage_and_save():
     grid = get_map()
     grid.create_rectangle(0, 0, 30, 30)
 
-    caster = create_sorcerer(name="Caster", position=(5, 5), faction="heroes")
+    caster = create_caster(name="Caster", position=(5, 5), faction="heroes")
 
     # Create target with low CON in cone path
     target = create_skeleton(name="Target", position=(7, 5), faction="monsters")
@@ -146,7 +146,7 @@ def test_circle_of_death_range():
     grid = get_map()
     grid.create_rectangle(0, 0, 40, 40)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     # Test at 150ft (30 tiles) - should work
@@ -216,7 +216,7 @@ def test_blight_rejects_undead():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     skeleton = create_skeleton(name="Skeleton", position=(1, 0), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -247,7 +247,7 @@ def test_blight_rejects_construct():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
     # Create construct
     construct_config = EntityConfig(
@@ -286,7 +286,7 @@ def test_blight_plant_max_damage():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
     # Create plant creature
     plant_config = EntityConfig(
@@ -332,7 +332,7 @@ def test_blight_normal_target():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     goblin = create_goblin(name="Goblin", position=(1, 0), faction="monsters")
 
     Entity.update_all_entities_senses()
@@ -371,7 +371,7 @@ def test_pwk_kills_at_threshold():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
     # Create target with lots of HP, then set to exactly 100
     target_config = EntityConfig(
@@ -410,7 +410,7 @@ def test_pwk_kills_below_threshold():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="monsters")
     set_hp(target, 50)
 
@@ -441,7 +441,7 @@ def test_pwk_fails_above_threshold():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
 
     # Create target with > 100 HP
     target_config = EntityConfig(
@@ -502,7 +502,7 @@ def test_protection_from_energy_fire_resistance():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="heroes")
 
     Entity.update_all_entities_senses()
@@ -545,7 +545,7 @@ def test_protection_from_energy_cold_resistance():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="heroes")
 
     Entity.update_all_entities_senses()
@@ -577,7 +577,7 @@ def test_protection_from_energy_concentration_cleanup():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="heroes")
 
     Entity.update_all_entities_senses()
@@ -621,7 +621,7 @@ def test_protection_from_energy_self_target():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses()
 
     spell = ProtectionFromEnergy(
@@ -652,7 +652,7 @@ def test_stoneskin_bludgeoning_resistance():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton (bludgeoning vulnerability)
     target = create_goblin(name="Target", position=(1, 0), faction="heroes")
 
@@ -686,7 +686,7 @@ def test_stoneskin_piercing_resistance():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton
     target = create_goblin(name="Target", position=(1, 0), faction="heroes")
 
@@ -718,7 +718,7 @@ def test_stoneskin_slashing_resistance():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton
     target = create_goblin(name="Target", position=(1, 0), faction="heroes")
 
@@ -750,7 +750,7 @@ def test_stoneskin_concentration_cleanup():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton (bludgeoning vulnerability)
     target = create_goblin(name="Target", position=(1, 0), faction="heroes")
 
@@ -792,7 +792,7 @@ def test_stoneskin_other_damage_unaffected():
     grid.create_rectangle(0, 0, 20, 20)
 
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Use goblin (no inherent resistances/vulnerabilities) instead of skeleton
     target = create_goblin(name="Target", position=(1, 0), faction="heroes")
 

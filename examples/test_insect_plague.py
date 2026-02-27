@@ -15,7 +15,7 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, get_natural_roll
-from dnd.monsters.bestiary import create_sorcerer, create_goblin
+from dnd.monsters.bestiary import create_caster, create_goblin
 from dnd.spells.conjuration import InsectPlague, InsectPlagueZone
 from dnd.utils import (
     reset_combat_state, get_hp, set_hp, has_condition,
@@ -68,7 +68,7 @@ def test_insect_plague_initial_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         # Target at the center of where we'll cast
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
@@ -112,7 +112,7 @@ def test_insect_plague_zone_created():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=15)
 
     spell = InsectPlague(
@@ -147,7 +147,7 @@ def test_insect_plague_entry_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(18, 5), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
 
@@ -194,7 +194,7 @@ def test_insect_plague_turn_start_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -241,7 +241,7 @@ def test_insect_plague_half_on_save():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -284,7 +284,7 @@ def test_insect_plague_concentration_break():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     Entity.update_all_entities_senses(max_distance=15)
 
     spell = InsectPlague(
@@ -318,7 +318,7 @@ def test_insect_plague_upcast():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -364,7 +364,7 @@ def test_insect_plague_exit_no_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(10, 5), faction="monsters")
         Entity.update_all_entities_senses(max_distance=15)
 
@@ -412,7 +412,7 @@ def test_insect_plague_reenter_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(18, 5), faction="monsters")
         Entity.update_all_entities_senses(max_distance=20)
 
@@ -469,7 +469,7 @@ def test_insect_plague_present_vs_entering():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         # Present at cast
         present = create_goblin(name="Present", position=(10, 5), faction="monsters")
         # Will move in later
@@ -521,7 +521,7 @@ def test_insect_plague_no_damage_after_removal():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     target = create_goblin(name="Goblin", position=(18, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 

@@ -20,7 +20,7 @@ from dnd.encounter import Encounter
 from dnd.controller import HumanController
 from dnd.actions import Attack, Move
 from dnd.actions_functional import setup_standard_actions, execute_use_action
-from dnd.monsters.bestiary import create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_skeleton, create_caster
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.illusion import Invisibility, GreaterInvisibility
 from dnd.items.test_items import create_scroll_of_invisibility, create_potion_of_greater_invisibility
@@ -58,7 +58,7 @@ def setup_oa_scenario():
     grid.create_rectangle(0, 0, 20, 20)
 
     # The entity that will be invisible and make OA
-    oa_maker = create_sorcerer(name="InvisEntity", position=(5, 5), level=7)
+    oa_maker = create_caster(name="InvisEntity", position=(5, 5), level=7)
     setup_standard_actions(oa_maker)
     add_opportunity_attack_handler(oa_maker)
 

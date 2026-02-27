@@ -529,9 +529,6 @@ class Slow(SpellAction):
                 centered=True
             )
 
-    def get_range(self) -> Range:
-        return self.spell_range
-
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
         caster = Entity.get(self.source_entity_uuid)
@@ -793,9 +790,6 @@ class Haste(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
     )
     valid_target_filter: str = Field(default="all")
-
-    def get_range(self) -> Range:
-        return self.spell_range
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target is in LOS and range."""

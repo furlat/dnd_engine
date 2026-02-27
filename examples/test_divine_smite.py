@@ -17,7 +17,7 @@ sys.path.insert(0, '.')
 from dnd.core.gridmap import get_map
 from dnd.core.events import WeaponSlot
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_skeleton, create_caster
 from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions
 from dnd.classes.paladin import register_divine_smite
@@ -32,9 +32,9 @@ from dnd.utils import (
 def create_paladin(name="Paladin", position=(5, 5), level=5):
     """Create a paladin-like entity with melee weapon and spell slots.
 
-    Uses create_sorcerer as base (has spell slots), then equips a longsword.
+    Uses create_caster as base (has spell slots), then equips a longsword.
     """
-    entity = create_sorcerer(name=name, position=position, level=level)
+    entity = create_caster(name=name, position=position, level=level)
     # Equip a longsword for melee attacks
     sword = create_longsword(entity.uuid)
     entity.equipment.equip(sword, WeaponSlot.MELEE_MAIN)

@@ -27,7 +27,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.gridmap import get_map
-from dnd.core.base_actions import TargetType, Cost
+from dnd.core.base_actions import ActionEvent, TargetType, Cost
 from dnd.core.events import AbilityName
 from dnd.core.modifiers import NumericalModifier, CreatureType
 from dnd.actions_functional import setup_standard_actions
@@ -59,7 +59,7 @@ def test(name: str):
             fn()
             passed += 1
             print(f"  PASS: {name}")
-        except Exception as e:
+        except Exception as _e:
             failed += 1
             print(f"  FAIL: {name}")
             import traceback
@@ -292,7 +292,7 @@ def _():
 
 @test("EX-B4: Hold Person with alt_skip_slot — slot not consumed, target paralyzed")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         target = make_target("Target", (1, 0))
@@ -355,7 +355,7 @@ def _():
         template=False,
         alt_extra_costs=[sp_cost],
     )
-    result1 = spell1.apply()
+    _result1 = spell1.apply()
     assert get_hp(target) == hp_before, "Should not deal damage when SP unaffordable"
 
     # With 5 SP, should work
@@ -415,7 +415,8 @@ def _():
     # NOTE: total_damage is 0 because FireBolt._apply() doesn't set it on completion
     # (only AoE spells like Fireball set total_damage for convolution aggregation)
     assert result is not None, "Result should not be None"
-    assert result.total_targets == 3, f"total_targets should be 3, got {result.total_targets}"
+    ae = type_cast(ActionEvent, result)
+    assert ae.total_targets == 3, f"total_targets should be 3, got {ae.total_targets}"
 
 
 @test("EX-C7: Fire Bolt ENTITY→POSITION_AOE — AoE splash damage")
@@ -451,12 +452,13 @@ def _():
     assert get_hp(t1) < hp1, "T1 should take damage from AoE"
     assert get_hp(t2) < hp2, "T2 should take damage from AoE"
     assert result is not None
-    assert result.total_targets == 2, f"total_targets should be 2, got {result.total_targets}"
+    ae = type_cast(ActionEvent, result)
+    assert ae.total_targets == 2, f"total_targets should be 2, got {ae.total_targets}"
 
 
 @test("EX-C8: Fireball POSITION_AOE→ENTITY — single target, no splash")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         target = make_target("Target", (2, 0))
@@ -489,7 +491,7 @@ def _():
 
 @test("EX-C9: Fireball POSITION_AOE→MULTI_ENTITY — cherry-pick targets")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         t1 = make_target("T1", (2, 0))
@@ -559,7 +561,8 @@ def _():
     assert get_hp(t1) < hp1, "T1 should take damage from 3 darts"
     assert get_hp(t2) == hp2, "T2 should NOT take damage (MM override ignores AoE shape)"
     assert result is not None
-    assert result.total_targets == 3, f"total_targets should be 3 (darts), got {result.total_targets}"
+    ae = type_cast(ActionEvent, result)
+    assert ae.total_targets == 3, f"total_targets should be 3 (darts), got {ae.total_targets}"
 
 
 # ============================================================================
@@ -571,7 +574,7 @@ print("\n=== Category EX-D: Concentration + Multi-Target Execution ===")
 
 @test("EX-D11: Hold Person MULTI_ENTITY — conc break via damage removes all")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         t1 = make_target("T1", (1, 0))
@@ -612,7 +615,7 @@ def _():
 
 @test("EX-D12: Hold Person MULTI_ENTITY — partial save, then damage break")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         t1 = make_target("T1", (1, 0))
@@ -657,7 +660,7 @@ def _():
 
 @test("EX-D13: Hold Person MULTI_ENTITY — one target freed, conc survives, then break")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         t1 = make_target("T1", (1, 0))
@@ -706,7 +709,7 @@ print("\n=== Category EX-E: _finalize_aoe Gating ===")
 
 @test("EX-E14: IceStorm normal — terrain created (control)")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         target = make_target("Target", (4, 0))
@@ -734,7 +737,7 @@ def _():
 
 @test("EX-E15: IceStorm→ENTITY — no terrain, damage still dealt")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         target = make_target("Target", (2, 0))
@@ -819,7 +822,8 @@ def _():
     remove_spell_attack_modifier(caster, hit_mod)
 
     assert result is not None, "Result should not be None"
-    assert result.total_targets == 3, f"total_targets should be 3, got {result.total_targets}"
+    ae = type_cast(ActionEvent, result)
+    assert ae.total_targets == 3, f"total_targets should be 3, got {ae.total_targets}"
 
     # Verify all 3 targets took damage
     actual_damage = (hp1 - get_hp(t1)) + (hp2 - get_hp(t2)) + (hp3 - get_hp(t3))
@@ -831,7 +835,7 @@ def _():
 
 @test("EX-F18: POSITION_AOE Fireball — result has total_targets and aoe_position")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         t1 = make_target("T1", (4, 0))
@@ -850,8 +854,9 @@ def _():
         result = spell.apply()
 
         if result is not None and not result.canceled:
-            assert result.total_targets >= 1, f"total_targets should be ≥1, got {result.total_targets}"
-            assert result.aoe_position == (4, 0), f"aoe_position should be (4,0), got {result.aoe_position}"
+            ae = type_cast(ActionEvent, result)
+            assert ae.total_targets >= 1, f"total_targets should be ≥1, got {ae.total_targets}"
+            assert ae.aoe_position == (4, 0), f"aoe_position should be (4,0), got {ae.aoe_position}"
             return
 
     assert False, "Could not get valid Fireball result in 20 attempts"
@@ -907,7 +912,7 @@ def _():
 
 @test("EX-G20: Upcast Hold Person L3 + alt_skip_slot — 0 slots used, still works")
 def _():
-    for attempt in range(20):
+    for _ in range(20):
         fresh_state()
         caster = make_caster("Mage", (0, 0))
         target = make_target("Target", (1, 0))
