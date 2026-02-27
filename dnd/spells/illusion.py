@@ -17,7 +17,7 @@ from dnd.core.dice import AttackOutcome
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
-from dnd.conditions import Concentrating, Frightened, Charmed, Incapacitated, Blinded, InvisibilityEffect, GreaterInvisibilityEffect
+from dnd.conditions import  Frightened, Charmed, Incapacitated, Blinded, InvisibilityEffect, GreaterInvisibilityEffect
 
 
 class BlurEffect(BaseCondition):
@@ -106,12 +106,7 @@ class Blur(SpellAction):
         caster.add_condition(blur_effect, parent_event=effect_event)
 
         # Apply Concentrating condition
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Blur"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link effect to concentration
         concentration.add_linked_condition(caster.uuid, blur_effect.uuid)
@@ -320,20 +315,11 @@ class Fear(SpellAction):
         )
         target.add_condition(fear_effect, parent_event=effect_event)
 
-        # Apply Concentrating (only on first target via convolution)
-        # Note: Convolution handles multi-target, but concentration is per-spell
-        if "Concentrating" not in caster.active_conditions:
-            concentration = Concentrating(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
-                spell_name="Fear"
-            )
-            caster.add_condition(concentration, parent_event=effect_event)
+        # Apply Concentrating (safe for convolution via ensure_concentration)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link fear effect to concentration
-        conc = caster.active_conditions.get("Concentrating")
-        if conc and isinstance(conc, Concentrating) and conc.spell_name == "Fear":
-            conc.add_linked_condition(target.uuid, fear_effect.uuid)
+        concentration.add_linked_condition(target.uuid, fear_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -528,19 +514,11 @@ class HypnoticPattern(SpellAction):
         )
         target.add_condition(hp_effect, parent_event=effect_event)
 
-        # Apply Concentrating (only on first target)
-        if "Concentrating" not in caster.active_conditions:
-            concentration = Concentrating(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
-                spell_name="Hypnotic Pattern"
-            )
-            caster.add_condition(concentration, parent_event=effect_event)
+        # Apply Concentrating (safe for convolution via ensure_concentration)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link effect to concentration
-        conc = caster.active_conditions.get("Concentrating")
-        if conc and isinstance(conc, Concentrating) and conc.spell_name == "Hypnotic Pattern":
-            conc.add_linked_condition(target.uuid, hp_effect.uuid)
+        concentration.add_linked_condition(target.uuid, hp_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -805,12 +783,7 @@ class Invisibility(SpellAction):
         target.add_condition(invis_effect, parent_event=effect_event)
 
         # Apply Concentrating condition on caster
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Invisibility"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link effect to concentration for cleanup
         concentration.add_linked_condition(target.uuid, invis_effect.uuid)
@@ -887,12 +860,7 @@ class GreaterInvisibility(SpellAction):
         target.add_condition(invis_effect, parent_event=effect_event)
 
         # Apply Concentrating condition on caster
-        concentration = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            spell_name="Greater Invisibility"
-        )
-        caster.add_condition(concentration, parent_event=effect_event)
+        concentration = self.ensure_concentration(effect_event)
 
         # Link effect to concentration for cleanup
         concentration.add_linked_condition(target.uuid, invis_effect.uuid)

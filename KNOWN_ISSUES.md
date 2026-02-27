@@ -13,6 +13,34 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Status**: OPEN | INVESTIGATING | FIXED
 ```
 
+## Fixed Issues
+
+### Concentration 0-children bug (Concentrating persists with no effects)
+- **Found**: 2026-02-27
+- **Test file**: `examples/test_bless_bane.py`, `examples/test_concentration_spells.py`
+- **Error**: When ALL targets of a concentration spell save (HoldPerson, Bane, Bless), `Concentrating` persisted with 0 linked children — a dead state that blocked future concentration spells.
+- **Root cause**: `ensure_concentration()` spells create Concentrating BEFORE the save roll. If all targets save, no `add_linked_condition()` calls are made, but nothing cleaned up the empty Concentrating.
+- **Fix**: Added `_cleanup_concentration` hook on `BaseAction`/`SpellAction` that calls `Concentrating.cleanup_if_no_effects()` after COMPLETION phase. If `linked_conditions` is empty, Concentrating is removed.
+- **Status**: FIXED (2026-02-27)
+
+### Infinite loop in Concentrating._apply() eviction loop
+- **Found**: 2026-02-27 (during multi-slot concentration implementation)
+- **Test file**: `examples/test_concentration.py` (test 7)
+- **Error**: Infinite loop when casting a new concentration spell while at max slots. Process hung forever.
+- **Root cause**: The eviction `while` loop checked `len(existing.concentration_slots) >= max_slots` and called `existing.drop_slot(oldest_name, ...)` each iteration. When the last slot was dropped, `drop_slot()` called `target.remove_condition("Concentrating")` and returned early WITHOUT deleting from the `concentration_slots` dict. The `existing` variable still held a reference to the now-removed condition object with its slots dict intact, so `len(existing.concentration_slots)` never decreased and the loop ran forever.
+- **Fix**: Added re-check of `existing` inside the while loop after `drop_slot()`:
+  ```python
+  while len(existing.concentration_slots) >= max_slots:
+      oldest_name = next(iter(existing.concentration_slots))
+      existing.drop_slot(oldest_name, parent_event=declaration_event)
+      # Re-check: drop_slot of last slot removes entire Concentrating
+      existing = target.active_conditions.get("Concentrating")
+      if not existing or not isinstance(existing, Concentrating):
+          break
+  ```
+- **Lesson**: When a method has side effects that remove the object from a registry (like `remove_condition`), always re-validate the reference from the registry after calling it. Local references to removed objects are stale.
+- **Status**: FIXED (2026-02-27)
+
 ## Open Issues
 
 ### API error messages need improvement

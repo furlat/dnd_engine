@@ -21,7 +21,7 @@ from typing import Any, Dict
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import SpellAction, SpellEvent
 from dnd.spells.evocation import validate_line_of_sight
-from dnd.conditions import Blinded, Deafened, Concentrating
+from dnd.conditions import Blinded, Deafened
 from dnd.spells.enchantment import BaneEffect, BlessEffect
 
 
@@ -823,15 +823,8 @@ class NecroticBless(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # Create or find Concentrating condition
-        if "Concentrating" not in caster.active_conditions:
-            concentration = Concentrating(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
-                spell_name="Necrotic Bless",
-            )
-            caster.add_condition(concentration, parent_event=execution_event)
-        concentration = caster.active_conditions["Concentrating"]
+        # Create or reuse Concentrating (safe for convolution)
+        concentration = self.ensure_concentration(execution_event)
 
         is_undead = target.creature_type == CreatureType.UNDEAD
 

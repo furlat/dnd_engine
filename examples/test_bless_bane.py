@@ -165,7 +165,7 @@ def test_bane_save_success():
             break
 
     check(not has_condition(tough_enemy, "Bane"), "High-CHA enemy resisted Bane")
-    check(has_condition(caster, "Concentrating"), "Caster still concentrating even if all targets save")
+    check(not has_condition(caster, "Concentrating"), "Caster NOT concentrating when all targets save (0-children cleanup)")
 
 
 # =============================================================================
@@ -353,7 +353,7 @@ def test_necrotic_bless_save_success():
             break
 
     check(not has_condition(strong_target, "Bane"), "High-CHA target resisted Necrotic Bless")
-    check(has_condition(caster, "Concentrating"), "Caster still concentrating")
+    check(not has_condition(caster, "Concentrating"), "Caster NOT concentrating when all targets save (0-children cleanup)")
 
 
 # =============================================================================
