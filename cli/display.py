@@ -1599,6 +1599,8 @@ def render_available_actions_panel(
     # Self-actions - fully dynamic using registry (filter out spells and item use)
     other = [a for a in all_self_actions if a.get("action_category", "ability") != "spell" and not a.get("is_item_use")]
     other_items = []
+    fom_slot_to_sp = []  # Collect Font of Magic Slot→SP actions
+    fom_sp_to_slot = []  # Collect Font of Magic SP→Slot actions
 
     for act in other:
         if act.get("can_afford"):
@@ -1610,16 +1612,21 @@ def render_available_actions_panel(
             if registry:
                 shortcut = registry.get_or_create_shortcut(template_name)
             else:
-                # Fallback: derive shortcut from template_name
                 words = template_name.split()
                 if len(words) > 1:
                     shortcut = "".join(w[0].lower() for w in words)
                 else:
                     shortcut = template_name[0].lower() if template_name else "?"
 
-            # Color based on cost_type
-            color = COST_TYPE_COLORS.get(cost_type, DEFAULT_ACTION_COLOR)
+            # Detect Font of Magic actions and collect them
+            if "\u2192SP" in template_name:
+                fom_slot_to_sp.append((template_name, shortcut))
+                continue
+            elif "\u2192Slot" in template_name:
+                fom_sp_to_slot.append((template_name, shortcut))
+                continue
 
+            color = COST_TYPE_COLORS.get(cost_type, DEFAULT_ACTION_COLOR)
             other_items.append((display_name, color, f"[{shortcut}]"))
 
     if other_items:
@@ -1629,6 +1636,21 @@ def render_available_actions_panel(
             content.append(name, style=style)
             content.append(f" {key}", style="dim")
         content.append("\n")
+
+    # Font of Magic grouped display (2 compact lines instead of 6)
+    if fom_slot_to_sp or fom_sp_to_slot:
+        if fom_slot_to_sp:
+            shortcuts = ",".join(sc for _, sc in fom_slot_to_sp)
+            levels = " ".join(f"L{n.split('L')[-1]}\u2192{n.split('L')[-1]}SP" for n, _ in fom_slot_to_sp)
+            content.append("SLOT\u2192SP", style="bold cyan")
+            content.append(f" [{shortcuts}]", style="dim")
+            content.append(f"  bonus, {levels}\n", style="dim")
+        if fom_sp_to_slot:
+            shortcuts = ",".join(sc for _, sc in fom_sp_to_slot)
+            costs = " ".join(n.split("\u2192")[0] for n, _ in fom_sp_to_slot)
+            content.append("SP\u2192SLOT", style="bold cyan")
+            content.append(f" [{shortcuts}]", style="dim")
+            content.append(f"  bonus, {costs}\n", style="dim")
 
     # Reactions (handler toggle state)
     handler_details = actions.get("handler_details", [])
@@ -1661,6 +1683,18 @@ def render_available_actions_panel(
 
     # Build title with action economy
     title = f"Actions:{actions_remaining} Bonus:{bonus_remaining} Move:{movement_remaining}ft React:{reactions_remaining}"
+
+    # Add spell slots to title
+    spell_slots = actions.get("spell_slots", {})
+    if spell_slots:
+        slot_parts = [f"L{lvl}:{info['current']}/{info['max']}" for lvl, info in sorted(spell_slots.items())]
+        title += f" Slots:[{' '.join(slot_parts)}]"
+
+    # Add custom resources (sorcery points, rage, etc.) to title
+    resources = actions.get("resources", {})
+    if resources:
+        res_parts = [f"{rname.replace('_', ' ').title()}:{rinfo['current']}/{rinfo['max']}" for rname, rinfo in resources.items()]
+        title += f" {' '.join(res_parts)}"
 
     return Panel(content, title=title, box=box.ROUNDED, border_style="green")
 

@@ -10,7 +10,7 @@ Tests:
 """
 
 from dnd.utils import reset_combat_state, has_condition, get_hp
-from dnd.monsters.bestiary import create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_skeleton, create_caster
 from dnd.entity import Entity
 from dnd.spells.transmutation import SpikeGrowth
 from dnd.core.gridmap import get_map, reset_map
@@ -36,7 +36,7 @@ def test_spike_growth_zone_creation():
     setup_arena()
 
     # Create caster
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     # Update senses with larger range to see the target position
     caster.update_entity_senses(max_distance=20)
 
@@ -85,7 +85,7 @@ def test_spike_growth_entry_damage():
     setup_arena()
 
     # Create caster and target
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     target = create_skeleton(name="Target", position=(10, 5))  # Outside zone
     caster.update_entity_senses(max_distance=20)
 
@@ -128,7 +128,7 @@ def test_spike_growth_caster_immune():
     setup_arena()
 
     # Create caster
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=20)
 
     initial_hp = get_hp(caster)
@@ -166,7 +166,7 @@ def test_spike_growth_concentration_break():
     setup_arena()
 
     # Create caster
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=20)
 
     # Cast Spike Growth

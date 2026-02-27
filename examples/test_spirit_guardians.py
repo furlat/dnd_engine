@@ -18,7 +18,7 @@ Tests:
 import pytest
 
 from dnd.utils import reset_combat_state, has_condition, get_hp, set_hp
-from dnd.monsters.bestiary import create_goblin, create_sorcerer
+from dnd.monsters.bestiary import create_goblin, create_caster
 from dnd.entity import Entity, get_natural_roll
 from dnd.spells.conjuration import SpiritGuardians, SpiritGuardiansZone
 from dnd.core.gridmap import get_map, reset_map
@@ -61,7 +61,7 @@ def test_spirit_guardians_zone_creation():
     setup_arena()
 
     # Create caster at (10, 10)
-    caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+    caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
     caster.update_entity_senses(max_distance=30)
 
     # Cast Spirit Guardians
@@ -107,7 +107,7 @@ def test_spirit_guardians_enemy_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+        caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
         enemy = create_goblin(name="Enemy", position=(11, 10), faction="monsters")
         # Boost HP so goblin survives 3d8 damage
         enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
@@ -159,7 +159,7 @@ def test_spirit_guardians_ally_safe():
     setup_arena()
 
     # Create caster and ally near each other
-    caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+    caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
     ally = create_goblin(name="Ally", position=(11, 10), faction="heroes")  # Same faction = ally
     caster.update_entity_senses(max_distance=30)
 
@@ -192,7 +192,7 @@ def test_spirit_guardians_entry_damage():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+        caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
         enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")
         # Boost HP so goblin survives 3d8 damage
         enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
@@ -246,7 +246,7 @@ def test_spirit_guardians_once_per_turn():
     setup_arena()
 
     # Create caster and enemy
-    caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+    caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
     enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")
     caster.update_entity_senses(max_distance=30)
 
@@ -299,7 +299,7 @@ def test_spirit_guardians_follows_caster():
     setup_arena()
 
     # Create caster
-    caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+    caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
     caster.update_entity_senses(max_distance=30)
 
     # Cast Spirit Guardians
@@ -342,7 +342,7 @@ def test_spirit_guardians_speed_halved():
     setup_arena()
 
     # Create caster and enemy
-    caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+    caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
     enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")
     # Boost goblin max HP so it survives 3d8 entry damage (goblin default is 10 HP)
     enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
@@ -391,7 +391,7 @@ def test_spirit_guardians_speed_restored():
     setup_arena()
 
     # Create caster and enemy
-    caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+    caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
     enemy = create_goblin(name="Enemy", position=(20, 10), faction="monsters")
     # Boost goblin max HP so it survives 3d8 entry damage (goblin default is 10 HP)
     enemy.health.max_hit_points_bonus.self_static.add_value_modifier(
@@ -443,7 +443,7 @@ def test_spirit_guardians_concentration_break():
     setup_arena()
 
     # Create caster
-    caster = create_sorcerer(name="Caster", position=(10, 10), faction="heroes")
+    caster = create_caster(name="Caster", position=(10, 10), faction="heroes")
     caster.update_entity_senses(max_distance=30)
 
     # Cast Spirit Guardians

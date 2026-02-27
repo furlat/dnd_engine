@@ -36,9 +36,10 @@ from dnd.core.gridmap import get_map, reset_map
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.monsters.bestiary import (
-    create_goblin, create_skeleton, create_sorcerer,
+    create_goblin, create_skeleton,
     create_skeleton_warrior, create_skeleton_archer, create_skeleton_warlock,
 )
+from dnd.classes.sorcerer_factory import create_sorcerer as create_sorcerer_class, SorcererConfig
 from dnd.classes.fighter_factory import create_fighter, FighterConfig
 from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
 from dnd.items import create_shortsword, create_dagger, create_longbow
@@ -307,7 +308,21 @@ def setup_arena_combat(
     if character_class == "barbarian":
         player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
     elif character_class == "sorcerer":
-        player = create_sorcerer(name="Hero", position=player_position, faction="heroes")
+        config = SorcererConfig(
+            name="Hero",
+            position=player_position,
+            faction="heroes",
+            level=5,
+            metamagic_choices=["quickened", "twinned"],
+            asi_4=[("charisma", 2)],
+            spell_names=[
+                "Fire Bolt", "Ray of Frost",
+                "Magic Missile", "Burning Hands", "Thunderwave",
+                "Scorching Ray", "Hold Person", "Shatter", "Invisibility",
+                "Fireball", "Lightning Bolt",
+            ],
+        )
+        player = create_sorcerer_class(config)
     else:
         # Default to fighter
         player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
@@ -409,7 +424,21 @@ def setup_aoe_test_arena(
 
     # Create player based on character class
     if character_class == "sorcerer":
-        player = create_sorcerer(name="Hero", position=player_position, faction="heroes")
+        config = SorcererConfig(
+            name="Hero",
+            position=player_position,
+            faction="heroes",
+            level=5,
+            metamagic_choices=["quickened", "twinned"],
+            asi_4=[("charisma", 2)],
+            spell_names=[
+                "Fire Bolt", "Ray of Frost",
+                "Magic Missile", "Burning Hands", "Thunderwave",
+                "Scorching Ray", "Hold Person", "Shatter", "Invisibility",
+                "Fireball", "Lightning Bolt",
+            ],
+        )
+        player = create_sorcerer_class(config)
     elif character_class == "barbarian":
         player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
     else:
@@ -1425,6 +1454,20 @@ def _serialize_available_actions(entity: Entity, actions: AvailableActionsResult
                     }
         if spell_slots:
             result["spell_slots"] = spell_slots
+
+    # Add custom resources (sorcery points, rage, second wind, etc.)
+    if ae.resources:
+        custom_resources = {}
+        for res_name, resource in ae.resources.items():
+            if res_name == "extra_attacks":
+                continue  # Already exposed as extra_attacks_remaining
+            custom_resources[res_name] = {
+                "current": resource.current,
+                "max": resource.maximum,
+            }
+        if custom_resources:
+            result["resources"] = custom_resources
+
     return result
 
 

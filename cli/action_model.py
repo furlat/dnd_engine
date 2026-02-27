@@ -61,6 +61,18 @@ class ShortcutRegistry:
         "Sacred Flame": "sf",
         # Spells - Self/Buff
         "Mage Armor": "ma",
+        # Font of Magic (Slot→SP)
+        "Slot\u2192SP L1": "ss1",
+        "Slot\u2192SP L2": "ss2",
+        "Slot\u2192SP L3": "ss3",
+        # Font of Magic (SP→Slot)
+        "2SP\u2192Slot L1": "ps1",
+        "3SP\u2192Slot L2": "ps2",
+        "5SP\u2192Slot L3": "ps3",
+        # Metamagic
+        "Quickened Spell": "qs",
+        "Twinned Spell": "ts",
+        "Distant Spell": "ds",
     }
 
     def __init__(self):

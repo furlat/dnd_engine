@@ -18,7 +18,7 @@ from dnd.utils import reset_combat_state, get_hp, set_hp
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, HazardFilter
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_skeleton, create_caster
 from dnd.tiles import create_spike_zone, deactivate_spike_zone
 from dnd.actions_functional import get_available_actions, execute_action
 from dnd.spells.transmutation import SpikeGrowth
@@ -162,7 +162,7 @@ def test_a5_stealth_dc_filtering():
     # Create entities with different perception
     low_percep = create_skeleton(name="LowPercep", position=(0, 0))  # Skeleton: low WIS
     # Sorcerer has higher WIS
-    high_percep = create_sorcerer(name="HighPercep", position=(1, 0))
+    high_percep = create_caster(name="HighPercep", position=(1, 0))
 
     tile = grid.get_tile(5, 5)
     assert tile is not None
@@ -313,7 +313,7 @@ def test_d_hidden_spike_trap():
     grid = setup_arena()
 
     low_percep = create_skeleton(name="LowPercep", position=(0, 0))
-    high_percep = create_sorcerer(name="HighPercep", position=(1, 0))
+    high_percep = create_caster(name="HighPercep", position=(1, 0))
 
     spike_positions = {(5, 5)}
     tiles, _ = create_spike_zone(spike_positions, stealth_dc=15)
@@ -342,9 +342,9 @@ def test_e_spike_growth_markers():
     reset_combat_state()
     grid = setup_arena(20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     # Use another sorcerer as enemy so they have enough perception to detect the zone
-    enemy = create_sorcerer(name="Enemy", position=(10, 10), faction="villains")
+    enemy = create_caster(name="Enemy", position=(10, 10), faction="villains")
     caster.update_entity_senses(max_distance=20)
 
     # Cast Spike Growth at (10, 10)
@@ -401,7 +401,7 @@ def test_e_zone_removal_cleans_markers():
     reset_combat_state()
     grid = setup_arena(20)
 
-    caster = create_sorcerer(name="Caster", position=(0, 0))
+    caster = create_caster(name="Caster", position=(0, 0))
     caster.update_entity_senses(max_distance=20)
 
     spell = SpikeGrowth(

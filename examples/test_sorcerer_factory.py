@@ -23,8 +23,8 @@ Tests:
 """
 
 from dnd.utils import (
-    reset_combat_state, setup_combat_arena, get_hp, get_max_hp, set_hp,
-    force_attack_hit, remove_attack_modifier, deal_damage_to, has_condition,
+    reset_combat_state, setup_combat_arena, get_hp, set_hp,
+    force_attack_hit, remove_attack_modifier, deal_damage_to,
 )
 from dnd.entity import Entity
 from dnd.core.base_actions import TargetType
@@ -36,7 +36,6 @@ from dnd.controller import PassController
 from dnd.classes.sorcerer_factory import (
     SorcererConfig,
     create_sorcerer,
-    get_sorcerer_spell_slots,
 )
 from pydantic import ValidationError
 
@@ -545,6 +544,7 @@ def test_sf_e1_distant_doubles_range():
     # Fire Bolt should have doubled range
     fb2 = sorc.get_action_template("Fire Bolt")
     assert fb2 is not None
+    assert isinstance(fb2, SpellAction)
     assert fb2.alt_range == 240, f"Expected alt_range 240, got {fb2.alt_range}"
     assert fb2.effective_range == 240, f"Expected effective_range 240, got {fb2.effective_range}"
 
@@ -579,6 +579,7 @@ def test_sf_e2_distant_restored_after_cast():
     # Restored
     fb2 = sorc.get_action_template("Fire Bolt")
     assert fb2 is not None
+    assert isinstance(fb2, SpellAction)
     assert fb2.alt_range is None, f"Should be None after cleanup, got {fb2.alt_range}"
 
     remove_attack_modifier(sorc, hit_mod_uuid)
@@ -610,9 +611,9 @@ def test_sf_f1_convert_slot_to_sp():
     sp_before = sorc.action_economy.get_resource_current("sorcery_points")
     assert sp_before == 2
 
-    # Execute Convert L1 Slot to SP
-    conv = sorc.get_action_template("Convert L1 Slot to SP")
-    assert conv is not None, "Convert L1 Slot to SP not found"
+    # Execute Slot→SP L1
+    conv = sorc.get_action_template("Slot\u2192SP L1")
+    assert conv is not None, "Slot\u2192SP L1 not found"
     conv.instantiate().apply()
 
     sp_after = sorc.action_economy.get_resource_current("sorcery_points")
@@ -641,9 +642,9 @@ def test_sf_f2_convert_sp_to_slot():
     slots_before = sorc.action_economy.spell_slot_1.normalized_score
     assert slots_before == 3, f"Expected 3 L1 slots (4-1), got {slots_before}"
 
-    # Execute Convert SP to L1 Slot
-    conv = sorc.get_action_template("Convert SP to L1 Slot")
-    assert conv is not None, "Convert SP to L1 Slot not found"
+    # Execute 2SP→Slot L1
+    conv = sorc.get_action_template("2SP\u2192Slot L1")
+    assert conv is not None, "2SP\u2192Slot L1 not found"
     conv.instantiate().apply()
 
     slots_after = sorc.action_economy.spell_slot_1.normalized_score
@@ -666,8 +667,8 @@ def test_sf_f3_insufficient_sp_blocked():
     sorc.action_economy.consume_resource("sorcery_points", 3)
     assert sorc.action_economy.get_resource_current("sorcery_points") == 0
 
-    # Convert SP to Slot should fail
-    conv = sorc.get_action_template("Convert SP to L1 Slot")
+    # SP→Slot should fail with 0 SP
+    conv = sorc.get_action_template("2SP\u2192Slot L1")
     assert conv is not None
     assert not conv.pre_validate(), "Should fail with 0 SP"
 
@@ -733,6 +734,7 @@ def test_sf_h1_quickened_action_plus_spell():
     sorc = create_sorcerer(config)
     from dnd.monsters.bestiary import create_skeleton
     t1 = create_skeleton(name="T1", position=(2, 0))
+    set_hp(t1, 100)  # Survive Fire Bolt so MM has a valid target
     Entity.update_all_entities_senses()
     encounter = setup_combat_arena(sorc, t1)
     encounter.start_encounter()
@@ -1119,6 +1121,7 @@ def test_sf_j2_distant_touch_spell():
     # After distant: Shocking Grasp should be 30ft range
     sg2 = sorc.get_action_template("Shocking Grasp")
     assert sg2 is not None
+    assert isinstance(sg2, SpellAction)
     assert sg2.alt_range == 30, f"Expected alt_range 30 for touch spell, got {sg2.alt_range}"
 
 
@@ -1139,7 +1142,7 @@ def test_sf_j3_distant_no_modify_self():
     # Dash/Dodge are non-spell actions — should not be affected
     dash = sorc.get_action_template("Dash")
     assert dash is not None
-    assert not hasattr(dash, 'alt_range') or dash.alt_range is None, \
+    assert not isinstance(dash, SpellAction) or dash.alt_range is None, \
         "Non-spell actions should not be modified by Distant"
 
 
@@ -1353,7 +1356,7 @@ def test_sf_l1_convert_l2_slot_to_sp():
     get_to_turn(encounter, sorc)
 
     sorc.action_economy.consume_resource("sorcery_points", 3)  # 5→2
-    conv = sorc.get_action_template("Convert L2 Slot to SP")
+    conv = sorc.get_action_template("Slot\u2192SP L2")
     assert conv is not None
     conv.instantiate().apply()
 
@@ -1377,7 +1380,7 @@ def test_sf_l2_convert_l3_slot_to_sp():
     get_to_turn(encounter, sorc)
 
     sorc.action_economy.consume_resource("sorcery_points", 5)  # 5→0
-    conv = sorc.get_action_template("Convert L3 Slot to SP")
+    conv = sorc.get_action_template("Slot\u2192SP L3")
     assert conv is not None
     conv.instantiate().apply()
 
@@ -1405,7 +1408,7 @@ def test_sf_l3_convert_sp_to_l2_slot():
     slots_before = sorc.action_economy.spell_slot_2.normalized_score
     assert slots_before == 2, f"Expected 2 L2 slots, got {slots_before}"
 
-    conv = sorc.get_action_template("Convert SP to L2 Slot")
+    conv = sorc.get_action_template("3SP\u2192Slot L2")
     assert conv is not None
     conv.instantiate().apply()
 
@@ -1436,7 +1439,7 @@ def test_sf_l4_convert_sp_to_l3_slot():
     slots_before = sorc.action_economy.spell_slot_3.normalized_score
     assert slots_before == 1, f"Expected 1 L3 slot, got {slots_before}"
 
-    conv = sorc.get_action_template("Convert SP to L3 Slot")
+    conv = sorc.get_action_template("5SP\u2192Slot L3")
     assert conv is not None
     conv.instantiate().apply()
 
@@ -1466,7 +1469,7 @@ def test_sf_l5_sp_capped_at_max():
     sp_before = sorc.action_economy.get_resource_current("sorcery_points")
     assert sp_before == 5
 
-    conv = sorc.get_action_template("Convert L1 Slot to SP")
+    conv = sorc.get_action_template("Slot\u2192SP L1")
     assert conv is not None
     conv.instantiate().apply()
 
@@ -1483,10 +1486,10 @@ def test_sf_l6_no_l4_slot_conversion_at_l5():
     )
     sorc = create_sorcerer(config)
 
-    conv_l4 = sorc.get_action_template("Convert SP to L4 Slot")
+    conv_l4 = sorc.get_action_template("6SP\u2192Slot L4")
     assert conv_l4 is None, "L5 sorcerer should not have L4 slot conversion"
 
-    conv_l4_to_sp = sorc.get_action_template("Convert L4 Slot to SP")
+    conv_l4_to_sp = sorc.get_action_template("Slot\u2192SP L4")
     assert conv_l4_to_sp is None, "L5 sorcerer should not have L4 slot→SP conversion"
 
 
@@ -1809,15 +1812,17 @@ def test_sf_p4_font_of_magic_count():
     sorc = create_sorcerer(config)
 
     # L5: slots at L1, L2, L3 → should have 3 ConvertSlotToSP + 3 ConvertSPToSlot
+    from dnd.classes.sorcerer import SP_TO_SLOT_COST
     for lvl in [1, 2, 3]:
-        assert sorc.get_action_template(f"Convert L{lvl} Slot to SP") is not None, \
+        assert sorc.get_action_template(f"Slot\u2192SP L{lvl}") is not None, \
             f"Missing ConvertSlotToSP for L{lvl}"
-        assert sorc.get_action_template(f"Convert SP to L{lvl} Slot") is not None, \
+        sp_cost = SP_TO_SLOT_COST[lvl]
+        assert sorc.get_action_template(f"{sp_cost}SP\u2192Slot L{lvl}") is not None, \
             f"Missing ConvertSPToSlot for L{lvl}"
 
     # Should NOT have L4, L5
     for lvl in [4, 5]:
-        assert sorc.get_action_template(f"Convert L{lvl} Slot to SP") is None, \
+        assert sorc.get_action_template(f"Slot\u2192SP L{lvl}") is None, \
             f"Should NOT have ConvertSlotToSP for L{lvl}"
 
 
@@ -1854,13 +1859,13 @@ def test_sf_q2_removal_unregisters_font_of_magic():
     )
     sorc = create_sorcerer(config)
 
-    assert sorc.get_action_template("Convert L1 Slot to SP") is not None
+    assert sorc.get_action_template("Slot\u2192SP L1") is not None
 
     sorc.remove_condition("Sorcery Points Feature")
 
-    assert sorc.get_action_template("Convert L1 Slot to SP") is None, \
+    assert sorc.get_action_template("Slot\u2192SP L1") is None, \
         "ConvertSlotToSP should be unregistered"
-    assert sorc.get_action_template("Convert SP to L1 Slot") is None, \
+    assert sorc.get_action_template("2SP\u2192Slot L1") is None, \
         "ConvertSPToSlot should be unregistered"
 
 
@@ -2010,7 +2015,7 @@ def test_sf_r3_font_then_quickened_same_turn():
     assert not qs.pre_validate(), "Should fail with 1 SP (needs 2)"
 
     # Convert L1 slot → 1 SP (bonus action)
-    conv = sorc.get_action_template("Convert L1 Slot to SP")
+    conv = sorc.get_action_template("Slot\u2192SP L1")
     assert conv is not None
     conv.instantiate().apply()
     assert sorc.action_economy.get_resource_current("sorcery_points") == 2

@@ -23,7 +23,7 @@ from dnd.utils import (
     force_attack_hit, remove_attack_modifier,
     has_condition,
 )
-from dnd.monsters.bestiary import create_skeleton, create_sorcerer
+from dnd.monsters.bestiary import create_skeleton, create_caster
 from dnd.entity import Entity
 from dnd.core.gridmap import get_map
 from dnd.blocks.base_item import UsableItem
@@ -532,7 +532,7 @@ def test_hidden_removal_on_spell_cast():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Hidden Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Hidden Caster", position=(0, 0), faction="heroes")
     register_spell(caster, FireBolt, caster_level=5)
     target = create_skeleton(name="Target", position=(5, 0), faction="monsters")
     setup_standard_actions(target)
@@ -753,7 +753,7 @@ def test_invisibility_spell_basic():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target_ally = create_skeleton(name="Target Ally", position=(1, 0), faction="heroes")
     observer = create_skeleton(name="Observer", position=(5, 0), faction="monsters")
     setup_standard_actions(target_ally)
@@ -858,7 +858,7 @@ def test_invisibility_ends_on_spell_cast():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Invis Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Invis Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Enemy", position=(5, 0), faction="monsters")
     setup_standard_actions(target)
     Entity.update_all_entities_senses()
@@ -907,7 +907,7 @@ def test_invisibility_concentration_break():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     target_ally = create_skeleton(name="Invis Ally", position=(1, 0), faction="heroes")
     enemy = create_skeleton(name="Enemy", position=(5, 0), faction="monsters")
     setup_standard_actions(target_ally)
@@ -955,7 +955,7 @@ def test_greater_invisibility_basic():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     observer = create_skeleton(name="Observer", position=(5, 0), faction="monsters")
     setup_standard_actions(observer)
     Entity.update_all_entities_senses()
@@ -1053,7 +1053,7 @@ def test_greater_invisibility_escalating_dc():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Invisible Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Invisible Caster", position=(0, 0), faction="heroes")
     target = create_skeleton(name="Target", position=(1, 0), faction="monsters")
     setup_standard_actions(target)
     Entity.update_all_entities_senses()
@@ -1086,7 +1086,7 @@ def test_greater_invisibility_concentration_break():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     ally = create_skeleton(name="Invisible Ally", position=(1, 0), faction="heroes")
     enemy = create_skeleton(name="Enemy", position=(5, 0), faction="monsters")
     setup_standard_actions(ally)
@@ -1231,7 +1231,7 @@ def test_invisibility_spell_self_cast_not_self_trigger():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     observer = create_skeleton(name="Observer", position=(5, 0), faction="monsters")
     setup_standard_actions(observer)
     Entity.update_all_entities_senses()
@@ -1273,7 +1273,7 @@ def test_greater_invisibility_spell_self_cast_not_self_trigger():
         for y in range(5):
             grid.set_tile(x, y, walkable=True, name="Floor")
 
-    caster = create_sorcerer(name="Caster", position=(0, 0), faction="heroes")
+    caster = create_caster(name="Caster", position=(0, 0), faction="heroes")
     observer = create_skeleton(name="Observer", position=(5, 0), faction="monsters")
     setup_standard_actions(observer)
     Entity.update_all_entities_senses()

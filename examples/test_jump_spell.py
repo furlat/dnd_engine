@@ -12,7 +12,7 @@ Tests:
 from uuid import uuid4
 
 from dnd.utils import reset_combat_state
-from dnd.monsters.bestiary import create_sorcerer, create_goblin
+from dnd.monsters.bestiary import create_caster, create_goblin
 from dnd.actions_functional import setup_standard_actions, get_available_actions, register_spell
 from dnd.actions import Jump
 from dnd.spells.transmutation import JumpSpell
@@ -238,7 +238,7 @@ def test_jump_spell_lifecycle():
     reset_combat_state()
     create_arena()
 
-    caster = create_sorcerer(level=5, name="Wizard", position=(10, 10))
+    caster = create_caster(level=5, name="Wizard", position=(10, 10))
     register_spell(caster, JumpSpell, caster_level=5)
 
     # Dummy enemy far away to keep encounter alive
@@ -294,7 +294,7 @@ def test_jump_spell_on_ally():
     reset_combat_state()
     create_arena()
 
-    caster = create_sorcerer(level=5, name="Wizard", position=(10, 10), faction="heroes")
+    caster = create_caster(level=5, name="Wizard", position=(10, 10), faction="heroes")
     register_spell(caster, JumpSpell, caster_level=5)
 
     # Goblin has STR 8 (mod -1), so base jump = 15ft
@@ -349,7 +349,7 @@ def test_available_actions_expanded_targets():
     reset_combat_state()
     create_arena(size=30)
 
-    entity = create_sorcerer(level=5, name="Jumper", position=(15, 15))
+    entity = create_caster(level=5, name="Jumper", position=(15, 15))
     register_spell(entity, JumpSpell, caster_level=5)
 
     enemy = create_goblin(name="Enemy", position=(25, 25))

@@ -16,7 +16,7 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, get_natural_roll
-from dnd.monsters.bestiary import create_sorcerer, create_goblin
+from dnd.monsters.bestiary import create_caster, create_goblin
 from dnd.spells.transmutation import Disintegrate
 from dnd.utils import (
     reset_combat_state, get_hp, set_hp, has_condition,
@@ -55,7 +55,7 @@ def test_disintegrate_failed_save():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Goblin", position=(8, 5), faction="monsters")
         Entity.update_all_entities_senses()
 
@@ -108,7 +108,7 @@ def test_disintegrate_successful_save():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Agile Goblin", position=(8, 5), faction="monsters")
         Entity.update_all_entities_senses()
 
@@ -193,7 +193,7 @@ def test_disintegrate_range():
     reset_combat_state()
     setup_arena(size=30)
 
-    caster = create_sorcerer(name="Wizard", position=(2, 2), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(2, 2), level=5, faction="heroes")
     # 15 tiles = 75ft, beyond 60ft
     far_target = create_goblin(name="Far Goblin", position=(17, 2), faction="monsters")
     Entity.update_all_entities_senses()
@@ -213,7 +213,7 @@ def test_disintegrate_range():
     # In range (12 tiles = 60ft exactly)
     reset_combat_state()
     setup_arena(size=30)
-    caster2 = create_sorcerer(name="Wizard2", position=(2, 2), level=5, faction="heroes")
+    caster2 = create_caster(name="Wizard2", position=(2, 2), level=5, faction="heroes")
     near_target = create_goblin(name="Near Goblin", position=(14, 2), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -240,7 +240,7 @@ def test_disintegrate_not_concentration():
     reset_combat_state()
     setup_arena()
 
-    caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+    caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
     target = create_goblin(name="Goblin", position=(8, 5), faction="monsters")
     Entity.update_all_entities_senses()
     set_hp(target, 200)
@@ -269,7 +269,7 @@ def test_disintegrate_kills_target():
         reset_combat_state()
         setup_arena()
 
-        caster = create_sorcerer(name="Wizard", position=(5, 5), level=5, faction="heroes")
+        caster = create_caster(name="Wizard", position=(5, 5), level=5, faction="heroes")
         target = create_goblin(name="Weakling", position=(8, 5), faction="monsters")
         Entity.update_all_entities_senses()
 
