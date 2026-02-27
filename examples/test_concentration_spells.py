@@ -332,15 +332,30 @@ def test_5_call_lightning_then_hold_person():
     # Reset actions
     caster.action_economy.reset_all_costs()
 
-    # Cast Hold Person - even if target saves, concentration switches
-    hold_person = HoldPerson(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=target.uuid,
-        cast_at_level=2,
-        template=False,
-        costs=HoldPerson(source_entity_uuid=caster.uuid)._get_costs_for_level(2)
+    # Cast Hold Person - retry until target fails save (need an actual effect to test concentration switch)
+    # Give target very low WIS to almost always fail
+    from dnd.core.modifiers import NumericalModifier
+    target.ability_scores.wisdom.ability_score.self_static.add_value_modifier(
+        NumericalModifier(name="Low WIS", value=-10, source_entity_uuid=target.uuid)
     )
-    hold_person.apply()
+
+    for attempt in range(10):
+        caster.action_economy.reset_all_costs()
+        hold_person = HoldPerson(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            cast_at_level=2,
+            template=False,
+            costs=HoldPerson(source_entity_uuid=caster.uuid)._get_costs_for_level(2)
+        )
+        hold_person.apply()
+
+        if has_condition(target, "Hold Person"):
+            break
+        # Target saved — Call Lightning already evicted, no concentration
+        # This is correct D&D behavior: old spell broken, new didn't land
+        # But we need the target to fail for the rest of the test
+        print(f"  Target saved (attempt {attempt + 1}), retrying...")
 
     # Check: concentration switched to Hold Person
     conc = caster.active_conditions.get("Concentrating")
@@ -439,9 +454,9 @@ def test_7_immunity_to_hold_person_effect():
     print(f"  Target has 'Hold Person': {has_hold_person}")
     print(f"  Target has 'Paralyzed': {has_paralyzed}")
 
-    # Caster is still concentrating (spell was cast, just resisted)
-    assert has_condition(caster, "Concentrating"), "Caster should still be concentrating"
-    print(f"  {caster.name} is concentrating (spell cast but resisted)")
+    # Caster should NOT be concentrating (all targets resisted → 0-children cleanup)
+    assert not has_condition(caster, "Concentrating"), "Caster should NOT be concentrating (0-children cleanup)"
+    print(f"  {caster.name} is NOT concentrating (spell resisted, 0-children cleanup)")
 
     assert not has_hold_person, "Target should NOT have Hold Person effect (immune)"
     assert not has_paralyzed, "Target should NOT have Paralyzed (parent blocked)"

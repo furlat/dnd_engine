@@ -82,7 +82,8 @@
       "Bash(echo === $spell ===:*)",
       "Bash(cat:*)",
       "Bash(source:*)",
-      "Bash(.venv/bin/python:*)"
+      "Bash(.venv/bin/python:*)",
+      "Bash(do:*)"
     ]
   }
 }

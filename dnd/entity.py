@@ -157,6 +157,11 @@ class Entity(BaseBlock):
     # Movement blocking - when True, this entity does not block walking (set by death handler, incorporeal, etc.)
     non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
 
+    # Concentration slots (default 1 — standard D&D rules)
+    max_concentration_slots: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="max_concentration_slots", base_value=1)
+    )
+
     # Action registry - stores action templates for this entity
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
