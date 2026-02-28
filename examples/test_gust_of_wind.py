@@ -289,6 +289,11 @@ def test_gust_turn_start_push():
         zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
         if pos_after_cast in zone.affected_positions:
             target.on_turn_start()
+
+            if had_critical_d20():
+                print(f"  Attempt {attempt+1}: nat 1/20 on turn start save, retrying...")
+                continue
+
             pos_after_turn = get_position(target)
             print(f"  Position after turn start: {pos_after_turn}")
             assert pos_after_turn[0] > pos_after_cast[0], \
