@@ -21,10 +21,12 @@ from dnd.core.modifiers import (
 
 def reset_combat_state():
     """Clear all global state for a fresh combat test."""
+    from dnd.core.base_conditions import SpellProtectionRegistry
     EventQueue.reset()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     GridMap.reset()  # Reset spatial data
+    SpellProtectionRegistry.reset()  # Reset globe-like protections
 
 
 def setup_combat_arena(

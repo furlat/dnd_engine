@@ -271,7 +271,8 @@ class Weapon(EquippableItem):
     
     def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores,
                         is_off_hand: bool = False,
-                        off_hand_ability_bonus: Optional[ModifiableValue] = None) -> Damage:
+                        off_hand_ability_bonus: Optional[ModifiableValue] = None,
+                        override_ability: Optional[AbilityName] = None) -> Damage:
         """Get base damage for this weapon.
 
         Args:
@@ -279,6 +280,7 @@ class Weapon(EquippableItem):
             ability_block: The AbilityScores for ability modifiers
             is_off_hand: If True, use off_hand_ability_bonus instead of direct ability modifier
             off_hand_ability_bonus: ModifiableValue for off-hand ability bonus (0 by default, TWF adds ability via contextual)
+            override_ability: If set, use this ability instead of STR/DEX (e.g. True Strike uses spellcasting ability)
         """
         bonuses = []
         if self.damage_bonus is not None:
@@ -287,7 +289,11 @@ class Weapon(EquippableItem):
             bonuses.append(equipment_block.damage_bonus)
 
         # Ability modifier handling
-        if not is_off_hand:
+        if override_ability is not None:
+            # Override: use specified ability for damage (e.g. True Strike uses spellcasting ability)
+            ability = ability_block.get_ability(override_ability)
+            bonuses.append(ability.get_combined_values())
+        elif not is_off_hand:
             # Main-hand: add ability modifier directly
             if WeaponProperty.RANGED in self.properties:
                 # Ranged: DEX modifier
@@ -572,20 +578,23 @@ class Equipment(BaseBlock):
         """Ranged slots are always ranged, melee slots are never ranged."""
         return weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
         
-    def _get_main_unarmed_damage(self, ability_block: AbilityScores) -> Damage:
+    def _get_main_unarmed_damage(self, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> Damage:
         """ combines the unarmed damage bonus with the damage bonus and melee damage bonus into a single damage block"""
         unarmed_damage_bonus = self.unarmed_damage_bonus
-        strength_bonus = ability_block.strength.get_combined_values()
-        ability_bonus = strength_bonus
-        if WeaponProperty.FINESSE in self.unarmed_properties:
-            dexterity_bonus = ability_block.dexterity.get_combined_values()
-            if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
-                ability_bonus = dexterity_bonus
+        if override_ability is not None:
+            ability_bonus = ability_block.get_ability(override_ability).get_combined_values()
+        else:
+            strength_bonus = ability_block.strength.get_combined_values()
+            ability_bonus = strength_bonus
+            if WeaponProperty.FINESSE in self.unarmed_properties:
+                dexterity_bonus = ability_block.dexterity.get_combined_values()
+                if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
+                    ability_bonus = dexterity_bonus
         combined_bonus = unarmed_damage_bonus.combine_values([self.damage_bonus,self.melee_damage_bonus, ability_bonus])
         unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.unarmed_damage_dice, dice_numbers=self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=self.unarmed_damage_type)
         return unarmed_damage
     
-    def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> Optional[Damage]:
+    def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> Optional[Damage]:
         """ combines the weapon damage bonus with the damage bonus and melee damage bonus into a single damage block"""
         weapon = self._get_weapon_by_slot(weapon_slot)
         if isinstance(weapon, Weapon):
@@ -599,7 +608,8 @@ class Equipment(BaseBlock):
                 off_hand_ability_bonus = self.off_hand_ranged_ability_bonus if is_ranged else self.off_hand_melee_ability_bonus
 
             return weapon.get_base_damage(self, ability_block, is_off_hand=is_off_hand,
-                                          off_hand_ability_bonus=off_hand_ability_bonus)
+                                          off_hand_ability_bonus=off_hand_ability_bonus,
+                                          override_ability=override_ability)
         return None
     
     def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:
@@ -618,12 +628,12 @@ class Equipment(BaseBlock):
         else:
             return damages
 
-    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores) -> List[Damage]:
+    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> List[Damage]:
         if self.is_unarmed(weapon_slot):
-            return [self._get_main_unarmed_damage(ability_block)]+self.get_extra_attack_damage()
+            return [self._get_main_unarmed_damage(ability_block, override_ability=override_ability)]+self.get_extra_attack_damage()
         else:
             outs = []
-            base_damage = self._get_weapon_base_damage(weapon_slot, ability_block)
+            base_damage = self._get_weapon_base_damage(weapon_slot, ability_block, override_ability=override_ability)
             if base_damage is not None:
                 outs.append(base_damage)
             outs.extend(self.get_extra_attack_damage(weapon_slot))

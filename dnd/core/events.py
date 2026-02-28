@@ -2054,6 +2054,30 @@ class Damage(BaseObject):
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
 
 
+class Healing(BaseObject):
+    """Healing specification — analogous to Damage but for healing rolls."""
+    name: str = Field(default="Healing", description="Name of the healing")
+    healing_dice: Literal[4, 6, 8, 10, 12, 20] = Field(
+        description="Number of sides on the healing dice (e.g., 8 for d8)"
+    )
+    dice_numbers: int = Field(
+        description="Number of dice to roll for healing (e.g., 2 for 2d8)"
+    )
+    healing_bonus: Optional[ModifiableValue] = Field(
+        default=None,
+        description="Bonus to healing rolls (typically spellcasting ability modifier)"
+    )
+
+    def get_dice(self) -> Dice:
+        assert self.healing_bonus is not None, "Healing requires healing_bonus to be set"
+        return Dice(
+            count=self.dice_numbers,
+            value=self.healing_dice,
+            bonus=self.healing_bonus,
+            roll_type=RollType.HEAL
+        )
+
+
 # =============================================================================
 # Unified Dice Roll Event Hierarchy
 # =============================================================================
@@ -2380,6 +2404,7 @@ class HealEvent(Event):
     actual_healing: int = Field(default=0, description="Actual HP restored (after cap)")
     source_description: str = Field(default="", description="Description of healing source (e.g. 'Second Wind: d10(7)+1')")
     was_blocked: bool = Field(default=False, description="True if healing was blocked (e.g. Chill Touch)")
+    spell_level: int = Field(default=0, description="Spell level used (0 = non-spell healing)")
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         target_name = self.target_entity_name or "Unknown"

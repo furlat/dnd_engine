@@ -18,14 +18,15 @@ Event Handling:
 """
 
 import re
-from typing import List, Optional, Tuple, Type, Set, Dict
+from typing import Callable, List, Optional, Tuple, Type, Set, Dict
 
 from dnd.core.base_block import LightLevel
 from dnd.core.base_tiles import Tile
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, HazardFilter
+from dnd.core.base_conditions import BaseCondition, ConditionCategory, HazardFilter, SpellProtectionRegistry
+from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQueue, SpatialChangeEvent, SensesUpdateHint
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
@@ -216,6 +217,57 @@ class ZoneControlCondition(BaseCondition):
         raise NotImplementedError("Subclass must implement _create_zone_turn_start_handler")
 
     # =========================================================================
+    # Spell Protection Helpers
+    # =========================================================================
+
+    def _find_source_spell_level(self, event: Optional[Event]) -> Optional[int]:
+        """Walk parent_event chain to find the originating SpellEvent's base level.
+
+        Returns the spell_level (base, not upcast) or None if no SpellEvent found.
+        """
+        from dnd.actions import SpellEvent
+        current_uuid = event.uuid if event else None
+        visited = 0
+        while current_uuid and visited < 20:
+            obj = BaseObject.get(current_uuid)
+            if obj is None:
+                break
+            if isinstance(obj, SpellEvent):
+                return obj.spell_level
+            if isinstance(obj, Event):
+                current_uuid = obj.parent_event
+            else:
+                break
+            visited += 1
+        return None
+
+    @staticmethod
+    def _wrap_processor_with_protection(
+        original_processor: Callable[[Event, UUID], Optional[Event]],
+        source_entity_uuid: UUID,
+        spell_level: int,
+    ) -> Callable[[Event, UUID], Optional[Event]]:
+        """Wrap a zone handler processor with a SpellProtectionRegistry check.
+
+        At fire time, checks if the target entity's position is protected by a
+        globe-like effect. If protected, skips the effect (returns None).
+        """
+        from dnd.entity import Entity
+
+        def wrapped(event: Event, src_uuid: UUID) -> Optional[Event]:
+            # Get target entity position from the spatial event
+            if event.target_entity_uuid:
+                target = Entity.get(event.target_entity_uuid)
+                if target:
+                    source = Entity.get(source_entity_uuid)
+                    source_pos = source.position if source else (0, 0)
+                    if SpellProtectionRegistry.is_protected(target.position, source_pos, spell_level):
+                        return None
+            return original_processor(event, src_uuid)
+
+        return wrapped
+
+    # =========================================================================
     # Geometry
     # =========================================================================
 
@@ -344,6 +396,7 @@ class ZoneControlCondition(BaseCondition):
                 condition_stealth_dc=self.marker_stealth_dc,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=tile.uuid,
+                magical_origin=self.magical_origin,
             )
             tile.add_condition(marker, event=parent_event)
             self.add_linked_condition(tile.uuid, marker.uuid)
@@ -414,15 +467,30 @@ class ZoneControlCondition(BaseCondition):
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply zone control - compute positions and register spatial handlers."""
+        from dnd.entity import Entity
+
         handler_uuids: List[UUID] = []
         spatial_handler_uuids: List[UUID] = []
 
         # Compute affected positions
         self.affected_positions = self._compute_affected_positions()
 
+        # Filter out positions protected by Globe of Invulnerability (or similar)
+        spell_level = self._find_source_spell_level(declaration_event)
+        if spell_level is not None and self.magical_origin:
+            source = Entity.get(self.source_entity_uuid)
+            if source:
+                excluded = SpellProtectionRegistry.get_excluded_positions(
+                    source.position, spell_level)
+                self.affected_positions -= excluded
+
         # Create and register entry handler using position-indexed spatial registration
         if self._has_entry_effect():
             handler = self._create_zone_entry_handler()
+            # Wrap processor with spell protection check for runtime filtering
+            if spell_level is not None and self.magical_origin:
+                handler.event_processor = self._wrap_processor_with_protection(
+                    handler.event_processor, self.source_entity_uuid, spell_level)
             EventQueue.add_spatial_handler(
                 handler,
                 self.affected_positions,
@@ -447,6 +515,10 @@ class ZoneControlCondition(BaseCondition):
         # Turn start handler (not spatial - uses normal trigger)
         if self._has_turn_start_effect():
             handler = self._create_zone_turn_start_handler()
+            # Wrap turn start processor too (checks position at fire time)
+            if spell_level is not None and self.magical_origin:
+                handler.event_processor = self._wrap_processor_with_protection(
+                    handler.event_processor, self.source_entity_uuid, spell_level)
             EventQueue.add_event_handler(handler)
             self._turn_start_handler_uuid = handler.uuid
             handler_uuids.append(handler.uuid)

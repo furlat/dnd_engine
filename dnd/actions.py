@@ -4,7 +4,7 @@ from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent
+from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName
 from dnd.core.gridmap import get_map
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_block import LightLevel
@@ -548,6 +548,9 @@ class AttackEvent(ActionEvent):
     # Weapon info for combat log generation (populated during event creation)
     weapon_name: Optional[str] = Field(default=None, description="Name of the weapon used")
 
+    # Ability override for True Strike (use spellcasting ability instead of STR/DEX)
+    override_ability: Optional[AbilityName] = Field(default=None, description="Override ability for attack/damage rolls")
+
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for this attack event.
 
@@ -760,6 +763,7 @@ class Attack(BaseAction):
     weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
     action_category: ActionCategory = Field(default=ActionCategory.ATTACK)
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="A list of costs for the action")
+    override_ability: Optional[AbilityName] = Field(default=None, description="Override ability for attack/damage rolls (e.g. True Strike uses spellcasting ability)")
 
     @model_validator(mode="after")
     def adjust_cost_for_off_hand(self) -> Self:
@@ -890,7 +894,8 @@ class Attack(BaseAction):
             
             # Move to EXECUTION phase
             # Calculate attack bonus and target's AC
-            attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid)
+            override_ability = execution_event.override_ability
+            attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability)
             ac = target_entity.ac_bonus(source_entity.uuid)
             ac.set_from_target(attack_bonus)
             attack_bonus.set_from_target(ac)
@@ -965,7 +970,7 @@ class Attack(BaseAction):
                 )
 
             # Move to EFFECT phase for damage
-            damages = source_entity.get_damages(weapon_slot, target_entity_uuid)
+            damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability)
             attack_event = attack_event.phase_to(
                 EventPhase.EFFECT,
                 is_last=False,  # More EFFECT events coming (post-damage)
@@ -1070,7 +1075,8 @@ class Attack(BaseAction):
             use_register=use_register,
             source_entity_name=source_name,
             target_entity_name=target_name,
-            weapon_name=weapon_name
+            weapon_name=weapon_name,
+            override_ability=self.override_ability
         )
     
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
@@ -2482,6 +2488,7 @@ class SpellEvent(ActionEvent):
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
+    verbal: bool = Field(default=True, description="Whether spell has a verbal component")
 
     # Attack spell fields (optional)
     attack_bonus: Optional[ModifiableValue] = Field(default=None, description="The spell attack bonus")
@@ -2875,6 +2882,7 @@ class SpellAction(BaseAction):
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
     concentration: bool = Field(default=False, description="Whether spell requires concentration")
+    verbal: bool = Field(default=True, description="Whether spell has a verbal component")
 
     # Spell range (similar to weapon range)
     spell_range: Range = Field(
@@ -3086,7 +3094,9 @@ class SpellAction(BaseAction):
             target_entity_name=target_name,
             spell_level=self.spell_level,
             cast_at_level=self.cast_at_level,
-            spell_school=self.spell_school
+            spell_school=self.spell_school,
+            verbal=self.verbal,
+            aoe_position=self.end_position if self.effective_target_type == TargetType.POSITION_AOE else None
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:

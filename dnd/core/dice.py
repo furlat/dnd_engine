@@ -17,6 +17,7 @@ class RollType(str, Enum):
     ATTACK = "Attack"
     SAVE = "Save"
     CHECK = "Check"
+    HEAL = "Heal"
 
 class DiceRoll(BaseModel):
     """
@@ -229,8 +230,8 @@ class Dice(BaseModel):
         Raises:
             ValueError: If the number of dice is invalid for the given roll_type.
         """
-        if self.roll_type != RollType.DAMAGE and self.count > 1:
-            raise ValueError("Cannot have more than one die for non-damage rolls")
+        if self.roll_type not in (RollType.DAMAGE, RollType.HEAL) and self.count > 1:
+            raise ValueError("Cannot have more than one die for non-damage/heal rolls")
         return self
 
     @computed_field
@@ -312,7 +313,7 @@ class Dice(BaseModel):
         Returns:
             DiceRoll: The result of the dice roll.
         """
-        if self.roll_type == RollType.DAMAGE:
+        if self.roll_type in (RollType.DAMAGE, RollType.HEAL):
             results = [roll[0] for roll in self._roll(crit=(self.attack_outcome == AttackOutcome.CRIT))]
             total = sum(results) + self.bonus.normalized_score
         else:

@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, DurationType
 from dnd.core.events import (
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
     D20RollResultEvent,
@@ -20,7 +20,7 @@ from dnd.core.aoe import AoEShape, Sphere
 
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
-from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned
+from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned, Prone, Incapacitated
 from dnd.spells.evocation import validate_line_of_sight
 
 
@@ -192,7 +192,8 @@ class CharmPerson(SpellAction):
         # 7. On failed save: apply Charmed condition
         charmed = Charmed(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid
+            target_entity_uuid=target.uuid,
+            magical_origin=True
         )
         target.add_condition(charmed, parent_event=effect_event)
 
@@ -217,6 +218,7 @@ class HoldPersonEffect(BaseCondition):
     """
     name: str = "Hold Person"
     description: str = "Magically held in place"
+    magical_origin: bool = True
 
     # Track the caster for repeat saves
     caster_uuid: Optional[UUID] = None
@@ -248,7 +250,8 @@ class HoldPersonEffect(BaseCondition):
         paralyzed = Paralyzed(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid  # Links child to parent
+            parent_condition=self.uuid,  # Links child to parent
+            magical_origin=True
         )
         sub_condition_event = target.add_condition(paralyzed, parent_event=execution_event)
 
@@ -453,8 +456,9 @@ class HoldPerson(SpellAction):
         target.add_condition(hold_effect, parent_event=effect_event)
 
         # 6. Link Concentrating → HoldPersonEffect via linked_conditions
-        # When concentration breaks, HoldPersonEffect is removed, which removes Paralyzed
-        concentration.add_linked_condition(target.uuid, hold_effect.uuid)
+        # Only link if the condition was actually applied (immunity can block it)
+        if hold_effect.applied:
+            concentration.add_linked_condition(target.uuid, hold_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -470,6 +474,7 @@ class HoldMonsterEffect(BaseCondition):
     """
     name: str = "Hold Monster"
     description: str = "Magically held in place"
+    magical_origin: bool = True
 
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
@@ -496,7 +501,8 @@ class HoldMonsterEffect(BaseCondition):
         paralyzed = Paralyzed(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid
+            parent_condition=self.uuid,
+            magical_origin=True
         )
         sub_event = target.add_condition(paralyzed, parent_event=execution_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -682,8 +688,9 @@ class HoldMonster(SpellAction):
         )
         target.add_condition(hold_effect, parent_event=effect_event)
 
-        # Link to concentration
-        concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
+        # Link to concentration (only if condition was actually applied — immunity can block)
+        if hold_effect.applied:
+            concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -876,6 +883,7 @@ class SleepEffect(BaseCondition):
     """
     name: str = "Sleep"
     description: str = "Magically asleep"
+    magical_origin: bool = True
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -892,7 +900,8 @@ class SleepEffect(BaseCondition):
         unconscious = Unconscious(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid
+            parent_condition=self.uuid,
+            magical_origin=True
         )
         sub_event = target.add_condition(unconscious, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -1112,6 +1121,7 @@ class PowerWordStunEffect(BaseCondition):
     """
     name: str = "Power Word Stun"
     description: str = "Stunned by power word"
+    magical_origin: bool = True
 
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
@@ -1131,7 +1141,8 @@ class PowerWordStunEffect(BaseCondition):
         stunned = Stunned(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid
+            parent_condition=self.uuid,
+            magical_origin=True
         )
         sub_event = target.add_condition(stunned, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -1329,6 +1340,7 @@ class BaneEffect(BaseCondition):
     """Bane spell effect — subtract 1d4 from attack rolls and saving throws."""
     name: str = "Bane"
     description: str = "Subtract 1d4 from attack rolls and saving throws"
+    magical_origin: bool = True
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1374,6 +1386,7 @@ class BlessEffect(BaseCondition):
     """Bless spell effect — add 1d4 to attack rolls and saving throws."""
     name: str = "Bless"
     description: str = "Add 1d4 to attack rolls and saving throws"
+    magical_origin: bool = True
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1492,7 +1505,8 @@ class Bane(SpellAction):
             target_entity_uuid=target.uuid,
         )
         target.add_condition(bane_effect, parent_event=effect_event)
-        concentration.add_linked_condition(target.uuid, bane_effect.uuid)
+        if bane_effect.applied:
+            concentration.add_linked_condition(target.uuid, bane_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1549,7 +1563,8 @@ class Bless(SpellAction):
             target_entity_uuid=target.uuid,
         )
         target.add_condition(bless_effect, parent_event=execution_event)
-        concentration.add_linked_condition(target.uuid, bless_effect.uuid)
+        if bless_effect.applied:
+            concentration.add_linked_condition(target.uuid, bless_effect.uuid)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1560,4 +1575,278 @@ class Bless(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"Bless - {target.name} is blessed",
+        )
+
+
+# =============================================================================
+# Command (Level 1, Enchantment, NOT concentration)
+# =============================================================================
+
+class CommandGrovelEffect(BaseCondition):
+    """Command: Grovel — target falls prone and ends its turn."""
+    name: str = "Command: Grovel"
+    description: str = "Commanded to grovel — falls prone"
+    magical_origin: bool = True
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="No target")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        sub_conditions_uuids: List[UUID] = []
+
+        # Apply Prone as sub-condition
+        prone = Prone(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid,
+            parent_condition=self.uuid,
+            magical_origin=True
+        )
+        target.add_condition(prone, parent_event=declaration_event)
+        sub_conditions_uuids.append(prone.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{target.name} grovels on the ground"
+        )
+        return [], [], sub_conditions_uuids, [], effect_event
+
+
+class CommandHaltEffect(BaseCondition):
+    """Command: Halt — target does nothing on next turn (Incapacitated for 1 round)."""
+    name: str = "Command: Halt"
+    description: str = "Commanded to halt — can take no actions"
+    magical_origin: bool = True
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="No target")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        sub_conditions_uuids: List[UUID] = []
+
+        # Apply Incapacitated as sub-condition (1 round)
+        incap = Incapacitated(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid,
+            parent_condition=self.uuid,
+            magical_origin=True
+        )
+        target.add_condition(incap, parent_event=declaration_event)
+        sub_conditions_uuids.append(incap.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{target.name} halts in place"
+        )
+        return [], [], sub_conditions_uuids, [], effect_event
+
+
+class CommandFleeEffect(BaseCondition):
+    """Command: Flee — target moves away from caster on its next turn."""
+    name: str = "Command: Flee"
+    description: str = "Commanded to flee — must move away from caster"
+    magical_origin: bool = True
+    caster_uuid: Optional[UUID] = None
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="No target")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        # Register handler: on target's turn start, force Dash away
+        handler = self._create_flee_handler()
+        target.add_event_handler(handler)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{target.name} is commanded to flee"
+        )
+        return [], [handler.uuid], [], [], effect_event
+
+    def _create_flee_handler(self) -> EventHandler:
+        """On target's turn start, use its movement to move away from caster."""
+        assert self.target_entity_uuid is not None
+        target_uuid = self.target_entity_uuid
+        caster_uuid = self.caster_uuid or self.source_entity_uuid
+        condition_uuid = self.uuid
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.source_entity_uuid != target_uuid:
+                return None
+
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+
+            # Verify condition is still active
+            if "Command: Flee" not in target.active_conditions:
+                return None
+            active = target.active_conditions.get("Command: Flee")
+            if not active or active.uuid != condition_uuid:
+                return None
+
+            caster = Entity.get(caster_uuid)
+            if not caster:
+                target.remove_condition("Command: Flee", parent_event=event)
+                return None
+
+            # Find farthest reachable position from caster using Dash speed
+            caster_pos = caster.position
+            best_pos = target.position
+            best_dist = abs(best_pos[0] - caster_pos[0]) + abs(best_pos[1] - caster_pos[1])
+
+            for pos in target.senses.paths:
+                dist = abs(pos[0] - caster_pos[0]) + abs(pos[1] - caster_pos[1])
+                if dist > best_dist:
+                    best_dist = dist
+                    best_pos = pos
+
+            # Move to the farthest position
+            if best_pos != target.position:
+                from dnd.core.gridmap import get_map
+                grid = get_map()
+                path = target.senses.paths.get(best_pos, [])
+                if path:
+                    for step in path:
+                        grid.move_entity(target.uuid, step)
+
+            # Remove the condition after executing flee
+            target.remove_condition("Command: Flee", parent_event=event)
+            return None
+
+        return EventHandler(
+            name=f"Command: Flee ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target_uuid
+            )],
+            event_processor=processor
+        )
+
+
+class Command(SpellAction):
+    """Command - 1st level Enchantment
+
+    You speak a one-word command to a creature you can see within range.
+    The target must succeed on a Wisdom saving throw or follow the command
+    on its next turn. The spell has no effect if the target is undead.
+
+    Command words: Grovel, Flee, Halt
+
+    At Higher Levels: +1 target per slot level above 1st.
+    """
+    name: str = Field(default="Command")
+    description: str = Field(default="WIS save or follow a one-word command (Grovel/Flee/Halt)")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="enchantment")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    valid_target_filter: str = Field(default="enemies")
+
+    # Command word: "grovel", "flee", or "halt"
+    command_word: str = Field(default="grovel")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and target.creature_type == CreatureType.UNDEAD:
+            return declaration_event.cancel(status_message="Command has no effect on undead")
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Per-target: WIS save or follow command."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # Undead immunity
+        if target.creature_type == CreatureType.UNDEAD:
+            return execution_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"Command has no effect on undead {target.name}"
+            )
+
+        dc = caster.spell_save_dc()
+
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="wisdom",
+            dc=dc,
+            parent_event=execution_event.uuid
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="wisdom", save_dc=dc,
+            save_success=success, save_roll=save_roll,
+            target_entity_name=target.name,
+            status_message=f"WIS save: {save_roll.total} vs DC {dc}"
+        )
+
+        if success:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{target.name} resists Command"
+            )
+
+        # Apply command effect based on command_word
+        word = self.command_word.lower()
+        if word == "grovel":
+            effect = CommandGrovelEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+            effect.duration.duration_type = DurationType.ROUNDS
+            effect.duration.duration = 1
+            target.add_condition(effect, parent_event=effect_event)
+        elif word == "halt":
+            effect = CommandHaltEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+            effect.duration.duration_type = DurationType.ROUNDS
+            effect.duration.duration = 1
+            target.add_condition(effect, parent_event=effect_event)
+        elif word == "flee":
+            flee_effect = CommandFleeEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+                caster_uuid=caster.uuid
+            )
+            flee_effect.duration.duration_type = DurationType.ROUNDS
+            flee_effect.duration.duration = 1
+            target.add_condition(flee_effect, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} is commanded to {self.command_word}"
         )
