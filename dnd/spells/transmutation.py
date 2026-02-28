@@ -1,9 +1,9 @@
 """Transmutation spells - transforming matter and energy.
 
-Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate
+Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
+          EnhanceAbility, EnlargeReduce, Regenerate
 """
-import random
-from typing import Any, Optional, List, Tuple, cast as type_cast
+from typing import Any, Literal, Optional, List, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -12,12 +12,13 @@ from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, Act
 from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage
+    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing
 )
 from dnd.core.dice import AttackOutcome
-from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, DamageType
+from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, DamageType, Size
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Incapacitated, Dashing
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
@@ -34,6 +35,7 @@ class SpikeGrowthZone(ZoneControlCondition):
     """
     name: str = "Spike Growth Zone"
     description: str = "Sharp spikes and thorns deal 2d4 piercing per 5ft traveled"
+    magical_origin: bool = True
 
     # Zone configuration
     zone_shape: str = Field(default="sphere")
@@ -77,8 +79,17 @@ class SpikeGrowthZone(ZoneControlCondition):
 
             # Roll and apply damage (using receive_damage for proper event firing)
             count, value = parse_dice_string(damage_dice)
-            damage = sum(random.randint(1, value) for _ in range(count))
-            entity.receive_damage(damage, DamageType.PIERCING, source_uuid, parent_event=event.uuid)
+            caster = Entity.get(source_uuid)
+            dmg_bonus = caster.get_spell_damage_bonus() if caster else ModifiableValue.create(
+                source_entity_uuid=source_uuid, base_value=0, value_name="Spell Damage"
+            )
+            damage_obj = Damage(
+                source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
+                damage_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], value), dice_numbers=count, damage_bonus=dmg_bonus,
+                damage_type=DamageType.PIERCING
+            )
+            damage_roll = damage_obj.get_dice(attack_outcome=AttackOutcome.HIT).roll
+            entity.receive_damage(damage_roll.total, DamageType.PIERCING, source_uuid, parent_event=event.uuid)
 
             return None
 
@@ -589,7 +600,8 @@ class Slow(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             caster_uuid=caster.uuid,
-            spell_dc=dc
+            spell_dc=dc,
+            magical_origin=True
         )
         target.add_condition(slowed, parent_event=effect_event)
 
@@ -597,7 +609,8 @@ class Slow(SpellAction):
         concentration = self.ensure_concentration(effect_event)
 
         # Link effect to concentration
-        concentration.add_linked_condition(target.uuid, slowed.uuid)
+        if slowed.applied:
+            concentration.add_linked_condition(target.uuid, slowed.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -747,7 +760,8 @@ class HasteEffect(BaseCondition):
         if self.apply_lethargy and target and target.is_active:
             lethargy = Incapacitated(
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid
+                target_entity_uuid=self.target_entity_uuid,
+                magical_origin=True
             )
             lethargy.duration.duration_type = DurationType.ROUNDS
             lethargy.duration.duration = 1
@@ -818,7 +832,8 @@ class Haste(SpellAction):
         haste_effect = HasteEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            caster_uuid=caster.uuid
+            caster_uuid=caster.uuid,
+            magical_origin=True
         )
         target.add_condition(haste_effect, parent_event=effect_event)
 
@@ -826,7 +841,8 @@ class Haste(SpellAction):
         concentration = self.ensure_concentration(effect_event)
 
         # Link HasteEffect to Concentrating
-        concentration.add_linked_condition(target.uuid, haste_effect.uuid)
+        if haste_effect.applied:
+            concentration.add_linked_condition(target.uuid, haste_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -921,12 +937,14 @@ class DarkvisionSpell(SpellAction):
 
         darkvision_effect = DarkvisionEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid
+            target_entity_uuid=target.uuid,
+            magical_origin=True
         )
         target.add_condition(darkvision_effect, parent_event=effect_event)
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(target.uuid, darkvision_effect.uuid)
+        if darkvision_effect.applied:
+            concentration.add_linked_condition(target.uuid, darkvision_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1133,12 +1151,14 @@ class JumpSpell(SpellAction):
 
         jump_effect = JumpEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid
+            target_entity_uuid=target.uuid,
+            magical_origin=True
         )
         target.add_condition(jump_effect, parent_event=effect_event)
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(target.uuid, jump_effect.uuid)
+        if jump_effect.applied:
+            concentration.add_linked_condition(target.uuid, jump_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1254,7 +1274,8 @@ class ExpeditiousRetreat(SpellAction):
 
         retreat_effect = ExpeditiousRetreatEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid
+            target_entity_uuid=caster.uuid,
+            magical_origin=True
         )
         caster.add_condition(retreat_effect, parent_event=effect_event)
 
@@ -1264,5 +1285,787 @@ class ExpeditiousRetreat(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{caster.name} can now Dash as a bonus action"
+        )
+
+
+# =============================================================================
+# ENHANCE ABILITY CONDITION + SPELL
+# =============================================================================
+
+class EnhanceAbilityEffect(BaseCondition):
+    """Enhance Ability buff - advantage on one ability's checks.
+
+    Bear's Endurance (constitution) also grants 2d6 temp HP.
+    """
+    name: str = "Enhance Ability"
+    description: str = "Advantage on one ability's checks"
+    ability_type: str = "strength"
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+
+        # Add advantage on the chosen ability's checks
+        from dnd.core.events import AbilityName
+        ability_name = type_cast(AbilityName, self.ability_type)
+        ability = target.ability_scores.get_ability(ability_name)
+        mod_uuid = ability.ability_score.self_static.add_advantage_modifier(
+            AdvantageModifier(
+                name=f"Enhance Ability ({self.ability_type.title()})",
+                value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=target.uuid
+            )
+        )
+        outs.append((ability.ability_score.uuid, mod_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Enhanced {self.ability_type.title()} on {target.name}"
+        )
+
+        # Bear's Endurance: also grant 2d6 temp HP
+        if self.ability_type == "constitution":
+            healing = Healing(
+                source_entity_uuid=self.source_entity_uuid,
+                healing_dice=6, dice_numbers=2,
+                healing_bonus=ModifiableValue.create(
+                    source_entity_uuid=self.source_entity_uuid, base_value=0, value_name="Bear's Endurance"
+                )
+            )
+            temp_hp = healing.get_dice().roll.total
+            target.health.add_temporary_hit_points(temp_hp, self.source_entity_uuid)
+
+        return outs, [], [], [], effect_event
+
+
+class EnhanceAbility(SpellAction):
+    """Enhance Ability - 2nd level Transmutation (Concentration)
+
+    You touch a creature and bestow upon it a magical enhancement.
+    Choose one ability - the target has advantage on ability checks
+    with that ability. Bear's Endurance also grants 2d6 temp HP.
+
+    At Higher Levels: +1 additional target per slot level above 2nd.
+    """
+    name: str = Field(default="Enhance Ability")
+    description: str = Field(default="Advantage on one ability's checks (concentration)")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="transmutation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    # Which ability to enhance
+    enhance_ability_type: str = Field(default="strength")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not target:
+            target = caster
+            self.target_entity_uuid = caster.uuid
+
+        if target.uuid != caster.uuid:
+            distance = caster.senses.get_feet_distance(target.position)
+            if distance > self.effective_range:
+                return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        concentration = self.ensure_concentration(execution_event)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"Enhancing {self.enhance_ability_type.title()} on {target.name}"
+        )
+
+        effect = EnhanceAbilityEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            ability_type=self.enhance_ability_type,
+            magical_origin=True
+        )
+        target.add_condition(effect, parent_event=effect_event)
+        if effect.applied:
+            concentration.add_linked_condition(target.uuid, effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Enhanced {self.enhance_ability_type.title()} on {target.name}"
+        )
+
+
+# =============================================================================
+# ENLARGE/REDUCE CONDITION + SPELL
+# =============================================================================
+
+_SIZE_ORDER = [Size.TINY, Size.SMALL, Size.MEDIUM, Size.LARGE, Size.HUGE, Size.GARGANTUAN]
+
+
+def _shift_size(current: Size, delta: int) -> Size:
+    """Shift size up or down, clamping to valid range."""
+    idx = _SIZE_ORDER.index(current)
+    new_idx = max(0, min(len(_SIZE_ORDER) - 1, idx + delta))
+    return _SIZE_ORDER[new_idx]
+
+
+class EnlargeReduceEffect(BaseCondition):
+    """Enlarge/Reduce effect - changes size, grants STR advantage/disadvantage.
+
+    Enlarge: size +1, advantage on STR checks/saves
+    Reduce: size -1, disadvantage on STR checks/saves
+    Damage dice change comes from size-based auto-dice on Entity.get_damages().
+    """
+    name: str = "Enlarge/Reduce"
+    description: str = "Size changed by magic"
+    mode: str = "enlarge"  # "enlarge" or "reduce"
+    original_size: Optional[str] = None  # Store as string for Pydantic
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+
+        # Store original size
+        self.original_size = target.size.value
+
+        # Change size
+        if self.mode == "enlarge":
+            target.size = _shift_size(target.size, 1)
+            adv_value = AdvantageStatus.ADVANTAGE
+        else:
+            target.size = _shift_size(target.size, -1)
+            adv_value = AdvantageStatus.DISADVANTAGE
+
+        # STR checks advantage/disadvantage
+        str_ability = target.ability_scores.get_ability("strength")
+        mod_uuid = str_ability.ability_score.self_static.add_advantage_modifier(
+            AdvantageModifier(
+                name=f"{'Enlarge' if self.mode == 'enlarge' else 'Reduce'} (STR checks)",
+                value=adv_value,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=target.uuid
+            )
+        )
+        outs.append((str_ability.ability_score.uuid, mod_uuid))
+
+        # STR saves advantage/disadvantage
+        str_save = target.saving_throws.get_saving_throw("strength")
+        save_mod_uuid = str_save.bonus.self_static.add_advantage_modifier(
+            AdvantageModifier(
+                name=f"{'Enlarge' if self.mode == 'enlarge' else 'Reduce'} (STR saves)",
+                value=adv_value,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=target.uuid
+            )
+        )
+        outs.append((str_save.bonus.uuid, save_mod_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{'Enlarged' if self.mode == 'enlarge' else 'Reduced'} {target.name} to {target.size.value}"
+        )
+
+        return outs, [], [], [], effect_event
+
+    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
+        """Restore original size on removal."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and self.original_size:
+            try:
+                target.size = Size(self.original_size)
+            except ValueError:
+                pass
+        return super()._remove(removal_event)
+
+
+class EnlargeReduce(SpellAction):
+    """Enlarge/Reduce - 2nd level Transmutation (Concentration)
+
+    You cause a creature to grow larger or smaller. Enlarge: size +1 category,
+    advantage on STR checks/saves, +1d4 weapon damage. Reduce: opposite.
+    Unwilling targets make a CON save to resist.
+
+    Duration: Concentration, up to 1 minute
+    """
+    name: str = Field(default="Enlarge/Reduce")
+    description: str = Field(default="Change creature size, STR advantage/disadvantage, ±1d4 weapon damage")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="transmutation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="all")
+
+    # Enlarge or Reduce
+    enlarge_mode: str = Field(default="enlarge")  # "enlarge" or "reduce"
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not target:
+            return declaration_event.cancel(status_message="No target specified")
+
+        if target.uuid != caster.uuid:
+            distance = caster.senses.get_feet_distance(target.position)
+            if distance > self.effective_range:
+                return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+
+        # Unwilling targets (enemies) get a CON save
+        if target.uuid != caster.uuid and caster.is_enemy(target):
+            save_request = caster.create_saving_throw_request(
+                target_entity_uuid=target.uuid,
+                ability_name="constitution",
+                dc=dc,
+                parent_event=execution_event.uuid
+            )
+            _, _, success = target.saving_throw(save_request)
+            if success:
+                return execution_event.phase_to(
+                    new_phase=EventPhase.COMPLETION,
+                    status_message=f"{target.name} resists {self.name} (CON save)"
+                )
+
+        concentration = self.ensure_concentration(execution_event)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{'Enlarging' if self.enlarge_mode == 'enlarge' else 'Reducing'} {target.name}"
+        )
+
+        effect = EnlargeReduceEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            mode=self.enlarge_mode,
+            magical_origin=True
+        )
+        target.add_condition(effect, parent_event=effect_event)
+        if effect.applied:
+            concentration.add_linked_condition(target.uuid, effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} {'enlarged' if self.enlarge_mode == 'enlarge' else 'reduced'} to {target.size.value}"
+        )
+
+
+# =============================================================================
+# Telekinesis (Level 5, Concentration)
+# =============================================================================
+
+class TelekinesisRestrain(BaseAction):
+    """Telekinesis sub-action: restrain the grabbed creature.
+
+    0-cost, registered after a failed STR save. Applies Restrained linked to concentration.
+    Deregisters both sub-actions after use.
+    """
+    name: str = Field(default="Telekinesis: Restrain")
+    description: str = Field(default="Restrain the telekinetically grabbed creature")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    costs: List[Cost] = Field(default_factory=list)
+
+    grabbed_entity_uuid: UUID = Field(description="UUID of the grabbed entity")
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        grabbed = Entity.get(self.grabbed_entity_uuid)
+        if not grabbed:
+            return declaration_event.cancel(status_message="Grabbed entity not found")
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message="Validated Telekinesis: Restrain"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        from dnd.conditions import Restrained as RestrainedCond, Concentrating as ConcentratingCond
+
+        caster = Entity.get(self.source_entity_uuid)
+        grabbed = Entity.get(self.grabbed_entity_uuid)
+        if not caster or not grabbed:
+            return execution_event.cancel(status_message="Entity not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"Restraining {grabbed.name} with Telekinesis"
+        )
+
+        # Apply Restrained
+        restrained = RestrainedCond(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=grabbed.uuid,
+            magical_origin=True
+        )
+        grabbed.add_condition(restrained, parent_event=effect_event)
+
+        # Link to concentration so it cleans up when concentration breaks
+        conc = caster.active_conditions.get("Concentrating")
+        if isinstance(conc, ConcentratingCond):
+            conc.add_linked_condition(grabbed.uuid, restrained.uuid)
+
+        # Deregister both sub-actions
+        caster.unregister_action("Telekinesis: Restrain")
+        caster.unregister_action("Telekinesis: Move")
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{grabbed.name} restrained by Telekinesis"
+        )
+
+
+class TelekinesisMove(BaseAction):
+    """Telekinesis sub-action: move the grabbed creature up to 30ft.
+
+    0-cost, registered after a failed STR save. Teleports entity to chosen position.
+    Deregisters both sub-actions after use.
+    """
+    name: str = Field(default="Telekinesis: Move")
+    description: str = Field(default="Move the telekinetically grabbed creature up to 30ft")
+    target_type: TargetType = Field(default=TargetType.POSITION)
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    costs: List[Cost] = Field(default_factory=list)
+
+    grabbed_entity_uuid: UUID = Field(description="UUID of the grabbed entity")
+
+    def get_valid_targets(self) -> List[Tuple[int, int]]:
+        """Return walkable, unoccupied positions within 30ft of the grabbed entity."""
+        grabbed = Entity.get(self.grabbed_entity_uuid)
+        if not grabbed:
+            return []
+        grid = get_map()
+        gx, gy = grabbed.senses.position
+        valid = []
+        for dx in range(-6, 7):
+            for dy in range(-6, 7):
+                x, y = gx + dx, gy + dy
+                if abs(dx) + abs(dy) > 6:  # Manhattan distance > 30ft
+                    continue
+                if not grid.is_walkable(x, y):
+                    continue
+                entities_at = grid.get_entities_at((x, y))
+                if entities_at and entities_at != {grabbed.uuid}:
+                    continue  # Occupied by someone else
+                valid.append((x, y))
+        return valid
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        grabbed = Entity.get(self.grabbed_entity_uuid)
+        if not grabbed:
+            return declaration_event.cancel(status_message="Grabbed entity not found")
+
+        target_pos = self.end_position
+        if target_pos is None:
+            return declaration_event.cancel(status_message="No target position")
+
+        valid = self.get_valid_targets()
+        if target_pos not in valid:
+            return declaration_event.cancel(status_message="Invalid target position")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message="Validated Telekinesis: Move"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        grabbed = Entity.get(self.grabbed_entity_uuid)
+        if not caster or not grabbed:
+            return execution_event.cancel(status_message="Entity not found")
+
+        target_pos = self.end_position
+        if target_pos is None:
+            return execution_event.cancel(status_message="No target position")
+
+        start_pos = grabbed.senses.position
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"Moving {grabbed.name} to {target_pos}"
+        )
+
+        # Fire forced movement event
+        from dnd.core.events import ForcedMovementEvent
+        forced_event = ForcedMovementEvent(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=grabbed.uuid,
+            source_entity_name=caster.name,
+            target_entity_name=grabbed.name,
+            start_position=start_pos,
+            end_position=target_pos,
+            direction=(0, 0),  # Telekinesis — no specific direction
+            intended_distance=abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5,
+            actual_distance=abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5,
+            cause="telekinesis",
+            phase=EventPhase.DECLARATION,
+            parent_event=effect_event.uuid
+        )
+        forced_event.phase_to(EventPhase.COMPLETION)
+
+        # Apply movement
+        Entity.update_entity_position(grabbed, target_pos, parent_event=effect_event.uuid)
+
+        # Deregister both sub-actions
+        caster.unregister_action("Telekinesis: Restrain")
+        caster.unregister_action("Telekinesis: Move")
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{grabbed.name} moved to {target_pos} by Telekinesis"
+        )
+
+
+class TelekinesisGrab(BaseAction):
+    """Telekinesis granted action: STR save contest, spawns sub-actions on failure.
+
+    Registered as a template on the caster during Telekinesis spell cast.
+    Each use costs 1 action. On failed STR save, registers TelekinesisRestrain
+    and TelekinesisMove as 0-cost sub-actions.
+    """
+    name: str = Field(default="Telekinesis")
+    description: str = Field(default="Telekinetically grab a creature (STR save)")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Telekinesis Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    spell_dc: int = Field(default=10)
+    valid_target_filter: str = Field(default="enemies")
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not source or not target:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        # Range 60ft
+        distance = source.senses.get_feet_distance(target.position)
+        if distance > 60:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > 60ft)")
+
+        # LOS
+        if target.uuid not in source.senses.entities:
+            return declaration_event.cancel(status_message="Target not in line of sight")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message="Validated Telekinesis grab"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # STR saving throw
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="strength",
+            dc=self.spell_dc,
+            parent_event=execution_event.uuid
+        )
+        _, _, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"STR save: {'Success' if success else 'Failure'}"
+        )
+
+        if success:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{target.name} resists Telekinesis (STR save)"
+            )
+
+        # Failed save: register 0-cost sub-actions
+        restrain = TelekinesisRestrain(
+            source_entity_uuid=caster.uuid,
+            grabbed_entity_uuid=target.uuid,
+            template=True
+        )
+        move = TelekinesisMove(
+            source_entity_uuid=caster.uuid,
+            grabbed_entity_uuid=target.uuid,
+            template=True
+        )
+        caster.register_action(restrain)
+        caster.register_action(move)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} grabbed by Telekinesis — choose Restrain or Move"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+
+class Telekinesis(SpellAction):
+    """Telekinesis - 5th level Transmutation (Concentration)
+
+    You gain the ability to move or manipulate creatures with your mind.
+    Each turn, use an action to target one creature within 60ft.
+    It must succeed on a STR save or be moved/restrained.
+
+    Duration: Concentration, up to 1 minute
+    """
+    name: str = Field(default="Telekinesis")
+    description: str = Field(default="Telekinetically grab, move, or restrain a creature (STR save)")
+    spell_level: int = Field(default=5)
+    spell_school: str = Field(default="transmutation")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    valid_target_filter: str = Field(default="enemies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        from dnd.spells.evocation import validate_line_of_sight as _validate_los
+        los_event = _validate_los(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not source or not target:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        distance = source.senses.get_feet_distance(target.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        dc = caster.spell_save_dc()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Telekinesis"
+        )
+
+        # Register TelekinesisGrab as granted action template
+        grab = TelekinesisGrab(
+            source_entity_uuid=caster.uuid,
+            spell_dc=dc,
+            template=True
+        )
+        caster.register_action(grab)
+
+        # Apply concentration + marker for action cleanup
+        from dnd.conditions import ConcentrationActionMarker
+        concentration = self.ensure_concentration(effect_event)
+        marker = ConcentrationActionMarker(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            action_name=grab.name
+        )
+        caster.add_condition(marker, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, marker.uuid)
+
+        # Fire first grab immediately (like Eyebite)
+        if self.target_entity_uuid and self.target_entity_uuid != caster.uuid:
+            first_grab = TelekinesisGrab(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                spell_dc=dc,
+                template=False,
+                costs=[],  # No additional cost — already paid by casting Telekinesis
+            )
+            first_grab.apply()
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{caster.name} channels Telekinesis"
+        )
+
+
+# =============================================================================
+# Regenerate
+# =============================================================================
+
+
+class RegeneratingEffect(BaseCondition):
+    """Regenerating effect from Regenerate spell — heals 1 HP at start of each turn.
+
+    Lasts 10 rounds (1 minute). Self-removes when counter hits 0.
+    NOT concentration.
+    """
+    name: str = "Regenerating"
+    description: str = "Regenerating: heals 1 HP at the start of each turn"
+    rounds_remaining: int = 10
+
+    def _apply(self, declaration_event: Event) -> tuple:
+        if not self.target_entity_uuid:
+            return [], [], [], [], None
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], None
+
+        effect_event = declaration_event.phase_to(EventPhase.EFFECT)
+
+        # Register turn-start handler for 1 HP/round healing
+        handler = EventHandler(
+            name="Regenerating",
+            source_entity_uuid=self.source_entity_uuid,
+            trigger_conditions=[
+                Trigger(
+                    name="Regenerating Turn Start",
+                    event_type=EventType.TURN_START,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=self.target_entity_uuid
+                )
+            ],
+            event_processor=self._on_turn_start
+        )
+        target.add_event_handler(handler)
+
+        return [], [handler.uuid], [], [], effect_event
+
+    def _on_turn_start(self, event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+        if self.rounds_remaining <= 0 or not self.target_entity_uuid:
+            return event
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return event
+
+        target.receive_healing(
+            1, self.source_entity_uuid,
+            source_description="Regenerate: 1 HP",
+            parent_event=event.uuid
+        )
+
+        self.rounds_remaining -= 1
+        if self.rounds_remaining <= 0:
+            target.remove_condition("Regenerating", parent_event=event)
+
+        return event
+
+
+class Regenerate(SpellAction):
+    """Regenerate - 7th level Transmutation
+
+    You touch a creature and stimulate its natural healing ability.
+    The target regains 4d8 + 15 hit points. For the duration of the spell,
+    the target regains 1 hit point at the start of each of its turns.
+
+    Duration: 1 hour (10 rounds in combat). NOT concentration.
+    """
+    name: str = Field(default="Regenerate")
+    description: str = Field(default="Heal 4d8+15 instantly, then 1 HP/round for 10 rounds")
+    spell_level: int = Field(default=7)
+    spell_school: str = Field(default="transmutation")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+    )
+    concentration: bool = Field(default=False)
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return declaration_event.cancel(status_message="Caster or target not found")
+
+        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+            return declaration_event.cancel(status_message="Target not in line of sight")
+
+        distance = caster.senses.get_feet_distance(target.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(
+                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
+            )
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # Instant healing: 4d8 + 15
+        healing = Healing(
+            name="Regenerate",
+            source_entity_uuid=caster.uuid,
+            healing_dice=8,
+            dice_numbers=4,
+            healing_bonus=ModifiableValue.create(
+                source_entity_uuid=caster.uuid,
+                base_value=15,
+                value_name="Regenerate Healing"
+            )
+        )
+        healing_roll = healing.get_dice().roll
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Regenerate heals {target.name}"
+        )
+
+        actual = target.receive_healing(
+            healing_roll.total, caster.uuid,
+            source_description=f"Regenerate: {healing_roll.total}",
+            parent_event=effect_event.uuid,
+            spell_level=self.cast_at_level
+        )
+
+        # Apply regenerating condition (1 HP/round for 10 rounds)
+        regen = RegeneratingEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(regen, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Regenerate heals {target.name} for {actual} HP + 1 HP/round"
         )
 

@@ -1,6 +1,6 @@
 """Necromancy spells - manipulating life force and death.
 
-Contains: Blight, BlindnessDeafness, FalseLife, ChillTouch, NecroticBless
+Contains: Blight, BlindnessDeafness, FalseLife, ChillTouch, NecroticBless, Eyebite
 """
 from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID
@@ -19,9 +19,10 @@ from dnd.core.values import ModifiableValue
 from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity, determine_attack_outcome
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.spells.evocation import validate_line_of_sight
-from dnd.conditions import Blinded, Deafened
+from dnd.core.base_actions import Cost, BaseAction, ActionCategory
+from dnd.conditions import Blinded, Deafened, Unconscious, Frightened, Concentrating, ConcentrationActionMarker
 from dnd.spells.enchantment import BaneEffect, BlessEffect
 
 
@@ -147,6 +148,7 @@ class ChillTouchEffect(BaseCondition):
     """
     name: str = "Chill Touch Effect"
     description: str = "Tracking condition for Chill Touch debuffs"
+    magical_origin: bool = True
     affected_target_uuid: Optional[UUID] = None  # The target of the spell
     target_is_undead: bool = False
 
@@ -358,7 +360,8 @@ class ChillTouch(SpellAction):
         # Apply No Healing to target
         no_healing = NoHealing(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid
+            target_entity_uuid=target.uuid,
+            magical_origin=True
         )
         target.add_condition(no_healing, parent_event=effect_event)
 
@@ -547,6 +550,7 @@ class BlindnessDeafnessEffect(BaseCondition):
     """
     name: str = "Blindness/Deafness"
     description: str = "Blinded or Deafened by magic"
+    magical_origin: bool = True
 
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
@@ -568,13 +572,15 @@ class BlindnessDeafnessEffect(BaseCondition):
             effect = Blinded(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                parent_condition=self.uuid
+                parent_condition=self.uuid,
+                magical_origin=True
             )
         else:
             effect = Deafened(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                parent_condition=self.uuid
+                parent_condition=self.uuid,
+                magical_origin=True
             )
 
         sub_event = target.add_condition(effect, parent_event=declaration_event)
@@ -833,9 +839,11 @@ class NecroticBless(SpellAction):
             bless_effect = BlessEffect(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
+                magical_origin=True,
             )
             target.add_condition(bless_effect, parent_event=execution_event)
-            concentration.add_linked_condition(target.uuid, bless_effect.uuid)
+            if bless_effect.applied:
+                concentration.add_linked_condition(target.uuid, bless_effect.uuid)
 
             effect_event = execution_event.phase_to(
                 new_phase=EventPhase.EFFECT,
@@ -875,11 +883,572 @@ class NecroticBless(SpellAction):
             bane_effect = BaneEffect(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
+                magical_origin=True,
             )
             target.add_condition(bane_effect, parent_event=effect_event)
-            concentration.add_linked_condition(target.uuid, bane_effect.uuid)
+            if bane_effect.applied:
+                concentration.add_linked_condition(target.uuid, bane_effect.uuid)
 
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Necrotic Bless - {target.name} is baned",
             )
+
+
+# =============================================================================
+# EYEBITE CONDITIONS
+# =============================================================================
+
+class SickenedCondition(BaseCondition):
+    """Sickened by Eyebite - disadvantage on attacks and ability checks.
+
+    Repeat CON save at end of turn to end the effect.
+    """
+    name: str = "Sickened"
+    description: str = "Disadvantage on attacks and ability checks"
+    magical_origin: bool = True
+    caster_uuid: Optional[UUID] = None
+    spell_dc: int = 10
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+
+        # Disadvantage on attacks
+        mod_uuid = target.equipment.attack_bonus.self_static.add_advantage_modifier(
+            AdvantageModifier(
+                name="Sickened (attacks)",
+                value=AdvantageStatus.DISADVANTAGE,
+                source_entity_uuid=target.uuid,
+                target_entity_uuid=self.source_entity_uuid
+            )
+        )
+        outs.append((target.equipment.attack_bonus.uuid, mod_uuid))
+
+        # Disadvantage on all 6 ability checks
+        for ability_name_str in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+            from dnd.core.events import AbilityName
+            from typing import cast as type_cast_fn
+            ability_name_typed = type_cast_fn(AbilityName, ability_name_str)
+            ability = target.ability_scores.get_ability(ability_name_typed)
+            ab_mod_uuid = ability.ability_score.self_static.add_advantage_modifier(
+                AdvantageModifier(
+                    name="Sickened (ability checks)",
+                    value=AdvantageStatus.DISADVANTAGE,
+                    source_entity_uuid=target.uuid,
+                    target_entity_uuid=self.source_entity_uuid
+                )
+            )
+            outs.append((ability.ability_score.uuid, ab_mod_uuid))
+
+        # Repeat CON save handler
+        handler = self._create_repeat_save_handler()
+        target.add_event_handler(handler)
+        handler_uuids = [handler.uuid]
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{target.name} is sickened"
+        )
+        return outs, handler_uuids, [], [], effect_event
+
+    def _create_repeat_save_handler(self) -> EventHandler:
+        """CON save at end of turn to end Sickened."""
+        assert self.target_entity_uuid is not None
+        target_uuid = self.target_entity_uuid
+        caster_uuid = self.caster_uuid or self.source_entity_uuid
+        effect_uuid = self.uuid
+        dc = self.spell_dc
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.source_entity_uuid != target_uuid:
+                return None
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+            sickened = target.active_conditions.get("Sickened")
+            if not sickened or sickened.uuid != effect_uuid:
+                return None
+            caster = Entity.get(caster_uuid)
+            if not caster:
+                target.remove_condition("Sickened", parent_event=event)
+                return None
+            save_request = caster.create_saving_throw_request(
+                target_entity_uuid=target.uuid,
+                ability_name="constitution", dc=dc,
+                parent_event=event.uuid
+            )
+            _, _, success = target.saving_throw(save_request)
+            if success:
+                target.remove_condition("Sickened", parent_event=event)
+            return None
+
+        return EventHandler(
+            name=f"Sickened: Repeat Save ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_END,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target_uuid
+            )],
+            event_processor=processor
+        )
+
+
+class EyebiteAsleepEffect(BaseCondition):
+    """Eyebite Asleep - applies Unconscious, wakes on damage."""
+    name: str = "Eyebite Asleep"
+    description: str = "Magically asleep - wakes on damage"
+    magical_origin: bool = True
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        sub_conditions_uuids: List[UUID] = []
+
+        # Apply Unconscious as sub-condition
+        unconscious = Unconscious(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid,
+            parent_condition=self.uuid,
+            magical_origin=True
+        )
+        target.add_condition(unconscious, parent_event=declaration_event)
+        sub_conditions_uuids.append(unconscious.uuid)
+
+        # Wake on damage handler
+        handler = self._create_wake_handler()
+        target.add_event_handler(handler)
+        handler_uuids = [handler.uuid]
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{target.name} falls asleep (Eyebite)"
+        )
+        return [], handler_uuids, sub_conditions_uuids, [], effect_event
+
+    def _create_wake_handler(self) -> EventHandler:
+        """Wake up when taking damage."""
+        assert self.target_entity_uuid is not None
+        target_uuid = self.target_entity_uuid
+        effect_uuid = self.uuid
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.target_entity_uuid != target_uuid:
+                return None
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+            asleep = target.active_conditions.get("Eyebite Asleep")
+            if not asleep or asleep.uuid != effect_uuid:
+                return None
+            target.remove_condition("Eyebite Asleep", parent_event=event)
+            return None
+
+        return EventHandler(
+            name=f"Eyebite: Wake on Damage ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TAKE_DAMAGE,
+                event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target_uuid
+            )],
+            event_processor=processor
+        )
+
+
+class EyebitePanickedEffect(BaseCondition):
+    """Eyebite Panicked - applies Frightened, repeat WIS save at turn end."""
+    name: str = "Eyebite Panicked"
+    description: str = "Panicked - Frightened, repeat WIS save"
+    magical_origin: bool = True
+    caster_uuid: Optional[UUID] = None
+    spell_dc: int = 10
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        sub_conditions_uuids: List[UUID] = []
+
+        # Apply Frightened as sub-condition
+        frightened = Frightened(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid,
+            parent_condition=self.uuid,
+            magical_origin=True
+        )
+        target.add_condition(frightened, parent_event=declaration_event)
+        sub_conditions_uuids.append(frightened.uuid)
+
+        # Repeat WIS save handler
+        handler = self._create_repeat_save_handler()
+        target.add_event_handler(handler)
+        handler_uuids = [handler.uuid]
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{target.name} is panicked (Eyebite)"
+        )
+        return [], handler_uuids, sub_conditions_uuids, [], effect_event
+
+    def _create_repeat_save_handler(self) -> EventHandler:
+        """WIS save at end of turn to end Panicked."""
+        assert self.target_entity_uuid is not None
+        target_uuid = self.target_entity_uuid
+        caster_uuid = self.caster_uuid or self.source_entity_uuid
+        effect_uuid = self.uuid
+        dc = self.spell_dc
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.source_entity_uuid != target_uuid:
+                return None
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+            panicked = target.active_conditions.get("Eyebite Panicked")
+            if not panicked or panicked.uuid != effect_uuid:
+                return None
+            caster = Entity.get(caster_uuid)
+            if not caster:
+                target.remove_condition("Eyebite Panicked", parent_event=event)
+                return None
+            save_request = caster.create_saving_throw_request(
+                target_entity_uuid=target.uuid,
+                ability_name="wisdom", dc=dc,
+                parent_event=event.uuid
+            )
+            _, _, success = target.saving_throw(save_request)
+            if success:
+                target.remove_condition("Eyebite Panicked", parent_event=event)
+            return None
+
+        return EventHandler(
+            name=f"Eyebite Panicked: Repeat Save ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_END,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target_uuid
+            )],
+            event_processor=processor
+        )
+
+
+# =============================================================================
+# EYEBITE GRANTED ACTION + SPELL
+# =============================================================================
+
+class EyebiteStrike(BaseAction):
+    """Action granted by Eyebite to target a creature each turn."""
+    name: str = Field(default="Eyebite Strike")
+    description: str = Field(default="Choose a creature: Asleep, Panicked, or Sickened (WIS save)")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Eyebite Strike", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+    ])
+    spell_dc: int = Field(default=10)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    effect_choice: str = Field(default="sickened")  # "asleep", "panicked", "sickened"
+    valid_target_filter: str = Field(default="enemies")
+
+    def _create_event(self) -> Event:
+        return Event(
+            name=self.name,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            event_type=EventType.CAST_SPELL,
+            phase=EventPhase.DECLARATION
+        )
+
+    def _validate(self, declaration_event: Event) -> Optional[Event]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+
+        if "Concentrating" not in caster.active_conditions:
+            return declaration_event.cancel(status_message="Not concentrating on Eyebite")
+
+        conc = caster.active_conditions.get("Concentrating")
+        if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Eyebite") is None:
+            return declaration_event.cancel(status_message="Not concentrating on Eyebite")
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return declaration_event.cancel(status_message="No target specified")
+
+        # Check range (60ft)
+        distance = caster.senses.get_feet_distance(target.position)
+        if distance > 60:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: Event) -> Optional[Event]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # WIS save
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="wisdom", dc=self.spell_dc,
+            parent_event=execution_event.uuid
+        )
+        _, _, success = target.saving_throw(save_request)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"WIS save: {'Success' if success else 'Failure'}"
+        )
+
+        if success:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{target.name} resists Eyebite ({self.effect_choice})"
+            )
+
+        # Get concentration for linking
+        conc = caster.active_conditions.get("Concentrating")
+
+        # Apply chosen effect
+        if self.effect_choice == "asleep":
+            effect = EyebiteAsleepEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid
+            )
+            target.add_condition(effect, parent_event=effect_event)
+            if isinstance(conc, Concentrating) and effect.applied:
+                conc.add_linked_condition(target.uuid, effect.uuid)
+            result_text = "Asleep"
+
+        elif self.effect_choice == "panicked":
+            effect_p = EyebitePanickedEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+                caster_uuid=caster.uuid,
+                spell_dc=self.spell_dc
+            )
+            target.add_condition(effect_p, parent_event=effect_event)
+            if isinstance(conc, Concentrating) and effect_p.applied:
+                conc.add_linked_condition(target.uuid, effect_p.uuid)
+            result_text = "Panicked"
+
+        else:  # sickened
+            effect_s = SickenedCondition(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+                caster_uuid=caster.uuid,
+                spell_dc=self.spell_dc
+            )
+            target.add_condition(effect_s, parent_event=effect_event)
+            if isinstance(conc, Concentrating) and effect_s.applied:
+                conc.add_linked_condition(target.uuid, effect_s.uuid)
+            result_text = "Sickened"
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Eyebite: {target.name} is {result_text}"
+        )
+
+
+class Eyebite(SpellAction):
+    """Eyebite - 6th level Necromancy (Concentration)
+
+    For the spell's duration, your eyes become pools of inky darkness.
+    One creature within 60 feet must succeed on a WIS save or be affected
+    by one of: Asleep, Panicked, or Sickened. Each turn you can use an
+    action to target another creature.
+
+    Duration: Concentration, up to 1 minute
+    """
+    name: str = Field(default="Eyebite")
+    description: str = Field(default="WIS save or Asleep/Panicked/Sickened, repeatable each turn")
+    spell_level: int = Field(default=6)
+    spell_school: str = Field(default="necromancy")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.SELF)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    # Which effect to apply on first use
+    effect_choice: str = Field(default="sickened")
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        dc = caster.spell_save_dc()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Eyebite"
+        )
+
+        # Register Eyebite Strike action
+        strike = EyebiteStrike(
+            source_entity_uuid=caster.uuid,
+            spell_dc=dc,
+            effect_choice=self.effect_choice,
+            template=True
+        )
+        caster.register_action(strike)
+
+        # Apply Concentrating + marker condition for action cleanup
+        concentration = self.ensure_concentration(effect_event)
+        marker = ConcentrationActionMarker(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            action_name=strike.name
+        )
+        caster.add_condition(marker, parent_event=effect_event)
+        concentration.add_linked_condition(caster.uuid, marker.uuid)
+
+        # Fire the first strike immediately (Eyebite targets on cast)
+        if self.target_entity_uuid and self.target_entity_uuid != caster.uuid:
+            first_strike = EyebiteStrike(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                spell_dc=dc,
+                effect_choice=self.effect_choice,
+                template=False,
+                costs=[],  # No additional cost — already paid by casting Eyebite
+            )
+            first_strike.apply()
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{caster.name} channels Eyebite - can target a creature each turn"
+        )
+
+
+class FingerOfDeath(SpellAction):
+    """Finger of Death - 7th level Necromancy
+
+    You send negative energy coursing through a creature that you can see
+    within range, causing it searing pain. The target must make a Constitution
+    saving throw. It takes 7d8 + 30 necrotic damage on a failed save, or half
+    as much damage on a successful one.
+
+    At Higher Levels: +1d8 damage per slot level above 7th (not standard but supported).
+    """
+    name: str = Field(default="Finger of Death")
+    description: str = Field(default="7d8+30 necrotic, CON save half")
+    spell_level: int = Field(default=7)
+    spell_school: str = Field(default="necromancy")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+
+    # Target filtering
+    include_self: bool = Field(default=False)
+    valid_target_filter: str = Field(default="enemies")
+
+    # Damage configuration
+    base_damage_dice: int = Field(default=7)  # 7d8 at level 7
+    flat_damage: int = Field(default=30)  # +30 flat damage
+
+    def get_damage_dice_count(self) -> int:
+        """7d8 base + 1d8 per level above 7th."""
+        upcast_bonus = max(0, self.cast_at_level - self.spell_level)
+        return self.base_damage_dice + upcast_bonus
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate range and line of sight."""
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source_entity = Entity.get(self.source_entity_uuid)
+        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not source_entity or not target_entity:
+            return declaration_event.cancel(status_message="Source or target entity not found")
+
+        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(
+                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
+            )
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Execute Finger of Death — CON save or 7d8+30 necrotic."""
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        # 1. Calculate spell DC
+        dc = caster.spell_save_dc()
+
+        # 2. Request CON save
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="constitution",
+            dc=dc,
+            parent_event=execution_event.uuid
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        # Get save bonus for combat log
+        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="constitution",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
+            status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+        )
+
+        # 3. Calculate damage: Nd8 + 30
+        num_dice = self.get_damage_dice_count()
+        damage_bonus = caster.get_spell_damage_bonus()
+
+        necrotic_damage = Damage(
+            source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+            damage_dice=8, dice_numbers=num_dice, damage_bonus=damage_bonus,
+            damage_type=DamageType.NECROTIC
+        )
+        damage_roll = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        raw_damage = damage_roll.total + self.flat_damage
+
+        # Half damage on successful save
+        final_damage = raw_damage // 2 if success else raw_damage
+
+        # 4. Apply damage
+        if final_damage > 0:
+            target.receive_damage(
+                amount=final_damage,
+                damage_type=DamageType.NECROTIC,
+                source_entity_uuid=caster.uuid,
+                parent_event=effect_event.uuid
+            )
+
+        save_text = " (saved for half)" if success else ""
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            damages=[necrotic_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,
+            status_message=f"Finger of Death deals {final_damage} necrotic damage to {target.name}{save_text}"
+        )

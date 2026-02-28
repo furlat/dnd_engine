@@ -700,6 +700,11 @@ class BaseAction(BaseObject):
                 })
                 per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
 
+                # Skip this target if a handler cancelled the per-target event
+                # (e.g. Globe of Invulnerability blocking spells on protected targets)
+                if per_target_event.canceled:
+                    continue
+
                 # Call normal _apply() with the child event
                 result_event = self._apply(per_target_event)
                 if result_event:
