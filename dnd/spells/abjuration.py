@@ -1,8 +1,9 @@
 """Abjuration spells - protection and defense.
 
-Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin
+Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
+          LesserRestoration, GreaterRestoration
 """
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -45,6 +46,7 @@ class ShieldBuff(BaseCondition):
     name: str = "Shield"
     description: str = "+5 AC until start of your next turn"
     condition_category: ConditionCategory = ConditionCategory.STATUS
+    magical_origin: bool = True
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -277,6 +279,7 @@ class MageArmorCondition(BaseCondition):
     """
     name: str = "Mage Armor"
     description: str = "AC equals 13 + DEX modifier when unarmored"
+    magical_origin: bool = True
 
     # Track the old unarmored type to restore on removal
     _old_unarmored_type: Optional[str] = None  # Store as string for Pydantic serialization
@@ -476,6 +479,7 @@ class ProtectionFromEnergyEffect(BaseCondition):
     """
     name: str = "Protection from Energy"
     description: str = "Resistant to one energy type"
+    magical_origin: bool = True
 
     # The chosen energy type (set by spell)
     energy_type: DamageType = DamageType.FIRE
@@ -593,7 +597,8 @@ class ProtectionFromEnergy(SpellAction):
         target.add_condition(protection, parent_event=effect_event)
 
         # 3. Link via linked_conditions for cleanup
-        concentration.add_linked_condition(target.uuid, protection.uuid)
+        if protection.applied:
+            concentration.add_linked_condition(target.uuid, protection.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -615,6 +620,7 @@ class StoneskinEffect(BaseCondition):
     """
     name: str = "Stoneskin"
     description: str = "Resistant to bludgeoning, piercing, and slashing damage"
+    magical_origin: bool = True
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
@@ -722,9 +728,717 @@ class Stoneskin(SpellAction):
         target.add_condition(stoneskin, parent_event=effect_event)
 
         # 3. Link via linked_conditions for cleanup
-        concentration.add_linked_condition(target.uuid, stoneskin.uuid)
+        if stoneskin.applied:
+            concentration.add_linked_condition(target.uuid, stoneskin.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{self.name} cast on {target.name}"
+        )
+
+
+# =============================================================================
+# COUNTERSPELL (REACTION)
+# =============================================================================
+
+def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+    """Counterspell reaction: when an enemy within 60ft casts a spell, attempt to counter it.
+
+    - Auto-success if slot level >= spell's cast level
+    - Otherwise: ability check DC = 10 + spell's cast level
+    """
+    # Only react to CAST_SPELL events
+    if event.event_type != EventType.CAST_SPELL:
+        return None
+
+    # Don't counter own spells
+    if event.source_entity_uuid == source_entity_uuid:
+        return None
+
+    entity = Entity.get(source_entity_uuid)
+    if not entity or not isinstance(entity, Entity):
+        return None
+
+    # Must be able to see the caster
+    if event.source_entity_uuid not in entity.senses.entities:
+        return None
+
+    # Must be within 60ft
+    spell_caster = Entity.get(event.source_entity_uuid)
+    if not spell_caster:
+        return None
+    distance = entity.senses.get_feet_distance(spell_caster.position)
+    if distance > 60:
+        return None
+
+    # Need reaction available
+    if not entity.action_economy.can_afford("reactions", 1):
+        return None
+
+    # Need a spell slot level 3+
+    if entity.get_lowest_spell_slot(3) is None:
+        return None
+
+    # Get the spell's cast level from the SpellEvent
+    from dnd.actions import SpellEvent as _SpellEvent
+    spell_cast_level = 0
+    if isinstance(event, _SpellEvent):
+        spell_cast_level = event.cast_at_level or event.spell_level
+    if spell_cast_level <= 0:
+        return None  # Can't counter cantrips
+
+    # Strategy: try to find a slot that auto-counters, else use cheapest slot
+    auto_slot = entity.get_lowest_spell_slot(spell_cast_level)
+    if auto_slot is not None:
+        # Auto-success: slot >= spell level
+        entity.action_economy.consume("reactions", 1)
+        entity.action_economy.consume(spell_slot_cost_type(auto_slot), 1)
+        return event.cancel(
+            status_message=f"{entity.name} casts Counterspell (L{auto_slot} slot) - auto-counters L{spell_cast_level} spell!"
+        )
+
+    # Fall back to cheapest slot + ability check
+    cheap_slot = entity.get_lowest_spell_slot(3)
+    if cheap_slot is None:
+        return None
+
+    # Consume reaction + slot regardless of check outcome
+    entity.action_economy.consume("reactions", 1)
+    entity.action_economy.consume(spell_slot_cost_type(cheap_slot), 1)
+
+    # Ability check: DC = 10 + spell's cast level
+    dc = 10 + spell_cast_level
+    ability_name = entity.spellcasting.spellcasting_ability or "intelligence"
+    ability_mod = entity.ability_scores.get_ability(ability_name).modifier
+    import random as _random
+    d20 = _random.randint(1, 20)
+    check_total = d20 + ability_mod
+    if check_total >= dc:
+        return event.cancel(
+            status_message=f"{entity.name} casts Counterspell (L{cheap_slot} slot) - check {check_total} vs DC {dc} - countered!"
+        )
+    else:
+        # Failed - spell goes through, slot wasted
+        return event.model_copy(update={
+            "status_message": f"{entity.name} casts Counterspell (L{cheap_slot} slot) - check {check_total} vs DC {dc} - FAILED"
+        })
+
+
+def create_counterspell_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
+    """Create a Counterspell reaction handler for an entity."""
+    return EventHandler(
+        name="Counterspell",
+        source_entity_uuid=source_entity_uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.CAST_SPELL,
+                event_phase=EventPhase.EXECUTION,
+            )
+        ],
+        event_processor=counterspell_reaction_processor,
+        player_toggleable=True
+    )
+
+
+def register_counterspell_reaction(entity: Entity) -> None:
+    """Register the Counterspell reaction handler on an entity."""
+    handler = create_counterspell_reaction_handler(entity.uuid)
+    entity.add_event_handler(handler)
+
+
+# =============================================================================
+# Globe of Invulnerability (Level 6, Concentration)
+# =============================================================================
+
+class GlobeZone(BaseCondition):
+    """Zone marker condition for Globe of Invulnerability.
+
+    Tracks affected positions around the caster. Not a full ZoneControlCondition
+    since there are no entry/exit/turn_start effects — the spell-blocking is done
+    via EventHandlers on CAST_SPELL and CONDITION_APPLICATION.
+
+    SRD: Globe is IMMOBILE — stays at cast position, does not follow caster.
+    Blocks spells by BASE level (not upcast level), including cantrips (level 0).
+    Only blocks spells cast from OUTSIDE the barrier.
+    """
+    name: str = "Globe of Invulnerability Zone"
+    description: str = "Immobile sphere blocks spells level 5 or lower"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    magical_origin: bool = True
+
+    zone_center: Tuple[int, int] = Field(default=(0, 0))
+    zone_radius_feet: int = Field(default=10)
+    affected_positions: set = Field(default_factory=set)
+    max_blocked_level: int = Field(default=5)  # Blocks spells up to this level
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def _compute_positions(self) -> set:
+        """Compute positions in the 10ft radius sphere around center."""
+        from dnd.core.aoe import Sphere
+        shape = Sphere(
+            source_entity_uuid=self.source_entity_uuid,
+            target=self.zone_center,
+            radius_feet=self.zone_radius_feet
+        )
+        shape.compute_objective(self.zone_center)
+        return set(shape.affected_positions)
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        from dnd.core.events import EventQueue
+        from dnd.core.base_conditions import SpellProtectionRegistry, SpellProtection
+
+        self.affected_positions = self._compute_positions()
+        handler_uuids = []
+
+        # Spell-blocking handler (Layer 1)
+        blocker = self._create_spell_blocker()
+        EventQueue.add_event_handler(blocker)
+        handler_uuids.append(blocker.uuid)
+
+        # Condition-blocking handler (Layer 2)
+        cond_blocker = self._create_condition_blocker()
+        EventQueue.add_event_handler(cond_blocker)
+        handler_uuids.append(cond_blocker.uuid)
+
+        # Register with SpellProtectionRegistry for zone spell filtering
+        SpellProtectionRegistry.register(SpellProtection(
+            uuid=self.uuid,
+            positions=set(self.affected_positions),
+            max_blocked_level=self.max_blocked_level,
+        ))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Globe of Invulnerability active"
+        )
+        return [], handler_uuids, [], [], effect_event
+
+    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
+        """Unregister from SpellProtectionRegistry before standard cleanup."""
+        from dnd.core.base_conditions import SpellProtectionRegistry
+        SpellProtectionRegistry.unregister(self.uuid)
+        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
+
+    def _create_spell_blocker(self) -> EventHandler:
+        """Handler that cancels spells level <= max_blocked_level targeting inside the globe.
+
+        Fixed bugs vs original:
+        1. Uses spell_level (base), not cast_at_level (upcast) — Fireball upcast to L7 is still L3
+        2. Position-based "outside" check — source position outside globe, not UUID comparison
+        3. Cantrips (level 0) are blocked — 0 <= 5
+        4. No follow handler — globe is immobile per SRD
+        """
+        globe = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type != EventType.CAST_SPELL:
+                return None
+            if not isinstance(event, SpellEvent):
+                return None
+
+            # Use BASE spell level (not upcast level)
+            base_level = event.spell_level
+            if base_level > globe.max_blocked_level:
+                return None
+
+            # Check if source is OUTSIDE the globe (position-based, not UUID)
+            source = Entity.get(event.source_entity_uuid)
+            if not source or source.position in globe.affected_positions:
+                return None  # Source inside globe — spell passes through
+
+            # Check if target entity is inside the globe
+            if event.target_entity_uuid:
+                target = Entity.get(event.target_entity_uuid)
+                if target and target.position in globe.affected_positions:
+                    return event.cancel(
+                        status_message=f"Globe of Invulnerability blocks L{base_level} spell"
+                    )
+
+            return None
+
+        return EventHandler(
+            name="Globe Spell Blocker",
+            source_entity_uuid=self.source_entity_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.CAST_SPELL,
+                event_phase=EventPhase.EXECUTION
+            )],
+            event_processor=processor
+        )
+
+    def _create_condition_blocker(self) -> EventHandler:
+        """Handler that blocks magical conditions applied to entities/tiles inside the globe.
+
+        Catches zone spell effects, magical conditions from SpatialHandlers, etc.
+        Walks the parent_event chain to find the originating SpellEvent and checks
+        its base spell_level.
+        """
+        globe = self
+        from dnd.core.base_conditions import ConditionApplicationEvent
+        from dnd.core.base_object import BaseObject
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, ConditionApplicationEvent):
+                return None
+
+            condition = event.condition
+            if not condition.magical_origin:
+                return None
+
+            # Get target position (entity or tile)
+            target_pos: Optional[Tuple[int, int]] = None
+            target_entity = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+            if target_entity:
+                target_pos = target_entity.position
+            else:
+                # Could be a tile — check GridMap
+                from dnd.core.gridmap import get_map
+                grid = get_map()
+                tile = grid.get_tile_by_uuid(event.target_entity_uuid) if event.target_entity_uuid else None
+                if tile:
+                    target_pos = tile.position
+
+            if target_pos is None or target_pos not in globe.affected_positions:
+                return None
+
+            # Walk parent_event chain to find the SpellEvent
+            spell_level: Optional[int] = None
+            source_pos: Optional[Tuple[int, int]] = None
+            current_uuid = event.parent_event
+            visited = 0
+            while current_uuid and visited < 20:
+                parent = BaseObject.get(current_uuid)
+                if parent is None:
+                    break
+                if isinstance(parent, SpellEvent):
+                    spell_level = parent.spell_level
+                    source = Entity.get(parent.source_entity_uuid)
+                    if source:
+                        source_pos = source.position
+                    break
+                if isinstance(parent, Event):
+                    current_uuid = parent.parent_event
+                else:
+                    break
+                visited += 1
+
+            if spell_level is None or source_pos is None:
+                return None
+
+            if spell_level > globe.max_blocked_level:
+                return None
+
+            # Source must be outside the globe
+            if source_pos in globe.affected_positions:
+                return None
+
+            return event.cancel(
+                status_message=f"Globe of Invulnerability blocks magical condition (L{spell_level} spell)"
+            )
+
+        return EventHandler(
+            name="Globe Condition Blocker",
+            source_entity_uuid=self.source_entity_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.CONDITION_APPLICATION,
+                event_phase=EventPhase.DECLARATION
+            )],
+            event_processor=processor
+        )
+
+
+class GlobeOfInvulnerability(SpellAction):
+    """Globe of Invulnerability - 6th level Abjuration (Concentration)
+
+    An immobile, faintly shimmering barrier springs into existence in a 10-foot
+    radius around you and remains for the duration. Any spell of 5th level or
+    lower cast from outside the barrier can't affect creatures or areas within it.
+    The barrier doesn't prevent such spells from being cast, but it causes them
+    to fail on targets within the sphere.
+
+    At Higher Levels: blocked spell level increases by 1 per slot above 6th.
+    """
+    name: str = Field(default="Globe of Invulnerability")
+    description: str = Field(default="10ft sphere blocks spells L5 or lower, concentration")
+    spell_level: int = Field(default=6)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.SELF)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        upcast_bonus = self.get_upcast_bonus()
+        max_blocked = 5 + upcast_bonus
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Globe of Invulnerability (blocks L{max_blocked} and below)"
+        )
+
+        zone = GlobeZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=caster.senses.position,
+            max_blocked_level=max_blocked
+        )
+        caster.add_condition(zone, parent_event=effect_event)
+
+        concentration = self.ensure_concentration(effect_event)
+        concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Globe of Invulnerability active — blocks spells L{max_blocked} and below"
+        )
+
+
+# =============================================================================
+# Banishment (Level 4, Concentration)
+# =============================================================================
+
+class BanishedCondition(BaseCondition):
+    """Condition applied to banished entities.
+
+    Removes entity from GridMap spatial tracking (invisible to all, can't act).
+    Stores original position for return when concentration breaks.
+    Incapacitated is applied as a sub-condition.
+    """
+    name: str = "Banished"
+    description: str = "Banished to another plane — removed from play"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    magical_origin: bool = True
+
+    original_position: Tuple[int, int] = Field(default=(0, 0))
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        from dnd.conditions import Incapacitated
+        from dnd.core.gridmap import get_map
+        from dnd.core.events import SpatialChangeEvent
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return [], [], [], [], None
+
+        # Store original position
+        self.original_position = target.position
+
+        # Apply Incapacitated sub-condition
+        sub_conditions_uuids = []
+        incap = Incapacitated(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=self.target_entity_uuid,
+            parent_condition=self.uuid,
+            magical_origin=True
+        )
+        target.add_condition(incap, parent_event=declaration_event)
+        sub_conditions_uuids.append(incap.uuid)
+
+        # Remove from GridMap spatial tracking
+        grid = get_map()
+        pos = self.original_position
+        grid._entity_positions.pop(target.uuid, None)
+        if pos in grid._entities_by_position:
+            grid._entities_by_position[pos].discard(target.uuid)
+
+        # Remove from Entity class-level position registry (keeps senses rebuild in sync)
+        if target in Entity._entity_by_position[pos]:
+            Entity._entity_by_position[pos].remove(target)
+
+        # Fire ENTITY_LEFT so other entities' senses update
+        if grid._events_enabled:
+            spatial_event = SpatialChangeEvent.entity_left(pos, target.uuid, None)
+            grid._fire_spatial_event(spatial_event)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"{target.name} banished from the battlefield"
+        )
+        return [], [], sub_conditions_uuids, [], effect_event
+
+    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
+        """Return entity to original position when banishment ends."""
+        from dnd.core.gridmap import get_map
+        from dnd.core.events import SpatialChangeEvent
+
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            grid = get_map()
+            pos = self.original_position
+
+            # Check if original position is occupied, try to displace
+            occupants = grid.get_entities_at(pos) - {target.uuid}
+            if occupants:
+                for occ_uuid in occupants:
+                    occ = Entity.get(occ_uuid)
+                    if occ:
+                        for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]:
+                            adj = (pos[0] + dx, pos[1] + dy)
+                            if grid.is_walkable_for(adj[0], adj[1], occ_uuid):
+                                Entity.update_entity_position(occ, adj)
+                                break
+                    break  # Only displace one
+
+            # Place banished entity back
+            grid._entity_positions[target.uuid] = pos
+            if pos not in grid._entities_by_position:
+                grid._entities_by_position[pos] = set()
+            grid._entities_by_position[pos].add(target.uuid)
+
+            # Restore Entity class-level position registry
+            if target not in Entity._entity_by_position[pos]:
+                Entity._entity_by_position[pos].append(target)
+
+            # Fire ENTITY_ENTERED
+            if grid._events_enabled:
+                spatial_event = SpatialChangeEvent.entity_entered(pos, target.uuid, None)
+                grid._fire_spatial_event(spatial_event)
+
+        return super()._remove(removal_event)
+
+
+class Banishment(SpellAction):
+    """Banishment - 4th level Abjuration (Concentration)
+
+    You attempt to send one creature that you can see within range to another
+    plane of existence. The target must succeed on a CHA saving throw or be
+    banished. While banished, the target is incapacitated and removed from play.
+    When the spell ends, the target reappears in the space it left.
+
+    At Higher Levels: +1 target per slot level above 4th.
+    """
+    name: str = Field(default="Banishment")
+    description: str = Field(default="CHA save or banished (removed from play), concentration")
+    spell_level: int = Field(default=4)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    valid_target_filter: str = Field(default="enemies")
+    include_self: bool = Field(default=False)
+
+    def get_multi_target_count(self) -> int:
+        """1 target base + 1 per level above 4th."""
+        return 1 + self.get_upcast_bonus()
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        from dnd.spells.evocation import validate_line_of_sight as _validate_los
+        los_event = _validate_los(declaration_event, self.source_entity_uuid)
+        if los_event is None or los_event.canceled:
+            return los_event
+
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not source or not target:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        distance = source.senses.get_feet_distance(target.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
+
+        return los_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Entity not found")
+
+        # CHA saving throw
+        dc = caster.spell_save_dc()
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="charisma",
+            dc=dc,
+            parent_event=execution_event.uuid
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+
+        save_bonus = target.saving_throw_bonus(caster.uuid, "charisma").normalized_score
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability="charisma",
+            save_dc=dc,
+            save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_bonus,
+            target_entity_name=target.name,
+            status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
+        )
+
+        if success:
+            return effect_event.phase_to(
+                new_phase=EventPhase.COMPLETION,
+                status_message=f"{target.name} resists Banishment (CHA save)"
+            )
+
+        # Failed save: apply BanishedCondition
+        banished = BanishedCondition(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(banished, parent_event=effect_event)
+
+        # Concentration
+        concentration = self.ensure_concentration(effect_event)
+        if banished.applied:
+            concentration.add_linked_condition(target.uuid, banished.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} banished!"
+        )
+
+
+# =============================================================================
+# Restoration Spells
+# =============================================================================
+
+
+_LESSER_RESTORATION_CONDITIONS = {"Blinded", "Deafened", "Paralyzed", "Poisoned"}
+_GREATER_RESTORATION_CONDITIONS = {
+    "Charmed", "Poisoned", "Blinded", "Deafened", "Paralyzed", "Stunned", "Frightened"
+}
+
+
+class LesserRestoration(SpellAction):
+    """Lesser Restoration - 2nd level Abjuration
+
+    You touch a creature and can end either one disease or one condition
+    afflicting it. The condition can be blinded, deafened, paralyzed, or poisoned.
+    """
+    name: str = Field(default="Lesser Restoration")
+    description: str = Field(default="Touch: remove one of blinded, deafened, paralyzed, or poisoned")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="abjuration")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+    )
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return declaration_event.cancel(status_message="Caster or target not found")
+
+        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+            return declaration_event.cancel(status_message="Target not in line of sight")
+
+        distance = caster.senses.get_feet_distance(target.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(
+                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
+            )
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Lesser Restoration on {target.name}"
+        )
+
+        removed = None
+        for condition_name in _LESSER_RESTORATION_CONDITIONS:
+            if condition_name in target.active_conditions:
+                target.remove_condition(condition_name, parent_event=effect_event)
+                removed = condition_name
+                break
+
+        status = f"Removed {removed}" if removed else "No removable condition found"
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Lesser Restoration: {status}"
+        )
+
+
+class GreaterRestoration(SpellAction):
+    """Greater Restoration - 5th level Abjuration
+
+    You imbue a creature you touch with positive energy to undo a debilitating
+    effect. You can reduce the target's exhaustion level by one, or end one of
+    the following effects: charmed, petrified, cursed, ability score reduction,
+    or HP maximum reduction.
+    """
+    name: str = Field(default="Greater Restoration")
+    description: str = Field(default="Touch: remove one of charmed, poisoned, blinded, deafened, paralyzed, stunned, frightened")
+    spell_level: int = Field(default=5)
+    spell_school: str = Field(default="abjuration")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+    )
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return declaration_event.cancel(status_message="Caster or target not found")
+
+        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+            return declaration_event.cancel(status_message="Target not in line of sight")
+
+        distance = caster.senses.get_feet_distance(target.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(
+                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
+            )
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Greater Restoration on {target.name}"
+        )
+
+        removed = None
+        for condition_name in _GREATER_RESTORATION_CONDITIONS:
+            if condition_name in target.active_conditions:
+                target.remove_condition(condition_name, parent_event=effect_event)
+                removed = condition_name
+                break
+
+        status = f"Removed {removed}" if removed else "No removable condition found"
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Greater Restoration: {status}"
         )

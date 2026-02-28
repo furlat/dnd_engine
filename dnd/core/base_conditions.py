@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
-from pydantic import Field, computed_field
-from typing import Dict, Any, Optional, Self, Union, List, Tuple, Literal
+from pydantic import Field, computed_field, BaseModel
+from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Literal, Set
 
 from pydantic import  model_validator
 from enum import Enum
@@ -215,6 +215,10 @@ class BaseCondition(BaseObject):
     condition_stealth_dc: Optional[int] = Field(
         default=None,
         description="Perception DC to detect this condition on a tile. None = always visible."
+    )
+    magical_origin: bool = Field(
+        default=False,
+        description="Whether this condition was created by a spell or magical effect. Used by Globe of Invulnerability, Dispel Magic, etc."
     )
     
     @model_validator(mode="after")
@@ -479,3 +483,56 @@ class BaseCondition(BaseObject):
     def long_rest(self) -> None:
         """ Set the long rested flag to True """
         self.duration.long_rest()
+
+
+class SpellProtection(BaseModel):
+    """A spell protection zone (e.g. Globe of Invulnerability).
+
+    Tracks positions that are protected from spells at or below a certain level,
+    when the spell source is outside the protection zone.
+    """
+    uuid: UUID
+    positions: Set[Tuple[int, int]]
+    max_blocked_level: int
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
+class SpellProtectionRegistry:
+    """Tracks globe-like protections for zone spell position filtering.
+
+    A position is protected if:
+    1. It's inside a registered protection zone
+    2. The spell source_position is OUTSIDE that zone
+    3. The spell's base level <= max_blocked_level
+    """
+    _protections: ClassVar[List[SpellProtection]] = []
+
+    @classmethod
+    def register(cls, protection: SpellProtection) -> None:
+        cls._protections.append(protection)
+
+    @classmethod
+    def unregister(cls, protection_uuid: UUID) -> None:
+        cls._protections = [p for p in cls._protections if p.uuid != protection_uuid]
+
+    @classmethod
+    def is_protected(cls, position: Tuple[int, int], source_position: Tuple[int, int], spell_level: int) -> bool:
+        """Check if position is protected from a spell at given level cast from source_position."""
+        for p in cls._protections:
+            if position in p.positions and source_position not in p.positions and spell_level <= p.max_blocked_level:
+                return True
+        return False
+
+    @classmethod
+    def get_excluded_positions(cls, source_position: Tuple[int, int], spell_level: int) -> Set[Tuple[int, int]]:
+        """Get all positions protected from a spell at given level cast from source_position."""
+        excluded: Set[Tuple[int, int]] = set()
+        for p in cls._protections:
+            if source_position not in p.positions and spell_level <= p.max_blocked_level:
+                excluded |= p.positions
+        return excluded
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._protections.clear()

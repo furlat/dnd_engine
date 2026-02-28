@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from collections import defaultdict
 
 from dnd.core.values import ModifiableValue, AdvantageStatus
-from dnd.core.modifiers import NumericalModifier, CreatureType, DamageType
+from dnd.core.modifiers import NumericalModifier, CreatureType, DamageType, Size
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
@@ -117,6 +117,7 @@ class EntityConfig(BaseModel):
     spellcasting: Optional[SpellcastingConfig] = Field(default=None, description="Spellcasting configuration (None = non-caster)")
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
+    size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
 
 class Entity(BaseBlock):
     """ Base class for dnd entities in the game it acts as container for blocks and implements common functionalities that
@@ -141,6 +142,7 @@ class Entity(BaseBlock):
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the entity")
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
+    size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
 
     # Jump distance: (15 + max(0, STR_mod)*5 + additive.normalized_score) * multiplier.normalized_score
     # STR component computed dynamically in Jump.get_range(). These are pure spell/condition channels.
@@ -287,7 +289,8 @@ class Entity(BaseBlock):
                 sprite_name=config.sprite_name,
                 faction=config.faction,
                 weight=config.weight,
-                creature_type=config.creature_type
+                creature_type=config.creature_type,
+                size=config.size
             )
 
     def _set_position(self,new_position: Tuple[int,int]):
@@ -564,7 +567,7 @@ class Entity(BaseBlock):
         normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
         return normalized_proficiency_bonus, saving_throw_bonus, ability_bonus,ability_modifier_bonus
     
-    def _get_attack_bonuses(self,weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Tuple[ModifiableValue,ModifiableValue,List[ModifiableValue],List[ModifiableValue],Range ]:
+    def _get_attack_bonuses(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None) -> Tuple[ModifiableValue,ModifiableValue,List[ModifiableValue],List[ModifiableValue],Range ]:
         """ We have to get from weapon and then from equipment
         attack_bonus
         ability bonuses
@@ -572,41 +575,59 @@ class Entity(BaseBlock):
         weapon = self.equipment._get_weapon_by_slot(weapon_slot)
 
         ability_bonuses : List[ModifiableValue] = []
-        dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
-        dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
-        strength_bonus = self.ability_scores.get_ability("strength").ability_score
-        strength_modifier_bonus = self.ability_scores.get_ability("strength").modifier_bonus
         attack_bonuses : List[ModifiableValue] = [self.equipment.attack_bonus]
-        if weapon is None or isinstance(weapon, Shield):
-            weapon_bonus=self.equipment.unarmed_attack_bonus
-            attack_bonuses.append(self.equipment.melee_attack_bonus)
-            ability_bonuses.append(strength_bonus)
-            ability_bonuses.append(strength_modifier_bonus)
-            range = Range(type=RangeType.REACH,normal=5)
-        else:
-            weapon_bonus=weapon.attack_bonus
-            range = weapon.range
-            if range.type == RangeType.RANGE:
 
-                attack_bonuses.append(self.equipment.ranged_attack_bonus)
-                ability_bonuses.append(dexterity_bonus)
-                ability_bonuses.append(dexterity_modifier_bonus)
-            elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
+        if override_ability is not None:
+            # Override: use specified ability for attack (e.g. True Strike uses spellcasting ability)
+            ability = self.ability_scores.get_ability(override_ability)
+            ability_bonuses.append(ability.ability_score)
+            ability_bonuses.append(ability.modifier_bonus)
+            if weapon is None or isinstance(weapon, Shield):
+                weapon_bonus = self.equipment.unarmed_attack_bonus
                 attack_bonuses.append(self.equipment.melee_attack_bonus)
-                combined_strength_bonus = strength_bonus.combine_values([strength_modifier_bonus])
-                combined_dexterity_bonus = dexterity_bonus.combine_values([dexterity_modifier_bonus])
-                if combined_strength_bonus.normalized_score >= combined_dexterity_bonus.normalized_score:
-                    ability_bonuses.append(strength_bonus)
-                    ability_bonuses.append(strength_modifier_bonus)
-                else:
-                    ability_bonuses.append(dexterity_bonus)
-                    ability_bonuses.append(dexterity_modifier_bonus)
+                range = Range(type=RangeType.REACH, normal=5)
             else:
+                weapon_bonus = weapon.attack_bonus
+                range = weapon.range
+                if range.type == RangeType.RANGE:
+                    attack_bonuses.append(self.equipment.ranged_attack_bonus)
+                else:
+                    attack_bonuses.append(self.equipment.melee_attack_bonus)
+        else:
+            dexterity_bonus = self.ability_scores.get_ability("dexterity").ability_score
+            dexterity_modifier_bonus = self.ability_scores.get_ability("dexterity").modifier_bonus
+            strength_bonus = self.ability_scores.get_ability("strength").ability_score
+            strength_modifier_bonus = self.ability_scores.get_ability("strength").modifier_bonus
+            if weapon is None or isinstance(weapon, Shield):
+                weapon_bonus=self.equipment.unarmed_attack_bonus
                 attack_bonuses.append(self.equipment.melee_attack_bonus)
                 ability_bonuses.append(strength_bonus)
                 ability_bonuses.append(strength_modifier_bonus)
+                range = Range(type=RangeType.REACH,normal=5)
+            else:
+                weapon_bonus=weapon.attack_bonus
+                range = weapon.range
+                if range.type == RangeType.RANGE:
+
+                    attack_bonuses.append(self.equipment.ranged_attack_bonus)
+                    ability_bonuses.append(dexterity_bonus)
+                    ability_bonuses.append(dexterity_modifier_bonus)
+                elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
+                    attack_bonuses.append(self.equipment.melee_attack_bonus)
+                    combined_strength_bonus = strength_bonus.combine_values([strength_modifier_bonus])
+                    combined_dexterity_bonus = dexterity_bonus.combine_values([dexterity_modifier_bonus])
+                    if combined_strength_bonus.normalized_score >= combined_dexterity_bonus.normalized_score:
+                        ability_bonuses.append(strength_bonus)
+                        ability_bonuses.append(strength_modifier_bonus)
+                    else:
+                        ability_bonuses.append(dexterity_bonus)
+                        ability_bonuses.append(dexterity_modifier_bonus)
+                else:
+                    attack_bonuses.append(self.equipment.melee_attack_bonus)
+                    ability_bonuses.append(strength_bonus)
+                    ability_bonuses.append(strength_modifier_bonus)
         proficiency_bonus = self.proficiency_bonus
-        
+
         return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
       
     
@@ -780,14 +801,14 @@ class Entity(BaseBlock):
         return ac_bonus
     
     
-    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
+    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None) -> ModifiableValue:
         """ missing effects from target armor bonus"""
         should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
 
-        proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, _ = self._get_attack_bonuses(weapon_slot)
+        proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, _ = self._get_attack_bonuses(weapon_slot, override_ability=override_ability)
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
 
@@ -839,12 +860,30 @@ class Entity(BaseBlock):
 
         return general + specific
 
-    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None) -> List[Damage]:
+    def get_size_damage_dice(self) -> int:
+        """Return number of extra d4 dice from creature size.
+        Medium and smaller: 0, Large: 1, Huge: 2, Gargantuan: 3."""
+        size_order = [Size.TINY, Size.SMALL, Size.MEDIUM, Size.LARGE, Size.HUGE, Size.GARGANTUAN]
+        idx = size_order.index(self.size)
+        return max(0, idx - 2)  # Medium(2) = 0, Large(3) = 1, Huge(4) = 2, Gargantuan(5) = 3
+
+    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None) -> List[Damage]:
         should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
-        damages = self.equipment.get_damages(weapon_slot, self.ability_scores)
+        damages = self.equipment.get_damages(weapon_slot, self.ability_scores, override_ability=override_ability)
+        # Add size-based extra damage dice (Large+)
+        size_dice = self.get_size_damage_dice()
+        if size_dice > 0 and damages:
+            primary_type = damages[0].damage_type
+            damages.append(Damage(
+                source_entity_uuid=self.uuid,
+                target_entity_uuid=target_entity_uuid or self.target_entity_uuid,
+                damage_dice=4,
+                dice_numbers=size_dice,
+                damage_type=primary_type
+            ))
         if should_clear_target:
             self.clear_target_entity()
         return damages
@@ -975,7 +1014,8 @@ class Entity(BaseBlock):
         amount: int,
         source_entity_uuid: UUID,
         source_description: str = "",
-        parent_event: Optional[UUID] = None
+        parent_event: Optional[UUID] = None,
+        spell_level: int = 0
     ) -> int:
         """
         Apply healing with proper event firing.
@@ -988,6 +1028,7 @@ class Entity(BaseBlock):
             source_entity_uuid: UUID of the entity/source providing healing
             source_description: Description for combat log (e.g. "Second Wind: d10(7)+1")
             parent_event: Optional parent event UUID for combat log nesting
+            spell_level: Spell level used (0 = non-spell healing)
 
         Returns:
             Actual HP restored (may be less than amount due to max HP cap or blocking)
@@ -1000,6 +1041,7 @@ class Entity(BaseBlock):
             total_healing=amount,
             source_description=source_description,
             parent_event=parent_event,
+            spell_level=spell_level,
             phase=EventPhase.DECLARATION
         )
 
