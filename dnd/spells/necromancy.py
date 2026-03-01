@@ -10,7 +10,7 @@ from pydantic import Field
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition, DurationType, Duration
 from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event
+from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, AbilityName
 from dnd.core.modifiers import (
     DamageType, AdvantageModifier, AdvantageStatus, CreatureType,
     NumericalModifier, ContextualAdvantageModifier
@@ -20,7 +20,7 @@ from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.spells.evocation import validate_line_of_sight
+from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.core.base_actions import Cost, BaseAction, ActionCategory
 from dnd.conditions import Blinded, Deafened, Unconscious, Frightened, Concentrating, ConcentrationActionMarker
 from dnd.spells.enchantment import BaneEffect, BlessEffect
@@ -930,9 +930,7 @@ class SickenedCondition(BaseCondition):
 
         # Disadvantage on all 6 ability checks
         for ability_name_str in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
-            from dnd.core.events import AbilityName
-            from typing import cast as type_cast_fn
-            ability_name_typed = type_cast_fn(AbilityName, ability_name_str)
+            ability_name_typed = type_cast(AbilityName, ability_name_str)
             ability = target.ability_scores.get_ability(ability_name_typed)
             ab_mod_uuid = ability.ability_score.self_static.add_advantage_modifier(
                 AdvantageModifier(

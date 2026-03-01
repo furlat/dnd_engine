@@ -11,10 +11,11 @@ from typing import cast as type_cast
 
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType, HazardFilter
-from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event
+from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
 from dnd.core.dice import AttackOutcome
 from dnd.core.aoe import AoEShape, Cone, Cube
+from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.conditions import Frightened, Charmed, Incapacitated, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect
@@ -983,7 +984,6 @@ class MirrorImageEffect(BaseCondition):
 
             # Update AC modifier: new value = remaining * 3
             if condition._ac_modifier_uuid and condition._ac_mv_uuid:
-                from dnd.core.values import ModifiableValue
                 mv = ModifiableValue.get(condition._ac_mv_uuid)
                 if mv:
                     mod = mv.self_static.value_modifiers.get(condition._ac_modifier_uuid)
@@ -1162,8 +1162,7 @@ class SilenceZone(ZoneControlCondition):
         # Register CAST_SPELL blocking handler
         spell_block_handler = self._create_spell_block_handler()
         # Use EventQueue directly since this isn't on an entity
-        from dnd.core.events import EventQueue as EQ
-        EQ.add_event_handler(spell_block_handler)
+        EventQueue.add_event_handler(spell_block_handler)
         handler_uuids.append(spell_block_handler.uuid)
         self._spell_block_handler_uuid = spell_block_handler.uuid
 
@@ -1200,8 +1199,7 @@ class SilenceZone(ZoneControlCondition):
                 return None
 
             # Check if the spell has verbal component (SpellEvent carries verbal field)
-            from dnd.actions import SpellEvent as _SpellEvent
-            if isinstance(event, _SpellEvent) and event.verbal:
+            if isinstance(event, SpellEvent) and event.verbal:
                 return event.cancel(status_message="Cannot cast verbal spell in Silence zone")
 
             return None

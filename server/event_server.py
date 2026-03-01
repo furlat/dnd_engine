@@ -850,7 +850,7 @@ async def get_tile_info(x: int, y: int):
             })
 
     # Get handler names
-    handler_names = [h.name for h in tile.event_handlers.values()] if hasattr(tile, 'event_handlers') else []
+    handler_names = [h.name for h in tile.event_handlers.values()]
 
     # Light level
     light_level = tile.resolved_light_level
@@ -861,12 +861,12 @@ async def get_tile_info(x: int, y: int):
         "name": tile.name,
         "walkable": tile.walkable,
         "visible": tile.visible,
-        "walking_cost": int(tile.walking_cost.normalized_score) if hasattr(tile, 'walking_cost') else 1,
-        "conditions": list(tile.active_conditions.keys()) if hasattr(tile, 'active_conditions') else [],
+        "walking_cost": int(tile.walking_cost.normalized_score),
+        "conditions": list(tile.active_conditions.keys()),
         "handlers": handler_names,
         "entities": entities_at,
         "objects": objects_at,
-        "height": tile.height if hasattr(tile, 'height') else 0,
+        "height": tile.height,
         "light_level": light_level.value,
         "light_level_name": light_level_names.get(light_level.value, "Unknown"),
         "default_light": tile.default_light.value,

@@ -8,11 +8,11 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, ActionCategory
+from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, ActionCategory, BaseCost
 from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing
+    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, AbilityName, ForcedMovementEvent
 )
 from dnd.core.dice import AttackOutcome
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, DamageType, Size
@@ -20,9 +20,10 @@ from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.conditions import Incapacitated, Dashing
+from dnd.conditions import Incapacitated, Dashing, Restrained, Concentrating, ConcentrationActionMarker
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
+from dnd.spells.spell_utils import validate_line_of_sight
 
 
 class SpikeGrowthZone(ZoneControlCondition):
@@ -983,7 +984,6 @@ class Disintegrate(SpellAction):
         return self.base_damage_dice + upcast_bonus * 3
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        from dnd.spells.evocation import validate_line_of_sight
 
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
@@ -1181,7 +1181,6 @@ class BonusDash(BaseAction):
     ])
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        from dnd.core.base_actions import BaseCost
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
         return ActionEvent(
@@ -1309,7 +1308,6 @@ class EnhanceAbilityEffect(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
 
         # Add advantage on the chosen ability's checks
-        from dnd.core.events import AbilityName
         ability_name = type_cast(AbilityName, self.ability_type)
         ability = target.ability_scores.get_ability(ability_name)
         mod_uuid = ability.ability_score.self_static.add_advantage_modifier(
@@ -1612,7 +1610,6 @@ class TelekinesisRestrain(BaseAction):
         )
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        from dnd.conditions import Restrained as RestrainedCond, Concentrating as ConcentratingCond
 
         caster = Entity.get(self.source_entity_uuid)
         grabbed = Entity.get(self.grabbed_entity_uuid)
@@ -1625,7 +1622,7 @@ class TelekinesisRestrain(BaseAction):
         )
 
         # Apply Restrained
-        restrained = RestrainedCond(
+        restrained = Restrained(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=grabbed.uuid,
             magical_origin=True
@@ -1634,7 +1631,7 @@ class TelekinesisRestrain(BaseAction):
 
         # Link to concentration so it cleans up when concentration breaks
         conc = caster.active_conditions.get("Concentrating")
-        if isinstance(conc, ConcentratingCond):
+        if isinstance(conc, Concentrating):
             conc.add_linked_condition(grabbed.uuid, restrained.uuid)
 
         # Deregister both sub-actions
@@ -1718,7 +1715,6 @@ class TelekinesisMove(BaseAction):
         )
 
         # Fire forced movement event
-        from dnd.core.events import ForcedMovementEvent
         forced_event = ForcedMovementEvent(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=grabbed.uuid,
@@ -1854,8 +1850,7 @@ class Telekinesis(SpellAction):
     valid_target_filter: str = Field(default="enemies")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        from dnd.spells.evocation import validate_line_of_sight as _validate_los
-        los_event = _validate_los(declaration_event, self.source_entity_uuid)
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
 
@@ -1894,7 +1889,6 @@ class Telekinesis(SpellAction):
         caster.register_action(grab)
 
         # Apply concentration + marker for action cleanup
-        from dnd.conditions import ConcentrationActionMarker
         concentration = self.ensure_concentration(effect_event)
         marker = ConcentrationActionMarker(
             source_entity_uuid=caster.uuid,
