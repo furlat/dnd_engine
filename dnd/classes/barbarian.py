@@ -726,7 +726,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         return None
 
     current_hp = entity.get_hp()
-    damage = event.total_damage if hasattr(event, 'total_damage') else 0
+    damage = event.total_damage
 
     # Would this damage drop us to 0?
     if current_hp - damage > 0:

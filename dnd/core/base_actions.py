@@ -255,6 +255,7 @@ class BaseAction(BaseObject):
     alt_extra_costs: List[Cost] = Field(default_factory=list, description="Additional costs appended (SP, etc.)")
     alt_target_type: Optional[TargetType] = Field(default=None, description="Replace target type")
     alt_target_count: Optional[int] = Field(default=None, description="Multi-target count override")
+    alt_skip_slot: bool = Field(default=False, description="Skip spell slot cost")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -271,7 +272,7 @@ class BaseAction(BaseObject):
             # Replace the primary cost type (first cost entry that's "actions")
             costs = [c.model_copy(update={"cost_type": self.alt_cost_type})
                      if c.cost_type == "actions" else c for c in costs]
-        if getattr(self, 'alt_skip_slot', False):
+        if self.alt_skip_slot:
             costs = [c for c in costs if not c.cost_type.startswith("spell_slot")]
         costs.extend(self.alt_extra_costs)
         return costs

@@ -538,9 +538,8 @@ def clear_action_overrides(entity: Entity, template_uuids: List[UUID]) -> None:
         for template in entity.registered_actions:
             if template.uuid == uid:
                 for field, default in defaults.items():
-                    if hasattr(template, field):
-                        if isinstance(default, list):
-                            setattr(template, field, list(default))
-                        else:
-                            setattr(template, field, default)
+                    if isinstance(default, list):
+                        setattr(template, field, list(default))
+                    else:
+                        setattr(template, field, default)
                 break

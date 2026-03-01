@@ -21,7 +21,8 @@ from dnd.core.aoe import AoEShape, Sphere
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
 from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned, Prone, Incapacitated
-from dnd.spells.evocation import validate_line_of_sight
+from dnd.spells.spell_utils import validate_line_of_sight
+from dnd.core.gridmap import get_map
 
 
 class CharmPerson(SpellAction):
@@ -1719,7 +1720,6 @@ class CommandFleeEffect(BaseCondition):
 
             # Move to the farthest position
             if best_pos != target.position:
-                from dnd.core.gridmap import get_map
                 grid = get_map()
                 path = target.senses.paths.get(best_pos, [])
                 if path:
