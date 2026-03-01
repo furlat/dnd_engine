@@ -25,7 +25,7 @@ from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import ArmorType, Weapon as WeaponItem, Shield as ShieldItem
 
 from dnd.entity import Entity, determine_attack_outcome
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, Attack
 from dnd.conditions import Blinded, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
 
 
@@ -3537,7 +3537,6 @@ class TrueStrike(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute True Strike — fires Attack with override_ability + cantrip radiant."""
-        from dnd.actions import Attack
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None

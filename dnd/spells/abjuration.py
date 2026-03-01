@@ -3,25 +3,30 @@
 Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           LesserRestoration, GreaterRestoration
 """
+import random
 from typing import Optional, List, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType, spell_slot_cost_type
-from dnd.core.base_conditions import BaseCondition, ConditionCategory
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range
-from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier
+from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, SpellProtectionRegistry, SpellProtection
+from dnd.core.base_object import BaseObject
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent
+from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus
+from dnd.core.aoe import Sphere
+from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
 from dnd.core.dice import AttackOutcome
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
+from dnd.conditions import Incapacitated
+from dnd.spells.spell_utils import validate_line_of_sight
 
 
 def _is_magic_missile_damage(event: Event) -> bool:
     """Check if a TakeDamageEvent originates from Magic Missile by tracing parent events."""
-    from dnd.core.events import EventQueue
     parent_uuid = event.parent_event
     while parent_uuid is not None:
         parent = EventQueue.get_event_by_uuid(parent_uuid)
@@ -168,7 +173,6 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
             return None
 
         # Auto-hit bypasses AC entirely — Shield can't help
-        from dnd.core.modifiers import AutoHitStatus
         if event.dice_roll.auto_hit_status == AutoHitStatus.AUTOHIT:
             return None
 
@@ -780,9 +784,8 @@ def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> O
         return None
 
     # Get the spell's cast level from the SpellEvent
-    from dnd.actions import SpellEvent as _SpellEvent
     spell_cast_level = 0
-    if isinstance(event, _SpellEvent):
+    if isinstance(event, SpellEvent):
         spell_cast_level = event.cast_at_level or event.spell_level
     if spell_cast_level <= 0:
         return None  # Can't counter cantrips
@@ -810,8 +813,7 @@ def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> O
     dc = 10 + spell_cast_level
     ability_name = entity.spellcasting.spellcasting_ability or "intelligence"
     ability_mod = entity.ability_scores.get_ability(ability_name).modifier
-    import random as _random
-    d20 = _random.randint(1, 20)
+    d20 = random.randint(1, 20)
     check_total = d20 + ability_mod
     if check_total >= dc:
         return event.cancel(
@@ -875,7 +877,6 @@ class GlobeZone(BaseCondition):
 
     def _compute_positions(self) -> set:
         """Compute positions in the 10ft radius sphere around center."""
-        from dnd.core.aoe import Sphere
         shape = Sphere(
             source_entity_uuid=self.source_entity_uuid,
             target=self.zone_center,
@@ -885,9 +886,6 @@ class GlobeZone(BaseCondition):
         return set(shape.affected_positions)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.core.events import EventQueue
-        from dnd.core.base_conditions import SpellProtectionRegistry, SpellProtection
-
         self.affected_positions = self._compute_positions()
         handler_uuids = []
 
@@ -916,7 +914,6 @@ class GlobeZone(BaseCondition):
 
     def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
         """Unregister from SpellProtectionRegistry before standard cleanup."""
-        from dnd.core.base_conditions import SpellProtectionRegistry
         SpellProtectionRegistry.unregister(self.uuid)
         return super().cleanup_own_state(expire=expire, parent_event=parent_event)
 
@@ -975,9 +972,6 @@ class GlobeZone(BaseCondition):
         its base spell_level.
         """
         globe = self
-        from dnd.core.base_conditions import ConditionApplicationEvent
-        from dnd.core.base_object import BaseObject
-
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if not isinstance(event, ConditionApplicationEvent):
                 return None
@@ -993,7 +987,6 @@ class GlobeZone(BaseCondition):
                 target_pos = target_entity.position
             else:
                 # Could be a tile — check GridMap
-                from dnd.core.gridmap import get_map
                 grid = get_map()
                 tile = grid.get_tile_by_uuid(event.target_entity_uuid) if event.target_entity_uuid else None
                 if tile:
@@ -1125,10 +1118,6 @@ class BanishedCondition(BaseCondition):
     original_position: Tuple[int, int] = Field(default=(0, 0))
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        from dnd.conditions import Incapacitated
-        from dnd.core.gridmap import get_map
-        from dnd.core.events import SpatialChangeEvent
-
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not target:
             return [], [], [], [], None
@@ -1171,9 +1160,6 @@ class BanishedCondition(BaseCondition):
 
     def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
         """Return entity to original position when banishment ends."""
-        from dnd.core.gridmap import get_map
-        from dnd.core.events import SpatialChangeEvent
-
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
             grid = get_map()
@@ -1235,8 +1221,7 @@ class Banishment(SpellAction):
         return 1 + self.get_upcast_bonus()
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        from dnd.spells.evocation import validate_line_of_sight as _validate_los
-        los_event = _validate_los(declaration_event, self.source_entity_uuid)
+        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
 

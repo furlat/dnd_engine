@@ -17,6 +17,13 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 
 ## Open Issues
 
+### `alt_skip_slot` getattr in BaseAction violates no-duck-typing principle
+- **Found**: 2026-02-28
+- **File**: `dnd/core/base_actions.py` line 274
+- **Error**: `getattr(self, 'alt_skip_slot', False)` — parent class (`BaseAction.effective_costs()`) uses getattr to access a field (`alt_skip_slot`) that only exists on a subclass (`SpellAction`). This is duck-typing from parent to child, violating the codebase rule against getattr/hasattr.
+- **Hypothesis**: `alt_skip_slot` should either be moved up to `BaseAction` (alongside the other `alt_*` override fields that are already there), or `effective_costs()` should be overridden in `SpellAction` to handle spell-slot-specific cost filtering. Moving the field up is the simpler fix since `alt_cost_type`, `alt_extra_costs`, `alt_target_type`, and `alt_target_count` are already on `BaseAction`.
+- **Status**: FIXED — moved `alt_skip_slot` to `BaseAction` alongside other `alt_*` fields, removed duplicate from `SpellAction`
+
 
 
 ### API error messages need improvement

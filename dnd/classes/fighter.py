@@ -1304,7 +1304,7 @@ class ExtraAttack(BaseAction):
         weapon_name = None
         if source_entity:
             weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
-            weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+            weapon_name = weapon.name if weapon else "Unarmed"
 
         # Use clean name for combat log (e.g., "Extra Attack (Shortbow)")
         display_name = f"Extra Attack ({weapon_name})" if weapon_name else "Extra Attack"

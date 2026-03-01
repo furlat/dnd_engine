@@ -2902,7 +2902,6 @@ class SpellAction(BaseAction):
 
     # Spell-specific alt overrides (set by conditions like metamagic)
     alt_range: Optional[int] = Field(default=None, description="Override spell_range.normal")
-    alt_skip_slot: bool = Field(default=False, description="Skip spell slot cost")
 
     # Default cost is 1 action (no spell slot for cantrips)
     costs: List[Cost] = Field(

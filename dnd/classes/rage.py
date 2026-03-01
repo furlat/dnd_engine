@@ -809,7 +809,7 @@ class FrenziedStrike(BaseAction):
         weapon_name = None
         if source_entity:
             weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
-            weapon_name = weapon.name if weapon and hasattr(weapon, 'name') else "Unarmed"
+            weapon_name = weapon.name if weapon else "Unarmed"
 
         display_name = f"Frenzied Strike ({weapon_name})" if weapon_name else "Frenzied Strike"
 

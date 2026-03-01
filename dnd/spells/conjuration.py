@@ -21,7 +21,7 @@ from dnd.entity import Entity
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone, Restrained
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition
-from dnd.spells.evocation import validate_line_of_sight
+from dnd.spells.spell_utils import validate_line_of_sight
 
 
 class CallLightningStrike(BaseAction):
