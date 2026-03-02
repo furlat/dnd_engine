@@ -159,6 +159,9 @@ class Entity(BaseBlock):
     # Movement blocking - when True, this entity does not block walking (set by death handler, incorporeal, etc.)
     non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
 
+    # Difficult terrain immunity - when True, difficult terrain costs are capped at base cost (1 unit)
+    ignore_difficult_terrain: bool = Field(default=False, description="When True, ignores difficult terrain movement costs")
+
     # Concentration slots (default 1 — standard D&D rules)
     max_concentration_slots: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="max_concentration_slots", base_value=1)
@@ -1392,7 +1395,8 @@ class Entity(BaseBlock):
         context: Optional[Dict[str, Any]] = None,
         ability_name: Optional[AbilityName] = None,
         skill_name: Optional[SkillName] = None,
-        weapon_slot: Optional[WeaponSlot] = None
+        weapon_slot: Optional[WeaponSlot] = None,
+        parent_event: Optional[UUID] = None
     ) -> DiceRoll:
         """
         Roll a d20 with the given bonus.
@@ -1426,7 +1430,8 @@ class Entity(BaseBlock):
             "bonus": bonus,
             "context": context or {},
             "phase": EventPhase.DECLARATION,
-            "roll_type": roll_type
+            "roll_type": roll_type,
+            "parent_event": parent_event
         }
 
         if roll_type == RollType.ATTACK:
@@ -1472,7 +1477,8 @@ class Entity(BaseBlock):
         context: Optional[Dict[str, Any]] = None,
         ability_name: Optional[AbilityName] = None,
         skill_name: Optional[SkillName] = None,
-        weapon_slot: Optional[WeaponSlot] = None
+        weapon_slot: Optional[WeaponSlot] = None,
+        parent_event: Optional[UUID] = None
     ) -> Tuple[DiceRoll, D20RollResultEvent]:
         """Like roll_d20 but returns (DiceRoll, event_at_EFFECT_phase).
 
@@ -1493,7 +1499,8 @@ class Entity(BaseBlock):
             "bonus": bonus,
             "context": context or {},
             "phase": EventPhase.DECLARATION,
-            "roll_type": roll_type
+            "roll_type": roll_type,
+            "parent_event": parent_event
         }
 
         if roll_type == RollType.ATTACK:
@@ -1625,7 +1632,7 @@ class Entity(BaseBlock):
         )
 
         # Roll the dice (with ability_name for event handlers)
-        roll = self.roll_d20(save_bonus, RollType.SAVE, ability_name=request.ability_name)
+        roll = self.roll_d20(save_bonus, RollType.SAVE, ability_name=request.ability_name, parent_event=request.uuid)
         outcome = determine_attack_outcome(roll, dc)
         success = outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
 
@@ -1822,12 +1829,15 @@ class Entity(BaseBlock):
         # Get walkable paths using dijkstra (with occupancy check if entity_uuid provided)
         # Subjective: imperceivable blockers are transparent so paths don't leak positions
         collision: Set[Tuple[int, int]] = set()
+        ign_terrain = False
         if entity_uuid:
             ent = Entity._entity_registry.get(entity_uuid)
             if ent is not None:
                 collision = ent.senses.collision_blocked
+                ign_terrain = ent.ignore_difficult_terrain
         _, paths = grid.compute_paths(position, max_distance, requesting_entity_uuid=entity_uuid,
-                                      subjective=True, collision_blocked=collision)
+                                      subjective=True, collision_blocked=collision,
+                                      ignore_difficult_terrain=ign_terrain)
 
         # Filter paths to only include those where:
         # 1. The destination is currently visible (lit)
@@ -1852,7 +1862,8 @@ class Entity(BaseBlock):
         if has_any_hazardous:
             _, safe_raw = grid.compute_paths(
                 position, max_distance, requesting_entity_uuid=entity_uuid,
-                walk_in_danger=False, subjective=True, collision_blocked=collision
+                walk_in_danger=False, subjective=True, collision_blocked=collision,
+                ignore_difficult_terrain=ign_terrain
             )
             # Filter safe paths same as normal paths (visible + known)
             for pos, path in safe_raw.items():

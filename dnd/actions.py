@@ -191,11 +191,18 @@ class Move(BaseAction):
             grid = get_map()
             total_cost = 0
 
+            # Check if entity ignores difficult terrain
+            source_entity = Entity.get(self.source_entity_uuid)
+            ign_terrain = source_entity.ignore_difficult_terrain if source_entity else False
+
             # Path includes starting position, so iterate from index 1
             for i in range(1, len(self.path)):
                 tile = grid.get_tile(*self.path[i])
                 if tile:
-                    total_cost += tile.get_movement_cost(MovementMode.WALKING)
+                    cost = tile.get_movement_cost(MovementMode.WALKING)
+                    if ign_terrain:
+                        cost = min(cost, 1.0)
+                    total_cost += cost
                 else:
                     total_cost += 1  # Default cost if no tile exists
 
@@ -412,6 +419,8 @@ class Move(BaseAction):
                 # Get step cost from terrain
                 tile = grid.get_tile(*to_pos)
                 step_cost_units = tile.get_movement_cost(MovementMode.WALKING) if tile else 1.0
+                if source_entity.ignore_difficult_terrain:
+                    step_cost_units = min(step_cost_units, 1.0)
                 step_cost_feet = int(step_cost_units * 5)
 
                 # Check if entity has enough movement remaining (conditions affect this via modifiers)
