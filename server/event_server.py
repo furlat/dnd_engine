@@ -1268,12 +1268,31 @@ async def get_session_entities(session_id: str):
 
 @app.get("/events")
 async def get_events(
+    since: int = 0,
     limit: int = 50,
     event_type: Optional[str] = None,
     phase: Optional[str] = None
 ):
-    """Get recent events from the queue."""
-    events = EventQueue._all_events[-limit:]
+    """
+    Get events with cursor-based pagination.
+
+    Args:
+        since: Return events starting from this index (0-based). Use the
+               total from a previous response or WebSocket handshake event_count.
+               Default 0 returns the last `limit` events (backwards-compatible).
+        limit: Max events to return (0 = unlimited, default 50).
+        event_type: Filter by event type (e.g. "attack", "movement").
+        phase: Filter by event phase (e.g. "completion").
+    """
+    all_events = EventQueue._all_events
+
+    if since > 0:
+        events = all_events[since:]
+    else:
+        events = all_events[-limit:] if limit > 0 else all_events
+
+    if since > 0 and limit > 0:
+        events = events[:limit]
 
     # Filter by type if specified
     if event_type:
@@ -1298,8 +1317,9 @@ async def get_events(
             )
 
     return {
+        "events": [e.model_dump(mode='json') for e in events],
         "count": len(events),
-        "events": [e.model_dump(mode='json') for e in events]
+        "total": len(all_events),
     }
 
 

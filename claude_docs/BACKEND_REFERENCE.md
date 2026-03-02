@@ -1171,7 +1171,7 @@ All action endpoints validate: session exists → session owns entity → entity
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/events?limit=50&event_type=&phase=` | Recent events |
+| GET | `/events?since=0&limit=50&event_type=&phase=` | Events with cursor (`since` > 0 for cursor mode, response includes `total` for next cursor) |
 | GET | `/event-types` | All event types and phases |
 
 ### PvP Status
