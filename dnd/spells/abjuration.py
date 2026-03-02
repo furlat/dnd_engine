@@ -1,7 +1,8 @@
 """Abjuration spells - protection and defense.
 
 Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
-          LesserRestoration, GreaterRestoration
+          LesserRestoration, GreaterRestoration,
+          ProtectionFromPoison, DeathWard, FreedomOfMovement
 """
 import random
 from typing import Optional, List, Tuple, cast as type_cast
@@ -12,7 +13,7 @@ from pydantic import Field
 from dnd.core.base_actions import TargetType, spell_slot_cost_type
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, SpellProtectionRegistry, SpellProtection
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus
 from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
@@ -1426,4 +1427,341 @@ class GreaterRestoration(SpellAction):
             new_phase=EventPhase.COMPLETION,
             total_damage=0,
             status_message=f"Greater Restoration: {status}"
+        )
+
+
+# =============================================================================
+# Protection from Poison (Level 2, NOT concentration)
+# =============================================================================
+
+class ProtectionFromPoisonEffect(BaseCondition):
+    """Resistance to poison damage + immunity to Poisoned condition."""
+    name: str = "Protection from Poison"
+    description: str = "Resistant to poison damage, immune to Poisoned condition"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    magical_origin: bool = True
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target or not isinstance(target, Entity):
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+
+        # Poison damage resistance
+        resist_mod = ResistanceModifier(
+            name="Protection from Poison",
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid,
+            value=ResistanceStatus.RESISTANCE,
+            damage_type=DamageType.POISON
+        )
+        mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
+        outs.append((target.health.damage_reduction.uuid, mod_uuid))
+
+        # Immunity to Poisoned condition
+        target.add_condition_immunity("Poisoned", immunity_name="Protection from Poison")
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Protection from Poison applied to {target.name}"
+        )
+        return outs, [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clean up condition immunity on removal."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            target._remove_static_condition_immunity("Poisoned", "Protection from Poison")
+        return super()._remove(event)
+
+
+class ProtectionFromPoison(SpellAction):
+    """Protection from Poison - 2nd level Abjuration (NOT concentration)"""
+    name: str = Field(default="Protection from Poison")
+    description: str = Field(default="Touch: resist poison damage, immune to Poisoned")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not target:
+            target = caster
+            self.target_entity_uuid = caster.uuid
+
+        if target.uuid != caster.uuid:
+            if target.uuid not in caster.senses.entities:
+                return declaration_event.cancel(status_message="Target not in line of sight")
+            distance = caster.senses.get_feet_distance(target.position)
+            if distance > self.effective_range:
+                return declaration_event.cancel(
+                    status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
+                )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Protection from Poison on {target.name}"
+        )
+
+        condition = ProtectionFromPoisonEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(condition, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{self.name} cast on {target.name}"
+        )
+
+
+# =============================================================================
+# Death Ward (Level 4, NOT concentration)
+# =============================================================================
+
+class DeathWardEffect(BaseCondition):
+    """First time target would drop to 0 HP, instead drops to 1 HP. One-use."""
+    name: str = "Death Ward"
+    description: str = "Once: survive lethal damage at 1 HP"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    magical_origin: bool = True
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target or not isinstance(target, Entity):
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        target_uuid = self.target_entity_uuid
+        handler_uuids: List[UUID] = []
+
+        def death_ward_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+            _ = source_entity_uuid
+            if not isinstance(event, TakeDamageEvent):
+                return None
+            entity = Entity.get(target_uuid)
+            if not entity:
+                return None
+            current_hp = entity.get_hp()
+            damage = event.total_damage
+            # Only trigger if damage would drop to 0 or below
+            if current_hp - damage > 0:
+                return None
+            # Cap damage to leave 1 HP
+            new_damage = current_hp - 1
+            # Remove Death Ward (one-use) — must be done before returning modified event
+            if "Death Ward" in entity.active_conditions:
+                entity.remove_condition("Death Ward", parent_event=event)
+            return event.model_copy(update={
+                "modified": True,
+                "final_damage": max(0, new_damage),
+                "status_message": f"Death Ward! {entity.name} survives with 1 HP"
+            })
+
+        handler = EventHandler(
+            name="Death Ward",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TAKE_DAMAGE,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=target_uuid
+                )
+            ],
+            event_processor=death_ward_processor
+        )
+        target.add_event_handler(handler)
+        handler_uuids.append(handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Death Ward applied to {target.name}"
+        )
+        return [], handler_uuids, [], [], effect_event
+
+
+class DeathWard(SpellAction):
+    """Death Ward - 4th level Abjuration (NOT concentration)"""
+    name: str = Field(default="Death Ward")
+    description: str = Field(default="Touch: once, survive lethal damage at 1 HP")
+    spell_level: int = Field(default=4)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not target:
+            target = caster
+            self.target_entity_uuid = caster.uuid
+
+        if target.uuid != caster.uuid:
+            if target.uuid not in caster.senses.entities:
+                return declaration_event.cancel(status_message="Target not in line of sight")
+            distance = caster.senses.get_feet_distance(target.position)
+            if distance > self.effective_range:
+                return declaration_event.cancel(
+                    status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
+                )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Death Ward on {target.name}"
+        )
+
+        condition = DeathWardEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(condition, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{self.name} cast on {target.name}"
+        )
+
+
+# =============================================================================
+# Freedom of Movement (Level 4, NOT concentration)
+# =============================================================================
+
+class FreedomOfMovementEffect(BaseCondition):
+    """Ignores difficult terrain, immune to Grappled and Restrained."""
+    name: str = "Freedom of Movement"
+    description: str = "Immune to difficult terrain, Grappled, and Restrained"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    magical_origin: bool = True
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if not self.target_entity_uuid:
+            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
+
+        target = Entity.get(self.target_entity_uuid)
+        if not target or not isinstance(target, Entity):
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        # Ignore difficult terrain
+        target.ignore_difficult_terrain = True
+        target.senses._paths_dirty = True
+
+        # Immune to Grappled and Restrained
+        target.add_condition_immunity("Grappled", immunity_name="Freedom of Movement")
+        target.add_condition_immunity("Restrained", immunity_name="Freedom of Movement")
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Freedom of Movement applied to {target.name}"
+        )
+        return [], [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clean up flag and condition immunities on removal."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            target.ignore_difficult_terrain = False
+            target.senses._paths_dirty = True
+            target._remove_static_condition_immunity("Grappled", "Freedom of Movement")
+            target._remove_static_condition_immunity("Restrained", "Freedom of Movement")
+        return super()._remove(event)
+
+
+class FreedomOfMovement(SpellAction):
+    """Freedom of Movement - 4th level Abjuration (NOT concentration)"""
+    name: str = Field(default="Freedom of Movement")
+    description: str = Field(default="Touch: immune to difficult terrain, Grappled, Restrained")
+    spell_level: int = Field(default=4)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not target:
+            target = caster
+            self.target_entity_uuid = caster.uuid
+
+        if target.uuid != caster.uuid:
+            if target.uuid not in caster.senses.entities:
+                return declaration_event.cancel(status_message="Target not in line of sight")
+            distance = caster.senses.get_feet_distance(target.position)
+            if distance > self.effective_range:
+                return declaration_event.cancel(
+                    status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
+                )
+
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Freedom of Movement on {target.name}"
+        )
+
+        condition = FreedomOfMovementEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(condition, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{self.name} cast on {target.name}"
         )
