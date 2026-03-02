@@ -1,12 +1,12 @@
 # Cleric Spell Analysis for D&D Engine
 
-**Last Updated:** February 2026
+**Last Updated:** March 2026
 
 ## Overview
 
 This document analyzes all **105 Cleric spells** from D&D 5e SRD for implementation difficulty in the D&D Engine. It reflects the current state after implementing AoE, concentration, zone spells, the lighting system (Layer 2), stealth/invisibility (Layer 1), and reaction casting.
 
-*Note: 12 cross-class spells were already implemented from the Sorcerer spell list. 7 Cleric-specific spells added in Batch 1 (Guardian of Faith, Command, Guidance, Light, Continual Flame, Silence, Enhance Ability). 10 healing/restoration spells added in Batch 2 (Cure Wounds, Healing Word, Prayer of Healing, Mass Healing Word, Mass Cure Wounds, Heal, Mass Heal, Regenerate, Lesser Restoration, Greater Restoration).*
+*Note: 12 cross-class spells were already implemented from the Sorcerer spell list. 7 Cleric-specific spells added in Batch 1 (Guardian of Faith, Command, Guidance, Light, Continual Flame, Silence, Enhance Ability). 10 healing/restoration spells added in Batch 2 (Cure Wounds, Healing Word, Prayer of Healing, Mass Healing Word, Mass Cure Wounds, Heal, Mass Heal, Regenerate, Lesser Restoration, Greater Restoration). 3 buff spells added in Batch 3 (Protection from Poison, Death Ward, Freedom of Movement).*
 
 ### Spell Count by Level
 
@@ -24,7 +24,7 @@ This document analyzes all **105 Cleric spells** from D&D 5e SRD for implementat
 | Level 9 | 4 |
 | **Total** | **105** |
 
-### Currently Implemented Spells (29)
+### Currently Implemented Spells (32)
 
 | Spell | Level | School | Type | Notes |
 |-------|-------|--------|------|-------|
@@ -43,10 +43,13 @@ This document analyzes all **105 Cleric spells** from D&D 5e SRD for implementat
 | Silence | 2 | Illusion | Zone | 20ft sphere, blocks verbal spells, deafens ✓ |
 | Prayer of Healing | 2 | Evocation | Multi-target Heal | 6 targets, 2d8+WIS, upcasts +1d8 (Pattern 17) ✓ |
 | Lesser Restoration | 2 | Abjuration | Condition Removal | Remove blinded/deafened/paralyzed/poisoned (Pattern 18) ✓ |
+| Protection from Poison | 2 | Abjuration | Buff | Poison resistance + Poisoned immunity, NOT concentration ✓ |
 | Spirit Guardians | 3 | Conjuration | Zone | 15ft follows caster, 3d8 WIS save (Pattern 8) ✓ |
 | Daylight | 3 | Evocation | Light Zone | 60ft bright light (Pattern 13) ✓ |
 | Protection from Energy | 3 | Abjuration | Buff | Single type resistance (Pattern 5) ✓ |
 | Mass Healing Word | 3 | Evocation | Multi-target Heal | Bonus action, 6 targets, 1d4+WIS (Pattern 17) ✓ |
+| Death Ward | 4 | Abjuration | Anti-death Buff | Survive lethal damage at 1 HP, one-use, NOT concentration ✓ |
+| Freedom of Movement | 4 | Abjuration | Buff | Ignore difficult terrain + Grappled/Restrained immunity, NOT concentration ✓ |
 | Guardian of Faith | 4 | Conjuration | Stationary Zone | DEX save 20 radiant, 60 damage budget ✓ |
 | Insect Plague | 5 | Conjuration | Zone | 20ft sphere, CON save 4d10 (Pattern 8) ✓ |
 | Flame Strike | 5 | Evocation | Cylinder AoE | 4d6 fire + 4d6 radiant, DEX save ✓ |
@@ -58,7 +61,7 @@ This document analyzes all **105 Cleric spells** from D&D 5e SRD for implementat
 | Regenerate | 7 | Transmutation | Heal + Regen | 4d8+15 instant + 1 HP/round for 10 rounds (Pattern 17) ✓ |
 | Mass Heal | 9 | Evocation | Mega Multi-heal | 700 HP pool + condition removal (Pattern 17+18) ✓ |
 
-*Cross-class: 12 shared with Sorcerer/Wizard. 7 Cleric-specific in Batch 1. 10 healing/restoration in Batch 2.*
+*Cross-class: 12 shared with Sorcerer/Wizard. 7 Cleric-specific in Batch 1. 10 healing/restoration in Batch 2. 3 buff spells in Batch 3.*
 
 ---
 
@@ -267,7 +270,7 @@ class SpiritualWeaponCondition(BaseCondition):
 | Lesser Restoration | Abjuration | Condition Removal | End one: blinded/deafened/paralyzed/poisoned | **DONE** | Pattern 18: iterates removable set, removes first found ✓ |
 | Enhance Ability | Transmutation | Buff | Advantage on chosen ability's checks, concentration | EASY | AdvantageModifier on chosen ability check ModifiableValue, concentration. 6 options (Bull's STR, Cat's DEX, etc.) |
 | Prayer of Healing | Evocation | Multi-target Heal | 10-min cast, 6 targets, 2d8+WIS | **DONE** | Pattern 17, MULTI_ENTITY(6), upcasts +1d8/level ✓ |
-| Protection from Poison | Abjuration | Buff | Poison resistance + advantage on poison saves | EASY | ResistanceModifier(poison) on health.damage_reduction + AdvantageModifier on CON saves vs poison |
+| Protection from Poison | Abjuration | Buff | Poison resistance + Poisoned immunity, NOT conc | **DONE** | ResistanceModifier(poison) + condition immunity via add_condition_immunity() ✓ |
 | Spiritual Weapon | Evocation | Granted Action | Bonus action summon, 1d8+WIS force, move+attack each turn | MEDIUM | **Pattern 19**: granted bonus action attack, NOT concentration, 1min duration, upcasts +1d8 per 2 levels above 2nd |
 | Silence | Illusion | Zone | 20ft sphere, no sound, blocks verbal spells | **DONE** | Pattern 8 zone, blocks verbal spells, deafens in zone ✓ |
 | Warding Bond | Abjuration | Buff + Link | +1 AC, +1 saves, resistance to all damage, damage mirroring | MEDIUM | Buff condition on target (NumericalModifier +1 AC, +1 saves, ResistanceModifier ALL) + handler on TAKE_DAMAGE at EFFECT: mirror damage to caster. Ends at 60ft separation. |
@@ -279,7 +282,7 @@ class SpiritualWeaponCondition(BaseCondition):
 | Augury | Divination | Utility | Omen about future action | BLOCKED | No combat effect |
 | Locate Object | Divination | Sense | Sense direction to nearest object of a kind, or specific known object, within 1000ft. Concentration. | EASY | Query `GridMap._object_positions` for matching object by name/type, return direction vector. Same pattern as Locate Creature but for objects. |
 
-**Summary**: DONE 6, EASY 6, MEDIUM 3, BLOCKED 2
+**Summary**: DONE 7, EASY 5, MEDIUM 3, BLOCKED 2
 
 ---
 
@@ -315,8 +318,8 @@ class SpiritualWeaponCondition(BaseCondition):
 
 | Spell | School | Type | Effect Summary | Difficulty | Pattern/Notes |
 |-------|--------|------|----------------|------------|---------------|
-| Death Ward | Abjuration | Anti-death Buff | First time HP would drop to 0 → 1 HP instead, one-use, 8 hours | EASY | Handler on TAKE_DAMAGE at EFFECT: if final_damage would kill, reduce to leave 1 HP. One-use: remove condition after trigger. |
-| Freedom of Movement | Abjuration | Buff | Ignore difficult terrain, immune to grapple/restrained, escape nonmagical restraints, 1 hour | EASY | Max constraint removal on movement (ignore difficult terrain cost modifier) + immunity to Grappled/Restrained conditions |
+| Death Ward | Abjuration | Anti-death Buff | First time HP would drop to 0 → 1 HP instead, one-use, 8 hours | **DONE** | TAKE_DAMAGE handler caps lethal damage to leave 1 HP, one-use self-removal ✓ |
+| Freedom of Movement | Abjuration | Buff | Ignore difficult terrain, immune to grapple/restrained, 1 hour | **DONE** | Entity.ignore_difficult_terrain flag + condition immunity for Grappled/Restrained ✓ |
 | Banishment | Abjuration | CHA Save | Remove from plane, return on concentration end | MEDIUM | CHA save, remove entity from gridmap (store position), restore on condition cleanup. Concentration. If native to plane, returns on end. |
 | Guardian of Faith | Conjuration | Stationary Zone | 10ft radius, DEX save 20 radiant, vanishes at 60 total damage dealt, 8 hours | **DONE** | BaseItem object + SpatialHandler aura, damage budget, GuardianWarded one-per-turn ✓ |
 | Control Water | Transmutation | Terrain Manipulation | Move/reshape water tiles in 100ft cube. Flood: raise water 20ft. Part Water: create path through water. Redirect Flow: move water to new location. Whirlpool: 5ft deep, STR save or 2d8 bludg | MEDIUM | Move Water tiles to new positions via GridMap, or temporarily convert Water→Floor (Part Water). Whirlpool option: zone with STR save damage. Concentration. Uses existing tile type system. |
@@ -324,7 +327,7 @@ class SpiritualWeaponCondition(BaseCondition):
 | Locate Creature | Divination | Sense | Know direction to nearest creature of a kind, or specific known creature, within 1000ft. Concentration, 1 hour. | EASY | Query `Entity._entity_registry` for matching creature by name/type, return direction vector from caster position. Bypasses LOS/stealth. Blocked by running water/polymorph. |
 | Stone Shape | Transmutation | Terrain Manipulation | Reshape 5ft cube of stone — create passage through Wall, seal opening, create crude object | EASY | Convert Wall tile ↔ Floor tile at target position. Touch range. Instant. Uses existing tile type system in GridMap. |
 
-**Summary**: DONE 1, EASY 4, MEDIUM 2, BLOCKED 1
+**Summary**: DONE 3, EASY 2, MEDIUM 2, BLOCKED 1
 
 ---
 
@@ -416,8 +419,8 @@ class SpiritualWeaponCondition(BaseCondition):
 
 | Difficulty | Count | Percentage |
 |------------|-------|------------|
-| **DONE** | 29 | 28% |
-| **EASY** | 28 | 27% |
+| **DONE** | 32 | 30% |
+| **EASY** | 25 | 24% |
 | **MEDIUM** | 22 | 21% |
 | **HARD** | 11 | 10% |
 | **VERY HARD** | 6 | 6% |
@@ -426,7 +429,7 @@ class SpiritualWeaponCondition(BaseCondition):
 
 **Combat-relevant**: 96 spells (DONE through VERY HARD)
 **Implementable with existing + new patterns**: 79 spells (DONE + EASY + MEDIUM) = 82% of combat-relevant
-**Progress**: 29 of 96 combat-relevant implemented (30%)
+**Progress**: 32 of 96 combat-relevant implemented (33%)
 
 ---
 
@@ -445,6 +448,8 @@ class SpiritualWeaponCondition(BaseCondition):
 | **Creature Type Filtering** | ✅ COMPLETE | `CreatureType.UNDEAD` exists, `entity.creature_type` field — Turn Undead, Protection from Evil and Good |
 | **Healing Modifier Hooks** | ✅ COMPLETE | `spell_level` field on `HealEvent` + `receive_healing()`, `RollType.HEAL` on dice, `Healing` class in events.py |
 | **Condition Removal Spells** | ✅ COMPLETE | Lesser Restoration, Greater Restoration implemented (Pattern 18). Remove Curse pending (no curse system). |
+| **Condition Immunity** | ✅ COMPLETE | `add_condition_immunity()` / `_remove_static_condition_immunity()` — used by Protection from Poison (Poisoned), Freedom of Movement (Grappled, Restrained) |
+| **Difficult Terrain Bypass** | ✅ COMPLETE | `Entity.ignore_difficult_terrain` flag → `compute_paths()` + `Move._apply()` cap tile cost at 1.0 — used by Freedom of Movement |
 | **Granted Bonus Actions** | ❌ NOT STARTED | Spiritual Weapon (Pattern 19 — non-concentration granted action) |
 | **Spell Preparation** | ❌ NOT STARTED | `SpellPreparationFeature` condition for prepared casters |
 | **Wet/Ice Terrain** | ❌ NOT STARTED | Create/Destroy Water Wet condition (Cold/Lightning vulnerability), Ice surfaces, spell combos |
@@ -481,10 +486,10 @@ Tests: `examples/test_healing_spells.py` (61 assertions).
 |-------|-------|------------|---------|
 | Shield of Faith | 1 | EASY | Pattern 5 (+2 AC buff) |
 | Aid | 2 | EASY | +5 max HP, multi-target |
-| Death Ward | 4 | EASY | Anti-death TAKE_DAMAGE handler |
-| Freedom of Movement | 4 | EASY | Movement immunity buff |
+| ~~Death Ward~~ | 4 | **DONE** | ~~TAKE_DAMAGE handler, one-use, caps lethal at 1 HP~~ ✓ |
+| ~~Freedom of Movement~~ | 4 | **DONE** | ~~ignore_difficult_terrain flag + Grappled/Restrained immunity~~ ✓ |
 | Beacon of Hope | 3 | EASY | Adv WIS saves + max healing |
-| Protection from Poison | 2 | EASY | Resistance + save advantage |
+| ~~Protection from Poison~~ | 2 | **DONE** | ~~Poison resistance + Poisoned condition immunity~~ ✓ |
 | Enhance Ability | 2 | EASY | Ability check advantage |
 
 ### Batch C — Condition Management (Pattern 18) ✅ MOSTLY COMPLETE
@@ -535,7 +540,7 @@ With existing systems (AoE, concentration, zones, d20 manipulation, healing even
 - **Pattern 18 (Condition Removal)**: Simple `entity.remove_condition()` calls — minimal new code
 - **Pattern 19 (Granted Bonus Action)**: Variant of existing Pattern 6 (Call Lightning) — non-concentration, bonus action cost
 
-**19 of 96 combat-relevant spells implemented (20%)**
+**32 of 96 combat-relevant spells implemented (33%)**
 **79 of 96 implementable with current + new patterns (82%)**
 
 ---
@@ -569,3 +574,31 @@ With existing systems (AoE, concentration, zones, d20 manipulation, healing even
 5. **Testing light spells**: Use dark arena pattern: set all `tile.default_light = LightLevel.DARKNESS`, then verify `tile.resolved_light_level == LightLevel.BRIGHT_LIGHT` at expected positions. Always use Move action (not `grid.move_entity()`) for entity movement in tests.
 
 6. **`verbal` field**: Added to both `SpellAction` and `SpellEvent` in `dnd/actions.py`. Default `True`. Silence zone handler checks this on `CAST_SPELL` events at EXECUTION phase.
+
+## Batch 3 Implementation Notes (March 2026)
+
+**Spells completed**: Protection from Poison, Death Ward, Freedom of Movement — 37 integration tests, all passing.
+
+**Infrastructure added**:
+- `parent_event` chain fix: `roll_d20()` and `roll_d20_event()` now accept `parent_event` param, threaded from `saving_throw()` so D20 roll events link back to their parent SavingThrowEvent
+- `Entity.ignore_difficult_terrain` flag: clean bool threaded through `compute_senses_from_position()` → `gridmap.compute_paths()` → caps tile cost at `min(cost, 1.0)`. Same pattern in `Move._apply()` and `_setup_costs_from_path()`
+
+### Difficulty Assessment vs Reality
+
+| Spell | Estimated | Actual | Notes |
+|-------|-----------|--------|-------|
+| Protection from Poison | EASY | EASY | ResistanceModifier(poison) + `add_condition_immunity("Poisoned")`. Clean ~30 lines. |
+| Death Ward | EASY | EASY | Clone of Relentless Rage TAKE_DAMAGE handler pattern. One-use self-removal via `entity.remove_condition()`. ~40 lines. |
+| Freedom of Movement | MEDIUM | MEDIUM | Required `ignore_difficult_terrain` infrastructure across 3 files (entity.py, gridmap.py, actions.py). Condition immunity for Grappled/Restrained. ~60 lines for spell + ~20 lines infrastructure. |
+
+### Gotchas for Future Batches
+
+7. **Condition immunity system**: `entity.add_condition_immunity(condition_name, immunity_name)` blocks condition application. Cleanup via `entity._remove_static_condition_immunity(condition_name, immunity_name)` in `_remove()`. The `add_condition()` path already checks `check_condition_immunity()` and logs a combat message.
+
+8. **Difficult terrain in tests**: Don't set `tile.walking_cost.base_value = 2` — use `tile.walking_cost.self_static.add_value_modifier(NumericalModifier(value=1))` matching `difficult_terrain_factory` pattern.
+
+9. **TAKE_DAMAGE handler pattern**: For death-prevention effects, intercept at EFFECT phase, check `current_hp - event.total_damage <= 0`, return `event.model_copy(update={"modified": True, "final_damage": max(0, current_hp - 1)})`. Self-remove condition after triggering for one-use effects.
+
+10. **`_remove()` for manual state cleanup**: Override `_remove()` (not `cleanup_own_state()`) when you need to undo state changes that aren't tracked as modifiers/handlers (e.g., flags like `ignore_difficult_terrain`, condition immunities). Call `super()._remove()` first.
+
+Tests: `examples/test_cleric_batch2.py` (37 assertions).
