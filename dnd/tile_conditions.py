@@ -396,7 +396,7 @@ class ZoneControlCondition(BaseCondition):
                 condition_stealth_dc=self.marker_stealth_dc,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=tile.uuid,
-                magical_origin=self.magical_origin,
+                tags=self.tags,
             )
             tile.add_condition(marker, event=parent_event)
             self.add_linked_condition(tile.uuid, marker.uuid)

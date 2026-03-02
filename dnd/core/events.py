@@ -156,6 +156,7 @@ class EventType(str, Enum):
     SAVE_D20_ROLL_RESULT = "save_d20_roll"      # Saving throws
     CHECK_D20_ROLL_RESULT = "check_d20_roll"    # Skill checks
     DAMAGE_ROLL_RESULT = "damage_roll_result"   # After damage dice rolled, before applied
+    HEAL_ROLL_RESULT = "heal_roll_result"       # After healing dice rolled, before applied
     DAMAGE_ROLLED = "damage_rolled"  # DEPRECATED: Use DAMAGE_ROLL_RESULT instead
 
     # Combat events
@@ -2227,6 +2228,33 @@ class DamageRollResultEvent(DiceRollResultEvent):
         old_roll = self.final_rolls[index]
         self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
         self.final_rolls[index] = new_roll
+
+
+class HealRollResultEvent(DiceRollResultEvent):
+    """
+    Event fired after healing dice are rolled but before healing is applied.
+
+    Mirrors DamageRollResultEvent pattern. Handlers can maximize or replace
+    healing dice (e.g., Beacon of Hope maximizes all healing dice).
+    """
+    name: str = Field(default="Heal Roll Result")
+    event_type: EventType = Field(default=EventType.HEAL_ROLL_RESULT)
+    roll_type: RollType = Field(default=RollType.HEAL)
+
+    # Context
+    spell_name: str = Field(default="", description="Name of the healing spell")
+
+    # IMMUTABLE: Original roll
+    original_roll: DiceRoll = Field(description="Original healing dice roll before modifications")
+
+    # MUTABLE: Current best roll (handlers replace)
+    final_roll: DiceRoll = Field(description="Final healing dice roll after handler modifications")
+
+    def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> None:  # type: ignore[override]
+        """Helper for handlers to replace the healing roll and track the change."""
+        self.roll_modifications.append((handler_name, reason))
+        self.final_roll = new_roll
+        self.modified = True
 
 
 # =============================================================================

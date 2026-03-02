@@ -3,13 +3,13 @@
 Contains: SeeInvisibility, TrueSeeing, Guidance
 """
 import random
-from typing import Optional, List, Tuple, cast as type_cast
+from typing import Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition, DurationType
+from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
 from dnd.entity import Entity
@@ -24,7 +24,7 @@ class SeeInvisibilityEffect(BaseCondition):
     """Grants the ability to see invisible creatures and objects."""
     name: str = "See Invisibility"
     description: str = "You can see invisible creatures and objects"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     _granted_sense_type: Optional[SensesType] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -103,7 +103,7 @@ class TrueSeeingEffect(BaseCondition):
     """Grants 120ft truesight."""
     name: str = "True Seeing"
     description: str = "You have truesight out to 120 feet"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     _granted_sense_type: Optional[SensesType] = None
     _granted_range: int = 120
 
@@ -229,7 +229,7 @@ class GuidanceEffect(BaseCondition):
     """
     name: str = "Guidance"
     description: str = "Add 1d4 to one ability check"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
