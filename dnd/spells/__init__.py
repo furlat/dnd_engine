@@ -12,12 +12,14 @@ from dnd.spells.evocation import (
     TrueStrike, register_true_strike,
     FlameStrike, Light, LightEffect, ContinualFlame, ContinualFlameObject,
     CureWounds, HealingWord, PrayerOfHealing, MassHealingWord,
-    MassCureWounds, HealSpell, MassHeal
+    MassCureWounds, HealSpell, MassHeal,
+    DivineWord, DivineWordEffect,
 )
-from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction, register_counterspell_reaction, GlobeOfInvulnerability, Banishment, LesserRestoration, GreaterRestoration, ProtectionFromPoison, DeathWard, FreedomOfMovement
+from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction, register_counterspell_reaction, GlobeOfInvulnerability, Banishment, LesserRestoration, GreaterRestoration, RemoveCurse, ProtectionFromPoison, DeathWard, FreedomOfMovement, Resistance, ResistanceEffect, ShieldOfFaith, ShieldOfFaithEffect, Aid, AidEffect, Sanctuary, SanctuaryEffect, BeaconOfHope, BeaconOfHopeEffect
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep, Bane, BaneEffect, Bless, BlessEffect, Command, CommandGrovelEffect, CommandHaltEffect, CommandFleeEffect
-from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud, StinkingCloud, SleetStorm, DimensionDoor, GuardianOfFaith, GuardianOfFaithObject, GuardianWarded
-from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing, NecroticBless, Eyebite, FingerOfDeath
+from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud, StinkingCloud, SleetStorm, DimensionDoor, GuardianOfFaith, GuardianOfFaithObject, GuardianWarded, HeroesFeast, HeroesFeastObject, HeroesFeastBuff, EatFromFeast
+from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing, NecroticBless, Eyebite, FingerOfDeath, InflictWounds, Harm, BestowCurse, AbilityCurseEffect, AttackCurseEffect, InactionCurseEffect, DamageCurseEffect
+from dnd.core.base_conditions import ConditionTag
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage, Silence, SilenceZone
 from dnd.spells.transmutation import SpikeGrowth, Slow, Haste, DarkvisionSpell, Disintegrate, JumpSpell, ExpeditiousRetreat, EnhanceAbility, EnlargeReduce, Telekinesis, Regenerate, RegeneratingEffect
 from dnd.spells.divination import SeeInvisibility, TrueSeeing, Guidance, GuidanceEffect
@@ -35,6 +37,7 @@ CANTRIPS = {
     "True Strike": TrueStrike,
     "Guidance": Guidance,
     "Light": Light,
+    "Resistance": Resistance,
 }
 
 LEVEL_1_SPELLS = {
@@ -56,6 +59,9 @@ LEVEL_1_SPELLS = {
     "Command": Command,
     "Cure Wounds": CureWounds,
     "Healing Word": HealingWord,
+    "Inflict Wounds": InflictWounds,
+    "Shield of Faith": ShieldOfFaith,
+    "Sanctuary": Sanctuary,
 }
 
 LEVEL_2_SPELLS = {
@@ -81,6 +87,7 @@ LEVEL_2_SPELLS = {
     "Prayer of Healing": PrayerOfHealing,
     "Lesser Restoration": LesserRestoration,
     "Protection from Poison": ProtectionFromPoison,
+    "Aid": Aid,
 }
 
 LEVEL_3_SPELLS = {
@@ -97,6 +104,9 @@ LEVEL_3_SPELLS = {
     "Stinking Cloud": StinkingCloud,
     "Sleet Storm": SleetStorm,
     "Mass Healing Word": MassHealingWord,
+    "Beacon of Hope": BeaconOfHope,
+    "Remove Curse": RemoveCurse,
+    "Bestow Curse": BestowCurse,
 }
 
 LEVEL_4_SPELLS = {
@@ -131,12 +141,15 @@ LEVEL_6_SPELLS = {
     "Eyebite": Eyebite,
     "Globe of Invulnerability": GlobeOfInvulnerability,
     "Heal": HealSpell,
+    "Harm": Harm,
+    "Heroes' Feast": HeroesFeast,
 }
 
 LEVEL_7_SPELLS = {
     "Prismatic Spray": PrismaticSpray,
     "Finger of Death": FingerOfDeath,
     "Regenerate": Regenerate,
+    "Divine Word": DivineWord,
 }
 
 LEVEL_8_SPELLS = {
@@ -186,6 +199,20 @@ __all__ = [
     "LightEffect",
     "ContinualFlameObject",
     "GuidanceEffect",
+    "ResistanceEffect",
+    "ShieldOfFaithEffect",
+    "AidEffect",
+    "SanctuaryEffect",
+    "BeaconOfHopeEffect",
+    "DivineWordEffect",
+    "AbilityCurseEffect",
+    "AttackCurseEffect",
+    "InactionCurseEffect",
+    "DamageCurseEffect",
+    "ConditionTag",
+    "HeroesFeastObject",
+    "HeroesFeastBuff",
+    "EatFromFeast",
     "CommandGrovelEffect",
     "CommandHaltEffect",
     "CommandFleeEffect",
@@ -214,6 +241,10 @@ __all__ = [
     "Command",
     "CureWounds",
     "HealingWord",
+    "InflictWounds",
+    "ShieldOfFaith",
+    "Sanctuary",
+    "Resistance",
     # Level 2
     "HoldPerson",
     "Shatter",
@@ -237,6 +268,7 @@ __all__ = [
     "PrayerOfHealing",
     "LesserRestoration",
     "ProtectionFromPoison",
+    "Aid",
     # Level 3
     "CallLightning",
     "CallLightningStrike",
@@ -252,6 +284,9 @@ __all__ = [
     "StinkingCloud",
     "SleetStorm",
     "MassHealingWord",
+    "BeaconOfHope",
+    "RemoveCurse",
+    "BestowCurse",
     # Level 4
     "Blight",
     "Stoneskin",
@@ -280,10 +315,13 @@ __all__ = [
     "Eyebite",
     "GlobeOfInvulnerability",
     "HealSpell",
+    "Harm",
+    "HeroesFeast",
     # Level 7
     "PrismaticSpray",
     "FingerOfDeath",
     "Regenerate",
+    "DivineWord",
     # Level 8
     "Sunburst",
     "PowerWordStun",

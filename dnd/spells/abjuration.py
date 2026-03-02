@@ -2,26 +2,27 @@
 
 Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           LesserRestoration, GreaterRestoration,
-          ProtectionFromPoison, DeathWard, FreedomOfMovement
+          ProtectionFromPoison, DeathWard, FreedomOfMovement,
+          Resistance, ShieldOfFaith, Aid, Sanctuary, BeaconOfHope
 """
 import random
-from typing import Optional, List, Tuple, cast as type_cast
+from typing import Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType, spell_slot_cost_type
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, SpellProtectionRegistry, SpellProtection
+from dnd.core.base_actions import TargetType, spell_slot_cost_type, Cost
+from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, ConditionTag, SpellProtectionRegistry, SpellProtection, DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent
-from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus, AdvantageModifier, AdvantageStatus
 from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
-from dnd.core.dice import AttackOutcome
+from dnd.core.dice import AttackOutcome, Dice
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent, AttackEvent
+from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
 from dnd.conditions import Incapacitated
 from dnd.spells.spell_utils import validate_line_of_sight
 
@@ -52,7 +53,7 @@ class ShieldBuff(BaseCondition):
     name: str = "Shield"
     description: str = "+5 AC until start of your next turn"
     condition_category: ConditionCategory = ConditionCategory.STATUS
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -284,7 +285,7 @@ class MageArmorCondition(BaseCondition):
     """
     name: str = "Mage Armor"
     description: str = "AC equals 13 + DEX modifier when unarmored"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # Track the old unarmored type to restore on removal
     _old_unarmored_type: Optional[str] = None  # Store as string for Pydantic serialization
@@ -484,7 +485,7 @@ class ProtectionFromEnergyEffect(BaseCondition):
     """
     name: str = "Protection from Energy"
     description: str = "Resistant to one energy type"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # The chosen energy type (set by spell)
     energy_type: DamageType = DamageType.FIRE
@@ -625,7 +626,7 @@ class StoneskinEffect(BaseCondition):
     """
     name: str = "Stoneskin"
     description: str = "Resistant to bludgeoning, piercing, and slashing damage"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
@@ -867,7 +868,7 @@ class GlobeZone(BaseCondition):
     name: str = "Globe of Invulnerability Zone"
     description: str = "Immobile sphere blocks spells level 5 or lower"
     condition_category: ConditionCategory = ConditionCategory.STATUS
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_center: Tuple[int, int] = Field(default=(0, 0))
     zone_radius_feet: int = Field(default=10)
@@ -1114,7 +1115,7 @@ class BanishedCondition(BaseCondition):
     name: str = "Banished"
     description: str = "Banished to another plane — removed from play"
     condition_category: ConditionCategory = ConditionCategory.STATUS
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     original_position: Tuple[int, int] = Field(default=(0, 0))
 
@@ -1132,7 +1133,7 @@ class BanishedCondition(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(incap, parent_event=declaration_event)
         sub_conditions_uuids.append(incap.uuid)
@@ -1431,6 +1432,73 @@ class GreaterRestoration(SpellAction):
 
 
 # =============================================================================
+# Remove Curse (Level 3, instantaneous)
+# =============================================================================
+
+
+class RemoveCurse(SpellAction):
+    """Remove Curse - 3rd level Abjuration
+
+    At your touch, all curses affecting one creature or object end.
+    Finds first condition with ConditionTag.CURSE and removes it.
+    """
+    name: str = Field(default="Remove Curse")
+    description: str = Field(default="Touch: remove one curse from a creature")
+    spell_level: int = Field(default=3)
+    spell_school: str = Field(default="abjuration")
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+    )
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return declaration_event.cancel(status_message="Caster or target not found")
+
+        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+            return declaration_event.cancel(status_message="Target not in line of sight")
+
+        distance = caster.senses.get_feet_distance(target.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(
+                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
+            )
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Remove Curse on {target.name}"
+        )
+
+        removed = None
+        for cond_name, cond in list(target.active_conditions.items()):
+            if ConditionTag.CURSE in cond.tags:
+                target.remove_condition(cond_name, parent_event=effect_event)
+                removed = cond_name
+                break
+
+        status = f"Removed {removed}" if removed else "No curse found"
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Remove Curse: {status}"
+        )
+
+
+# =============================================================================
 # Protection from Poison (Level 2, NOT concentration)
 # =============================================================================
 
@@ -1439,7 +1507,7 @@ class ProtectionFromPoisonEffect(BaseCondition):
     name: str = "Protection from Poison"
     description: str = "Resistant to poison damage, immune to Poisoned condition"
     condition_category: ConditionCategory = ConditionCategory.STATUS
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1547,7 +1615,7 @@ class DeathWardEffect(BaseCondition):
     name: str = "Death Ward"
     description: str = "Once: survive lethal damage at 1 HP"
     condition_category: ConditionCategory = ConditionCategory.STATUS
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1673,7 +1741,7 @@ class FreedomOfMovementEffect(BaseCondition):
     name: str = "Freedom of Movement"
     description: str = "Immune to difficult terrain, Grappled, and Restrained"
     condition_category: ConditionCategory = ConditionCategory.STATUS
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1764,4 +1832,597 @@ class FreedomOfMovement(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"{self.name} cast on {target.name}"
+        )
+
+
+# =============================================================================
+# Resistance (Cantrip) - Add 1d4 to one saving throw (Guidance clone)
+# =============================================================================
+
+def _resistance_processor(
+    event: D20RollResultEvent,
+    source_entity_uuid: UUID,
+) -> Optional[D20RollResultEvent]:
+    """Add 1d4 to saving throw roll. One-use: removes condition after firing."""
+    if event.source_entity_uuid != source_entity_uuid:
+        return None
+
+    d4_value = random.randint(1, 4)
+    effective = event.get_effective_roll()
+    new_total = effective.total + d4_value
+    new_roll = effective.model_copy(update={"total": new_total})
+    event.replace_roll(new_roll, "Resistance", f"+{d4_value} (1d4)")
+
+    target = Entity.get(source_entity_uuid)
+    if target and "Resistance" in target.active_conditions:
+        target.remove_condition("Resistance", parent_event=event)
+
+    return event.model_copy(update={"modified": True})
+
+
+class ResistanceEffect(BaseCondition):
+    """Resistance condition — adds 1d4 to one saving throw, then expires."""
+    name: str = "Resistance"
+    description: str = "Add 1d4 to one saving throw"
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        handler = EventHandler(
+            name="Resistance",
+            source_entity_uuid=self.target_entity_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.SAVE_D20_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=self.target_entity_uuid,
+                ),
+            ],
+            event_processor=_resistance_processor,
+        )
+        target.add_event_handler(handler)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Resistance applied to {target.name}"
+        )
+        return [], [handler.uuid], [], [], effect_event
+
+
+class Resistance(SpellAction):
+    """Resistance — Abjuration cantrip.
+
+    Touch one willing creature. Once before the spell ends, the target can
+    add 1d4 to one saving throw of its choice. Concentration, up to 1 minute.
+    """
+    name: str = Field(default="Resistance")
+    description: str = Field(default="Add 1d4 to one saving throw (one use)")
+    spell_level: int = Field(default=0)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Resistance cast on {target.name}"
+        )
+
+        resistance_effect = ResistanceEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        resistance_effect.duration.duration_type = DurationType.ROUNDS
+        resistance_effect.duration.duration = 10
+        target.add_condition(resistance_effect, parent_event=effect_event)
+
+        concentration = self.ensure_concentration(effect_event)
+        if resistance_effect.applied:
+            concentration.add_linked_condition(target.uuid, resistance_effect.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Resistance cast on {target.name}"
+        )
+
+
+# =============================================================================
+# Shield of Faith (L1) - +2 AC, bonus action, concentration
+# =============================================================================
+
+class ShieldOfFaithEffect(BaseCondition):
+    """Shield of Faith — +2 AC bonus."""
+    name: str = "Shield of Faith"
+    description: str = "+2 bonus to AC"
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+        modifier_uuid = target.equipment.ac_bonus.self_static.add_value_modifier(
+            NumericalModifier(
+                name="Shield of Faith",
+                value=2,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+            )
+        )
+        outs.append((target.equipment.ac_bonus.uuid, modifier_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Shield of Faith grants +2 AC to {target.name}"
+        )
+        return outs, [], [], [], effect_event
+
+
+class ShieldOfFaith(SpellAction):
+    """Shield of Faith — 1st-level abjuration.
+
+    A shimmering field appears around a creature, granting +2 to AC.
+    Bonus action, 60ft range, concentration up to 10 minutes.
+    """
+    name: str = Field(default="Shield of Faith")
+    description: str = Field(default="+2 AC bonus (concentration)")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Shield of Faith Cost", cost_type="bonus_actions", cost=1,
+             evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Shield of Faith cast on {target.name}"
+        )
+
+        condition = ShieldOfFaithEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(condition, parent_event=effect_event)
+
+        concentration = self.ensure_concentration(effect_event)
+        if condition.applied:
+            concentration.add_linked_condition(target.uuid, condition.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Shield of Faith grants +2 AC to {target.name}"
+        )
+
+
+# =============================================================================
+# Aid (L2) - +max HP bonus, 3 targets, NOT concentration
+# =============================================================================
+
+class AidEffect(BaseCondition):
+    """Aid — increases max HP (and current HP) by 5 per spell level above 1st."""
+    name: str = "Aid"
+    description: str = "Max HP increased"
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    hp_bonus: int = 5
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+        modifier_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(
+            NumericalModifier(
+                name="Aid",
+                value=self.hp_bonus,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+            )
+        )
+        outs.append((target.health.max_hit_points_bonus.uuid, modifier_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Aid grants +{self.hp_bonus} max HP to {target.name}"
+        )
+        return outs, [], [], [], effect_event
+
+
+class Aid(SpellAction):
+    """Aid — 2nd-level abjuration.
+
+    Choose up to three creatures within range. Each target's max HP and
+    current HP increase by 5 for the duration. At higher levels: +5 per
+    slot level above 2nd.
+    """
+    name: str = Field(default="Aid")
+    description: str = Field(default="Increase max HP by 5 per level above 1st for 3 targets")
+    spell_level: int = Field(default=2)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def get_num_projectiles(self) -> int:
+        return 3
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        hp_bonus = 5 * max(1, self.cast_at_level - 1)  # 5 at L2, 10 at L3, 15 at L4
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Aid grants +{hp_bonus} max HP to {target.name}"
+        )
+
+        condition = AidEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            hp_bonus=hp_bonus,
+        )
+        target.add_condition(condition, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Aid grants +{hp_bonus} max HP to {target.name}"
+        )
+
+
+# =============================================================================
+# Sanctuary (L1) - Ward: force WIS save on attacker, self-break on offensive
+# =============================================================================
+
+class SanctuaryEffect(BaseCondition):
+    """Sanctuary — warded creature can't be targeted by attacks unless attacker passes WIS save.
+    Breaks when warded creature attacks or casts a spell affecting an enemy.
+    """
+    name: str = "Sanctuary"
+    description: str = "Attackers must make WIS save to target this creature"
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    spell_dc: int = 10
+    duration_rounds: int = 10
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        handler_uuids: List[UUID] = []
+
+        # Handler 1: Ward — intercept attacks targeting this entity
+        ward_handler = self._create_ward_handler()
+        target.add_event_handler(ward_handler)
+        handler_uuids.append(ward_handler.uuid)
+
+        # Handler 2: Self-break — remove Sanctuary when warded entity acts offensively
+        break_handler = self._create_break_handler()
+        target.add_event_handler(break_handler)
+        handler_uuids.append(break_handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Sanctuary protects {target.name}"
+        )
+        return [], handler_uuids, [], [], effect_event
+
+    def _create_ward_handler(self) -> EventHandler:
+        """Force WIS save on attackers targeting the warded entity."""
+        warded_uuid = self.target_entity_uuid
+        caster_uuid = self.source_entity_uuid
+        dc = self.spell_dc
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.target_entity_uuid != warded_uuid:
+                return None
+            if event.source_entity_uuid == warded_uuid:
+                return None  # Can't block self-attacks
+
+            attacker = Entity.get(event.source_entity_uuid)
+            caster = Entity.get(caster_uuid)
+            if not attacker or not caster:
+                return None
+
+            # Force WIS save
+            save_request = caster.create_saving_throw_request(
+                target_entity_uuid=attacker.uuid,
+                ability_name="wisdom",
+                dc=dc,
+                parent_event=event.uuid
+            )
+            _, _, success = attacker.saving_throw(save_request)
+
+            if success:
+                return None  # Save passed — attack proceeds
+            else:
+                return event.cancel(status_message=f"{attacker.name} fails WIS save — Sanctuary blocks attack")
+
+        return EventHandler(
+            name="Sanctuary Ward",
+            source_entity_uuid=warded_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK,
+                    event_phase=EventPhase.DECLARATION,
+                    event_target_entity_uuid=warded_uuid,
+                ),
+            ],
+            event_processor=processor,
+        )
+
+    def _create_break_handler(self) -> EventHandler:
+        """Remove Sanctuary when the warded entity attacks or casts an offensive spell."""
+        warded_uuid = self.target_entity_uuid
+        condition_uuid = self.uuid
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.source_entity_uuid != warded_uuid:
+                return None
+
+            # For attacks: check that target is an enemy
+            target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+            warded = Entity.get(warded_uuid)
+            if not warded:
+                return None
+
+            if target and warded.is_enemy(target):
+                if "Sanctuary" in warded.active_conditions:
+                    active = warded.active_conditions.get("Sanctuary")
+                    if active and active.uuid == condition_uuid:
+                        warded.remove_condition("Sanctuary", parent_event=event)
+            return None
+
+        return EventHandler(
+            name="Sanctuary Self-Break",
+            source_entity_uuid=warded_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=warded_uuid,
+                ),
+                Trigger(
+                    event_type=EventType.CAST_SPELL,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=warded_uuid,
+                ),
+            ],
+            event_processor=processor,
+        )
+
+
+class Sanctuary(SpellAction):
+    """Sanctuary — 1st-level abjuration.
+
+    You ward a creature. Any creature that targets the warded creature with
+    an attack must first make a WIS save. On failure, the attack is wasted.
+    If the warded creature attacks or casts a spell that affects an enemy,
+    Sanctuary ends.
+    """
+    name: str = Field(default="Sanctuary")
+    description: str = Field(default="Ward: attackers must WIS save; breaks on offensive action")
+    spell_level: int = Field(default=1)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Sanctuary Cost", cost_type="bonus_actions", cost=1,
+             evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        dc = caster.spell_save_dc()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Sanctuary cast on {target.name}"
+        )
+
+        condition = SanctuaryEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            spell_dc=dc,
+        )
+        condition.duration.duration_type = DurationType.ROUNDS
+        condition.duration.duration = 10
+        target.add_condition(condition, parent_event=effect_event)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"Sanctuary protects {target.name} (DC {dc})"
+        )
+
+
+# =============================================================================
+# Beacon of Hope (L3) - Advantage on WIS saves + maximize healing dice
+# =============================================================================
+
+class BeaconOfHopeEffect(BaseCondition):
+    """Beacon of Hope — advantage on WIS saves and death saves,
+    and all healing received is maximized.
+    """
+    name: str = "Beacon of Hope"
+    description: str = "Advantage on WIS saves; healing dice maximized"
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+        handler_uuids: List[UUID] = []
+
+        # Advantage on WIS saves
+        wis_save = target.saving_throws.get_saving_throw("wisdom")
+        modifier_uuid = wis_save.bonus.self_static.add_advantage_modifier(
+            AdvantageModifier(
+                name="Beacon of Hope",
+                value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+            )
+        )
+        outs.append((wis_save.bonus.uuid, modifier_uuid))
+
+        # Handler to maximize healing dice
+        heal_handler = self._create_heal_maximizer()
+        target.add_event_handler(heal_handler)
+        handler_uuids.append(heal_handler.uuid)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Beacon of Hope inspires {target.name}"
+        )
+        return outs, handler_uuids, [], [], effect_event
+
+    def _create_heal_maximizer(self) -> EventHandler:
+        """Maximize all healing dice received by this entity."""
+        target_uuid = self.target_entity_uuid
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, HealRollResultEvent):
+                return None
+            if event.target_entity_uuid != target_uuid:
+                return None
+
+            roll = event.final_roll
+            # Maximize each die: replace results with max values
+            if isinstance(roll.results, list) and len(roll.results) > 0:
+                # Each die result becomes the max face value
+                # We need to figure out the die value from the count and results
+                # The bonus is stored separately in roll.bonus
+                die_count = len(roll.results)
+                # Get the die value from the original roll's dice
+                original = event.original_roll
+                if isinstance(original.results, list) and len(original.results) > 0:
+                    # Die value = (total - bonus) could help but simpler:
+                    # We know the Healing object, but we don't have it here.
+                    # Instead, infer from the Dice: results are individual die values
+                    # max value per die = max possible result, but we need the die size
+                    # The DiceRoll has a dice_uuid referencing the Dice object
+                    dice = Dice.get(roll.dice_uuid)
+                    if dice:
+                        max_per_die = dice.value
+                        new_results = [max_per_die] * die_count
+                        new_total = sum(new_results) + roll.bonus
+                        new_roll = roll.model_copy(update={
+                            "results": new_results,
+                            "total": new_total,
+                        })
+                        event.replace_roll(new_roll, "Beacon of Hope", "maximize healing dice")
+
+            return event
+
+        return EventHandler(
+            name="Beacon of Hope Heal Maximizer",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.HEAL_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=target_uuid,
+                ),
+            ],
+            event_processor=processor,
+        )
+
+
+class BeaconOfHope(SpellAction):
+    """Beacon of Hope — 3rd-level abjuration.
+
+    Choose any number of creatures within range. Each target has advantage on
+    WIS saves and death saves, and regains the maximum possible HP from healing.
+    Concentration, up to 1 minute.
+    """
+    name: str = Field(default="Beacon of Hope")
+    description: str = Field(default="Advantage on WIS saves; maximize healing received")
+    spell_level: int = Field(default=3)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    include_self: bool = Field(default=True)
+    valid_target_filter: str = Field(default="self_or_allies")
+
+    def get_num_projectiles(self) -> int:
+        return 6  # Reasonable cap for visible allies
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Beacon of Hope inspires {target.name}"
+        )
+
+        condition = BeaconOfHopeEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid
+        )
+        target.add_condition(condition, parent_event=effect_event)
+
+        concentration = self.ensure_concentration(effect_event)
+        if condition.applied:
+            concentration.add_linked_condition(target.uuid, condition.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Beacon of Hope cast on {target.name}"
         )

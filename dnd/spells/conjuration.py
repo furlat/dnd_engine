@@ -3,22 +3,23 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
-from typing import Optional, List, Tuple, cast as type_cast
+from typing import Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, BaseCost
-from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType
-from dnd.blocks.base_item import BaseItem
+from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, BaseCost, ActionCategory
+from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType, ConditionTag
+from dnd.blocks.base_item import BaseItem, UsableItem
+import random
 from dnd.core.dice import AttackOutcome
 from dnd.core.values import ModifiableValue
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SkillCheckEvent, SpatialChangeEvent
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.modifiers import DamageType, NumericalModifier, AdvantageModifier, AdvantageStatus
 from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone, Restrained
+from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone, Restrained, Poisoned, Frightened
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition
 from dnd.spells.spell_utils import validate_line_of_sight
@@ -633,7 +634,7 @@ class GreaseZone(ZoneControlCondition):
     """
     name: str = "Grease Zone"
     description: str = "Slippery grease - DEX save or fall prone"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # Zone configuration
     zone_shape: str = Field(default="cube")
@@ -683,7 +684,7 @@ class GreaseZone(ZoneControlCondition):
                 prone = Prone(
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=entity.uuid,
-                    magical_origin=True
+                    tags={ConditionTag.MAGICAL}
                 )
                 entity.add_condition(prone, parent_event=event)
 
@@ -737,7 +738,7 @@ class GreaseZone(ZoneControlCondition):
                 prone = Prone(
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=entity.uuid,
-                    magical_origin=True
+                    tags={ConditionTag.MAGICAL}
                 )
                 entity.add_condition(prone, parent_event=event)
 
@@ -866,7 +867,7 @@ class Grease(SpellAction):
                     prone = Prone(
                         source_entity_uuid=caster.uuid,
                         target_entity_uuid=ent.uuid,
-                        magical_origin=True
+                        tags={ConditionTag.MAGICAL}
                     )
                     ent.add_condition(prone, parent_event=effect_event)
                     prone_count += 1
@@ -911,7 +912,7 @@ class WebRestrained(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(restrained, parent_event=declaration_event)
         sub_conditions_uuids.append(restrained.uuid)
@@ -1032,7 +1033,7 @@ class WebZone(ZoneControlCondition):
     """
     name: str = "Web Zone"
     description: str = "Sticky webs - DEX save or restrained"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # Zone configuration
     zone_shape: str = Field(default="cube")
@@ -1082,7 +1083,7 @@ class WebZone(ZoneControlCondition):
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=entity.uuid,
                     spell_dc=dc,
-                    magical_origin=True
+                    tags={ConditionTag.MAGICAL}
                 )
                 entity.add_condition(web_restrained, parent_event=event)
 
@@ -1220,7 +1221,7 @@ class Web(SpellAction):
                         source_entity_uuid=caster.uuid,
                         target_entity_uuid=ent.uuid,
                         spell_dc=dc,
-                        magical_origin=True
+                        tags={ConditionTag.MAGICAL}
                     )
                     ent.add_condition(web_restrained, parent_event=effect_event)
                     restrained_count += 1
@@ -1249,7 +1250,7 @@ class CloudkillZone(ZoneControlCondition):
     """
     name: str = "Cloudkill Zone"
     description: str = "Poisonous fog - CON save or 5d8 poison, half on save"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # Zone configuration
     zone_shape: str = Field(default="sphere")
@@ -1690,7 +1691,7 @@ class SpiritGuardiansZone(ZoneControlCondition):
     """
     name: str = "Spirit Guardians Zone"
     description: str = "Spectral warriors damage enemies entering the zone"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # Zone configuration
     zone_shape: str = Field(default="sphere")
@@ -2101,7 +2102,7 @@ class FogCloudZone(ZoneControlCondition):
     """
     name: str = "Fog Cloud Zone"
     description: str = "Heavily obscured fog — blocks vision including darkvision"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=20)
@@ -2208,7 +2209,7 @@ class DarknessZone(ZoneControlCondition):
     """
     name: str = "Darkness Zone"
     description: str = "Magical darkness — blocks all vision including darkvision"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=15)
@@ -2313,7 +2314,7 @@ class DaylightZone(ZoneControlCondition):
     """
     name: str = "Daylight Zone"
     description: str = "Very bright light — reveals hidden creatures"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=60)
@@ -2415,7 +2416,7 @@ class InsectPlagueZone(ZoneControlCondition):
     """Zone for Insect Plague - swarming locusts deal piercing damage."""
     name: str = "Insect Plague Zone"
     description: str = "Swarming biting locusts - CON save or 4d10 piercing"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=20)
@@ -2630,7 +2631,7 @@ class IncendiaryCloudZone(ZoneControlCondition):
     """Zone for Incendiary Cloud - roiling fire cloud deals fire damage."""
     name: str = "Incendiary Cloud Zone"
     description: str = "Roiling fire cloud - DEX save or 10d8 fire"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=20)
@@ -2938,7 +2939,7 @@ class StinkingCloudZone(ZoneControlCondition):
     """
     name: str = "Stinking Cloud Zone"
     description: str = "Nauseating gas - CON save or lose actions"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=20)
@@ -2993,7 +2994,7 @@ class StinkingCloudZone(ZoneControlCondition):
                 nauseated = NauseatedCondition(
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=entity.uuid,
-                    magical_origin=True
+                    tags={ConditionTag.MAGICAL}
                 )
                 entity.add_condition(nauseated, parent_event=event)
 
@@ -3093,7 +3094,7 @@ class SleetStormZone(ZoneControlCondition):
     """
     name: str = "Sleet Storm Zone"
     description: str = "Icy sleet - DEX save or prone, concentration disruption"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=40)
@@ -3132,7 +3133,7 @@ class SleetStormZone(ZoneControlCondition):
             )
             _, _, success = entity.saving_throw(save_request)
             if not success:
-                prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid, magical_origin=True)
+                prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid, tags={ConditionTag.MAGICAL})
                 entity.add_condition(prone, parent_event=event)
             return None
 
@@ -3173,7 +3174,7 @@ class SleetStormZone(ZoneControlCondition):
                 )
                 _, _, success = entity.saving_throw(save_request)
                 if not success:
-                    prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid, magical_origin=True)
+                    prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid, tags={ConditionTag.MAGICAL})
                     entity.add_condition(prone, parent_event=event)
 
             # Concentration disruption: CON save DC 10
@@ -3280,7 +3281,7 @@ class SleetStorm(SpellAction):
                 )
                 _, _, success = ent.saving_throw(save_request)
                 if not success:
-                    prone = Prone(source_entity_uuid=caster.uuid, target_entity_uuid=ent.uuid, magical_origin=True)
+                    prone = Prone(source_entity_uuid=caster.uuid, target_entity_uuid=ent.uuid, tags={ConditionTag.MAGICAL})
                     ent.add_condition(prone, parent_event=effect_event)
 
         return effect_event.phase_to(
@@ -3621,4 +3622,217 @@ class GuardianOfFaith(SpellAction):
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"A spectral guardian appears at {position} (60 damage budget)"
+        )
+
+
+# =============================================================================
+# Heroes' Feast (L6) - Summoned feast object, use action for buff
+# =============================================================================
+
+class HeroesFeastBuff(BaseCondition):
+    """Heroes' Feast buff — immunity to poison/frightened, advantage on WIS saves,
+    increased max HP.
+    """
+    name: str = "Heroes' Feast"
+    description: str = "Immune to poison/frightened, advantage WIS saves, +max HP"
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    hp_bonus: int = 0
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        outs: List[Tuple[UUID, UUID]] = []
+
+        # Remove existing Poisoned and Frightened
+        if "Poisoned" in target.active_conditions:
+            target.remove_condition("Poisoned", parent_event=declaration_event)
+        if "Frightened" in target.active_conditions:
+            target.remove_condition("Frightened", parent_event=declaration_event)
+
+        # Condition immunities
+        target.add_condition_immunity("Poisoned", immunity_name="Heroes' Feast")
+        target.add_condition_immunity("Frightened", immunity_name="Heroes' Feast")
+
+        # Advantage on WIS saves
+        wis_save = target.saving_throws.get_saving_throw("wisdom")
+        wis_adv_uuid = wis_save.bonus.self_static.add_advantage_modifier(
+            AdvantageModifier(
+                name="Heroes' Feast",
+                value=AdvantageStatus.ADVANTAGE,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+            )
+        )
+        outs.append((wis_save.bonus.uuid, wis_adv_uuid))
+
+        # Max HP bonus (rolled 2d10 at apply time)
+        if self.hp_bonus > 0:
+            hp_mod_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(
+                NumericalModifier(
+                    name="Heroes' Feast",
+                    value=self.hp_bonus,
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=self.target_entity_uuid,
+                )
+            )
+            outs.append((target.health.max_hit_points_bonus.uuid, hp_mod_uuid))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Heroes' Feast buff on {target.name} (+{self.hp_bonus} max HP)"
+        )
+        return outs, [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Clean up condition immunities."""
+        target = Entity.get(self.target_entity_uuid)
+        if target:
+            target._remove_static_condition_immunity("Poisoned", "Heroes' Feast")
+            target._remove_static_condition_immunity("Frightened", "Heroes' Feast")
+        return super()._remove(event)
+
+
+class EatFromFeast(BaseAction):
+    """Action to eat from the Heroes' Feast and gain the buff."""
+    name: str = Field(default="Eat from Feast")
+    description: str = Field(default="Eat from the Heroes' Feast to gain its buff")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    feast_uuid: UUID = Field(description="UUID of the HeroesFeastObject")
+    caster_uuid: UUID = Field(description="UUID of the caster who created the feast")
+    is_item_use: bool = Field(default=True)
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        if not entity:
+            return declaration_event.cancel(status_message="Entity not found")
+
+        # Check the feast object still exists
+        feast = BaseItem.get(self.feast_uuid)
+        if not feast or not isinstance(feast, HeroesFeastObject):
+            return declaration_event.cancel(status_message="Feast no longer available")
+
+        # Check already eaten
+        if entity.uuid in feast.consumed_by:
+            return declaration_event.cancel(status_message=f"{entity.name} has already eaten from this feast")
+
+        # Check already has the buff
+        if "Heroes' Feast" in entity.active_conditions:
+            return declaration_event.cancel(status_message=f"{entity.name} already has Heroes' Feast buff")
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[ActionEvent], parent_result)
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        feast = BaseItem.get(self.feast_uuid)
+        if not entity or not feast or not isinstance(feast, HeroesFeastObject):
+            return execution_event.cancel(status_message="Entity or feast not found")
+
+        # Roll 2d10 for HP bonus
+        hp_bonus = random.randint(1, 10) + random.randint(1, 10)
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{entity.name} eats from the Heroes' Feast"
+        )
+
+        buff = HeroesFeastBuff(
+            source_entity_uuid=self.caster_uuid,
+            target_entity_uuid=entity.uuid,
+            hp_bonus=hp_bonus,
+        )
+        entity.add_condition(buff, parent_event=effect_event)
+
+        # Mark as consumed
+        feast.consumed_by.add(entity.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{entity.name} gains Heroes' Feast buff (+{hp_bonus} max HP)"
+        )
+
+
+class HeroesFeastObject(UsableItem):
+    """A magnificent feast that appears on the ground.
+    Creatures can eat from it to gain the Heroes' Feast buff.
+    """
+    name: str = Field(default="Heroes' Feast")
+    description: str = Field(default="A magnificent feast — eat to gain immunity to poison/frightened and +HP")
+    is_pickable: bool = Field(default=False)
+    map_char: str = Field(default="F")
+    consumed_by: Set[UUID] = Field(default_factory=set)
+    caster_uuid: Optional[UUID] = Field(default=None)
+
+    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        """Return the EatFromFeast action if the user hasn't eaten yet."""
+        if user_entity_uuid in self.consumed_by:
+            return []
+        if not self.caster_uuid:
+            return []
+        return [
+            EatFromFeast(
+                source_entity_uuid=user_entity_uuid,
+                feast_uuid=self.uuid,
+                caster_uuid=self.caster_uuid,
+                source_item_uuid=self.uuid,
+            )
+        ]
+
+
+class HeroesFeast(SpellAction):
+    """Heroes' Feast — 6th-level conjuration.
+
+    You bring forth a great feast. A feast object appears at the target position.
+    Creatures within 5 feet can use an action to eat from it, gaining:
+    - Immunity to poison and being frightened
+    - Advantage on WIS saves
+    - +2d10 max HP
+    """
+    name: str = Field(default="Heroes' Feast")
+    description: str = Field(default="Summon feast: eat for poison/fear immunity, WIS save advantage, +HP")
+    spell_level: int = Field(default=6)
+    spell_school: str = Field(default="conjuration")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.POSITION)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        if not self.end_position:
+            return declaration_event.cancel(status_message="No target position")
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+        position = self.end_position
+        if not position:
+            return execution_event.cancel(status_message="No target position")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} conjures a Heroes' Feast"
+        )
+
+        # Create and place the feast object
+        feast = HeroesFeastObject(
+            source_entity_uuid=caster.uuid,
+            caster_uuid=caster.uuid,
+        )
+        grid = get_map()
+        grid.place_object(feast.uuid, position)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"A magnificent feast appears at {position}"
         )

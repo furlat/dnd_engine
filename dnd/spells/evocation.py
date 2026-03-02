@@ -14,7 +14,7 @@ from pydantic import Field
 
 from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionCategory
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType, HazardFilter
+from dnd.core.base_conditions import BaseCondition, ConditionTag, Duration, DurationType, HazardFilter
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome, RollType
 from typing import cast as type_cast
@@ -26,7 +26,8 @@ from dnd.blocks.equipment import ArmorType, Weapon as WeaponItem, Shield as Shie
 
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, Attack
-from dnd.conditions import Blinded, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
+from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
+from dnd.spells.spell_utils import fire_heal_roll_result
 
 
 def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
@@ -331,7 +332,7 @@ class RayOfFrost(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,  # Lives on caster
             affected_target_uuid=target.uuid,  # But affects target's speed
-            magical_origin=True,
+            tags={ConditionTag.MAGICAL},
             duration=Duration(
                 duration=1,
                 duration_type=DurationType.ROUNDS,
@@ -1830,7 +1831,7 @@ class SunburstBlindedEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event = target.add_condition(blinded, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -2043,7 +2044,7 @@ class Sunburst(SpellAction):
                 target_entity_uuid=target.uuid,
                 caster_uuid=caster.uuid,
                 spell_dc=dc,
-                magical_origin=True
+                tags={ConditionTag.MAGICAL}
             )
             target.add_condition(blind_effect, parent_event=effect_event)
 
@@ -2591,7 +2592,7 @@ class GustOfWindZone(ZoneControlCondition):
     """Zone for Gust of Wind - 60ft line of wind that pushes creatures."""
     name: str = "Gust of Wind Zone"
     description: str = "Strong wind pushes creatures and costs extra movement"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="line")
     zone_radius_feet: int = Field(default=60)
@@ -3070,7 +3071,7 @@ class SunbeamStrike(BaseAction):
             blinded = Blinded(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
-                magical_origin=True
+                tags={ConditionTag.MAGICAL}
             )
             blinded.duration.duration_type = DurationType.ROUNDS
             blinded.duration.duration = 1
@@ -3280,7 +3281,7 @@ class PrismaticRestrained(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(restrained, parent_event=declaration_event)
         sub_conditions_uuids.append(restrained.uuid)
@@ -3425,7 +3426,7 @@ class PrismaticSpray(SpellAction):
                     target_entity_uuid=target.uuid,
                     caster_uuid=caster.uuid,
                     spell_dc=dc,
-                    magical_origin=True
+                    tags={ConditionTag.MAGICAL}
                 )
                 target.add_condition(prismatic_restrained, parent_event=parent_event)
 
@@ -3441,7 +3442,7 @@ class PrismaticSpray(SpellAction):
                 blinded = Blinded(
                     source_entity_uuid=caster.uuid,
                     target_entity_uuid=target.uuid,
-                    magical_origin=True
+                    tags={ConditionTag.MAGICAL}
                 )
                 blinded.duration.duration_type = DurationType.ROUNDS
                 blinded.duration.duration = 10
@@ -3789,7 +3790,7 @@ class Light(SpellAction):
         light_effect = LightEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         light_effect.duration.duration_type = DurationType.ROUNDS
         light_effect.duration.duration = 10
@@ -3968,7 +3969,6 @@ class CureWounds(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         healing = _create_healing(caster, self.cast_at_level, 8, "Cure Wounds")
-        healing_roll = healing.get_dice().roll
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -3976,6 +3976,7 @@ class CureWounds(SpellAction):
             status_message=f"Cure Wounds heals {target.name}"
         )
 
+        healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Cure Wounds")
         actual = target.receive_healing(
             healing_roll.total, caster.uuid,
             source_description=f"Cure Wounds: {healing_roll.total}",
@@ -4039,7 +4040,6 @@ class HealingWord(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         healing = _create_healing(caster, self.cast_at_level, 4, "Healing Word")
-        healing_roll = healing.get_dice().roll
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4047,6 +4047,7 @@ class HealingWord(SpellAction):
             status_message=f"Healing Word heals {target.name}"
         )
 
+        healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Healing Word")
         actual = target.receive_healing(
             healing_roll.total, caster.uuid,
             source_description=f"Healing Word: {healing_roll.total}",
@@ -4116,7 +4117,6 @@ class PrayerOfHealing(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         healing = _create_healing(caster, self.cast_at_level, 8, "Prayer of Healing")
-        healing_roll = healing.get_dice().roll
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4124,6 +4124,7 @@ class PrayerOfHealing(SpellAction):
             status_message=f"Prayer of Healing heals {target.name}"
         )
 
+        healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Prayer of Healing")
         actual = target.receive_healing(
             healing_roll.total, caster.uuid,
             source_description=f"Prayer of Healing: {healing_roll.total}",
@@ -4200,7 +4201,6 @@ class MassHealingWord(SpellAction):
 
         num_dice = 1 + max(0, self.cast_at_level - 3)  # 1d4 at L3, 2d4 at L4, etc.
         healing = _create_healing(caster, num_dice, 4, "Mass Healing Word")
-        healing_roll = healing.get_dice().roll
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4208,6 +4208,7 @@ class MassHealingWord(SpellAction):
             status_message=f"Mass Healing Word heals {target.name}"
         )
 
+        healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Healing Word")
         actual = target.receive_healing(
             healing_roll.total, caster.uuid,
             source_description=f"Mass Healing Word: {healing_roll.total}",
@@ -4287,7 +4288,6 @@ class MassCureWounds(SpellAction):
 
         num_dice = self.cast_at_level - 2  # 3d8 at L5, 4d8 at L6, etc.
         healing = _create_healing(caster, num_dice, 8, "Mass Cure Wounds")
-        healing_roll = healing.get_dice().roll
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4295,6 +4295,7 @@ class MassCureWounds(SpellAction):
             status_message=f"Mass Cure Wounds heals {target.name}"
         )
 
+        healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Cure Wounds")
         actual = target.receive_healing(
             healing_roll.total, caster.uuid,
             source_description=f"Mass Cure Wounds: {healing_roll.total}",
@@ -4476,4 +4477,204 @@ class MassHeal(SpellAction):
             new_phase=EventPhase.COMPLETION,
             total_damage=0,
             status_message=f"Mass Heal heals {target.name} for {actual} HP"
+        )
+
+
+# =============================================================================
+# Divine Word (L7) - HP-threshold effects, bonus action
+# =============================================================================
+
+class DivineWordEffect(BaseCondition):
+    """Divine Word effect — applies tier-based conditions with duration handler for auto-removal."""
+    name: str = "Divine Word"
+    description: str = "Affected by Divine Word"
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration_rounds: int = 10  # Default, overridden per tier
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid)
+        if not target:
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+
+        sub_conditions_uuids: List[UUID] = []
+        handler_uuids: List[UUID] = []
+
+        execution_event = declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            status_message=f"Divine Word affects {target.name}"
+        )
+
+        current_hp = target.get_hp()
+
+        if current_hp <= 20:
+            # Instant kill (massive damage)
+            effect_event = execution_event.phase_to(
+                EventPhase.EFFECT,
+                status_message=f"Divine Word kills {target.name}"
+            )
+            target.receive_damage(
+                amount=99999,
+                damage_type=DamageType.FORCE,
+                source_entity_uuid=self.source_entity_uuid,
+                parent_event=effect_event.uuid,
+            )
+            return [], [], [], [], effect_event
+
+        elif current_hp <= 30:
+            # Blinded + Deafened + Stunned, 1 hour (600 rounds)
+            self.duration_rounds = 600
+            for condition_cls in [Blinded, Deafened, Stunned]:
+                cond = condition_cls(
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=self.target_entity_uuid,
+                    parent_condition=self.uuid,
+                )
+                result = target.add_condition(cond, parent_event=execution_event)
+                if result and result.phase == EventPhase.COMPLETION:
+                    sub_conditions_uuids.append(cond.uuid)
+
+        elif current_hp <= 40:
+            # Blinded + Deafened, 10 min (100 rounds)
+            self.duration_rounds = 100
+            for condition_cls in [Blinded, Deafened]:
+                cond = condition_cls(
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=self.target_entity_uuid,
+                    parent_condition=self.uuid,
+                )
+                result = target.add_condition(cond, parent_event=execution_event)
+                if result and result.phase == EventPhase.COMPLETION:
+                    sub_conditions_uuids.append(cond.uuid)
+
+        elif current_hp <= 50:
+            # Deafened, 1 min (10 rounds)
+            self.duration_rounds = 10
+            deafened = Deafened(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                parent_condition=self.uuid,
+            )
+            result = target.add_condition(deafened, parent_event=execution_event)
+            if result and result.phase == EventPhase.COMPLETION:
+                sub_conditions_uuids.append(deafened.uuid)
+
+        else:
+            # >50 HP: no effect
+            return [], [], [], [], execution_event.phase_to(
+                EventPhase.EFFECT,
+                status_message=f"Divine Word has no effect on {target.name} (HP > 50)"
+            )
+
+        # Duration handler for non-lethal tiers
+        duration_handler = self._create_duration_handler()
+        target.add_event_handler(duration_handler)
+        handler_uuids.append(duration_handler.uuid)
+
+        effect_event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Divine Word affects {target.name} ({self.duration_rounds} rounds)"
+        )
+        return [], handler_uuids, sub_conditions_uuids, [], effect_event
+
+    def _create_duration_handler(self) -> EventHandler:
+        """Remove this condition after duration_rounds turns."""
+        target_uuid = self.target_entity_uuid
+        condition_uuid = self.uuid
+        rounds_remaining = [self.duration_rounds]  # Mutable container for closure
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.source_entity_uuid != target_uuid:
+                return None
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+
+            rounds_remaining[0] -= 1
+            if rounds_remaining[0] <= 0:
+                if "Divine Word" in target.active_conditions:
+                    active = target.active_conditions.get("Divine Word")
+                    if active and active.uuid == condition_uuid:
+                        target.remove_condition("Divine Word", parent_event=event)
+            return None
+
+        return EventHandler(
+            name="Divine Word Duration",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_START,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=target_uuid,
+                ),
+            ],
+            event_processor=processor,
+        )
+
+
+class DivineWord(SpellAction):
+    """Divine Word — 7th-level evocation.
+
+    You utter a divine word, imbued with the power that shaped the world.
+    Each creature of your choice within range is affected based on current HP:
+    - 50+ HP: No effect
+    - 41-50 HP: Deafened for 1 minute
+    - 31-40 HP: Blinded and Deafened for 10 minutes
+    - 21-30 HP: Blinded, Deafened, and Stunned for 1 hour
+    - 20 or fewer HP: Killed outright
+    """
+    name: str = Field(default="Divine Word")
+    description: str = Field(default="HP-threshold effects: deafen/blind/stun/kill")
+    spell_level: int = Field(default=7)
+    spell_school: str = Field(default="evocation")
+    concentration: bool = Field(default=False)
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    valid_target_filter: str = Field(default="enemies")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(name="Divine Word Cost", cost_type="bonus_actions", cost=1,
+             evaluator=entity_action_economy_cost_evaluator)
+    ])
+
+    def get_num_projectiles(self) -> int:
+        return 6  # Reasonable cap
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not caster or not target:
+            return execution_event.cancel(status_message="Caster or target not found")
+
+        current_hp = target.get_hp()
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            target_entity_name=target.name,
+            status_message=f"Divine Word targets {target.name} ({current_hp} HP)"
+        )
+
+        # Apply the condition (handles all HP tiers internally)
+        condition = DivineWordEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+        )
+        target.add_condition(condition, parent_event=effect_event)
+
+        # Determine outcome text
+        if current_hp <= 20:
+            outcome = "killed outright"
+        elif current_hp <= 30:
+            outcome = "blinded, deafened, and stunned (1 hour)"
+        elif current_hp <= 40:
+            outcome = "blinded and deafened (10 minutes)"
+        elif current_hp <= 50:
+            outcome = "deafened (1 minute)"
+        else:
+            outcome = "no effect"
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Divine Word: {target.name} is {outcome}"
         )

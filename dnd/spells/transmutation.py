@@ -3,13 +3,13 @@
 Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
           EnhanceAbility, EnlargeReduce, Regenerate
 """
-from typing import Any, Literal, Optional, List, Tuple, cast as type_cast
+from typing import Any, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, ActionCategory, BaseCost
-from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType
+from dnd.core.base_conditions import BaseCondition, ConditionTag, HazardFilter, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, AbilityName, ForcedMovementEvent
@@ -23,6 +23,7 @@ from dnd.entity import Entity
 from dnd.conditions import Incapacitated, Dashing, Restrained, Concentrating, ConcentrationActionMarker
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
+from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.spells.spell_utils import validate_line_of_sight
 
 
@@ -36,7 +37,7 @@ class SpikeGrowthZone(ZoneControlCondition):
     """
     name: str = "Spike Growth Zone"
     description: str = "Sharp spikes and thorns deal 2d4 piercing per 5ft traveled"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # Zone configuration
     zone_shape: str = Field(default="sphere")
@@ -602,7 +603,7 @@ class Slow(SpellAction):
             target_entity_uuid=target.uuid,
             caster_uuid=caster.uuid,
             spell_dc=dc,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(slowed, parent_event=effect_event)
 
@@ -762,7 +763,7 @@ class HasteEffect(BaseCondition):
             lethargy = Incapacitated(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                magical_origin=True
+                tags={ConditionTag.MAGICAL}
             )
             lethargy.duration.duration_type = DurationType.ROUNDS
             lethargy.duration.duration = 1
@@ -834,7 +835,7 @@ class Haste(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             caster_uuid=caster.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(haste_effect, parent_event=effect_event)
 
@@ -939,7 +940,7 @@ class DarkvisionSpell(SpellAction):
         darkvision_effect = DarkvisionEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(darkvision_effect, parent_event=effect_event)
 
@@ -1152,7 +1153,7 @@ class JumpSpell(SpellAction):
         jump_effect = JumpEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(jump_effect, parent_event=effect_event)
 
@@ -1274,7 +1275,7 @@ class ExpeditiousRetreat(SpellAction):
         retreat_effect = ExpeditiousRetreatEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         caster.add_condition(retreat_effect, parent_event=effect_event)
 
@@ -1398,7 +1399,7 @@ class EnhanceAbility(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             ability_type=self.enhance_ability_type,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(effect, parent_event=effect_event)
         if effect.applied:
@@ -1570,7 +1571,7 @@ class EnlargeReduce(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             mode=self.enlarge_mode,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(effect, parent_event=effect_event)
         if effect.applied:
@@ -1625,7 +1626,7 @@ class TelekinesisRestrain(BaseAction):
         restrained = Restrained(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=grabbed.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         grabbed.add_condition(restrained, parent_event=effect_event)
 
@@ -2035,14 +2036,13 @@ class Regenerate(SpellAction):
                 value_name="Regenerate Healing"
             )
         )
-        healing_roll = healing.get_dice().roll
-
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             target_entity_name=target.name,
             status_message=f"Regenerate heals {target.name}"
         )
 
+        healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Regenerate")
         actual = target.receive_healing(
             healing_roll.total, caster.uuid,
             source_description=f"Regenerate: {healing_roll.total}",

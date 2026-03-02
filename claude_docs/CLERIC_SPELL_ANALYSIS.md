@@ -6,7 +6,7 @@
 
 This document analyzes all **105 Cleric spells** from D&D 5e SRD for implementation difficulty in the D&D Engine. It reflects the current state after implementing AoE, concentration, zone spells, the lighting system (Layer 2), stealth/invisibility (Layer 1), and reaction casting.
 
-*Note: 12 cross-class spells were already implemented from the Sorcerer spell list. 7 Cleric-specific spells added in Batch 1 (Guardian of Faith, Command, Guidance, Light, Continual Flame, Silence, Enhance Ability). 10 healing/restoration spells added in Batch 2 (Cure Wounds, Healing Word, Prayer of Healing, Mass Healing Word, Mass Cure Wounds, Heal, Mass Heal, Regenerate, Lesser Restoration, Greater Restoration). 3 buff spells added in Batch 3 (Protection from Poison, Death Ward, Freedom of Movement).*
+*Note: 12 cross-class spells were already implemented from the Sorcerer spell list. 7 Cleric-specific spells added in Batch 1 (Guardian of Faith, Command, Guidance, Light, Continual Flame, Silence, Enhance Ability). 10 healing/restoration spells added in Batch 2 (Cure Wounds, Healing Word, Prayer of Healing, Mass Healing Word, Mass Cure Wounds, Heal, Mass Heal, Regenerate, Lesser Restoration, Greater Restoration). 3 buff spells added in Batch 3 (Protection from Poison, Death Ward, Freedom of Movement). 9 spells added in Batch 4 (Resistance, Inflict Wounds, Shield of Faith, Aid, Sanctuary, Beacon of Hope, Harm, Divine Word, Heroes' Feast) + HEAL_ROLL_RESULT infrastructure.*
 
 ### Spell Count by Level
 
@@ -24,44 +24,55 @@ This document analyzes all **105 Cleric spells** from D&D 5e SRD for implementat
 | Level 9 | 4 |
 | **Total** | **105** |
 
-### Currently Implemented Spells (32)
+### Currently Implemented Spells (43)
 
 | Spell | Level | School | Type | Notes |
 |-------|-------|--------|------|-------|
 | Sacred Flame | 0 | Evocation | DEX Save | Cantrip scaling ✓ |
 | Guidance | 0 | Divination | Touch Buff | +1d4 one ability check, one-use, concentration ✓ |
+| Resistance | 0 | Abjuration | Touch Buff | +1d4 one saving throw, one-use, concentration ✓ |
 | Light | 0 | Evocation | Touch Light | 20ft bright + 20ft dim anchored to entity ✓ |
 | Bless | 1 | Enchantment | Multi-target Buff | +1d4 attacks/saves, concentration (Pattern 16) ✓ |
 | Bane | 1 | Enchantment | Multi-target CHA Save | -1d4 attacks/saves, concentration (Pattern 16) ✓ |
 | Guiding Bolt | 1 | Evocation | Attack + Mark | 4d6 radiant, next attack adv (Pattern 1 + mark) ✓ |
 | Command | 1 | Enchantment | WIS Save | Grovel/Halt/Flee, upcasts +1 target ✓ |
+| Inflict Wounds | 1 | Necromancy | Melee Spell Attack | 3d10 necrotic, upcasts +1d10/level ✓ |
 | Cure Wounds | 1 | Evocation | Touch Heal | 1d8+WIS HP, upcasts +1d8/level (Pattern 17) ✓ |
 | Healing Word | 1 | Evocation | Ranged Heal | Bonus action, 60ft, 1d4+WIS, upcasts +1d4 (Pattern 17) ✓ |
+| Shield of Faith | 1 | Abjuration | AC Buff | +2 AC, bonus action, concentration ✓ |
+| Sanctuary | 1 | Abjuration | Ward | WIS save to attack target, breaks on offensive action ✓ |
 | Hold Person | 2 | Enchantment | WIS Save | Paralyzed, concentration (Pattern 5) ✓ |
 | Blindness/Deafness | 2 | Necromancy | CON Save | Blinded or Deafened ✓ |
 | Continual Flame | 2 | Evocation | Permanent Light | 20ft bright + 20ft dim persistent object ✓ |
 | Silence | 2 | Illusion | Zone | 20ft sphere, blocks verbal spells, deafens ✓ |
 | Prayer of Healing | 2 | Evocation | Multi-target Heal | 6 targets, 2d8+WIS, upcasts +1d8 (Pattern 17) ✓ |
 | Lesser Restoration | 2 | Abjuration | Condition Removal | Remove blinded/deafened/paralyzed/poisoned (Pattern 18) ✓ |
+| Aid | 2 | Abjuration | Multi-target Buff | +5 max HP/level above 1st, 3 targets, NOT concentration ✓ |
 | Protection from Poison | 2 | Abjuration | Buff | Poison resistance + Poisoned immunity, NOT concentration ✓ |
+| Enhance Ability | 2 | Transmutation | Buff | Advantage on chosen ability checks, concentration ✓ |
 | Spirit Guardians | 3 | Conjuration | Zone | 15ft follows caster, 3d8 WIS save (Pattern 8) ✓ |
 | Daylight | 3 | Evocation | Light Zone | 60ft bright light (Pattern 13) ✓ |
 | Protection from Energy | 3 | Abjuration | Buff | Single type resistance (Pattern 5) ✓ |
+| Beacon of Hope | 3 | Abjuration | Multi-target Buff | WIS save advantage + maximize healing dice, concentration ✓ |
 | Mass Healing Word | 3 | Evocation | Multi-target Heal | Bonus action, 6 targets, 1d4+WIS (Pattern 17) ✓ |
 | Death Ward | 4 | Abjuration | Anti-death Buff | Survive lethal damage at 1 HP, one-use, NOT concentration ✓ |
 | Freedom of Movement | 4 | Abjuration | Buff | Ignore difficult terrain + Grappled/Restrained immunity, NOT concentration ✓ |
 | Guardian of Faith | 4 | Conjuration | Stationary Zone | DEX save 20 radiant, 60 damage budget ✓ |
+| Banishment | 4 | Abjuration | CHA Save | Remove from play, concentration, return on end ✓ |
 | Insect Plague | 5 | Conjuration | Zone | 20ft sphere, CON save 4d10 (Pattern 8) ✓ |
 | Flame Strike | 5 | Evocation | Cylinder AoE | 4d6 fire + 4d6 radiant, DEX save ✓ |
 | Mass Cure Wounds | 5 | Evocation | AoE Heal | 30ft sphere, 6 targets, 3d8+WIS (Pattern 17) ✓ |
 | Greater Restoration | 5 | Abjuration | Condition Removal | Remove charmed/frightened/stunned/etc. (Pattern 18) ✓ |
 | True Seeing | 6 | Divination | Buff | Truesight 120ft ✓ |
+| Harm | 6 | Necromancy | CON Save | 14d6 necrotic, half on save, can't reduce below 1 HP ✓ |
+| Heroes' Feast | 6 | Conjuration | Summoned Object | Place feast, eat action for poison/fright immunity + WIS adv + max HP ✓ |
 | Heal | 6 | Evocation | Mega Heal | Flat 70 HP + remove blinded/deafened (Pattern 17+18) ✓ |
+| Divine Word | 7 | Evocation | HP-threshold Effects | Bonus action, 4-tier effects based on target HP ✓ |
 | Fire Storm | 7 | Evocation | Multi-cube AoE | 10 cubes, 7d10 fire (Pattern 3) ✓ |
 | Regenerate | 7 | Transmutation | Heal + Regen | 4d8+15 instant + 1 HP/round for 10 rounds (Pattern 17) ✓ |
 | Mass Heal | 9 | Evocation | Mega Multi-heal | 700 HP pool + condition removal (Pattern 17+18) ✓ |
 
-*Cross-class: 12 shared with Sorcerer/Wizard. 7 Cleric-specific in Batch 1. 10 healing/restoration in Batch 2. 3 buff spells in Batch 3.*
+*Cross-class: 14 shared with Sorcerer/Wizard (includes Banishment, Enhance Ability). 7 Cleric-specific in Batch 1. 10 healing/restoration in Batch 2. 3 buff spells in Batch 3. 9 spells in Batch 4 (+ HEAL_ROLL_RESULT infrastructure for healing dice maximization).*
 
 ---
 
@@ -268,10 +279,10 @@ class SpiritualWeaponCondition(BaseCondition):
 | Blindness/Deafness | Necromancy | CON Save | Blinded or Deafened, NOT concentration | **DONE** | Condition application ✓ |
 | Aid | Abjuration | Multi-target Buff | +5 max HP to 3 targets, 8 hours, not concentration | EASY | NumericalModifier(+5) on health.max_hit_points_bonus.self_static, MULTI_ENTITY(3), upcasts +5/level. Condition with no concentration. |
 | Lesser Restoration | Abjuration | Condition Removal | End one: blinded/deafened/paralyzed/poisoned | **DONE** | Pattern 18: iterates removable set, removes first found ✓ |
-| Enhance Ability | Transmutation | Buff | Advantage on chosen ability's checks, concentration | EASY | AdvantageModifier on chosen ability check ModifiableValue, concentration. 6 options (Bull's STR, Cat's DEX, etc.) |
+| Enhance Ability | Transmutation | Buff | Advantage on chosen ability's checks, concentration | **DONE** | AdvantageModifier on chosen ability check ModifiableValue, concentration. 6 options (Bull's STR, Cat's DEX, etc.) ✓ |
 | Prayer of Healing | Evocation | Multi-target Heal | 10-min cast, 6 targets, 2d8+WIS | **DONE** | Pattern 17, MULTI_ENTITY(6), upcasts +1d8/level ✓ |
 | Protection from Poison | Abjuration | Buff | Poison resistance + Poisoned immunity, NOT conc | **DONE** | ResistanceModifier(poison) + condition immunity via add_condition_immunity() ✓ |
-| Spiritual Weapon | Evocation | Granted Action | Bonus action summon, 1d8+WIS force, move+attack each turn | MEDIUM | **Pattern 19**: granted bonus action attack, NOT concentration, 1min duration, upcasts +1d8 per 2 levels above 2nd |
+| Spiritual Weapon | Evocation | Summon | Bonus action summon, 1d8+WIS force, move+attack each turn | HARD | Summoned force weapon entity with its own position, movement, and attack. NOT concentration, 1min duration, upcasts +1d8 per 2 levels above 2nd |
 | Silence | Illusion | Zone | 20ft sphere, no sound, blocks verbal spells | **DONE** | Pattern 8 zone, blocks verbal spells, deafens in zone ✓ |
 | Warding Bond | Abjuration | Buff + Link | +1 AC, +1 saves, resistance to all damage, damage mirroring | MEDIUM | Buff condition on target (NumericalModifier +1 AC, +1 saves, ResistanceModifier ALL) + handler on TAKE_DAMAGE at EFFECT: mirror damage to caster. Ends at 60ft separation. |
 | Calm Emotions | Enchantment | AoE Debuff | 20ft sphere, CHA save, suppress charmed/frightened | MEDIUM | Pattern 3 AoE + temporary condition suppression (not removal — suppressed for duration) |
@@ -282,7 +293,7 @@ class SpiritualWeaponCondition(BaseCondition):
 | Augury | Divination | Utility | Omen about future action | BLOCKED | No combat effect |
 | Locate Object | Divination | Sense | Sense direction to nearest object of a kind, or specific known object, within 1000ft. Concentration. | EASY | Query `GridMap._object_positions` for matching object by name/type, return direction vector. Same pattern as Locate Creature but for objects. |
 
-**Summary**: DONE 7, EASY 5, MEDIUM 3, BLOCKED 2
+**Summary**: DONE 8, EASY 4, MEDIUM 3, BLOCKED 2
 
 ---
 
@@ -320,14 +331,14 @@ class SpiritualWeaponCondition(BaseCondition):
 |-------|--------|------|----------------|------------|---------------|
 | Death Ward | Abjuration | Anti-death Buff | First time HP would drop to 0 → 1 HP instead, one-use, 8 hours | **DONE** | TAKE_DAMAGE handler caps lethal damage to leave 1 HP, one-use self-removal ✓ |
 | Freedom of Movement | Abjuration | Buff | Ignore difficult terrain, immune to grapple/restrained, 1 hour | **DONE** | Entity.ignore_difficult_terrain flag + condition immunity for Grappled/Restrained ✓ |
-| Banishment | Abjuration | CHA Save | Remove from plane, return on concentration end | MEDIUM | CHA save, remove entity from gridmap (store position), restore on condition cleanup. Concentration. If native to plane, returns on end. |
+| Banishment | Abjuration | CHA Save | Remove from plane, return on concentration end | **DONE** | CHA save, remove entity from gridmap, restore on cleanup. Concentration ✓ |
 | Guardian of Faith | Conjuration | Stationary Zone | 10ft radius, DEX save 20 radiant, vanishes at 60 total damage dealt, 8 hours | **DONE** | BaseItem object + SpatialHandler aura, damage budget, GuardianWarded one-per-turn ✓ |
 | Control Water | Transmutation | Terrain Manipulation | Move/reshape water tiles in 100ft cube. Flood: raise water 20ft. Part Water: create path through water. Redirect Flow: move water to new location. Whirlpool: 5ft deep, STR save or 2d8 bludg | MEDIUM | Move Water tiles to new positions via GridMap, or temporarily convert Water→Floor (Part Water). Whirlpool option: zone with STR save damage. Concentration. Uses existing tile type system. |
 | Divination | Divination | Utility | Receive omen from deity about future action | BLOCKED | GM adjudication, no AI/dialogue system |
 | Locate Creature | Divination | Sense | Know direction to nearest creature of a kind, or specific known creature, within 1000ft. Concentration, 1 hour. | EASY | Query `Entity._entity_registry` for matching creature by name/type, return direction vector from caster position. Bypasses LOS/stealth. Blocked by running water/polymorph. |
 | Stone Shape | Transmutation | Terrain Manipulation | Reshape 5ft cube of stone — create passage through Wall, seal opening, create crude object | EASY | Convert Wall tile ↔ Floor tile at target position. Touch range. Instant. Uses existing tile type system in GridMap. |
 
-**Summary**: DONE 3, EASY 2, MEDIUM 2, BLOCKED 1
+**Summary**: DONE 4, EASY 1, MEDIUM 1, HARD 1, BLOCKED 1
 
 ---
 
@@ -419,17 +430,17 @@ class SpiritualWeaponCondition(BaseCondition):
 
 | Difficulty | Count | Percentage |
 |------------|-------|------------|
-| **DONE** | 32 | 30% |
-| **EASY** | 25 | 24% |
-| **MEDIUM** | 22 | 21% |
-| **HARD** | 11 | 10% |
+| **DONE** | 34 | 32% |
+| **EASY** | 23 | 22% |
+| **MEDIUM** | 20 | 19% |
+| **HARD** | 12 | 11% |
 | **VERY HARD** | 6 | 6% |
 | **BLOCKED** | 9 | 9% |
 | **Total** | **105** | **100%** |
 
 **Combat-relevant**: 96 spells (DONE through VERY HARD)
-**Implementable with existing + new patterns**: 79 spells (DONE + EASY + MEDIUM) = 82% of combat-relevant
-**Progress**: 32 of 96 combat-relevant implemented (33%)
+**Implementable with existing + new patterns**: 77 spells (DONE + EASY + MEDIUM) = 80% of combat-relevant
+**Progress**: 34 of 96 combat-relevant implemented (35%)
 
 ---
 
@@ -490,7 +501,7 @@ Tests: `examples/test_healing_spells.py` (61 assertions).
 | ~~Freedom of Movement~~ | 4 | **DONE** | ~~ignore_difficult_terrain flag + Grappled/Restrained immunity~~ ✓ |
 | Beacon of Hope | 3 | EASY | Adv WIS saves + max healing |
 | ~~Protection from Poison~~ | 2 | **DONE** | ~~Poison resistance + Poisoned condition immunity~~ ✓ |
-| Enhance Ability | 2 | EASY | Ability check advantage |
+| ~~Enhance Ability~~ | 2 | **DONE** | ~~Ability check advantage, concentration~~ ✓ |
 
 ### Batch C — Condition Management (Pattern 18) ✅ MOSTLY COMPLETE
 
@@ -514,7 +525,7 @@ Tests: included in `examples/test_healing_spells.py`.
 | ~~Command~~ | 1 | **DONE** | ~~WIS save, multiple behavior effects~~ ✓ |
 | Inflict Wounds | 1 | EASY | Pattern 11 (melee spell attack) |
 | Harm | 6 | EASY | Pattern 2 (CON save, high damage) |
-| Spiritual Weapon | 2 | MEDIUM | Pattern 19 (granted bonus action) |
+| Spiritual Weapon | 2 | HARD | Summoned entity with own position/movement/attack |
 
 ### Batch E — Zone/Advanced
 
@@ -526,7 +537,7 @@ Tests: included in `examples/test_healing_spells.py`.
 | ~~Guardian of Faith~~ | 4 | **DONE** | ~~Stationary zone with damage budget~~ ✓ |
 | Warding Bond | 2 | MEDIUM | Buff + damage mirroring link |
 | Blade Barrier | 6 | MEDIUM | Wall zone, crossing damage |
-| Banishment | 4 | MEDIUM | CHA save, remove from play |
+| ~~Banishment~~ | 4 | **DONE** | ~~CHA save, remove from play, concentration~~ ✓ |
 | Holy Aura | 8 | MEDIUM | Self-aura, save advantage, counter-attack |
 | Divine Word | 7 | MEDIUM | HP-threshold multi-tier effects |
 
@@ -540,8 +551,8 @@ With existing systems (AoE, concentration, zones, d20 manipulation, healing even
 - **Pattern 18 (Condition Removal)**: Simple `entity.remove_condition()` calls — minimal new code
 - **Pattern 19 (Granted Bonus Action)**: Variant of existing Pattern 6 (Call Lightning) — non-concentration, bonus action cost
 
-**32 of 96 combat-relevant spells implemented (33%)**
-**79 of 96 implementable with current + new patterns (82%)**
+**34 of 96 combat-relevant spells implemented (35%)**
+**77 of 96 implementable with current + new patterns (80%)**
 
 ---
 

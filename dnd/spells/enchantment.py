@@ -4,13 +4,13 @@ Contains: HoldPerson, HoldPersonEffect, CharmPerson, TestBless, Sleep,
           Bane, BaneEffect, Bless, BlessEffect
 """
 import random
-from typing import Any, Optional, List, Tuple, cast as type_cast
+from typing import Any, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
 from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition, DurationType
+from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
 from dnd.core.events import (
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
     D20RollResultEvent,
@@ -194,7 +194,7 @@ class CharmPerson(SpellAction):
         charmed = Charmed(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(charmed, parent_event=effect_event)
 
@@ -219,7 +219,7 @@ class HoldPersonEffect(BaseCondition):
     """
     name: str = "Hold Person"
     description: str = "Magically held in place"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     # Track the caster for repeat saves
     caster_uuid: Optional[UUID] = None
@@ -252,7 +252,7 @@ class HoldPersonEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,  # Links child to parent
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_condition_event = target.add_condition(paralyzed, parent_event=execution_event)
 
@@ -475,7 +475,7 @@ class HoldMonsterEffect(BaseCondition):
     """
     name: str = "Hold Monster"
     description: str = "Magically held in place"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
@@ -503,7 +503,7 @@ class HoldMonsterEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event = target.add_condition(paralyzed, parent_event=execution_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -884,7 +884,7 @@ class SleepEffect(BaseCondition):
     """
     name: str = "Sleep"
     description: str = "Magically asleep"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -902,7 +902,7 @@ class SleepEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event = target.add_condition(unconscious, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -1122,7 +1122,7 @@ class PowerWordStunEffect(BaseCondition):
     """
     name: str = "Power Word Stun"
     description: str = "Stunned by power word"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
@@ -1143,7 +1143,7 @@ class PowerWordStunEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event = target.add_condition(stunned, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -1341,7 +1341,7 @@ class BaneEffect(BaseCondition):
     """Bane spell effect — subtract 1d4 from attack rolls and saving throws."""
     name: str = "Bane"
     description: str = "Subtract 1d4 from attack rolls and saving throws"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1387,7 +1387,7 @@ class BlessEffect(BaseCondition):
     """Bless spell effect — add 1d4 to attack rolls and saving throws."""
     name: str = "Bless"
     description: str = "Add 1d4 to attack rolls and saving throws"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1587,7 +1587,7 @@ class CommandGrovelEffect(BaseCondition):
     """Command: Grovel — target falls prone and ends its turn."""
     name: str = "Command: Grovel"
     description: str = "Commanded to grovel — falls prone"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
@@ -1606,7 +1606,7 @@ class CommandGrovelEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(prone, parent_event=declaration_event)
         sub_conditions_uuids.append(prone.uuid)
@@ -1622,7 +1622,7 @@ class CommandHaltEffect(BaseCondition):
     """Command: Halt — target does nothing on next turn (Incapacitated for 1 round)."""
     name: str = "Command: Halt"
     description: str = "Commanded to halt — can take no actions"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
@@ -1641,7 +1641,7 @@ class CommandHaltEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(incap, parent_event=declaration_event)
         sub_conditions_uuids.append(incap.uuid)
@@ -1657,7 +1657,7 @@ class CommandFleeEffect(BaseCondition):
     """Command: Flee — target moves away from caster on its next turn."""
     name: str = "Command: Flee"
     description: str = "Commanded to flee — must move away from caster"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     caster_uuid: Optional[UUID] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[

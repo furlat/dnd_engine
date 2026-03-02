@@ -3,14 +3,14 @@
 Contains: Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage
 """
 import random
-from typing import Any, Optional, List, Tuple
+from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
 from typing import cast as type_cast
 
 from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType, HazardFilter
+from dnd.core.base_conditions import BaseCondition, ConditionTag, Duration, DurationType, HazardFilter
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
 from dnd.core.dice import AttackOutcome
@@ -31,7 +31,7 @@ class BlurEffect(BaseCondition):
     """
     name: str = "Blur"
     description: str = "Your body becomes blurred, giving attackers disadvantage"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -130,7 +130,7 @@ class FearEffect(BaseCondition):
     """
     name: str = "Fear"
     description: str = "Frightened of the caster, must Dash away"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     caster_uuid: Optional[UUID] = None
     spell_dc: int = 10
@@ -151,7 +151,7 @@ class FearEffect(BaseCondition):
             source_entity_uuid=self.caster_uuid or self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event = target.add_condition(frightened, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -343,7 +343,7 @@ class HypnoticPatternEffect(BaseCondition):
     """
     name: str = "Hypnotic Pattern"
     description: str = "Charmed and incapacitated by swirling pattern"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -361,7 +361,7 @@ class HypnoticPatternEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event = target.add_condition(charmed, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -372,7 +372,7 @@ class HypnoticPatternEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event2 = target.add_condition(incapacitated, parent_event=declaration_event)
         if sub_event2 and sub_event2.phase == EventPhase.COMPLETION:
@@ -545,7 +545,7 @@ class ColorSprayEffect(BaseCondition):
     """
     name: str = "Color Spray"
     description: str = "Blinded by dazzling colors"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -562,7 +562,7 @@ class ColorSprayEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         sub_event = target.add_condition(blinded, parent_event=declaration_event)
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
@@ -793,7 +793,7 @@ class Invisibility(SpellAction):
         invis_effect = InvisibilityEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(invis_effect, parent_event=effect_event)
 
@@ -872,7 +872,7 @@ class GreaterInvisibility(SpellAction):
         invis_effect = GreaterInvisibilityEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(invis_effect, parent_event=effect_event)
 
@@ -907,7 +907,7 @@ class MirrorImageEffect(BaseCondition):
     """
     name: str = "Mirror Image"
     description: str = "Illusory duplicates increase AC by 3 each"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     duplicates: int = Field(default=3, description="Number of remaining duplicates")
 
@@ -1074,7 +1074,7 @@ class SilenceZone(ZoneControlCondition):
     """
     name: str = "Silence Zone"
     description: str = "Area of magical silence - no sound, blocks verbal spells"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
 
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=20)
@@ -1236,7 +1236,7 @@ class _SilenceDeafened(BaseCondition):
     """
     name: str = "Silence Deafened"
     description: str = "Deafened by Silence spell"
-    magical_origin: bool = True
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     zone_uuid: Optional[UUID] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[
@@ -1256,7 +1256,7 @@ class _SilenceDeafened(BaseCondition):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
             parent_condition=self.uuid,
-            magical_origin=True
+            tags={ConditionTag.MAGICAL}
         )
         target.add_condition(deafened, parent_event=declaration_event)
         sub_conditions_uuids.append(deafened.uuid)
