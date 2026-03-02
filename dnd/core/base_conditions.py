@@ -18,6 +18,13 @@ class HazardFilter(str, Enum):
     NON_SOURCE = "non_source"  # Hazardous to everyone except source (Spike Growth)
 
 
+class ConditionTag(str, Enum):
+    """Tags describing condition properties. Replaces individual boolean flags."""
+    MAGICAL = "magical"    # Created by spell/magical effect (Globe of Invulnerability, Dispel Magic)
+    CURSE = "curse"        # Curse effect (Remove Curse, Bestow Curse)
+    DISEASE = "disease"    # Disease effect (Lesser/Greater Restoration)
+    POISON = "poison"      # Poison effect (Protection from Poison)
+
 class ConditionCategory(str, Enum):
     CONDITION = "condition"      # Real D&D conditions: Blinded, Prone, Paralyzed, etc.
     STATUS = "status"            # Turn-scoped action effects: Dashing, Dodging, Disengaging, Concentrating
@@ -216,10 +223,15 @@ class BaseCondition(BaseObject):
         default=None,
         description="Perception DC to detect this condition on a tile. None = always visible."
     )
-    magical_origin: bool = Field(
-        default=False,
-        description="Whether this condition was created by a spell or magical effect. Used by Globe of Invulnerability, Dispel Magic, etc."
+    tags: Set[ConditionTag] = Field(
+        default_factory=set,
+        description="Condition tags (MAGICAL, CURSE, DISEASE, POISON). Replaces individual boolean flags."
     )
+
+    @property
+    def magical_origin(self) -> bool:
+        """Backward-compat property: True if ConditionTag.MAGICAL in tags."""
+        return ConditionTag.MAGICAL in self.tags
     
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
