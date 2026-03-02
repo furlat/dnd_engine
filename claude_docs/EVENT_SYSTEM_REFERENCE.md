@@ -78,8 +78,9 @@ Each `phase_to()` call creates a **new event copy** with the same `lineage_uuid`
 The `EventQueue` is the central event bus. When an event is registered:
 
 1. **Handler processing** — Matching EventHandlers fire (DECLARATION/EXECUTION/EFFECT only)
-2. **Storage** — Event stored in **9 indices** for fast lookup:
-   - By UUID, by lineage, by type, by phase, by source entity, by target entity, by timestamp, by parent-child, chronological
+2. **Storage** — Event stored in **8 indices** for fast lookup:
+   - By UUID, by lineage, by type, by phase, by source entity, by target entity, by timestamp, chronological (`_all_events`)
+   - Parent-child relationships are tracked via fields on the Event object itself (`children_events`, `lineage_children_events`), not as a separate index
 3. **Passive callbacks** — All registered `on_event_callbacks` fire (including WebSocket broadcast)
 4. **Combat log callback** — If COMPLETION phase and event has combat_log, the Encounter's callback fires
 
@@ -166,8 +167,8 @@ Every event in the system is broadcast to all connected WebSocket clients:
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `ping` | Keep-alive | `{"type": "ping"}` → `{"type": "pong"}` |
-| `filter` | Filter by event types | `{"type": "filter", "event_types": ["attack", "movement", "take_damage"]}` |
-| `filter` (clear) | Remove filter | `{"type": "filter"}` → `{"type": "filter_cleared"}` |
+| `filter` | Filter by event types | `{"type": "filter", "event_types": ["attack", "movement", "take_damage"]}` → `{"type": "filter_set", "event_types": [...]}` |
+| `filter` (clear) | Remove filter | `{"type": "filter"}` (no event_types) → `{"type": "filter_cleared"}` |
 | `get_history` | Replay past events | `{"type": "get_history", "limit": 50}` → stream of event messages |
 
 ### Queue Overflow
@@ -181,15 +182,34 @@ The `combat_log` field on events is **excluded from serialization**. Combat log 
 - Included in `ActionResult.combat_log_entries` (after action execution via REST)
 - Generated at COMPLETION phase but only delivered to the Encounter via internal callback
 
+### Event Cursor Endpoint
+
+`GET /events?since=<cursor>&limit=50` returns events from a known cursor position:
+
+```json
+{
+  "events": [...],
+  "count": 12,
+  "total": 59       // ← use as cursor for next request
+}
+```
+
+- `since=0` (default): returns the last `limit` events (backwards-compatible)
+- `since=N` (N > 0): returns events from index N onward (cursor mode)
+- `limit=0`: unlimited (return all events from cursor)
+- Optional filters: `event_type`, `phase`
+
+The WebSocket handshake `event_count` and this endpoint's `total` field are the same value — use either as your cursor.
+
 ### Recommended Bootstrap Pattern
 
 ```
-1. GET /state                    → Full game state snapshot (entities, grid, encounter)
-2. Connect to ws://host/ws       → WebSocket connection
-3. Send get_history (limit=50)   → Catch up on recent events
+1. GET /state                    → Full game state snapshot + note event_count
+2. Connect to ws://host/ws       → Handshake returns event_count
+3. GET /events?since=<state_count> → Catch up on events fired between step 1 and 2
 4. Send filter (optional)        → Only receive event types you care about
 5. Listen for live events        → Apply incremental state updates
-6. On queue overflow / reconnect → Re-fetch /state + get_history
+6. On queue overflow / reconnect → GET /events?since=<last_total> to catch up
 ```
 
 ---
@@ -198,7 +218,7 @@ The `combat_log` field on events is **excluded from serialization**. Combat log 
 
 ### ActionEvent (Base for All Action Events)
 
-All attack, spell, movement, and ability events inherit from `ActionEvent`:
+Defined in `dnd/core/base_actions.py`. All attack, spell, movement, and ability events inherit from `ActionEvent`:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -345,6 +365,8 @@ Fires after damage dice are rolled but before damage is applied. Handlers can re
 
 ### ConditionApplicationEvent
 
+Defined in `dnd/core/base_conditions.py` (not events.py).
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `condition` | BaseCondition | Full condition object (name, description, category, duration, etc.) |
@@ -352,6 +374,8 @@ Fires after damage dice are rolled but before damage is applied. Handlers can re
 | `target_entity_name` | string or null | Who it was applied to |
 
 ### ConditionRemovalEvent
+
+Defined in `dnd/core/base_conditions.py` (not events.py).
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1384,7 +1408,7 @@ This means: between turn start and the entity's first movement, paths are fresh.
 ```
 
 **Event-driven primary**: Position, HP, conditions, turns tracked from events.
-**REST fallback**: Available actions queried when it's your turn. Full state re-fetched on reconnect or queue overflow.
+**REST fallback**: Available actions queried when it's your turn. On reconnect or queue overflow, use `GET /events?since=<last_total>` to catch up incrementally, or `GET /state` for a full reset.
 
 ### Phase Trust Rule
 
