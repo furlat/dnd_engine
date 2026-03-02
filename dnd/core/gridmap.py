@@ -685,7 +685,8 @@ class GridMap:
                       movement_mode: MovementMode = MovementMode.WALKING,
                       walk_in_danger: bool = True,
                       subjective: bool = False,
-                      collision_blocked: Optional[Set[Tuple[int, int]]] = None
+                      collision_blocked: Optional[Set[Tuple[int, int]]] = None,
+                      ignore_difficult_terrain: bool = False
                       ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
         """
         Compute all reachable positions and paths from start using Dijkstra.
@@ -722,7 +723,10 @@ class GridMap:
             tile = self.get_tile(x, y)
             if not tile:
                 return 0  # No tile = impassable
-            return tile.get_movement_cost(movement_mode)
+            cost = tile.get_movement_cost(movement_mode)
+            if ignore_difficult_terrain:
+                return min(cost, 1.0)  # Cap at base cost
+            return cost
 
         # Check if entry is allowed from a direction (border check)
         def can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:

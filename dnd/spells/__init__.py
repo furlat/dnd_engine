@@ -14,7 +14,7 @@ from dnd.spells.evocation import (
     CureWounds, HealingWord, PrayerOfHealing, MassHealingWord,
     MassCureWounds, HealSpell, MassHeal
 )
-from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction, register_counterspell_reaction, GlobeOfInvulnerability, Banishment, LesserRestoration, GreaterRestoration
+from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction, register_counterspell_reaction, GlobeOfInvulnerability, Banishment, LesserRestoration, GreaterRestoration, ProtectionFromPoison, DeathWard, FreedomOfMovement
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep, Bane, BaneEffect, Bless, BlessEffect, Command, CommandGrovelEffect, CommandHaltEffect, CommandFleeEffect
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud, StinkingCloud, SleetStorm, DimensionDoor, GuardianOfFaith, GuardianOfFaithObject, GuardianWarded
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing, NecroticBless, Eyebite, FingerOfDeath
@@ -80,6 +80,7 @@ LEVEL_2_SPELLS = {
     "Continual Flame": ContinualFlame,
     "Prayer of Healing": PrayerOfHealing,
     "Lesser Restoration": LesserRestoration,
+    "Protection from Poison": ProtectionFromPoison,
 }
 
 LEVEL_3_SPELLS = {
@@ -106,6 +107,8 @@ LEVEL_4_SPELLS = {
     "Dimension Door": DimensionDoor,
     "Banishment": Banishment,
     "Guardian of Faith": GuardianOfFaith,
+    "Death Ward": DeathWard,
+    "Freedom of Movement": FreedomOfMovement,
 }
 
 LEVEL_5_SPELLS = {
@@ -233,6 +236,7 @@ __all__ = [
     "ContinualFlame",
     "PrayerOfHealing",
     "LesserRestoration",
+    "ProtectionFromPoison",
     # Level 3
     "CallLightning",
     "CallLightningStrike",
@@ -256,6 +260,8 @@ __all__ = [
     "DimensionDoor",
     "Banishment",
     "GuardianOfFaith",
+    "DeathWard",
+    "FreedomOfMovement",
     # Level 5
     "HoldMonster",
     "ConeOfCold",
