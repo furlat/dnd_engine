@@ -19,7 +19,7 @@ from dnd.core.modifiers import DamageType, NumericalModifier, AdvantageModifier,
 from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone, Restrained, Poisoned, Frightened
+from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone, Restrained
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition
 from dnd.spells.spell_utils import validate_line_of_sight
@@ -3641,6 +3641,7 @@ class HeroesFeastBuff(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -3689,6 +3690,8 @@ class HeroesFeastBuff(BaseCondition):
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up condition immunities."""
+        if not self.target_entity_uuid:
+            return super()._remove(event)
         target = Entity.get(self.target_entity_uuid)
         if target:
             target._remove_static_condition_immunity("Poisoned", "Heroes' Feast")

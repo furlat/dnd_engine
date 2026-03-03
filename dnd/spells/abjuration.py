@@ -1871,6 +1871,7 @@ class ResistanceEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -1955,6 +1956,7 @@ class ShieldOfFaithEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -2039,6 +2041,7 @@ class AidEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -2126,6 +2129,7 @@ class SanctuaryEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -2150,6 +2154,7 @@ class SanctuaryEffect(BaseCondition):
 
     def _create_ward_handler(self) -> EventHandler:
         """Force WIS save on attackers targeting the warded entity."""
+        assert self.target_entity_uuid is not None
         warded_uuid = self.target_entity_uuid
         caster_uuid = self.source_entity_uuid
         dc = self.spell_dc
@@ -2194,6 +2199,7 @@ class SanctuaryEffect(BaseCondition):
 
     def _create_break_handler(self) -> EventHandler:
         """Remove Sanctuary when the warded entity attacks or casts an offensive spell."""
+        assert self.target_entity_uuid is not None
         warded_uuid = self.target_entity_uuid
         condition_uuid = self.uuid
 
@@ -2299,6 +2305,7 @@ class BeaconOfHopeEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -2331,6 +2338,7 @@ class BeaconOfHopeEffect(BaseCondition):
 
     def _create_heal_maximizer(self) -> EventHandler:
         """Maximize all healing dice received by this entity."""
+        assert self.target_entity_uuid is not None
         target_uuid = self.target_entity_uuid
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:

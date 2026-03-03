@@ -23,37 +23,37 @@ class WeaponEquipEvent(EquipmentEvent):
     """Event for equipping a weapon"""
     name: str = Field(default="Weapon Equip", description="A weapon equip event")
     event_type: EventType = Field(default=EventType.WEAPON_EQUIP, description="The type of event")
-    weapon: 'Weapon' = Field(description="The weapon being equipped")
+    item_uuid: UUID = Field(description="UUID of the weapon being equipped")
 
 class WeaponUnequipEvent(EquipmentEvent):
     """Event for unequipping a weapon"""
     name: str = Field(default="Weapon Unequip", description="A weapon unequip event")
     event_type: EventType = Field(default=EventType.WEAPON_UNEQUIP, description="The type of event")
-    weapon: 'Weapon' = Field(description="The weapon being unequipped")
+    item_uuid: UUID = Field(description="UUID of the weapon being unequipped")
 
 class ArmorEquipEvent(EquipmentEvent):
     """Event for equipping armor"""
     name: str = Field(default="Armor Equip", description="An armor equip event")
     event_type: EventType = Field(default=EventType.ARMOR_EQUIP, description="The type of event")
-    armor: 'Armor' = Field(description="The armor being equipped")
+    item_uuid: UUID = Field(description="UUID of the armor being equipped")
 
 class ArmorUnequipEvent(EquipmentEvent):
     """Event for unequipping armor"""
     name: str = Field(default="Armor Unequip", description="An armor unequip event")
     event_type: EventType = Field(default=EventType.ARMOR_UNEQUIP, description="The type of event")
-    armor: 'Armor' = Field(description="The armor being unequipped")
+    item_uuid: UUID = Field(description="UUID of the armor being unequipped")
 
 class ShieldEquipEvent(EquipmentEvent):
     """Event for equipping a shield"""
     name: str = Field(default="Shield Equip", description="A shield equip event")
     event_type: EventType = Field(default=EventType.SHIELD_EQUIP, description="The type of event")
-    shield: 'Shield' = Field(description="The shield being equipped")
+    item_uuid: UUID = Field(description="UUID of the shield being equipped")
 
 class ShieldUnequipEvent(EquipmentEvent):
     """Event for unequipping a shield"""
     name: str = Field(default="Shield Unequip", description="A shield unequip event")
     event_type: EventType = Field(default=EventType.SHIELD_UNEQUIP, description="The type of event")
-    shield: 'Shield' = Field(description="The shield being unequipped")
+    item_uuid: UUID = Field(description="UUID of the shield being unequipped")
 
 class UnarmoredAc(str, Enum):
     BARBARIAN = "Barbarian"
@@ -698,15 +698,22 @@ class Equipment(BaseBlock):
         """
         # Update the item's source_entity_uuid to match the equipment's
         item.source_entity_uuid = self.source_entity_uuid
-        
-        # Update any ModifiableValue fields to use the new source_entity_uuid
+
+        # Update any ModifiableValue fields and their inner channels to use the new source_entity_uuid
+        def _reparent_modifiable_value(mv: ModifiableValue) -> None:
+            mv.source_entity_uuid = self.source_entity_uuid
+            mv.self_static.source_entity_uuid = self.source_entity_uuid
+            mv.to_target_static.source_entity_uuid = self.source_entity_uuid
+            mv.self_contextual.source_entity_uuid = self.source_entity_uuid
+            mv.to_target_contextual.source_entity_uuid = self.source_entity_uuid
+
         for _, field_value in item.__dict__.items():
             if isinstance(field_value, ModifiableValue):
-                field_value.source_entity_uuid = self.source_entity_uuid
+                _reparent_modifiable_value(field_value)
             elif isinstance(field_value, list):
                 for value in field_value:
                     if isinstance(value, ModifiableValue):
-                        value.source_entity_uuid = self.source_entity_uuid
+                        _reparent_modifiable_value(value)
 
         # Handle rings
         if isinstance(item, Ring):
@@ -725,12 +732,12 @@ class Equipment(BaseBlock):
                 name=item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                armor=item,
+                item_uuid=item.uuid,
                 slot=slot
             )
             if event.phase_to(EventPhase.EXECUTION).canceled:
                 return
-            
+
             if slot == RingSlot.LEFT:
                 self.ring_left = item
             else:
@@ -756,7 +763,7 @@ class Equipment(BaseBlock):
                 name=item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                shield=item,
+                item_uuid=item.uuid,
                 slot=slot
             )
 
@@ -802,7 +809,7 @@ class Equipment(BaseBlock):
                 name=item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                weapon=item,
+                item_uuid=item.uuid,
                 slot=slot
             )
 
@@ -842,7 +849,7 @@ class Equipment(BaseBlock):
             name=item.name,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            armor=item,
+            item_uuid=item.uuid,
             slot=slot
         )
         
@@ -900,7 +907,7 @@ class Equipment(BaseBlock):
                 name=current_item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                weapon=current_item,
+                item_uuid=current_item.uuid,
                 slot=slot,
                 parent_event=parent_event_uuid
             )
@@ -909,7 +916,7 @@ class Equipment(BaseBlock):
                 name=current_item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                shield=current_item,
+                item_uuid=current_item.uuid,
                 slot=slot,
                 parent_event=parent_event_uuid
             )
@@ -918,7 +925,7 @@ class Equipment(BaseBlock):
                 name=current_item.name,
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                armor=current_item,
+                item_uuid=current_item.uuid,
                 slot=slot,
                 parent_event=parent_event_uuid
             )
