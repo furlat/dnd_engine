@@ -3,10 +3,11 @@
 Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           LesserRestoration, GreaterRestoration,
           ProtectionFromPoison, DeathWard, FreedomOfMovement,
-          Resistance, ShieldOfFaith, Aid, Sanctuary, BeaconOfHope
+          Resistance, ShieldOfFaith, Aid, Sanctuary, BeaconOfHope,
+          AntimagicField
 """
 import random
-from typing import Optional, List, Set, Tuple, cast as type_cast
+from typing import Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -14,7 +15,7 @@ from pydantic import Field
 from dnd.core.base_actions import TargetType, spell_slot_cost_type, Cost
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, ConditionTag, SpellProtectionRegistry, SpellProtection, DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, BaseHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus, AdvantageModifier, AdvantageStatus
 from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
@@ -25,6 +26,7 @@ from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
 from dnd.conditions import Incapacitated
 from dnd.spells.spell_utils import validate_line_of_sight
+from dnd.spells.transmutation import HasteEffect
 
 
 def _is_magic_missile_damage(event: Event) -> bool:
@@ -2425,4 +2427,443 @@ class BeaconOfHope(SpellAction):
             new_phase=EventPhase.COMPLETION,
             total_damage=0,
             status_message=f"Beacon of Hope cast on {target.name}"
+        )
+
+
+# =============================================================================
+# ANTIMAGIC FIELD (8th-level Abjuration, Concentration)
+# =============================================================================
+
+class AntimagicSuppression(BaseCondition):
+    """Internal marker that holds a suppressed magical condition.
+
+    When added to an entity, it stores a condition that was removed by an
+    Antimagic Field zone. When this marker is removed (entity leaves zone or
+    AMF ends), its _remove() re-adds the stored condition.
+
+    Each marker has a unique name (e.g., "Antimagic Suppression: Haste") to
+    avoid collision in active_conditions dict (keyed by name).
+    """
+    name: str = "Antimagic Suppression"
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    suppressed_condition: BaseCondition = Field(description="The condition object being suppressed")
+    saved_parent_link: Optional[Tuple[UUID, UUID]] = Field(
+        default=None,
+        description="Saved (parent_block_uuid, parent_condition_uuid) for reconnection"
+    )
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=f"Antimagic Suppression stores {self.suppressed_condition.name}"
+        )
+        return [], [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Re-add the suppressed condition when the marker is removed."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        cond = self.suppressed_condition
+        if target and target.is_active and not cond.duration.is_expired:
+            # Check if parent still alive (concentration not broken while suppressed)
+            if self.saved_parent_link:
+                _, parent_cond_uuid = self.saved_parent_link
+                parent_cond = BaseObject.get(parent_cond_uuid)
+                if not isinstance(parent_cond, BaseCondition) or not parent_cond.applied:
+                    return super()._remove(event)
+
+            # Clear stale tracking from previous application
+            cond.modifers_uuids.clear()
+            cond.event_handlers_uuids.clear()
+            cond.spatial_handler_uuids.clear()
+            cond.sub_conditions.clear()
+            cond.linked_conditions.clear()
+
+            target.add_condition(cond, parent_event=event)
+
+            # Reconnect parent_link if parent still exists
+            if self.saved_parent_link and cond.applied:
+                _, parent_cond_uuid = self.saved_parent_link
+                parent_cond = BaseObject.get(parent_cond_uuid)
+                if isinstance(parent_cond, BaseCondition) and parent_cond.applied:
+                    parent_cond.add_linked_condition(target.uuid, cond.uuid)
+
+        return super()._remove(event)
+
+
+class AntimagicFieldZone(BaseCondition):
+    """Zone condition for Antimagic Field, applied to the caster.
+
+    Creates a 10ft sphere that follows the caster. Within the sphere:
+    - All spells are blocked (caster included)
+    - New magical conditions are blocked
+    - Existing magical conditions are suppressed (removed, restored on leaving)
+
+    Uses manual marker tracking (not linked_conditions) to control cleanup order.
+    """
+    name: str = "Antimagic Field Zone"
+    description: str = "10ft sphere suppresses all magic"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    zone_center: Tuple[int, int] = Field(default=(0, 0))
+    zone_radius_feet: int = Field(default=10)
+    affected_positions: Set[Tuple[int, int]] = Field(default_factory=set)
+
+    # entity_uuid → [marker condition UUIDs]
+    suppression_markers: Dict[UUID, List[UUID]] = Field(default_factory=dict)
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def _compute_positions(self) -> Set[Tuple[int, int]]:
+        """Compute positions in the 10ft radius sphere around center."""
+        shape = Sphere(
+            source_entity_uuid=self.source_entity_uuid,
+            target=self.zone_center,
+            radius_feet=self.zone_radius_feet
+        )
+        shape.compute_objective(self.zone_center)
+        return set(shape.affected_positions)
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        self.affected_positions = self._compute_positions()
+        handler_uuids: List[UUID] = []
+
+        # Handler 1: Block all spells (cast from/targeting inside zone)
+        blocker = self._create_spell_blocker()
+        EventQueue.add_event_handler(blocker)
+        handler_uuids.append(blocker.uuid)
+
+        # Handler 2: Follow caster
+        follow = self._create_follow_caster_handler()
+        EventQueue.add_event_handler(follow)
+        handler_uuids.append(follow.uuid)
+
+        # Handler 3: Entity enters zone → suppress magical conditions
+        entry = self._create_entity_entry_handler()
+        EventQueue.add_event_handler(entry)
+        handler_uuids.append(entry.uuid)
+
+        # Handler 4: Entity leaves zone → restore suppressed conditions
+        exit_handler = self._create_entity_exit_handler()
+        EventQueue.add_event_handler(exit_handler)
+        handler_uuids.append(exit_handler.uuid)
+
+        # Register with SpellProtectionRegistry (blocks zone spells from crossing in)
+        SpellProtectionRegistry.register(SpellProtection(
+            uuid=self.uuid,
+            positions=set(self.affected_positions),
+            max_blocked_level=9,  # Blocks all spell levels
+        ))
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message="Antimagic Field active"
+        )
+
+        # Suppress existing magical conditions on entities in zone
+        grid = get_map()
+        for pos in self.affected_positions:
+            for entity_uuid in grid.get_entities_at(pos):
+                self._suppress_entity(entity_uuid, parent_event=effect_event)
+
+        return [], handler_uuids, [], [], effect_event
+
+    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
+        """Override to control cleanup order: disable handlers, unsuppress, then standard cleanup."""
+        if not self.applied:
+            return False
+
+        # 1. Disable all handlers so condition blocker can't interfere with re-adds
+        for handler_uuid in self.event_handlers_uuids:
+            handler = BaseObject.get(handler_uuid)
+            if isinstance(handler, BaseHandler):
+                handler.enabled = False
+
+        # 2. Unregister spell protection
+        SpellProtectionRegistry.unregister(self.uuid)
+
+        # 3. Unsuppress all entities (markers removed → conditions restored)
+        self._unsuppress_all_entities(parent_event=parent_event)
+
+        # 4. Standard cleanup (removes disabled handlers, sets applied=False)
+        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
+
+    # ---- Suppression logic ----
+
+    def _suppress_entity(self, entity_uuid: UUID, parent_event: Optional[Event] = None) -> None:
+        """Suppress all top-level magical conditions on an entity."""
+        entity = Entity.get(entity_uuid)
+        if not entity:
+            return
+
+        # Collect top-level magical conditions to suppress
+        to_suppress: List[BaseCondition] = []
+        for cond in list(entity.active_conditions.values()):
+            if not cond.magical_origin:
+                continue
+            if cond.parent_condition is not None:
+                continue  # Sub-condition, will be handled by parent's removal
+            if cond.name == "Concentrating":
+                continue  # Don't suppress Concentrating itself
+            if cond.uuid == self.uuid:
+                continue  # Don't suppress ourselves
+            if not cond.applied:
+                continue
+            to_suppress.append(cond)
+
+        for cond in to_suppress:
+            if not cond.applied:
+                continue  # May have been removed as sub-condition of a previous suppress
+
+            # Save parent_link before detaching
+            saved_parent_link: Optional[Tuple[UUID, UUID]] = None
+            if cond.parent_link:
+                saved_parent_link = cond.parent_link
+                _, parent_cond_uuid = cond.parent_link
+                parent_cond = BaseObject.get(parent_cond_uuid)
+                if isinstance(parent_cond, BaseCondition):
+                    # Remove from parent's linked_conditions list
+                    parent_cond.linked_conditions = [
+                        lc for lc in parent_cond.linked_conditions
+                        if lc[1] != cond.uuid
+                    ]
+                cond.parent_link = None
+
+            # Special-case: HasteEffect → disable lethargy on suppression removal
+            if isinstance(cond, HasteEffect):
+                cond.apply_lethargy = False
+
+            # Full removal via standard path
+            assert cond.name is not None
+            entity.remove_condition(cond.name, parent_event=parent_event)
+
+            # Re-enable lethargy for when condition is restored
+            if isinstance(cond, HasteEffect):
+                cond.apply_lethargy = True
+
+            # Create suppression marker (unique name per suppressed condition)
+            marker = AntimagicSuppression(
+                name=f"Antimagic Suppression: {cond.name}",
+                source_entity_uuid=type_cast(UUID, self.source_entity_uuid),
+                target_entity_uuid=entity.uuid,
+                suppressed_condition=cond,
+                saved_parent_link=saved_parent_link
+            )
+            entity.add_condition(marker, parent_event=parent_event)
+
+            if marker.applied:
+                if entity.uuid not in self.suppression_markers:
+                    self.suppression_markers[entity.uuid] = []
+                self.suppression_markers[entity.uuid].append(marker.uuid)
+
+    def _unsuppress_entity(self, entity_uuid: UUID, parent_event: Optional[Event] = None) -> None:
+        """Remove all suppression markers from an entity, restoring conditions."""
+        marker_uuids = self.suppression_markers.pop(entity_uuid, [])
+        entity = Entity.get(entity_uuid)
+        if not entity:
+            return
+
+        for marker_uuid in list(marker_uuids):
+            entity.remove_condition_by_uuid(marker_uuid, parent_event=parent_event)
+
+    def _unsuppress_all_entities(self, parent_event: Optional[Event] = None) -> None:
+        """Unsuppress all tracked entities."""
+        for entity_uuid in list(self.suppression_markers.keys()):
+            self._unsuppress_entity(entity_uuid, parent_event=parent_event)
+
+    # ---- Handler factories ----
+
+    def _create_spell_blocker(self) -> EventHandler:
+        """Block ALL spells when caster or target is in the zone."""
+        zone = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, SpellEvent):
+                return None
+
+            # Check if source is in the zone
+            source = Entity.get(event.source_entity_uuid)
+            if source and source.position in zone.affected_positions:
+                return event.cancel(
+                    status_message=f"Antimagic Field blocks {event.name}"
+                )
+
+            # Check if target entity is in the zone
+            if event.target_entity_uuid:
+                target = Entity.get(event.target_entity_uuid)
+                if target and target.position in zone.affected_positions:
+                    return event.cancel(
+                        status_message=f"Antimagic Field blocks {event.name}"
+                    )
+
+            return None
+
+        return EventHandler(
+            name="Antimagic Spell Blocker",
+            source_entity_uuid=type_cast(UUID, self.source_entity_uuid),
+            trigger_conditions=[Trigger(
+                event_type=EventType.CAST_SPELL,
+                event_phase=EventPhase.EXECUTION
+            )],
+            event_processor=processor
+        )
+
+    def _create_follow_caster_handler(self) -> EventHandler:
+        """Move zone to follow caster, suppress/unsuppress entity deltas."""
+        caster_uuid = type_cast(UUID, self.source_entity_uuid)
+        zone = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, SpatialChangeEvent) or event.entity_uuid != caster_uuid:
+                return None
+
+            old_positions = set(zone.affected_positions)
+            zone.zone_center = event.position
+            new_positions = zone._compute_positions()
+            zone.affected_positions = new_positions
+
+            # Update SpellProtectionRegistry
+            SpellProtectionRegistry.unregister(zone.uuid)
+            SpellProtectionRegistry.register(SpellProtection(
+                uuid=zone.uuid,
+                positions=set(new_positions),
+                max_blocked_level=9,
+            ))
+
+            # Entities that left the zone: unsuppress
+            grid = get_map()
+            left_positions = old_positions - new_positions
+            for pos in left_positions:
+                for entity_uuid in grid.get_entities_at(pos):
+                    if entity_uuid in zone.suppression_markers:
+                        zone._unsuppress_entity(entity_uuid, parent_event=event)
+
+            # Entities that entered the zone: suppress
+            entered_positions = new_positions - old_positions
+            for pos in entered_positions:
+                for entity_uuid in grid.get_entities_at(pos):
+                    if entity_uuid != caster_uuid:
+                        zone._suppress_entity(entity_uuid, parent_event=event)
+
+            return None
+
+        return EventHandler(
+            name="Antimagic Follow Caster",
+            source_entity_uuid=caster_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+    def _create_entity_entry_handler(self) -> EventHandler:
+        """Suppress magical conditions when an entity enters the zone."""
+        caster_uuid = type_cast(UUID, self.source_entity_uuid)
+        zone = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
+                return None
+            # Skip caster (follow handler handles caster movement)
+            if event.entity_uuid == caster_uuid:
+                return None
+            if event.position not in zone.affected_positions:
+                return None
+            zone._suppress_entity(event.entity_uuid, parent_event=event)
+            return None
+
+        return EventHandler(
+            name="Antimagic Entry Suppress",
+            source_entity_uuid=caster_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+    def _create_entity_exit_handler(self) -> EventHandler:
+        """Restore suppressed conditions when an entity leaves the zone."""
+        caster_uuid = type_cast(UUID, self.source_entity_uuid)
+        zone = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
+                return None
+            if event.entity_uuid == caster_uuid:
+                return None
+            if event.entity_uuid in zone.suppression_markers:
+                zone._unsuppress_entity(event.entity_uuid, parent_event=event)
+            return None
+
+        return EventHandler(
+            name="Antimagic Exit Restore",
+            source_entity_uuid=caster_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.SPATIAL_ENTITY_LEFT,
+                event_phase=EventPhase.EFFECT
+            )],
+            event_processor=processor
+        )
+
+
+class AntimagicField(SpellAction):
+    """Antimagic Field - 8th level Abjuration (Concentration)
+
+    A 10-foot-radius invisible sphere of antimagic surrounds you. This area
+    is divorced from the magical energy that suffuses the multiverse. Within
+    the sphere, spells can't be cast, summoned creatures disappear, and even
+    magic items become mundane.
+
+    The sphere moves with the caster. Spells and magical effects are suppressed
+    in the sphere and can't protrude into it. Slots expended to cast suppressed
+    spells are consumed.
+    """
+    name: str = Field(default="Antimagic Field")
+    description: str = Field(default="10ft sphere suppresses all magic, concentration")
+    spell_level: int = Field(default=8)
+    spell_school: str = Field(default="abjuration")
+    concentration: bool = Field(default=True)
+    target_type: TargetType = Field(default=TargetType.SELF)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+
+    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return declaration_event.cancel(status_message="Caster not found")
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        caster = Entity.get(self.source_entity_uuid)
+        if not caster:
+            return execution_event.cancel(status_message="Caster not found")
+
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            status_message=f"{caster.name} casts Antimagic Field"
+        )
+
+        zone = AntimagicFieldZone(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            zone_center=caster.senses.position
+        )
+        caster.add_condition(zone, parent_event=effect_event)
+
+        concentration = self.ensure_concentration(effect_event)
+        if zone.applied:
+            concentration.add_linked_condition(caster.uuid, zone.uuid)
+
+        return effect_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            total_damage=0,
+            status_message=f"Antimagic Field active around {caster.name}"
         )
