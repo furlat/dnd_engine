@@ -101,6 +101,7 @@ class BaseValue(BaseObject):
     )
     score_normalizer: Callable[[int], int] = Field(
         default=identity,
+        exclude=True,
         description="A function to normalize the score. Defaults to identity function."
     )
     generated_from: List[UUID] = Field(
