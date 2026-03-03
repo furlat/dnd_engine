@@ -4494,6 +4494,7 @@ class DivineWordEffect(BaseCondition):
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -4580,6 +4581,7 @@ class DivineWordEffect(BaseCondition):
 
     def _create_duration_handler(self) -> EventHandler:
         """Remove this condition after duration_rounds turns."""
+        assert self.target_entity_uuid is not None
         target_uuid = self.target_entity_uuid
         condition_uuid = self.uuid
         rounds_remaining = [self.duration_rounds]  # Mutable container for closure

@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from uuid import uuid4
 from dnd.utils import (
-    reset_combat_state, setup_combat_arena, get_hp, set_hp,
-    has_condition, force_attack_hit, force_attack_miss, remove_attack_modifier,
+    reset_combat_state, get_hp, set_hp,
+    has_condition, force_attack_hit, remove_attack_modifier,
     deal_damage_to,
 )
 from dnd.core.gridmap import get_map
@@ -21,7 +21,7 @@ from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
 from dnd.monsters.bestiary import create_goblin, create_caster
-from dnd.actions_functional import setup_standard_actions, register_spell
+from dnd.actions_functional import register_spell
 from dnd.spells import (
     RemoveCurse, BestowCurse,
     AbilityCurseEffect, AttackCurseEffect, InactionCurseEffect, DamageCurseEffect,
@@ -174,7 +174,7 @@ def test_bestow_curse_option1():
 
     # Get baseline STR save advantage
     baseline_save = target.saving_throw_bonus(cleric.uuid, "strength")
-    baseline_adv = baseline_save.advantage
+    _ = baseline_save.advantage
 
     # Cast with option 1 (strength curse)
     spell = BestowCurse(

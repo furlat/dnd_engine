@@ -313,6 +313,19 @@ class SlowedEffect(BaseCondition):
         )
         return outs, handler_uuids, [], [], effect_event
 
+    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
+        """Remove the dynamic lockout constraint before standard cleanup."""
+        # The lockout constraint is added dynamically by the handler at runtime,
+        # not tracked in the condition's modifier list from _apply().
+        # Must clean it up here or it becomes orphaned.
+        if self._lockout_modifier_uuid is not None and self._lockout_target_mv_uuid is not None:
+            mv = ModifiableValue.get(self._lockout_target_mv_uuid)
+            if mv:
+                mv.self_static.remove_max_constraint(self._lockout_modifier_uuid)
+            self._lockout_modifier_uuid = None
+            self._lockout_target_mv_uuid = None
+        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
+
     def _create_action_bonus_lockout_handler(self) -> EventHandler:
         """When entity uses action → lock bonus actions, and vice versa."""
         target_uuid = type_cast(UUID, self.target_entity_uuid)
