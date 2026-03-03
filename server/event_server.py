@@ -722,6 +722,27 @@ async def root():
 
 # =============================================================================
 # Game State Endpoints
+# Fields inherited from BaseBlock/BaseObject — internal machinery, not object state
+_BASE_BLOCK_FIELDS = set(BaseBlock.model_fields.keys()) | {
+    'use_register', 'blocks_dict_name_uuid', 'blocks_dict_uuid_name',
+    'values_dict_name_uuid', 'values_dict_uuid_name',
+}
+
+# Additional fields already serialized as top-level APIFloorObject fields
+_ALREADY_SERIALIZED = {'uuid', 'name', 'map_char'}
+
+
+def _get_floor_object_state(obj: BaseBlock) -> dict:
+    """Extract object-specific state fields for API serialization.
+
+    Dumps all fields defined on the object's class that aren't inherited
+    BaseBlock/BaseObject internals or already top-level in APIFloorObject.
+    """
+    all_fields = set(type(obj).model_fields.keys())
+    state_fields = all_fields - _BASE_BLOCK_FIELDS - _ALREADY_SERIALIZED
+    return obj.model_dump(mode='json', include=state_fields)
+
+
 # =============================================================================
 
 @app.get("/state", response_model=APIGameState)
@@ -745,6 +766,7 @@ async def get_state():
                 name=obj.name or "Object",
                 position=list(obj_pos),
                 map_char=map_char,
+                state=_get_floor_object_state(obj),
             ))
 
     return APIGameState(
@@ -1982,6 +2004,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
                 name=obj.name or "Object",
                 position=list(obj_pos),
                 map_char=map_char,
+                state=_get_floor_object_state(obj),
             ))
     game_state = APIGameState(
         grid=APIGrid.create(grid, requesting_entity_uuid=entity.uuid),

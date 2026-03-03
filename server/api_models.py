@@ -10,7 +10,7 @@ extracts the relevant data.
 
 from uuid import UUID
 from pydantic import BaseModel
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from dnd.entity import Entity
@@ -216,6 +216,7 @@ class APIFloorObject(BaseModel):
     name: str
     position: List[int]
     map_char: str = "\u03c6"  # phi fallback
+    state: Dict[str, Any] = {}  # All object-specific state fields
 
 
 class APIGameState(BaseModel):
