@@ -111,6 +111,7 @@ class NumericalModifier(BaseObject):
     )
     score_normalizer: Optional[Callable[[int], int]] = Field(
         default=None,
+        exclude=True,
         description="Optional function to normalize this modifier's value"
     )
 
@@ -396,6 +397,7 @@ class ContextualModifier(BaseObject):
 
     callable: Union[ContextAwareNumerical, ContextAwareAdvantage, ContextAwareCritical, ContextAwareAutoHit] = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that determines the modifier's effect."
     )
     callable_arguments: Optional[Tuple[UUID, Optional[UUID], Optional[Dict[str, Any]]]] = Field(
@@ -504,6 +506,7 @@ class ContextualAdvantageModifier(ContextualModifier):
 
     callable: ContextAwareAdvantage = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that returns an AdvantageModifier."
     )
 
@@ -565,6 +568,7 @@ class ContextualCriticalModifier(ContextualModifier):
 
     callable: ContextAwareCritical = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that returns a CriticalModifier."
     )
 
@@ -626,6 +630,7 @@ class ContextualAutoHitModifier(ContextualModifier):
 
     callable: ContextAwareAutoHit = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that returns an AutoHitModifier."
     )
 
@@ -687,6 +692,7 @@ class ContextualNumericalModifier(ContextualModifier):
 
     callable: ContextAwareNumerical = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that returns a NumericalModifier."
     )
 
@@ -822,6 +828,7 @@ class ContextualSizeModifier(ContextualModifier):
 
     callable: ContextAwareSize = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that returns a SizeModifier."
     )
 
@@ -868,6 +875,7 @@ class ContextualDamageTypeModifier(ContextualModifier):
 
     callable: ContextAwareDamageType = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that returns a DamageTypeModifier."
     )
 
@@ -986,6 +994,7 @@ class ContextualResistanceModifier(ContextualModifier):
 
     callable: ContextAwareResistance = Field(
         ...,
+        exclude=True,
         description="A context-aware callable function that returns a ResistanceModifier."
     )
 
