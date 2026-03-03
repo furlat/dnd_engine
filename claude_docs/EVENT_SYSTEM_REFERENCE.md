@@ -184,7 +184,7 @@ The `combat_log` field on events is **excluded from serialization**. Combat log 
 
 ### Event Cursor Endpoint
 
-`GET /events?since=<cursor>&limit=50` returns events from a known cursor position:
+`GET /events?since=<cursor>&limit=0&phase=completion` returns events from a known cursor position:
 
 ```json
 {
@@ -194,23 +194,43 @@ The `combat_log` field on events is **excluded from serialization**. Combat log 
 }
 ```
 
-- `since=0` (default): returns the last `limit` events (backwards-compatible)
-- `since=N` (N > 0): returns events from index N onward (cursor mode)
-- `limit=0`: unlimited (return all events from cursor)
-- Optional filters: `event_type`, `phase`
+**Parameters:**
 
-The WebSocket handshake `event_count` and this endpoint's `total` field are the same value — use either as your cursor.
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `since` | 0 | `0` = return last `limit` events (backwards-compatible). `> 0` = cursor mode, returns events from index onward. |
+| `limit` | 50 | Max events to return. `0` = unlimited (recommended for cursor mode). |
+| `event_type` | null | Filter by event type (e.g., `"attack"`, `"movement"`) |
+| `phase` | null | Filter by event phase (e.g., `"completion"`) |
 
-### Recommended Bootstrap Pattern
+The `total` field equals `event_count` from both `GET /` and the WebSocket handshake — use any as your cursor.
+
+**Cursor mode gives exactly-once delivery**: store `total` from each response, pass it as `since` next poll. Zero overlap, zero duplicates, no need for UUID-based deduplication.
+
+### Recommended Client Patterns
+
+**Pattern A — Polling only (recommended for simplicity):**
 
 ```
-1. GET /state                    → Full game state snapshot + note event_count
-2. Connect to ws://host/ws       → Handshake returns event_count
-3. GET /events?since=<state_count> → Catch up on events fired between step 1 and 2
-4. Send filter (optional)        → Only receive event types you care about
-5. Listen for live events        → Apply incremental state updates
-6. On queue overflow / reconnect → GET /events?since=<last_total> to catch up
+1. GET /state                                        → Full snapshot
+2. GET /events?since=0&limit=0                       → Grab total as initial cursor
+3. Start polling: GET /events?since=<cursor>&limit=0&phase=completion  (every ~400ms)
+4. Each response: apply events, set cursor = total
+5. On error / unknown entity in event → GET /state + reset cursor
 ```
+
+**Pattern B — WebSocket with cursor recovery:**
+
+```
+1. GET /state                                        → Full snapshot + note event_count
+2. Connect to ws://host/ws                           → Handshake returns event_count
+3. GET /events?since=<state_count>                   → Catch up on events fired between 1 and 2
+4. Send filter (optional)                            → Only receive event types you care about
+5. Listen for live events                            → Apply incremental state updates
+6. On queue overflow / reconnect                     → GET /events?since=<last_total> to catch up
+```
+
+Pattern A is simpler and sufficient for turn-based combat. Pattern B offers lower latency for real-time scenarios.
 
 ---
 
@@ -1389,26 +1409,27 @@ This means: between turn start and the entity's first movement, paths are fresh.
 │  └────▲─────┘  └────▲─────┘  └────▲─────┘  │
 │       │              │              │        │
 │  ┌────┴──────────────┴──────────────┴────┐  │
-│  │         Event Stream Processor         │  │
-│  │  (WebSocket listener, COMPLETION only) │  │
+│  │     Event Cursor Poller (~400ms)      │  │
+│  │  GET /events?since=N&phase=completion │  │
+│  │  Exactly-once: cursor = total         │  │
 │  └────────────────▲──────────────────────┘  │
 │                   │                          │
 │  ┌────────────────┴──────────────────────┐  │
-│  │         REST Fallback Layer            │  │
-│  │  (bootstrap, available-actions,        │  │
-│  │   computed values, reconnect)          │  │
+│  │         REST Layer                     │  │
+│  │  (bootstrap, ping, available-actions,  │  │
+│  │   visibility, resync)                  │  │
 │  └───────────────────────────────────────┘  │
 └─────────────────────────────────────────────┘
-         │                    │
-    WebSocket             REST API
-         │                    │
-┌────────┴────────────────────┴───────────────┐
+                    │
+                REST API
+                    │
+┌───────────────────┴─────────────────────────┐
 │              Backend Server                  │
 └─────────────────────────────────────────────┘
 ```
 
-**Event-driven primary**: Position, HP, conditions, turns tracked from events.
-**REST fallback**: Available actions queried when it's your turn. On reconnect or queue overflow, use `GET /events?since=<last_total>` to catch up incrementally, or `GET /state` for a full reset.
+**Event-driven primary**: Position, HP, conditions, turns tracked from cursor-based event polling (`GET /events?since=<cursor>&phase=completion`). Exactly-once delivery — store `total` from each response as the next cursor. No UUID-based deduplication needed.
+**REST fallback**: Available actions queried when it's your turn. On errors or unknown entities in events, `GET /state` to resync + reset cursor from `GET /events` response `total`.
 
 ### Phase Trust Rule
 

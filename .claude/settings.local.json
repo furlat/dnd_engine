@@ -84,7 +84,18 @@
       "Bash(source:*)",
       "Bash(.venv/bin/python:*)",
       "Bash(do:*)",
-      "Bash(/tmp/eventqueue_indices.txt:*)"
+      "Bash(/tmp/eventqueue_indices.txt:*)",
+      "WebFetch(domain:pixijs.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:forum.babylonjs.com)",
+      "WebFetch(domain:viewport.pixijs.io)",
+      "WebFetch(domain:konvajs.org)",
+      "WebFetch(domain:dillonshook.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:moonbench.xyz)",
+      "WebFetch(domain:pixijs.download)",
+      "WebFetch(domain:hub.jmonkeyengine.org)",
+      "WebFetch(domain:app.unpkg.com)"
     ]
   }
 }
