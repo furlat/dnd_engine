@@ -15,7 +15,7 @@ from dnd.spells.evocation import (
     MassCureWounds, HealSpell, MassHeal,
     DivineWord, DivineWordEffect,
 )
-from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction, register_counterspell_reaction, GlobeOfInvulnerability, Banishment, LesserRestoration, GreaterRestoration, RemoveCurse, ProtectionFromPoison, DeathWard, FreedomOfMovement, Resistance, ResistanceEffect, ShieldOfFaith, ShieldOfFaithEffect, Aid, AidEffect, Sanctuary, SanctuaryEffect, BeaconOfHope, BeaconOfHopeEffect
+from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, register_shield_reaction, register_counterspell_reaction, GlobeOfInvulnerability, Banishment, LesserRestoration, GreaterRestoration, RemoveCurse, ProtectionFromPoison, DeathWard, FreedomOfMovement, Resistance, ResistanceEffect, ShieldOfFaith, ShieldOfFaithEffect, Aid, AidEffect, Sanctuary, SanctuaryEffect, BeaconOfHope, BeaconOfHopeEffect, AntimagicField
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep, Bane, BaneEffect, Bless, BlessEffect, Command, CommandGrovelEffect, CommandHaltEffect, CommandFleeEffect
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud, StinkingCloud, SleetStorm, DimensionDoor, GuardianOfFaith, GuardianOfFaithObject, GuardianWarded, HeroesFeast, HeroesFeastObject, HeroesFeastBuff, EatFromFeast
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing, NecroticBless, Eyebite, FingerOfDeath, InflictWounds, Harm, BestowCurse, AbilityCurseEffect, AttackCurseEffect, InactionCurseEffect, DamageCurseEffect
@@ -156,6 +156,7 @@ LEVEL_8_SPELLS = {
     "Sunburst": Sunburst,
     "Power Word Stun": PowerWordStun,
     "Incendiary Cloud": IncendiaryCloud,
+    "Antimagic Field": AntimagicField,
 }
 
 LEVEL_9_SPELLS = {
@@ -326,6 +327,7 @@ __all__ = [
     "Sunburst",
     "PowerWordStun",
     "IncendiaryCloud",
+    "AntimagicField",
     # Level 9
     "PowerWordKill",
     "MassHeal",

@@ -1167,12 +1167,35 @@ All action endpoints validate: session exists → session owns entity → entity
 | POST | `/simulation/set-delay?delay=1.0` | Set turn delay |
 | GET | `/simulation/status` | Simulation status |
 
-### Event Debugging
+### Event Feed
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/events?since=0&limit=50&event_type=&phase=` | Events with cursor (`since` > 0 for cursor mode, response includes `total` for next cursor) |
+| GET | `/events` | Events with cursor-based pagination (see below) |
 | GET | `/event-types` | All event types and phases |
+
+**`GET /events` — Cursor-Based Event Feed**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `since` | int | 0 | Cursor position. `0` = return last `limit` events (backwards-compatible). `> 0` = return events from index onward (cursor mode). |
+| `limit` | int | 50 | Max events to return. `0` = unlimited. |
+| `event_type` | string | null | Filter by event type (e.g., `"attack"`, `"movement"`) |
+| `phase` | string | null | Filter by event phase (e.g., `"completion"`) |
+
+**Response:**
+
+```json
+{
+  "events": [ ... ],
+  "count": 12,
+  "total": 59
+}
+```
+
+- `total` is the server's current event count — use it as `since` in the next request for exactly-once delivery
+- Matches the `event_count` field from `GET /` and the WebSocket handshake
+- **Recommended for frontend polling**: `GET /events?since=<cursor>&limit=0&phase=completion` — returns only new COMPLETION events since last poll, zero overlap, zero duplicates
 
 ### PvP Status
 
@@ -1198,13 +1221,36 @@ All action endpoints validate: session exists → session owns entity → entity
 
 ### Polling Pattern
 
-The frontend uses polling to detect turn changes:
+The frontend uses two polling loops:
+
+**1. Ping polling** (turn ownership, ~1s interval):
 
 1. Poll `POST /session/{id}/ping` periodically
 2. Response includes `is_my_turn: bool` and `active_entity_uuid`
 3. When `is_my_turn` becomes true, fetch available actions and present UI
 4. After executing actions, call `POST /action/end-turn`
 5. End-turn response advances through AI turns and returns when the next human turn begins (or encounter ends)
+
+**2. Event polling** (state changes, ~400ms interval):
+
+1. Store `eventCursor` (initialized from bootstrap `GET /events` response `total`)
+2. Poll `GET /events?since=<eventCursor>&limit=0&phase=completion`
+3. Response `total` becomes the new `eventCursor` — exactly-once, no duplicates
+4. Apply COMPLETION events to update client state (HP, position, conditions, turns, deaths)
+5. Generate animation clips from events for visual playback
+
+**Bootstrap sequence:**
+
+```
+1. POST /session/create              → session_id
+2. POST /game/join                   → controlled entities
+3. GET /state                        → full snapshot
+4. GET /events?since=0&limit=0       → just grab total as initial cursor (no events needed)
+5. GET /visibility                   → fog of war for observer
+6. Start ping + event pollers
+```
+
+**Resync**: If consecutive polls return errors, or an event references an unknown entity, re-fetch `GET /state` and reset the cursor from `GET /events`.
 
 ---
 
