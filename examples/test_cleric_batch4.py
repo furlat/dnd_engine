@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from uuid import uuid4
 from dnd.utils import (
-    reset_combat_state, setup_combat_arena, get_hp, get_max_hp, set_hp,
+    reset_combat_state, get_hp, get_max_hp, set_hp,
     has_condition, force_attack_hit, remove_attack_modifier,
 )
 from dnd.core.gridmap import get_map

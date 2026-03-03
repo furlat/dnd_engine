@@ -190,7 +190,7 @@ def test_2_action_bonus_lockout():
 
     fail_mod = force_save_fail(target)
     cast_slow(caster, (3, 0))
-    remove_save_modifier(target, fail_mod)
+    # Keep force_save_fail active so repeat saves at turn end don't remove Slowed
     assert has_condition(target, "Slowed"), "Target should be Slowed"
 
     # Navigate to target's turn
@@ -220,6 +220,7 @@ def test_2_action_bonus_lockout():
     bonus_reset = target.action_economy.bonus_actions.normalized_score
     assert bonus_reset >= 1, f"Bonus should be restored after turn reset, got {bonus_reset}"
 
+    remove_save_modifier(target, fail_mod)
     print("PASSED: test_2_action_bonus_lockout")
 
 
@@ -448,15 +449,19 @@ def test_7_slow_action_surge():
     fighter.add_condition(asf)
 
     dummy = create_target("Dummy", (4, 0))
+    set_hp(dummy, 500)  # Ensure dummy survives all attacks
     Entity.update_all_entities_senses()
 
     encounter = setup_encounter(caster, fighter, dummy)
 
-    # Apply Slow
+    # Apply Slow — force fighter to fail, dummy to succeed (dummy is in AoE)
     fail_mod = force_save_fail(fighter)
+    succeed_mod = force_save_succeed(dummy)
     cast_slow(caster, (3, 0))
-    remove_save_modifier(fighter, fail_mod)
+    remove_save_modifier(dummy, succeed_mod)
+    # Keep force_save_fail on fighter so repeat saves at turn end don't remove Slowed
     assert has_condition(fighter, "Slowed"), "Fighter should be Slowed"
+    assert not has_condition(dummy, "Slowed"), "Dummy should not be Slowed"
 
     # Navigate to fighter's turn
     encounter.start_turn()
@@ -475,6 +480,7 @@ def test_7_slow_action_surge():
     hit_mod = force_attack_hit(fighter)
     hits = _attack_until_done(fighter, dummy)
     remove_attack_modifier(fighter, hit_mod)
+    remove_save_modifier(fighter, fail_mod)
 
     print(f"Slow + Action Surge hits: {hits}")
     # Slow suppresses ALL EA → each action = 1 single attack

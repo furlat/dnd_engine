@@ -10,6 +10,7 @@ Contains all rage/frenzy related code:
 """
 
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
@@ -23,7 +24,7 @@ from dnd.core.modifiers import (
     ContextualNumericalModifier,
     ResistanceModifier, ResistanceStatus, DamageType
 )
-from dnd.blocks.equipment import ArmorType, ArmorEquipEvent
+from dnd.blocks.equipment import ArmorType, ArmorEquipEvent, Armor
 from dnd.blocks.action_economy import RechargeType
 from dnd.entity import Entity
 from dnd.actions import (
@@ -158,10 +159,10 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
         return None
 
     # Check if the equipped armor is heavy
-    # Cast to ArmorEquipEvent to access armor field
     armor_event = event if isinstance(event, ArmorEquipEvent) else None
-    if armor_event and armor_event.armor is not None:
-        if armor_event.armor.type == ArmorType.HEAVY:
+    if armor_event:
+        armor = cast(Armor, BaseBlock.get(armor_event.item_uuid))
+        if armor is not None and armor.type == ArmorType.HEAVY:
             entity.remove_condition("Raging", parent_event=event)
             return event.model_copy(update={
                 "modified": True,

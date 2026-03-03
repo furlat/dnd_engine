@@ -257,7 +257,7 @@ def setup_arena_combat(
     # Add a vertical wall in the middle (blocking LOS)
     for y in range(3, 12):
         if y != 7:  # Leave a gap — door goes here
-            grid.set_tile(7, y, walkable=False, visible=False)
+            grid.set_tile(7, y, walkable=False, visible=False, name="Wall")
 
     # Closed door at the wall gap — blocks movement and vision until opened
     door = TestDoorA(source_entity_uuid=uuid4())
@@ -336,9 +336,23 @@ def setup_arena_combat(
     potion = create_potion_of_greater_invisibility(player.uuid)
     player.loot_item(potion)
 
-    # Add items for sorcerer: spell scrolls in inventory, potions in spikes, lever at spike edge
+    # Healing potions on floor inside the spike zone
+    for pot_pos in [(1, 12), (3, 13)]:
+        hp_potion = create_healing_potion(uuid4(), heal_amount=10)
+        grid.place_object(hp_potion.uuid, pot_pos)
+
+    # Trap lever adjacent to spike zone (deactivates spikes)
+    lever_action = PullLeverAction(
+        source_entity_uuid=uuid4(), trap_handler_uuid=spike_handler.uuid, template=True
+    )
+    lever = TrapLever(
+        source_entity_uuid=uuid4(), use_action_templates=[lever_action], charges=1
+    )
+    lever_pos = (5, 12)
+    grid.place_object(lever.uuid, lever_pos)
+
+    # Spell scrolls for sorcerer only
     if character_class == "sorcerer":
-        # Spell scrolls → sorcerer's inventory
         scroll_mm1 = create_scroll_of_magic_missile(player.uuid, cast_level=1)
         scroll_mm2 = create_scroll_of_magic_missile(player.uuid, cast_level=1)  # Stacks with mm1
         scroll_fb3 = create_scroll_of_fireball(player.uuid, cast_level=3)
@@ -347,21 +361,6 @@ def setup_arena_combat(
         player.loot_item(scroll_mm2)  # Merges into mm1, stack_count=2
         player.loot_item(scroll_fb3)
         player.loot_item(scroll_fb5)
-
-        # Healing potions on floor inside the spike zone
-        for pot_pos in [(1, 12), (3, 13)]:
-            potion = create_healing_potion(uuid4(), heal_amount=10)
-            grid.place_object(potion.uuid, pot_pos)
-
-        # Trap lever adjacent to spike zone (deactivates spikes)
-        lever_action = PullLeverAction(
-            source_entity_uuid=uuid4(), trap_handler_uuid=spike_handler.uuid, template=True
-        )
-        lever = TrapLever(
-            source_entity_uuid=uuid4(), use_action_templates=[lever_action], charges=1
-        )
-        lever_pos = (5, 12)
-        grid.place_object(lever.uuid, lever_pos)
 
     # Create 3 specialized Skeletons (monsters faction) at different positions
     warrior = create_skeleton_warrior(

@@ -1673,6 +1673,7 @@ class AbilityCurseEffect(BaseCondition):
     cursed_ability: AbilityName = "strength"
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -1722,6 +1723,7 @@ class AttackCurseEffect(BaseCondition):
     caster_uuid: Optional[UUID] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
@@ -1776,6 +1778,7 @@ class InactionCurseEffect(BaseCondition):
     _action_value_uuid: Optional[UUID] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
