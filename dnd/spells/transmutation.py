@@ -654,6 +654,7 @@ class HasteEffect(BaseCondition):
 
     caster_uuid: Optional[UUID] = Field(default=None, description="UUID of the caster")
     apply_lethargy: bool = Field(default=True, description="Apply Incapacitated when Haste ends")
+    _haste_ea_suppressed_this_turn: bool = False
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
@@ -716,6 +717,11 @@ class HasteEffect(BaseCondition):
         target.add_event_handler(ea_handler)
         handler_uuids.append(ea_handler.uuid)
 
+        # Handler: Reset per-turn suppression flag at turn start
+        reset_handler = self._create_ea_suppression_reset_handler()
+        target.add_event_handler(reset_handler)
+        handler_uuids.append(reset_handler.uuid)
+
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
@@ -727,12 +733,17 @@ class HasteEffect(BaseCondition):
         """Suppress Extra Attack on the last remaining action (the haste action).
 
         Logic: When remaining_actions <= 1, this is the haste action — suppress EA.
-        Otherwise, normal action — EA allowed.
+        But only suppress once per turn (flag prevents re-triggering after Action Surge).
         """
         target_uuid = type_cast(UUID, self.target_entity_uuid)
+        condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if event.source_entity_uuid != target_uuid:
+                return None
+
+            # Already suppressed this turn (e.g., Action Surge gave more actions)
+            if condition._haste_ea_suppressed_this_turn:
                 return None
 
             entity = Entity.get(target_uuid)
@@ -753,6 +764,7 @@ class HasteEffect(BaseCondition):
                 # Suppress Extra Attack by zeroing the resource
                 if entity.action_economy.has_resource("extra_attacks"):
                     entity.action_economy.resources["extra_attacks"].current = 0
+                condition._haste_ea_suppressed_this_turn = True
 
             return None
 
@@ -762,6 +774,30 @@ class HasteEffect(BaseCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.ATTACK,
+                    event_phase=EventPhase.EXECUTION,
+                    event_source_entity_uuid=target_uuid
+                )
+            ],
+            event_processor=processor
+        )
+
+    def _create_ea_suppression_reset_handler(self) -> EventHandler:
+        """Reset the per-turn EA suppression flag at turn start."""
+        target_uuid = type_cast(UUID, self.target_entity_uuid)
+        condition = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.source_entity_uuid != target_uuid:
+                return None
+            condition._haste_ea_suppressed_this_turn = False
+            return None
+
+        return EventHandler(
+            name="Haste: EA Suppression Reset",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_START,
                     event_phase=EventPhase.EXECUTION,
                     event_source_entity_uuid=target_uuid
                 )

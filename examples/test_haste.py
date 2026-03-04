@@ -304,7 +304,11 @@ def test_2_haste_extra_attack_suppression():
 # Test 3: Haste + Action Surge = 5 hits
 # =============================================================================
 def test_3_haste_action_surge():
-    """Hasted fighter with Action Surge: 1st EA (2), 2nd EA (2), 3rd no EA (1) = 5."""
+    """Hasted fighter with Action Surge (surge first): 1st EA (2), 2nd EA (2), 3rd no EA (1) = 5.
+
+    NOTE: This test uses Surge FIRST (3 actions upfront), so suppression only fires
+    on the 3rd attack. The mid-turn Surge bug (test_10) is not triggered here.
+    """
     reset_combat_state()
     get_map().create_rectangle(0, 0, 20, 20)
 
@@ -582,6 +586,81 @@ def test_9_lethargy_on_expiry():
 
 
 # =============================================================================
+# Test 10: Haste + mid-turn Action Surge gets EA on surge action
+# =============================================================================
+def test_10_haste_mid_turn_action_surge():
+    """Attack→EA→Haste Attack→Action Surge→Attack→EA = 5 hits.
+
+    Regression test: the suppression handler used to fire twice when Action Surge
+    was used mid-turn (remaining_actions goes back to 1 after surge). The fix
+    tracks a per-turn flag so suppression only fires once.
+    """
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 20, 20)
+
+    caster = create_caster("Wizard", (0, 0))
+    fighter = create_fighter("Fighter", (3, 0), action_surge=True)
+    dummy = create_dummy("Dummy", (4, 0))
+    Entity.update_all_entities_senses()
+
+    encounter = setup_encounter(caster, fighter, dummy)
+    cast_haste(caster, fighter)
+
+    _navigate_to_turn(encounter, fighter)
+
+    hit_mod = force_attack_hit(fighter)
+
+    # Fighter has 2 actions (1 base + 1 haste). Do NOT surge first.
+    actions = fighter.action_economy.actions.normalized_score
+    assert actions == 2, f"Should have 2 actions, got {actions}"
+
+    def _find_attack(name_contains: str):
+        available = get_available_actions(fighter)
+        matches = [a for a in available.entity_actions if name_contains in a.template_name]
+        return matches[0] if matches else None
+
+    def _do_attack(name_contains: str) -> int:
+        info = _find_attack(name_contains)
+        assert info is not None, f"Expected to find action containing '{name_contains}'"
+        set_hp(dummy, 500)
+        hp_before = get_hp(dummy)
+        execute_action(fighter, info.template_name,
+                       AvailableTarget(index=0, target_uuid=dummy.uuid))
+        return 1 if get_hp(dummy) < hp_before else 0
+
+    # Attack #1 (costs 1 action, remaining=2): EA should be available
+    hit1 = _do_attack("Attack")
+    # Extra Attack (free, uses extra_attacks resource)
+    hit2 = _do_attack("Extra Attack")
+
+    # Attack #2 (haste action, remaining=1): EA suppressed
+    hit3 = _do_attack("Attack")
+
+    # Verify no Extra Attack available after haste action
+    assert _find_attack("Extra Attack") is None, \
+        "No Extra Attack should be available after haste action"
+
+    # Action Surge mid-turn (remaining actions: 0 → 1)
+    surge = ActionSurge(source_entity_uuid=fighter.uuid)
+    surge.apply()
+    actions_after_surge = fighter.action_economy.actions.normalized_score
+    assert actions_after_surge == 1, f"Should have 1 action after surge, got {actions_after_surge}"
+
+    # Attack #3 (surge action, remaining=1): EA should NOT be suppressed
+    hit4 = _do_attack("Attack")
+    # Extra Attack from surge action
+    hit5 = _do_attack("Extra Attack")
+
+    remove_attack_modifier(fighter, hit_mod)
+
+    total_hits = hit1 + hit2 + hit3 + hit4 + hit5
+    print(f"Mid-turn surge hits: {total_hits} (expected 5)")
+    assert total_hits == 5, f"Should get 5 hits (2+1+2), got {total_hits}"
+
+    print("PASSED: test_10_haste_mid_turn_action_surge")
+
+
+# =============================================================================
 # Run all tests
 # =============================================================================
 if __name__ == "__main__":
@@ -595,6 +674,7 @@ if __name__ == "__main__":
         test_7_haste_slow_action_surge,
         test_8_lethargy_on_dispel,
         test_9_lethargy_on_expiry,
+        test_10_haste_mid_turn_action_surge,
     ]
 
     passed = 0
