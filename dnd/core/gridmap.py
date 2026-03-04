@@ -783,7 +783,8 @@ class GridMap:
 
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
-                         very_bright_radius_feet: int = 0) -> UUID:
+                         very_bright_radius_feet: int = 0,
+                         parent_event: Optional[UUID] = None) -> UUID:
         """Add a light source at a position.
 
         Computes illuminated area via FOV from position.
@@ -815,21 +816,22 @@ class GridMap:
                 anchor.attach_light_source(source.uuid)
 
         # Apply illumination to tiles
-        self._apply_light_source(source)
+        self._apply_light_source(source, parent_event=parent_event)
 
         # Register movement callback if not already done
         self._ensure_light_callback()
 
         return source.uuid
 
-    def remove_light_source(self, light_uuid: UUID) -> None:
+    def remove_light_source(self, light_uuid: UUID,
+                            parent_event: Optional[UUID] = None) -> None:
         """Remove a light source and clean up tile modifiers."""
         source = self._light_sources.pop(light_uuid, None)
         if source is None:
             return
 
         # Remove tile illumination
-        self._remove_light_source_tiles(source)
+        self._remove_light_source_tiles(source, parent_event=parent_event)
 
         # Detach from anchor
         if source.anchor_uuid:
@@ -936,7 +938,8 @@ class GridMap:
                 result[tile_pos] = LightLevel.DIM_LIGHT
         return result
 
-    def _apply_light_source(self, source: LightSourceData) -> None:
+    def _apply_light_source(self, source: LightSourceData,
+                            parent_event: Optional[UUID] = None) -> None:
         """Compute and apply illumination from a light source to tiles.
         Suppresses per-tile events and fires a single senses update after."""
         source.affected_tiles = self._compute_light_tiles(source)
@@ -946,9 +949,10 @@ class GridMap:
             if tile is not None:
                 if tile.add_illumination(source.uuid, level, fire_event=False):
                     changed_positions.append(pos)
-        self._fire_light_batch_events(changed_positions)
+        self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
-    def _remove_light_source_tiles(self, source: LightSourceData) -> None:
+    def _remove_light_source_tiles(self, source: LightSourceData,
+                                   parent_event: Optional[UUID] = None) -> None:
         """Remove illumination from all tiles affected by this light source.
         Suppresses per-tile events and fires a single senses update after."""
         changed_positions: List[Tuple[int, int]] = []
@@ -958,7 +962,7 @@ class GridMap:
                 if tile.remove_light_modifier(source.uuid, fire_event=False):
                     changed_positions.append(pos)
         source.affected_tiles.clear()
-        self._fire_light_batch_events(changed_positions)
+        self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
     def _fire_light_batch_events(self, changed_positions: List[Tuple[int, int]],
                                   parent_event: Optional[UUID] = None) -> None:
@@ -1021,6 +1025,7 @@ class GridMap:
             tile = self._tiles.get(senses_pos)
             if tile:
                 event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid, senses_hint=batch_hint)
+                event.parent_event = parent_event
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)
 
@@ -1075,9 +1080,10 @@ class GridMap:
         hint = event.senses_hint
         if hint is None or not hint.requires_fov:
             return
-        self.recompute_lights_at_position(event.position)
+        self.recompute_lights_at_position(event.position, parent_event=event.uuid)
 
-    def recompute_lights_at_position(self, position: Tuple[int, int]) -> None:
+    def recompute_lights_at_position(self, position: Tuple[int, int],
+                                     parent_event: Optional[UUID] = None) -> None:
         """Recompute light sources affected by a blocking change at position.
 
         When blocking geometry changes (door open/close, wall destruction),
@@ -1124,7 +1130,7 @@ class GridMap:
                         changed_positions.append(pos)
 
             source.affected_tiles = new_affected
-            self._fire_light_batch_events(changed_positions)
+            self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
     # =========================================================================
     # AoE Prefilter

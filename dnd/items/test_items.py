@@ -64,7 +64,7 @@ class OpenDoorAction(BaseAction):
         door.is_open = True
         door.blocks_movement = False
         door.blocks_vision_field = False
-        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision)
+        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision, parent_event=execution_event.uuid)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door opened")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Door opened")
 
@@ -102,7 +102,7 @@ class CloseDoorAction(BaseAction):
         door.is_open = False
         door.blocks_movement = True
         door.blocks_vision_field = True
-        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision)
+        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision, parent_event=execution_event.uuid)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door closed")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Door closed")
 
@@ -172,7 +172,7 @@ class InteractDoorAction(BaseAction):
         door.is_open = not door.is_open
         door.blocks_movement = not door.is_open
         door.blocks_vision_field = not door.is_open
-        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision)
+        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision, parent_event=execution_event.uuid)
         status = "opened" if door.is_open else "closed"
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message=f"Door {status}")
         return effect.phase_to(EventPhase.COMPLETION, status_message=f"Door {status}")
@@ -1077,7 +1077,7 @@ class IgniteTorchAction(BaseAction):
         if not isinstance(torch, Torch):
             return execution_event.cancel(status_message="Torch not found")
 
-        torch.ignite(self.source_entity_uuid)
+        torch.ignite(self.source_entity_uuid, parent_event=execution_event.uuid)
 
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Torch ignited")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Torch ignited")
@@ -1108,7 +1108,7 @@ class ExtinguishTorchAction(BaseAction):
         if not isinstance(torch, Torch):
             return execution_event.cancel(status_message="Torch not found")
 
-        torch.extinguish()
+        torch.extinguish(parent_event=execution_event.uuid)
 
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Torch extinguished")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Torch extinguished")
@@ -1145,7 +1145,8 @@ class Torch(UsableItem):
                 source_item_uuid=self.uuid,
             )]
 
-    def ignite(self, carrier_entity_uuid: UUID) -> None:
+    def ignite(self, carrier_entity_uuid: UUID,
+               parent_event: Optional[UUID] = None) -> None:
         """Light the torch — creates a light source on the GridMap."""
         if self.is_lit:
             return
@@ -1158,17 +1159,18 @@ class Torch(UsableItem):
                 very_bright_radius_feet=self.very_bright_radius_feet,
                 bright_radius_feet=self.bright_radius_feet,
                 dim_radius_feet=self.dim_radius_feet,
-                anchor_uuid=carrier_entity_uuid
+                anchor_uuid=carrier_entity_uuid,
+                parent_event=parent_event,
             )
 
-    def extinguish(self) -> None:
+    def extinguish(self, parent_event: Optional[UUID] = None) -> None:
         """Put out the torch — removes the light source."""
         if not self.is_lit:
             return
         self.is_lit = False
         if self._light_source_uuid:
             grid = get_map()
-            grid.remove_light_source(self._light_source_uuid)
+            grid.remove_light_source(self._light_source_uuid, parent_event=parent_event)
             self._light_source_uuid = None
 
     def _on_destroy(self) -> None:
@@ -1211,7 +1213,7 @@ class IgniteWallTorchAction(BaseAction):
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, WallTorch):
             return execution_event.cancel(status_message="Wall torch not found")
-        torch.light()
+        torch.light(parent_event=execution_event.uuid)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Wall torch lit")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Wall torch lit")
 
@@ -1237,7 +1239,7 @@ class ExtinguishWallTorchAction(BaseAction):
         torch = BaseBlock.get(self.source_item_uuid)
         if not isinstance(torch, WallTorch):
             return execution_event.cancel(status_message="Wall torch not found")
-        torch.put_out()
+        torch.put_out(parent_event=execution_event.uuid)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Wall torch extinguished")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Wall torch extinguished")
 
@@ -1268,7 +1270,7 @@ class WallTorch(UsableItem):
                 source_item_uuid=self.uuid,
             )]
 
-    def light(self) -> None:
+    def light(self, parent_event: Optional[UUID] = None) -> None:
         """Light the wall torch — creates a fixed light source."""
         if self.is_lit:
             return
@@ -1280,16 +1282,17 @@ class WallTorch(UsableItem):
                 very_bright_radius_feet=self.very_bright_radius_feet,
                 bright_radius_feet=self.bright_radius_feet,
                 dim_radius_feet=self.dim_radius_feet,
+                parent_event=parent_event,
             )
 
-    def put_out(self) -> None:
+    def put_out(self, parent_event: Optional[UUID] = None) -> None:
         """Extinguish the wall torch — removes the light source."""
         if not self.is_lit:
             return
         self.is_lit = False
         if self._light_source_uuid:
             grid = get_map()
-            grid.remove_light_source(self._light_source_uuid)
+            grid.remove_light_source(self._light_source_uuid, parent_event=parent_event)
             self._light_source_uuid = None
 
 
