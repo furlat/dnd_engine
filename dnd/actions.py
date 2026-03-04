@@ -950,7 +950,7 @@ class Attack(BaseAction):
                 return attack_event
             
             # Roll attack and post results using the helper methods
-            dice_roll = source_entity.roll_d20(attack_bonus,RollType.ATTACK)
+            dice_roll = source_entity.roll_d20(attack_bonus, RollType.ATTACK, parent_event=attack_event.uuid)
             crit_threshold = source_entity.get_crit_threshold(weapon_slot)
             attack_outcome = determine_attack_outcome(dice_roll, ac, crit_threshold)
             
@@ -1024,6 +1024,9 @@ class Attack(BaseAction):
 
                 # Step 4: Apply final_rolls (possibly modified by handlers)
                 damage_rolls = damage_roll_event.final_rolls
+
+                # Phase to COMPLETION so lineage fields are populated
+                damage_roll_event.phase_to(EventPhase.COMPLETION)
                 total_damage = sum(roll.total for roll in damage_rolls)
 
                 # Step 5: Apply damage (fires TakeDamageEvent internally)
@@ -1488,7 +1491,7 @@ class Hide(BaseAction):
 
         # Roll Stealth check via SkillCheckEvent (generates combat log with roll details)
         skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
-        stealth_roll = entity.roll_d20(skill_bonus, RollType.CHECK, skill_name="stealth")
+        stealth_roll = entity.roll_d20(skill_bonus, RollType.CHECK, skill_name="stealth", parent_event=execution_event.uuid)
         stealth_result = stealth_roll.total
 
         # Create SkillCheckEvent as child — no DC (Hide sets stealth DC, not pass/fail)
@@ -2397,7 +2400,7 @@ class Shove(BaseAction):
                 target_skill = "acrobatics"
 
             # Roll Athletics check
-            dice_roll = source.roll_d20(athletics_bonus, RollType.CHECK)
+            dice_roll = source.roll_d20(athletics_bonus, RollType.CHECK, parent_event=execution_event.uuid)
             contest_success = dice_roll.total >= target_passive
 
         # Update event with contest results

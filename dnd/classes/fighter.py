@@ -1513,7 +1513,7 @@ def indomitable_processor(
     # Reroll the save (must use new result per RAW)
     ability_name = event.ability_name
     save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name)
-    new_roll = entity.roll_d20(save_bonus, RollType.SAVE)
+    new_roll = entity.roll_d20(save_bonus, RollType.SAVE, parent_event=event.uuid)
 
     # Determine new result
     dc = event.get_dc()

@@ -744,7 +744,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     # Make CON save using proper dice roll
     # Use direct save bonus (no cross-entity propagation needed for self-save)
     con_save = entity.saving_throws.get_saving_throw("constitution")
-    dice_roll = entity.roll_d20(con_save.bonus, RollType.SAVE)
+    dice_roll = entity.roll_d20(con_save.bonus, RollType.SAVE, parent_event=event.uuid)
     total = dice_roll.total
 
     if total >= current_dc:

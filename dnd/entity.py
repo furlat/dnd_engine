@@ -1666,19 +1666,46 @@ class Entity(BaseBlock):
         return final_outcome, final_roll, final_success
     
     def skill_check(self, request: SkillCheckEvent) -> Tuple[AttackOutcome,DiceRoll,bool]:
-        """ make a skill check """
+        """Make a skill check with full event phase transitions.
+
+        Mirrors saving_throw() pattern: DECLARATION → EXECUTION → EFFECT → COMPLETION.
+        """
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
         self.set_target_entity(request.source_entity_uuid)
-        skill_check = self.skill_bonus(request.source_entity_uuid, request.skill_name)
+        skill_check_bonus = self.skill_bonus(request.source_entity_uuid, request.skill_name)
         dc = request.get_dc()
         if dc is None:
             raise ValueError(f"DC is not set for {request.skill_name} skill check with event id {request.uuid}")
-        #create the dice (with skill_name for event handlers)
-        roll = self.roll_d20(skill_check, RollType.CHECK, skill_name=request.skill_name)
+
+        # EXECUTION phase - bonus calculated, about to roll
+        execution_event = request.phase_to(
+            EventPhase.EXECUTION,
+            bonus=skill_check_bonus,
+            status_message=f"Rolling {request.skill_name} check vs DC {dc}"
+        )
+
+        # Roll the dice
+        roll = self.roll_d20(skill_check_bonus, RollType.CHECK, skill_name=request.skill_name, parent_event=request.uuid)
         skill_check_outcome = determine_attack_outcome(roll, dc)
+        success = skill_check_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
+
+        # EFFECT phase - roll made, result determined
+        effect_event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            dice_roll=roll,
+            result=success,
+            status_message=f"Rolled {roll.total} vs DC {dc}: {'Success' if success else 'Failure'}"
+        )
+
+        # COMPLETION phase - finalized
+        effect_event.phase_to(
+            EventPhase.COMPLETION,
+            status_message=f"{request.skill_name} check complete"
+        )
+
         self.clear_target_entity()
-        return skill_check_outcome, roll, True if skill_check_outcome not in [AttackOutcome.MISS,AttackOutcome.CRIT_MISS] else False
+        return skill_check_outcome, roll, success
 
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,

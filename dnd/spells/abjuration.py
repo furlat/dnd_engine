@@ -1153,7 +1153,7 @@ class BanishedCondition(BaseCondition):
 
         # Fire ENTITY_LEFT so other entities' senses update
         if grid._events_enabled:
-            spatial_event = SpatialChangeEvent.entity_left(pos, target.uuid, None)
+            spatial_event = SpatialChangeEvent.entity_left(pos, target.uuid, None, parent_event=declaration_event.uuid)
             grid._fire_spatial_event(spatial_event)
 
         effect_event = declaration_event.phase_to(
@@ -1194,7 +1194,8 @@ class BanishedCondition(BaseCondition):
 
             # Fire ENTITY_ENTERED
             if grid._events_enabled:
-                spatial_event = SpatialChangeEvent.entity_entered(pos, target.uuid, None)
+                spatial_event = SpatialChangeEvent.entity_entered(pos, target.uuid, None,
+                                                                   parent_event=removal_event.uuid if removal_event else None)
                 grid._fire_spatial_event(spatial_event)
 
         return super()._remove(removal_event)
