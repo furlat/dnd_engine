@@ -518,7 +518,8 @@ class GridMap:
     # Entity Position Management
     # =========================================================================
 
-    def register_entity(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
+    def register_entity(self, entity_uuid: UUID, position: Tuple[int, int],
+                         parent_event: Optional[UUID] = None) -> None:
         """Register an entity at a position."""
         # Remove from old position if exists
         old_pos = self._entity_positions.get(entity_uuid)
@@ -526,7 +527,7 @@ class GridMap:
             self._entities_by_position[old_pos].discard(entity_uuid)
             # Fire entity left event
             if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(old_pos, entity_uuid, position)
+                event = SpatialChangeEvent.entity_left(old_pos, entity_uuid, position, parent_event=parent_event)
                 self._fire_spatial_event(event)
 
         # Add to new position
@@ -535,10 +536,11 @@ class GridMap:
 
         # Fire entity entered event
         if self._events_enabled:
-            event = SpatialChangeEvent.entity_entered(position, entity_uuid, old_pos)
+            event = SpatialChangeEvent.entity_entered(position, entity_uuid, old_pos, parent_event=parent_event)
             self._fire_spatial_event(event)
 
-    def unregister_entity(self, entity_uuid: UUID) -> None:
+    def unregister_entity(self, entity_uuid: UUID,
+                           parent_event: Optional[UUID] = None) -> None:
         """Remove an entity from position tracking and subscriptions."""
         if entity_uuid in self._entity_positions:
             pos = self._entity_positions[entity_uuid]
@@ -546,7 +548,7 @@ class GridMap:
 
             # Fire entity left event
             if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(pos, entity_uuid)
+                event = SpatialChangeEvent.entity_left(pos, entity_uuid, parent_event=parent_event)
                 self._fire_spatial_event(event)
 
             del self._entity_positions[entity_uuid]
@@ -602,7 +604,8 @@ class GridMap:
     # Object Position Management
     # =========================================================================
 
-    def place_object(self, object_uuid: UUID, position: Tuple[int, int]) -> None:
+    def place_object(self, object_uuid: UUID, position: Tuple[int, int],
+                      parent_event: Optional[UUID] = None) -> None:
         """Place an object on the grid at a position."""
         self._object_positions[object_uuid] = position
         self._objects_by_position[position].add(object_uuid)
@@ -613,11 +616,13 @@ class GridMap:
             blocks_walking = obj.blocks_walking() if obj else False
             self._fire_spatial_event(SpatialChangeEvent.object_placed(
                 position, object_uuid,
+                parent_event=parent_event,
                 blocks_vision=blocks_vision,
                 blocks_walking=blocks_walking,
             ))
 
-    def remove_object(self, object_uuid: UUID) -> None:
+    def remove_object(self, object_uuid: UUID,
+                       parent_event: Optional[UUID] = None) -> None:
         """Remove an object from the grid."""
         # Check blocking properties BEFORE removing (for hint)
         obj = BaseBlock.get(object_uuid)
@@ -629,6 +634,7 @@ class GridMap:
             if self._events_enabled:
                 self._fire_spatial_event(SpatialChangeEvent.object_removed(
                     position, object_uuid,
+                    parent_event=parent_event,
                     blocks_vision=blocks_vision,
                     blocks_walking=blocks_walking,
                 ))

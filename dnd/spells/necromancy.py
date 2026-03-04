@@ -291,7 +291,7 @@ class ChillTouch(SpellAction):
         target_ac.set_from_target(attack_bonus)
 
         # 3. Roll attack
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
+        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         outcome = determine_attack_outcome(dice_roll, target_ac)
 
         # 4. Clean up
@@ -1512,7 +1512,7 @@ class InflictWounds(SpellAction):
         target_ac.set_from_target(attack_bonus)
 
         # Roll attack
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK)
+        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 

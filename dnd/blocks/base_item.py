@@ -91,7 +91,8 @@ class BaseItem(BaseBlock):
         """Whether this item blocks line of sight through its grid position."""
         return self.blocks_vision_field
 
-    def _notify_blocking_changed(self, old_blocks_movement: bool, old_blocks_vision: bool) -> None:
+    def _notify_blocking_changed(self, old_blocks_movement: bool, old_blocks_vision: bool,
+                                     parent_event: Optional[UUID] = None) -> None:
         """Fire SPATIAL_OBJECT_CHANGED if blocking state changed while on grid.
 
         Called after modifying blocks_movement or blocks_vision_field on an item
@@ -112,6 +113,7 @@ class BaseItem(BaseBlock):
                 position, self.uuid,
                 blocks_vision_changed=vision_changed,
                 blocks_walking_changed=walking_changed,
+                parent_event=parent_event,
             )
             grid._fire_spatial_event(event)
 

@@ -275,10 +275,10 @@ class Tile(BaseBlock):
                 return LightLevel.DIM_LIGHT
         return level
 
-    def _notify_light_changed(self) -> None:
+    def _notify_light_changed(self, parent_event: Optional[UUID] = None) -> None:
         """Fire a SPATIAL_LIGHT_CHANGED event at this tile's position.
         Same pattern as BaseBlock._notify_perceivability_changed()."""
-        event = SpatialChangeEvent.light_changed(self.position, self.uuid)
+        event = SpatialChangeEvent.light_changed(self.position, self.uuid, parent_event=parent_event)
         current = EventQueue.register(event)
         if current.canceled:
             return
