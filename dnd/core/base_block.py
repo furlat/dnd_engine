@@ -384,13 +384,13 @@ class BaseBlock(BaseModel):
         self.is_invisible = value
         self._notify_perceivability_changed()
 
-    def _notify_perceivability_changed(self) -> None:
+    def _notify_perceivability_changed(self, parent_event: Optional[UUID] = None) -> None:
         """Fire a SPATIAL_PERCEIVABILITY_CHANGED event at this block's position.
 
         Entities subscribed to this cell via SpatialSensesCallback will
         re-evaluate their senses. Does not trigger SpatialHandlers (zone effects).
         """
-        event = SpatialChangeEvent.perceivability_changed(self.position, self.uuid)
+        event = SpatialChangeEvent.perceivability_changed(self.position, self.uuid, parent_event=parent_event)
         current = EventQueue.register(event)
         if current.canceled:
             return

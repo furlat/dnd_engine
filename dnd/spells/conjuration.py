@@ -1002,7 +1002,8 @@ class EscapeWebAction(BaseAction):
             target_entity_uuid=entity.uuid,
             skill_name="athletics",
             dc=self.spell_dc,
-            source_entity_name=entity.name
+            source_entity_name=entity.name,
+            parent_event=execution_event.uuid,
         )
         _, _, success = entity.skill_check(check_event)
 

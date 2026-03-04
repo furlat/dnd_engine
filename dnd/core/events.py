@@ -241,6 +241,12 @@ class Event(BaseObject):
     lineage_children_events: List[UUID] = Field(default_factory=list,description="All children events that happened throughout this event's lifetime")
     children_events: List[UUID] = Field(default_factory=list,description="Children events that happened during the current phase")
 
+    # Stable hierarchy fields — populated automatically at COMPLETION phase
+    # by resolving stale phase-specific UUIDs through EventQueue lookups.
+    # Never set by callers.
+    parent_lineage: Optional[UUID] = Field(default=None, description="Parent's lineage_uuid (stable across phases)")
+    children_lineages: List[UUID] = Field(default_factory=list, description="Lineage UUIDs of all children (stable, deduped)")
+
     # Auto-generated combat log entry (populated at COMPLETION phase)
     # Excluded from serialization - generated on demand via generate_combat_log()
     combat_log: Optional[CombatLogEntry] = Field(default=None, exclude=True, description="Auto-generated combat log entry")
@@ -316,9 +322,31 @@ class Event(BaseObject):
         if 'is_last' not in phase_updates:
             phase_updates['is_last'] = True
 
-        # Preserve lineage_children_events but clear children_events for new phase
-        phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
-        phase_updates['children_events'] = []
+        if new_phase == EventPhase.COMPLETION:
+            # COMPLETION: carry forward ALL children and resolve stable lineage references
+            all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
+            phase_updates['lineage_children_events'] = all_children
+            phase_updates['children_events'] = all_children
+
+            # Resolve parent_lineage from stale parent_event UUID
+            if self.parent_event:
+                parent = EventQueue.get_event_by_uuid(self.parent_event)
+                if parent:
+                    phase_updates['parent_lineage'] = parent.lineage_uuid
+
+            # Build children_lineages by dereferencing child UUIDs → lineage UUIDs
+            child_lineages: List[UUID] = []
+            seen_lineages: Set[UUID] = set()
+            for child_uuid in all_children:
+                child = EventQueue.get_event_by_uuid(child_uuid)
+                if child and child.lineage_uuid not in seen_lineages:
+                    child_lineages.append(child.lineage_uuid)
+                    seen_lineages.add(child.lineage_uuid)
+            phase_updates['children_lineages'] = child_lineages
+        else:
+            # Non-COMPLETION: existing behavior unchanged
+            phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
+            phase_updates['children_events'] = []
 
         # Auto-generate combat log at COMPLETION phase
         if new_phase == EventPhase.COMPLETION:
@@ -396,12 +424,31 @@ class Event(BaseObject):
             self.lineage_children_events.append(child_event.uuid)
 
     def get_children_events(self) -> List['Event']:
-        """Get all children events of the current event"""
-        outs = [EventQueue.get_event_by_uuid(child_event) for child_event in self.children_events]
-        return [out for out in outs if out is not None]
-    
+        """Get all children events of the current event.
+
+        Prefers stable children_lineages (latest event per child lineage) when
+        available, falls back to children_events UUID lookup.
+        """
+        if self.children_lineages:
+            result: List[Event] = []
+            for lineage_id in self.children_lineages:
+                lineage_events = EventQueue._events_by_lineage.get(lineage_id, [])
+                if lineage_events:
+                    result.append(lineage_events[-1])  # Latest version in lineage
+            return result
+        resolved = [EventQueue.get_event_by_uuid(child_event) for child_event in self.children_events]
+        return [out for out in resolved if out is not None]
+
     def get_parent_event(self) -> Optional['Event']:
-        """Get the parent event of the current event"""
+        """Get the parent event of the current event.
+
+        Prefers stable parent_lineage (latest event in parent's lineage) when
+        available, falls back to parent_event UUID lookup.
+        """
+        if self.parent_lineage:
+            events = EventQueue._events_by_lineage.get(self.parent_lineage, [])
+            if events:
+                return events[-1]  # Latest version in parent lineage
         if self.parent_event:
             return EventQueue.get_event_by_uuid(self.parent_event)
         return None
@@ -413,17 +460,28 @@ class Event(BaseObject):
         Each child's combat_log already has ITS children in sub_entries
         (because this method runs when each child completes).
 
-        De-duplicates by lineage_uuid to avoid adding the same event's log
-        multiple times when the event phases through (each phase has a new uuid
-        but the same lineage_uuid).
+        Prefers children_lineages for direct lineage-based lookup, falling back
+        to lineage_children_events with de-duplication by lineage_uuid.
         """
-        child_logs = []
-        seen_lineages: Set[UUID] = set()
-        for child_uuid in self.lineage_children_events:
-            child = EventQueue.get_event_by_uuid(child_uuid)
-            if child and child.combat_log and child.lineage_uuid not in seen_lineages:
-                child_logs.append(child.combat_log)
-                seen_lineages.add(child.lineage_uuid)
+        child_logs: List[CombatLogEntry] = []
+
+        if self.children_lineages:
+            # Direct lookup: each entry is already a unique lineage UUID
+            for lineage_id in self.children_lineages:
+                events = EventQueue._events_by_lineage.get(lineage_id, [])
+                # Walk backwards to find the COMPLETION event with combat_log
+                for ev in reversed(events):
+                    if ev.combat_log:
+                        child_logs.append(ev.combat_log)
+                        break
+        else:
+            # Fallback: de-duplicate by lineage_uuid
+            seen_lineages: Set[UUID] = set()
+            for child_uuid in self.lineage_children_events:
+                child = EventQueue.get_event_by_uuid(child_uuid)
+                if child and child.combat_log and child.lineage_uuid not in seen_lineages:
+                    child_logs.append(child.combat_log)
+                    seen_lineages.add(child.lineage_uuid)
         return child_logs
 
     def get_history(self) -> List['Event']:
@@ -791,8 +849,14 @@ class EventQueue:
         if event.parent_event:
             parent_uuid = event.parent_event
             parent_event = cls.get_event_by_uuid(parent_uuid)
-            if parent_event and parent_event.uuid not in event.children_events:
+            if parent_event and event.uuid not in parent_event.children_events:
                 parent_event.add_child_event(event)
+                # Propagate child to ALL lineage versions of parent so the latest
+                # version has all children when its COMPLETION runs
+                for lineage_event in cls._events_by_lineage.get(parent_event.lineage_uuid, []):
+                    if lineage_event.uuid != parent_event.uuid:
+                        if event.uuid not in lineage_event.lineage_children_events:
+                            lineage_event.add_child_event(event)
 
         # By type
         cls._events_by_type[event.event_type].append(event)
@@ -1699,7 +1763,8 @@ class SpatialChangeEvent(Event):
     @classmethod
     def tile_changed(cls, position: Tuple[int, int], walkable: bool, visible: bool,
                      source_entity_uuid: Optional[UUID] = None,
-                     senses_hint: Optional['SensesUpdateHint'] = None) -> 'SpatialChangeEvent':
+                     senses_hint: Optional['SensesUpdateHint'] = None,
+                     parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile property change.
 
         Event starts at DECLARATION phase to allow full lifecycle.
@@ -1720,6 +1785,7 @@ class SpatialChangeEvent(Event):
             tile_visible=visible,
             phase=EventPhase.DECLARATION,
             use_register=False,  # GridMap controls registration via _fire_spatial_event
+            parent_event=parent_event,
             senses_hint=senses_hint,
         )
 
@@ -1773,7 +1839,8 @@ class SpatialChangeEvent(Event):
 
     @classmethod
     def perceivability_changed(cls, position: Tuple[int, int], entity_uuid: UUID,
-                               source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                               source_entity_uuid: Optional[UUID] = None,
+                               parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity's perceivability changing (hidden/invisible).
 
         This is a lightweight event that only triggers senses re-evaluation
@@ -1791,13 +1858,15 @@ class SpatialChangeEvent(Event):
             entity_uuid=entity_uuid,
             phase=EventPhase.DECLARATION,
             use_register=False,
+            parent_event=parent_event,
             senses_hint=hint,
         )
 
     @classmethod
     def light_changed(cls, position: Tuple[int, int], tile_uuid: UUID,
                       source_entity_uuid: Optional[UUID] = None,
-                      senses_hint: Optional['SensesUpdateHint'] = None) -> 'SpatialChangeEvent':
+                      senses_hint: Optional['SensesUpdateHint'] = None,
+                      parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile's resolved light level changing.
 
         Triggers senses re-evaluation on observers subscribed to this cell.
@@ -1815,6 +1884,7 @@ class SpatialChangeEvent(Event):
             entity_uuid=tile_uuid,  # Tile UUID stored in entity_uuid field
             phase=EventPhase.DECLARATION,
             use_register=False,
+            parent_event=parent_event,
             senses_hint=senses_hint,
         )
 
@@ -1822,7 +1892,8 @@ class SpatialChangeEvent(Event):
     def object_changed(cls, position: Tuple[int, int], object_uuid: UUID,
                        blocks_vision_changed: bool = False,
                        blocks_walking_changed: bool = False,
-                       source_entity_uuid: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                       source_entity_uuid: Optional[UUID] = None,
+                       parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for an object's blocking state changing (door open/close).
 
         Fires when an object's blocks_movement or blocks_vision_field changes
@@ -1840,6 +1911,7 @@ class SpatialChangeEvent(Event):
             object_uuid=object_uuid,
             phase=EventPhase.DECLARATION,
             use_register=False,
+            parent_event=parent_event,
             senses_hint=hint,
         )
 

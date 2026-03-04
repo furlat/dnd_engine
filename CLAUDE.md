@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+NO GIT CHECKOUT OR ANY COMMIT OR ANY ROLLBACK ONLY USERS DOES IT
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
