@@ -978,12 +978,12 @@ class Entity(BaseBlock):
             )
             # Update event with actual damage after resistances so combat log is accurate
             take_damage_event = take_damage_event.model_copy(
-                update={"final_damage": actual_damage}
+                update={"final_damage": actual_damage, "resulting_hp": self.get_hp()}
             )
         else:
             # Canceled (e.g., Shield blocks Magic Missile) — set final_damage=0 for combat log
             take_damage_event = take_damage_event.model_copy(
-                update={"final_damage": 0}
+                update={"final_damage": 0, "resulting_hp": self.get_hp()}
             )
 
         # Handle death BEFORE completing TakeDamageEvent so DeathEvent appears
@@ -1061,7 +1061,7 @@ class Entity(BaseBlock):
                 self.health.heal(amount)
                 actual_healing = self.get_hp() - hp_before
 
-        heal_event = heal_event.model_copy(update={"actual_healing": actual_healing})
+        heal_event = heal_event.model_copy(update={"actual_healing": actual_healing, "resulting_hp": self.get_hp()})
         heal_event.phase_to(EventPhase.COMPLETION)
 
         return actual_healing
