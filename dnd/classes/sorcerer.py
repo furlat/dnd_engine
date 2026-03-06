@@ -74,12 +74,23 @@ class DraconicResilience(BaseCondition):
         mod_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(hp_mod)
         outs.append((target.health.max_hit_points_bonus.uuid, mod_uuid))
 
+        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
             status_message="Draconic Resilience applied",
+            resulting_max_hp=max_hp
         )
         return outs, [], [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+            max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
+            return {"resulting_max_hp": max_hp}
+        return {}
 
 
 # =============================================================================

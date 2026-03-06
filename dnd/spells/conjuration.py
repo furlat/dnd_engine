@@ -3,7 +3,7 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
-from typing import Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -3683,11 +3683,22 @@ class HeroesFeastBuff(BaseCondition):
             )
             outs.append((target.health.max_hit_points_bonus.uuid, hp_mod_uuid))
 
+        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"Heroes' Feast buff on {target.name} (+{self.hp_bonus} max HP)"
+            status_message=f"Heroes' Feast buff on {target.name} (+{self.hp_bonus} max HP)",
+            resulting_max_hp=max_hp
         )
         return outs, [], [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+            max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
+            return {"resulting_max_hp": max_hp}
+        return {}
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Clean up condition immunities."""

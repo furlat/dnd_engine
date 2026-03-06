@@ -1689,6 +1689,7 @@ class SpatialChangeEvent(Event):
 
     # For frontend reducer — light level after change
     new_light_level: Optional[int] = Field(default=None, description="Resolved light level at position after change")
+    light_level_map: Optional[Dict[str, int]] = Field(default=None, description="Map of 'x,y' -> resolved light_level for all changed positions in batch")
 
     # For frontend reducer — object metadata (placed/changed events)
     object_name: Optional[str] = Field(default=None, description="Object name (e.g. 'Door', 'Torch')")
@@ -1881,7 +1882,8 @@ class SpatialChangeEvent(Event):
                       source_entity_uuid: Optional[UUID] = None,
                       senses_hint: Optional['SensesUpdateHint'] = None,
                       parent_event: Optional[UUID] = None,
-                      new_light_level: Optional[int] = None) -> 'SpatialChangeEvent':
+                      new_light_level: Optional[int] = None,
+                      light_level_map: Optional[Dict[str, int]] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile's resolved light level changing.
 
         Triggers senses re-evaluation on observers subscribed to this cell.
@@ -1902,6 +1904,7 @@ class SpatialChangeEvent(Event):
             parent_event=parent_event,
             senses_hint=senses_hint,
             new_light_level=new_light_level,
+            light_level_map=light_level_map,
         )
 
     @classmethod

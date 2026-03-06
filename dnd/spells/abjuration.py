@@ -7,7 +7,7 @@ Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           AntimagicField
 """
 import random
-from typing import Dict, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -132,9 +132,16 @@ class ShieldBuff(BaseCondition):
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"Shield: +5 AC to {target.name}"
+            status_message=f"Shield: +5 AC to {target.name}",
+            resulting_ac=target.ac_bonus().normalized_score
         )
         return outs, handler_uuids, [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            return {"resulting_ac": target.ac_bonus().normalized_score}
+        return {}
 
 
 def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
@@ -1975,9 +1982,16 @@ class ShieldOfFaithEffect(BaseCondition):
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"Shield of Faith grants +2 AC to {target.name}"
+            status_message=f"Shield of Faith grants +2 AC to {target.name}",
+            resulting_ac=target.ac_bonus().normalized_score
         )
         return outs, [], [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            return {"resulting_ac": target.ac_bonus().normalized_score}
+        return {}
 
 
 class ShieldOfFaith(SpellAction):
@@ -2058,11 +2072,22 @@ class AidEffect(BaseCondition):
         )
         outs.append((target.health.max_hit_points_bonus.uuid, modifier_uuid))
 
+        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"Aid grants +{self.hp_bonus} max HP to {target.name}"
+            status_message=f"Aid grants +{self.hp_bonus} max HP to {target.name}",
+            resulting_max_hp=max_hp
         )
         return outs, [], [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+            max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
+            return {"resulting_max_hp": max_hp}
+        return {}
 
 
 class Aid(SpellAction):

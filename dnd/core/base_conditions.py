@@ -109,6 +109,10 @@ class ConditionApplicationEvent(Event):
     source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
     target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
 
+    # For frontend reducer — resulting stats after condition applied
+    resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition applied")
+    resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition applied")
+
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition application."""
         cond = self.condition
@@ -156,6 +160,10 @@ class ConditionRemovalEvent(Event):
     event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="The type of event")
     source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
     target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
+
+    # For frontend reducer — resulting stats after condition removed
+    resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removed")
+    resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removed")
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition removal."""
@@ -314,6 +322,15 @@ class BaseCondition(BaseObject):
             event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
             event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
         return event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        """Return resulting stats to inject into the COMPLETION event after modifiers are removed.
+
+        Override in conditions that modify AC or max_hp so the frontend reducer
+        can update entity stats without waiting for the next /state resync.
+        Called after remove_condition_modifiers() in cleanup_own_state().
+        """
+        return {}
 
     def _expire(self, event: Optional[Event] = None) -> Optional[Event]:
         """Custom extra Expire called during removal from natural expiration"""
@@ -480,8 +497,9 @@ class BaseCondition(BaseObject):
 
         self.applied = False
 
-        # Complete event
-        event.phase_to(EventPhase.COMPLETION)
+        # Complete event — inject post-removal stats (AC, max_hp) if condition overrides hook
+        post_stats = self._post_removal_stats()
+        event.phase_to(EventPhase.COMPLETION, **post_stats)
         return True
 
     def progress(self) -> bool:
