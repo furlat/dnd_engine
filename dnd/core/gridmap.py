@@ -614,11 +614,15 @@ class GridMap:
             obj = BaseBlock.get(object_uuid)
             blocks_vision = obj.blocks_vision() if obj else False
             blocks_walking = obj.blocks_walking() if obj else False
+            obj_name = getattr(obj, 'name', None)
+            obj_map_char = getattr(obj, 'map_char', None)
             self._fire_spatial_event(SpatialChangeEvent.object_placed(
                 position, object_uuid,
                 parent_event=parent_event,
                 blocks_vision=blocks_vision,
                 blocks_walking=blocks_walking,
+                object_name=obj_name,
+                object_map_char=obj_map_char,
             ))
 
     def remove_object(self, object_uuid: UUID,
@@ -1008,7 +1012,8 @@ class GridMap:
                         requires_fov=has_magical_darkness,
                         light_changed_positions={pos},
                     )
-                    event = SpatialChangeEvent.light_changed(pos, tile.uuid, senses_hint=per_pos_hint)
+                    event = SpatialChangeEvent.light_changed(pos, tile.uuid, senses_hint=per_pos_hint,
+                                                                   new_light_level=tile.resolved_light_level.value)
                     event.parent_event = parent_event
                     self._fire_spatial_event(event)
 
@@ -1024,7 +1029,8 @@ class GridMap:
         if senses_pos is not None:
             tile = self._tiles.get(senses_pos)
             if tile:
-                event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid, senses_hint=batch_hint)
+                event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid, senses_hint=batch_hint,
+                                                               new_light_level=tile.resolved_light_level.value)
                 event.parent_event = parent_event
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)

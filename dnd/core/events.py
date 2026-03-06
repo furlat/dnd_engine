@@ -1687,6 +1687,16 @@ class SpatialChangeEvent(Event):
     tile_visible: Optional[bool] = Field(default=None, description="New visible state (for tile changes)")
     senses_hint: Optional[SensesUpdateHint] = Field(default=None, description="Hint for incremental senses updates")
 
+    # For frontend reducer — light level after change
+    new_light_level: Optional[int] = Field(default=None, description="Resolved light level at position after change")
+
+    # For frontend reducer — object metadata (placed/changed events)
+    object_name: Optional[str] = Field(default=None, description="Object name (e.g. 'Door', 'Torch')")
+    object_map_char: Optional[str] = Field(default=None, description="Object map character (e.g. 'D', 'φ')")
+    object_blocks_movement: Optional[bool] = Field(default=None, description="Object blocks_movement after change")
+    object_blocks_vision: Optional[bool] = Field(default=None, description="Object blocks_vision after change")
+    object_is_open: Optional[bool] = Field(default=None, description="Object is_open state (doors)")
+
     @classmethod
     def entity_entered(cls, position: Tuple[int, int], entity_uuid: UUID,
                        old_position: Optional[Tuple[int, int]] = None,
@@ -1794,7 +1804,9 @@ class SpatialChangeEvent(Event):
                       source_entity_uuid: Optional[UUID] = None,
                       parent_event: Optional[UUID] = None,
                       blocks_vision: bool = False,
-                      blocks_walking: bool = False) -> 'SpatialChangeEvent':
+                      blocks_walking: bool = False,
+                      object_name: Optional[str] = None,
+                      object_map_char: Optional[str] = None) -> 'SpatialChangeEvent':
         """Create an event for an object being placed on the grid."""
         hint = SensesUpdateHint(
             requires_fov=blocks_vision,
@@ -1811,6 +1823,8 @@ class SpatialChangeEvent(Event):
             use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
+            object_name=object_name,
+            object_map_char=object_map_char,
         )
 
     @classmethod
@@ -1866,7 +1880,8 @@ class SpatialChangeEvent(Event):
     def light_changed(cls, position: Tuple[int, int], tile_uuid: UUID,
                       source_entity_uuid: Optional[UUID] = None,
                       senses_hint: Optional['SensesUpdateHint'] = None,
-                      parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                      parent_event: Optional[UUID] = None,
+                      new_light_level: Optional[int] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile's resolved light level changing.
 
         Triggers senses re-evaluation on observers subscribed to this cell.
@@ -1886,6 +1901,7 @@ class SpatialChangeEvent(Event):
             use_register=False,
             parent_event=parent_event,
             senses_hint=senses_hint,
+            new_light_level=new_light_level,
         )
 
     @classmethod
@@ -1893,7 +1909,12 @@ class SpatialChangeEvent(Event):
                        blocks_vision_changed: bool = False,
                        blocks_walking_changed: bool = False,
                        source_entity_uuid: Optional[UUID] = None,
-                       parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+                       parent_event: Optional[UUID] = None,
+                       object_name: Optional[str] = None,
+                       object_map_char: Optional[str] = None,
+                       object_blocks_movement: Optional[bool] = None,
+                       object_blocks_vision: Optional[bool] = None,
+                       object_is_open: Optional[bool] = None) -> 'SpatialChangeEvent':
         """Create an event for an object's blocking state changing (door open/close).
 
         Fires when an object's blocks_movement or blocks_vision_field changes
@@ -1913,6 +1934,11 @@ class SpatialChangeEvent(Event):
             use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
+            object_name=object_name,
+            object_map_char=object_map_char,
+            object_blocks_movement=object_blocks_movement,
+            object_blocks_vision=object_blocks_vision,
+            object_is_open=object_is_open,
         )
 
     @classmethod
@@ -2411,6 +2437,12 @@ class TakeDamageEvent(Event):
         description="Modified damage after handlers. If None, use total_damage."
     )
 
+    # For frontend reducer — authoritative HP after damage applied
+    resulting_hp: Optional[int] = Field(
+        default=None,
+        description="Entity HP after damage applied (set at EFFECT phase)"
+    )
+
     def get_effective_damage(self) -> int:
         """Get the damage amount to apply (final_damage if set, else total_damage)."""
         return self.final_damage if self.final_damage is not None else self.total_damage
@@ -2505,6 +2537,12 @@ class HealEvent(Event):
     source_description: str = Field(default="", description="Description of healing source (e.g. 'Second Wind: d10(7)+1')")
     was_blocked: bool = Field(default=False, description="True if healing was blocked (e.g. Chill Touch)")
     spell_level: int = Field(default=0, description="Spell level used (0 = non-spell healing)")
+
+    # For frontend reducer — authoritative HP after healing applied
+    resulting_hp: Optional[int] = Field(
+        default=None,
+        description="Entity HP after healing applied (set at EFFECT phase)"
+    )
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         target_name = self.target_entity_name or "Unknown"
