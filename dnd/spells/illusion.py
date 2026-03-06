@@ -3,7 +3,7 @@
 Contains: Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage
 """
 import random
-from typing import Any, Optional, List, Set, Tuple
+from typing import Any, Dict, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -953,9 +953,16 @@ class MirrorImageEffect(BaseCondition):
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
-            status_message=f"Applied Mirror Image (+9 AC, 3 duplicates) to {target.name}"
+            status_message=f"Applied Mirror Image (+9 AC, 3 duplicates) to {target.name}",
+            resulting_ac=target.ac_bonus().normalized_score
         )
         return outs, handler_uuids, [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            return {"resulting_ac": target.ac_bonus().normalized_score}
+        return {}
 
     def _create_miss_handler(self) -> EventHandler:
         """When an attack misses the caster, destroy one duplicate."""

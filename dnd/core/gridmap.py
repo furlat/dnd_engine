@@ -1029,8 +1029,15 @@ class GridMap:
         if senses_pos is not None:
             tile = self._tiles.get(senses_pos)
             if tile:
+                # Build per-position light level map for client reducer
+                level_map: Dict[str, int] = {}
+                for pos in changed_positions:
+                    t = self._tiles.get(pos)
+                    if t:
+                        level_map[f"{pos[0]},{pos[1]}"] = t.resolved_light_level.value
                 event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid, senses_hint=batch_hint,
-                                                               new_light_level=tile.resolved_light_level.value)
+                                                               new_light_level=tile.resolved_light_level.value,
+                                                               light_level_map=level_map)
                 event.parent_event = parent_event
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)
