@@ -114,6 +114,11 @@ class BaseItem(BaseBlock):
                 blocks_vision_changed=vision_changed,
                 blocks_walking_changed=walking_changed,
                 parent_event=parent_event,
+                object_name=self.name,
+                object_map_char=self.map_char,
+                object_blocks_movement=self.blocks_movement,
+                object_blocks_vision=self.blocks_vision_field,
+                object_is_open=getattr(self, 'is_open', None),
             )
             grid._fire_spatial_event(event)
 
