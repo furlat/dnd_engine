@@ -13,6 +13,7 @@ Level 15: Champion - Superior Critical
 Level 18: Champion - Survivor (DEFERRED)
 """
 
+from typing import Any, Dict
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
@@ -196,10 +197,17 @@ class FightingStyleDefense(BaseCondition):
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"Applied Defense fighting style to {target.name}"
+            status_message=f"Applied Defense fighting style to {target.name}",
+            resulting_ac=target.ac_bonus().normalized_score
         )
 
         return outs, [], [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            return {"resulting_ac": target.ac_bonus().normalized_score}
+        return {}
 
 
 # -----------------------------------------------------------------------------

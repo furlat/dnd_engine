@@ -3,7 +3,7 @@
 Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
           EnhanceAbility, EnlargeReduce, Regenerate
 """
-from typing import Any, Literal, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
@@ -309,9 +309,16 @@ class SlowedEffect(BaseCondition):
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
-            status_message=f"Applied Slowed to {target.name}"
+            status_message=f"Applied Slowed to {target.name}",
+            resulting_ac=target.ac_bonus().normalized_score
         )
         return outs, handler_uuids, [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            return {"resulting_ac": target.ac_bonus().normalized_score}
+        return {}
 
     def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
         """Remove the dynamic lockout constraint before standard cleanup."""
@@ -725,9 +732,16 @@ class HasteEffect(BaseCondition):
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
-            status_message=f"Applied Haste to {target.name}"
+            status_message=f"Applied Haste to {target.name}",
+            resulting_ac=target.ac_bonus().normalized_score
         )
         return outs, handler_uuids, [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            return {"resulting_ac": target.ac_bonus().normalized_score}
+        return {}
 
     def _create_extra_attack_suppression_handler(self) -> EventHandler:
         """Suppress Extra Attack on the last remaining action (the haste action).
