@@ -8,7 +8,7 @@ Subclass this for different control modes:
 - ScriptedController: Follows a predefined action sequence
 """
 
-from typing import Any, Optional, Dict, List, ClassVar
+from typing import Any, Optional, Dict, List, ClassVar, Protocol, runtime_checkable
 
 __all__ = [
     "TurnContext",
@@ -16,6 +16,8 @@ __all__ = [
     "HumanController",
     "ClaudeController",
     "MeleeAIController",
+    "TurnRunner",
+    "AIAgentController",
 ]
 from uuid import UUID
 from pydantic import Field
@@ -271,3 +273,44 @@ class MeleeAIController(Controller):
 
         # No good action, end turn
         return None
+
+
+@runtime_checkable
+class TurnRunner(Protocol):
+    """Protocol for AI agents that can run a full turn autonomously."""
+    def run_turn(self) -> None: ...
+
+
+class AIAgentController(Controller):
+    """Controller that delegates to a TurnRunner (e.g. ai.agents.base.BaseAgent).
+
+    The agent handles the entire turn internally via GameInterface,
+    so this controller runs the agent once then signals turn end.
+    """
+
+    name: str = Field(default="AI Agent")
+    controller_type: str = Field(default="ai_agent")
+
+    _agents: ClassVar[Dict[UUID, TurnRunner]] = {}
+    _has_run: ClassVar[Dict[UUID, bool]] = {}
+
+    def set_agent(self, agent: TurnRunner) -> None:
+        """Bind a TurnRunner to this controller."""
+        self._agents[self.uuid] = agent
+
+    def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
+        self._has_run[self.uuid] = False
+
+    def get_next_action(
+        self,
+        entity: Entity,
+        context: TurnContext
+    ) -> Optional[BaseAction]:
+        agent = self._agents.get(self.uuid)
+        if agent:
+            agent.run_turn()
+        self._has_run[self.uuid] = True
+        return None
+
+    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
+        return not self._has_run.get(self.uuid, False)

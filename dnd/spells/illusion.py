@@ -443,6 +443,7 @@ class HypnoticPattern(SpellAction):
     concentration: bool = Field(default=True)
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120))
+    projectile_type: Optional[str] = Field(default="orb")
 
     # AoE configuration
     aoe_shape: Optional[AoEShape] = Field(default=None)

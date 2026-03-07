@@ -1035,6 +1035,7 @@ class Disintegrate(SpellAction):
     spell_school: str = Field(default="transmutation")
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = Field(default="ray")
 
     include_self: bool = Field(default=False)
     valid_target_filter: str = Field(default="enemies")
@@ -1912,6 +1913,7 @@ class Telekinesis(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     valid_target_filter: str = Field(default="enemies")
+    projectile_type: Optional[str] = Field(default="ray")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
