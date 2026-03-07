@@ -239,6 +239,7 @@ class ChillTouch(SpellAction):
     spell_school: str = Field(default="necromancy")
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120))
+    projectile_type: Optional[str] = Field(default="orb")
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:
         """1d8 base, scaling at 5/11/17."""
@@ -398,6 +399,7 @@ class Blight(SpellAction):
     spell_school: str = Field(default="necromancy")
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    projectile_type: Optional[str] = Field(default="ray")
 
     # Target filtering
     include_self: bool = Field(default=False)
@@ -1279,6 +1281,7 @@ class Eyebite(SpellAction):
     concentration: bool = Field(default=True)
     target_type: TargetType = Field(default=TargetType.SELF)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    projectile_type: Optional[str] = Field(default="ray")
 
     # Which effect to apply on first use
     effect_choice: str = Field(default="sickened")
@@ -1348,6 +1351,7 @@ class FingerOfDeath(SpellAction):
     spell_school: str = Field(default="necromancy")
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = Field(default="ray")
 
     # Target filtering
     include_self: bool = Field(default=False)
@@ -1473,6 +1477,7 @@ class InflictWounds(SpellAction):
         default_factory=lambda: Range(type=RangeType.REACH, normal=5)
     )
     valid_target_filter: str = Field(default="enemies")
+    projectile_type: Optional[str] = Field(default="touch")
 
     def _get_damage_dice_count(self) -> int:
         """3d10 at L1, +1d10 per level above 1st."""
@@ -1589,6 +1594,7 @@ class Harm(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
     )
     valid_target_filter: str = Field(default="enemies")
+    projectile_type: Optional[str] = Field(default="touch")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2017,6 +2023,7 @@ class BestowCurse(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.REACH, normal=5)
     )
+    projectile_type: Optional[str] = Field(default="touch")
     curse_option: int = Field(default=1, description="Curse type 1-4")
     cursed_ability: AbilityName = Field(default="strength", description="For option 1: which ability")
 

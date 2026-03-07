@@ -166,6 +166,7 @@ class CallLightning(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
+    projectile_type: Optional[str] = Field(default="bolt")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -292,6 +293,7 @@ class PoisonSpray(SpellAction):
     spell_school: str = Field(default="conjuration")
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=10))
+    projectile_type: Optional[str] = Field(default="spray")
 
     include_self: bool = Field(default=False)
     valid_target_filter: str = Field(default="enemies")
@@ -391,6 +393,7 @@ class AcidSplash(SpellAction):
     spell_school: str = Field(default="conjuration")
     target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = Field(default="orb")
 
     # Multi-entity configuration
     allow_same_target: bool = Field(default=False)  # Can't hit same target twice
@@ -1477,6 +1480,7 @@ class Cloudkill(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
+    projectile_type: Optional[str] = Field(default="orb")
 
     # Action cost
     costs: List[Cost] = Field(default_factory=lambda: [
@@ -2542,6 +2546,7 @@ class InsectPlague(SpellAction):
     concentration: bool = Field(default=True)
     target_type: TargetType = Field(default=TargetType.POSITION)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = Field(default="orb")
 
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Insect Plague Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
