@@ -68,6 +68,7 @@ class FireBolt(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
+    projectile_type: Optional[str] = Field(default="bolt")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -233,6 +234,7 @@ class RayOfFrost(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
     )
+    projectile_type: Optional[str] = Field(default="ray")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -365,6 +367,7 @@ class SacredFlame(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
     )
+    projectile_type: Optional[str] = Field(default="radiance")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -489,6 +492,7 @@ class MagicMissile(SpellAction):
     # Multi-entity configuration
     allow_same_target: bool = Field(default=True)  # Can send multiple darts to same target
     valid_target_filter: str = Field(default="enemies")  # Only enemies
+    projectile_type: Optional[str] = Field(default="dart")
 
     def get_num_projectiles(self) -> int:
         """3 darts base + 1 per upcast level."""
@@ -620,6 +624,7 @@ class ScorchingRay(SpellAction):
     # Multi-entity configuration
     allow_same_target: bool = Field(default=True)  # Can send multiple rays to same target
     valid_target_filter: str = Field(default="enemies")
+    projectile_type: Optional[str] = Field(default="ray")
 
     def get_num_projectiles(self) -> int:
         """3 rays base + 1 per upcast level."""
@@ -775,6 +780,7 @@ class Fireball(SpellAction):
     spell_school: str = Field(default="evocation")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+    projectile_type: Optional[str] = Field(default="orb")
 
     # AoE configuration - set via __init__ or field default
     aoe_shape: Optional[AoEShape] = Field(default=None)
@@ -1406,6 +1412,7 @@ class Shatter(SpellAction):
     spell_school: str = Field(default="evocation")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = Field(default="orb")
 
     # AoE configuration
     aoe_shape: Optional[AoEShape] = Field(default=None)
@@ -1548,6 +1555,7 @@ class CircleOfDeath(SpellAction):
     spell_school: str = Field(default="necromancy")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+    projectile_type: Optional[str] = Field(default="orb")
 
     # AoE configuration
     aoe_shape: Optional[AoEShape] = Field(default=None)
@@ -2107,6 +2115,7 @@ class ShockingGrasp(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.REACH, normal=5)
     )
+    projectile_type: Optional[str] = Field(default="touch")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range (melee: 5ft) and line of sight."""
@@ -2345,6 +2354,7 @@ class GuidingBolt(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
+    projectile_type: Optional[str] = Field(default="bolt")
 
     # Damage configuration
     base_damage_dice: int = Field(default=4)  # 4d6 at level 1
@@ -2485,6 +2495,7 @@ class EldritchBlast(SpellAction):
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
+    projectile_type: Optional[str] = Field(default="beam")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -2860,6 +2871,7 @@ class IceStorm(SpellAction):
     concentration: bool = Field(default=False)
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = Field(default="rain")
 
     aoe_shape: Optional[AoEShape] = Field(default=None)
     include_self: bool = Field(default=True)
@@ -3170,6 +3182,7 @@ class ChainLightning(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
     valid_target_filter: str = Field(default="enemies")
+    projectile_type: Optional[str] = Field(default="bolt")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         result = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -3620,6 +3633,7 @@ class FlameStrike(SpellAction):
     concentration: bool = Field(default=False)
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = Field(default="radiance")
 
     aoe_shape: Optional[AoEShape] = Field(default=None)
     include_self: bool = Field(default=True)

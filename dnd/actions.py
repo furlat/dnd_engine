@@ -6,6 +6,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName
 from dnd.core.gridmap import get_map
+from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_block import LightLevel
 from dnd.core.combat_log import (
@@ -2519,6 +2520,13 @@ class SpellEvent(ActionEvent):
     damages: Optional[List[Damage]] = Field(default=None, description="The damages dealt")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None, description="The damage roll results")
 
+    # VFX metadata (propagated from SpellAction at declaration time)
+    aoe_shape_type: Optional[str] = Field(default=None, description="AoE shape: sphere, cone, line, cube, cylinder")
+    aoe_radius_ft: Optional[int] = Field(default=None, description="AoE size in feet")
+    range_type: Optional[str] = Field(default=None, description="Delivery type: self, touch, ranged")
+    range_ft: Optional[int] = Field(default=None, description="Spell range in feet")
+    projectile_type: Optional[str] = Field(default=None, description="Visual projectile delivery type")
+
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for spell effects.
 
@@ -2915,6 +2923,9 @@ class SpellAction(BaseAction):
     # Spell-specific alt overrides (set by conditions like metamagic)
     alt_range: Optional[int] = Field(default=None, description="Override spell_range.normal")
 
+    # VFX metadata
+    projectile_type: Optional[str] = Field(default=None, description="VFX projectile delivery type")
+
     # Default cost is 1 action (no spell slot for cantrips)
     costs: List[Cost] = Field(
         default_factory=lambda: [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
@@ -3005,6 +3016,32 @@ class SpellAction(BaseAction):
                 del conc.concentration_slots[slot_uuid]
             if empty_slot_uuids:
                 conc._sync_spell_name()
+
+    def _get_aoe_radius_ft(self) -> Optional[int]:
+        """Extract AoE size in feet from aoe_shape for VFX metadata."""
+        shape = self.aoe_shape
+        if shape is None:
+            return None
+        if isinstance(shape, (Sphere, Cylinder)):
+            return shape.radius_feet
+        if isinstance(shape, Cone):
+            return shape.length_feet
+        if isinstance(shape, Line):
+            return shape.length_feet
+        if isinstance(shape, Cube):
+            return shape.size_feet
+        return None
+
+    def _get_range_type(self) -> Optional[str]:
+        """Map spell range type to VFX delivery string."""
+        rt = self.spell_range.type
+        if rt == RangeType.SELF:
+            return "self"
+        if rt == RangeType.REACH:
+            return "touch"
+        if rt == RangeType.RANGE:
+            return "ranged"
+        return None
 
     def generate_variants(self, entity: Entity) -> List['SpellAction']:
         """Generate spell variants for available spell slots.
@@ -3107,7 +3144,12 @@ class SpellAction(BaseAction):
             cast_at_level=self.cast_at_level,
             spell_school=self.spell_school,
             verbal=self.verbal,
-            aoe_position=self.end_position if self.effective_target_type == TargetType.POSITION_AOE else None
+            aoe_position=self.end_position if self.effective_target_type == TargetType.POSITION_AOE else None,
+            aoe_shape_type=self.aoe_shape.name.lower() if self.aoe_shape and self.aoe_shape.name else None,
+            aoe_radius_ft=self._get_aoe_radius_ft(),
+            range_type=self._get_range_type(),
+            range_ft=self.spell_range.normal,
+            projectile_type=self.projectile_type,
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
