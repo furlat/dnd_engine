@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import setup_standard_actions, register_spells_by_name
+from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot, UnarmoredAc
@@ -368,12 +369,18 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
     )
 
     # 7. Entity config
+    saving_throws_config = SavingThrowSetConfig(
+        constitution_saving_throw=SavingThrowConfig(proficiency=True),
+        charisma_saving_throw=SavingThrowConfig(proficiency=True),
+    )
+
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         health=health_config,
         equipment=EquipmentConfig(unarmored_ac_type=UnarmoredAc.DRACONIC_SORCERER),
         action_economy=action_economy_config,
         spellcasting=spellcasting_config,
+        saving_throws=saving_throws_config,
         proficiency_bonus=prof_bonus,
         position=config.position,
         faction=config.faction,

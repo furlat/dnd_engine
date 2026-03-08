@@ -178,6 +178,7 @@ class SkillCheckLogData(BaseModel):
     dc: Optional[int] = None  # May not have a DC
     roll: DiceRollDisplay
     bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
+    advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
     success: Optional[bool] = None  # Only set if there's a DC
 
 
@@ -355,7 +356,7 @@ class CombatLogEntry(BaseModel):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return self.model_dump()
+        return self.model_dump(mode='json')
 
 
 # =============================================================================

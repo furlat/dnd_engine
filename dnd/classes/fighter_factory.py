@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
+from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot
 from dnd.blocks.action_economy import ActionEconomyConfig
@@ -471,12 +472,17 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
     # 5. Create entity config
     equipment_config = EquipmentConfig()
     action_economy_config = ActionEconomyConfig()
+    saving_throws_config = SavingThrowSetConfig(
+        strength_saving_throw=SavingThrowConfig(proficiency=True),
+        constitution_saving_throw=SavingThrowConfig(proficiency=True),
+    )
 
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         health=health_config,
         equipment=equipment_config,
         action_economy=action_economy_config,
+        saving_throws=saving_throws_config,
         proficiency_bonus=prof_bonus,
         position=config.position,
         faction=config.faction

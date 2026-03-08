@@ -1460,6 +1460,20 @@ class SavingThrowEvent(D20Event):
                     source=mod.get('source', 'self')
                 ))
 
+        # Build advantage breakdown
+        advantage_breakdown: List[ModifierBreakdown] = []
+        if self.bonus and isinstance(self.bonus, ModifiableValue):
+            for mod in self.bonus.get_full_advantage_breakdown():
+                adv_val = mod.get('value', 'inactive')
+                if adv_val == 'advantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
+                    ))
+                elif adv_val == 'disadvantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
+                    ))
+
         # Determine success
         success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
 
@@ -1494,6 +1508,7 @@ class SavingThrowEvent(D20Event):
             dc=dc,
             roll=roll,
             bonus_breakdown=bonus_breakdown,
+            advantage_breakdown=advantage_breakdown,
             success=success or False,
             source_name=source_name if source_name != target_name else None
         )
@@ -1572,6 +1587,20 @@ class SkillCheckEvent(D20Event):
                     source=mod.get('source', 'self')
                 ))
 
+        # Build advantage breakdown
+        advantage_breakdown: List[ModifierBreakdown] = []
+        if self.bonus and isinstance(self.bonus, ModifiableValue):
+            for mod in self.bonus.get_full_advantage_breakdown():
+                adv_val = mod.get('value', 'inactive')
+                if adv_val == 'advantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
+                    ))
+                elif adv_val == 'disadvantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
+                    ))
+
         # Determine success
         success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
 
@@ -1617,6 +1646,7 @@ class SkillCheckEvent(D20Event):
             dc=dc,
             roll=roll,
             bonus_breakdown=bonus_breakdown,
+            advantage_breakdown=advantage_breakdown,
             success=success
         )
 

@@ -2529,7 +2529,7 @@ class SpellEvent(ActionEvent):
     attack_outcome: Optional[AttackOutcome] = Field(default=None, description="The attack outcome")
 
     # Save spell fields (optional)
-    save_ability: Optional[str] = Field(default=None, description="Ability for saving throw")
+    save_ability: Optional[AbilityName] = Field(default=None, description="Ability for saving throw")
     save_dc: Optional[int] = Field(default=None, description="Save DC")
     save_success: Optional[bool] = Field(default=None, description="Whether the save succeeded")
     save_roll: Optional[DiceRoll] = Field(default=None, description="The save roll result")
@@ -2654,6 +2654,32 @@ class SpellEvent(ActionEvent):
         # DETAILED: Same as verbose for now (could add modifier breakdowns)
         detailed = verbose
 
+        # Build save bonus breakdown and advantage breakdown from target entity
+        save_bonus_breakdown: List[ModifierBreakdown] = []
+        save_advantage_breakdown: List[ModifierBreakdown] = []
+        if self.target_entity_uuid and self.save_ability:
+            target_entity = Entity.get(self.target_entity_uuid)
+            if target_entity:
+                save_mv = target_entity.saving_throw_bonus(
+                    self.source_entity_uuid, self.save_ability
+                )
+                for mod in save_mv.get_breakdown():
+                    save_bonus_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'),
+                        value=mod.get('value', 0),
+                        source=mod.get('source', 'self')
+                    ))
+                for mod in save_mv.get_full_advantage_breakdown():
+                    adv_val = mod.get('value', 'inactive')
+                    if adv_val == 'advantage':
+                        save_advantage_breakdown.append(ModifierBreakdown(
+                            name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
+                        ))
+                    elif adv_val == 'disadvantage':
+                        save_advantage_breakdown.append(ModifierBreakdown(
+                            name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
+                        ))
+
         # Build structured data
         data = SpellSaveLogData(
             caster_name=caster_name,
@@ -2665,6 +2691,8 @@ class SpellEvent(ActionEvent):
             save_ability=self.save_ability or "dexterity",
             save_dc=dc,
             save_roll=save_roll_display,
+            save_bonus_breakdown=save_bonus_breakdown,
+            save_advantage_breakdown=save_advantage_breakdown,
             save_success=success,
             damage_rolls=damage_displays,
             base_damage=base_damage,
@@ -2734,6 +2762,20 @@ class SpellEvent(ActionEvent):
                     value=mod.get('value', 0),
                     source=mod.get('source', 'self')
                 ))
+
+        # Build advantage breakdown from cached contextual results
+        advantage_breakdown: List[ModifierBreakdown] = []
+        if self.attack_bonus:
+            for mod in self.attack_bonus.get_full_advantage_breakdown():
+                adv_val = mod.get('value', 'inactive')
+                if adv_val == 'advantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
+                    ))
+                elif adv_val == 'disadvantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
+                    ))
 
         # Get target AC
         target_ac = 0
@@ -2822,6 +2864,7 @@ class SpellEvent(ActionEvent):
             weapon_name=spell_name,
             attack_roll=attack_roll,
             attack_breakdown=attack_breakdown,
+            advantage_breakdown=advantage_breakdown,
             target_ac=target_ac,
             ac_breakdown=ac_breakdown,
             outcome=outcome,
