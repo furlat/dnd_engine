@@ -781,7 +781,7 @@ async def get_state():
 async def get_entities():
     """Get all entities (lightweight)."""
     return {
-        "entities": [APIEntitySummary.create(e).model_dump() for e in Entity.get_all_entities()]
+        "entities": [APIEntitySummary.create(e).model_dump(mode='json') for e in Entity.get_all_entities()]
     }
 
 
@@ -902,7 +902,7 @@ async def get_encounter():
         return {"active": False, "encounter": None}
     return {
         "active": True,
-        "encounter": APIEncounter.create(sim.encounter).model_dump()
+        "encounter": APIEncounter.create(sim.encounter).model_dump(mode='json')
     }
 
 

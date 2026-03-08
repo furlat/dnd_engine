@@ -2239,16 +2239,11 @@ class ModifiableValue(BaseValue):
 
         result: List[Dict[str, Any]] = []
 
-        # If this value was combined from others, get breakdowns from sources
-        if self.generated_from:
-            source_values = self.get_generated_from()
-            for source_val in source_values:
-                result.extend(source_val.get_breakdown())
-            return result
-
-        # Only extract from static components - contextual modifiers can't be
-        # reliably re-evaluated later (context may have changed) and their effects
-        # are already reflected in normalized_score
+        # Extract directly from static components — even for combined values.
+        # Combined ModifiableValues have all modifiers merged into self_static/
+        # from_target_static with correct normalizers. Do NOT recurse through
+        # generated_from, as registry lookups return the original un-normalized
+        # values (model_copy doesn't re-register, so normalizer updates are lost).
         static_components = [
             (self.self_static, "self"),
             (self.from_target_static, "from_target"),

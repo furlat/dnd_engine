@@ -18,7 +18,7 @@ from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay, ModifierBreakdown
 from enum import Enum
 
 
@@ -1751,6 +1751,26 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
     else:
         verbose += " → {{red:loses invisibility!}}"
 
+    # Build bonus/advantage breakdowns from the skill MV
+    stealth_bonus_breakdown: List[ModifierBreakdown] = []
+    stealth_advantage_breakdown: List[ModifierBreakdown] = []
+    for mod in skill_bonus.get_breakdown():
+        stealth_bonus_breakdown.append(ModifierBreakdown(
+            name=mod.get('name', 'Unknown'),
+            value=mod.get('value', 0),
+            source=mod.get('source', 'self')
+        ))
+    for mod in skill_bonus.get_full_advantage_breakdown():
+        adv_val = mod.get('value', 'inactive')
+        if adv_val == 'advantage':
+            stealth_advantage_breakdown.append(ModifierBreakdown(
+                name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
+            ))
+        elif adv_val == 'disadvantage':
+            stealth_advantage_breakdown.append(ModifierBreakdown(
+                name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
+            ))
+
     check_event.combat_log = CombatLogEntry(
         entry_type=CombatLogEntryType.SKILL_CHECK,
         source_name=entity_name,
@@ -1765,6 +1785,8 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
             skill="stealth",
             dc=dc,
             roll=roll_display,
+            bonus_breakdown=stealth_bonus_breakdown,
+            advantage_breakdown=stealth_advantage_breakdown,
             success=success
         ).model_dump()
     )
