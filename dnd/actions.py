@@ -623,6 +623,20 @@ class AttackEvent(ActionEvent):
                     source=mod.get('source', 'self')
                 ))
 
+        # Build advantage breakdown from cached contextual results
+        advantage_breakdown: List[ModifierBreakdown] = []
+        if self.attack_bonus:
+            for mod in self.attack_bonus.get_full_advantage_breakdown():
+                adv_val = mod.get('value', 'inactive')
+                if adv_val == 'advantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
+                    ))
+                elif adv_val == 'disadvantage':
+                    advantage_breakdown.append(ModifierBreakdown(
+                        name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
+                    ))
+
         # Get target AC
         target_ac = 0
         if self.ac:
@@ -729,6 +743,7 @@ class AttackEvent(ActionEvent):
             weapon_slot=self.weapon_slot.value if self.weapon_slot else None,
             attack_roll=attack_roll,
             attack_breakdown=attack_breakdown,
+            advantage_breakdown=advantage_breakdown,
             target_ac=target_ac,
             ac_breakdown=ac_breakdown,
             outcome=outcome,
@@ -909,6 +924,8 @@ class Attack(BaseAction):
             ac = target_entity.ac_bonus(source_entity.uuid)
             ac.set_from_target(attack_bonus)
             attack_bonus.set_from_target(ac)
+            attack_bonus.set_event_lineage(execution_event.lineage_uuid)
+            ac.set_event_lineage(execution_event.lineage_uuid)
 
             # Apply ranged attack disadvantages (long range or threatened)
             ranged_disadvantage_modifiers: List[UUID] = []
@@ -962,6 +979,8 @@ class Attack(BaseAction):
             )
             ac.reset_from_target()
             attack_bonus.reset_from_target()
+            attack_bonus.clear_event_lineage()
+            ac.clear_event_lineage()
             
             
             # If attack was canceled, return early

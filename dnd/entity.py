@@ -1620,6 +1620,7 @@ class Entity(BaseBlock):
 
         # Get save bonus and DC
         save_bonus = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
+        save_bonus.set_event_lineage(request.lineage_uuid)
         dc = request.get_dc()
         if dc is None:
             raise ValueError(f"DC is not set for {request.ability_name} saving throw with event id {request.uuid}")
@@ -1650,6 +1651,7 @@ class Entity(BaseBlock):
             status_message=f"{request.ability_name} save complete"
         )
 
+        save_bonus.clear_event_lineage()
         self.clear_target_entity()
 
         # Return from final event (may have been modified by handlers)

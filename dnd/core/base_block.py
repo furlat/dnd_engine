@@ -182,16 +182,22 @@ class BaseBlock(BaseModel):
     _attached_light_sources: Set[UUID] = PrivateAttr(default_factory=set)
 
     active_conditions: Dict[str, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition name")
-    active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict,description="Dictionary of active conditions, key is the condition UUID")
+    active_conditions_by_uuid: Dict[UUID, BaseCondition] = Field(default_factory=dict, exclude=True, description="Dictionary of active conditions, key is the condition UUID")
     condition_immunities: List[Tuple[str,Optional[str]]] = Field(default_factory=list)
-    contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict)
-    active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=lambda: defaultdict(list),description="Dictionary of active conditions by source entity UUID")
+    contextual_condition_immunities: Dict[str, List[Tuple[str,ContextualConditionImmunity]]] = Field(default_factory=dict, exclude=True)
+    active_conditions_by_source: Dict[UUID, List[str]] = Field(default_factory=lambda: defaultdict(list), exclude=True, description="Dictionary of active conditions by source entity UUID")
 
     event_handlers: Dict[UUID, EventHandler] = Field(default_factory=dict)
-    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=lambda: defaultdict(list))
-    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=lambda: defaultdict(list))
+    event_handlers_by_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=lambda: defaultdict(list), exclude=True)
+    event_handlers_by_simple_trigger: Dict[Trigger, List[EventHandler]] = Field(default_factory=lambda: defaultdict(list), exclude=True)
     
     allow_events_conditions: bool = Field(default=False,description="If True, events and conditions will be allowed to be added to the block")
+
+    @computed_field
+    @property
+    def contextual_immunity_names(self) -> Dict[str, List[str]]:
+        """Serializable view of contextual condition immunities (names only)."""
+        return {cond: [name for name, _ in imms] for cond, imms in self.contextual_condition_immunities.items()}
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, computed_field
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
@@ -66,8 +66,8 @@ class BaseCost(BaseModel):
 
 
 class Cost(BaseCost):
-    evaluator: Optional[CostEvaluator] = Field(default=None, description="The evaluator for the cost")
-    resource_evaluator: Optional[ResourceCostEvaluator] = Field(default=None, description="Evaluator for resource cost checks")
+    evaluator: Optional[CostEvaluator] = Field(default=None, exclude=True, description="The evaluator for the cost")
+    resource_evaluator: Optional[ResourceCostEvaluator] = Field(default=None, exclude=True, description="Evaluator for resource cost checks")
 
 class ActionEvent(Event):
     costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
@@ -758,10 +758,12 @@ class StructuredAction(BaseAction):
     prerequisites, consequences, and cost checking through event processors."""
     prerequisites: OrderedDict[str,EventProcessor] = Field(
         default_factory=OrderedDict,
+        exclude=True,
         description="A dictionary of prerequisites, the key is the name of the prerequisite and the value is a callable that returns a boolean"
     )
     consequences: OrderedDict[str,EventProcessor] = Field(
         default_factory=OrderedDict,
+        exclude=True,
         description="A dictionary of consequences, the key is the name of the consequence and the value is a callable that returns an Event"
     )
     revalidate_prerequisites: bool = Field(
@@ -770,8 +772,21 @@ class StructuredAction(BaseAction):
     )
     cost_applier: Optional[EventProcessor] = Field(
         default=None,
+        exclude=True,
         description="The event processor that will be used to apply costs"
     )
+
+    @computed_field
+    @property
+    def prerequisite_names(self) -> List[str]:
+        """Serializable list of prerequisite names."""
+        return list(self.prerequisites.keys())
+
+    @computed_field
+    @property
+    def consequence_names(self) -> List[str]:
+        """Serializable list of consequence names."""
+        return list(self.consequences.keys())
     
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Implements the prerequisite checking pipeline."""
