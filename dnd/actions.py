@@ -5,6 +5,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName
+from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.base_block import BaseBlock, MovementMode
@@ -20,6 +21,7 @@ from typing import Any, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
+from dnd.blocks.equipment import Weapon
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
 
 
@@ -561,6 +563,15 @@ class AttackEvent(ActionEvent):
     # Ability override for True Strike (use spellcasting ability instead of STR/DEX)
     override_ability: Optional[AbilityName] = Field(default=None, description="Override ability for attack/damage rolls")
 
+    # VFX metadata: damage types for this attack (populated at DECLARATION from weapon, updated on hit from actual damages)
+    damage_types: List[DamageType] = Field(default_factory=list, description="Damage types for VFX (populated at declaration from weapon, updated on hit)")
+
+    def phase_to(self, new_phase: Optional[EventPhase] = None, status_message: Optional[str] = None, **updates: Any) -> Self:
+        """Override to auto-update damage_types when damages are set."""
+        if 'damages' in updates and updates['damages'] and 'damage_types' not in updates:
+            updates['damage_types'] = list(dict.fromkeys(d.damage_type for d in updates['damages']))
+        return super().phase_to(new_phase, status_message, **updates)
+
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for this attack event.
 
@@ -1090,11 +1101,16 @@ class Attack(BaseAction):
         source_name = source_entity.name if source_entity else None
         target_name = target_entity.name if target_entity else None
 
-        # Get weapon name
+        # Get weapon name and damage types
         weapon_name = None
+        weapon_damage_types: List[DamageType] = []
         if source_entity:
             weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
             weapon_name = weapon.name if weapon else "Unarmed"
+            if isinstance(weapon, Weapon):
+                weapon_damage_types = [weapon.damage_type] + list(weapon.extra_damage_type)
+            else:
+                weapon_damage_types = [source_entity.equipment.unarmed_damage_type]
 
         return AttackEvent(
             name=f"{self.name}",
@@ -1108,7 +1124,8 @@ class Attack(BaseAction):
             source_entity_name=source_name,
             target_entity_name=target_name,
             weapon_name=weapon_name,
-            override_ability=self.override_ability
+            override_ability=self.override_ability,
+            damage_types=weapon_damage_types
         )
     
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
@@ -2545,6 +2562,13 @@ class SpellEvent(ActionEvent):
     range_type: Optional[str] = Field(default=None, description="Delivery type: self, touch, ranged")
     range_ft: Optional[int] = Field(default=None, description="Spell range in feet")
     projectile_type: Optional[str] = Field(default=None, description="Visual projectile delivery type")
+    damage_types: List[DamageType] = Field(default_factory=list, description="Damage types for VFX (populated at declaration, updated on hit)")
+
+    def phase_to(self, new_phase: Optional[EventPhase] = None, status_message: Optional[str] = None, **updates: Any) -> Self:
+        """Override to auto-update damage_types when damages are set."""
+        if 'damages' in updates and updates['damages'] and 'damage_types' not in updates:
+            updates['damage_types'] = list(dict.fromkeys(d.damage_type for d in updates['damages']))
+        return super().phase_to(new_phase, status_message, **updates)
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for spell effects.
@@ -2987,6 +3011,7 @@ class SpellAction(BaseAction):
 
     # VFX metadata
     projectile_type: Optional[str] = Field(default=None, description="VFX projectile delivery type")
+    spell_damage_type: Optional[DamageType] = Field(default=None, description="Primary damage type for VFX")
 
     # Default cost is 1 action (no spell slot for cantrips)
     costs: List[Cost] = Field(
@@ -3212,6 +3237,7 @@ class SpellAction(BaseAction):
             range_type=self._get_range_type(),
             range_ft=self.spell_range.normal,
             projectile_type=self.projectile_type,
+            damage_types=[self.spell_damage_type] if self.spell_damage_type else [],
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:

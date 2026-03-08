@@ -69,6 +69,7 @@ class FireBolt(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
     projectile_type: Optional[str] = Field(default="bolt")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -235,6 +236,7 @@ class RayOfFrost(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
     )
     projectile_type: Optional[str] = Field(default="ray")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.COLD, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -368,6 +370,7 @@ class SacredFlame(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
     )
     projectile_type: Optional[str] = Field(default="radiance")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -493,6 +496,7 @@ class MagicMissile(SpellAction):
     allow_same_target: bool = Field(default=True)  # Can send multiple darts to same target
     valid_target_filter: str = Field(default="enemies")  # Only enemies
     projectile_type: Optional[str] = Field(default="dart")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
     def get_num_projectiles(self) -> int:
         """3 darts base + 1 per upcast level."""
@@ -625,6 +629,7 @@ class ScorchingRay(SpellAction):
     allow_same_target: bool = Field(default=True)  # Can send multiple rays to same target
     valid_target_filter: str = Field(default="enemies")
     projectile_type: Optional[str] = Field(default="ray")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
     def get_num_projectiles(self) -> int:
         """3 rays base + 1 per upcast level."""
@@ -781,6 +786,7 @@ class Fireball(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
     projectile_type: Optional[str] = Field(default="orb")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
     # AoE configuration - set via __init__ or field default
     aoe_shape: Optional[AoEShape] = Field(default=None)
@@ -921,6 +927,7 @@ class BurningHands(SpellAction):
     description: str = Field(default="15ft cone of fire dealing 3d6 fire damage (DEX save half)")
     spell_level: int = Field(default=1)
     spell_school: str = Field(default="evocation")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
 
@@ -1050,6 +1057,7 @@ class LightningBolt(SpellAction):
     description: str = Field(default="100ft×5ft line dealing 8d6 lightning damage (DEX save half)")
     spell_level: int = Field(default=3)
     spell_school: str = Field(default="evocation")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
 
@@ -1179,6 +1187,7 @@ class Thunderwave(SpellAction):
     description: str = Field(default="15ft cube dealing 2d8 thunder + 10ft push on fail (CON save)")
     spell_level: int = Field(default=1)
     spell_school: str = Field(default="evocation")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.THUNDER, description="Primary damage type for VFX")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
 
@@ -1413,6 +1422,7 @@ class Shatter(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     projectile_type: Optional[str] = Field(default="orb")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.THUNDER, description="Primary damage type for VFX")
 
     # AoE configuration
     aoe_shape: Optional[AoEShape] = Field(default=None)
@@ -1556,6 +1566,7 @@ class CircleOfDeath(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
     projectile_type: Optional[str] = Field(default="orb")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     # AoE configuration
     aoe_shape: Optional[AoEShape] = Field(default=None)
@@ -1695,6 +1706,7 @@ class ConeOfCold(SpellAction):
     description: str = Field(default="60ft cone dealing 8d8 cold damage (CON save half)")
     spell_level: int = Field(default=5)
     spell_school: str = Field(default="evocation")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.COLD, description="Primary damage type for VFX")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
 
@@ -1925,6 +1937,7 @@ class Sunburst(SpellAction):
     description: str = Field(default="60ft sphere, 12d6 radiant, CON save or blinded")
     spell_level: int = Field(default=8)
     spell_school: str = Field(default="evocation")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
 
@@ -2116,6 +2129,7 @@ class ShockingGrasp(SpellAction):
         default_factory=lambda: Range(type=RangeType.REACH, normal=5)
     )
     projectile_type: Optional[str] = Field(default="touch")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range (melee: 5ft) and line of sight."""
@@ -2355,6 +2369,7 @@ class GuidingBolt(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
     projectile_type: Optional[str] = Field(default="bolt")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
 
     # Damage configuration
     base_damage_dice: int = Field(default=4)  # 4d6 at level 1
@@ -2496,6 +2511,7 @@ class EldritchBlast(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
     projectile_type: Optional[str] = Field(default="beam")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -2872,6 +2888,7 @@ class IceStorm(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     projectile_type: Optional[str] = Field(default="rain")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.BLUDGEONING, description="Primary damage type for VFX")
 
     aoe_shape: Optional[AoEShape] = Field(default=None)
     include_self: bool = Field(default=True)
@@ -3110,6 +3127,7 @@ class Sunbeam(SpellAction):
     description: str = Field(default="60ft line beam, 6d8 radiant + Blinded (CON half), repeatable")
     spell_level: int = Field(default=6)
     spell_school: str = Field(default="evocation")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
     concentration: bool = Field(default=True)
     target_type: TargetType = Field(default=TargetType.SELF)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
@@ -3183,6 +3201,7 @@ class ChainLightning(SpellAction):
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
     valid_target_filter: str = Field(default="enemies")
     projectile_type: Optional[str] = Field(default="bolt")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         result = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -3634,6 +3653,7 @@ class FlameStrike(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION_AOE)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     projectile_type: Optional[str] = Field(default="radiance")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
     aoe_shape: Optional[AoEShape] = Field(default=None)
     include_self: bool = Field(default=True)
