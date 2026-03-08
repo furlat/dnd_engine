@@ -722,6 +722,9 @@ class PowerWordKill(SpellAction):
     # HP threshold
     hp_threshold: int = Field(default=100)
 
+    # VFX metadata
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and LOS."""
 

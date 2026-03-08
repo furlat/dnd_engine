@@ -167,6 +167,7 @@ class CallLightning(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
     projectile_type: Optional[str] = Field(default="bolt")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
@@ -294,6 +295,7 @@ class PoisonSpray(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=10))
     projectile_type: Optional[str] = Field(default="spray")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.POISON, description="Primary damage type for VFX")
 
     include_self: bool = Field(default=False)
     valid_target_filter: str = Field(default="enemies")
@@ -394,6 +396,7 @@ class AcidSplash(SpellAction):
     target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     projectile_type: Optional[str] = Field(default="orb")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.ACID, description="Primary damage type for VFX")
 
     # Multi-entity configuration
     allow_same_target: bool = Field(default=False)  # Can't hit same target twice
@@ -1481,6 +1484,7 @@ class Cloudkill(SpellAction):
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
     )
     projectile_type: Optional[str] = Field(default="orb")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.POISON, description="Primary damage type for VFX")
 
     # Action cost
     costs: List[Cost] = Field(default_factory=lambda: [
@@ -1977,6 +1981,7 @@ class SpiritGuardians(SpellAction):
     description: str = Field(default="15ft sphere around caster, enemies take 3d8 radiant (WIS half), speed halved")
     spell_level: int = Field(default=3)
     spell_school: str = Field(default="conjuration")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
     concentration: bool = Field(default=True)
     target_type: TargetType = Field(default=TargetType.SELF)
     spell_range: Range = Field(
@@ -2547,6 +2552,7 @@ class InsectPlague(SpellAction):
     target_type: TargetType = Field(default=TargetType.POSITION)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     projectile_type: Optional[str] = Field(default="orb")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.PIERCING, description="Primary damage type for VFX")
 
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Insect Plague Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
@@ -2799,6 +2805,7 @@ class IncendiaryCloud(SpellAction):
     description: str = Field(default="20ft sphere fire cloud, 10d8 fire (DEX half), heavily obscured")
     spell_level: int = Field(default=8)
     spell_school: str = Field(default="conjuration")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
     concentration: bool = Field(default=True)
     target_type: TargetType = Field(default=TargetType.POSITION)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
@@ -3583,6 +3590,7 @@ class GuardianOfFaith(SpellAction):
     description: str = Field(default="Summon spectral guardian: 20 radiant (DEX half), 60 damage budget")
     spell_level: int = Field(default=4)
     spell_school: str = Field(default="conjuration")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
     concentration: bool = Field(default=False)
     target_type: TargetType = Field(default=TargetType.POSITION)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
