@@ -240,6 +240,7 @@ class ChillTouch(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120))
     projectile_type: Optional[str] = Field(default="orb")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:
         """1d8 base, scaling at 5/11/17."""
@@ -400,6 +401,7 @@ class Blight(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
     projectile_type: Optional[str] = Field(default="ray")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     # Target filtering
     include_self: bool = Field(default=False)
@@ -1352,6 +1354,7 @@ class FingerOfDeath(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     projectile_type: Optional[str] = Field(default="ray")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     # Target filtering
     include_self: bool = Field(default=False)
@@ -1478,6 +1481,7 @@ class InflictWounds(SpellAction):
     )
     valid_target_filter: str = Field(default="enemies")
     projectile_type: Optional[str] = Field(default="touch")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     def _get_damage_dice_count(self) -> int:
         """3d10 at L1, +1d10 per level above 1st."""
@@ -1595,6 +1599,7 @@ class Harm(SpellAction):
     )
     valid_target_filter: str = Field(default="enemies")
     projectile_type: Optional[str] = Field(default="touch")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)

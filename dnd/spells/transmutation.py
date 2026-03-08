@@ -125,6 +125,7 @@ class SpikeGrowth(SpellAction):
     description: str = Field(default="20ft radius difficult terrain, 2d4 piercing per 5ft traveled")
     spell_level: int = Field(default=2)
     spell_school: str = Field(default="transmutation")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.PIERCING, description="Primary damage type for VFX")
     concentration: bool = Field(default=True)
     target_type: TargetType = Field(default=TargetType.POSITION)
     spell_range: Range = Field(
@@ -1036,6 +1037,7 @@ class Disintegrate(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY)
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
     projectile_type: Optional[str] = Field(default="ray")
+    spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
     include_self: bool = Field(default=False)
     valid_target_filter: str = Field(default="enemies")
