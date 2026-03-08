@@ -404,6 +404,10 @@ class ContextualModifier(BaseObject):
         default=None,
         description="The arguments to be passed to the callable function: (source_uuid, target_uuid, context)."
     )
+    cached_results: Dict[str, Optional[Any]] = Field(
+        default_factory=dict,
+        description="Cached evaluation results indexed by 'source|target|lineage'"
+    )
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['ContextualModifier']:
@@ -444,6 +448,18 @@ class ContextualModifier(BaseObject):
             self.callable_validation_function()
         except ValueError as e:
             raise ValueError(str(e))
+
+    def evaluate(self, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None,
+                 context: Optional[Dict[str, Any]] = None,
+                 event_lineage_uuid: Optional[UUID] = None) -> Optional[Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier, 'SizeModifier', 'DamageTypeModifier', 'ResistanceModifier']]:
+        """Evaluate callable and cache result indexed by (source, target, lineage)."""
+        try:
+            result = self.callable(source_entity_uuid, target_entity_uuid, context)
+        except Exception:
+            result = None
+        key = f"{source_entity_uuid}|{target_entity_uuid or 'none'}|{event_lineage_uuid or 'none'}"
+        self.cached_results[key] = result
+        return result
 
     def execute_callable(self) -> Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier]:
         if self.callable_arguments is None:
