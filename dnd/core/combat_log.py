@@ -110,6 +110,9 @@ class AttackLogData(BaseModel):
     # Target HP after attack
     target_hp: Optional[int] = None
 
+    # Advantage/disadvantage breakdown
+    advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
+
     # Flags
     is_opportunity_attack: bool = False
     is_long_range: bool = False
@@ -135,6 +138,7 @@ class SavingThrowLogData(BaseModel):
     dc: int
     roll: DiceRollDisplay
     bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
+    advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
     success: bool
     source_name: Optional[str] = None  # What caused the save
 
@@ -153,6 +157,7 @@ class SpellSaveLogData(BaseModel):
     save_dc: int
     save_roll: DiceRollDisplay
     save_bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
+    save_advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
     save_success: bool
 
     # Damage info

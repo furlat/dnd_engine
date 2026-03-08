@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from pydantic import Field, computed_field, BaseModel
+from pydantic import Field, computed_field, BaseModel, field_serializer
 from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Literal, Set
 
 from pydantic import  model_validator
@@ -45,6 +45,14 @@ class Duration(BaseObject):
     long_rested: bool = Field(default=False,description="Whether the condition has been long rested")
     owned_by_condition: Optional[UUID] = Field(default=None,description="The UUID of the condition that owns this duration")
     
+
+    @field_serializer('duration')
+    def serialize_duration(self, value: Optional[Union[int, ContextAwareCondition]], _info: Any) -> Optional[Union[int, str]]:
+        if value is None:
+            return None
+        if callable(value):
+            return "conditional"
+        return value
 
     def set_owned_by_condition(self,condition_uuid: UUID) -> None:
         """ Set the condition that owns this duration """

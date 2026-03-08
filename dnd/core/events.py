@@ -584,7 +584,7 @@ class BaseHandler(BaseObject):
     Provides common fields and invocation logic.
     """
     name: str = Field(default="BaseHandler", description="The name of the handler")
-    event_processor: EventProcessor = Field(description="The event processor to handle the event")
+    event_processor: EventProcessor = Field(exclude=True, description="The event processor to handle the event")
     enabled: bool = Field(default=True, description="Whether this handler is active. Disabled handlers are skipped during event dispatch.")
     player_toggleable: bool = Field(default=False, description="Whether the player can toggle this handler on/off. Only True for reactions and optional features like Divine Smite.")
 

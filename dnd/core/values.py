@@ -924,6 +924,12 @@ class ContextualValue(BaseValue):
         with the is_outgoing_modifier flag.
     """
 
+    event_lineage_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Lineage UUID of the current event context for cache indexing"
+    )
+
     value_modifiers: Dict[UUID, ContextualNumericalModifier] = Field(
         default_factory=dict,
         description="Dictionary of contextual numerical modifiers, keyed by UUID."
@@ -1002,7 +1008,8 @@ class ContextualValue(BaseValue):
         """
         if not self.min_constraints:
             return None
-        constraints = [constraint.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)  for constraint in self.min_constraints.values() ]
+        constraints = [constraint.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                        event_lineage_uuid=self.event_lineage_uuid) for constraint in self.min_constraints.values()]
         values = [constraint.value for constraint in constraints if constraint is not None]
         return min(values) if len(values) > 0 else None
     
@@ -1017,8 +1024,8 @@ class ContextualValue(BaseValue):
         """
         if not self.max_constraints:
             return None
-        constraints = [constraint.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
-                        for constraint in self.max_constraints.values() ]
+        constraints = [constraint.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                        event_lineage_uuid=self.event_lineage_uuid) for constraint in self.max_constraints.values()]
         values = [constraint.value for constraint in constraints if constraint is not None]
         return max(values) if len(values) > 0 else None
 
@@ -1031,15 +1038,13 @@ class ContextualValue(BaseValue):
         """
         modifier_sum = 0
         for context_aware_modifier in self.value_modifiers.values():
-            try:
-                result = context_aware_modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
-                if result is None:
-                    continue  # Skip None results
-                if not isinstance(result, NumericalModifier):
-                    raise ValueError(f"Callable returned unexpected type. Expected NumericalModifier, got {type(result)}")
-                modifier_sum += result.value if not normalized else result.normalized_value
-            except Exception as e:
-                raise ValueError(f"Error calculating score: {str(e)}")
+            result = context_aware_modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                                                      event_lineage_uuid=self.event_lineage_uuid)
+            if result is None:
+                continue
+            if not isinstance(result, NumericalModifier):
+                continue
+            modifier_sum += result.value if not normalized else result.normalized_value
         
         if self.max is not None and self.min is not None:
             return max(self.min, min(modifier_sum, self.max))
@@ -1082,8 +1087,9 @@ class ContextualValue(BaseValue):
         Returns:
             int: The total advantage sum.
         """
-        modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) for modifier in self.advantage_modifiers.values()]
-        values = [modifier.numerical_value for modifier in modifiers if modifier is not None]
+        modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                      event_lineage_uuid=self.event_lineage_uuid) for modifier in self.advantage_modifiers.values()]
+        values = [modifier.numerical_value for modifier in modifiers if modifier is not None and hasattr(modifier, 'numerical_value')]
         return sum(values) if len(values) > 0 else 0
 
     @computed_field
@@ -1111,9 +1117,9 @@ class ContextualValue(BaseValue):
         Returns:
             CriticalStatus: The final critical status (NOCRIT, AUTOCRIT, or NONE).
         """
-        critical_modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
-                              for modifier in self.critical_modifiers.values()]
-        values = [modifier.value for modifier in critical_modifiers if modifier is not None]
+        critical_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                              event_lineage_uuid=self.event_lineage_uuid) for modifier in self.critical_modifiers.values()]
+        values = [modifier.value for modifier in critical_modifiers if modifier is not None and hasattr(modifier, 'value')]
         if CriticalStatus.NOCRIT in values:
             return CriticalStatus.NOCRIT
         elif CriticalStatus.AUTOCRIT in values:
@@ -1130,9 +1136,9 @@ class ContextualValue(BaseValue):
         Returns:
             AutoHitStatus: The final auto-hit status (AUTOMISS, AUTOHIT, or NONE).
         """
-        auto_hit_modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
-                              for modifier in self.auto_hit_modifiers.values()]
-        values = [modifier.value for modifier in auto_hit_modifiers if modifier is not None]
+        auto_hit_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                              event_lineage_uuid=self.event_lineage_uuid) for modifier in self.auto_hit_modifiers.values()]
+        values = [modifier.value for modifier in auto_hit_modifiers if modifier is not None and hasattr(modifier, 'value')]
         if AutoHitStatus.AUTOMISS in values:
             return AutoHitStatus.AUTOMISS
         elif AutoHitStatus.AUTOHIT in values:
@@ -1151,9 +1157,9 @@ class ContextualValue(BaseValue):
         """
         if not self.size_modifiers:
             return Size.MEDIUM  # Default size if no modifiers
-        size_modifiers = [modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context) 
-                          for modifier in self.size_modifiers.values()]
-        sizes = [modifier.value for modifier in size_modifiers if modifier is not None]
+        size_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                          event_lineage_uuid=self.event_lineage_uuid) for modifier in self.size_modifiers.values()]
+        sizes = [modifier.value for modifier in size_modifiers if modifier is not None and hasattr(modifier, 'value')]
         if self.largest_size_priority:
             return max(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
         else:
@@ -1174,8 +1180,9 @@ class ContextualValue(BaseValue):
         
         type_counts = {}
         for modifier in self.damage_type_modifiers.values():
-            result = modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
-            if result is not None:
+            result = modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                                        event_lineage_uuid=self.event_lineage_uuid)
+            if result is not None and hasattr(result, 'value'):
                 type_counts[result.value] = type_counts.get(result.value, 0) + 1
         
         max_count = max(type_counts.values())
@@ -1208,8 +1215,9 @@ class ContextualValue(BaseValue):
         """
         resistance_sum = {damage_type: 0 for damage_type in DamageType}
         for modifier in self.resistance_modifiers.values():
-            result = modifier.callable(self.source_entity_uuid, self.target_entity_uuid, self.context)
-            if result is not None:
+            result = modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                                        event_lineage_uuid=self.event_lineage_uuid)
+            if result is not None and isinstance(result, ResistanceModifier):
                 resistance_sum[result.damage_type] += result.numerical_value
         return resistance_sum
 
@@ -2084,7 +2092,21 @@ class ModifiableValue(BaseValue):
         """
         self.from_target_contextual = None
         self.from_target_static = None
-    
+
+    def set_event_lineage(self, lineage_uuid: UUID) -> None:
+        """Set event lineage UUID for cache indexing on all contextual channels."""
+        self.self_contextual.event_lineage_uuid = lineage_uuid
+        if self.from_target_contextual:
+            self.from_target_contextual.event_lineage_uuid = lineage_uuid
+        self.to_target_contextual.event_lineage_uuid = lineage_uuid
+
+    def clear_event_lineage(self) -> None:
+        """Clear event lineage UUID from all contextual channels."""
+        self.self_contextual.event_lineage_uuid = None
+        if self.from_target_contextual:
+            self.from_target_contextual.event_lineage_uuid = None
+        self.to_target_contextual.event_lineage_uuid = None
+
     def combine_values(self, others: List['ModifiableValue'], naming_callable: Optional[naming_callable] = None) -> 'ModifiableValue':
         """
         Combine this ModifiableValue with a list of other ModifiableValues.
@@ -2285,6 +2307,63 @@ class ModifiableValue(BaseValue):
                         "source": source
                     })
 
+        return result
+
+    def get_full_breakdown(self) -> List[Dict[str, Any]]:
+        """Breakdown including contextual modifiers (reads cached_results for current context)."""
+        result = self.get_breakdown()
+
+        contextual_components: List[tuple[Optional[ContextualValue], str]] = [
+            (self.self_contextual, "self_contextual"),
+            (self.from_target_contextual, "from_target_contextual"),
+        ]
+        for component, source in contextual_components:
+            if component is None:
+                continue
+            lineage = component.event_lineage_uuid
+            key = f"{component.source_entity_uuid}|{component.target_entity_uuid or 'none'}|{lineage or 'none'}"
+            for modifier in component.value_modifiers.values():
+                cached = modifier.cached_results.get(key)
+                if cached is not None and isinstance(cached, NumericalModifier):
+                    value = cached.normalized_value
+                    if value != 0:
+                        result.append({
+                            "name": modifier.name or "Unknown",
+                            "value": value,
+                            "source": source,
+                            "contextual": True
+                        })
+        return result
+
+    def get_full_advantage_breakdown(self) -> List[Dict[str, Any]]:
+        """Advantage breakdown including contextual (reads cached_results for current context)."""
+        result = self.get_advantage_breakdown()
+
+        contextual_components: List[tuple[Optional[ContextualValue], str]] = [
+            (self.self_contextual, "self_contextual"),
+            (self.from_target_contextual, "from_target_contextual"),
+        ]
+        for component, source in contextual_components:
+            if component is None:
+                continue
+            lineage = component.event_lineage_uuid
+            key = f"{component.source_entity_uuid}|{component.target_entity_uuid or 'none'}|{lineage or 'none'}"
+            for modifier in component.advantage_modifiers.values():
+                cached = modifier.cached_results.get(key)
+                if cached is not None and isinstance(cached, AdvantageModifier):
+                    result.append({
+                        "name": modifier.name or "Unknown",
+                        "value": cached.value.value.lower() if hasattr(cached.value, 'value') else str(cached.value).lower(),
+                        "source": source,
+                        "active": True
+                    })
+                else:
+                    result.append({
+                        "name": modifier.name or "Unknown",
+                        "value": "inactive",
+                        "source": source,
+                        "active": False
+                    })
         return result
 
     def remove_modifier(self, uuid: UUID) -> None:
