@@ -29,8 +29,12 @@ from dnd.items import (
     create_chain_mail,
     create_studded_leather,
     create_shield,
+    create_dagger,
+    create_handaxe,
+    create_javelin,
 )
-from dnd.items.test_items import create_potion_of_haste
+from dnd.items.armors import create_leather_armor
+from dnd.items.test_items import create_potion_of_haste, create_healing_potion
 
 # Import fighter features
 from dnd.classes.fighter import (
@@ -505,9 +509,34 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
     # 9. Apply all fighter features
     apply_fighter_features(entity, config)
 
-    # 10. Add Potion of Haste to inventory
+    # 10. Add starter inventory items
     haste_potion = create_potion_of_haste(entity.uuid)
     entity.loot_item(haste_potion)
+    entity.loot_item(create_healing_potion(entity.uuid))
+    entity.loot_item(create_healing_potion(entity.uuid))
+
+    # Spare weapons — items NOT duplicating equipped gear
+    # Check what's equipped to avoid exact duplicates
+    equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
+    spare_weapons = [
+        ("Handaxe", create_handaxe),
+        ("Javelin", create_javelin),
+        ("Dagger", create_dagger),
+        ("Longsword", create_longsword),
+    ]
+    for weapon_name, factory_fn in spare_weapons:
+        if weapon_name not in equipped_names:
+            entity.loot_item(factory_fn(entity.uuid))
+
+    # Spare armor — only if different from equipped
+    if "Leather Armor" not in equipped_names and "Studded Leather" not in equipped_names:
+        entity.loot_item(create_leather_armor(entity.uuid))
+    if "Chain Mail" not in equipped_names:
+        entity.loot_item(create_chain_mail(entity.uuid))
+
+    # Spare shield
+    if "Shield" not in equipped_names:
+        entity.loot_item(create_shield(entity.uuid))
 
     return entity
 

@@ -1010,7 +1010,7 @@ class ContextualValue(BaseValue):
             return None
         constraints = [constraint.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                         event_lineage_uuid=self.event_lineage_uuid) for constraint in self.min_constraints.values()]
-        values = [constraint.value for constraint in constraints if constraint is not None]
+        values = [constraint.value for constraint in constraints if isinstance(constraint, NumericalModifier)]
         return min(values) if len(values) > 0 else None
     
     @computed_field
@@ -1026,7 +1026,7 @@ class ContextualValue(BaseValue):
             return None
         constraints = [constraint.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                         event_lineage_uuid=self.event_lineage_uuid) for constraint in self.max_constraints.values()]
-        values = [constraint.value for constraint in constraints if constraint is not None]
+        values = [constraint.value for constraint in constraints if isinstance(constraint, NumericalModifier)]
         return max(values) if len(values) > 0 else None
 
     def _score(self,normalized=False) -> int:
@@ -1089,7 +1089,7 @@ class ContextualValue(BaseValue):
         """
         modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                       event_lineage_uuid=self.event_lineage_uuid) for modifier in self.advantage_modifiers.values()]
-        values = [modifier.numerical_value for modifier in modifiers if modifier is not None and hasattr(modifier, 'numerical_value')]
+        values = [modifier.numerical_value for modifier in modifiers if isinstance(modifier, AdvantageModifier)]
         return sum(values) if len(values) > 0 else 0
 
     @computed_field
@@ -1159,7 +1159,7 @@ class ContextualValue(BaseValue):
             return Size.MEDIUM  # Default size if no modifiers
         size_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                           event_lineage_uuid=self.event_lineage_uuid) for modifier in self.size_modifiers.values()]
-        sizes = [modifier.value for modifier in size_modifiers if modifier is not None and hasattr(modifier, 'value')]
+        sizes = [modifier.value for modifier in size_modifiers if isinstance(modifier, SizeModifier)]
         if self.largest_size_priority:
             return max(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
         else:
