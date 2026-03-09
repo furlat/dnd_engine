@@ -26,8 +26,10 @@ from dnd.items import (
     create_handaxe,
     create_longsword,
     create_shield,
+    create_javelin,
+    create_dagger,
 )
-from dnd.items.test_items import create_potion_of_haste
+from dnd.items.test_items import create_potion_of_haste, create_healing_potion
 
 # Import rage/frenzy features (from rage.py)
 from dnd.classes.rage import (
@@ -550,9 +552,27 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
     # 9. Apply all barbarian features
     apply_barbarian_features(entity, config)
 
-    # 10. Add Potion of Haste to inventory
+    # 10. Add starter inventory items
     haste_potion = create_potion_of_haste(entity.uuid)
     entity.loot_item(haste_potion)
+    entity.loot_item(create_healing_potion(entity.uuid))
+    entity.loot_item(create_healing_potion(entity.uuid))
+
+    # Spare weapons — avoid duplicating equipped gear
+    equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
+    spare_weapons = [
+        ("Handaxe", create_handaxe),
+        ("Javelin", create_javelin),
+        ("Dagger", create_dagger),
+        ("Longsword", create_longsword),
+    ]
+    for weapon_name, factory_fn in spare_weapons:
+        if weapon_name not in equipped_names:
+            entity.loot_item(factory_fn(entity.uuid))
+
+    # Spare shield
+    if "Shield" not in equipped_names:
+        entity.loot_item(create_shield(entity.uuid))
 
     return entity
 

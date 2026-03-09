@@ -10,12 +10,175 @@ extracts the relevant data.
 
 from uuid import UUID
 from pydantic import BaseModel
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from dnd.entity import Entity
     from dnd.core.gridmap import GridMap
     from dnd.encounter import Encounter
+    from dnd.blocks.base_item import BaseItem
+    from dnd.blocks.equipment import Weapon, Armor, Shield, Equipment
+
+
+# =============================================================================
+# Equipment & Inventory Models
+# =============================================================================
+
+class APIItemSummary(BaseModel):
+    """Lightweight item metadata for list views."""
+    uuid: str
+    name: str
+    description: Optional[str] = None
+    item_type: str          # "weapon", "armor", "shield", "usable", "item"
+    rarity: str
+    weight: float
+    is_equipped: bool
+    equipped_slot: Optional[str] = None
+    # Weapon-specific
+    damage_dice: Optional[str] = None     # "1d8", "2d6"
+    damage_type: Optional[str] = None     # "Slashing"
+    weapon_properties: List[str] = []     # ["Finesse", "Light"]
+    # Armor-specific
+    armor_type: Optional[str] = None      # "Light", "Medium", "Heavy"
+    armor_ac: Optional[int] = None        # Base AC value
+    # Shield-specific
+    shield_ac_bonus: Optional[int] = None
+    # Usable-specific
+    charges: Optional[int] = None         # -1=unlimited, 0=depleted
+    max_charges: Optional[int] = None
+    stack_count: Optional[int] = None
+    is_consumable: bool = False
+
+    @classmethod
+    def create(cls, item: 'BaseItem') -> 'APIItemSummary':
+        from dnd.blocks.equipment import Weapon, Armor, Shield
+        from dnd.blocks.base_item import UsableItem
+
+        # Determine item_type
+        if isinstance(item, Weapon):
+            item_type = "weapon"
+        elif isinstance(item, Shield):
+            item_type = "shield"
+        elif isinstance(item, Armor):
+            item_type = "armor"
+        elif isinstance(item, UsableItem):
+            item_type = "usable"
+        else:
+            item_type = "item"
+
+        data: Dict[str, Any] = {
+            "uuid": str(item.uuid),
+            "name": item.name,
+            "description": item.description,
+            "item_type": item_type,
+            "rarity": item.rarity.value,
+            "weight": item.weight,
+            "is_equipped": item.is_equipped,
+            "equipped_slot": item.equipped_slot,
+        }
+
+        # Weapon-specific fields
+        if isinstance(item, Weapon):
+            dice_str = f"{item.dice_numbers}d{item.damage_dice}"
+            data["damage_dice"] = dice_str
+            data["damage_type"] = item.damage_type.value
+            data["weapon_properties"] = [p.value for p in item.properties]
+
+        # Armor-specific fields
+        if isinstance(item, Armor):
+            data["armor_type"] = item.type.value
+            data["armor_ac"] = item.ac.score
+
+        # Shield-specific fields
+        if isinstance(item, Shield):
+            data["shield_ac_bonus"] = item.ac_bonus.score
+
+        # Usable-specific fields
+        if isinstance(item, UsableItem):
+            data["charges"] = item.charges
+            data["max_charges"] = item.max_charges
+            data["stack_count"] = item.stack_count
+            data["is_consumable"] = item.is_consumable
+
+        return cls(**data)
+
+
+class APIEquipmentSlot(BaseModel):
+    """Slot -> item mapping."""
+    slot: str               # "weapon_melee_main", "body_armor", "helmet", etc.
+    slot_type: str          # "weapon", "armor", "shield", "ring"
+    item: Optional[APIItemSummary] = None
+
+
+class APIEquipmentOverview(BaseModel):
+    """Full equipment state."""
+    slots: List[APIEquipmentSlot]
+    ac: int
+    inventory: List[APIItemSummary]
+
+    @classmethod
+    def create(cls, entity: 'Entity') -> 'APIEquipmentOverview':
+        from dnd.blocks.equipment import Weapon, Shield, Armor
+        equipment = entity.equipment
+
+        # Build all 13 slots
+        slot_defs: List[Tuple[str, str, Any]] = [
+            ("weapon_melee_main", "weapon", equipment.weapon_melee_main),
+            ("weapon_melee_off", "weapon", equipment.weapon_melee_off),
+            ("weapon_ranged_main", "weapon", equipment.weapon_ranged_main),
+            ("weapon_ranged_off", "weapon", equipment.weapon_ranged_off),
+            ("helmet", "armor", equipment.helmet),
+            ("body_armor", "armor", equipment.body_armor),
+            ("gauntlets", "armor", equipment.gauntlets),
+            ("greaves", "armor", equipment.greaves),
+            ("boots", "armor", equipment.boots),
+            ("amulet", "armor", equipment.amulet),
+            ("cloak", "armor", equipment.cloak),
+            ("ring_left", "ring", equipment.ring_left),
+            ("ring_right", "ring", equipment.ring_right),
+        ]
+
+        slots = []
+        for slot_name, slot_type, item in slot_defs:
+            # Determine actual slot_type from item if present
+            actual_type = slot_type
+            if item is not None:
+                if isinstance(item, Shield):
+                    actual_type = "shield"
+                elif isinstance(item, Weapon):
+                    actual_type = "weapon"
+            slots.append(APIEquipmentSlot(
+                slot=slot_name,
+                slot_type=actual_type,
+                item=APIItemSummary.create(item) if item is not None else None,
+            ))
+
+        # Inventory items
+        inv_items = [APIItemSummary.create(item) for item in entity.inventory.items.values()]
+
+        return cls(
+            slots=slots,
+            ac=entity.ac_bonus().normalized_score,
+            inventory=inv_items,
+        )
+
+
+# =============================================================================
+# Equipment Request Models
+# =============================================================================
+
+class EquipRequest(BaseModel):
+    """Request to equip an item from inventory."""
+    session_id: str
+    entity_uuid: str
+    item_uuid: str
+    slot: Optional[str] = None  # Auto-assign if omitted
+
+class UnequipRequest(BaseModel):
+    """Request to unequip an item from a slot."""
+    session_id: str
+    entity_uuid: str
+    slot: str  # Required: which slot to unequip
 
 
 class APIEntitySummary(BaseModel):
@@ -59,6 +222,7 @@ class APIEntityFull(APIEntitySummary):
     action_economy: dict
     ability_scores: dict
     weapon_name: Optional[str]
+    equipment: Optional[APIEquipmentOverview] = None
 
     @classmethod
     def create(cls, entity: 'Entity') -> 'APIEntityFull':
@@ -91,7 +255,8 @@ class APIEntityFull(APIEntitySummary):
                 'wisdom': entity.ability_scores.wisdom.ability_score.normalized_score,
                 'charisma': entity.ability_scores.charisma.ability_score.normalized_score,
             },
-            weapon_name=weapon.name if weapon else None
+            weapon_name=weapon.name if weapon else None,
+            equipment=APIEquipmentOverview.create(entity),
         )
 
 
