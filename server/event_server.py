@@ -66,7 +66,8 @@ from server.api_models import (
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
     SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest,
-    ToggleHandlerRequest
+    ToggleHandlerRequest,
+    APIEquipmentOverview, APIItemSummary, EquipRequest, UnequipRequest,
 )
 from server.session import (
     SessionManager, GameSession,
@@ -1580,6 +1581,207 @@ async def toggle_entity_handler(entity_uuid: str, handler_name: str, request: To
         "success": True,
         "handler_name": handler_name,
         "enabled": request.enabled,
+    }
+
+
+# =============================================================================
+# Equipment & Inventory Endpoints
+# =============================================================================
+
+@app.get("/entity/{entity_uuid}/equipment", response_model=APIEquipmentOverview)
+async def get_entity_equipment(entity_uuid: str):
+    """Get full equipment and inventory state for an entity."""
+    try:
+        uuid_obj = UUID(entity_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    entity = Entity.get(uuid_obj)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    return APIEquipmentOverview.create(entity)
+
+
+@app.get("/entity/{entity_uuid}/equipment/item/{item_uuid}")
+async def get_entity_item_detail(entity_uuid: str, item_uuid: str):
+    """Get full detail for a single item (equipped or in inventory)."""
+    try:
+        entity_uuid_obj = UUID(entity_uuid)
+        item_uuid_obj = UUID(item_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    entity = Entity.get(entity_uuid_obj)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    # Search equipped items
+    for equipped_item in entity.equipment.get_all_equipped_items():
+        if equipped_item.uuid == item_uuid_obj:
+            return APIItemSummary.create(equipped_item).model_dump()
+
+    # Search inventory
+    if entity.inventory.has_item(item_uuid_obj):
+        item = entity.inventory.items[item_uuid_obj]
+        return APIItemSummary.create(item).model_dump()
+
+    raise HTTPException(status_code=404, detail="Item not found on entity")
+
+
+@app.get("/entity/{entity_uuid}/equippable-items")
+async def get_equippable_items(entity_uuid: str):
+    """Get inventory items that can be equipped, grouped by valid slots."""
+    try:
+        uuid_obj = UUID(entity_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    entity = Entity.get(uuid_obj)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    return {"entity_uuid": entity_uuid, "equippable": entity.get_equippable_items()}
+
+
+@app.post("/entity/{entity_uuid}/equip")
+async def equip_item(entity_uuid: str, request: EquipRequest):
+    """Equip an item from inventory to a slot.
+
+    Removes item from inventory, equips it. If slot is occupied, the old item
+    goes to inventory (swap). Validates session ownership and turn.
+    """
+    entity = validate_session_action(request.session_id, request.entity_uuid)
+
+    if entity_uuid != request.entity_uuid:
+        raise HTTPException(status_code=400, detail="Entity UUID mismatch")
+
+    # Find item in inventory
+    try:
+        item_uuid_obj = UUID(request.item_uuid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid item UUID format")
+
+    if not entity.inventory.has_item(item_uuid_obj):
+        raise HTTPException(status_code=404, detail="Item not found in inventory")
+
+    item = entity.inventory.items[item_uuid_obj]
+
+    # Verify item is equippable
+    from dnd.blocks.base_item import EquippableItem
+    if not isinstance(item, EquippableItem):
+        raise HTTPException(status_code=400, detail="Item is not equippable")
+
+    # Parse the slot if provided
+    from dnd.blocks.equipment import Weapon, Shield, Ring
+    from dnd.core.events import WeaponSlot, BodyPart, RingSlot
+
+    parsed_slot = None
+    if request.slot is not None:
+        slot_str_map = {
+            "weapon_melee_main": WeaponSlot.MELEE_MAIN,
+            "weapon_melee_off": WeaponSlot.MELEE_OFF,
+            "weapon_ranged_main": WeaponSlot.RANGED_MAIN,
+            "weapon_ranged_off": WeaponSlot.RANGED_OFF,
+            "helmet": BodyPart.HEAD,
+            "body_armor": BodyPart.BODY,
+            "gauntlets": BodyPart.HANDS,
+            "greaves": BodyPart.LEGS,
+            "boots": BodyPart.FEET,
+            "amulet": BodyPart.AMULET,
+            "cloak": BodyPart.CLOAK,
+            "ring_left": RingSlot.LEFT,
+            "ring_right": RingSlot.RIGHT,
+        }
+        parsed_slot = slot_str_map.get(request.slot)
+        if parsed_slot is None:
+            raise HTTPException(status_code=400, detail=f"Invalid slot: {request.slot}")
+
+    # Check if slot is occupied — if so, unequip old item to inventory first
+    if parsed_slot is not None:
+        old_item = entity.equipment.get_item_by_slot(parsed_slot)
+        if old_item is not None:
+            # unequip() is called inside equip() automatically, but we need to
+            # capture the old item and add it to inventory
+            pass  # equip() handles the unequip internally
+
+    # Remove item from inventory before equipping
+    entity.inventory.remove_item(item_uuid_obj)
+
+    try:
+        # equip() auto-unequips existing item in that slot
+        # We need to capture the old item if any
+        if parsed_slot is not None:
+            old_item = entity.equipment.get_item_by_slot(parsed_slot)
+        else:
+            old_item = None
+
+        entity.equipment.equip(item, parsed_slot)
+
+        # If there was an old item that got unequipped, add to inventory
+        if old_item is not None and old_item.uuid != item.uuid:
+            # The old item was unequipped by equip() — add it to inventory
+            old_item.owner_uuid = entity.uuid
+            old_item.stored_in_uuid = entity.inventory.uuid
+            entity.inventory.add_item(old_item)
+
+    except ValueError as e:
+        # Equip failed — put item back in inventory
+        entity.inventory.add_item(item)
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "success": True,
+        "message": f"Equipped {item.name}",
+        "equipment": APIEquipmentOverview.create(entity).model_dump(),
+    }
+
+
+@app.post("/entity/{entity_uuid}/unequip")
+async def unequip_item(entity_uuid: str, request: UnequipRequest):
+    """Unequip an item from a slot to inventory.
+
+    Validates session ownership and turn.
+    """
+    entity = validate_session_action(request.session_id, request.entity_uuid)
+
+    if entity_uuid != request.entity_uuid:
+        raise HTTPException(status_code=400, detail="Entity UUID mismatch")
+
+    # Parse the slot
+    from dnd.core.events import WeaponSlot, BodyPart, RingSlot
+    slot_str_map = {
+        "weapon_melee_main": WeaponSlot.MELEE_MAIN,
+        "weapon_melee_off": WeaponSlot.MELEE_OFF,
+        "weapon_ranged_main": WeaponSlot.RANGED_MAIN,
+        "weapon_ranged_off": WeaponSlot.RANGED_OFF,
+        "helmet": BodyPart.HEAD,
+        "body_armor": BodyPart.BODY,
+        "gauntlets": BodyPart.HANDS,
+        "greaves": BodyPart.LEGS,
+        "boots": BodyPart.FEET,
+        "amulet": BodyPart.AMULET,
+        "cloak": BodyPart.CLOAK,
+        "ring_left": RingSlot.LEFT,
+        "ring_right": RingSlot.RIGHT,
+    }
+    parsed_slot = slot_str_map.get(request.slot)
+    if parsed_slot is None:
+        raise HTTPException(status_code=400, detail=f"Invalid slot: {request.slot}")
+
+    unequipped = entity.equipment.unequip(parsed_slot)
+    if unequipped is None:
+        raise HTTPException(status_code=400, detail="Slot is empty or unequip was canceled")
+
+    # Add to inventory
+    unequipped.owner_uuid = entity.uuid
+    unequipped.stored_in_uuid = entity.inventory.uuid
+    entity.inventory.add_item(unequipped)
+
+    return {
+        "success": True,
+        "message": f"Unequipped {unequipped.name}",
+        "equipment": APIEquipmentOverview.create(entity).model_dump(),
     }
 
 

@@ -24,6 +24,7 @@ from dnd.core.modifiers import DamageType
 
 # Import items
 from dnd.items.weapons import create_dagger, create_quarterstaff
+from dnd.items.test_items import create_healing_potion, create_potion_of_haste
 
 # Import sorcerer features
 from dnd.classes.sorcerer import (
@@ -410,6 +411,18 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
 
     # Shield is a reaction spell, registered separately (not via ALL_SPELLS)
     register_shield_reaction(entity)
+
+    # 13. Add starter inventory items
+    entity.loot_item(create_potion_of_haste(entity.uuid))
+    entity.loot_item(create_healing_potion(entity.uuid))
+    entity.loot_item(create_healing_potion(entity.uuid))
+
+    # Spare weapon — the one NOT equipped (preset picks one, inventory gets the other)
+    equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
+    if "Dagger" not in equipped_names:
+        entity.loot_item(create_dagger(entity.uuid))
+    if "Quarterstaff" not in equipped_names:
+        entity.loot_item(create_quarterstaff(entity.uuid))
 
     return entity
 

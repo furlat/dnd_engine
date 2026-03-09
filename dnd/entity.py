@@ -2867,3 +2867,79 @@ class Entity(BaseBlock):
             })
 
         return result
+
+    # =========================================================================
+    # Equipment management helpers
+    # =========================================================================
+
+    def get_equippable_items(self) -> Dict[str, list]:
+        """Returns inventory items that can be equipped, grouped by valid slot.
+
+        For each EquippableItem in inventory, determines which slots it can go into
+        and whether that slot is currently occupied (includes swap info).
+
+        Returns:
+            Dict mapping slot name -> list of dicts with item info and swap details.
+        """
+        from dnd.blocks.base_item import EquippableItem
+        from dnd.blocks.equipment import Weapon, Armor, Shield, Ring, WeaponProperty, slot_mapping
+        from dnd.core.events import WeaponSlot, BodyPart, RingSlot
+
+        result: Dict[str, list] = {}
+
+        slot_attr_map = {
+            "weapon_melee_main": WeaponSlot.MELEE_MAIN,
+            "weapon_melee_off": WeaponSlot.MELEE_OFF,
+            "weapon_ranged_main": WeaponSlot.RANGED_MAIN,
+            "weapon_ranged_off": WeaponSlot.RANGED_OFF,
+            "helmet": BodyPart.HEAD,
+            "body_armor": BodyPart.BODY,
+            "gauntlets": BodyPart.HANDS,
+            "greaves": BodyPart.LEGS,
+            "boots": BodyPart.FEET,
+            "amulet": BodyPart.AMULET,
+            "cloak": BodyPart.CLOAK,
+            "ring_left": RingSlot.LEFT,
+            "ring_right": RingSlot.RIGHT,
+        }
+
+        for item in self.inventory.items.values():
+            if not isinstance(item, EquippableItem):
+                continue
+
+            valid_slots: List[str] = []
+
+            if isinstance(item, Weapon):
+                is_ranged = WeaponProperty.RANGED in item.properties
+                is_light = WeaponProperty.LIGHT in item.properties
+                if is_ranged:
+                    valid_slots.append("weapon_ranged_main")
+                    if is_light:
+                        valid_slots.append("weapon_ranged_off")
+                else:
+                    valid_slots.append("weapon_melee_main")
+                    if is_light:
+                        valid_slots.append("weapon_melee_off")
+            elif isinstance(item, Shield):
+                valid_slots.append("weapon_melee_off")
+            elif isinstance(item, Ring):
+                valid_slots.extend(["ring_left", "ring_right"])
+            elif isinstance(item, Armor):
+                for bp, attr_name in slot_mapping.items():
+                    if item.body_part == bp:
+                        valid_slots.append(attr_name)
+                        break
+
+            for slot_name in valid_slots:
+                if slot_name not in result:
+                    result[slot_name] = []
+                current_item = self.equipment.get_item_by_slot(slot_attr_map[slot_name])
+                entry = {
+                    "item_uuid": str(item.uuid),
+                    "item_name": item.name,
+                    "swap_item_name": current_item.name if current_item else None,
+                    "swap_item_uuid": str(current_item.uuid) if current_item else None,
+                }
+                result[slot_name].append(entry)
+
+        return result
