@@ -20,7 +20,7 @@ Expected Condition Effects (from CLAUDE.md):
 | Paralyzed     | Auto-fail STR/DEX saves                         | Advantage, auto-crit within 5ft        | Incapacitated  |
 | Poisoned      | Disadvantage on attacks & ability checks        | -                                      | -              |
 | Prone         | Disadvantage on attacks                         | Advantage ≤5ft, disadvantage >5ft      | -              |
-| Restrained    | Speed=0, disadvantage attacks, fail DEX saves   | Advantage on attacks                   | -              |
+| Restrained    | Speed=0, disadvantage attacks, disadv DEX saves | Advantage on attacks                   | -              |
 | Stunned       | Auto-fail STR/DEX saves                         | Advantage on attacks                   | Incapacitated  |
 | Unconscious   | Auto-fail STR/DEX saves                         | Advantage, auto-crit ≤5ft, prone-like  | Incapacitated  |
 """
@@ -581,7 +581,7 @@ def test_prone() -> bool:
 
 def test_restrained() -> bool:
     """
-    Restrained: Speed=0, disadvantage on attacks, auto-fail DEX saves, attackers have advantage.
+    Restrained: Speed=0, disadvantage on attacks, disadvantage on DEX saves, attackers have advantage.
     """
     print_separator("TEST: RESTRAINED")
     result = TestResult()
@@ -603,11 +603,11 @@ def test_restrained() -> bool:
         f"Restrained has disadvantage on attacks (got {attack_bonus.advantage})"
     )
 
-    # Check 3: Auto-fail DEX saves
+    # Check 3: Disadvantage on DEX saves (SRD: "disadvantage on Dexterity saving throws")
     dex_save = target.saving_throws.get_saving_throw("dexterity")
     result.check(
-        dex_save.bonus.auto_hit == AutoHitStatus.AUTOMISS,
-        f"Restrained auto-fails DEX saves (got {dex_save.bonus.auto_hit})"
+        dex_save.bonus.advantage == AdvantageStatus.DISADVANTAGE,
+        f"Restrained has disadvantage on DEX saves (got {dex_save.bonus.advantage})"
     )
 
     # Check 4: Attackers have advantage
