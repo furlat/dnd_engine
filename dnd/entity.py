@@ -180,7 +180,7 @@ class Entity(BaseBlock):
         # Also register with GridMap for spatial queries
         get_map().register_entity(self.uuid, self.position)
 
-        # Register spatial callback for reactive senses updates
+        # Register pre-completion sensory lifecycle system for reactive senses updates
         if self.senses is not None:
             update_senses_func = lambda: self.update_entity_senses(max_distance=20)
             update_visibility_func = lambda: self.update_entity_visibility(max_distance=20)
@@ -189,7 +189,7 @@ class Entity(BaseBlock):
                 update_senses_func=update_senses_func,
                 update_visibility_func=update_visibility_func
             )
-            EventQueue.add_on_event_callback(spatial_callback)
+            EventQueue.add_pre_completion_callback(spatial_callback)
 
     @classmethod
     def update_entity_position(

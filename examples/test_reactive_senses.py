@@ -1,8 +1,9 @@
 """
 Test reactive senses update system.
 
-Tests that entities' visible_entities update reactively via SPATIAL events
-instead of requiring bulk update_all_entities_senses() calls.
+Tests that entities' visible_entities update reactively through first-class
+SENSORY_UPDATE events produced by SPATIAL events, instead of requiring bulk
+update_all_entities_senses() calls.
 """
 
 from uuid import uuid4
@@ -10,6 +11,8 @@ from dnd.utils import reset_combat_state
 from dnd.monsters.bestiary import create_skeleton
 from dnd.entity import Entity
 from dnd.core.gridmap import get_map
+from dnd.core.events import EventQueue, EventPhase, EventType
+from dnd.blocks.sensory import SpatialSensesCallback
 
 
 def test_reactive_senses_on_movement():
@@ -68,40 +71,34 @@ def test_reactive_senses_on_movement():
 
 
 def test_senses_callback_registered():
-    """Test that the spatial callback is registered on entity creation."""
+    """Test that the sensory lifecycle system is registered on entity creation."""
     print("\n" + "=" * 60)
-    print("TEST: Spatial Callback Registration")
+    print("TEST: Sensory Lifecycle System Registration")
     print("=" * 60)
 
     reset_combat_state()
     grid = get_map()
     grid.set_tile(0, 0, walkable=True, name="Floor")
 
-    from dnd.core.events import EventQueue
-    from dnd.blocks.sensory import SpatialSensesCallback
-
-    # Count callbacks before
-    callbacks_before = len(EventQueue._on_event_callbacks)
+    callbacks_before = len(EventQueue._pre_completion_callbacks)
 
     entity = create_skeleton(name="Test Entity", position=(0, 0))
 
     # Count callbacks after
-    callbacks_after = len(EventQueue._on_event_callbacks)
+    callbacks_after = len(EventQueue._pre_completion_callbacks)
     new_callbacks = callbacks_after - callbacks_before
 
-    # Check that a SpatialSensesCallback was registered
-    spatial_callbacks = [c for c in EventQueue._on_event_callbacks
-                         if isinstance(c, SpatialSensesCallback) and c.owner_uuid == entity.uuid]
+    # Check that a SpatialSensesCallback-backed lifecycle system was registered
+    spatial_callbacks = [
+        c for c in EventQueue._pre_completion_callbacks
+        if isinstance(c, SpatialSensesCallback) and c.owner_uuid == entity.uuid
+    ]
 
-    print(f"New callbacks registered: {new_callbacks}")
-    print(f"Spatial callbacks for this entity: {len(spatial_callbacks)}")
+    print(f"New pre-completion callbacks registered: {new_callbacks}")
+    print(f"Sensory systems for this entity: {len(spatial_callbacks)}")
 
-    if len(spatial_callbacks) == 1:
-        print("[PASS] Spatial callback registered correctly!")
-    elif len(spatial_callbacks) == 0:
-        print("[FAIL] No spatial callback found!")
-    else:
-        print(f"[WARN] Multiple spatial callbacks found ({len(spatial_callbacks)})")
+    assert len(spatial_callbacks) == 1, "Expected one sensory lifecycle system for entity"
+    print("[PASS] Sensory lifecycle system registered correctly!")
 
 
 def test_visible_entities_update_on_enter():
@@ -149,6 +146,37 @@ def test_visible_entities_update_on_enter():
             print(f"[INFO] Unexpected position: {reported_pos}")
     else:
         print("[INFO] Mover not added - check subscription system")
+
+    sensory_events = [
+        event for event in EventQueue._all_events
+        if event.event_type == EventType.SENSORY_UPDATE
+        and event.phase == EventPhase.COMPLETION
+        and getattr(event, "observer_uuid", None) == observer.uuid
+    ]
+    add_events = [
+        event for event in sensory_events
+        if mover.uuid in getattr(event, "visible_entities_added", {})
+    ]
+    assert add_events, "Expected a sensory update adding the mover to observer senses"
+
+    sensory_event = add_events[-1]
+    parent = sensory_event.get_parent_event()
+    assert parent is not None, "Sensory update should have a parent event"
+    assert parent.event_type == EventType.SPATIAL_ENTITY_ENTERED, \
+        f"Expected sensory update parent to be SPATIAL_ENTITY_ENTERED, got {parent.event_type}"
+
+    spatial_parents = [
+        event for event in EventQueue._all_events
+        if event.event_type == EventType.SPATIAL_ENTITY_ENTERED
+        and event.phase == EventPhase.COMPLETION
+        and getattr(event, "entity_uuid", None) == mover.uuid
+        and getattr(event, "position", None) == (2, 0)
+    ]
+    assert spatial_parents, "Expected completed spatial entered event"
+    child_types = {child.event_type for child in spatial_parents[-1].get_children_events()}
+    assert EventType.SENSORY_UPDATE in child_types, \
+        "Spatial entered completion should include SENSORY_UPDATE child lineage"
+    print("[PASS] SENSORY_UPDATE child emitted and parented under spatial entered!")
 
 
 def test_visible_entities_update_on_leave():
@@ -601,6 +629,26 @@ def test_death_updates_paths():
 
     print(f"Target HP after damage: {target.get_hp()}")
     print(f"Target is dead: {target.get_hp() <= 0}")
+
+    death_events = [
+        event for event in EventQueue._all_events
+        if event.event_type == EventType.DEATH
+        and event.phase == EventPhase.COMPLETION
+        and getattr(event, "entity_uuid", None) == target.uuid
+    ]
+    assert death_events, "Expected a completed DeathEvent for killed target"
+
+    death_children = death_events[-1].get_children_events()
+    sensory_children = [
+        child for child in death_children
+        if child.event_type == EventType.SENSORY_UPDATE
+        and getattr(child, "observer_uuid", None) == attacker.uuid
+    ]
+    assert sensory_children, "Expected DeathEvent to contain sensory update child for attacker"
+    assert target.uuid in sensory_children[-1].visible_entities_removed, \
+        "Death sensory update should remove target from attacker's visible entities"
+    assert sensory_children[-1].paths_dirty, "Death sensory update should mark paths dirty"
+    print("[PASS] DeathEvent contains parented SENSORY_UPDATE child!")
 
     # Check if target is marked non-blocking
     is_non_blocking = target.non_blocking

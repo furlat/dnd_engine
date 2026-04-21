@@ -12,7 +12,7 @@ Tests cover:
 """
 import sys
 import traceback
-from dnd.core.events import EventQueue
+from dnd.core.events import EventQueue, EventPhase, EventType
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.base_block import SensesType, LightLevel
 from dnd.core.base_tiles import dark_floor_factory
@@ -54,6 +54,16 @@ def had_critical_d20() -> bool:
                 except Exception:
                     pass
     return False
+
+
+def completed_sensory_updates(observer_uuid):
+    """Return completed first-class sensory updates for one observer."""
+    return [
+        event for event in EventQueue._all_events
+        if event.event_type == EventType.SENSORY_UPDATE
+        and event.phase == EventPhase.COMPLETION
+        and getattr(event, "observer_uuid", None) == observer_uuid
+    ]
 
 
 # =============================================================================
@@ -643,9 +653,10 @@ def test_see_invisibility_reactive():
     through the reactive senses update pipeline (no manual update_entity_senses).
 
     Pipeline: condition._apply() adds SEE_INVISIBLE SenseMode
-    → CONDITION_APPLICATION event → _handle_own_perception_change()
-    → sense hash change detected → update_visibility_func()
-    → _refilter at visible positions → is_perceivable_by() now passes for invisible entity.
+    → CONDITION_APPLICATION event
+    → pre-completion sensory system detects sense hash change
+    → emits SENSORY_UPDATE child with visible entity delta
+    → is_perceivable_by() now passes for invisible entity.
     """
     print("\n=== Test 12: See Invisibility reactive senses ===")
     reset_combat_state()
@@ -667,6 +678,15 @@ def test_see_invisibility_reactive():
     print(f"  After invisibility (reactive) - enemy visible: {enemy_visible}")
     assert not enemy_visible, \
         "Enemy should NOT be visible after becoming invisible (reactive update)"
+    invisibility_updates = [
+        event for event in completed_sensory_updates(observer.uuid)
+        if enemy.uuid in event.visible_entities_removed
+    ]
+    assert invisibility_updates, \
+        "Invisible condition should emit sensory update removing enemy"
+    parent = invisibility_updates[-1].get_parent_event()
+    assert parent is not None and parent.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED, \
+        "Invisible removal sensory update should be parented under perceivability change"
 
     # Cast See Invisibility
     spell = SeeInvisibility(
@@ -685,6 +705,15 @@ def test_see_invisibility_reactive():
     print(f"  After See Invisibility (reactive) - enemy visible: {enemy_visible}")
     assert enemy_visible, \
         "Invisible enemy should be visible after casting See Invisibility (reactive)"
+    see_invisibility_updates = [
+        event for event in completed_sensory_updates(observer.uuid)
+        if enemy.uuid in event.visible_entities_added and event.sense_modes_changed
+    ]
+    assert see_invisibility_updates, \
+        "See Invisibility should emit sensory update adding invisible enemy"
+    parent = see_invisibility_updates[-1].get_parent_event()
+    assert parent is not None and parent.event_type == EventType.CONDITION_APPLICATION, \
+        "See Invisibility sensory update should be parented under condition application"
 
     # Expire the condition (10 rounds)
     for _ in range(10):
@@ -697,6 +726,15 @@ def test_see_invisibility_reactive():
     print(f"  After expiry (reactive) - enemy visible: {enemy_visible}")
     assert not enemy_visible, \
         "Invisible enemy should NOT be visible after See Invisibility expires (reactive)"
+    expiry_updates = [
+        event for event in completed_sensory_updates(observer.uuid)
+        if enemy.uuid in event.visible_entities_removed and event.sense_modes_changed
+    ]
+    assert expiry_updates, \
+        "See Invisibility expiry should emit sensory update removing invisible enemy"
+    parent = expiry_updates[-1].get_parent_event()
+    assert parent is not None and parent.event_type == EventType.CONDITION_REMOVAL, \
+        "See Invisibility expiry sensory update should be parented under condition removal"
 
     print("  PASS: See Invisibility reactive senses lifecycle works")
 

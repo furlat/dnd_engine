@@ -43,18 +43,7 @@ def setup_test_environment():
     BaseObject._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_lineage.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-    EventQueue._events_by_timestamp.clear()
-    EventQueue._all_events.clear()
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
+    EventQueue.reset()
 
 
 def setup_protection_scenario():
