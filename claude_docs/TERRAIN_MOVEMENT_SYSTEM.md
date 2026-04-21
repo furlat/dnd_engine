@@ -145,7 +145,7 @@ When `GridMap.move_entity(uuid, new_position)` is called:
    - DECLARATION: Handlers can see entity leaving
    - EXECUTION: Handlers can process
    - EFFECT: Effects like opportunity attacks could trigger
-   - COMPLETION: SpatialSensesCallback updates observers
+   - COMPLETION: stable event metadata is finalized
 
 2. Position update happens in GridMap
 
@@ -153,7 +153,8 @@ When `GridMap.move_entity(uuid, new_position)` is called:
    - DECLARATION: Handlers can see entity entering
    - EXECUTION: Handlers can process
    - EFFECT: Entry damage, saves, conditions apply HERE
-   - COMPLETION: SpatialSensesCallback updates observers
+   - before COMPLETION finalizes: SpatialSensesCallback updates observers and
+     may emit a SENSORY_UPDATE child event
 ```
 
 ### EventHandler for Entry Damage
@@ -218,13 +219,15 @@ The Move action integrates with terrain:
 2. Fires `StepMovementEvent` for each cell in path (cell-by-cell movement)
 3. Each step triggers `GridMap.move_entity()` → spatial events → entry damage handlers fire per step
 
-### SpatialSensesCallback (Unchanged)
+### SpatialSensesCallback
 
 **File**: `dnd/blocks/sensory.py`
 
-- Fires at COMPLETION phase via `EventQueue._on_event_callbacks`
+- Runs through `EventQueue.add_pre_completion_callback()` as relevant events
+  phase to COMPLETION
 - Updates entity's `senses.entities` dict when visible entities move
-- This is correct use of callbacks - passive observation, no modification of events
+- Emits a first-class `SENSORY_UPDATE` child event when the observer's staged
+  sensory state changed
 
 ---
 

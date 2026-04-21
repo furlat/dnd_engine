@@ -3,11 +3,15 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 import math
+from dataclasses import dataclass
 from collections import defaultdict
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.events import Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent, DeathEvent, EventQueue
+from dnd.core.events import (
+    Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent,
+    DeathEvent, EventQueue, SensoryUpdateEvent, SensoryUpdateReason
+)
 from dnd.core.base_block import SensesType, SenseMode, LightLevel
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData, HazardDetectedLogData
 
@@ -142,17 +146,19 @@ class Senses(BaseBlock):
         update_senses_func: Optional[Callable[[], None]] = None,
         update_visibility_func: Optional[Callable[[], None]] = None
     ) -> "SpatialSensesCallback":
-        """Create a callback that updates senses when spatial events fire.
+        """Create the observer-local sensory lifecycle system.
 
         Uses closure to access the senses instance without importing Entity.
-        The callback fires on SPATIAL events and triggers appropriate updates:
+        The system runs before relevant events complete and triggers
+        appropriate updates:
         - Self-movement: visibility-only update per step + mark paths dirty
         - Other changes: apply incremental hint (no Dijkstra)
         - Dijkstra runs only at turn start and movement end (explicit calls)
 
-        This uses the passive callback system (EventQueue._on_event_callbacks)
-        instead of EventHandlers because spatial events fire at COMPLETION phase
-        and we don't need to modify them, just react to them.
+        This uses EventQueue's pre-completion lifecycle hook instead of normal
+        EventHandlers because event handlers do not fire at COMPLETION, and
+        sensory children must be created before the causative event finalizes
+        its stable child-lineage metadata.
 
         Args:
             owner_uuid: UUID of the entity that owns this Senses block
@@ -163,19 +169,46 @@ class Senses(BaseBlock):
                 update (FOV + entity filter, no Dijkstra).
 
         Returns:
-            SpatialSensesCallback that should be registered with EventQueue
+            SpatialSensesCallback that should be registered with EventQueue as
+            a pre-completion callback.
         """
         return SpatialSensesCallback(
             self, owner_uuid, update_senses_func, update_visibility_func
         )
 
 
-class SpatialSensesCallback:
-    """Callback that updates senses when spatial events fire.
+@dataclass(frozen=True)
+class SensesSnapshot:
+    visible: Set[Tuple[int, int]]
+    seen: Set[Tuple[int, int]]
+    entities: Dict[UUID, Tuple[int, int]]
+    objects: Dict[UUID, Tuple[int, int]]
+    paths_dirty: bool
+    passive_perception: int
+    sense_modes_hash: int
 
-    This is registered with EventQueue.add_on_event_callback() and fires
-    for ALL events. It filters to events that affect senses and triggers
-    targeted incremental updates using SensesUpdateHint carried by each event.
+
+def _sorted_positions(positions: Set[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    return sorted(positions, key=lambda pos: (pos[0], pos[1]))
+
+
+def _sorted_uuid_position_dict(values: Dict[UUID, Tuple[int, int]]) -> Dict[UUID, Tuple[int, int]]:
+    return {uuid: values[uuid] for uuid in sorted(values.keys(), key=str)}
+
+
+def _sorted_uuid_move_dict(
+    values: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]]
+) -> Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]]:
+    return {uuid: values[uuid] for uuid in sorted(values.keys(), key=str)}
+
+
+class SpatialSensesCallback:
+    """Pre-completion lifecycle system that updates one observer's senses.
+
+    This is registered with EventQueue.add_pre_completion_callback() and runs
+    before causative events complete. It mutates backend senses exactly where
+    the previous reactive callback did, then emits an observer-specific
+    SensoryUpdateEvent child so animated clients can consume staged truth.
 
     Key design principle: Callbacks NEVER run Dijkstra (update_senses_func).
     All paths go through update_visibility_func (FOV only, no paths) plus
@@ -183,10 +216,9 @@ class SpatialSensesCallback:
     - Turn start (Encounter.start_turn → update_entity_senses)
     - Movement end (Move._apply finally → update_entity_senses)
 
-    Using callbacks instead of EventHandlers because:
-    - Spatial events fire at COMPLETION phase
-    - EventHandlers don't fire for COMPLETION events (by design)
-    - Callbacks fire for ALL events and can't modify them (perfect for reactive senses)
+    The class name is kept for compatibility with existing construction sites,
+    but it now acts as a first-class sensory update system rather than a passive
+    post-storage callback.
     """
 
     # Spatial event types we care about
@@ -214,65 +246,188 @@ class SpatialSensesCallback:
         self.update_visibility_func = update_visibility_func
 
     def __call__(self, event: Event) -> None:
-        """Process any event, filtering to events that affect our senses.
+        """Process an event before completion and emit a sensory child if needed."""
+        if event.event_type == EventType.SENSORY_UPDATE:
+            return
 
-        NEVER calls update_senses_func (no Dijkstra). All paths through
-        the callback use only update_visibility_func + _paths_dirty.
-        """
+        before = self._snapshot()
+        reason: Optional[SensoryUpdateReason] = None
+
         # Handle DEATH events - dead entity no longer blocks paths
         if event.event_type == EventType.DEATH:
             self._handle_death_event(event)
-            return
+            reason = SensoryUpdateReason.DEATH
 
         # Handle condition changes on self → check perception capabilities update
-        if event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL):
-            if event.phase == EventPhase.COMPLETION:
-                if event.target_entity_uuid == self.owner_uuid:
-                    self._handle_own_perception_change()
+        elif event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL):
+            if event.target_entity_uuid != self.owner_uuid:
+                return
+            self._handle_own_perception_change()
+            reason = SensoryUpdateReason.CONDITION
+
+        elif event.event_type in self.SPATIAL_EVENTS:
+            reason = self._handle_spatial_event(event)
+            if reason is None:
+                return
+
+        else:
             return
 
-        # Handle spatial events only
-        if event.event_type not in self.SPATIAL_EVENTS:
-            return
+        after = self._snapshot()
+        self._emit_sensory_update(event, before, after, reason)
 
-        # Only process at COMPLETION phase (one update per event lifecycle)
-        if event.phase != EventPhase.COMPLETION:
-            return
-
-        # Spatial events are always SpatialChangeEvent
+    def _handle_spatial_event(self, event: Event) -> Optional[SensoryUpdateReason]:
         if not isinstance(event, SpatialChangeEvent):
-            return
+            return None
 
         position = event.position
         entity_uuid = event.entity_uuid
 
         # Skip self-perceivability events (our own hiding doesn't affect our own senses)
         if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
-            return
+            return None
 
         # Self-movement events: visibility-only + paths dirty
         # Uniform for walking, teleport, and forced movement (no is_moving flag)
         if entity_uuid == self.owner_uuid and event.event_type in (
             EventType.SPATIAL_ENTITY_ENTERED, EventType.SPATIAL_ENTITY_LEFT
         ):
+            # Entity.update_entity_position sets the Entity position before
+            # GridMap emits left/entered. Updating on entered gives one clean
+            # per-step FOV delta after the grid contains the new occupancy.
+            if event.event_type == EventType.SPATIAL_ENTITY_LEFT:
+                return None
             if self.update_visibility_func:
                 self.update_visibility_func()
             self.senses._paths_dirty = True
-            return
+            return SensoryUpdateReason.SELF_MOVEMENT
 
         # For all other events: use hint if available
         hint = event.senses_hint
         if hint is not None:
             self._apply_hint(hint, event)
+            return self._reason_for_spatial_event(event)
         else:
             # Fallback for events without hints: check subscription, visibility-only + paths dirty
             grid = get_map()
             subscribers = grid.get_subscribers_at(position)
             if self.owner_uuid not in subscribers:
-                return
+                return None
             if self.update_visibility_func:
                 self.update_visibility_func()
             self.senses._paths_dirty = True
+            return self._reason_for_spatial_event(event)
+
+    def _reason_for_spatial_event(self, event: SpatialChangeEvent) -> SensoryUpdateReason:
+        if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
+            return SensoryUpdateReason.LIGHT
+        if event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
+            return SensoryUpdateReason.PERCEIVABILITY
+        return SensoryUpdateReason.SPATIAL
+
+    def _snapshot(self) -> SensesSnapshot:
+        return SensesSnapshot(
+            visible={pos for pos, is_visible in self.senses.visible.items() if is_visible},
+            seen=set(self.senses.seen),
+            entities=dict(self.senses.entities),
+            objects=dict(self.senses.objects),
+            paths_dirty=self.senses._paths_dirty,
+            passive_perception=self.senses._last_passive_perception,
+            sense_modes_hash=self.senses._last_sense_modes_hash,
+        )
+
+    def _emit_sensory_update(
+        self,
+        cause_event: Event,
+        before: SensesSnapshot,
+        after: SensesSnapshot,
+        reason: SensoryUpdateReason,
+    ) -> None:
+        visible_added = after.visible - before.visible
+        visible_removed = before.visible - after.visible
+        seen_added = after.seen - before.seen
+
+        entity_added_keys = set(after.entities) - set(before.entities)
+        entity_removed_keys = set(before.entities) - set(after.entities)
+        entity_moved = {
+            uuid: (before.entities[uuid], after.entities[uuid])
+            for uuid in set(before.entities) & set(after.entities)
+            if before.entities[uuid] != after.entities[uuid]
+        }
+
+        object_added_keys = set(after.objects) - set(before.objects)
+        object_removed_keys = set(before.objects) - set(after.objects)
+        object_moved = {
+            uuid: (before.objects[uuid], after.objects[uuid])
+            for uuid in set(before.objects) & set(after.objects)
+            if before.objects[uuid] != after.objects[uuid]
+        }
+
+        paths_dirty_changed = (not before.paths_dirty) and after.paths_dirty
+        passive_changed = before.passive_perception != after.passive_perception
+        sense_modes_changed = before.sense_modes_hash != after.sense_modes_hash
+
+        has_delta = any((
+            visible_added,
+            visible_removed,
+            seen_added,
+            entity_added_keys,
+            entity_removed_keys,
+            entity_moved,
+            object_added_keys,
+            object_removed_keys,
+            object_moved,
+            paths_dirty_changed,
+            passive_changed,
+            sense_modes_changed,
+        ))
+        if not has_delta:
+            return
+
+        sensory_event = SensoryUpdateEvent(
+            source_entity_uuid=self.owner_uuid,
+            target_entity_uuid=self.owner_uuid,
+            observer_uuid=self.owner_uuid,
+            cause_event_uuid=cause_event.uuid,
+            update_reason=reason,
+            parent_event=cause_event.uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+            visible_cells_added=_sorted_positions(visible_added),
+            visible_cells_removed=_sorted_positions(visible_removed),
+            seen_cells_added=_sorted_positions(seen_added),
+            visible_entities_added=_sorted_uuid_position_dict({
+                uuid: after.entities[uuid] for uuid in entity_added_keys
+            }),
+            visible_entities_removed=_sorted_uuid_position_dict({
+                uuid: before.entities[uuid] for uuid in entity_removed_keys
+            }),
+            visible_entities_moved=_sorted_uuid_move_dict(entity_moved),
+            visible_objects_added=_sorted_uuid_position_dict({
+                uuid: after.objects[uuid] for uuid in object_added_keys
+            }),
+            visible_objects_removed=_sorted_uuid_position_dict({
+                uuid: before.objects[uuid] for uuid in object_removed_keys
+            }),
+            visible_objects_moved=_sorted_uuid_move_dict(object_moved),
+            paths_dirty=paths_dirty_changed,
+            passive_perception_changed=passive_changed,
+            sense_modes_changed=sense_modes_changed,
+        )
+
+        current = EventQueue.register(sensory_event)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.EXECUTION)
+        current = EventQueue.register(current)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.EFFECT)
+        current = EventQueue.register(current)
+        if current.canceled:
+            return
+        current = current.phase_to(EventPhase.COMPLETION)
+        EventQueue.register(current)
 
     def _apply_hint(self, hint: SensesUpdateHint, _event: Event) -> None:
         """Apply targeted update based on event hint.

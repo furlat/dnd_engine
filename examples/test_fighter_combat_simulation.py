@@ -56,22 +56,7 @@ def setup_clean_state():
     reset_map()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
-
-    # Clear event registries
-    EventQueue._events_by_lineage.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_timestamp.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-    EventQueue._all_events.clear()
-
-    # Clear event handlers
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
+    EventQueue.reset()
 
 
 def setup_fighter_vs_skeleton(fighter_level: int = 5, distance_tiles: int = 1):

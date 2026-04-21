@@ -506,7 +506,7 @@ class Invisible(BaseCondition):
         elif isinstance(target_entity,Entity):
             outs = []
             # Set invisibility flag (fires perceivability event to update observer senses)
-            target_entity.set_invisible(True)
+            target_entity.set_invisible(True, parent_event=declaration_event.uuid)
             # Unseen attacker advantage (uses senses-based check)
             self_contextual_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_attacker_advantage))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_contextual_uuid))
@@ -523,7 +523,7 @@ class Invisible(BaseCondition):
         """Clear invisibility flag when condition is removed."""
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target.set_invisible(False)
+            target.set_invisible(False, parent_event=event.uuid if event else None)
         return super()._remove(event)
 
     @staticmethod
@@ -1362,7 +1362,7 @@ class Hidden(BaseCondition):
             handler_uuids: List[UUID] = []
 
             # Set stealth DC flag (fires perceivability event to update observer senses)
-            target_entity.set_stealth_dc(self.stealth_result)
+            target_entity.set_stealth_dc(self.stealth_result, parent_event=declaration_event.uuid)
 
             # Unseen Attacker advantage (shared callable with Invisible)
             adv_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
@@ -1420,7 +1420,7 @@ class Hidden(BaseCondition):
         """Clear stealth DC flag when condition is removed."""
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target.set_stealth_dc(None)
+            target.set_stealth_dc(None, parent_event=event.uuid if event else None)
         return super()._remove(event)
 
 
@@ -1509,7 +1509,7 @@ class InvisibilityEffect(BaseCondition):
             handler_uuids: List[UUID] = []
 
             # Set invisibility flag
-            target_entity.set_invisible(True)
+            target_entity.set_invisible(True, parent_event=declaration_event.uuid)
 
             # Unseen attacker advantage (shared callable with Invisible/Hidden)
             self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
@@ -1569,7 +1569,7 @@ class InvisibilityEffect(BaseCondition):
         """Clear invisibility flag when condition is removed."""
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target.set_invisible(False)
+            target.set_invisible(False, parent_event=event.uuid if event else None)
         return super()._remove(event)
 
 
@@ -1618,7 +1618,7 @@ class GreaterInvisibilityEffect(BaseCondition):
             handler_uuids: List[UUID] = []
 
             # Set invisibility flag
-            target_entity.set_invisible(True)
+            target_entity.set_invisible(True, parent_event=declaration_event.uuid)
 
             # Unseen attacker advantage
             self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
@@ -1678,7 +1678,7 @@ class GreaterInvisibilityEffect(BaseCondition):
         """Clear invisibility flag when condition is removed."""
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target.set_invisible(False)
+            target.set_invisible(False, parent_event=event.uuid if event else None)
         return super()._remove(event)
 
 

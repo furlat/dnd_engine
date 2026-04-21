@@ -1011,8 +1011,11 @@ Step 3: (4,5) → (5,5) where (5,5) is in Spike Growth zone
              total_damage: 5
              damages: [{damage_type: "piercing"}]
 
+     pre-COMPLETION:
+       → SpatialSensesCallback processes visibility updates
+       → emits SENSORY_UPDATE child if observer perception changed
+
      COMPLETION:
-       → SpatialSensesCallback processes (visibility updates)
        → Combat log collects child TakeDamageEvent
 
 3. Back in Move._apply():
@@ -1103,16 +1106,25 @@ The sensory system is the most complex reactive chain in the engine. It determin
 
 ### SpatialSensesCallback
 
-Every entity has a `SpatialSensesCallback` registered as a passive event callback. It fires on **ALL events** but only processes:
-- **Spatial events** (8 types) at **COMPLETION phase**
+Every entity has a `SpatialSensesCallback` registered as a pre-completion
+lifecycle callback. It runs immediately before relevant events complete, mutates
+the observer's backend `Senses`, and emits a first-class `SENSORY_UPDATE` child
+event when the observer's staged perception changed.
+
+It processes:
+- **Spatial events** (8 types) as they phase to **COMPLETION**
 - **CONDITION_APPLICATION / CONDITION_REMOVAL** on the owning entity (perception changes)
 - **DEATH** events (remove dead entity from visible dict)
+
+The class name is historical. It is no longer an `_on_event_callbacks` passive
+observer; it is the observer-local sensory lifecycle system.
 
 ### Three Processing Paths
 
 #### Path A: Hint-Based Incremental Update
 
-Most spatial events carry a `SensesUpdateHint`. The callback reads it and applies targeted updates:
+Most spatial events carry a `SensesUpdateHint`. The sensory system reads it and
+applies targeted updates:
 
 ```
 Hint Processing Priority:
@@ -1224,7 +1236,8 @@ Action: Player lights a torch (light source added at position (5,5))
        light_changed_positions: {(3,5), (4,5), (5,5), (6,5), (7,5), ...}
      → Register at COMPLETION phase only
 
-4. SpatialSensesCallback processes Tier 2 event:
+4. The Tier 2 event phases toward COMPLETION, and each observer's
+   `SpatialSensesCallback` processes it before completion metadata is finalized:
    → For each position in light_changed_positions ∩ subscribed_cells:
      → _update_visibility_at(position):
        → Tile now has BRIGHT_LIGHT (was DARKNESS)
@@ -1237,7 +1250,9 @@ Action: Player lights a torch (light source added at position (5,5))
            → If Goblin is NOT Hidden: perceivable → add to senses.entities
          → Generate ENTITY_SPOTTED combat log if newly visible
 
-Result: Observer now sees the lit area. Hidden enemies may or may not be spotted depending on perception.
+Result: Observer now sees the lit area. Hidden enemies may or may not be spotted
+depending on perception. If the observer's sensory state changed, a
+`SENSORY_UPDATE` child event records the fog/entity/object delta.
 ```
 
 ### Cascade Scenario 2: Entity Hides
@@ -1258,7 +1273,8 @@ Action: Rogue uses Hide action (Stealth check result: 17)
    → Hint: perceivability_entity = rogue_uuid
    → Full lifecycle: DECLARATION → EXECUTION → EFFECT → COMPLETION
 
-4. At COMPLETION, each observer's SpatialSensesCallback fires:
+4. Before the perceivability event completes, each observer's
+   `SpatialSensesCallback` runs:
    → hint.perceivability_entity = rogue_uuid
    → _recheck_entity_perceivability(rogue_uuid):
      → Observer PP = 14, stealth_dc = 17
@@ -1268,6 +1284,9 @@ Action: Rogue uses Hide action (Stealth check result: 17)
    → Another observer PP = 18, stealth_dc = 17
      → 18 ≥ 17 → STILL perceivable
      → Rogue stays in senses.entities (this observer sees through the hide)
+
+5. Observers whose visible entity set changed receive a `SENSORY_UPDATE` child
+   under the perceivability event.
 
 Result: Some observers lose sight of the Rogue, others don't. Each observer's senses update independently.
 ```

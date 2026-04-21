@@ -10,6 +10,8 @@ __all__ = [
     "AbilityName", "SkillName",
     # Core event classes
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
+    # Sensory events
+    "SensoryUpdateReason", "SensoryUpdateEvent",
     # D20 events (legacy)
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
     # Unified dice roll events
@@ -174,6 +176,7 @@ class EventType(str, Enum):
     SPATIAL_LIGHT_CHANGED = "spatial_light_changed"  # Tile's resolved light level changed
     SPATIAL_OBJECT_CHANGED = "spatial_object_changed"  # Object blocking state changed (door open/close)
     MOVEMENT_COLLISION = "movement_collision"  # Entity bumped into imperceivable blocker
+    SENSORY_UPDATE = "sensory_update"  # Observer-specific visibility/fog/entity/object delta
 
     # Encounter/Turn events
     ENCOUNTER_START = "encounter_start"
@@ -198,6 +201,17 @@ class SpatialChangeType(str, Enum):
     LIGHT_CHANGED = "light_changed"
     OBJECT_CHANGED = "object_changed"
     MOVEMENT_COLLISION = "movement_collision"
+
+
+class SensoryUpdateReason(str, Enum):
+    """Why an observer's sensory state changed."""
+    SPATIAL = "spatial"
+    SELF_MOVEMENT = "self_movement"
+    LIGHT = "light"
+    PERCEIVABILITY = "perceivability"
+    DEATH = "death"
+    CONDITION = "condition"
+    UNKNOWN = "unknown"
 
 
 class EventPhase(str, Enum):
@@ -323,6 +337,8 @@ class Event(BaseObject):
             phase_updates['is_last'] = True
 
         if new_phase == EventPhase.COMPLETION:
+            EventQueue.run_pre_completion_callbacks(self)
+
             # COMPLETION: carry forward ALL children and resolve stable lineage references
             all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
             phase_updates['lineage_children_events'] = all_children
@@ -717,6 +733,12 @@ class EventQueue:
     # These are called for ALL events after storage, cannot modify events
     _on_event_callbacks: List[Callable[['Event'], None]] = []
 
+    # Pre-completion callbacks are lifecycle systems. They run immediately
+    # before an event phases to COMPLETION, while the causative event can still
+    # receive child events that will be captured in children_lineages.
+    _pre_completion_callbacks: List[Callable[['Event'], None]] = []
+    _pre_completion_running: Set[UUID] = set()
+
     # Callback for combat log auto-capture (set by Encounter)
     # Called for top-level events (parent_event=None) when they complete with combat_log
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
@@ -794,6 +816,38 @@ class EventQueue:
         """Remove an event callback."""
         if callback in cls._on_event_callbacks:
             cls._on_event_callbacks.remove(callback)
+
+    @classmethod
+    def add_pre_completion_callback(cls, callback: Callable[['Event'], None]) -> None:
+        """Add a lifecycle callback that runs before event completion.
+
+        Unlike passive on-event callbacks, these callbacks may emit child events.
+        They run before completion metadata is computed, so child lineage fields
+        remain structurally honest for animated clients and event-tree readers.
+        """
+        if callback not in cls._pre_completion_callbacks:
+            cls._pre_completion_callbacks.append(callback)
+
+    @classmethod
+    def remove_pre_completion_callback(cls, callback: Callable[['Event'], None]) -> None:
+        """Remove a pre-completion lifecycle callback."""
+        if callback in cls._pre_completion_callbacks:
+            cls._pre_completion_callbacks.remove(callback)
+
+    @classmethod
+    def run_pre_completion_callbacks(cls, event: Event) -> None:
+        """Run lifecycle systems before an event completes."""
+        if event.event_type == EventType.SENSORY_UPDATE:
+            return
+        if event.uuid in cls._pre_completion_running:
+            return
+        cls._pre_completion_running.add(event.uuid)
+        try:
+            for callback in list(cls._pre_completion_callbacks):
+                callback(event)
+        finally:
+            cls._pre_completion_running.discard(event.uuid)
+
     @classmethod
     def register(cls, event: Event) -> Event:
         """Register an event and notify listeners"""
@@ -1299,6 +1353,8 @@ class EventQueue:
         cls._handler_positions.clear()
         # Clear event callbacks (spatial senses callbacks, etc.)
         cls._on_event_callbacks.clear()
+        cls._pre_completion_callbacks.clear()
+        cls._pre_completion_running.clear()
         cls._perceiver_computer = None
         cls._revealed_computer = None
 
@@ -1692,6 +1748,53 @@ class SensesUpdateHint(BaseModel):
 
     # Death: entity stopped blocking
     entity_died: Optional[Tuple[UUID, Tuple[int, int]]] = None
+
+
+class SensoryUpdateEvent(Event):
+    """Observer-specific sensory state delta.
+
+    This event records the backend-authoritative change to one observer's
+    visibility/fog/entity/object perception. It is emitted before the causative
+    parent completes, so clients can animate perception changes from the event
+    tree without recomputing FOV or polling snapshots for timing.
+    """
+    name: str = Field(default="Sensory Update", description="Observer sensory state changed")
+    event_type: EventType = Field(default=EventType.SENSORY_UPDATE)
+    observer_uuid: UUID = Field(description="Observer whose sensory state changed")
+    cause_event_uuid: UUID = Field(description="Event UUID that caused this sensory update")
+    update_reason: SensoryUpdateReason = Field(default=SensoryUpdateReason.UNKNOWN)
+
+    visible_cells_added: List[Tuple[int, int]] = Field(default_factory=list)
+    visible_cells_removed: List[Tuple[int, int]] = Field(default_factory=list)
+    seen_cells_added: List[Tuple[int, int]] = Field(default_factory=list)
+
+    visible_entities_added: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
+    visible_entities_removed: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
+    visible_entities_moved: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]] = Field(default_factory=dict)
+
+    visible_objects_added: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
+    visible_objects_removed: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
+    visible_objects_moved: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]] = Field(default_factory=dict)
+
+    sense_modes_changed: bool = Field(default=False)
+    passive_perception_changed: bool = Field(default=False)
+    paths_dirty: bool = Field(default=False)
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        positions: Set[Tuple[int, int]] = set(self.visible_cells_added)
+        positions.update(self.visible_cells_removed)
+        positions.update(self.seen_cells_added)
+        positions.update(self.visible_entities_added.values())
+        positions.update(self.visible_entities_removed.values())
+        for old_pos, new_pos in self.visible_entities_moved.values():
+            positions.add(old_pos)
+            positions.add(new_pos)
+        positions.update(self.visible_objects_added.values())
+        positions.update(self.visible_objects_removed.values())
+        for old_pos, new_pos in self.visible_objects_moved.values():
+            positions.add(old_pos)
+            positions.add(new_pos)
+        return positions
 
 
 class SpatialChangeEvent(Event):
@@ -2769,6 +2872,3 @@ class DeathEvent(Event):
             data={"entity_name": self.entity_name, "final_hp": self.final_hp},
             success=True
         )
-
-
-

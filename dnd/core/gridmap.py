@@ -139,8 +139,9 @@ class GridMap:
         if current_event.canceled:
             return None
 
-        # Progress to COMPLETION - informational only
-        # SpatialSensesCallback fires here via _on_event_callbacks
+        # Progress to COMPLETION. Pre-completion lifecycle systems, including
+        # sensory updates, run during phase_to(COMPLETION) before metadata is
+        # finalized.
         current_event = current_event.phase_to(EventPhase.COMPLETION)
         current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
 
@@ -1039,8 +1040,11 @@ class GridMap:
                                                                new_light_level=tile.resolved_light_level.value,
                                                                light_level_map=level_map)
                 event.parent_event = parent_event
-                event = event.phase_to(EventPhase.COMPLETION)
-                EventQueue.register(event)
+                current_event = EventQueue.register(event)
+                if current_event.canceled:
+                    return
+                current_event = current_event.phase_to(EventPhase.COMPLETION)
+                EventQueue.register(current_event)
 
     def _ensure_light_callback(self) -> None:
         """Register the movement callback for light source tracking (once)."""
