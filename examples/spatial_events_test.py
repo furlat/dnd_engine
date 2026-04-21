@@ -24,20 +24,12 @@ def clear_state():
     reset_map()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
-    # Clear event queue
-    EventQueue._events_by_lineage.clear()
-    EventQueue._events_by_uuid.clear()
-    EventQueue._events_by_type.clear()
-    EventQueue._events_by_timestamp.clear()
-    EventQueue._events_by_phase.clear()
-    EventQueue._events_by_source.clear()
-    EventQueue._events_by_target.clear()
-    EventQueue._all_events.clear()
-    EventQueue._event_handlers.clear()
-    EventQueue._event_handlers_by_trigger.clear()
-    EventQueue._event_handlers_by_simple_trigger.clear()
-    EventQueue._event_handlers_by_source_entity_uuid.clear()
-    EventQueue._on_event_callbacks.clear()
+    EventQueue.reset()
+
+
+def count_event_type(events, event_type: EventType) -> int:
+    """Count events of one type in a local event slice."""
+    return sum(1 for event in events if event.event_type == event_type)
 
 
 def create_simple_grid(width: int = 10, height: int = 10) -> GridMap:
@@ -303,11 +295,11 @@ def test_no_duplicate_events():
 
     With the full spatial event lifecycle (DECLARATION -> EXECUTION -> EFFECT -> COMPLETION),
     each spatial event (LEFT or ENTERED) fires at all 4 phases.
-    So a move produces at minimum: 4 LEFT events + 4 ENTERED events = 8 total events.
+    So a move always produces: 4 LEFT events + 4 ENTERED events = 8 spatial events.
 
-    After the first move, the entity's reactive senses callback subscribes to visible cells,
-    so subsequent moves may produce additional cascading spatial events from subscriber
-    notifications. The key invariant is that subsequent moves produce a consistent count.
+    The first-class sensory pipeline may additionally emit one SENSORY_UPDATE
+    lifecycle when movement changes the observer's staged senses. The invariant
+    here is no duplicated spatial movement lifecycles and no unbounded growth.
     """
     print("\n=== Test: No Duplicate Events ===")
     clear_state()
@@ -334,32 +326,51 @@ def test_no_duplicate_events():
 
     events_after_move1 = len(EventQueue._all_events)
     move1_events = events_after_move1 - events_after_creation
+    move1_slice = EventQueue._all_events[events_after_creation:events_after_move1]
+    move1_left = count_event_type(move1_slice, EventType.SPATIAL_ENTITY_LEFT)
+    move1_entered = count_event_type(move1_slice, EventType.SPATIAL_ENTITY_ENTERED)
+    move1_sensory = count_event_type(move1_slice, EventType.SENSORY_UPDATE)
     print(f"Events from first move: {move1_events}")
+    print(f"  Spatial LEFT={move1_left}, ENTERED={move1_entered}, sensory={move1_sensory}")
 
-    # First move: 8 base events (4 phases × 2 types: LEFT + ENTERED)
-    assert move1_events == 8, f"Expected 8 events for first move (4 phases × 2 types), got {move1_events}"
+    assert move1_left == 4, f"Expected one LEFT lifecycle (4 phases), got {move1_left}"
+    assert move1_entered == 4, f"Expected one ENTERED lifecycle (4 phases), got {move1_entered}"
+    assert move1_sensory in (0, 4), f"Expected zero or one sensory lifecycle, got {move1_sensory}"
 
-    # Move again — reactive senses callback may fire and cascade additional events
-    # (subscription notifications from the entity's own spatial callback).
-    # The key invariant: each move still produces at least 8 base events.
+    # Move again. The key invariant: each move still produces exactly one LEFT
+    # and one ENTERED lifecycle, even if sensory state also changes.
     Entity.update_entity_position(entity, (5, 5))
 
     events_after_move2 = len(EventQueue._all_events)
     move2_events = events_after_move2 - events_after_move1
+    move2_slice = EventQueue._all_events[events_after_move1:events_after_move2]
+    move2_left = count_event_type(move2_slice, EventType.SPATIAL_ENTITY_LEFT)
+    move2_entered = count_event_type(move2_slice, EventType.SPATIAL_ENTITY_ENTERED)
+    move2_sensory = count_event_type(move2_slice, EventType.SENSORY_UPDATE)
     print(f"Events from second move: {move2_events}")
+    print(f"  Spatial LEFT={move2_left}, ENTERED={move2_entered}, sensory={move2_sensory}")
 
-    assert move2_events >= 8, f"Expected at least 8 events per move, got {move2_events}"
+    assert move2_left == 4, f"Expected one LEFT lifecycle (4 phases), got {move2_left}"
+    assert move2_entered == 4, f"Expected one ENTERED lifecycle (4 phases), got {move2_entered}"
+    assert move2_sensory in (0, 4), f"Expected zero or one sensory lifecycle, got {move2_sensory}"
 
     # Move a third time to verify no unbounded growth
     Entity.update_entity_position(entity, (6, 6))
 
     events_after_move3 = len(EventQueue._all_events)
     move3_events = events_after_move3 - events_after_move2
+    move3_slice = EventQueue._all_events[events_after_move2:events_after_move3]
+    move3_left = count_event_type(move3_slice, EventType.SPATIAL_ENTITY_LEFT)
+    move3_entered = count_event_type(move3_slice, EventType.SPATIAL_ENTITY_ENTERED)
+    move3_sensory = count_event_type(move3_slice, EventType.SENSORY_UPDATE)
     print(f"Events from third move: {move3_events}")
+    print(f"  Spatial LEFT={move3_left}, ENTERED={move3_entered}, sensory={move3_sensory}")
 
-    assert move3_events >= 8, f"Expected at least 8 events per move, got {move3_events}"
+    assert move3_left == 4, f"Expected one LEFT lifecycle (4 phases), got {move3_left}"
+    assert move3_entered == 4, f"Expected one ENTERED lifecycle (4 phases), got {move3_entered}"
+    assert move3_sensory in (0, 4), f"Expected zero or one sensory lifecycle, got {move3_sensory}"
     # Verify no unbounded growth: each move should not produce drastically more events
-    max_expected = move1_events * 4  # generous bound: no exponential blowup
+    max_expected = max(move1_events, 8) * 4  # generous bound: no exponential blowup
     assert move3_events <= max_expected, f"Event count growing unboundedly: {move3_events} > {max_expected}"
 
     print("✓ Consistent event counts on movement")

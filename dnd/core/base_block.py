@@ -380,15 +380,15 @@ class BaseBlock(BaseModel):
 
     # --- Perceivability system ---
 
-    def set_stealth_dc(self, value: Optional[int]) -> None:
+    def set_stealth_dc(self, value: Optional[int], parent_event: Optional[UUID] = None) -> None:
         """Set stealth DC and notify observers. Called by Hidden condition."""
         self.stealth_dc = value
-        self._notify_perceivability_changed()
+        self._notify_perceivability_changed(parent_event=parent_event)
 
-    def set_invisible(self, value: bool) -> None:
+    def set_invisible(self, value: bool, parent_event: Optional[UUID] = None) -> None:
         """Set invisibility flag and notify observers. Called by Invisible condition."""
         self.is_invisible = value
-        self._notify_perceivability_changed()
+        self._notify_perceivability_changed(parent_event=parent_event)
 
     def _notify_perceivability_changed(self, parent_event: Optional[UUID] = None) -> None:
         """Fire a SPATIAL_PERCEIVABILITY_CHANGED event at this block's position.
@@ -971,4 +971,3 @@ class BaseBlock(BaseModel):
         self._remove_static_condition_immunity(condition_name)
         self._remove_contextual_condition_immunity(condition_name)
         return
-

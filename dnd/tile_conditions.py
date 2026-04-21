@@ -14,7 +14,8 @@ Event Handling:
 - SPATIAL events now fire through full lifecycle: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
 - Entry damage handlers fire at EFFECT phase using standard EventHandlers
 - Turn start damage handlers also fire at EFFECT phase
-- SpatialSensesCallback still uses callbacks for passive senses updates at COMPLETION
+- Observer sensory updates run through EventQueue's pre-completion lifecycle hook,
+  then emit first-class SENSORY_UPDATE child events when perception changes.
 """
 
 import re

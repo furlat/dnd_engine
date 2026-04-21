@@ -242,9 +242,14 @@ visible_entities dict            → final result
 
 **Key**: `senses.visible` is light-filtered — dark tiles are removed from `senses.visible` (but stay in `senses.seen` for memory/fog-of-war). Normal light changes update `senses.visible`, entities, and objects at affected positions via `_update_visibility_at()`.
 
-### SpatialSensesCallback (`sensory.py:157-392`)
+### SpatialSensesCallback (`dnd/blocks/sensory.py`)
 
-Registered as `EventQueue.add_on_event_callback()`. Fires for ALL events, filters to spatial events at **COMPLETION phase only**. Uses the **incremental senses update system** — callbacks NEVER run Dijkstra. All updates are lightweight:
+Registered as a pre-completion lifecycle callback via
+`EventQueue.add_pre_completion_callback()`. It runs as relevant events phase to
+**COMPLETION**, mutates observer senses, and emits a first-class
+`SENSORY_UPDATE` child event when the staged perception delta is non-empty.
+It uses the **incremental senses update system** — callbacks NEVER run
+Dijkstra. All updates are lightweight:
 
 - **Self-movement** (any `SPATIAL_ENTITY_ENTERED`/`LEFT` where `entity_uuid == owner_uuid`): calls `update_visibility_func()` (FOV only) + sets `_paths_dirty = True`
 - **Other spatial events**: reads `SensesUpdateHint` from the event and applies targeted updates:
@@ -454,7 +459,10 @@ Used by `BaseItem._notify_blocking_changed()` — standard pattern for items to 
 
 ### Observer Perception Change Detection
 
-`SpatialSensesCallback` also handles `CONDITION_APPLICATION` / `CONDITION_REMOVAL` events on self (not just spatial events). When a condition changes the observer's perception capabilities, cached senses are re-evaluated:
+`SpatialSensesCallback` also handles `CONDITION_APPLICATION` /
+`CONDITION_REMOVAL` events on self (not just spatial events). When a condition
+changes the observer's perception capabilities, cached senses are re-evaluated
+before the condition event completes:
 
 **Snapshot fields on Senses**:
 - `_last_passive_perception: int` — stored after each `update_entity_senses()`
