@@ -117,6 +117,21 @@ class EventMonitor:
         # Serialize event to JSON-compatible dict
         try:
             event_data = event.model_dump(mode='json')
+
+            # Presentation convenience: embed post-effect equipment snapshot on
+            # equip/unequip events so the client can drive AnimatedEntity.setAppearance
+            # without maintaining a parallel items-by-uuid cache. Serialization-layer
+            # concern only — domain events stay untyped.
+            from dnd.blocks.equipment import EquipmentEvent
+            if isinstance(event, EquipmentEvent) and event.source_entity_uuid:
+                from dnd.entity import Entity
+                from server.api_models import APIEquipmentOverview
+                entity = Entity.get(event.source_entity_uuid)
+                if entity is not None:
+                    event_data['resulting_equipment'] = (
+                        APIEquipmentOverview.create(entity).model_dump(mode='json')
+                    )
+
             for queue in self._listeners:
                 try:
                     queue.put_nowait(event_data)

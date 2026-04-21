@@ -2218,6 +2218,7 @@ class Entity(BaseBlock):
                 valid_targets.append(AvailableTarget(
                     index=idx,
                     target_uuid=target_uuid,
+                    position=target_pos,
                     target_name=target_entity.name if target_entity else None,
                     distance=self.senses.get_feet_distance(target_pos)
                 ))
