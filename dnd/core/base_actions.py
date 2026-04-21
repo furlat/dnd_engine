@@ -867,7 +867,7 @@ class AvailableTarget(BaseModel):
     """
     index: int = Field(description="Index for selection (e.g., 'attack 0')")
     target_uuid: Optional[UUID] = Field(default=None, description="For ENTITY actions")
-    position: Optional[Tuple[int, int]] = Field(default=None, description="For POSITION actions")
+    position: Optional[Tuple[int, int]] = Field(default=None, description="Grid cell for POSITION targets and entity/object target cells")
     # Additional info for display
     target_name: Optional[str] = Field(default=None, description="Entity name if ENTITY action")
     distance: Optional[int] = Field(default=None, description="Distance in feet")
