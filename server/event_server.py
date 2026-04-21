@@ -1441,11 +1441,18 @@ def _serialize_target(t: AvailableTarget) -> dict:
         result["affected_count"] = t.affected_count
     if t.affected_positions:
         result["affected_positions"] = [list(p) for p in t.affected_positions]
-    # Hazard pathfinding fields
-    if t.is_path_hazardous:
-        result["is_path_hazardous"] = True
-        if t.safe_path_cost is not None:
-            result["safe_path_cost"] = t.safe_path_cost
+    # Hazard pathfinding fields. Paths are presentation hints from the
+    # authoritative available-actions snapshot; execution still chooses the
+    # path server-side from target_index + prefer_safe.
+    result["is_path_hazardous"] = t.is_path_hazardous
+    if t.path:
+        result["path"] = [list(p) for p in t.path]
+    if t.safe_path:
+        result["safe_path"] = [list(p) for p in t.safe_path]
+    if t.safe_path_cost is not None:
+        result["safe_path_cost"] = t.safe_path_cost
+    if t.extra_target_uuids:
+        result["extra_target_uuids"] = [str(uuid) for uuid in t.extra_target_uuids]
     return result
 
 
