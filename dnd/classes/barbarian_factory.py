@@ -18,6 +18,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot, UnarmoredAc
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 
 # Import items
@@ -531,7 +532,15 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         saving_throws=saving_throws_config,
         proficiency_bonus=prof_bonus,
         position=config.position,
-        faction=config.faction
+        faction=config.faction,
+        appearance=AppearanceConfig(
+            body_category="NakedBody",
+            skin_tint=0xD4AA78,
+            head_category="Head9",
+            hair_tint=0xD0BFA1,
+            has_beard=False,
+            beard_tint=0,
+        ),
     )
 
     # 6. Create entity

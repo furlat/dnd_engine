@@ -201,6 +201,7 @@ def test_skeleton_warlock_creation():
     # Check arcane staff
     main_weapon = warlock.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)
     check(main_weapon is not None and main_weapon.name == "Arcane Staff", "Has Arcane Staff in MELEE_MAIN")
+    check(warlock.equipment.helmet is not None and warlock.equipment.helmet.name == "Crown", "Has Crown in helmet slot")
 
     # Check spellcaster
     check(warlock.is_spellcaster, "Is spellcaster")

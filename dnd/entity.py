@@ -27,6 +27,7 @@ from dnd.core.base_block import SensesType, SenseMode, LightLevel
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData
@@ -115,6 +116,7 @@ class EntityConfig(BaseModel):
     sprite_name: Optional[str] = Field(default=None,description="The name of the sprite to use for the entity")
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
     spellcasting: Optional[SpellcastingConfig] = Field(default=None, description="Spellcasting configuration (None = non-caster)")
+    appearance: AppearanceConfig = Field(default_factory=AppearanceConfig, description="Passive renderer identity metadata")
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
@@ -134,6 +136,7 @@ class Entity(BaseBlock):
     initiative: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="initiative", base_value=0))
     senses: Senses = Field(default_factory=lambda: Senses.create(source_entity_uuid=uuid4()))
     inventory: Inventory = Field(default_factory=lambda: Inventory(source_entity_uuid=uuid4()))
+    appearance: Appearance = Field(default_factory=lambda: Appearance.create(source_entity_uuid=uuid4()))
     spellcasting: SpellcastingBlock = Field(
         default_factory=lambda: SpellcastingBlock.create(source_entity_uuid=uuid4()),
         description="Spellcasting block (always present, defaults are harmless for non-casters)"
@@ -241,10 +244,12 @@ class Entity(BaseBlock):
             Entity: The newly created Entity instance
         """
         if config is None:
+            appearance = Appearance.create(source_entity_uuid=source_entity_uuid)
             return cls(
                 uuid=source_entity_uuid,
                 source_entity_uuid=source_entity_uuid,
-                name=name)
+                name=name,
+                appearance=appearance)
         else:
             ability_scores = AbilityScores.create(source_entity_uuid=source_entity_uuid,config=config.ability_scores)
             skill_set = SkillSet.create(source_entity_uuid=source_entity_uuid,config=config.skill_set)
@@ -252,6 +257,7 @@ class Entity(BaseBlock):
             health = Health.create(source_entity_uuid=source_entity_uuid,config=config.health)
             equipment = Equipment.create(source_entity_uuid=source_entity_uuid,config=config.equipment)
             senses = Senses.create(source_entity_uuid=source_entity_uuid,position=config.position)
+            appearance = Appearance.create(source_entity_uuid=source_entity_uuid,config=config.appearance)
             action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid,config=config.action_economy)
             proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.proficiency_bonus)
             for modifier in config.proficiency_bonus_modifiers:
@@ -284,6 +290,7 @@ class Entity(BaseBlock):
                 equipment=equipment,
                 senses=senses,
                 inventory=inventory,
+                appearance=appearance,
                 action_economy=action_economy,
                 proficiency_bonus=proficiency_bonus,
                 initiative=initiative,

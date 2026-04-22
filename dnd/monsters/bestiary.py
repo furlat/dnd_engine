@@ -19,6 +19,7 @@ from dnd.blocks.equipment import (
 from dnd.core.events import BodyPart
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.modifiers import DamageType, CreatureType
 from dnd.core.values import ModifiableValue
 from dnd.core.base_block import SenseMode, SensesType
@@ -32,6 +33,7 @@ from dnd.items import (
     create_longsword,
     create_leather_armor,
     create_wooden_shield,
+    create_crown,
 )
 
 # Import spellcasting and spells for sorcerer
@@ -51,6 +53,34 @@ from dnd.items.weapons import create_arcane_staff
 from dnd.spells.abjuration import register_shield_reaction
 from dnd.spells.necromancy import NecroticBless
 from dnd.monsters.skeleton_abilities import MarkTargetAction
+
+
+GOBLIN_APPEARANCE = AppearanceConfig(
+    body_category="NakedBody",
+    skin_tint=0x7A9A3A,
+    head_category=None,
+    hair_tint=0,
+    has_beard=False,
+    beard_tint=0,
+)
+
+SKELETON_APPEARANCE = AppearanceConfig(
+    body_category="NakedBody2",
+    skin_tint=0xFFFFFF,
+    head_category=None,
+    hair_tint=0,
+    has_beard=False,
+    beard_tint=0,
+)
+
+CASTER_APPEARANCE = AppearanceConfig(
+    body_category="NakedBody",
+    skin_tint=0xDDAA88,
+    head_category="Head9",
+    hair_tint=0x6C5231,
+    has_beard=False,
+    beard_tint=0,
+)
 
 
 def create_armor_scraps(source_id: UUID) -> BodyArmor:
@@ -146,7 +176,8 @@ def create_goblin(
         proficiency_bonus=2,
         position=position,
         faction=faction,
-        weight=weight
+        weight=weight,
+        appearance=GOBLIN_APPEARANCE
     )
 
     # Create entity
@@ -244,7 +275,8 @@ def create_skeleton(
         position=position,
         faction=faction,
         weight=weight,
-        creature_type=CreatureType.UNDEAD
+        creature_type=CreatureType.UNDEAD,
+        appearance=SKELETON_APPEARANCE
     )
 
     # Create entity
@@ -348,7 +380,8 @@ def create_goblin_archer(
         proficiency_bonus=2,
         position=position,
         faction=faction,
-        weight=weight
+        weight=weight,
+        appearance=GOBLIN_APPEARANCE
     )
 
     # Create entity
@@ -443,7 +476,8 @@ def create_caster(
         spellcasting=SpellcastingConfig(spellcasting_ability="charisma"),
         proficiency_bonus=3,  # Level 5+
         position=position,
-        faction=faction
+        faction=faction,
+        appearance=CASTER_APPEARANCE
     )
 
     # Create entity
@@ -543,7 +577,8 @@ def create_skeleton_warrior(
         position=position,
         faction=faction,
         weight=weight,
-        creature_type=CreatureType.UNDEAD
+        creature_type=CreatureType.UNDEAD,
+        appearance=SKELETON_APPEARANCE
     )
 
     entity = Entity.create(
@@ -632,7 +667,8 @@ def create_skeleton_archer(
         position=position,
         faction=faction,
         weight=weight,
-        creature_type=CreatureType.UNDEAD
+        creature_type=CreatureType.UNDEAD,
+        appearance=SKELETON_APPEARANCE
     )
 
     entity = Entity.create(
@@ -732,7 +768,8 @@ def create_skeleton_warlock(
         position=position,
         faction=faction,
         weight=weight,
-        creature_type=CreatureType.UNDEAD
+        creature_type=CreatureType.UNDEAD,
+        appearance=SKELETON_APPEARANCE
     )
 
     entity = Entity.create(
@@ -752,8 +789,10 @@ def create_skeleton_warlock(
     # Equip arcane staff
     staff = create_arcane_staff(entity.uuid)
     armor_scraps = create_armor_scraps(entity.uuid)
+    crown = create_crown(entity.uuid)
 
     entity.equipment.equip(armor_scraps)
+    entity.equipment.equip(crown)
     entity.equipment.equip(staff, WeaponSlot.MELEE_MAIN)
 
     # Register spells

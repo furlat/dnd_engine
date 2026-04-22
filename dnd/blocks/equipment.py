@@ -840,8 +840,9 @@ class Equipment(BaseBlock):
             raise ValueError(f"Invalid equipment slot: {slot}")
         assert slot is not None  # Type narrowing after validation
 
-        #check if the armor is already equipped in case unequip the previous armor
-        if slot in slot_mapping and self.body_armor is not None:
+        # Check if the target armor slot is already occupied.
+        current_armor = self.get_item_by_slot(slot)
+        if current_armor is not None:
             self.unequip(slot)
 
         # Create and process armor equip event

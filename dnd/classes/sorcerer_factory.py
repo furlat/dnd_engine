@@ -19,11 +19,13 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot, UnarmoredAc
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 from dnd.core.modifiers import DamageType
 
 # Import items
 from dnd.items.weapons import create_dagger, create_quarterstaff
+from dnd.items.armors import create_cloth_shoes, create_robes, create_wizard_hat
 from dnd.items.test_items import create_healing_potion, create_potion_of_haste
 
 # Import sorcerer features
@@ -385,6 +387,14 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
         proficiency_bonus=prof_bonus,
         position=config.position,
         faction=config.faction,
+        appearance=AppearanceConfig(
+            body_category="NakedBody",
+            skin_tint=0xE6BC98,
+            head_category="Head9",
+            hair_tint=0x993F00,
+            has_beard=False,
+            beard_tint=0,
+        ),
     )
 
     # 8. Create entity
@@ -401,6 +411,8 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
 
     # 10. Equipment
     apply_equipment(entity, config.equipment_preset)
+    entity.equipment.equip(create_robes(entity.uuid, visual_variant_id="81000005"))
+    entity.equipment.equip(create_cloth_shoes(entity.uuid, visual_variant_id="b0000004"))
 
     # 11. Apply class features
     apply_sorcerer_features(entity, config)
@@ -416,6 +428,9 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
     entity.loot_item(create_potion_of_haste(entity.uuid))
     entity.loot_item(create_healing_potion(entity.uuid))
     entity.loot_item(create_healing_potion(entity.uuid))
+    entity.loot_item(create_robes(entity.uuid, visual_variant_id="81000001"))
+    entity.loot_item(create_cloth_shoes(entity.uuid, visual_variant_id="b0000005"))
+    entity.loot_item(create_wizard_hat(entity.uuid, visual_variant_id="h0000011"))
 
     # Spare weapon — the one NOT equipped (preset picks one, inventory gets the other)
     equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}

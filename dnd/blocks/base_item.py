@@ -59,6 +59,14 @@ class BaseItem(BaseBlock):
 
     # Display
     map_char: str = Field(default="\u03c6", description="Character to display on the map grid")
+    visual_item_name: Optional[str] = Field(
+        default=None,
+        description="Renderer item catalog key. Defaults to name when omitted."
+    )
+    visual_variant_id: Optional[str] = Field(
+        default=None,
+        description="Renderer sub-item variant id under visual_item_name."
+    )
 
     # Tags for filtering/queries
     tags: List[str] = Field(default_factory=list)
