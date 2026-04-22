@@ -25,7 +25,7 @@ from uuid import UUID, uuid4
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -65,11 +65,19 @@ from server.api_models import (
     APICurrentTurn, SimpleActionRequest, ActionResult, AoEPreviewResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
+    EventHistoryResponse, CombatLogHistoryResponse,
     SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest,
     ToggleHandlerRequest,
-    APIEquipmentOverview, APIItemSummary, EquipRequest, UnequipRequest,
+    APIEquipmentOverview, APIItemSummary, EquipRequest, UnequipRequest, EquipmentMutationResult,
+    AdvanceEncounterResult,
 )
-from server.event_serialization import serialize_event
+from server.event_stream import (
+    HeartbeatPayload,
+    StreamSyncPayload,
+    event_stream,
+    format_sse,
+    make_stream_id,
+)
 from server.session import (
     SessionManager, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
@@ -117,7 +125,7 @@ class EventMonitor:
 
         # Serialize event to JSON-compatible dict
         try:
-            event_data = serialize_event(event)
+            event_data = event.model_dump(mode="json")
 
             for queue in self._listeners:
                 try:
@@ -212,6 +220,7 @@ def setup_combat() -> Encounter:
     Entity._entity_by_position.clear()
     Encounter.clear_registry()
     EventQueue.reset()
+    event_stream.ensure_attached()
 
     # Create grid
     grid = get_map()
@@ -252,6 +261,7 @@ def setup_arena_combat(
     Controller._controller_registry.clear()
     SessionManager.reset()
     EventQueue.reset()
+    event_stream.ensure_attached()
 
     # Create grid
     grid = get_map()
@@ -418,6 +428,7 @@ def setup_aoe_test_arena(
     Controller._controller_registry.clear()
     SessionManager.reset()
     EventQueue.reset()
+    event_stream.ensure_attached()
 
     # Create open grid (no walls for clean AoE testing)
     grid = get_map()
@@ -555,7 +566,7 @@ def create_barbarian_hero(name: str = "Hero", position: tuple = (0, 0), faction:
     return create_barbarian(config)
 
 
-async def advance_encounter() -> dict:
+async def advance_encounter() -> AdvanceEncounterResult:
     """
     Advance encounter, auto-run AI turns, stop on human turn.
 
@@ -563,14 +574,17 @@ async def advance_encounter() -> dict:
     Returns status dict indicating what happened.
     """
     if sim.encounter is None:
-        return {"status": "no_encounter"}
+        return AdvanceEncounterResult(status="no_encounter")
 
     if sim.encounter.state == EncounterState.NOT_STARTED:
         sim.encounter.roll_initiative()
         sim.encounter.start_encounter()
 
     if sim.encounter.state == EncounterState.ENDED:
-        return {"status": "encounter_ended"}
+        return AdvanceEncounterResult(
+            status="encounter_ended",
+            **action_cursor_fields(),
+        )
 
     # Get log index before advancing (to fetch new AI entries later)
     log_start = len(sim.encounter.combat_log)
@@ -582,14 +596,23 @@ async def advance_encounter() -> dict:
     new_entries = sim.encounter.get_combat_log(log_start)
     ai_actions = [e.to_dict() for e in new_entries]
 
+    return AdvanceEncounterResult(
+        status=result.status,
+        entity_uuid=str(result.entity_uuid) if result.entity_uuid else None,
+        entity_name=result.entity_name,
+        round=result.round_number,
+        turn_index=result.turn_index,
+        ai_actions=ai_actions,
+        new_log_since=log_start,
+        **action_cursor_fields(),
+    )
+
+
+def action_cursor_fields() -> dict:
+    """Replication cursors after a command has finished mutating state."""
     return {
-        "status": result.status,
-        "entity_uuid": str(result.entity_uuid) if result.entity_uuid else None,
-        "entity_name": result.entity_name,
-        "round": result.round_number,
-        "turn_index": result.turn_index,
-        "ai_actions": ai_actions,
-        "new_log_since": log_start
+        "event_cursor_after": EventQueue.event_cursor(),
+        "combat_log_cursor_after": len(sim.encounter.combat_log) if sim.encounter else 0,
     }
 
 
@@ -659,8 +682,10 @@ async def lifespan(app: FastAPI):
     """Lifespan manager for FastAPI app."""
     # Startup
     event_monitor.start()
+    event_stream.start()
     yield
     # Shutdown
+    event_stream.stop()
     event_monitor.stop()
     if sim.combat_task and not sim.combat_task.done():
         sim.combat_task.cancel()
@@ -909,7 +934,7 @@ async def get_encounter():
     }
 
 
-@app.get("/combat-log")
+@app.get("/combat-log", response_model=CombatLogHistoryResponse)
 async def get_combat_log(since: int = 0):
     """
     Get combat log entries from Encounter.
@@ -921,14 +946,14 @@ async def get_combat_log(since: int = 0):
         List of log entries as CombatLogEntry.to_dict() (raw model_dump)
     """
     if not sim.encounter:
-        return {"entries": [], "count": 0, "total": 0}
+        return CombatLogHistoryResponse(entries=[], count=0, total=0)
 
     entries = sim.encounter.get_combat_log(since)
-    return {
-        "entries": [e.to_dict() for e in entries],
-        "count": len(entries),
-        "total": len(sim.encounter.combat_log)
-    }
+    return CombatLogHistoryResponse(
+        entries=entries,
+        count=len(entries),
+        total=len(sim.encounter.combat_log),
+    )
 
 
 # =============================================================================
@@ -1082,29 +1107,16 @@ async def create_session(request: CreateSessionRequest):
     )
 
 
-@app.post("/session/{session_id}/ping", response_model=SessionPingResponse)
-async def ping_session(session_id: str):
-    """
-    Ping a session to update activity and get current status.
-
-    Call this periodically to:
-    1. Keep the session alive (prevent timeout)
-    2. Check if it's your turn
-    3. Get the active entity info
-    """
-    try:
-        sid = UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid session ID format")
-
+def build_session_status(sid: UUID, ping: bool = False) -> SessionPingResponse:
+    """Build the same session status payload used by REST ping and SSE."""
     mgr = sim.get_session_manager()
     session = mgr.get_session(sid)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Update activity
-    session.ping()
+    if ping:
+        session.ping()
 
     # Get game state
     game = sim.game
@@ -1129,6 +1141,24 @@ async def ping_session(session_id: str):
         active_entity_name=active_entity_name,
         controlled_entities=[str(e) for e in session.controlled_entities]
     )
+
+
+@app.post("/session/{session_id}/ping", response_model=SessionPingResponse)
+async def ping_session(session_id: str):
+    """
+    Ping a session to update activity and get current status.
+
+    Call this periodically to:
+    1. Keep the session alive (prevent timeout)
+    2. Check if it's your turn
+    3. Get the active entity info
+    """
+    try:
+        sid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    return build_session_status(sid, ping=True)
 
 
 @app.delete("/session/{session_id}")
@@ -1290,7 +1320,7 @@ async def get_session_entities(session_id: str):
 # =============================================================================
 
 
-@app.get("/events")
+@app.get("/events", response_model=EventHistoryResponse)
 async def get_events(
     since: int = 0,
     limit: int = 50,
@@ -1324,10 +1354,7 @@ async def get_events(
             et = EventType(event_type)
             events = [e for e in events if e.event_type == et]
         except ValueError:
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Unknown event_type: {event_type}"}
-            )
+            raise HTTPException(status_code=400, detail=f"Unknown event_type: {event_type}")
 
     # Filter by phase if specified
     if phase:
@@ -1335,16 +1362,136 @@ async def get_events(
             ep = EventPhase(phase)
             events = [e for e in events if e.phase == ep]
         except ValueError:
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Unknown phase: {phase}"}
+            raise HTTPException(status_code=400, detail=f"Unknown phase: {phase}")
+
+    return EventHistoryResponse(
+        events=events,
+        count=len(events),
+        total=len(all_events),
+    )
+
+
+@app.get("/events/subscribe")
+async def subscribe_events(
+    request: Request,
+    session_id: Optional[str] = None,
+    since_event: int = 0,
+    since_log: int = 0,
+):
+    """Resumable SSE stream for game events, combat log, and session status."""
+    event_stream.ensure_attached()
+
+    sid: Optional[UUID] = None
+    if session_id:
+        try:
+            sid = UUID(session_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    subscription = event_stream.subscribe()
+    heartbeat_seconds = 10.0
+
+    def session_status_payload() -> Optional[dict]:
+        if sid is None:
+            return None
+        return build_session_status(sid, ping=True).model_dump(mode="json")
+
+    def should_emit_session_after_game_event(payload) -> bool:
+        event_type = payload.event.event_type
+        event_type_value = event_type.value if hasattr(event_type, "value") else str(event_type)
+        return event_type_value in {
+            "encounter_start",
+            "encounter_end",
+            "round_start",
+            "round_end",
+            "turn_start",
+            "turn_end",
+        }
+
+    async def event_generator():
+        try:
+            sync_payload = StreamSyncPayload(
+                event_cursor=event_stream.current_event_cursor(),
+                combat_log_cursor=event_stream.current_combat_log_cursor(sim.encounter),
+                session=session_status_payload(),
+            )
+            yield format_sse(
+                "sync",
+                sync_payload,
+                event_stream.current_stream_id(sim.encounter),
             )
 
-    return {
-        "events": [serialize_event(e) for e in events],
-        "count": len(events),
-        "total": len(all_events),
-    }
+            for payload in event_stream.iter_game_events_since(since_event, sim.encounter):
+                yield format_sse(
+                    "game_event",
+                    payload,
+                    make_stream_id(payload.event_cursor, payload.combat_log_cursor),
+                )
+                if sid is not None and should_emit_session_after_game_event(payload):
+                    yield format_sse(
+                        "session",
+                        session_status_payload() or {},
+                        event_stream.current_stream_id(sim.encounter),
+                    )
+
+            for payload in event_stream.iter_combat_logs_since(sim.encounter, since_log):
+                yield format_sse(
+                    "combat_log",
+                    payload,
+                    make_stream_id(payload.event_cursor, payload.combat_log_cursor),
+                )
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    envelope = await asyncio.wait_for(
+                        subscription.get(),
+                        timeout=heartbeat_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    heartbeat = HeartbeatPayload(
+                        server_time=time.time(),
+                        event_cursor=event_stream.current_event_cursor(),
+                        combat_log_cursor=event_stream.current_combat_log_cursor(sim.encounter),
+                        session=session_status_payload(),
+                    )
+                    yield format_sse(
+                        "heartbeat",
+                        heartbeat,
+                        event_stream.current_stream_id(sim.encounter),
+                    )
+                    continue
+
+                yield format_sse(
+                    envelope["event"],
+                    envelope["data"],
+                    envelope.get("id"),
+                )
+                if envelope["event"] == "evicted":
+                    break
+                if (
+                    sid is not None
+                    and envelope["event"] == "game_event"
+                    and should_emit_session_after_game_event(envelope["data"])
+                ):
+                    yield format_sse(
+                        "session",
+                        session_status_payload() or {},
+                        event_stream.current_stream_id(sim.encounter),
+                    )
+        finally:
+            event_stream.unsubscribe(subscription)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/event-types")
@@ -1653,7 +1800,7 @@ async def get_equippable_items(entity_uuid: str):
     return {"entity_uuid": entity_uuid, "equippable": entity.get_equippable_items()}
 
 
-@app.post("/entity/{entity_uuid}/equip")
+@app.post("/entity/{entity_uuid}/equip", response_model=EquipmentMutationResult)
 async def equip_item(entity_uuid: str, request: EquipRequest):
     """Equip an item from inventory to a slot.
 
@@ -1724,14 +1871,15 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    return {
-        "success": True,
-        "message": f"Equipped {item.name}",
-        "equipment": APIEquipmentOverview.create(entity).model_dump(),
-    }
+    return EquipmentMutationResult(
+        success=True,
+        message=f"Equipped {item.name}",
+        equipment=APIEquipmentOverview.create(entity),
+        **action_cursor_fields(),
+    )
 
 
-@app.post("/entity/{entity_uuid}/unequip")
+@app.post("/entity/{entity_uuid}/unequip", response_model=EquipmentMutationResult)
 async def unequip_item(entity_uuid: str, request: UnequipRequest):
     """Unequip an item from a slot to inventory.
 
@@ -1772,14 +1920,15 @@ async def unequip_item(entity_uuid: str, request: UnequipRequest):
     unequipped.stored_in_uuid = entity.inventory.uuid
     entity.inventory.add_item(unequipped)
 
-    return {
-        "success": True,
-        "message": f"Unequipped {unequipped.name}",
-        "equipment": APIEquipmentOverview.create(entity).model_dump(),
-    }
+    return EquipmentMutationResult(
+        success=True,
+        message=f"Unequipped {unequipped.name}",
+        equipment=APIEquipmentOverview.create(entity),
+        **action_cursor_fields(),
+    )
 
 
-@app.post("/action/end-turn")
+@app.post("/action/end-turn", response_model=AdvanceEncounterResult)
 async def end_human_turn(request: SimpleActionRequest):
     """End the session's entity turn and advance through AI turns."""
     _ = validate_session_action(request.session_id, request.entity_uuid)  # Validates session/entity
@@ -1847,7 +1996,8 @@ async def execute_self_action(request: SelfActionRequest):
         entity_hp=entity.get_hp(),
         turn_continues=True,
         encounter_ended=False,
-        combat_log_entries=action_log_entries
+        combat_log_entries=action_log_entries,
+        **action_cursor_fields(),
     )
 
 
@@ -1921,7 +2071,8 @@ async def execute_entity_action(request: EntityActionRequest):
         deaths=death_names,
         turn_continues=not encounter_ended and entity.has_hp,
         encounter_ended=encounter_ended,
-        combat_log_entries=action_log_entries
+        combat_log_entries=action_log_entries,
+        **action_cursor_fields(),
     )
 
 
@@ -1978,7 +2129,8 @@ async def execute_position_action(request: PositionActionRequest):
                 deaths=death_names,
                 turn_continues=not encounter_ended and entity.has_hp,
                 encounter_ended=encounter_ended,
-                combat_log_entries=action_log_entries
+                combat_log_entries=action_log_entries,
+                **action_cursor_fields(),
             )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown action: {request.action_name}")
@@ -2058,7 +2210,8 @@ async def execute_position_action(request: PositionActionRequest):
         triggered_reactions=triggered_reactions,
         turn_continues=not encounter_ended and entity.has_hp,
         encounter_ended=encounter_ended,
-        combat_log_entries=action_log_entries
+        combat_log_entries=action_log_entries,
+        **action_cursor_fields(),
     )
 
 
@@ -2223,6 +2376,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
         combat_log_entries=action_log_entries,
         available_actions=updated_actions,
         state=game_state,
+        **action_cursor_fields(),
     )
 
 
@@ -2342,7 +2496,7 @@ async def start_human_simulation(character_class: str = "fighter"):
         "encounter_uuid": str(sim.encounter.uuid),
         "hero_uuid": hero_uuid,  # Client should create session and join with this entity
         "message": "Create a session and join with hero_uuid to control the Hero",
-        **result
+        **result.model_dump(mode="json"),
     }
 
 
@@ -2397,7 +2551,7 @@ async def start_aoe_test():
         "encounter_uuid": str(sim.encounter.uuid),
         "hero_uuid": hero_uuid,
         "message": "AoE test arena: Sorcerer vs 3 clustered Goblins",
-        **result
+        **result.model_dump(mode="json"),
     }
 
 
@@ -2448,7 +2602,7 @@ async def start_pvp_simulation(character_class: str = "fighter"):
         "hero_uuid": str(hero_uuid) if hero_uuid else None,
         "skeleton_uuid": str(skeleton_uuid) if skeleton_uuid else None,
         "message": "PvP mode: Create sessions and join - Hero (human) vs Skeleton (claude)",
-        **result
+        **result.model_dump(mode="json"),
     }
 
 
@@ -2611,7 +2765,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         limit = data.get("limit", 50)
                         events = EventQueue._all_events[-limit:]
                         for event in events:
-                            event_data = serialize_event(event)
+                            event_data = event.model_dump(mode="json")
                             if event_type_filter is None or event_data.get("event_type") in event_type_filter:
                                 await websocket.send_json({
                                     "type": "event",

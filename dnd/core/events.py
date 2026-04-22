@@ -809,13 +809,33 @@ class EventQueue:
         - Cannot modify or cancel events
         - Are for passive monitoring (logging, websocket broadcast, etc.)
         """
-        cls._on_event_callbacks.append(callback)
+        if callback not in cls._on_event_callbacks:
+            cls._on_event_callbacks.append(callback)
 
     @classmethod
     def remove_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
         """Remove an event callback."""
         if callback in cls._on_event_callbacks:
             cls._on_event_callbacks.remove(callback)
+
+    @classmethod
+    def event_cursor(cls) -> int:
+        """Return the raw append cursor for the event stream."""
+        return len(cls._all_events)
+
+    @classmethod
+    def iter_events_since(cls, since: int) -> List[Tuple[int, 'Event']]:
+        """Return raw events with their zero-based event-stream indexes."""
+        start = max(0, since)
+        return list(enumerate(cls._all_events[start:], start=start))
+
+    @classmethod
+    def get_event_index(cls, event_uuid: UUID) -> Optional[int]:
+        """Return an event's raw stream index by UUID, if present."""
+        for index, event in enumerate(cls._all_events):
+            if event.uuid == event_uuid:
+                return index
+        return None
 
     @classmethod
     def add_pre_completion_callback(cls, callback: Callable[['Event'], None]) -> None:
@@ -930,7 +950,7 @@ class EventQueue:
         cls._all_events.sort(key=lambda e: e.timestamp)
 
         # Notify passive callbacks (for monitoring/logging)
-        for callback in cls._on_event_callbacks:
+        for callback in list(cls._on_event_callbacks):
             try:
                 callback(event)
             except Exception:

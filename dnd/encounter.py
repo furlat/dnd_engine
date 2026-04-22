@@ -9,7 +9,7 @@ The Encounter class orchestrates combat:
 - Integrates with action economy and conditions
 """
 
-from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple
+from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
 
 __all__ = [
     "EncounterState",
@@ -183,6 +183,7 @@ class Encounter(BaseObject):
     # Class-level registry
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
     _active_encounter: ClassVar[Optional['Encounter']] = None
+    _combat_log_listeners: ClassVar[List[Callable[['Encounter', int, CombatLogEntry, Event], None]]] = []
 
     name: str = Field(default="Encounter", description="Name of this encounter")
 
@@ -228,6 +229,24 @@ class Encounter(BaseObject):
         """Clear the encounter registry (for testing)."""
         cls._encounter_registry.clear()
         cls._active_encounter = None
+
+    @classmethod
+    def add_combat_log_listener(
+        cls,
+        callback: Callable[['Encounter', int, CombatLogEntry, Event], None],
+    ) -> None:
+        """Register a passive listener for appended combat log entries."""
+        if callback not in cls._combat_log_listeners:
+            cls._combat_log_listeners.append(callback)
+
+    @classmethod
+    def remove_combat_log_listener(
+        cls,
+        callback: Callable[['Encounter', int, CombatLogEntry, Event], None],
+    ) -> None:
+        """Remove a combat log append listener."""
+        if callback in cls._combat_log_listeners:
+            cls._combat_log_listeners.remove(callback)
 
     # =========================================================================
     # Combatant Management
@@ -772,7 +791,13 @@ class Encounter(BaseObject):
             return None
 
         self.combat_log.append(event.combat_log)
-        return len(self.combat_log) - 1
+        index = len(self.combat_log) - 1
+        for listener in list(self.__class__._combat_log_listeners):
+            try:
+                listener(self, index, event.combat_log, event)
+            except Exception:
+                pass
+        return index
 
     def get_combat_log(self, since: int = 0) -> List[CombatLogEntry]:
         """
