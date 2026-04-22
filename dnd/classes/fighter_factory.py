@@ -17,6 +17,7 @@ from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig, WeaponSlot
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 from dnd.core.base_conditions import BaseCondition
 
@@ -33,7 +34,7 @@ from dnd.items import (
     create_handaxe,
     create_javelin,
 )
-from dnd.items.armors import create_leather_armor
+from dnd.items.armors import create_cloth_shoes, create_iron_helmet, create_leather_armor, create_leather_boots
 from dnd.items.test_items import create_potion_of_haste, create_healing_potion
 
 # Import fighter features
@@ -489,7 +490,15 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         saving_throws=saving_throws_config,
         proficiency_bonus=prof_bonus,
         position=config.position,
-        faction=config.faction
+        faction=config.faction,
+        appearance=AppearanceConfig(
+            body_category="NakedBody",
+            skin_tint=0xE6BC98,
+            head_category="Head9",
+            hair_tint=0x993F00,
+            has_beard=True,
+            beard_tint=0x993F00,
+        ),
     )
 
     # 6. Create entity
@@ -505,6 +514,7 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
 
     # 8. Apply equipment
     apply_equipment(entity, config.equipment_preset)
+    entity.equipment.equip(create_leather_boots(entity.uuid, visual_variant_id="b0000009"))
 
     # 9. Apply all fighter features
     apply_fighter_features(entity, config)
@@ -514,6 +524,8 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
     entity.loot_item(haste_potion)
     entity.loot_item(create_healing_potion(entity.uuid))
     entity.loot_item(create_healing_potion(entity.uuid))
+    entity.loot_item(create_cloth_shoes(entity.uuid))
+    entity.loot_item(create_iron_helmet(entity.uuid, visual_variant_id="h0000008"))
 
     # Spare weapons — items NOT duplicating equipped gear
     # Check what's equipped to avoid exact duplicates

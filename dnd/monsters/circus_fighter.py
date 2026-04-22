@@ -72,6 +72,8 @@ def create_flaming_scimitar(source_id: UUID) -> Weapon:
     return Weapon(
         source_entity_uuid=source_id,
         name="Flaming Scimitar",
+        visual_item_name="Scimitar",
+        visual_variant_id="30000017",
         description="An elegant curved blade enchanted with magical flames. The blade dances with fire during performances, leaving trails of light in its wake. The flames intensify when the wielder performs acrobatic maneuvers.",
         damage_dice=6,  # d6
         dice_numbers=1,  # 1d6

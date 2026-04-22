@@ -2,7 +2,7 @@
 
 from typing import Optional
 from uuid import UUID
-from dnd.blocks.equipment import BodyArmor, Shield, ArmorType
+from dnd.blocks.equipment import BodyArmor, Boots, Helmet, Shield, ArmorType
 from dnd.core.events import BodyPart, EquipmentSlot
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -230,6 +230,96 @@ def create_cloth_armor(source_id: UUID) -> BodyArmor:
         type=ArmorType.CLOTH,
         body_part=BodyPart.BODY,
         ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+    )
+
+
+def create_robes(source_id: UUID, visual_variant_id: Optional[str] = None) -> BodyArmor:
+    """Robes - cloth body outfit, counts as unarmored for class features."""
+    return BodyArmor(
+        source_entity_uuid=source_id,
+        name="Robes",
+        visual_item_name="Robes" if visual_variant_id is not None else None,
+        visual_variant_id=visual_variant_id,
+        description="Cloth robes suitable for an arcane caster.",
+        type=ArmorType.CLOTH,
+        body_part=BodyPart.BODY,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+    )
+
+
+def create_cloth_shoes(source_id: UUID, visual_variant_id: Optional[str] = None) -> Boots:
+    """Cloth shoes - visual footwear with no armor bonus."""
+    return Boots(
+        source_entity_uuid=source_id,
+        name="Cloth Shoes",
+        visual_item_name="Cloth Shoes" if visual_variant_id is not None else None,
+        visual_variant_id=visual_variant_id,
+        description="Soft cloth shoes.",
+        type=ArmorType.CLOTH,
+        body_part=BodyPart.FEET,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+    )
+
+
+def create_leather_boots(source_id: UUID, visual_variant_id: Optional[str] = None) -> Boots:
+    """Leather boots - visual footwear with no armor bonus."""
+    return Boots(
+        source_entity_uuid=source_id,
+        name="Leather Boots",
+        visual_item_name="Leather Boots" if visual_variant_id is not None else None,
+        visual_variant_id=visual_variant_id,
+        description="Sturdy leather adventuring boots.",
+        type=ArmorType.LIGHT,
+        body_part=BodyPart.FEET,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+    )
+
+
+def create_iron_helmet(source_id: UUID, visual_variant_id: Optional[str] = None) -> Helmet:
+    """Iron helmet - visual headgear with no AC bonus."""
+    return Helmet(
+        source_entity_uuid=source_id,
+        name="Iron Helmet",
+        visual_item_name="Iron Helmet" if visual_variant_id is not None else None,
+        visual_variant_id=visual_variant_id,
+        description="A sturdy metal helmet.",
+        type=ArmorType.HEAVY,
+        body_part=BodyPart.HEAD,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+    )
+
+
+def create_wizard_hat(source_id: UUID, visual_variant_id: Optional[str] = None) -> Helmet:
+    """Wizard's hat - visual headgear with no AC bonus."""
+    return Helmet(
+        source_entity_uuid=source_id,
+        name="Wizard's Hat",
+        visual_item_name="Wizard's Hat" if visual_variant_id is not None else None,
+        visual_variant_id=visual_variant_id,
+        description="A pointy cloth hat favored by arcane casters.",
+        type=ArmorType.CLOTH,
+        body_part=BodyPart.HEAD,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+    )
+
+
+def create_crown(source_id: UUID, visual_variant_id: Optional[str] = None) -> Helmet:
+    """Crown - decorative headgear with no AC bonus."""
+    return Helmet(
+        source_entity_uuid=source_id,
+        name="Crown",
+        visual_item_name="Crown" if visual_variant_id is not None else None,
+        visual_variant_id=visual_variant_id,
+        description="A decorative crown.",
+        type=ArmorType.CLOTH,
+        body_part=BodyPart.HEAD,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
         max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
     )
 

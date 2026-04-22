@@ -21,6 +21,7 @@ from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin
 from dnd.items import create_longsword, create_dagger, create_shortsword, create_longbow, create_shield
 from dnd.items.armors import create_chain_mail, create_leather_armor
+from dnd.items.weapons import create_arcane_staff, create_assassin_dagger
 from dnd.items.test_items import create_healing_potion
 from dnd.blocks.equipment import Weapon, Shield, Armor, WeaponSlot
 from dnd.blocks.base_item import EquippableItem, UsableItem
@@ -54,6 +55,8 @@ Entity.update_all_entities_senses()
 # Create items
 longsword = create_longsword(entity.uuid)
 dagger = create_dagger(entity.uuid)
+assassin_dagger = create_assassin_dagger(entity.uuid)
+arcane_staff = create_arcane_staff(entity.uuid)
 shield = create_shield(entity.uuid)
 chain_mail = create_chain_mail(entity.uuid)
 potion = create_healing_potion(entity.uuid)
@@ -65,6 +68,8 @@ check("weapon has damage_dice", ws.damage_dice is not None)
 check("weapon has damage_type", ws.damage_type is not None)
 check("weapon name = 'Longsword'", ws.name == "Longsword")
 check("weapon rarity is string", isinstance(ws.rarity, str))
+check("weapon visual_item_name defaults to None", ws.visual_item_name is None)
+check("weapon visual_variant_id defaults to None", ws.visual_variant_id is None)
 
 # Test dagger weapon summary
 ds = APIItemSummary.create(dagger)
@@ -72,6 +77,18 @@ check("dagger item_type = 'weapon'", ds.item_type == "weapon")
 check("dagger has weapon_properties", len(ds.weapon_properties) > 0)
 check("dagger is Finesse", "Finesse" in ds.weapon_properties)
 check("dagger is Light", "Light" in ds.weapon_properties)
+
+# Test authored visual metadata for first-class rules items that render as
+# Studio sub-item variants.
+ads = APIItemSummary.create(assassin_dagger)
+check("assassin dagger keeps rules name", ads.name == "Assassin's Dagger")
+check("assassin dagger visual parent = Dagger", ads.visual_item_name == "Dagger")
+check("assassin dagger visual variant id", ads.visual_variant_id == "10000004")
+
+staffs = APIItemSummary.create(arcane_staff)
+check("arcane staff keeps rules name", staffs.name == "Arcane Staff")
+check("arcane staff visual parent = Quarterstaff", staffs.visual_item_name == "Quarterstaff")
+check("arcane staff visual variant id", staffs.visual_variant_id == "1000000f")
 
 # Test shield summary
 ss = APIItemSummary.create(shield)
@@ -118,6 +135,7 @@ if melee_main:
     check("melee_main has item (goblin's scimitar)", melee_main[0].item is not None)
     if melee_main[0].item:
         check("melee_main item is weapon type", melee_main[0].item.item_type == "weapon")
+        check("equipment slot item carries visual metadata fields", hasattr(melee_main[0].item, "visual_variant_id"))
 
 # Check empty slots
 helmet_slot = [s for s in overview.slots if s.slot == "helmet"]
@@ -270,6 +288,29 @@ if old_item_before is not None:
 
 check("longsword now equipped", entity.equipment.weapon_melee_main is longsword)
 check("old scimitar in inventory", old_weapon_uuid is not None and entity.inventory.has_item(old_weapon_uuid))
+
+
+# =========================================================================
+print("\n=== Test 6b: Entity.equip_item swap helper returns old item to inventory ===")
+# =========================================================================
+
+reset_combat_state()
+get_map().create_rectangle(0, 0, 20, 20)
+
+entity = create_goblin(name="Gobby", position=(5, 5), faction="monsters")
+Entity.update_all_entities_senses()
+
+old_weapon = entity.equipment.weapon_melee_main
+check("helper starts with scimitar", old_weapon is not None and old_weapon.name == "Scimitar")
+old_weapon_uuid = old_weapon.uuid if old_weapon else None
+
+longsword = create_longsword(entity.uuid)
+entity.inventory.add_item(longsword)
+
+result = entity.equip_item(longsword.uuid, WeaponSlot.MELEE_MAIN)
+check("equip_item returns true", result)
+check("helper longsword now equipped", entity.equipment.weapon_melee_main is longsword)
+check("helper old scimitar in inventory", old_weapon_uuid is not None and entity.inventory.has_item(old_weapon_uuid))
 
 
 # =========================================================================

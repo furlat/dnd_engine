@@ -47,6 +47,13 @@ from dnd.items.armors import (
     create_chain_mail,
     create_splint_armor,
     create_plate_armor,
+    # Clothing / footwear
+    create_robes,
+    create_cloth_shoes,
+    create_leather_boots,
+    create_iron_helmet,
+    create_wizard_hat,
+    create_crown,
     # Shield
     create_shield,
     create_wooden_shield,
@@ -95,6 +102,10 @@ ARMORS = {
     "chain_mail": create_chain_mail,
     "splint": create_splint_armor,
     "plate": create_plate_armor,
+    "robes": create_robes,
+    "iron_helmet": create_iron_helmet,
+    "wizard_hat": create_wizard_hat,
+    "crown": create_crown,
 }
 
 SHIELDS = {
@@ -143,6 +154,13 @@ __all__ = [
     "create_chain_mail",
     "create_splint_armor",
     "create_plate_armor",
+    # Clothing / footwear
+    "create_robes",
+    "create_cloth_shoes",
+    "create_leather_boots",
+    "create_iron_helmet",
+    "create_wizard_hat",
+    "create_crown",
     # Shields
     "create_shield",
     "create_wooden_shield",

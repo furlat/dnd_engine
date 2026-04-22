@@ -34,6 +34,8 @@ class APIItemSummary(BaseModel):
     weight: float
     is_equipped: bool
     equipped_slot: Optional[str] = None
+    visual_item_name: Optional[str] = None
+    visual_variant_id: Optional[str] = None
     # Weapon-specific
     damage_dice: Optional[str] = None     # "1d8", "2d6"
     damage_type: Optional[str] = None     # "Slashing"
@@ -75,6 +77,8 @@ class APIItemSummary(BaseModel):
             "weight": item.weight,
             "is_equipped": item.is_equipped,
             "equipped_slot": item.equipped_slot,
+            "visual_item_name": item.visual_item_name,
+            "visual_variant_id": item.visual_variant_id,
         }
 
         # Weapon-specific fields
@@ -181,6 +185,27 @@ class UnequipRequest(BaseModel):
     slot: str  # Required: which slot to unequip
 
 
+class APIAppearance(BaseModel):
+    """Passive renderer identity metadata."""
+    body_category: str
+    skin_tint: int
+    head_category: Optional[str] = None
+    hair_tint: int
+    has_beard: bool
+    beard_tint: int
+
+    @classmethod
+    def create(cls, appearance: Any) -> 'APIAppearance':
+        return cls(
+            body_category=appearance.body_category,
+            skin_tint=appearance.skin_tint,
+            head_category=appearance.head_category,
+            hair_tint=appearance.hair_tint,
+            has_beard=appearance.has_beard,
+            beard_tint=appearance.beard_tint,
+        )
+
+
 class APIEntitySummary(BaseModel):
     """Lightweight entity for list views and event-driven updates."""
     uuid: str
@@ -193,6 +218,7 @@ class APIEntitySummary(BaseModel):
     condition_details: List[dict] = []  # [{name, category}] for each active condition
     is_dead: bool
     faction: Optional[str] = None
+    appearance: APIAppearance
 
     @classmethod
     def create(cls, entity: 'Entity') -> 'APIEntitySummary':
@@ -213,7 +239,8 @@ class APIEntitySummary(BaseModel):
                 for c in entity.active_conditions.values()
             ],
             is_dead=not entity.has_hp,
-            faction=entity.faction
+            faction=entity.faction,
+            appearance=APIAppearance.create(entity.appearance),
         )
 
 
@@ -239,8 +266,13 @@ class APIEntityFull(APIEntitySummary):
             max_hp=max_hp,
             ac=entity.ac_bonus().normalized_score,
             conditions=list(entity.active_conditions.keys()),
+            condition_details=[
+                {"name": c.name, "category": c.condition_category.value if hasattr(c.condition_category, 'value') else str(c.condition_category)}
+                for c in entity.active_conditions.values()
+            ],
             is_dead=not entity.has_hp,
             faction=entity.faction,
+            appearance=APIAppearance.create(entity.appearance),
             action_economy={
                 'actions': entity.action_economy.actions.normalized_score,
                 'bonus_actions': entity.action_economy.bonus_actions.normalized_score,
