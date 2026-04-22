@@ -69,6 +69,7 @@ from server.api_models import (
     ToggleHandlerRequest,
     APIEquipmentOverview, APIItemSummary, EquipRequest, UnequipRequest,
 )
+from server.event_serialization import serialize_event
 from server.session import (
     SessionManager, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
@@ -116,21 +117,7 @@ class EventMonitor:
 
         # Serialize event to JSON-compatible dict
         try:
-            event_data = event.model_dump(mode='json')
-
-            # Presentation convenience: embed post-effect equipment snapshot on
-            # equip/unequip events so the client can drive AnimatedEntity.setAppearance
-            # without maintaining a parallel items-by-uuid cache. Serialization-layer
-            # concern only — domain events stay untyped.
-            from dnd.blocks.equipment import EquipmentEvent
-            if isinstance(event, EquipmentEvent) and event.source_entity_uuid:
-                from dnd.entity import Entity
-                from server.api_models import APIEquipmentOverview
-                entity = Entity.get(event.source_entity_uuid)
-                if entity is not None:
-                    event_data['resulting_equipment'] = (
-                        APIEquipmentOverview.create(entity).model_dump(mode='json')
-                    )
+            event_data = serialize_event(event)
 
             for queue in self._listeners:
                 try:
@@ -1354,7 +1341,7 @@ async def get_events(
             )
 
     return {
-        "events": [e.model_dump(mode='json') for e in events],
+        "events": [serialize_event(e) for e in events],
         "count": len(events),
         "total": len(all_events),
     }
@@ -1695,7 +1682,7 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
         raise HTTPException(status_code=400, detail="Item is not equippable")
 
     # Parse the slot if provided
-    from dnd.blocks.equipment import Weapon, Shield, Ring
+    from dnd.blocks.equipment import Armor, Weapon, Shield, Ring, WeaponProperty
     from dnd.core.events import WeaponSlot, BodyPart, RingSlot
 
     parsed_slot = None
@@ -1719,37 +1706,22 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
         if parsed_slot is None:
             raise HTTPException(status_code=400, detail=f"Invalid slot: {request.slot}")
 
-    # Check if slot is occupied — if so, unequip old item to inventory first
-    if parsed_slot is not None:
-        old_item = entity.equipment.get_item_by_slot(parsed_slot)
-        if old_item is not None:
-            # unequip() is called inside equip() automatically, but we need to
-            # capture the old item and add it to inventory
-            pass  # equip() handles the unequip internally
-
-    # Remove item from inventory before equipping
-    entity.inventory.remove_item(item_uuid_obj)
+    effective_slot = parsed_slot
+    if effective_slot is None:
+        if isinstance(item, Weapon):
+            is_ranged = WeaponProperty.RANGED in item.properties
+            effective_slot = WeaponSlot.RANGED_MAIN if is_ranged else WeaponSlot.MELEE_MAIN
+        elif isinstance(item, Shield):
+            effective_slot = WeaponSlot.MELEE_OFF
+        elif isinstance(item, Ring):
+            raise HTTPException(status_code=400, detail="Rings require an explicit slot")
+        elif isinstance(item, Armor):
+            effective_slot = item.body_part
 
     try:
-        # equip() auto-unequips existing item in that slot
-        # We need to capture the old item if any
-        if parsed_slot is not None:
-            old_item = entity.equipment.get_item_by_slot(parsed_slot)
-        else:
-            old_item = None
-
-        entity.equipment.equip(item, parsed_slot)
-
-        # If there was an old item that got unequipped, add to inventory
-        if old_item is not None and old_item.uuid != item.uuid:
-            # The old item was unequipped by equip() — add it to inventory
-            old_item.owner_uuid = entity.uuid
-            old_item.stored_in_uuid = entity.inventory.uuid
-            entity.inventory.add_item(old_item)
-
+        if effective_slot is None or not entity.equip_item(item_uuid_obj, effective_slot):
+            raise ValueError("Item could not be equipped")
     except ValueError as e:
-        # Equip failed — put item back in inventory
-        entity.inventory.add_item(item)
         raise HTTPException(status_code=400, detail=str(e))
 
     return {
@@ -2639,7 +2611,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         limit = data.get("limit", 50)
                         events = EventQueue._all_events[-limit:]
                         for event in events:
-                            event_data = event.model_dump(mode='json')
+                            event_data = serialize_event(event)
                             if event_type_filter is None or event_data.get("event_type") in event_type_filter:
                                 await websocket.send_json({
                                     "type": "event",

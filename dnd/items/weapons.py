@@ -470,6 +470,8 @@ def create_assassin_dagger(source_id: UUID) -> UnseenStrikeDagger:
     return UnseenStrikeDagger(
         source_entity_uuid=source_id,
         name="Assassin's Dagger",
+        visual_item_name="Dagger",
+        visual_variant_id="10000004",
         description="A shadowy blade that strikes harder when the target can't see you coming. +1d6 piercing when unseen.",
         damage_dice=4,
         dice_numbers=1,
@@ -521,6 +523,8 @@ def create_arcane_staff(source_id: UUID) -> ArcaneStaff:
     return ArcaneStaff(
         source_entity_uuid=source_id,
         name="Arcane Staff",
+        visual_item_name="Quarterstaff",
+        visual_variant_id="1000000f",
         description="A staff crackling with arcane energy. +1 to spell attack rolls when equipped.",
         damage_dice=6,
         dice_numbers=1,
