@@ -9,8 +9,11 @@ extracts the relevant data.
 """
 
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, SerializeAsAny
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
+
+from dnd.core.combat_log import CombatLogEntry
+from dnd.core.events import Event
 
 if TYPE_CHECKING:
     from dnd.entity import Entity
@@ -183,6 +186,15 @@ class UnequipRequest(BaseModel):
     session_id: str
     entity_uuid: str
     slot: str  # Required: which slot to unequip
+
+
+class EquipmentMutationResult(BaseModel):
+    """Response after a successful equipment command."""
+    success: bool
+    message: str
+    equipment: APIEquipmentOverview
+    event_cursor_after: Optional[int] = None
+    combat_log_cursor_after: Optional[int] = None
 
 
 class APIAppearance(BaseModel):
@@ -616,3 +628,34 @@ class ActionResult(BaseModel):
 
     # Full game state snapshot after action (grid, entities, encounter, floor_objects)
     state: Optional[APIGameState] = None
+
+    # Raw replication cursors after all side effects from this action.
+    event_cursor_after: Optional[int] = None
+    combat_log_cursor_after: Optional[int] = None
+
+
+class AdvanceEncounterResult(BaseModel):
+    """Result of advancing combat until the next player-controlled turn."""
+    status: str
+    entity_uuid: Optional[str] = None
+    entity_name: Optional[str] = None
+    round: Optional[int] = None
+    turn_index: Optional[int] = None
+    ai_actions: List[dict] = []
+    new_log_since: Optional[int] = None
+    event_cursor_after: Optional[int] = None
+    combat_log_cursor_after: Optional[int] = None
+
+
+class EventHistoryResponse(BaseModel):
+    """Cursor-addressed history of original domain events."""
+    events: List[SerializeAsAny[Event]]
+    count: int
+    total: int
+
+
+class CombatLogHistoryResponse(BaseModel):
+    """Cursor-addressed history of combat log entries."""
+    entries: List[CombatLogEntry]
+    count: int
+    total: int

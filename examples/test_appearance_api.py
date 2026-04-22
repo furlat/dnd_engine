@@ -69,7 +69,7 @@ def test_monster_factory_appearance_api():
     assert_appearance(APIEntitySummary.create(caster), "NakedBody", 0xDDAA88, "Head9", 0x6C5231, False, 0)
 
 
-def test_equipment_event_serializer_has_resulting_equipment():
+def test_equipment_event_serializer_preserves_domain_event_only():
     sorcerer = create_sorcerer(SorcererConfig(level=1, name="Visual Sorcerer"))
 
     completions = [
@@ -80,13 +80,13 @@ def test_equipment_event_serializer_has_resulting_equipment():
 
     payload = serialize_event(completions[-1])
     assert payload["source_entity_uuid"] == str(sorcerer.uuid)
-    assert "resulting_equipment" in payload
-    assert payload["resulting_equipment"]["slots"]
+    assert payload["event_type"] in ("weapon_equip", "armor_equip", "shield_equip")
+    assert "resulting_equipment" not in payload
 
 
 run_test("class factory appearance API", test_class_factory_appearance_api)
 run_test("monster factory appearance API", test_monster_factory_appearance_api)
-run_test("equipment event serializer carries resulting equipment", test_equipment_event_serializer_has_resulting_equipment)
+run_test("equipment event serializer preserves domain event only", test_equipment_event_serializer_preserves_domain_event_only)
 
 print(f"\nResults: {tests_passed} passed, {tests_failed} failed")
 if tests_failed:
