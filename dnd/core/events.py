@@ -1797,7 +1797,9 @@ class SensoryUpdateEvent(Event):
     visible_objects_moved: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]] = Field(default_factory=dict)
 
     sense_modes_changed: bool = Field(default=False)
+    sense_modes: Optional[List[Dict[str, Any]]] = Field(default=None)
     passive_perception_changed: bool = Field(default=False)
+    passive_perception: Optional[int] = Field(default=None)
     paths_dirty: bool = Field(default=False)
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
