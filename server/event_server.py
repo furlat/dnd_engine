@@ -828,6 +828,7 @@ async def get_visibility():
             "position": list(entity.position),
             "visible_cells": visible_positions,
             "visible_entities": [str(uuid) for uuid in entity.senses.entities.keys()],
+            "visible_objects": [str(uuid) for uuid in entity.senses.objects.keys()],
             "seen_cells": [list(pos) for pos in entity.senses.seen],
             "sense_modes": [
                 {"sense_type": sm.sense_type.value, "range_feet": sm.range_feet}
