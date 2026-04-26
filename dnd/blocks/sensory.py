@@ -202,6 +202,13 @@ def _sorted_uuid_move_dict(
     return {uuid: values[uuid] for uuid in sorted(values.keys(), key=str)}
 
 
+def _serialize_sense_modes(senses: Senses) -> List[Dict[str, object]]:
+    return [
+        {"sense_type": sm.sense_type.value, "range_feet": sm.range_feet}
+        for sm in senses.get_sense_modes()
+    ]
+
+
 class SpatialSensesCallback:
     """Pre-completion lifecycle system that updates one observer's senses.
 
@@ -412,7 +419,9 @@ class SpatialSensesCallback:
             visible_objects_moved=_sorted_uuid_move_dict(object_moved),
             paths_dirty=paths_dirty_changed,
             passive_perception_changed=passive_changed,
+            passive_perception=after.passive_perception if passive_changed else None,
             sense_modes_changed=sense_modes_changed,
+            sense_modes=_serialize_sense_modes(self.senses) if sense_modes_changed else None,
         )
 
         current = EventQueue.register(sensory_event)
