@@ -70,6 +70,26 @@ from server.api_models import (
     ToggleHandlerRequest,
     APIEquipmentOverview, APIItemSummary, EquipRequest, UnequipRequest, EquipmentMutationResult,
     AdvanceEncounterResult,
+    MapEditorCatalog, MapEditorCreateMapRequest, MapEditorLightResponse, MapEditorMapSnapshot,
+    MapEditorObjectDeleteRequest, MapEditorObjectPlaceRequest, MapEditorTilePatchRequest, MapEditorVisibilityResponse,
+    MapEditorWalkabilityResponse, MapEditorSaveMapRequest, MapEditorSavedMapDocument,
+    MapEditorSavedMapList, MapEditorSavedMapMetadata,
+)
+from server.mapeditor_support import (
+    apply_tile_patches,
+    build_catalog,
+    create_editor_map,
+    delete_catalog_object,
+    delete_saved_editor_map,
+    get_editor_snapshot,
+    get_objective_light,
+    get_saved_editor_map,
+    get_visibility_blockers,
+    get_walkability,
+    list_saved_editor_maps,
+    load_saved_editor_map,
+    place_catalog_object,
+    save_current_editor_map,
 )
 from server.event_stream import (
     HeartbeatPayload,
@@ -803,6 +823,116 @@ async def get_state():
         encounter=encounter_data,
         floor_objects=floor_objects,
     )
+
+
+@app.get("/mapeditor/catalog", response_model=MapEditorCatalog)
+async def get_mapeditor_catalog():
+    """List mapeditor presets, terrain, environment objects, and floor loot."""
+    return build_catalog()
+
+
+@app.post("/mapeditor/maps", response_model=MapEditorMapSnapshot)
+async def create_mapeditor_map(request: MapEditorCreateMapRequest):
+    """Create/reset an entity-free mapeditor map from scratch or a preset."""
+    try:
+        sim.encounter = None
+        sim.combat_task = None
+        return create_editor_map(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/mapeditor/map", response_model=MapEditorMapSnapshot)
+async def get_mapeditor_map():
+    """Get the current entity-free mapeditor map snapshot."""
+    return get_editor_snapshot()
+
+
+@app.get("/mapeditor/saves", response_model=MapEditorSavedMapList)
+async def list_mapeditor_saves():
+    """List file-backed mapeditor map saves."""
+    return list_saved_editor_maps()
+
+
+@app.post("/mapeditor/saves", response_model=MapEditorSavedMapMetadata)
+async def save_mapeditor_map(request: MapEditorSaveMapRequest):
+    """Save the current entity-free editor map state."""
+    try:
+        return save_current_editor_map(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/mapeditor/saves/{map_id}", response_model=MapEditorSavedMapDocument)
+async def get_mapeditor_save(map_id: str):
+    """Read a saved editor map document without loading it."""
+    try:
+        return get_saved_editor_map(map_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/mapeditor/saves/{map_id}/load", response_model=MapEditorMapSnapshot)
+async def load_mapeditor_save(map_id: str):
+    """Load a saved editor map into the current entity-free editor world."""
+    try:
+        return load_saved_editor_map(map_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.delete("/mapeditor/saves/{map_id}", status_code=204)
+async def delete_mapeditor_save(map_id: str):
+    """Delete a saved editor map document."""
+    try:
+        delete_saved_editor_map(map_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/mapeditor/map/tiles", response_model=MapEditorMapSnapshot)
+async def patch_mapeditor_tiles(request: MapEditorTilePatchRequest):
+    """Patch editor tiles through GridMap and terrain factories."""
+    try:
+        return apply_tile_patches(request.tiles)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/mapeditor/map/objects", response_model=APIFloorObject)
+async def place_mapeditor_object(request: MapEditorObjectPlaceRequest):
+    """Place a catalog object or loot item on the current editor map."""
+    try:
+        return place_catalog_object(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/mapeditor/map/objects/delete", response_model=MapEditorMapSnapshot)
+async def delete_mapeditor_object(request: MapEditorObjectDeleteRequest):
+    """Delete editor object(s) by UUID or by tile position."""
+    try:
+        return delete_catalog_object(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/mapeditor/map/walkability", response_model=MapEditorWalkabilityResponse)
+async def get_mapeditor_walkability():
+    """Get objective walkability without entities."""
+    return get_walkability()
+
+
+@app.get("/mapeditor/map/visibility", response_model=MapEditorVisibilityResponse)
+async def get_mapeditor_visibility():
+    """Get objective line-of-sight blockers without subjective observer visibility."""
+    return get_visibility_blockers()
+
+
+@app.get("/mapeditor/map/light", response_model=MapEditorLightResponse)
+async def get_mapeditor_light():
+    """Get objective resolved tile light levels."""
+    return get_objective_light()
 
 
 @app.get("/entities")

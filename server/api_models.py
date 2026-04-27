@@ -10,7 +10,7 @@ extracts the relevant data.
 
 from uuid import UUID
 from pydantic import BaseModel, SerializeAsAny
-from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union, TYPE_CHECKING
 
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.events import Event
@@ -434,6 +434,154 @@ class APIGameState(BaseModel):
     entities: List[APIEntitySummary]
     encounter: Optional[APIEncounter]
     floor_objects: List[APIFloorObject] = []
+
+
+class MapEditorGridBounds(BaseModel):
+    """Inclusive grid bounds."""
+    min_x: int
+    min_y: int
+    max_x: int
+    max_y: int
+
+
+class MapEditorMapSnapshot(BaseModel):
+    """Entity-free map snapshot for map editing and generation."""
+    grid_bounds: MapEditorGridBounds
+    tiles: List[APITile]
+    floor_objects: List[APIFloorObject] = []
+
+
+class MapEditorSavedObjectPlacement(BaseModel):
+    """Reloadable editor object placement without serializing entities."""
+    catalog_id: str
+    name: str
+    position: Tuple[int, int]
+
+
+class MapEditorSaveMapRequest(BaseModel):
+    """Save the current entity-free editor map."""
+    id: Optional[str] = None
+    name: str = "Untitled Map"
+    overwrite: bool = False
+
+
+class MapEditorSavedMapMetadata(BaseModel):
+    """Saved editor map metadata."""
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+    revision: int = 1
+    grid_bounds: MapEditorGridBounds
+    tile_count: int
+    floor_object_count: int
+
+
+class MapEditorSavedMapDocument(BaseModel):
+    """Durable editor map document."""
+    schema_version: int = 1
+    metadata: MapEditorSavedMapMetadata
+    snapshot: MapEditorMapSnapshot
+    object_placements: List[MapEditorSavedObjectPlacement] = []
+
+
+class MapEditorSavedMapList(BaseModel):
+    """List of saved editor maps."""
+    maps: List[MapEditorSavedMapMetadata]
+
+
+class MapEditorCreateMapRequest(BaseModel):
+    """Create/reset the editor map from scratch or a named preset."""
+    source: Literal["scratch", "preset"] = "scratch"
+    width: int = 16
+    height: int = 16
+    origin: Tuple[int, int] = (0, 0)
+    default_tile: str = "Floor"
+    default_light: int = 1
+    preset_id: Optional[str] = None
+    include_entities: bool = False
+
+
+class MapEditorTilePatch(BaseModel):
+    """Single editor tile update."""
+    x: int
+    y: int
+    type: str
+    light_level: Optional[int] = None
+
+
+class MapEditorTilePatchRequest(BaseModel):
+    """Batch tile update request."""
+    tiles: List[MapEditorTilePatch]
+
+
+class MapEditorObjectPlaceRequest(BaseModel):
+    """Place a catalog item/object on the editor map."""
+    catalog_id: str
+    position: Tuple[int, int]
+    options: Dict[str, Any] = {}
+
+
+class MapEditorObjectDeleteRequest(BaseModel):
+    """Delete editor object(s) by UUID or tile position."""
+    object_uuid: Optional[str] = None
+    position: Optional[Tuple[int, int]] = None
+
+
+class MapEditorCatalogEntry(BaseModel):
+    """Normalized placeable/editor catalog entry."""
+    id: str
+    name: str
+    group: str
+    category: str
+    source_module: str
+    stability: Literal["stable", "candidate", "demo"] = "stable"
+    placement: str = "single_tile"
+    map_char: Optional[str] = None
+    visual_item_name: Optional[str] = None
+    flags: Dict[str, Any] = {}
+    actions: List[str] = []
+    default_state: Dict[str, Any] = {}
+
+
+class MapEditorCatalog(BaseModel):
+    """All mapeditor presets, terrain, objects, and loot known to the backend."""
+    presets: List[MapEditorCatalogEntry]
+    tiles: List[MapEditorCatalogEntry]
+    objects: List[MapEditorCatalogEntry]
+    loot: List[MapEditorCatalogEntry]
+
+
+class MapEditorWalkabilityCell(BaseModel):
+    x: int
+    y: int
+    walkable: bool
+    blocker: Optional[str] = None
+
+
+class MapEditorWalkabilityResponse(BaseModel):
+    cells: List[MapEditorWalkabilityCell]
+
+
+class MapEditorVisibilityCell(BaseModel):
+    x: int
+    y: int
+    blocks_visibility: bool
+    blocker: Optional[str] = None
+
+
+class MapEditorVisibilityResponse(BaseModel):
+    cells: List[MapEditorVisibilityCell]
+
+
+class MapEditorLightCell(BaseModel):
+    x: int
+    y: int
+    light_level: int
+
+
+class MapEditorLightResponse(BaseModel):
+    cells: List[MapEditorLightCell]
 
 
 class APISimulationStatus(BaseModel):
