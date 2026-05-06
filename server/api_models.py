@@ -528,6 +528,77 @@ class MapEditorObjectDeleteRequest(BaseModel):
     position: Optional[Tuple[int, int]] = None
 
 
+ProjectileCatalogType = Literal["bolt", "ray", "orb", "beam", "dart", "spray", "radiance", "touch", "rain"]
+AoeCatalogShapeType = Literal["sphere", "cone", "line", "cube", "cylinder"]
+SpellCatalogRangeType = Literal["self", "touch", "ranged"]
+SpellCatalogRouteHint = Literal[
+    "self", "touch", "single_projectile", "missile_volley", "aoe",
+    "aoe_projectile", "beam", "ray", "none"
+]
+
+
+class SpellCatalogSavingThrow(BaseModel):
+    """Saving throw metadata for a catalog spell."""
+    ability: str
+    dc_source: Optional[str] = None
+
+
+class SpellCatalogMultiTarget(BaseModel):
+    """Multi-target/projectile semantics for a catalog spell."""
+    min_targets: Optional[int] = None
+    max_targets: Optional[int] = None
+    allow_same_target: Optional[bool] = None
+    projectiles_per_cast: Optional[int] = None
+
+
+class SpellCatalogVfx(BaseModel):
+    """Visual routing hints derived from spell rules metadata."""
+    projectile_type: Optional[ProjectileCatalogType] = None
+    aoe_shape_type: Optional[AoeCatalogShapeType] = None
+    route_hint: SpellCatalogRouteHint
+    recommended_asset_tags: List[str] = []
+
+
+class SpellCatalogEntry(BaseModel):
+    """Design-time spell metadata for NeuroClient Spell Studio."""
+    id: str
+    name: str
+    aliases: List[str] = []
+    level: int
+    school: str
+    description: Optional[str] = None
+    action_category: Literal["spell"] = "spell"
+    target_type: str
+    range_type: Optional[SpellCatalogRangeType] = None
+    range_ft: Optional[int] = None
+    projectile_type: Optional[ProjectileCatalogType] = None
+    aoe_shape_type: Optional[AoeCatalogShapeType] = None
+    aoe_radius_ft: Optional[int] = None
+    aoe_length_ft: Optional[int] = None
+    aoe_width_ft: Optional[int] = None
+    damage_types: List[str] = []
+    healing: bool = False
+    attack_roll: bool = False
+    saving_throw: Optional[SpellCatalogSavingThrow] = None
+    concentration: bool = False
+    ritual: bool = False
+    verbal: bool = True
+    somatic: Optional[bool] = None
+    material: Optional[bool] = None
+    classes: List[str] = []
+    subclasses: List[str] = []
+    source: Optional[str] = None
+    multi_target: Optional[SpellCatalogMultiTarget] = None
+    vfx: Optional[SpellCatalogVfx] = None
+
+
+class SpellCatalogResponse(BaseModel):
+    """All backend spell templates known to the engine."""
+    version: str
+    generated_at: Optional[str] = None
+    spells: List[SpellCatalogEntry]
+
+
 class MapEditorCatalogEntry(BaseModel):
     """Normalized placeable/editor catalog entry."""
     id: str

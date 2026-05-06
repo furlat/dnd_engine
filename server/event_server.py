@@ -70,6 +70,7 @@ from server.api_models import (
     ToggleHandlerRequest,
     APIEquipmentOverview, APIItemSummary, EquipRequest, UnequipRequest, EquipmentMutationResult,
     AdvanceEncounterResult,
+    SpellCatalogResponse,
     MapEditorCatalog, MapEditorCreateMapRequest, MapEditorLightResponse, MapEditorMapSnapshot,
     MapEditorObjectDeleteRequest, MapEditorObjectPlaceRequest, MapEditorTilePatchRequest, MapEditorVisibilityResponse,
     MapEditorWalkabilityResponse, MapEditorSaveMapRequest, MapEditorSavedMapDocument,
@@ -91,6 +92,7 @@ from server.mapeditor_support import (
     place_catalog_object,
     save_current_editor_map,
 )
+from server.spell_catalog import build_spell_catalog
 from server.event_stream import (
     HeartbeatPayload,
     StreamSyncPayload,
@@ -829,6 +831,12 @@ async def get_state():
 async def get_mapeditor_catalog():
     """List mapeditor presets, terrain, environment objects, and floor loot."""
     return build_catalog()
+
+
+@app.get("/catalog/spells", response_model=SpellCatalogResponse)
+async def get_spell_catalog():
+    """List all spell templates and design-time VFX/rules metadata."""
+    return build_spell_catalog()
 
 
 @app.post("/mapeditor/maps", response_model=MapEditorMapSnapshot)

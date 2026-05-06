@@ -17,6 +17,13 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 
 ## Open Issues
 
+### WebSocket ping test assumes pong is the next frame
+- **Found**: 2026-05-03 during spell catalog endpoint validation
+- **Test file**: `server/test_websocket.py`
+- **Error**: Running `PYTHONPATH=. .venv/bin/python server/test_websocket.py` reaches `test_websocket_connection`, sends `{"type": "ping"}`, then `assert data["type"] == "pong"` fails because the next received frame can still be an `"event"` frame.
+- **Hypothesis**: The WebSocket stream is asynchronous and may have queued spatial events when the ping is sent. The test should drain/filter frames until it sees `pong` or times out, instead of assuming request/response ordering on a mixed event/control channel.
+- **Status**: OPEN
+
 ### `alt_skip_slot` getattr in BaseAction violates no-duck-typing principle
 - **Found**: 2026-02-28
 - **File**: `dnd/core/base_actions.py` line 274
@@ -49,7 +56,6 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
   3. Validate entity UUID at command execution time against the server's actual active entity
   4. Investigate why the subprocess takes 45+ seconds to drain — may need to interrupt Claude's generation more aggressively or increase the timeout
 - **Status**: OPEN
-
 
 
 
