@@ -8,6 +8,7 @@ from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Dama
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
+from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_block import LightLevel
 from dnd.core.combat_log import (
@@ -2534,6 +2535,7 @@ class SpellEvent(ActionEvent):
     """An event that represents a spell being cast."""
     name: str = Field(default="Spell Cast", description="A spell cast event")
     event_type: EventType = Field(default=EventType.CAST_SPELL, description="The type of event")
+    spell_id: Optional[str] = Field(default=None, description="Stable spell catalog id")
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
@@ -3219,6 +3221,7 @@ class SpellAction(BaseAction):
 
         return SpellEvent(
             name=f"{self.name}",
+            spell_id=normalize_spell_id(self.name or ""),
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
@@ -3437,4 +3440,3 @@ class Drop(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"Dropped {dropped.name}"
         )
-
