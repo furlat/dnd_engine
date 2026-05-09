@@ -1865,14 +1865,17 @@ class Entity(BaseBlock):
         # Get walkable paths using dijkstra (with occupancy check if entity_uuid provided)
         # Subjective: imperceivable blockers are transparent so paths don't leak positions
         collision: Set[Tuple[int, int]] = set()
+        directional_collision: Set[Tuple[Tuple[int, int], str]] = set()
         ign_terrain = False
         if entity_uuid:
             ent = Entity._entity_registry.get(entity_uuid)
             if ent is not None:
                 collision = ent.senses.collision_blocked
+                directional_collision = ent.senses.directional_collision_blocked
                 ign_terrain = ent.ignore_difficult_terrain
         _, paths = grid.compute_paths(position, max_distance, requesting_entity_uuid=entity_uuid,
                                       subjective=True, collision_blocked=collision,
+                                      directional_collision_blocked=directional_collision,
                                       ignore_difficult_terrain=ign_terrain)
 
         # Filter paths to only include those where:
@@ -1899,6 +1902,7 @@ class Entity(BaseBlock):
             _, safe_raw = grid.compute_paths(
                 position, max_distance, requesting_entity_uuid=entity_uuid,
                 walk_in_danger=False, subjective=True, collision_blocked=collision,
+                directional_collision_blocked=directional_collision,
                 ignore_difficult_terrain=ign_terrain
             )
             # Filter safe paths same as normal paths (visible + known)
@@ -1921,7 +1925,11 @@ class Entity(BaseBlock):
         for pos in visible_dict:
             for obj_uuid in grid.get_objects_at(pos):
                 obj = BaseBlock.get(obj_uuid)
-                if obj and not obj.is_perceivable_by(entity_uuid):
+                if obj is None:
+                    continue
+                if not obj.should_include_in_senses_objects():
+                    continue
+                if not obj.is_perceivable_by(entity_uuid):
                     continue
                 visible_objects[obj_uuid] = pos
 
@@ -2031,7 +2039,11 @@ class Entity(BaseBlock):
         for pos in visible_dict:
             for obj_uuid in grid.get_objects_at(pos):
                 obj = BaseBlock.get(obj_uuid)
-                if obj and not obj.is_perceivable_by(self.uuid):
+                if obj is None:
+                    continue
+                if not obj.should_include_in_senses_objects():
+                    continue
+                if not obj.is_perceivable_by(self.uuid):
                     continue
                 visible_objects[obj_uuid] = pos
 
@@ -2557,9 +2569,11 @@ class Entity(BaseBlock):
             can_afford = template.check_costs()
 
             for obj_uuid, obj_pos in self.senses.objects.items():
+                obj_block = BaseBlock.get(obj_uuid)
+                if obj_block is not None and not obj_block.should_include_in_available_object_actions():
+                    continue
                 template.set_target_entity(obj_uuid)
                 if template.pre_validate():
-                    obj_block = BaseBlock.get(obj_uuid)
                     obj_name = obj_block.name if obj_block else "Object"
                     distance = self.senses.get_feet_distance(obj_pos)
                     valid_targets.append(AvailableTarget(
@@ -2608,6 +2622,8 @@ class Entity(BaseBlock):
         for obj_uuid, obj_pos in self.senses.objects.items():
             obj = BaseBlock.get(obj_uuid)
             if not isinstance(obj, UsableItem):
+                continue
+            if not obj.should_include_in_available_object_actions():
                 continue
             if self.senses.get_feet_distance(obj_pos) > 5:
                 continue

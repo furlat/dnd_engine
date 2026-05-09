@@ -407,15 +407,28 @@ class Move(BaseAction):
                 from_pos = path[i - 1]
                 to_pos = path[i]
 
-                # Check if next step is still valid (tile walkable, not blocked by entity)
-                # Handles: tile destroyed, enemy moved into path, etc.
-                if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
-                    # Check if blocked by imperceivable blocker (would be walkable subjectively)
-                    if grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid, subjective=True):
-                        source_entity.senses.collision_blocked.add(to_pos)
+                # Check if next step is still valid (tile walkable, edge-crossable, not blocked by entity)
+                # Handles: tile destroyed, enemy moved into path, object border changed, etc.
+                if not grid.can_transition(from_pos, to_pos, source_entity.uuid):
+                    if grid.can_transition(from_pos, to_pos, source_entity.uuid, subjective=True):
+                        cell_blocked = not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid)
+                        directions = []
+                        from_tile = grid.get_tile(*from_pos)
+                        if from_tile:
+                            directions = list(from_tile.directions_toward(to_pos))
+                        if cell_blocked:
+                            source_entity.senses.collision_blocked.add(to_pos)
+                        else:
+                            for direction in directions:
+                                source_entity.senses.directional_collision_blocked.add((from_pos, direction))
                         collision_event = SpatialChangeEvent.movement_collision(
                             position=to_pos, mover_uuid=source_entity.uuid,
-                            parent_event=effect_event.uuid
+                            parent_event=effect_event.uuid,
+                            transition_from=from_pos,
+                            transition_to=to_pos,
+                            directional_position=from_pos if directions else None,
+                            directional_directions=directions or None,
+                            directional_channels=["movement"] if directions and not cell_blocked else None,
                         )
                         grid._fire_spatial_event(collision_event)
                     break
@@ -456,11 +469,11 @@ class Move(BaseAction):
                 if processed_step.canceled:
                     break
 
-                # Re-check walkability after step event processing.
+                # Re-check transition after step event processing.
                 # Handlers may have changed the map (e.g., an interceptor charged into to_pos,
                 # a door was closed, an object was placed). The pre-step check (line 384) may
                 # now be stale.
-                if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
+                if not grid.can_transition(from_pos, to_pos, source_entity.uuid):
                     break
 
                 # Actually move the entity - pass step event UUID so terrain damage links to it
@@ -1867,6 +1880,11 @@ class Jump(BaseAction):
             if not grid.is_walkable_for(pos[0], pos[1], entity.uuid):
                 continue
 
+            # Jump targets are LOS-based, but the physical path still cannot pass
+            # through propagation-blocking borders.
+            if not grid.raycast_clear(entity.position, pos, channel="propagation", observer_uuid=entity.uuid):
+                continue
+
             # Note: is_walkable_for already checks occupancy excluding non-blocking entities,
             # so we don't need a separate occupancy check here
 
@@ -2015,6 +2033,9 @@ class Jump(BaseAction):
         # Check walkability - this handles occupancy (excluding non-blocking entities like dead)
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
             return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
+
+        if not grid.raycast_clear(source_entity.position, end_pos, channel="propagation", observer_uuid=source_entity.uuid):
+            return declaration_event.cancel(status_message=f"Path to {end_pos} is blocked")
 
         # Note: is_walkable_for already checks occupancy excluding non-blocking entities,
         # so we don't need a separate occupancy check here
@@ -2319,8 +2340,8 @@ class Shove(BaseAction):
         for _ in range(cells_to_move):
             next_pos = (current[0] + direction[0], current[1] + direction[1])
 
-            # Check if next cell is walkable for the target
-            if not grid.is_walkable_for(next_pos[0], next_pos[1], target_uuid):
+            # Check if the target can cross into the next cell
+            if not grid.can_transition(current, next_pos, target_uuid):
                 blocked = True
                 blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break

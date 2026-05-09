@@ -77,8 +77,8 @@ def create_intercept_processor(charge_destination: Tuple[int, int]):
             if current_pos == charge_destination:
                 break  # Arrived
             next_pos = (current_pos[0] + cdx, current_pos[1] + cdy)
-            # Per-cell walkability check — reflects environment changes via _paths_dirty system
-            if not grid.is_walkable_for(next_pos[0], next_pos[1], interceptor.uuid):
+            # Per-step transition check reflects environment changes via _paths_dirty system.
+            if not grid.can_transition(current_pos, next_pos, interceptor.uuid):
                 break  # Path blocked (e.g., door closed between preparation and trigger)
             Entity.update_entity_position(interceptor, next_pos, parent_event=event.uuid)
             current_pos = next_pos
@@ -223,7 +223,7 @@ class PrepareIntercept(BaseAction):
         current = entity.position
         for _ in range(distance_cells):
             next_pos = (current[0] + step_dx, current[1] + step_dy)
-            if not grid.is_walkable_for(next_pos[0], next_pos[1], entity.uuid):
+            if not grid.can_transition(current, next_pos, entity.uuid):
                 return declaration_event.cancel(status_message=f"Path blocked at {next_pos}")
             current = next_pos
 
@@ -310,8 +310,8 @@ def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
     # Straight-line retreat — if blocked, dodge stops
     for _ in range(2):
         next_pos = (current_pos[0] + dx, current_pos[1] + dy)
-        # Per-cell walkability check — reflects environment changes
-        if not grid.is_walkable_for(next_pos[0], next_pos[1], defender.uuid):
+        # Per-step transition check reflects environment changes.
+        if not grid.can_transition(current_pos, next_pos, defender.uuid):
             break  # Blocked
         Entity.update_entity_position(defender, next_pos, parent_event=event.uuid)
         current_pos = next_pos

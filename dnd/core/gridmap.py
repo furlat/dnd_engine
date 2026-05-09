@@ -16,12 +16,16 @@ from collections import defaultdict
 
 from pydantic import BaseModel, Field
 
-from dnd.core.geometry import circle_positions
+from dnd.core.geometry import circle_positions, supercover_line
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_tiles import Tile
 from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint
+
+
+DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
+DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "vision", "light", "propagation")
 
 
 class LightSourceData(BaseModel):
@@ -215,6 +219,7 @@ class GridMap:
         """
         position = (x, y)
         old_tile = self._tiles.get(position)
+        old_directional = self._directional_block_map(position)
 
         # Remove old tile from UUID lookup if exists
         if old_tile:
@@ -236,6 +241,9 @@ class GridMap:
         self._tiles[position] = tile
         self._tiles_by_uuid[tile.uuid] = position
         self._bounds_dirty = True
+        self.recompute_tile_directional_blocking(position)
+        new_directional = self._directional_block_map(position)
+        directional_metadata = self._directional_metadata_from_delta(position, old_directional, new_directional)
 
         # Fire tile changed event if properties actually changed
         if fire_event and self._events_enabled:
@@ -243,11 +251,96 @@ class GridMap:
             old_visible = old_tile.visible if old_tile else None
             tile_walkable = tile.walkable
             tile_visible = tile.visible
-            if old_tile is None or old_walkable != tile_walkable or old_visible != tile_visible:
-                event = SpatialChangeEvent.tile_changed(position, tile_walkable, tile_visible)
+            scalar_walk_changed = old_tile is None or old_walkable != tile_walkable
+            scalar_visible_changed = old_tile is None or old_visible != tile_visible
+            directional_channels = set(directional_metadata.get("directional_channels") or [])
+            if scalar_walk_changed or scalar_visible_changed or directional_channels:
+                hint = SensesUpdateHint(
+                    requires_fov=scalar_visible_changed or "vision" in directional_channels,
+                    requires_paths=scalar_walk_changed or "movement" in directional_channels,
+                    directional_positions={position} if directional_channels else None,
+                    directional_neighbors={
+                        neighbor
+                        for direction in (directional_metadata.get("directional_directions") or [])
+                        for neighbor in self._neighbor_for_direction(position, direction)
+                    } or None,
+                    directional_channels_changed=directional_channels or None,
+                    requires_light_recompute="light" in directional_channels,
+                    requires_propagation_recompute="propagation" in directional_channels,
+                )
+                event = SpatialChangeEvent.tile_changed(
+                    position, tile_walkable, tile_visible,
+                    senses_hint=hint,
+                    **directional_metadata,
+                )
                 self._fire_spatial_event(event)
 
         return tile
+
+    def set_tile_directional_border(self, position: Tuple[int, int], channel: str,
+                                    direction: str, passable: bool,
+                                    parent_event: Optional[UUID] = None,
+                                    fire_event: bool = True) -> bool:
+        """Set an intrinsic tile-owned directional border and emit tile change metadata.
+
+        Args:
+            channel: movement, vision, light, or propagation.
+            direction: north, south, east, or west relative to this tile.
+            passable: True allows crossing; False blocks crossing.
+
+        Returns True when the stored value changed.
+        """
+        if channel not in DIRECTIONAL_CHANNELS:
+            raise ValueError(f"Unsupported directional channel: {channel}")
+        if direction not in DIRECTIONS:
+            raise ValueError(f"Unsupported direction: {direction}")
+
+        tile = self._tiles.get(position)
+        if tile is None:
+            return False
+
+        if not tile.set_intrinsic_border(channel, direction, passable):
+            return False
+        state = self._directional_block_map(position)
+        metadata = {
+            "directional_position": position,
+            "directional_directions": [direction],
+            "directional_channels": [channel],
+            "directional_blocks_movement": state["movement"],
+            "directional_blocks_vision": state["vision"],
+            "directional_blocks_light": state["light"],
+            "directional_blocks_propagation": state["propagation"],
+        }
+
+        if fire_event and self._events_enabled:
+            hint = SensesUpdateHint(
+                requires_fov=channel == "vision",
+                requires_paths=channel == "movement",
+                directional_positions={position},
+                directional_neighbors={neighbor for neighbor in self._neighbor_for_direction(position, direction)},
+                directional_channels_changed={channel},
+                requires_light_recompute=channel == "light",
+                requires_propagation_recompute=channel == "propagation",
+            )
+            event = SpatialChangeEvent.tile_changed(
+                position, tile.walkable, tile.visible,
+                senses_hint=hint,
+                parent_event=parent_event,
+                **metadata,
+            )
+            self._fire_spatial_event(event)
+        return True
+
+    def _neighbor_for_direction(self, position: Tuple[int, int], direction: str) -> List[Tuple[int, int]]:
+        delta = {
+            "north": (0, 1),
+            "south": (0, -1),
+            "east": (1, 0),
+            "west": (-1, 0),
+        }.get(direction)
+        if delta is None:
+            return []
+        return [(position[0] + delta[0], position[1] + delta[1])]
 
     def remove_tile(self, x: int, y: int, fire_event: bool = True) -> None:
         """Remove a tile at the given position."""
@@ -384,6 +477,203 @@ class GridMap:
             if block is not None and block.blocks_vision(requesting_entity_uuid):
                 return True
         return False
+
+    def _block_blocks_direction(self, block: BaseBlock, channel: str, direction: str,
+                                requester_uuid: Optional[UUID] = None,
+                                movement_mode: MovementMode = MovementMode.WALKING,
+                                subjective: bool = False) -> bool:
+        if channel == "movement":
+            return block.blocks_directional_movement(direction, requester_uuid, movement_mode, subjective)
+        if channel == "vision":
+            return block.blocks_directional_vision(direction, requester_uuid, subjective)
+        if channel == "light":
+            return block.blocks_directional_light(direction, requester_uuid, subjective)
+        if channel == "propagation":
+            return block.blocks_directional_propagation(direction, requester_uuid, subjective)
+        return False
+
+    def _directional_block_map(self, position: Tuple[int, int]) -> Dict[str, Dict[str, bool]]:
+        tile = self._tiles.get(position)
+        result: Dict[str, Dict[str, bool]] = {
+            channel: {direction: False for direction in DIRECTIONS}
+            for channel in DIRECTIONAL_CHANNELS
+        }
+        if tile is None:
+            return result
+        for channel in DIRECTIONAL_CHANNELS:
+            for direction in DIRECTIONS:
+                result[channel][direction] = not tile.allows_direction(direction, channel)
+        return result
+
+    def _directional_metadata_from_delta(self, position: Tuple[int, int],
+                                         old: Dict[str, Dict[str, bool]],
+                                         new: Dict[str, Dict[str, bool]]) -> Dict[str, object]:
+        empty: Dict[str, object] = {
+            "directional_position": None,
+            "directional_directions": None,
+            "directional_channels": None,
+            "directional_blocks_movement": None,
+            "directional_blocks_vision": None,
+            "directional_blocks_light": None,
+            "directional_blocks_propagation": None,
+        }
+        changed_channels = [
+            channel for channel in DIRECTIONAL_CHANNELS
+            if any(old[channel][direction] != new[channel][direction] for direction in DIRECTIONS)
+        ]
+        changed_directions = [
+            direction for direction in DIRECTIONS
+            if any(old[channel][direction] != new[channel][direction] for channel in DIRECTIONAL_CHANNELS)
+        ]
+        if not changed_channels:
+            return empty
+        return {
+            "directional_position": position,
+            "directional_directions": changed_directions,
+            "directional_channels": changed_channels,
+            "directional_blocks_movement": new["movement"],
+            "directional_blocks_vision": new["vision"],
+            "directional_blocks_light": new["light"],
+            "directional_blocks_propagation": new["propagation"],
+        }
+
+    def recompute_tile_directional_blocking(self, position: Tuple[int, int]) -> Dict[str, object]:
+        """Refresh object/entity-derived tile directional state for one tile.
+
+        The stored state is objective/default. Subjective pathing still re-derives
+        from the live blocks so imperceivable directional blockers do not leak.
+        """
+        empty: Dict[str, object] = {
+            "directional_position": None,
+            "directional_directions": None,
+            "directional_channels": None,
+            "directional_blocks_movement": None,
+            "directional_blocks_vision": None,
+            "directional_blocks_light": None,
+            "directional_blocks_propagation": None,
+        }
+        tile = self._tiles.get(position)
+        if tile is None:
+            return empty
+
+        old = self._directional_block_map(position)
+
+        for channel in DIRECTIONAL_CHANNELS:
+            for direction in DIRECTIONS:
+                tile.set_object_border(channel, direction, True)
+
+        block_uuids = set(self._objects_by_position.get(position, set()))
+        block_uuids.update(self._entities_by_position.get(position, set()))
+        for block_uuid in block_uuids:
+            block = BaseBlock.get(block_uuid)
+            if block is None:
+                continue
+            for channel in DIRECTIONAL_CHANNELS:
+                for direction in DIRECTIONS:
+                    if self._block_blocks_direction(block, channel, direction):
+                        tile.set_object_border(channel, direction, False)
+
+        new = self._directional_block_map(position)
+        return self._directional_metadata_from_delta(position, old, new)
+
+    def _tile_allows_transition_side(self, tile_pos: Tuple[int, int], other_pos: Tuple[int, int],
+                                     channel: str,
+                                     requester_uuid: Optional[UUID] = None,
+                                     movement_mode: MovementMode = MovementMode.WALKING,
+                                     subjective: bool = False) -> bool:
+        tile = self._tiles.get(tile_pos)
+        if tile is None:
+            return False
+
+        directions = tile.directions_toward(other_pos)
+        if not directions:
+            return True
+
+        if not subjective:
+            return tile.allows_directions(directions, channel)
+
+        open_directions = {direction: tile.allows_direction(direction, channel, include_derived=False)
+                           for direction in directions}
+        block_uuids = set(self._objects_by_position.get(tile_pos, set()))
+        block_uuids.update(self._entities_by_position.get(tile_pos, set()))
+        for block_uuid in block_uuids:
+            block = BaseBlock.get(block_uuid)
+            if block is None:
+                continue
+            if not block.is_perceivable_by(requester_uuid):
+                continue
+            for direction in directions:
+                if self._block_blocks_direction(block, channel, direction, requester_uuid,
+                                                movement_mode, subjective=True):
+                    open_directions[direction] = False
+
+        # Preserve the existing permissive diagonal policy.
+        return any(open_directions.values())
+
+    def _remembered_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
+                                      blocked: Optional[Set[Tuple[Tuple[int, int], str]]]) -> bool:
+        if not blocked:
+            return True
+        tile = self._tiles.get(from_pos)
+        if tile is None:
+            return False
+        directions = tile.directions_toward(to_pos)
+        if not directions:
+            return True
+        return any((from_pos, direction) not in blocked for direction in directions)
+
+    def can_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
+                       requesting_entity_uuid: Optional[UUID] = None,
+                       movement_mode: MovementMode = MovementMode.WALKING,
+                       walk_in_danger: bool = True,
+                       subjective: bool = False,
+                       collision_blocked: Optional[Set[Tuple[int, int]]] = None,
+                       directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None) -> bool:
+        """Return whether movement can cross from one adjacent tile to another."""
+        if from_pos == to_pos:
+            return True
+        if max(abs(to_pos[0] - from_pos[0]), abs(to_pos[1] - from_pos[1])) > 1:
+            return False
+        if from_pos not in self._tiles or to_pos not in self._tiles:
+            return False
+        if not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
+            return False
+        if not self._tile_allows_transition_side(from_pos, to_pos, "movement",
+                                                requesting_entity_uuid, movement_mode, subjective):
+            return False
+        if not self._tile_allows_transition_side(to_pos, from_pos, "movement",
+                                                requesting_entity_uuid, movement_mode, subjective):
+            return False
+        if requesting_entity_uuid is None:
+            return self.is_walkable(to_pos[0], to_pos[1], movement_mode)
+        return self.is_walkable_for(
+            to_pos[0], to_pos[1], requesting_entity_uuid, movement_mode,
+            walk_in_danger, subjective, collision_blocked
+        )
+
+    def can_see_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
+                           observer_uuid: Optional[UUID] = None,
+                           subjective: bool = False) -> bool:
+        return (
+            self._tile_allows_transition_side(from_pos, to_pos, "vision", observer_uuid, subjective=subjective)
+            and self._tile_allows_transition_side(to_pos, from_pos, "vision", observer_uuid, subjective=subjective)
+        )
+
+    def can_light_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
+                             observer_uuid: Optional[UUID] = None,
+                             subjective: bool = False) -> bool:
+        return (
+            self._tile_allows_transition_side(from_pos, to_pos, "light", observer_uuid, subjective=subjective)
+            and self._tile_allows_transition_side(to_pos, from_pos, "light", observer_uuid, subjective=subjective)
+        )
+
+    def can_propagate_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
+                                 requester_uuid: Optional[UUID] = None,
+                                 subjective: bool = False) -> bool:
+        return (
+            self._tile_allows_transition_side(from_pos, to_pos, "propagation", requester_uuid, subjective=subjective)
+            and self._tile_allows_transition_side(to_pos, from_pos, "propagation", requester_uuid, subjective=subjective)
+        )
 
     def identify_blocker_at(self, position: Tuple[int, int],
                             requesting_entity_uuid: Optional[UUID] = None,
@@ -526,18 +816,26 @@ class GridMap:
         old_pos = self._entity_positions.get(entity_uuid)
         if old_pos is not None:
             self._entities_by_position[old_pos].discard(entity_uuid)
+            old_directional_metadata = self.recompute_tile_directional_blocking(old_pos)
             # Fire entity left event
             if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(old_pos, entity_uuid, position, parent_event=parent_event)
+                event = SpatialChangeEvent.entity_left(
+                    old_pos, entity_uuid, position, parent_event=parent_event,
+                    **old_directional_metadata,
+                )
                 self._fire_spatial_event(event)
 
         # Add to new position
         self._entity_positions[entity_uuid] = position
         self._entities_by_position[position].add(entity_uuid)
+        new_directional_metadata = self.recompute_tile_directional_blocking(position)
 
         # Fire entity entered event
         if self._events_enabled:
-            event = SpatialChangeEvent.entity_entered(position, entity_uuid, old_pos, parent_event=parent_event)
+            event = SpatialChangeEvent.entity_entered(
+                position, entity_uuid, old_pos, parent_event=parent_event,
+                **new_directional_metadata,
+            )
             self._fire_spatial_event(event)
 
     def unregister_entity(self, entity_uuid: UUID,
@@ -546,10 +844,14 @@ class GridMap:
         if entity_uuid in self._entity_positions:
             pos = self._entity_positions[entity_uuid]
             self._entities_by_position[pos].discard(entity_uuid)
+            directional_metadata = self.recompute_tile_directional_blocking(pos)
 
             # Fire entity left event
             if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(pos, entity_uuid, parent_event=parent_event)
+                event = SpatialChangeEvent.entity_left(
+                    pos, entity_uuid, parent_event=parent_event,
+                    **directional_metadata,
+                )
                 self._fire_spatial_event(event)
 
             del self._entity_positions[entity_uuid]
@@ -575,18 +877,26 @@ class GridMap:
         # Update position tracking
         if old_position is not None:
             self._entities_by_position[old_position].discard(entity_uuid)
+            old_directional_metadata = self.recompute_tile_directional_blocking(old_position)
 
             # Fire entity left event for old position
             if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(old_position, entity_uuid, new_position, parent_event=parent_event)
+                event = SpatialChangeEvent.entity_left(
+                    old_position, entity_uuid, new_position, parent_event=parent_event,
+                    **old_directional_metadata,
+                )
                 self._fire_spatial_event(event)
 
         self._entity_positions[entity_uuid] = new_position
         self._entities_by_position[new_position].add(entity_uuid)
+        new_directional_metadata = self.recompute_tile_directional_blocking(new_position)
 
         # Fire entity entered event for new position
         if self._events_enabled:
-            event = SpatialChangeEvent.entity_entered(new_position, entity_uuid, old_position, parent_event=parent_event)
+            event = SpatialChangeEvent.entity_entered(
+                new_position, entity_uuid, old_position, parent_event=parent_event,
+                **new_directional_metadata,
+            )
             self._fire_spatial_event(event)
 
     def get_entity_position(self, entity_uuid: UUID) -> Optional[Tuple[int, int]]:
@@ -610,13 +920,14 @@ class GridMap:
         """Place an object on the grid at a position."""
         self._object_positions[object_uuid] = position
         self._objects_by_position[position].add(object_uuid)
+        directional_metadata = self.recompute_tile_directional_blocking(position)
         if self._events_enabled:
             # Check object blocking properties for hint
             obj = BaseBlock.get(object_uuid)
             blocks_vision = obj.blocks_vision() if obj else False
             blocks_walking = obj.blocks_walking() if obj else False
-            obj_name = getattr(obj, 'name', None)
-            obj_map_char = getattr(obj, 'map_char', None)
+            obj_name = obj.name if obj else None
+            obj_map_char = obj.get_map_char() if obj else None
             self._fire_spatial_event(SpatialChangeEvent.object_placed(
                 position, object_uuid,
                 parent_event=parent_event,
@@ -624,6 +935,7 @@ class GridMap:
                 blocks_walking=blocks_walking,
                 object_name=obj_name,
                 object_map_char=obj_map_char,
+                **directional_metadata,
             ))
 
     def remove_object(self, object_uuid: UUID,
@@ -636,12 +948,14 @@ class GridMap:
         position = self._object_positions.pop(object_uuid, None)
         if position is not None:
             self._objects_by_position[position].discard(object_uuid)
+            directional_metadata = self.recompute_tile_directional_blocking(position)
             if self._events_enabled:
                 self._fire_spatial_event(SpatialChangeEvent.object_removed(
                     position, object_uuid,
                     parent_event=parent_event,
                     blocks_vision=blocks_vision,
                     blocks_walking=blocks_walking,
+                    **directional_metadata,
                 ))
 
     def get_objects_at(self, position: Tuple[int, int]) -> Set[UUID]:
@@ -668,6 +982,74 @@ class GridMap:
     # FOV and Pathfinding
     # =========================================================================
 
+    def _has_directional_blockers(self, channel: str) -> bool:
+        for tile in self._tiles.values():
+            for direction in DIRECTIONS:
+                if not tile.allows_direction(direction, channel):
+                    return True
+        return False
+
+    def _transition_clear(self, start: Tuple[int, int], end: Tuple[int, int],
+                          channel: str,
+                          observer_uuid: Optional[UUID] = None) -> bool:
+        path = supercover_line(start, end)
+        if not path:
+            return False
+        for index in range(1, len(path)):
+            prev = path[index - 1]
+            current = path[index]
+            if channel == "vision":
+                if not self.can_see_transition(prev, current, observer_uuid):
+                    return False
+                blocks_cell = self.is_blocking(current[0], current[1], observer_uuid)
+            elif channel == "light":
+                if not self.can_light_transition(prev, current, observer_uuid):
+                    return False
+                blocks_cell = self.is_blocking(current[0], current[1], observer_uuid)
+            else:
+                if not self.can_propagate_transition(prev, current, observer_uuid):
+                    return False
+                blocks_cell = self.is_blocking_propagation(current[0], current[1])
+
+            if index < len(path) - 1 and blocks_cell:
+                return False
+        return True
+
+    def raycast_clear(self, start: Tuple[int, int], end: Tuple[int, int],
+                      channel: str = "vision",
+                      observer_uuid: Optional[UUID] = None) -> bool:
+        """Public transition-aware line check for vision/light/propagation."""
+        return self._transition_clear(start, end, channel, observer_uuid)
+
+    def _compute_directional_fov(self, origin: Tuple[int, int], max_distance: Optional[float],
+                                 channel: str,
+                                 observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
+        if origin not in self._tiles:
+            return []
+        if self._bounds_dirty:
+            self._update_bounds()
+
+        radius = max_distance if max_distance is not None else max(self.width, self.height)
+        visible_positions: List[Tuple[int, int]] = []
+        min_x = max(self._min_x, math.floor(origin[0] - radius))
+        max_x = min(self._max_x, math.ceil(origin[0] + radius))
+        min_y = max(self._min_y, math.floor(origin[1] - radius))
+        max_y = min(self._max_y, math.ceil(origin[1] + radius))
+
+        for x in range(min_x, max_x + 1):
+            for y in range(min_y, max_y + 1):
+                pos = (x, y)
+                if pos not in self._tiles:
+                    continue
+                if max_distance is not None:
+                    dx = x - origin[0]
+                    dy = y - origin[1]
+                    if math.sqrt(dx * dx + dy * dy) > max_distance:
+                        continue
+                if pos == origin or self._transition_clear(origin, pos, channel, observer_uuid):
+                    visible_positions.append(pos)
+        return visible_positions
+
     def compute_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None,
                     observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
         """
@@ -688,6 +1070,24 @@ class GridMap:
         def is_blocking_for(x: int, y: int) -> bool:
             return self.is_blocking(x, y, requesting_entity_uuid=observer_uuid)
 
+        if self._has_directional_blockers("vision"):
+            return self._compute_directional_fov(origin, max_distance, "vision", observer_uuid)
+
+        compute_fov(origin, is_blocking_for, mark_visible, max_distance)
+        return visible_positions
+
+    def compute_light_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
+        """Compute light reach using light directional borders and current cell blockers."""
+        if self._has_directional_blockers("light"):
+            return self._compute_directional_fov(origin, max_distance, "light")
+        visible_positions: List[Tuple[int, int]] = []
+
+        def mark_visible(x: int, y: int) -> None:
+            visible_positions.append((x, y))
+
+        def is_blocking_for(x: int, y: int) -> bool:
+            return self.is_blocking(x, y)
+
         compute_fov(origin, is_blocking_for, mark_visible, max_distance)
         return visible_positions
 
@@ -697,6 +1097,7 @@ class GridMap:
                       walk_in_danger: bool = True,
                       subjective: bool = False,
                       collision_blocked: Optional[Set[Tuple[int, int]]] = None,
+                      directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
                       ignore_difficult_terrain: bool = False
                       ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
         """
@@ -741,10 +1142,11 @@ class GridMap:
 
         # Check if entry is allowed from a direction (border check)
         def can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
-            tile = self.get_tile(*to_pos)
-            if not tile:
-                return False
-            return tile.can_enter_from(from_pos)
+            return self.can_transition(
+                from_pos, to_pos, requesting_entity_uuid, movement_mode,
+                walk_in_danger, subjective, collision_blocked,
+                directional_collision_blocked=directional_collision_blocked,
+            )
 
         return dijkstra(
             start,
@@ -927,7 +1329,7 @@ class GridMap:
         bright_radius_tiles = max(source.bright_radius_feet // 5, 1)
         very_bright_radius_tiles = source.very_bright_radius_feet / 5 if source.very_bright_radius_feet > 0 else 0
 
-        visible_positions = self.compute_fov(pos, total_radius_tiles)
+        visible_positions = self.compute_light_fov(pos, total_radius_tiles)
         result: Dict[Tuple[int, int], LightLevel] = {}
         for tile_pos in visible_positions:
             if tile_pos not in self._tiles:
@@ -1095,7 +1497,7 @@ class GridMap:
         if not isinstance(event, SpatialChangeEvent):
             return
         hint = event.senses_hint
-        if hint is None or not hint.requires_fov:
+        if hint is None or not (hint.requires_fov or hint.requires_light_recompute):
             return
         self.recompute_lights_at_position(event.position, parent_event=event.uuid)
 
@@ -1198,6 +1600,9 @@ class GridMap:
         def is_blocking_for(x: int, y: int) -> bool:
             return self.is_blocking_propagation(x, y)
 
+        if self._has_directional_blockers("propagation"):
+            return self._compute_directional_fov(origin, max_distance, "propagation")
+
         compute_fov(origin, is_blocking_for, mark_visible, max_distance)
         return visible_positions
 
@@ -1209,6 +1614,8 @@ class GridMap:
         barriers: Set[Tuple[int, int]] = set()
         for pos, tile in self._tiles.items():
             if not tile.visible:  # Wall
+                barriers.add(pos)
+            elif any(not tile.allows_direction(direction, "propagation") for direction in DIRECTIONS):
                 barriers.add(pos)
         for pos, obj_uuids in self._objects_by_position.items():
             for obj_uuid in obj_uuids:

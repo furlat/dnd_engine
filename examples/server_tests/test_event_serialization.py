@@ -10,6 +10,11 @@ variety of event types (attacks, damage, saves, conditions, movement, spells),
 then verifies every single event can be serialized with model_dump(mode='json').
 """
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from dnd.utils import reset_combat_state
 from dnd.core.events import EventQueue
 
