@@ -1256,11 +1256,12 @@ class Thunderwave(SpellAction):
         was_blocked = False
         blocked_by: Optional[str] = None
 
-        for i in range(1, distance_tiles + 1):
-            next_pos = (start[0] + direction[0] * i, start[1] + direction[1] * i)
+        current_pos = start
+        for _ in range(distance_tiles):
+            next_pos = (current_pos[0] + direction[0], current_pos[1] + direction[1])
 
-            # Check if tile is walkable
-            if not grid.is_walkable_for(next_pos[0], next_pos[1], target_uuid):
+            # Check if the forced movement can cross into the next tile.
+            if not grid.can_transition(current_pos, next_pos, target_uuid):
                 was_blocked = True
                 blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break
@@ -1275,6 +1276,7 @@ class Thunderwave(SpellAction):
                 break
 
             last_valid_pos = next_pos
+            current_pos = next_pos
 
         actual_distance = abs(last_valid_pos[0] - start[0]) + abs(last_valid_pos[1] - start[1])
         actual_distance_feet = actual_distance * 5
@@ -2736,7 +2738,7 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
     current_pos = entity_pos
     for _ in range(3):
         next_pos = (current_pos[0] + push_dx, current_pos[1] + push_dy)
-        if not grid.is_walkable_for(next_pos[0], next_pos[1], entity.uuid):
+        if not grid.can_transition(current_pos, next_pos, entity.uuid):
             break
         current_pos = next_pos
 

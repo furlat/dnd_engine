@@ -83,6 +83,53 @@ def bresenham_line(
     return positions
 
 
+def supercover_line(
+    start: Tuple[int, int],
+    end: Tuple[int, int]
+) -> List[Tuple[int, int]]:
+    """
+    Ordered grid traversal from start to end for transition-aware ray checks.
+
+    Consecutive cells are always adjacent. When the mathematical line advances
+    diagonally, the transition is represented as a diagonal step so callers can
+    apply their own diagonal policy while checking the crossed tile directions.
+    """
+    if start == end:
+        return [start]
+
+    x0, y0 = start
+    x1, y1 = end
+    dx = x1 - x0
+    dy = y1 - y0
+    nx = abs(dx)
+    ny = abs(dy)
+    sign_x = 1 if dx > 0 else -1 if dx < 0 else 0
+    sign_y = 1 if dy > 0 else -1 if dy < 0 else 0
+
+    x, y = x0, y0
+    ix = 0
+    iy = 0
+    positions: List[Tuple[int, int]] = [(x, y)]
+
+    while ix < nx or iy < ny:
+        x_mid = (1 + 2 * ix) * ny
+        y_mid = (1 + 2 * iy) * nx
+        if ix < nx and (iy >= ny or x_mid < y_mid):
+            x += sign_x
+            ix += 1
+        elif iy < ny and (ix >= nx or y_mid < x_mid):
+            y += sign_y
+            iy += 1
+        else:
+            x += sign_x
+            y += sign_y
+            ix += 1
+            iy += 1
+        positions.append((x, y))
+
+    return positions
+
+
 def line_positions(
     start: Tuple[int, int],
     direction: Tuple[int, int],

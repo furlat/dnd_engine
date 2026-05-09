@@ -19,7 +19,6 @@ from dnd.core.gridmap import get_map
 
 from dnd.spells.evocation import BurningHands, Thunderwave, LightningBolt
 from dnd.actions_functional import setup_standard_actions, register_spell
-import pytest
 
 
 def create_solo_caster(
@@ -145,4 +144,24 @@ class TestSelfRangeAoeAvailability:
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    print("=" * 60)
+    print("SELF-RANGE AOE AVAILABILITY TESTS")
+    print("=" * 60)
+
+    suite = TestSelfRangeAoeAvailability()
+    tests = [
+        suite.test_burning_hands_available_no_enemies,
+        suite.test_thunderwave_available_no_enemies,
+        suite.test_lightning_bolt_available_no_enemies,
+        suite.test_self_range_aoe_with_enemies_still_has_targets,
+        suite.test_non_self_range_aoe_still_filtered,
+    ]
+
+    passed = 0
+    for test in tests:
+        suite.setup_method()
+        test()
+        print(f"  PASS: {test.__name__}")
+        passed += 1
+
+    print(f"\nALL {passed} SELF-RANGE AOE AVAILABILITY TESTS PASSED")

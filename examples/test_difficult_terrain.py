@@ -129,11 +129,12 @@ def test_tile_borders():
     grid.set_tile(1, 0, walkable=True, name="Floor")
     grid.set_tile(2, 0, walkable=True, name="Floor")
 
-    # Make tile (1,0) only enterable from the west (can't enter from east)
+    # Block tile (1,0)'s east side. Directional tile data now applies to the
+    # tile-owned side itself, so crossing that side is blocked in either travel direction.
     middle_tile = grid.get_tile(1, 0)
     assert middle_tile is not None, "Middle tile should exist"
 
-    middle_tile.border_east = False  # Block entry from east (coming from x=2)
+    middle_tile.border_east = False
     print(f"Middle tile (1,0) borders: N={middle_tile.border_north}, S={middle_tile.border_south}, E={middle_tile.border_east}, W={middle_tile.border_west}")
 
     # Test can_enter_from
@@ -143,8 +144,8 @@ def test_tile_borders():
     print(f"Can enter (1,0) from (2,0) [east]: {middle_tile.can_enter_from((2, 0))}")
     assert middle_tile.can_enter_from((2, 0)) == False, "Should NOT be able to enter from east"
 
-    # Test pathfinding respects borders
-    # From (0,0), should be able to reach (1,0) and (2,0)
+    # Test pathfinding respects both endpoint tiles' directional state.
+    # From (0,0), should be able to reach (1,0), but cannot cross (1,0)'s east side.
     distances_from_west, _ = grid.compute_paths((0, 0))
     print(f"\nFrom (0,0) - reachable: {sorted(distances_from_west.keys())}")
 
@@ -152,9 +153,9 @@ def test_tile_borders():
     distances_from_east, _ = grid.compute_paths((2, 0))
     print(f"From (2,0) - reachable: {sorted(distances_from_east.keys())}")
 
-    # From west, should reach all tiles
+    # From west, can enter the middle but cannot leave through its blocked east side.
     assert (1, 0) in distances_from_west, "Should reach (1,0) from west"
-    assert (2, 0) in distances_from_west, "Should reach (2,0) from west"
+    assert (2, 0) not in distances_from_west, "Should NOT cross (1,0)'s blocked east side"
 
     # From east, cannot enter (1,0)
     assert (1, 0) not in distances_from_east, "Should NOT reach (1,0) from east (border blocks)"

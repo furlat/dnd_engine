@@ -17,6 +17,13 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 
 ## Open Issues
 
+### Equipment API test sends stale equip/unequip payloads
+- **Found**: 2026-05-08 during edge-aware spatial foundation validation
+- **Test file**: `examples/server_tests/test_equipment_api.py`
+- **Error**: Running against a temporary `uvicorn server.event_server:app --port 8000` reaches the equipment endpoints, but `POST /entity/{uuid}/equip` and `POST /entity/{uuid}/unequip` return HTTP 422 because the request body omits required `entity_uuid`. The later expected 400/404 error-case checks then fail as follow-on failures.
+- **Hypothesis**: The server request models were updated to require `entity_uuid`, but this manual integration test still sends the older payload shape with only `session_id`, `item_uuid`/`slot`. The test likely needs to include `entity_uuid` in equip/unequip payloads or the endpoint model needs compatibility handling.
+- **Status**: OPEN
+
 ### WebSocket ping test assumes pong is the next frame
 - **Found**: 2026-05-03 during spell catalog endpoint validation
 - **Test file**: `server/test_websocket.py`
@@ -56,7 +63,6 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
   3. Validate entity UUID at command execution time against the server's actual active entity
   4. Investigate why the subprocess takes 45+ seconds to drain — may need to interrupt Claude's generation more aggressively or increase the timeout
 - **Status**: OPEN
-
 
 
 

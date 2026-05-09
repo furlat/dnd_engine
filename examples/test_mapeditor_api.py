@@ -64,6 +64,28 @@ def test_scratch_map_and_layers() -> None:
     check(tiles[(2, 1)]["name"] == "Water" and not tiles[(2, 1)]["walkable"], "water tile is non-walkable")
     check(tiles[(3, 2)]["walking_cost"] == 2, "difficult terrain has walking cost 2")
 
+    response = client.post(
+        "/mapeditor/map/tiles",
+        json={
+            "tiles": [
+                {"x": 0, "y": 0, "directional_channel": "movement", "direction": "east", "passable": False},
+                {"x": 0, "y": 0, "directional_channel": "vision", "direction": "north", "passable": False},
+            ]
+        },
+    )
+    check(response.status_code == 200, "directional tile patch returns 200")
+    directional_tile = next(tile for tile in response.json()["tiles"] if tile["x"] == 0 and tile["y"] == 0)
+    check(directional_tile["directional_blocks_movement"]["east"], "mapeditor snapshot exposes directional movement block")
+    check(directional_tile["directional_blocks_vision"]["north"], "mapeditor snapshot exposes directional vision block")
+
+    grid_tile = next(tile for tile in client.get("/grid").json()["tiles"] if tile["x"] == 0 and tile["y"] == 0)
+    check(grid_tile["directional_blocks_movement"]["east"], "grid endpoint exposes directional movement block")
+    check(grid_tile["directional_blocks_vision"]["north"], "grid endpoint exposes directional vision block")
+
+    state_tile = next(tile for tile in client.get("/state").json()["grid"]["tiles"] if tile["x"] == 0 and tile["y"] == 0)
+    check(state_tile["directional_blocks_movement"]["east"], "state endpoint exposes directional movement block")
+    check(state_tile["directional_blocks_vision"]["north"], "state endpoint exposes directional vision block")
+
     response = client.post("/mapeditor/map/objects", json={"catalog_id": "door", "position": [0, 1]})
     check(response.status_code == 200, "door placement returns 200")
     check(response.json()["name"] == "Door", "placed object is a door")

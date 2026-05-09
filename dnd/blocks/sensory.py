@@ -27,6 +27,10 @@ class Senses(BaseBlock):
     sense_modes: List[SenseMode] = Field(default_factory=list, description="Special sense modes (Darkvision, Blindsight, etc.) with ranges")
     seen: Set[Tuple[int,int]] = Field(default_factory=set, description="A list of positions that the entity has seen")
     collision_blocked: Set[Tuple[int,int]] = Field(default_factory=set, description="Positions discovered blocked by imperceivable entities/objects during movement")
+    directional_collision_blocked: Set[Tuple[Tuple[int, int], str]] = Field(
+        default_factory=set,
+        description="Tile-relative transitions discovered blocked by imperceivable blockers during movement"
+    )
     _paths_dirty: bool = PrivateAttr(default=False)
     _last_passive_perception: int = PrivateAttr(default=0)
     _last_sense_modes_hash: int = PrivateAttr(default=0)
@@ -116,6 +120,7 @@ class Senses(BaseBlock):
         1. Adjacent to this entity (including diagonals)
         2. Visible to this entity
         3. On a walkable tile (regardless of occupancy - an occupied cell is still threatened)
+        4. Physical propagation can cross from this entity to that tile
 
         Note: Uses tile walkability (self.walkable), not paths, because paths exclude
         occupied cells but an enemy standing in a cell is still threatened.
@@ -133,7 +138,12 @@ class Senses(BaseBlock):
         ])
         visible_set = set(self.visible.keys())
         walkable_set = set(pos for pos, is_walkable in self.walkable.items() if is_walkable)
-        return list(neighbors & visible_set & walkable_set)
+        candidates = neighbors & visible_set & walkable_set
+        grid = get_map()
+        return [
+            pos for pos in candidates
+            if grid.can_propagate_transition(position, pos, self.source_entity_uuid)
+        ]
 
 
     @classmethod
@@ -645,6 +655,13 @@ class SpatialSensesCallback:
     def _try_add_visible_object(self, object_uuid: UUID, position: Tuple[int, int]) -> None:
         """Add object to senses.objects if in visible area."""
         grid = get_map()
+        block = BaseBlock.get(object_uuid)
+        if block is None:
+            return
+        if not block.should_include_in_senses_objects():
+            return
+        if not block.is_perceivable_by(self.owner_uuid):
+            return
         tile = grid.get_tile(*position)
         if tile:
             effective_light = tile.get_effective_light_for(self.owner_uuid, self.senses.position)
