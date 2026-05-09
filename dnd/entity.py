@@ -1824,6 +1824,33 @@ class Entity(BaseBlock):
         return item
 
     @staticmethod
+    def _add_adjacent_senses_objects(
+        visible_objects: Dict[UUID, Tuple[int, int]],
+        observer_position: Tuple[int, int],
+        observer_uuid: Optional[UUID],
+    ) -> None:
+        """Add adjacent interactable structural objects that block visibility into their own cell."""
+        grid = get_map()
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                position = (observer_position[0] + dx, observer_position[1] + dy)
+                for obj_uuid in grid.get_objects_at(position):
+                    if obj_uuid in visible_objects:
+                        continue
+                    obj = BaseBlock.get(obj_uuid)
+                    if obj is None:
+                        continue
+                    if not obj.should_include_in_senses_objects():
+                        continue
+                    if not obj.should_include_in_adjacent_senses_objects():
+                        continue
+                    if not obj.is_perceivable_by(observer_uuid):
+                        continue
+                    visible_objects[obj_uuid] = position
+
+    @staticmethod
     def compute_senses_from_position(
         position: Tuple[int, int],
         seen: Set[Tuple[int, int]],
@@ -1932,6 +1959,7 @@ class Entity(BaseBlock):
                 if not obj.is_perceivable_by(entity_uuid):
                     continue
                 visible_objects[obj_uuid] = pos
+        Entity._add_adjacent_senses_objects(visible_objects, position, entity_uuid)
 
         # Build walkable dict from full geometric FOV (for map rendering)
         walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in fov_positions}
@@ -2046,6 +2074,7 @@ class Entity(BaseBlock):
                 if not obj.is_perceivable_by(self.uuid):
                     continue
                 visible_objects[obj_uuid] = pos
+        Entity._add_adjacent_senses_objects(visible_objects, self.position, self.uuid)
 
         # Detect newly spotted hiding enemies
         old_entities = set(self.senses.entities.keys())

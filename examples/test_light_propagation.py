@@ -18,6 +18,7 @@ from dnd.core.gridmap import get_map
 from dnd.monsters.bestiary import create_skeleton
 from dnd.actions_functional import setup_standard_actions
 from dnd.items.test_items import TestDoorA, create_wall_torch
+from dnd.maps.arena_layout import build_dark_standard_barrier_fixture
 
 passed = 0
 failed = 0
@@ -47,25 +48,11 @@ def tile_light(x: int, y: int) -> LightLevel:
 
 
 def create_dark_arena_with_wall_and_door():
-    """Create a 15x15 dark arena with vertical wall at x=7, door at (7,7)."""
+    """Create a dark arena with the standard directional wall and door."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
-
-    # Make all tiles dark
-    for _, tile in grid._tiles.items():
-        tile.default_light = LightLevel.DARKNESS
-
-    # Vertical wall at x=7, y=3..11 with gap at y=7
-    for y in range(3, 12):
-        if y != 7:
-            grid.set_tile(7, y, walkable=False, visible=False, name="Wall")
-
-    # Place closed door at the gap
-    door = TestDoorA(source_entity_uuid=uuid4())
-    grid.place_object(door.uuid, (7, 7))
-
-    return grid, door
+    barrier = build_dark_standard_barrier_fixture(grid)
+    return grid, barrier.door
 
 
 # =============================================================================
@@ -101,12 +88,7 @@ check("Tile (4,7) is DARKNESS", tile_light(4, 7) == LightLevel.DARKNESS)
 section("Door opens — light propagates")
 
 # Open the door
-old_bm = door.blocks_movement
-old_bv = door.blocks_vision_field
-door.is_open = True
-door.blocks_movement = False
-door.blocks_vision_field = False
-door._notify_blocking_changed(old_bm, old_bv)
+door.open()
 
 # Right side should still be lit
 check("Tile (10,7) still BRIGHT after open", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
@@ -128,12 +110,7 @@ check("Tile (6,7) has light after open (light propagated)", tile_light(6, 7) != 
 # =============================================================================
 section("Door closes — light recedes")
 
-old_bm = door.blocks_movement
-old_bv = door.blocks_vision_field
-door.is_open = False
-door.blocks_movement = True
-door.blocks_vision_field = True
-door._notify_blocking_changed(old_bm, old_bv)
+door.close()
 
 # Right side still lit
 check("Tile (10,7) still BRIGHT after close", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
@@ -158,12 +135,7 @@ Entity.update_all_entities_senses()
 check("(6,7) dark with closed door (adjacent light)", tile_light(6, 7) == LightLevel.DARKNESS)
 
 # Open door
-old_bm = door.blocks_movement
-old_bv = door.blocks_vision_field
-door.is_open = True
-door.blocks_movement = False
-door.blocks_vision_field = False
-door._notify_blocking_changed(old_bm, old_bv)
+door.open()
 
 # Door position should get light
 check("(7,7) has light after open (adjacent torch)", tile_light(7, 7) != LightLevel.DARKNESS)
@@ -173,12 +145,7 @@ check("(7,7) has light after open (adjacent torch)", tile_light(7, 7) != LightLe
 check("(7,7) is BRIGHT from adjacent torch", tile_light(7, 7) == LightLevel.VERY_BRIGHT)
 
 # Close again
-old_bm = door.blocks_movement
-old_bv = door.blocks_vision_field
-door.is_open = False
-door.blocks_movement = True
-door.blocks_vision_field = True
-door._notify_blocking_changed(old_bm, old_bv)
+door.close()
 
 check("(6,7) dark again after close", tile_light(6, 7) == LightLevel.DARKNESS)
 
@@ -203,12 +170,7 @@ check("(6,7) has light from left torch (closed door)", tile_light(6, 7) != Light
 check("(8,7) has light from right torch (closed door)", tile_light(8, 7) != LightLevel.DARKNESS)
 
 # Open door — both torches should recompute and light the corridor
-old_bm = door.blocks_movement
-old_bv = door.blocks_vision_field
-door.is_open = True
-door.blocks_movement = False
-door.blocks_vision_field = False
-door._notify_blocking_changed(old_bm, old_bv)
+door.open()
 
 check("(7,7) has light after open (both torches)", tile_light(7, 7) != LightLevel.DARKNESS)
 # Both sides should still be lit
@@ -216,12 +178,7 @@ check("(10,7) still bright after open", tile_light(10, 7) == LightLevel.VERY_BRI
 check("(4,7) still bright after open", tile_light(4, 7) == LightLevel.VERY_BRIGHT)
 
 # Close door — revert
-old_bm = door.blocks_movement
-old_bv = door.blocks_vision_field
-door.is_open = False
-door.blocks_movement = True
-door.blocks_vision_field = True
-door._notify_blocking_changed(old_bm, old_bv)
+door.close()
 
 check("(10,7) still bright after close", tile_light(10, 7) == LightLevel.VERY_BRIGHT)
 check("(4,7) still bright after close", tile_light(4, 7) == LightLevel.VERY_BRIGHT)
@@ -299,12 +256,7 @@ Entity.update_all_entities_senses()
 check("Target NOT visible through closed door", target.uuid not in observer.senses.entities)
 
 # Open door
-old_bm = door.blocks_movement
-old_bv = door.blocks_vision_field
-door.is_open = True
-door.blocks_movement = False
-door.blocks_vision_field = False
-door._notify_blocking_changed(old_bm, old_bv)
+door.open()
 
 # Senses need full recompute after FOV change — the SPATIAL_OBJECT_CHANGED event
 # sets requires_fov which triggers senses update callback

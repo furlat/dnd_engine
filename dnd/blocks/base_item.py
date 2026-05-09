@@ -73,6 +73,7 @@ class BaseItem(BaseBlock):
 
     # Visibility/action discovery controls
     include_in_senses_objects: bool = Field(default=True, description="Whether entity senses should list this floor object")
+    include_in_adjacent_senses_objects: bool = Field(default=False, description="Whether adjacent entities can sense this floor object without cell visibility")
     include_in_available_object_actions: bool = Field(default=True, description="Whether object/use action discovery should consider this floor object")
 
     # Spatial properties (for floor items)
@@ -124,6 +125,9 @@ class BaseItem(BaseBlock):
 
     def should_include_in_senses_objects(self) -> bool:
         return self.include_in_senses_objects
+
+    def should_include_in_adjacent_senses_objects(self) -> bool:
+        return self.include_in_adjacent_senses_objects
 
     def should_include_in_available_object_actions(self) -> bool:
         return self.include_in_available_object_actions

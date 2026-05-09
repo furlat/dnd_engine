@@ -73,53 +73,79 @@ echo "8. Checking current turn..."
 TURN_INFO=$(curl -s "$BASE_URL/encounter/current-turn")
 echo "Response: $TURN_INFO"
 CURRENT_NAME=$(echo $TURN_INFO | python3 -c "import sys, json; print(json.load(sys.stdin).get('current_entity_name', ''))")
+CURRENT_UUID=$(echo $TURN_INFO | python3 -c "import sys, json; print(json.load(sys.stdin).get('current_entity_uuid', ''))")
+CONTROLLER_TYPE=$(echo $TURN_INFO | python3 -c "import sys, json; print(json.load(sys.stdin).get('controller_type', ''))")
 echo "Current turn: $CURRENT_NAME"
+echo "Current UUID: $CURRENT_UUID"
+echo "Controller: $CONTROLLER_TYPE"
 echo ""
 
 # 9. Try to move (with appropriate session)
-echo "9. Testing move action..."
-if [ "$CURRENT_NAME" = "Hero" ]; then
+echo "9. Testing action execution..."
+if [ "$CONTROLLER_TYPE" = "human" ]; then
   echo "Hero's turn - using human session"
   ACTIVE_SESSION="$HUMAN_SESSION_ID"
-  ACTIVE_UUID="$HERO_UUID"
 else
-  echo "Skeleton's turn - using claude session"
+  echo "Claude-controlled turn - using claude session"
   ACTIVE_SESSION="$CLAUDE_SESSION_ID"
-  ACTIVE_UUID="$SKELETON_UUID"
 fi
+ACTIVE_UUID="$CURRENT_UUID"
 
 # Get available actions first
 echo "Getting available actions for $CURRENT_NAME..."
 ACTIONS=$(curl -s "$BASE_URL/entity/$ACTIVE_UUID/available-actions")
-echo "Can move: $(echo $ACTIONS | python3 -c "import sys, json; print(json.load(sys.stdin).get('can_move', False))")"
+echo "Position actions: $(echo $ACTIONS | python3 -c "import sys, json; data=json.load(sys.stdin); print([a.get('template_name') for a in data.get('position_actions', [])])")"
+ACTION_SPEC=$(echo "$ACTIONS" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+for action in data.get("position_actions", []):
+    if action.get("template_name") == "Move" and action.get("valid_targets"):
+        print("position|Move|" + json.dumps(action["valid_targets"][0]["position"]))
+        break
+else:
+    self_actions = data.get("self_actions", [])
+    if not self_actions:
+        raise SystemExit("No executable position or self action found")
+    print("self|" + self_actions[0]["template_name"] + "|")
+')
+ACTION_KIND=$(echo "$ACTION_SPEC" | cut -d'|' -f1)
+ACTION_NAME=$(echo "$ACTION_SPEC" | cut -d'|' -f2)
+ACTION_TARGET=$(echo "$ACTION_SPEC" | cut -d'|' -f3-)
 echo ""
 
-# Try a move (position 3,7 for Hero, 11,7 for Skeleton)
-if [ "$CURRENT_NAME" = "Hero" ]; then
-  MOVE_POS="[3, 7]"
+echo "Attempting $ACTION_NAME ($ACTION_KIND)..."
+if [ "$ACTION_KIND" = "position" ]; then
+  ACTION_RESULT=$(curl -s -X POST "$BASE_URL/action/position" \
+    -H "Content-Type: application/json" \
+    -d "{\"session_id\": \"$ACTIVE_SESSION\", \"entity_uuid\": \"$ACTIVE_UUID\", \"action_name\": \"$ACTION_NAME\", \"position\": $ACTION_TARGET}")
 else
-  MOVE_POS="[11, 7]"
+  ACTION_RESULT=$(curl -s -X POST "$BASE_URL/action/self" \
+    -H "Content-Type: application/json" \
+    -d "{\"session_id\": \"$ACTIVE_SESSION\", \"entity_uuid\": \"$ACTIVE_UUID\", \"action_name\": \"$ACTION_NAME\"}")
 fi
-
-echo "Attempting move to $MOVE_POS..."
-MOVE_RESULT=$(curl -s -X POST "$BASE_URL/action/move" \
-  -H "Content-Type: application/json" \
-  -d "{\"session_id\": \"$ACTIVE_SESSION\", \"entity_uuid\": \"$ACTIVE_UUID\", \"position\": $MOVE_POS}")
-echo "Move result: $MOVE_RESULT"
+echo "Action result: $ACTION_RESULT"
+echo "$ACTION_RESULT" | python3 -c 'import json, sys; data=json.load(sys.stdin); assert data.get("success") is True, data'
 echo ""
 
 # 10. Try with WRONG session (should fail)
 echo "10. Testing wrong session (should fail)..."
-if [ "$CURRENT_NAME" = "Hero" ]; then
+if [ "$CONTROLLER_TYPE" = "human" ]; then
   WRONG_SESSION="$CLAUDE_SESSION_ID"
 else
   WRONG_SESSION="$HUMAN_SESSION_ID"
 fi
 
-WRONG_RESULT=$(curl -s -X POST "$BASE_URL/action/move" \
-  -H "Content-Type: application/json" \
-  -d "{\"session_id\": \"$WRONG_SESSION\", \"entity_uuid\": \"$ACTIVE_UUID\", \"position\": $MOVE_POS}")
+if [ "$ACTION_KIND" = "position" ]; then
+  WRONG_RESULT=$(curl -s -X POST "$BASE_URL/action/position" \
+    -H "Content-Type: application/json" \
+    -d "{\"session_id\": \"$WRONG_SESSION\", \"entity_uuid\": \"$ACTIVE_UUID\", \"action_name\": \"$ACTION_NAME\", \"position\": $ACTION_TARGET}")
+else
+  WRONG_RESULT=$(curl -s -X POST "$BASE_URL/action/self" \
+    -H "Content-Type: application/json" \
+    -d "{\"session_id\": \"$WRONG_SESSION\", \"entity_uuid\": \"$ACTIVE_UUID\", \"action_name\": \"$ACTION_NAME\"}")
+fi
 echo "Wrong session result (should be error): $WRONG_RESULT"
+echo "$WRONG_RESULT" | python3 -c 'import json, sys; data=json.load(sys.stdin); assert "detail" in data, data'
 echo ""
 
 echo "=== TEST COMPLETE ==="

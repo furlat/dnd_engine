@@ -215,6 +215,10 @@ class BaseBlock(BaseModel):
         """Whether this block should appear in entity senses.objects."""
         return True
 
+    def should_include_in_adjacent_senses_objects(self) -> bool:
+        """Whether this block can be sensed from an adjacent tile even if its cell is not visible."""
+        return False
+
     def should_include_in_available_object_actions(self) -> bool:
         """Whether this block should be considered by object/action discovery."""
         return True
