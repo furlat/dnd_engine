@@ -115,6 +115,34 @@ class Tile(BaseBlock):
     border_south: bool = Field(default=True, description="Can enter from south (y-1)")
     border_east: bool = Field(default=True, description="Can enter from east (x+1)")
     border_west: bool = Field(default=True, description="Can enter from west (x-1)")
+    vision_border_north: bool = Field(default=True, description="Vision can cross north")
+    vision_border_south: bool = Field(default=True, description="Vision can cross south")
+    vision_border_east: bool = Field(default=True, description="Vision can cross east")
+    vision_border_west: bool = Field(default=True, description="Vision can cross west")
+    light_border_north: bool = Field(default=True, description="Light can cross north")
+    light_border_south: bool = Field(default=True, description="Light can cross south")
+    light_border_east: bool = Field(default=True, description="Light can cross east")
+    light_border_west: bool = Field(default=True, description="Light can cross west")
+    propagation_border_north: bool = Field(default=True, description="Physical propagation can cross north")
+    propagation_border_south: bool = Field(default=True, description="Physical propagation can cross south")
+    propagation_border_east: bool = Field(default=True, description="Physical propagation can cross east")
+    propagation_border_west: bool = Field(default=True, description="Physical propagation can cross west")
+    object_movement_border_north: bool = Field(default=True, description="Object-derived movement contribution north")
+    object_movement_border_south: bool = Field(default=True, description="Object-derived movement contribution south")
+    object_movement_border_east: bool = Field(default=True, description="Object-derived movement contribution east")
+    object_movement_border_west: bool = Field(default=True, description="Object-derived movement contribution west")
+    object_vision_border_north: bool = Field(default=True, description="Object-derived vision contribution north")
+    object_vision_border_south: bool = Field(default=True, description="Object-derived vision contribution south")
+    object_vision_border_east: bool = Field(default=True, description="Object-derived vision contribution east")
+    object_vision_border_west: bool = Field(default=True, description="Object-derived vision contribution west")
+    object_light_border_north: bool = Field(default=True, description="Object-derived light contribution north")
+    object_light_border_south: bool = Field(default=True, description="Object-derived light contribution south")
+    object_light_border_east: bool = Field(default=True, description="Object-derived light contribution east")
+    object_light_border_west: bool = Field(default=True, description="Object-derived light contribution west")
+    object_propagation_border_north: bool = Field(default=True, description="Object-derived propagation contribution north")
+    object_propagation_border_south: bool = Field(default=True, description="Object-derived propagation contribution south")
+    object_propagation_border_east: bool = Field(default=True, description="Object-derived propagation contribution east")
+    object_propagation_border_west: bool = Field(default=True, description="Object-derived propagation contribution west")
 
     # Elevation (0 = ground level, each unit = 5ft)
     height: int = Field(default=0, description="Tile elevation in 5ft increments")
@@ -298,7 +326,241 @@ class Tile(BaseBlock):
     # Borders
     # =========================================================================
 
-    def can_enter_from(self, from_position: Tuple[int, int]) -> bool:
+    def directions_toward(self, other_position: Tuple[int, int]) -> Tuple[str, ...]:
+        """Return tile-relative cardinal directions touched by a transition."""
+        if self.position is None:
+            return ()
+
+        dx = other_position[0] - self.position[0]
+        dy = other_position[1] - self.position[1]
+        directions = []
+        if dx > 0:
+            directions.append("east")
+        elif dx < 0:
+            directions.append("west")
+        if dy > 0:
+            directions.append("north")
+        elif dy < 0:
+            directions.append("south")
+        return tuple(directions)
+
+    def _intrinsic_border(self, direction: str, channel: str) -> bool:
+        if channel == "movement":
+            if direction == "north":
+                return self.border_north
+            if direction == "south":
+                return self.border_south
+            if direction == "east":
+                return self.border_east
+            if direction == "west":
+                return self.border_west
+        elif channel == "vision":
+            if direction == "north":
+                return self.vision_border_north
+            if direction == "south":
+                return self.vision_border_south
+            if direction == "east":
+                return self.vision_border_east
+            if direction == "west":
+                return self.vision_border_west
+        elif channel == "light":
+            if direction == "north":
+                return self.light_border_north
+            if direction == "south":
+                return self.light_border_south
+            if direction == "east":
+                return self.light_border_east
+            if direction == "west":
+                return self.light_border_west
+        elif channel == "propagation":
+            if direction == "north":
+                return self.propagation_border_north
+            if direction == "south":
+                return self.propagation_border_south
+            if direction == "east":
+                return self.propagation_border_east
+            if direction == "west":
+                return self.propagation_border_west
+        return True
+
+    def _derived_border(self, direction: str, channel: str) -> bool:
+        if channel == "movement":
+            if direction == "north":
+                return self.object_movement_border_north
+            if direction == "south":
+                return self.object_movement_border_south
+            if direction == "east":
+                return self.object_movement_border_east
+            if direction == "west":
+                return self.object_movement_border_west
+        elif channel == "vision":
+            if direction == "north":
+                return self.object_vision_border_north
+            if direction == "south":
+                return self.object_vision_border_south
+            if direction == "east":
+                return self.object_vision_border_east
+            if direction == "west":
+                return self.object_vision_border_west
+        elif channel == "light":
+            if direction == "north":
+                return self.object_light_border_north
+            if direction == "south":
+                return self.object_light_border_south
+            if direction == "east":
+                return self.object_light_border_east
+            if direction == "west":
+                return self.object_light_border_west
+        elif channel == "propagation":
+            if direction == "north":
+                return self.object_propagation_border_north
+            if direction == "south":
+                return self.object_propagation_border_south
+            if direction == "east":
+                return self.object_propagation_border_east
+            if direction == "west":
+                return self.object_propagation_border_west
+        return True
+
+    def set_intrinsic_border(self, channel: str, direction: str, passable: bool) -> bool:
+        """Set a tile-authored directional border. Returns True if changed."""
+        old_value = self._intrinsic_border(direction, channel)
+        if old_value == passable:
+            return False
+        if channel == "movement":
+            if direction == "north":
+                self.border_north = passable
+            elif direction == "south":
+                self.border_south = passable
+            elif direction == "east":
+                self.border_east = passable
+            elif direction == "west":
+                self.border_west = passable
+            else:
+                return False
+        elif channel == "vision":
+            if direction == "north":
+                self.vision_border_north = passable
+            elif direction == "south":
+                self.vision_border_south = passable
+            elif direction == "east":
+                self.vision_border_east = passable
+            elif direction == "west":
+                self.vision_border_west = passable
+            else:
+                return False
+        elif channel == "light":
+            if direction == "north":
+                self.light_border_north = passable
+            elif direction == "south":
+                self.light_border_south = passable
+            elif direction == "east":
+                self.light_border_east = passable
+            elif direction == "west":
+                self.light_border_west = passable
+            else:
+                return False
+        elif channel == "propagation":
+            if direction == "north":
+                self.propagation_border_north = passable
+            elif direction == "south":
+                self.propagation_border_south = passable
+            elif direction == "east":
+                self.propagation_border_east = passable
+            elif direction == "west":
+                self.propagation_border_west = passable
+            else:
+                return False
+        else:
+            return False
+        return True
+
+    def set_object_border(self, channel: str, direction: str, passable: bool) -> bool:
+        """Set object/entity-derived directional border state. Returns True if changed."""
+        old_value = self._derived_border(direction, channel)
+        if old_value == passable:
+            return False
+        if channel == "movement":
+            if direction == "north":
+                self.object_movement_border_north = passable
+            elif direction == "south":
+                self.object_movement_border_south = passable
+            elif direction == "east":
+                self.object_movement_border_east = passable
+            elif direction == "west":
+                self.object_movement_border_west = passable
+            else:
+                return False
+        elif channel == "vision":
+            if direction == "north":
+                self.object_vision_border_north = passable
+            elif direction == "south":
+                self.object_vision_border_south = passable
+            elif direction == "east":
+                self.object_vision_border_east = passable
+            elif direction == "west":
+                self.object_vision_border_west = passable
+            else:
+                return False
+        elif channel == "light":
+            if direction == "north":
+                self.object_light_border_north = passable
+            elif direction == "south":
+                self.object_light_border_south = passable
+            elif direction == "east":
+                self.object_light_border_east = passable
+            elif direction == "west":
+                self.object_light_border_west = passable
+            else:
+                return False
+        elif channel == "propagation":
+            if direction == "north":
+                self.object_propagation_border_north = passable
+            elif direction == "south":
+                self.object_propagation_border_south = passable
+            elif direction == "east":
+                self.object_propagation_border_east = passable
+            elif direction == "west":
+                self.object_propagation_border_west = passable
+            else:
+                return False
+        else:
+            return False
+        return True
+
+    def allows_direction(self, direction: str, channel: str = "movement",
+                         include_derived: bool = True) -> bool:
+        """Check one tile-relative direction for a channel."""
+        if direction not in {"north", "south", "east", "west"}:
+            return True
+        if not self._intrinsic_border(direction, channel):
+            return False
+        if include_derived and not self._derived_border(direction, channel):
+            return False
+        return True
+
+    def allows_directions(self, directions: Tuple[str, ...], channel: str = "movement",
+                          include_derived: bool = True) -> bool:
+        """Check orthogonal or permissive-diagonal directional crossing."""
+        if not directions:
+            return True
+        return any(self.allows_direction(direction, channel, include_derived) for direction in directions)
+
+    def can_exit_to(self, to_position: Tuple[int, int], channel: str = "movement",
+                    requesting_entity_uuid: Optional['UUID'] = None,
+                    subjective: bool = False,
+                    include_derived: bool = True) -> bool:
+        """Check if a transition may leave this tile toward an adjacent position."""
+        return self.allows_directions(
+            self.directions_toward(to_position),
+            channel,
+            include_derived,
+        )
+
+    def can_enter_from(self, from_position: Tuple[int, int], channel: str = "movement",
+                       requesting_entity_uuid: Optional['UUID'] = None,
+                       subjective: bool = False,
+                       include_derived: bool = True) -> bool:
         """
         Check if an entity can enter this tile from an adjacent position.
 
@@ -308,33 +570,29 @@ class Tile(BaseBlock):
         Returns:
             True if the border allows passage
         """
-        if self.position is None:
-            return True
+        return self.allows_directions(
+            self.directions_toward(from_position),
+            channel,
+            include_derived,
+        )
 
-        dx = self.position[0] - from_position[0]
-        dy = self.position[1] - from_position[1]
+    def can_see_from(self, from_position: Tuple[int, int],
+                     observer_uuid: Optional['UUID'] = None,
+                     subjective: bool = False,
+                     include_derived: bool = True) -> bool:
+        return self.can_enter_from(from_position, "vision", observer_uuid, subjective, include_derived)
 
-        # Orthogonal movement - check single border
-        if dx == 1 and dy == 0:
-            return self.border_west   # Coming from west
-        elif dx == -1 and dy == 0:
-            return self.border_east   # Coming from east
-        elif dx == 0 and dy == 1:
-            return self.border_south  # Coming from south
-        elif dx == 0 and dy == -1:
-            return self.border_north  # Coming from north
+    def can_light_from(self, from_position: Tuple[int, int],
+                       observer_uuid: Optional['UUID'] = None,
+                       subjective: bool = False,
+                       include_derived: bool = True) -> bool:
+        return self.can_enter_from(from_position, "light", observer_uuid, subjective, include_derived)
 
-        # Diagonal movement - at least ONE touching border must be open
-        elif dx == 1 and dy == 1:
-            return self.border_west or self.border_south
-        elif dx == 1 and dy == -1:
-            return self.border_west or self.border_north
-        elif dx == -1 and dy == 1:
-            return self.border_east or self.border_south
-        elif dx == -1 and dy == -1:
-            return self.border_east or self.border_north
-
-        return True  # Same position or non-adjacent
+    def can_propagate_from(self, from_position: Tuple[int, int],
+                           requesting_entity_uuid: Optional['UUID'] = None,
+                           subjective: bool = False,
+                           include_derived: bool = True) -> bool:
+        return self.can_enter_from(from_position, "propagation", requesting_entity_uuid, subjective, include_derived)
 
     # =========================================================================
     # Factory

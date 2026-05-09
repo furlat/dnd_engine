@@ -21,19 +21,25 @@ import sys
 import subprocess
 import time
 import signal
+import os
+from pathlib import Path
 
 PORT = 8111
 BASE_URL = f"http://localhost:{PORT}"
+ROOT = Path(__file__).resolve().parents[2]
 server_proc = None
 
 
 def start_server():
     """Start the server on the test port."""
     global server_proc
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
     server_proc = subprocess.Popen(
-        ["python", "-m", "uvicorn", "server.event_server:app", "--port", str(PORT)],
+        [sys.executable, "-m", "uvicorn", "server.event_server:app", "--port", str(PORT)],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=env,
     )
     # Wait for server to be ready
     for _ in range(30):

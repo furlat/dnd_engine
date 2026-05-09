@@ -52,6 +52,7 @@ from dnd.tiles import create_spike_zone
 from server.api_models import (
     APIFloorObject,
     APIGrid,
+    APITile,
     MapEditorCatalog,
     MapEditorCatalogEntry,
     MapEditorCreateMapRequest,
@@ -345,7 +346,13 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
     grid = get_map()
     spike_positions = set()
     for patch in patches:
-        tile_type = _normalize_id(patch.type)
+        tile_type = _normalize_id(patch.type) if patch.type else None
+        if tile_type is None:
+            _apply_directional_tile_patch(grid, patch)
+            old = grid.get_tile(patch.x, patch.y)
+            if old is not None and patch.light_level is not None:
+                old.default_light = _light_level(patch.light_level)
+            continue
         if tile_type in {"spike_trap", "spike_zone", "spikes"}:
             spike_positions.add((patch.x, patch.y))
             continue
@@ -355,10 +362,12 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
             tile = difficult_terrain_factory((patch.x, patch.y))
             tile.default_light = _light_level(patch.light_level) if patch.light_level is not None else old_light
             grid.set_tile(patch.x, patch.y, tile=tile)
+            _apply_directional_tile_patch(grid, patch)
             continue
         walkable, visible, name = _tile_properties(tile_type)
         tile = grid.set_tile(patch.x, patch.y, walkable=walkable, visible=visible, name=name)
         tile.default_light = _light_level(patch.light_level) if patch.light_level is not None else old_light
+        _apply_directional_tile_patch(grid, patch)
 
     if spike_positions:
         spike_tiles, _handler = create_spike_zone(spike_positions)
@@ -368,6 +377,21 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
                 tile.default_light = old.default_light
             grid.set_tile(tile.position[0], tile.position[1], tile=tile)
     return get_editor_snapshot()
+
+
+def _apply_directional_tile_patch(grid: Any, patch: MapEditorTilePatch) -> None:
+    if patch.directional_channel is None and patch.direction is None and patch.passable is None:
+        return
+    if patch.directional_channel is None or patch.direction is None or patch.passable is None:
+        raise ValueError("directional_channel, direction, and passable are required together")
+    if grid.get_tile(patch.x, patch.y) is None:
+        grid.set_tile(patch.x, patch.y, walkable=True, visible=True, name="Floor")
+    grid.set_tile_directional_border(
+        (patch.x, patch.y),
+        patch.directional_channel,
+        patch.direction,
+        patch.passable,
+    )
 
 
 def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject:
@@ -498,6 +522,7 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
             tile = difficult_terrain_factory(position)
             tile.default_light = _light_level(tile_data.light_level)
             grid.set_tile(tile_data.x, tile_data.y, tile=tile, fire_event=False)
+            _restore_directional_tile_state(grid, tile_data)
             continue
         tile = grid.set_tile(
             tile_data.x,
@@ -508,12 +533,17 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
             fire_event=False,
         )
         tile.default_light = _light_level(tile_data.light_level)
+        _restore_directional_tile_state(grid, tile_data)
 
     if spike_light:
         spike_tiles, _handler = create_spike_zone(set(spike_light))
         for tile in spike_tiles:
             tile.default_light = _light_level(spike_light[tile.position])
             grid.set_tile(tile.position[0], tile.position[1], tile=tile, fire_event=False)
+            for tile_data in snapshot.tiles:
+                if (tile_data.x, tile_data.y) == tile.position:
+                    _restore_directional_tile_state(grid, tile_data)
+                    break
 
     for placement in object_placements:
         place_catalog_object(
@@ -522,6 +552,25 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
                 position=placement.position,
             )
         )
+
+
+def _restore_directional_tile_state(grid: Any, tile_data: APITile) -> None:
+    position = (tile_data.x, tile_data.y)
+    channel_maps = {
+        "movement": tile_data.directional_blocks_movement,
+        "vision": tile_data.directional_blocks_vision,
+        "light": tile_data.directional_blocks_light,
+        "propagation": tile_data.directional_blocks_propagation,
+    }
+    for channel, blocked_by_direction in channel_maps.items():
+        for direction, blocked in blocked_by_direction.items():
+            grid.set_tile_directional_border(
+                position,
+                channel,
+                direction,
+                not blocked,
+                fire_event=False,
+            )
 
 
 def _iter_tiles() -> Iterable[Tuple[int, int, Tile]]:
@@ -549,7 +598,7 @@ def _floor_object(obj_uuid: UUID, obj_pos: Tuple[int, int]) -> APIFloorObject:
         uuid=str(obj_uuid),
         name=obj.name or "Object",
         position=list(obj_pos),
-        map_char=getattr(obj, "map_char", "?"),
+        map_char=obj.get_map_char() or "?",
         state=_get_floor_object_state(obj),
     )
 

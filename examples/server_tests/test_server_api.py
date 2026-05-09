@@ -20,8 +20,66 @@ Note: This is a manual integration test, not a unit test.
 
 import requests
 import sys
+import os
+import subprocess
+import time
+import atexit
+from pathlib import Path
 
-BASE_URL = "http://localhost:8000"
+PORT = int(os.environ.get("DND_TEST_SERVER_API_PORT", "8769"))
+BASE_URL = f"http://localhost:{PORT}"
+ROOT = Path(__file__).resolve().parents[2]
+server_process = None
+
+
+def start_server() -> bool:
+    """Start a local uvicorn server for this integration test."""
+    global server_process
+    print(f"[INFO] Starting server on port {PORT}...")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    server_process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "server.event_server:app",
+            "--port",
+            str(PORT),
+            "--log-level",
+            "warning",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+    atexit.register(stop_server)
+    for _ in range(60):
+        try:
+            resp = requests.get(f"{BASE_URL}/", timeout=1)
+            if resp.status_code == 200:
+                print("[PASS] Server ready")
+                return True
+        except requests.RequestException:
+            pass
+        time.sleep(0.2)
+    return False
+
+
+def stop_server() -> None:
+    """Stop the local uvicorn server if this test started one."""
+    global server_process
+    if server_process:
+        server_process.terminate()
+        try:
+            _stdout, stderr = server_process.communicate(timeout=8)
+        except subprocess.TimeoutExpired:
+            server_process.kill()
+            _stdout, stderr = server_process.communicate(timeout=5)
+        if stderr:
+            print("\n=== Server stderr ===")
+            print(stderr.decode(errors="replace")[-2000:])
+        server_process = None
 
 
 def print_result(name: str, response: requests.Response) -> dict:
@@ -186,16 +244,16 @@ def main():
     print("D&D Engine - New Server API Test")
     print("=" * 60)
 
-    # Check server is running
+    # Check server is running; start one if needed.
     try:
         resp = requests.get(f"{BASE_URL}/state", timeout=2)
         if not resp.ok:
             print(f"[FAIL] Server returned {resp.status_code}")
             sys.exit(1)
     except requests.exceptions.ConnectionError:
-        print("[FAIL] Cannot connect to server. Start it with:")
-        print("  uvicorn server.event_server:app --reload")
-        sys.exit(1)
+        if not start_server():
+            print("[FAIL] Cannot start local server")
+            sys.exit(1)
 
     print("[PASS] Server is running")
 

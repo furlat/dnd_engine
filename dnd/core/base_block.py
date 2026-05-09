@@ -203,6 +203,22 @@ class BaseBlock(BaseModel):
 
     model_config = ConfigDict(validate_assignment=False)
 
+    def get_map_char(self) -> Optional[str]:
+        """Map glyph for blocks that have one."""
+        return None
+
+    def get_spatial_open_state(self) -> Optional[bool]:
+        """Open/closed state for spatial objects that expose one."""
+        return None
+
+    def should_include_in_senses_objects(self) -> bool:
+        """Whether this block should appear in entity senses.objects."""
+        return True
+
+    def should_include_in_available_object_actions(self) -> bool:
+        """Whether this block should be considered by object/action discovery."""
+        return True
+
     def _set_values_and_blocks_source(self, block: 'BaseBlock') -> None:
         """
         Helper function to set source and target for values and sub-blocks.
@@ -376,6 +392,31 @@ class BaseBlock(BaseModel):
     def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
         """Whether this block prevents vision through its position.
         Non-spatial blocks inherit this default."""
+        return False
+
+    def blocks_directional_movement(self, direction: str,
+                                    requesting_entity_uuid: Optional[UUID] = None,
+                                    mode: 'MovementMode' = MovementMode.WALKING,
+                                    subjective: bool = False) -> bool:
+        """Whether this block prevents movement out of its tile in a direction."""
+        return False
+
+    def blocks_directional_vision(self, direction: str,
+                                  observer_uuid: Optional[UUID] = None,
+                                  subjective: bool = False) -> bool:
+        """Whether this block prevents vision crossing out of its tile in a direction."""
+        return False
+
+    def blocks_directional_light(self, direction: str,
+                                 observer_uuid: Optional[UUID] = None,
+                                 subjective: bool = False) -> bool:
+        """Whether this block prevents light crossing out of its tile in a direction."""
+        return False
+
+    def blocks_directional_propagation(self, direction: str,
+                                       requesting_entity_uuid: Optional[UUID] = None,
+                                       subjective: bool = False) -> bool:
+        """Whether this block prevents physical propagation out of its tile in a direction."""
         return False
 
     # --- Perceivability system ---

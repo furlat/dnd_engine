@@ -21,6 +21,7 @@ from dnd.actions_functional import get_available_actions, execute_action
 from dnd.encounter import Encounter
 from dnd.controller import PassController
 from dnd.core.events import EventQueue
+from dnd.utils.test_utils import set_hp
 
 
 class TestResult:
@@ -276,6 +277,7 @@ def test_extra_attack_workflow():
     result = TestResult()
 
     fighter, skeleton = setup_fighter_vs_skeleton(fighter_level=5, distance_tiles=1)
+    set_hp(skeleton, 200)
 
     skeleton_initial_hp = skeleton.get_hp()
     print(f"  Skeleton HP: {skeleton_initial_hp}")

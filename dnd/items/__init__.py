@@ -59,6 +59,13 @@ from dnd.items.armors import (
     create_wooden_shield,
 )
 
+from dnd.items.environment import (
+    DirectionalDoor,
+    DirectionalWall,
+    OpenDirectionalDoorAction,
+    CloseDirectionalDoorAction,
+)
+
 # Weapon lookup by name (for presets)
 WEAPONS = {
     # Simple Melee
@@ -164,6 +171,11 @@ __all__ = [
     # Shields
     "create_shield",
     "create_wooden_shield",
+    # Environment
+    "DirectionalDoor",
+    "DirectionalWall",
+    "OpenDirectionalDoorAction",
+    "CloseDirectionalDoorAction",
     # Lookup dicts
     "WEAPONS",
     "ARMORS",

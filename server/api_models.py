@@ -316,6 +316,10 @@ class APITile(BaseModel):
     is_hazardous: bool = False  # Has damage handlers (spikes, fire, etc.)
     conditions: List[str] = []  # Active condition names on tile
     light_level: int = 3  # LightLevel enum value: 0=MAGICAL_DARKNESS..4=VERY_BRIGHT
+    directional_blocks_movement: Dict[str, bool] = {}
+    directional_blocks_vision: Dict[str, bool] = {}
+    directional_blocks_light: Dict[str, bool] = {}
+    directional_blocks_propagation: Dict[str, bool] = {}
 
 
 class APIGrid(BaseModel):
@@ -366,7 +370,23 @@ class APIGrid(BaseModel):
                 walking_cost=walking_cost,
                 is_hazardous=is_hazardous,
                 conditions=conditions,
-                light_level=td.resolved_light_level.value
+                light_level=td.resolved_light_level.value,
+                directional_blocks_movement={
+                    direction: not td.allows_direction(direction, "movement")
+                    for direction in ("north", "south", "east", "west")
+                },
+                directional_blocks_vision={
+                    direction: not td.allows_direction(direction, "vision")
+                    for direction in ("north", "south", "east", "west")
+                },
+                directional_blocks_light={
+                    direction: not td.allows_direction(direction, "light")
+                    for direction in ("north", "south", "east", "west")
+                },
+                directional_blocks_propagation={
+                    direction: not td.allows_direction(direction, "propagation")
+                    for direction in ("north", "south", "east", "west")
+                },
             ))
         return cls(
             min_x=bounds[0], min_y=bounds[1],
@@ -506,8 +526,11 @@ class MapEditorTilePatch(BaseModel):
     """Single editor tile update."""
     x: int
     y: int
-    type: str
+    type: Optional[str] = None
     light_level: Optional[int] = None
+    directional_channel: Optional[Literal["movement", "vision", "light", "propagation"]] = None
+    direction: Optional[Literal["north", "south", "east", "west"]] = None
+    passable: Optional[bool] = None
 
 
 class MapEditorTilePatchRequest(BaseModel):

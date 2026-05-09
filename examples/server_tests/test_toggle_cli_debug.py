@@ -7,14 +7,20 @@ Usage:
     python examples/server_tests/test_toggle_cli_debug.py
 """
 import subprocess, time, signal, sys, requests
+import os
+from pathlib import Path
 
 PORT = 8222
 BASE = f"http://localhost:{PORT}"
+ROOT = Path(__file__).resolve().parents[2]
 
 # Start server
+env = os.environ.copy()
+env["PYTHONPATH"] = str(ROOT)
 proc = subprocess.Popen(
-    ["python", "-m", "uvicorn", "server.event_server:app", "--port", str(PORT)],
+    [sys.executable, "-m", "uvicorn", "server.event_server:app", "--port", str(PORT)],
     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    env=env,
 )
 for _ in range(30):
     try:

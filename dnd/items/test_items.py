@@ -116,6 +116,9 @@ class TestDoorA(UsableItem):
     blocks_vision_field: bool = Field(default=True)
     is_open: bool = Field(default=False)
 
+    def get_spatial_open_state(self) -> Optional[bool]:
+        return self.is_open
+
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """State check HERE: return different action class based on door state."""
         if self.is_open:
@@ -188,6 +191,9 @@ class TestDoorB(UsableItem):
     is_open: bool = Field(default=False)
     # No get_use_actions override — uses default with use_action_templates.
     # Created with: TestDoorB(..., use_action_templates=[InteractDoorAction(..., template=True)])
+
+    def get_spatial_open_state(self) -> Optional[bool]:
+        return self.is_open
 
 
 # =============================================================================
