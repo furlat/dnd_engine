@@ -124,6 +124,7 @@ class DirectionalDoor(UsableItem):
     blocks_vision_field: bool = Field(default=False)
     map_char: str = Field(default="D")
     include_in_senses_objects: bool = Field(default=True)
+    include_in_adjacent_senses_objects: bool = Field(default=True)
     include_in_available_object_actions: bool = Field(default=True)
 
     is_open: bool = Field(default=False)
@@ -178,4 +179,3 @@ class DirectionalDoor(UsableItem):
             for channel in self.blocked_channels
             for direction in self.blocked_directions
         ]
-

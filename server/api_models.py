@@ -476,6 +476,7 @@ class MapEditorSavedObjectPlacement(BaseModel):
     catalog_id: str
     name: str
     position: Tuple[int, int]
+    state: Dict[str, Any] = {}
 
 
 class MapEditorSaveMapRequest(BaseModel):

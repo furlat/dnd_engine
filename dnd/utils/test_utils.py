@@ -304,6 +304,7 @@ def move_entity(entity: Entity, new_position: Tuple[int, int]):
         new_position: Target (x, y) position
     """
     old_pos = entity.senses.position
+    entity.position = new_position
     entity.senses.position = new_position
 
     # Update position registries

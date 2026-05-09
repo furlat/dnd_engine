@@ -662,6 +662,18 @@ class SpatialSensesCallback:
             return
         if not block.is_perceivable_by(self.owner_uuid):
             return
+        adjacent = (
+            position != self.senses.position
+            and max(
+                abs(position[0] - self.senses.position[0]),
+                abs(position[1] - self.senses.position[1]),
+            ) <= 1
+        )
+        if adjacent and block.should_include_in_adjacent_senses_objects():
+            self.senses.objects[object_uuid] = position
+            return
+        if position not in self.senses.visible:
+            return
         tile = grid.get_tile(*position)
         if tile:
             effective_light = tile.get_effective_light_for(self.owner_uuid, self.senses.position)

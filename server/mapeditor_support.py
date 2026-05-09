@@ -48,6 +48,8 @@ from dnd.items.test_items import (
     create_wand_of_magic_missiles,
     create_weapon_coat,
 )
+from dnd.items.environment import DIRECTIONAL_CHANNELS, DIRECTIONS, DirectionalDoor, DirectionalWall
+from dnd.maps.arena_layout import DOOR_DIRECTIONS, build_standard_arena_environment
 from dnd.tiles import create_spike_zone
 from server.api_models import (
     APIFloorObject,
@@ -132,50 +134,7 @@ def build_scratch_map(request: MapEditorCreateMapRequest) -> None:
 def build_forgotten_crypt_arena_map() -> None:
     """Build the current crypt arena environment without combat entities."""
     grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
-
-    for y in range(3, 12):
-        if y != 7:
-            grid.set_tile(7, y, walkable=False, visible=False, name="Wall")
-
-    door = TestDoorA(source_entity_uuid=uuid4())
-    grid.place_object(door.uuid, (7, 7))
-
-    for y in range(4):
-        grid.set_tile(2, y, walkable=False, visible=True, name="Water")
-    for x in range(2):
-        grid.set_tile(x, 3, walkable=False, visible=True, name="Water")
-
-    spike_positions = {(x, y) for x in range(5) for y in range(11, 15)}
-    spike_tiles, spike_handler = create_spike_zone(spike_positions)
-    for tile in spike_tiles:
-        grid.set_tile(tile.position[0], tile.position[1], tile=tile, fire_event=False)
-
-    for x in range(6, 9):
-        for y in range(0, 3):
-            tile = difficult_terrain_factory((x, y))
-            grid.set_tile(x, y, tile=tile, fire_event=False)
-    for x in range(6, 9):
-        for y in range(12, 15):
-            tile = difficult_terrain_factory((x, y))
-            grid.set_tile(x, y, tile=tile, fire_event=False)
-
-    for x in range(0, 15):
-        for y in range(0, 15):
-            tile = grid.get_tile(x, y)
-            if tile is not None:
-                tile.default_light = LightLevel.DARKNESS
-
-    create_wall_torch(position=(14, 1), owner_uuid=uuid4(), lit=True)
-    create_wall_torch(position=(14, 13), owner_uuid=uuid4(), lit=True)
-
-    for pot_pos in [(1, 12), (3, 13)]:
-        potion = create_healing_potion(uuid4(), heal_amount=10)
-        potion.place_on_grid(pot_pos)
-
-    lever_action = PullLeverAction(source_entity_uuid=uuid4(), trap_handler_uuid=spike_handler.uuid, template=True)
-    lever = TrapLever(source_entity_uuid=uuid4(), use_action_templates=[lever_action], charges=1)
-    lever.place_on_grid((5, 12))
+    build_standard_arena_environment(grid)
 
 
 def get_editor_snapshot() -> MapEditorMapSnapshot:
@@ -404,6 +363,22 @@ def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject
     if catalog_id == "door":
         item = TestDoorA(source_entity_uuid=owner)
         grid.place_object(item.uuid, position)
+    elif catalog_id == "directional_wall":
+        item = DirectionalWall(
+            source_entity_uuid=owner,
+            blocked_directions=tuple(request.options.get("blocked_directions", DIRECTIONS)),
+            blocked_channels=tuple(request.options.get("blocked_channels", DIRECTIONAL_CHANNELS)),
+        )
+        grid.place_object(item.uuid, position)
+    elif catalog_id == "directional_door":
+        item = DirectionalDoor(
+            source_entity_uuid=owner,
+            name=request.options.get("name", "Door"),
+            is_open=bool(request.options.get("is_open", False)),
+            blocked_directions=tuple(request.options.get("blocked_directions", DOOR_DIRECTIONS)),
+            blocked_channels=tuple(request.options.get("blocked_channels", DIRECTIONAL_CHANNELS)),
+        )
+        grid.place_object(item.uuid, position)
     elif catalog_id == "wall_torch":
         item = create_wall_torch(position=position, owner_uuid=owner, lit=bool(request.options.get("lit", True)))
     elif catalog_id == "trap_lever":
@@ -550,6 +525,7 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
             MapEditorObjectPlaceRequest(
                 catalog_id=placement.catalog_id,
                 position=placement.position,
+                options=placement.state,
             )
         )
 
@@ -615,12 +591,20 @@ def _saved_object_placements(floor_objects: List[APIFloorObject]) -> List[MapEdi
             catalog_id=_catalog_id_for_floor_object(obj),
             name=obj.name,
             position=(obj.position[0], obj.position[1]),
+            state=obj.state,
         )
         for obj in floor_objects
     ]
 
 
 def _catalog_id_for_floor_object(obj: APIFloorObject) -> str:
+    if "blocked_directions" in obj.state:
+        normalized_directional_name = _normalize_id(obj.name)
+        if normalized_directional_name in {"door", "directional_door"}:
+            return "directional_door"
+        if normalized_directional_name in {"directional_wall", "wall"}:
+            return "directional_wall"
+
     explicit = {
         "door": "door",
         "wall_torch": "wall_torch",
