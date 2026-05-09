@@ -94,6 +94,43 @@ def test_both_endpoint_tiles_are_considered() -> None:
     check("Unrelated north crossing remains open", grid.can_transition((2, 1), (2, 2)))
 
 
+def test_diagonal_crossing_requires_clear_adjacent_route() -> None:
+    print("\nTEST: diagonal crossing requires clear adjacent route")
+    make_grid()
+    grid = get_map()
+
+    lower_wall = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Lower West Wall",
+        is_pickable=False,
+        blocks_movement_west=True,
+        blocks_vision_west=True,
+        blocks_light_west=True,
+        blocks_propagation_west=True,
+    )
+    upper_wall = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Upper West Wall",
+        is_pickable=False,
+        blocks_movement_west=True,
+        blocks_vision_west=True,
+        blocks_light_west=True,
+        blocks_propagation_west=True,
+    )
+    grid.place_object(lower_wall.uuid, (2, 1))
+    grid.place_object(upper_wall.uuid, (2, 2))
+
+    check("Both adjacent west crossings are blocked", not grid.can_transition((1, 1), (2, 1)) and not grid.can_transition((1, 2), (2, 2)))
+    check("Diagonal movement cannot slip through blocked corner", not grid.can_transition((1, 1), (2, 2)))
+    check("Diagonal vision cannot slip through blocked corner", not grid.can_see_transition((1, 1), (2, 2)))
+    check("Diagonal light cannot slip through blocked corner", not grid.can_light_transition((1, 1), (2, 2)))
+    check("Diagonal propagation cannot slip through blocked corner", not grid.can_propagate_transition((1, 1), (2, 2)))
+
+    grid.remove_object(lower_wall.uuid)
+    check("Opening one adjacent route allows diagonal movement", grid.can_transition((1, 1), (2, 2)))
+    check("Opening one adjacent route allows diagonal vision", grid.can_see_transition((1, 1), (2, 2)))
+
+
 def test_directional_vision_light_and_propagation() -> None:
     print("\nTEST: directional vision/light/propagation")
     make_grid()
@@ -337,6 +374,7 @@ if __name__ == "__main__":
 
     test_directional_movement_item_propagates_to_tile()
     test_both_endpoint_tiles_are_considered()
+    test_diagonal_crossing_requires_clear_adjacent_route()
     test_directional_vision_light_and_propagation()
     test_intrinsic_directional_border_event_metadata()
     test_object_directional_change_event_metadata()

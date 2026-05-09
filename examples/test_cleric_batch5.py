@@ -8,6 +8,7 @@ Tests for:
 """
 import sys
 import os
+from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from uuid import uuid4
@@ -183,7 +184,8 @@ def test_bestow_curse_option1():
         curse_option=1,
         cursed_ability="strength"
     )
-    spell.apply()
+    with patch("dnd.core.dice.random.randint", return_value=1):
+        spell.apply()
 
     # Check if curse applied (target may save, so check)
     if has_condition(target, "Bestow Curse"):

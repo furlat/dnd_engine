@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import GridMap
-from dnd.items.environment import DIRECTIONAL_CHANNELS, DIRECTIONS, DirectionalDoor, DirectionalWall
+from dnd.items.environment import DIRECTIONAL_CHANNELS, DirectionalDoor, DirectionalWall
 from dnd.items.test_items import (
     PullLeverAction,
     TrapLever,
@@ -31,8 +31,8 @@ WALL_POSITIONS: Tuple[Tuple[int, int], ...] = tuple(
     if (WALL_COLUMN, y) != DOOR_POSITION
 )
 
-DOOR_DIRECTIONS: Tuple[str, ...] = ("east", "west")
-WALL_DIRECTIONS: Tuple[str, ...] = DIRECTIONS
+DOOR_DIRECTIONS: Tuple[str, ...] = ("west",)
+WALL_DIRECTIONS: Tuple[str, ...] = DOOR_DIRECTIONS
 STANDARD_BLOCKING_CHANNELS: Tuple[str, ...] = DIRECTIONAL_CHANNELS
 
 WATER_POSITIONS: Tuple[Tuple[int, int], ...] = (
