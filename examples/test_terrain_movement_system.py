@@ -266,10 +266,10 @@ def test_diagonal_border_northeast_blocked():
     print("\n[PASS] Diagonal NE correctly blocked when both borders blocked!")
 
 
-def test_diagonal_border_partial_allows():
-    """border_north=False alone doesn't block NE entry."""
+def test_diagonal_border_partial_blocks():
+    """Diagonal tile-only border checks require both touched sides to be open."""
     print("\n" + "=" * 60)
-    print("TEST: Diagonal Border Partial Allows")
+    print("TEST: Diagonal Border Partial Blocks")
     print("=" * 60)
 
     reset_map()
@@ -287,16 +287,15 @@ def test_diagonal_border_partial_allows():
 
     print(f"Center tile borders: N={center.border_north}, S={center.border_south}, E={center.border_east}, W={center.border_west}")
 
-    # Test diagonal entry from NE (position 2,2 to 1,1)
-    # Diagonal requires at least ONE border open (east OR north)
-    # East is still open
+    # Test diagonal entry from NE (position 2,2 to 1,1).
+    # Tile-only checks require both touched sides to be open; GridMap diagonal
+    # transitions can still pass when an actual orthogonal route exists.
     can_enter = center.can_enter_from((2, 2))
     print(f"Can enter (1,1) from (2,2) [NE]: {can_enter}")
 
-    # With only north blocked, east is open, diagonal should work
-    assert can_enter == True, "Should enter from NE when east border still open"
+    assert can_enter == False, "Should not enter from NE when north side is blocked"
 
-    print("\n[PASS] Diagonal allowed with partial border blocking!")
+    print("\n[PASS] Diagonal blocked with partial tile-side blocking!")
 
 
 def test_orthogonal_borders_dont_affect_diagonal():
@@ -1002,7 +1001,7 @@ def main():
     # Group 2: Diagonal Borders
     print("\n### GROUP 2: Diagonal Borders ###")
     test_diagonal_border_northeast_blocked()
-    test_diagonal_border_partial_allows()
+    test_diagonal_border_partial_blocks()
     test_orthogonal_borders_dont_affect_diagonal()
 
     # Group 3: TileEffectCondition

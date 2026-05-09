@@ -14,6 +14,7 @@ import sys
 import traceback
 
 from typing import cast as type_cast
+from unittest.mock import patch
 
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map, reset_map
@@ -380,7 +381,8 @@ def test_gust_difficult_terrain():
         template=False,
         costs=GustOfWind(source_entity_uuid=caster.uuid)._get_costs_for_level(2)
     )
-    spell.apply()
+    with patch("dnd.core.dice.random.randint", return_value=10):
+        spell.apply()
 
     zone = type_cast(GustOfWindZone, caster.active_conditions.get("Gust of Wind Zone"))
     assert zone is not None

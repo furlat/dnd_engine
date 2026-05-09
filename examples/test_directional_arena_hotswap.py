@@ -14,7 +14,7 @@ from dnd.core.events import EventPhase, EventQueue, EventType, SpatialChangeEven
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor, DirectionalWall
-from dnd.maps.arena_layout import DOOR_POSITION, WALL_POSITIONS
+from dnd.maps.arena_layout import DOOR_POSITION, WALL_DIRECTIONS, WALL_POSITIONS
 from server.event_server import setup_arena_combat
 from server.mapeditor_support import build_forgotten_crypt_arena_map, reset_editor_world
 
@@ -71,19 +71,26 @@ def test_live_arena_uses_directional_structures() -> None:
 
     check("Door is DirectionalDoor", isinstance(door, DirectionalDoor))
     check("Door starts closed", isinstance(door, DirectionalDoor) and not door.is_open)
-    check("Door blocks west-side movement/vision/light/propagation", transition_blocked_all_channels((6, 7), (7, 7), hero.uuid))
-    check("Door blocks east-side movement/vision/light/propagation", transition_blocked_all_channels((8, 7), (7, 7), hero.uuid))
+    check("Door blocks west-boundary movement/vision/light/propagation", transition_blocked_all_channels((6, 7), (7, 7), hero.uuid))
+    check("Door leaves east side of owning tile open", transition_open_all_channels((8, 7), (7, 7), hero.uuid))
+    check("Closed door and adjacent wall block north diagonal corner slip", transition_blocked_all_channels((6, 7), (7, 8), hero.uuid))
+    check("Closed door and adjacent wall block south diagonal corner slip", transition_blocked_all_channels((6, 7), (7, 6), hero.uuid))
 
     for position in WALL_POSITIONS:
         tile = grid.get_tile(*position)
         wall = object_at(position, DirectionalWall)
         check(f"Wall tile {position} remains floor-like", tile is not None and tile.walkable and tile.visible)
         check(f"Wall object {position} is DirectionalWall", isinstance(wall, DirectionalWall))
-        for neighbor in ((position[0] - 1, position[1]), (position[0] + 1, position[1]), (position[0], position[1] - 1), (position[0], position[1] + 1)):
+        check(f"Wall object {position} blocks only arena wall plane", isinstance(wall, DirectionalWall) and set(wall.blocked_directions) == set(WALL_DIRECTIONS))
+        check(f"Wall blocks west-boundary transition {(position[0] - 1, position[1])}->{position}", transition_blocked_all_channels((position[0] - 1, position[1]), position, hero.uuid))
+        check(f"Wall leaves east side of owning tile open {(position[0] + 1, position[1])}->{position}", transition_open_all_channels((position[0] + 1, position[1]), position, hero.uuid))
+        for neighbor in ((position[0], position[1] - 1), (position[0], position[1] + 1)):
             if grid.get_tile(*neighbor) is not None:
-                check(f"Wall blocks transition {neighbor}->{position}", transition_blocked_all_channels(neighbor, position, hero.uuid))
+                check(f"Wall leaves north/south transition {neighbor}->{position} open", transition_open_all_channels(neighbor, position, hero.uuid))
 
     Entity.update_all_entities_senses(max_distance=20)
+    check("Closed wall/door seam does not leak north diagonal visibility", (7, 8) not in hero.senses.visible)
+    check("Closed wall/door seam does not leak south diagonal visibility", (7, 6) not in hero.senses.visible)
     visible_objects = hero.senses.objects
     wall_uuids = {
         object_at(position, DirectionalWall).uuid
@@ -101,8 +108,8 @@ def test_live_arena_uses_directional_structures() -> None:
     result = execute_use_action(hero, door.uuid, "Open Door") if isinstance(door, DirectionalDoor) else None
     check("Open Door action succeeds", result is not None and not result.canceled)
     check("Door is open", isinstance(door, DirectionalDoor) and door.is_open)
-    check("Open door allows west-side crossing for all channels", transition_open_all_channels((6, 7), (7, 7), hero.uuid))
-    check("Open door allows east-side crossing for all channels", transition_open_all_channels((8, 7), (7, 7), hero.uuid))
+    check("Open door allows west-boundary crossing for all channels", transition_open_all_channels((6, 7), (7, 7), hero.uuid))
+    check("Open door keeps east side open for all channels", transition_open_all_channels((8, 7), (7, 7), hero.uuid))
 
     object_events = [
         event for _, event in EventQueue.iter_events_since(cursor)
@@ -131,6 +138,7 @@ def test_mapeditor_preset_uses_directional_structures() -> None:
         wall = object_at(position, DirectionalWall)
         check(f"Crypt wall tile {position} is floor-like", tile is not None and tile.walkable and tile.visible)
         check(f"Crypt wall object {position} is DirectionalWall", isinstance(wall, DirectionalWall))
+        check(f"Crypt wall object {position} blocks only arena wall plane", isinstance(wall, DirectionalWall) and set(wall.blocked_directions) == set(WALL_DIRECTIONS))
 
 
 def test_standard_builders_do_not_contain_legacy_wall_door_setup() -> None:
