@@ -541,10 +541,10 @@ class Tile(BaseBlock):
 
     def allows_directions(self, directions: Tuple[str, ...], channel: str = "movement",
                           include_derived: bool = True) -> bool:
-        """Check orthogonal or permissive-diagonal directional crossing."""
+        """Check orthogonal or diagonal directional crossing."""
         if not directions:
             return True
-        return any(self.allows_direction(direction, channel, include_derived) for direction in directions)
+        return all(self.allows_direction(direction, channel, include_derived) for direction in directions)
 
     def can_exit_to(self, to_position: Tuple[int, int], channel: str = "movement",
                     requesting_entity_uuid: Optional['UUID'] = None,

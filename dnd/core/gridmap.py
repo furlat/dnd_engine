@@ -607,8 +607,7 @@ class GridMap:
                                                 movement_mode, subjective=True):
                     open_directions[direction] = False
 
-        # Preserve the existing permissive diagonal policy.
-        return any(open_directions.values())
+        return all(open_directions.values())
 
     def _remembered_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                       blocked: Optional[Set[Tuple[Tuple[int, int], str]]]) -> bool:
@@ -620,7 +619,80 @@ class GridMap:
         directions = tile.directions_toward(to_pos)
         if not directions:
             return True
-        return any((from_pos, direction) not in blocked for direction in directions)
+        return all((from_pos, direction) not in blocked for direction in directions)
+
+    def _transition_cell_allows(self, position: Tuple[int, int], channel: str,
+                                requester_uuid: Optional[UUID] = None,
+                                movement_mode: MovementMode = MovementMode.WALKING,
+                                walk_in_danger: bool = True,
+                                subjective: bool = False,
+                                collision_blocked: Optional[Set[Tuple[int, int]]] = None) -> bool:
+        if channel == "movement":
+            if requester_uuid is None:
+                return self.is_walkable(position[0], position[1], movement_mode)
+            return self.is_walkable_for(
+                position[0], position[1], requester_uuid, movement_mode,
+                walk_in_danger, subjective, collision_blocked,
+            )
+        if channel == "propagation":
+            return not self.is_blocking_propagation(position[0], position[1])
+        return not self.is_blocking(position[0], position[1], requester_uuid)
+
+    def _cardinal_transition_sides_allow(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
+                                         channel: str,
+                                         requester_uuid: Optional[UUID] = None,
+                                         movement_mode: MovementMode = MovementMode.WALKING,
+                                         subjective: bool = False,
+                                         directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None) -> bool:
+        dx = abs(to_pos[0] - from_pos[0])
+        dy = abs(to_pos[1] - from_pos[1])
+        if dx + dy != 1:
+            return False
+        if from_pos not in self._tiles or to_pos not in self._tiles:
+            return False
+        if channel == "movement" and not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
+            return False
+        return (
+            self._tile_allows_transition_side(from_pos, to_pos, channel,
+                                             requester_uuid, movement_mode, subjective)
+            and self._tile_allows_transition_side(to_pos, from_pos, channel,
+                                                 requester_uuid, movement_mode, subjective)
+        )
+
+    def _diagonal_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
+                                    channel: str,
+                                    requester_uuid: Optional[UUID] = None,
+                                    movement_mode: MovementMode = MovementMode.WALKING,
+                                    walk_in_danger: bool = True,
+                                    subjective: bool = False,
+                                    collision_blocked: Optional[Set[Tuple[int, int]]] = None,
+                                    directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None) -> bool:
+        dx = to_pos[0] - from_pos[0]
+        dy = to_pos[1] - from_pos[1]
+        if abs(dx) != 1 or abs(dy) != 1:
+            return False
+
+        bridges = ((from_pos[0] + dx, from_pos[1]), (from_pos[0], from_pos[1] + dy))
+        for bridge in bridges:
+            if bridge not in self._tiles:
+                continue
+            if not self._transition_cell_allows(
+                bridge, channel, requester_uuid, movement_mode,
+                walk_in_danger, subjective, collision_blocked,
+            ):
+                continue
+            if (
+                self._cardinal_transition_sides_allow(
+                    from_pos, bridge, channel, requester_uuid, movement_mode,
+                    subjective, directional_collision_blocked,
+                )
+                and self._cardinal_transition_sides_allow(
+                    bridge, to_pos, channel, requester_uuid, movement_mode,
+                    subjective, directional_collision_blocked,
+                )
+            ):
+                return True
+        return False
 
     def can_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                        requesting_entity_uuid: Optional[UUID] = None,
@@ -636,6 +708,18 @@ class GridMap:
             return False
         if from_pos not in self._tiles or to_pos not in self._tiles:
             return False
+        if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
+            if not self._diagonal_transition_allows(
+                from_pos, to_pos, "movement", requesting_entity_uuid, movement_mode,
+                walk_in_danger, subjective, collision_blocked, directional_collision_blocked,
+            ):
+                return False
+            if requesting_entity_uuid is None:
+                return self.is_walkable(to_pos[0], to_pos[1], movement_mode)
+            return self.is_walkable_for(
+                to_pos[0], to_pos[1], requesting_entity_uuid, movement_mode,
+                walk_in_danger, subjective, collision_blocked,
+            )
         if not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
             return False
         if not self._tile_allows_transition_side(from_pos, to_pos, "movement",
@@ -654,6 +738,8 @@ class GridMap:
     def can_see_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                            observer_uuid: Optional[UUID] = None,
                            subjective: bool = False) -> bool:
+        if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
+            return self._diagonal_transition_allows(from_pos, to_pos, "vision", observer_uuid, subjective=subjective)
         return (
             self._tile_allows_transition_side(from_pos, to_pos, "vision", observer_uuid, subjective=subjective)
             and self._tile_allows_transition_side(to_pos, from_pos, "vision", observer_uuid, subjective=subjective)
@@ -662,6 +748,8 @@ class GridMap:
     def can_light_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                              observer_uuid: Optional[UUID] = None,
                              subjective: bool = False) -> bool:
+        if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
+            return self._diagonal_transition_allows(from_pos, to_pos, "light", observer_uuid, subjective=subjective)
         return (
             self._tile_allows_transition_side(from_pos, to_pos, "light", observer_uuid, subjective=subjective)
             and self._tile_allows_transition_side(to_pos, from_pos, "light", observer_uuid, subjective=subjective)
@@ -670,6 +758,8 @@ class GridMap:
     def can_propagate_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                  requester_uuid: Optional[UUID] = None,
                                  subjective: bool = False) -> bool:
+        if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
+            return self._diagonal_transition_allows(from_pos, to_pos, "propagation", requester_uuid, subjective=subjective)
         return (
             self._tile_allows_transition_side(from_pos, to_pos, "propagation", requester_uuid, subjective=subjective)
             and self._tile_allows_transition_side(to_pos, from_pos, "propagation", requester_uuid, subjective=subjective)
