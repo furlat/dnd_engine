@@ -45,19 +45,17 @@ from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, Pri
 from dnd.items import create_shortsword, create_dagger, create_longbow
 from dnd.items.test_items import (
     create_scroll_of_magic_missile, create_scroll_of_fireball,
-    create_healing_potion, create_potion_of_greater_invisibility,
-    TrapLever, PullLeverAction, create_torch, create_wall_torch,
-    TestDoorA,
+    create_potion_of_greater_invisibility,
+    create_torch,
 )
+from dnd.maps.arena_layout import build_standard_arena_environment
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, ClaudeController, MeleeAIController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index, execute_use_action
 from dnd.actions import MovementEvent, JumpEvent
 from dnd.core.base_actions import TargetType, AvailableTarget, AvailableActionsResult
-from dnd.core.base_block import BaseBlock, LightLevel
+from dnd.core.base_block import BaseBlock
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.tiles import create_spike_zone
-from dnd.core.base_tiles import difficult_terrain_factory
 
 from server.api_models import (
     APIEntitySummary, APIEntityFull, APIGrid, APIEncounter, APIFloorObject,
@@ -287,57 +285,7 @@ def setup_arena_combat(
 
     # Create grid
     grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
-
-    # Add a vertical wall in the middle (blocking LOS)
-    for y in range(3, 12):
-        if y != 7:  # Leave a gap — door goes here
-            grid.set_tile(7, y, walkable=False, visible=False, name="Wall")
-
-    # Closed door at the wall gap — blocks movement and vision until opened
-    door = TestDoorA(source_entity_uuid=uuid4())
-    grid.place_object(door.uuid, (7, 7))
-
-    # ADD: Jump test island in top-left corner
-    # Create water barrier around island (visible=True, walkable=False)
-    # Water at column 2 from y=0 to y=3 (vertical barrier)
-    for y in range(4):
-        grid.set_tile(2, y, walkable=False, visible=True, name="Water")
-    # Water at row 3 from x=0 to x=1 (horizontal barrier, completing the box)
-    for x in range(2):
-        grid.set_tile(x, 3, walkable=False, visible=True, name="Water")
-    # The island is at (0,0), (0,1), (0,2), (1,0), (1,1), (1,2) - floor tiles
-    # Now isolated by water - reachable only by Jump (LOS passes through water)
-
-    # ADD: Spike zone in bottom-left corner (opposite the water island)
-    # x: 0-4, y: 11-14 (5x4 = 20 tiles, ONE handler)
-    spike_positions = {(x, y) for x in range(5) for y in range(11, 15)}
-    spike_tiles, spike_handler = create_spike_zone(spike_positions)
-    for tile in spike_tiles:
-        grid._tiles[tile.position] = tile
-        grid._tiles_by_uuid[tile.uuid] = tile.position
-
-    # ADD: Difficult terrain at wall ends (3x3 zones)
-    # Top of wall: x: 6-8, y: 0-2
-    for x in range(6, 9):
-        for y in range(0, 3):
-            tile = difficult_terrain_factory((x, y))
-            grid._tiles[tile.position] = tile
-            grid._tiles_by_uuid[tile.uuid] = tile.position
-    # Bottom of wall: x: 6-8, y: 12-14
-    for x in range(6, 9):
-        for y in range(12, 15):
-            tile = difficult_terrain_factory((x, y))
-            grid._tiles[tile.position] = tile
-            grid._tiles_by_uuid[tile.uuid] = tile.position
-
-    # Whole arena is dark — torch is the only light source
-    for tile in grid._tiles.values():
-        tile.default_light = LightLevel.DARKNESS
-
-    # Wall-mounted torches at dark side corners (visible on map, toggleable)
-    create_wall_torch(position=(14, 1), owner_uuid=uuid4(), lit=True)
-    create_wall_torch(position=(14, 13), owner_uuid=uuid4(), lit=True)
+    build_standard_arena_environment(grid)
 
     # Create Hero based on character class
     if character_class == "barbarian":
@@ -370,21 +318,6 @@ def setup_arena_combat(
     # Add Greater Invisibility potion to all heroes for stealth testing
     potion = create_potion_of_greater_invisibility(player.uuid)
     player.loot_item(potion)
-
-    # Healing potions on floor inside the spike zone
-    for pot_pos in [(1, 12), (3, 13)]:
-        hp_potion = create_healing_potion(uuid4(), heal_amount=10)
-        grid.place_object(hp_potion.uuid, pot_pos)
-
-    # Trap lever adjacent to spike zone (deactivates spikes)
-    lever_action = PullLeverAction(
-        source_entity_uuid=uuid4(), trap_handler_uuid=spike_handler.uuid, template=True
-    )
-    lever = TrapLever(
-        source_entity_uuid=uuid4(), use_action_templates=[lever_action], charges=1
-    )
-    lever_pos = (5, 12)
-    grid.place_object(lever.uuid, lever_pos)
 
     # Spell scrolls for sorcerer only
     if character_class == "sorcerer":

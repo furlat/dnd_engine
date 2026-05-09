@@ -7,6 +7,7 @@ Usage:
     python -m server.test_websocket
 """
 
+import time
 from uuid import uuid4
 from typing import List, Dict, Any
 
@@ -16,6 +17,16 @@ from server.event_server import app, event_monitor
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.events import EventQueue
 from dnd.entity import Entity, EntityConfig
+
+
+def receive_until_type(websocket, expected_type: str, timeout_seconds: float = 2.0) -> Dict[str, Any]:
+    """Receive websocket messages until a control message of the expected type arrives."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        data = websocket.receive_json()
+        if data.get("type") == expected_type:
+            return data
+    raise AssertionError(f"Timed out waiting for websocket message type {expected_type!r}")
 
 
 def clear_state():
@@ -139,8 +150,7 @@ def test_websocket_connection():
 
             # Test ping
             websocket.send_json({"type": "ping"})
-            data = websocket.receive_json()
-            assert data["type"] == "pong"
+            receive_until_type(websocket, "pong")
             print("✓ Ping/pong works")
 
     event_monitor.stop()
@@ -236,8 +246,6 @@ def test_get_history():
 
             # Collect history events
             history_events = []
-            # Use a timeout approach - collect until we get all events
-            import time
             start = time.time()
             while time.time() - start < 2.0:  # 2 second timeout
                 try:

@@ -6,6 +6,8 @@ Run with: python -m server.test_human_control
 Requires server running: python -m server.event_server
 """
 
+import traceback
+
 import httpx
 
 BASE_URL = "http://localhost:8000"
@@ -36,6 +38,18 @@ def test_human_control():
         print("   ERROR: No entity UUID returned")
         return False
 
+    session_resp = client.post("/session/create", json={"player_type": "human", "name": "Human Control Test"})
+    session_data = session_resp.json()
+    session_id = session_data.get("session_id")
+    if not session_id:
+        print(f"   ERROR: No session ID returned: {session_data}")
+        return False
+    join_resp = client.post("/game/join", json={"session_id": session_id, "entity_uuid": entity_uuid})
+    if not join_resp.is_success:
+        print(f"   ERROR: Could not join game: {join_resp.text}")
+        return False
+    print(f"   Session ID: {session_id}")
+
     # 2. Get current turn info
     print("\n2. Getting current turn...")
     resp = client.get("/encounter/current-turn")
@@ -50,23 +64,33 @@ def test_human_control():
     print("\n3. Getting available actions...")
     resp = client.get(f"/entity/{entity_uuid}/available-actions")
     actions = resp.json()
-    print(f"   Attacks: {len(actions['attacks'])}")
-    for atk in actions['attacks']:
-        print(f"      - {atk['name']}: {len(atk['valid_targets'])} targets")
-    print(f"   Movement: {actions['can_move']}, {actions['remaining_movement']}ft")
-    print(f"   Other actions: {[a['action_id'] for a in actions['other_actions']]}")
+    entity_actions = actions.get("entity_actions", [])
+    position_actions = actions.get("position_actions", [])
+    self_actions = actions.get("self_actions", [])
+    print(f"   Entity actions: {len(entity_actions)}")
+    for action in entity_actions:
+        print(f"      - {action['template_name']}: {len(action['valid_targets'])} targets")
+    print(f"   Position actions: {[a['template_name'] for a in position_actions]}")
+    print(f"   Self actions: {[a['template_name'] for a in self_actions]}")
+    print(f"   Movement: {actions.get('remaining_movement', 0)}ft")
 
     # 4. Execute a move
     print("\n4. Executing move...")
     # Find a valid position
-    if actions['movement'] and actions['movement'][0]['valid_positions']:
-        target_pos = actions['movement'][0]['valid_positions'][0]
+    move_action = next((action for action in position_actions if action["template_name"] == "Move"), None)
+    if move_action and move_action["valid_targets"]:
+        target_pos = move_action["valid_targets"][0]["position"]
         print(f"   Moving to {target_pos}...")
-        resp = client.post("/action/move", json={
+        resp = client.post("/action/position", json={
+            "session_id": session_id,
             "entity_uuid": entity_uuid,
-            "position": target_pos
+            "action_name": "Move",
+            "position": target_pos,
         })
         result = resp.json()
+        if "success" not in result:
+            print(f"   ERROR: Move returned unexpected payload: {result}")
+            return False
         print(f"   Success: {result['success']}")
         print(f"   Message: {result['message']}")
     else:
@@ -76,20 +100,24 @@ def test_human_control():
     print("\n5. Getting updated available actions...")
     resp = client.get(f"/entity/{entity_uuid}/available-actions")
     actions = resp.json()
-    print(f"   Remaining movement: {actions['remaining_movement']}ft")
+    print(f"   Remaining movement: {actions.get('remaining_movement', 0)}ft")
 
     # 6. Try an attack if we have targets
-    attacks_with_targets = [a for a in actions['attacks'] if a['valid_targets']]
+    attacks_with_targets = [a for a in actions.get("entity_actions", []) if a["valid_targets"]]
     if attacks_with_targets:
         print("\n6. Executing attack...")
         attack = attacks_with_targets[0]
-        target = attack['valid_targets'][0]
-        resp = client.post("/action/attack", json={
+        target = attack['valid_targets'][0]["entity_uuid"]
+        resp = client.post("/action/entity", json={
+            "session_id": session_id,
             "entity_uuid": entity_uuid,
+            "action_name": attack["template_name"],
             "target_uuid": target,
-            "weapon_slot": "main_hand"
         })
         result = resp.json()
+        if "success" not in result:
+            print(f"   ERROR: Attack returned unexpected payload: {result}")
+            return False
         print(f"   Success: {result['success']}")
         print(f"   Message: {result['message']}")
         if result.get('event_data'):
@@ -104,7 +132,7 @@ def test_human_control():
 
     # 7. End turn
     print("\n7. Ending turn...")
-    resp = client.post("/action/end-turn", json={"entity_uuid": entity_uuid})
+    resp = client.post("/action/end-turn", json={"session_id": session_id, "entity_uuid": entity_uuid})
     result = resp.json()
     print(f"   Status: {result.get('status')}")
 
@@ -138,6 +166,5 @@ if __name__ == "__main__":
         exit(1)
     except Exception as e:
         print(f"ERROR: {e}")
-        import traceback
         traceback.print_exc()
         exit(1)

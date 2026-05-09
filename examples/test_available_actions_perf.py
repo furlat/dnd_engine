@@ -18,7 +18,6 @@ from typing import List, Tuple, Dict, Any, Optional
 
 from dnd.core.gridmap import reset_map, get_map, GridMap
 from dnd.core.events import EventQueue
-from dnd.core.base_block import LightLevel
 from dnd.core.base_actions import TargetType
 from dnd.core.aoe import AoEShape
 from dnd.entity import Entity
@@ -26,13 +25,11 @@ from dnd.encounter import Encounter
 from dnd.controller import HumanController, MeleeAIController, Controller
 from dnd.monsters.bestiary import create_caster, create_skeleton
 from dnd.items.test_items import (
-    TestDoorA, Torch, create_torch, create_wall_torch,
+    Torch, create_torch,
     create_scroll_of_magic_missile, create_scroll_of_fireball,
-    create_healing_potion, create_potion_of_greater_invisibility,
-    TrapLever, PullLeverAction,
+    create_potion_of_greater_invisibility,
 )
-from dnd.tiles import create_spike_zone
-from dnd.core.base_tiles import difficult_terrain_factory
+from dnd.maps.arena_layout import build_standard_arena_environment
 from dnd.actions_functional import get_available_actions, execute_by_index, execute_use_action
 from dnd.reactions import add_opportunity_attack_handler
 
@@ -41,7 +38,7 @@ from dnd.reactions import add_opportunity_attack_handler
 # Arena Setup (replicated from server/event_server.py:setup_arena_combat)
 # ──────────────────────────────────────────────────────────────────────
 
-def setup_sorcerer_arena() -> Tuple[Entity, List[Entity], "Encounter", "Torch", "TestDoorA"]:
+def setup_sorcerer_arena() -> Tuple[Entity, List[Entity], "Encounter", "Torch", "DirectionalDoor"]:
     """Set up the sorcerer arena matching the server's setup_arena_combat(character_class='sorcerer').
 
     Returns (hero, skeletons, encounter, hero_torch, door).
@@ -56,49 +53,8 @@ def setup_sorcerer_arena() -> Tuple[Entity, List[Entity], "Encounter", "Torch", 
 
     # Create grid
     grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
-
-    # Vertical wall at x=7, y=3-11 (gap at y=7 for door)
-    for y in range(3, 12):
-        if y != 7:
-            grid.set_tile(7, y, walkable=False, visible=False)
-
-    # Closed door at wall gap
-    door = TestDoorA(source_entity_uuid=uuid4())
-    grid.place_object(door.uuid, (7, 7))
-
-    # Water island in top-left
-    for y in range(4):
-        grid.set_tile(2, y, walkable=False, visible=True, name="Water")
-    for x in range(2):
-        grid.set_tile(x, 3, walkable=False, visible=True, name="Water")
-
-    # Spike zone in bottom-left
-    spike_positions = {(x, y) for x in range(5) for y in range(11, 15)}
-    spike_tiles, spike_handler = create_spike_zone(spike_positions)
-    for tile in spike_tiles:
-        grid._tiles[tile.position] = tile
-        grid._tiles_by_uuid[tile.uuid] = tile.position
-
-    # Difficult terrain at wall ends
-    for x in range(6, 9):
-        for y in range(0, 3):
-            tile = difficult_terrain_factory((x, y))
-            grid._tiles[tile.position] = tile
-            grid._tiles_by_uuid[tile.uuid] = tile.position
-    for x in range(6, 9):
-        for y in range(12, 15):
-            tile = difficult_terrain_factory((x, y))
-            grid._tiles[tile.position] = tile
-            grid._tiles_by_uuid[tile.uuid] = tile.position
-
-    # Dark arena
-    for pos, tile in grid._tiles.items():
-        tile.default_light = LightLevel.DARKNESS
-
-    # Wall torches on far side
-    create_wall_torch(position=(14, 1), owner_uuid=uuid4(), lit=True)
-    create_wall_torch(position=(14, 13), owner_uuid=uuid4(), lit=True)
+    arena_objects = build_standard_arena_environment(grid)
+    door = arena_objects.barrier.door
 
     # Create sorcerer hero
     player = create_caster(name="Hero", position=(2, 7), faction="heroes")
@@ -121,20 +77,6 @@ def setup_sorcerer_arena() -> Tuple[Entity, List[Entity], "Encounter", "Torch", 
     player.loot_item(scroll_mm2)
     player.loot_item(scroll_fb3)
     player.loot_item(scroll_fb5)
-
-    # Healing potions on floor in spike zone
-    for pot_pos in [(1, 12), (3, 13)]:
-        healing_pot = create_healing_potion(uuid4(), heal_amount=10)
-        grid.place_object(healing_pot.uuid, pot_pos)
-
-    # Trap lever
-    lever_action = PullLeverAction(
-        source_entity_uuid=uuid4(), trap_handler_uuid=spike_handler.uuid, template=True
-    )
-    lever = TrapLever(
-        source_entity_uuid=uuid4(), use_action_templates=[lever_action], charges=1
-    )
-    grid.place_object(lever.uuid, (5, 12))
 
     # Create skeletons
     skeleton_positions = [(12, 5), (12, 7), (12, 9)]

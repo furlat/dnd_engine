@@ -4,13 +4,12 @@ Setup: 15x15 arena with vertical wall at x=7 (gap at y=7 with closed door).
 Sorcerer starts at (5,7), moves to (6,7), opens the door.
 """
 import sys
-from uuid import uuid4
 
 from dnd.utils import reset_combat_state, setup_combat_arena, get_position, move_entity
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_caster, create_skeleton
-from dnd.items.test_items import TestDoorA
+from dnd.maps.arena_layout import create_standard_arena_floor, place_standard_directional_barrier
 from dnd.actions_functional import get_available_actions, execute_use_action
 
 passed = 0
@@ -30,16 +29,9 @@ def setup():
     """Create arena with wall, door, sorcerer, and skeleton."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
-
-    # Vertical wall at x=7, y=3..11 with gap at y=7
-    for y in range(3, 12):
-        if y != 7:
-            grid.set_tile(7, y, walkable=False, visible=False)
-
-    # Place closed door at the gap
-    door = TestDoorA(source_entity_uuid=uuid4())
-    grid.place_object(door.uuid, (7, 7))
+    create_standard_arena_floor(grid)
+    barrier = place_standard_directional_barrier(grid)
+    door = barrier.door
 
     # Sorcerer on the left side, skeleton on the right
     sorcerer = create_caster(name="Sorcerer", position=(5, 7), faction="heroes")
@@ -61,8 +53,8 @@ encounter.start_encounter()
 
 test("Sorcerer at (5,7)", get_position(sorcerer) == (5, 7))
 test("Door is closed", not door.is_open)
-test("Door blocks movement", door.blocks_movement)
-test("Door blocks vision", door.blocks_vision_field)
+test("Door blocks movement", not get_map().can_transition((6, 7), (7, 7), sorcerer.uuid))
+test("Door blocks vision", not get_map().can_see_transition((6, 7), (7, 7), sorcerer.uuid))
 
 # Sorcerer should NOT see skeleton through closed door
 test("Skeleton NOT visible through closed door", skeleton.uuid not in sorcerer.senses.entities)
@@ -92,13 +84,13 @@ test("Open Door in available actions", len(open_door_actions) > 0)
 print("\n--- Open door ---")
 if open_door_actions:
     result = execute_use_action(sorcerer, door.uuid, "Open Door")
-    test("Open Door executed", result is not None and not getattr(result, 'canceled', False))
+    test("Open Door executed", result is not None and not result.canceled)
 else:
     print("  SKIP: No Open Door action found")
 
 test("Door is now open", door.is_open)
-test("Door no longer blocks movement", not door.blocks_movement)
-test("Door no longer blocks vision", not door.blocks_vision_field)
+test("Door no longer blocks movement", get_map().can_transition((6, 7), (7, 7), sorcerer.uuid))
+test("Door no longer blocks vision", get_map().can_see_transition((6, 7), (7, 7), sorcerer.uuid))
 
 # --- After opening, sorcerer should see the skeleton ---
 Entity.update_all_entities_senses()
