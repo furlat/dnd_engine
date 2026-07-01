@@ -1,17 +1,34 @@
+__pycache__/
+*.py[cod]
+*$py.class
 
-dnd.egg-info/PKG-INFO
-*.pyc
-/build
-/dnd.egg-info
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+
+/.venv/
+/build/
+/dist/
+*.egg-info/
+
 .vscode/settings.json
-dnd.egg-info/SOURCES.txt
-/.venv
 
-/ui/node_modules
-/ui/public/assets/entities
+node_modules/
+.astro/
+
+/ui/node_modules/
+/ui/dist/
+/ui/.astro/
+/ui/public/assets/entities/
+/ui/public/assets/effects/
+
 *.mp3
-/ui/public/assets/effects
 Tomb of the Serpent_Kings v4.pdf
-/game_logs
-/ai
-/data/mapeditor/maps
+/game_logs/
+/data/mapeditor/maps/
