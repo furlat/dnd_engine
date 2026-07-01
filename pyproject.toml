@@ -20,8 +20,8 @@ dev = [
 ]
 
 [tool.pyright]
-include = ["dnd", "examples", "server", "cli"]
-exclude = ["**/__pycache__"]
+include = ["ai", "dnd", "server"]
+exclude = ["**/__pycache__", ".venv", "game_logs", "to_archive"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
 reportMissingImports = true
