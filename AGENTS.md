@@ -827,7 +827,7 @@ encounter.start_encounter()  # You must call this yourself!
 
 ```python
 from dnd.encounter import Encounter
-from dnd.controller import HumanController, PassController, MeleeAIController
+from dnd.controller import HumanController, PassController, ExternalAIController
 from uuid import uuid4
 
 encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
@@ -836,7 +836,7 @@ encounter.roll_initiative()
 encounter.start_encounter()
 ```
 
-**Controllers**: `HumanController`/`CodexController` (exit turn loop for API control), `MeleeAIController` (auto-attacks), `PassController` (ends turn immediately)
+**Controllers**: `HumanController`/`CodexController` (exit turn loop for API control), `ExternalAIController` (waits for the AI session/subprocess to act through the API), `PassController` (ends turn immediately)
 
 #### Step 4: Run Turns
 

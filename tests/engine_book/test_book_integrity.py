@@ -10,6 +10,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE_BOOK = ROOT / "engine_book"
+NOTES = ENGINE_BOOK / "notes"
 CHAPTERS = ENGINE_BOOK / "chapters"
 OUTLINE = ENGINE_BOOK / "outline.md"
 PARITY_MATRIX = ENGINE_BOOK / "parity_matrix.md"
@@ -203,7 +204,7 @@ CONTROLLER_MODELS = {
         "PassController",
         "HumanController",
         "CodexController",
-        "MeleeAIController",
+        "ExternalAIController",
         "AIAgentController",
     },
 }
@@ -670,7 +671,7 @@ def collect_engine_book_test_ranges() -> dict[int, tuple[int, int, str]]:
 
 
 def test_engine_book_required_files_exist() -> None:
-    """The book has the required root files and bottom-up chapter files."""
+    """The book has the required root files and bottom-up note files."""
     required_root_files = [
         ENGINE_BOOK / "goal.md",
         ENGINE_BOOK / "outline.md",
@@ -683,7 +684,7 @@ def test_engine_book_required_files_exist() -> None:
 
     chapter_numbers = {
         int(match.group(1))
-        for path in CHAPTERS.glob("*.md")
+        for path in NOTES.glob("*.md")
         if (match := re.match(r"(\d{2})_", path.name))
     }
     assert set(range(1, 19)) <= chapter_numbers
@@ -791,8 +792,11 @@ def test_chapter_matrix_has_no_tbd_or_missing_for_written_chapters() -> None:
 def test_written_chapters_keep_required_contract_sections() -> None:
     """Each written chapter should keep source, rules, parity, and hygiene sections."""
     missing: list[str] = []
+    chapter_paths = sorted(CHAPTERS.glob("*.md"))
+    if not chapter_paths:
+        return
 
-    for path in sorted(CHAPTERS.glob("*.md")):
+    for path in chapter_paths:
         text = read_text(path)
         required_headings = [
             "## Purpose",
@@ -816,8 +820,11 @@ def test_written_chapters_keep_required_contract_sections() -> None:
 def test_written_chapter_source_and_rules_references_are_valid() -> None:
     """Chapter source and rules sections should cite valid local evidence."""
     failures: list[str] = []
+    chapter_paths = sorted(CHAPTERS.glob("*.md"))
+    if not chapter_paths:
+        return
 
-    for path in sorted(CHAPTERS.glob("*.md")):
+    for path in chapter_paths:
         text = read_text(path)
         source_section = markdown_section(text, "## Source Files Studied")
         rule_section = markdown_section(text, "## Rules Relationship")

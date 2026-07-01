@@ -9,9 +9,10 @@ from typing import Any, Optional, Dict, List, ClassVar, Protocol, runtime_checka
 __all__ = [
     "TurnContext",
     "Controller",
+    "PassController",
     "HumanController",
     "CodexController",
-    "MeleeAIController",
+    "ExternalAIController",
     "TurnRunner",
     "AIAgentController",
 ]
@@ -19,8 +20,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_object import BaseObject
-from dnd.core.base_actions import ActionCategory, BaseAction
-from dnd.actions_functional import get_available_actions
+from dnd.core.base_actions import BaseAction
 from dnd.entity import Entity
 
 
@@ -235,80 +235,30 @@ class CodexController(Controller):
         return False
 
 
-class MeleeAIController(Controller):
-    """Simple AI that moves toward enemies and attacks in melee.
+class ExternalAIController(Controller):
+    """Controller for out-of-process AI sessions.
 
-    Priority order is attack when affordable, move closer when an action is
-    still available for a later attack, otherwise end the turn.
+    Actions come through the session API from a spawned agent process. The
+    encounter should start the turn and then wait for external commands, just
+    like it does for human and Codex-controlled entities.
 
     Attributes:
         name: Display name of this controller.
         controller_type: Stable controller type identifier.
     """
 
-    name: str = Field(default="Melee AI", description="Display name of this controller.")
-    controller_type: str = Field(default="melee_ai", description="Stable controller type identifier.")
+    name: str = Field(default="External AI", description="Display name of this controller.")
+    controller_type: str = Field(default="external_ai", description="Stable controller type identifier.")
 
     def get_next_action(
         self,
         entity: Entity,
         context: TurnContext
     ) -> Optional[BaseAction]:
-        """Return the next attack or movement action based on visible enemies.
-
-        Args:
-            entity: Entity controlled by this AI.
-            context: Turn context containing visible enemy positions.
-
-        Returns:
-            Attack, movement action, or ``None`` when the AI should pass.
-        """
-        available = get_available_actions(entity)
-
-        for attack_info in available.entity_actions:
-            if attack_info.action_category != ActionCategory.ATTACK:
-                continue
-            if attack_info.can_afford and attack_info.valid_targets:
-                target = attack_info.valid_targets[0]
-                if target.target_uuid is None:
-                    continue
-                template = entity.get_action_template(attack_info.template_name)
-                if template:
-                    return template.instantiate(target_entity_uuid=target.target_uuid)
-
-        can_still_attack = entity.action_economy.can_afford("actions", 1)
-        if can_still_attack and available.position_actions:
-            move_info = available.position_actions[0]
-
-            closest_pos = None
-            closest_dist = float('inf')
-            current_min_dist = float('inf')
-
-            for enemy_uuid, enemy_pos in context.visible_enemies.items():
-                if enemy_uuid == entity.uuid:
-                    continue
-                dist = abs(entity.position[0] - enemy_pos[0]) + abs(entity.position[1] - enemy_pos[1])
-                if dist < current_min_dist:
-                    current_min_dist = dist
-
-            for enemy_uuid, enemy_pos in context.visible_enemies.items():
-                if enemy_uuid == entity.uuid:
-                    continue
-                for target in move_info.valid_targets:
-                    if target.position is None:
-                        continue
-                    pos = target.position
-                    dist = abs(pos[0] - enemy_pos[0]) + abs(pos[1] - enemy_pos[1])
-                    if dist < closest_dist and dist < current_min_dist:
-                        closest_dist = dist
-                        closest_pos = pos
-
-            if closest_pos and closest_pos != entity.position:
-                template = entity.get_action_template(move_info.template_name)
-                if template:
-                    return template.instantiate(end_position=closest_pos)
-
         return None
+
+    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
+        return False
 
 
 @runtime_checkable

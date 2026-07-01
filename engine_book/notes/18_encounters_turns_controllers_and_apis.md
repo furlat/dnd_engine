@@ -234,12 +234,13 @@ The built-in controller types matter for automation:
   running stops immediately.
 - `CodexController`: same external-input shape as `HumanController`, with a
   distinct controller type.
-- `MeleeAIController`: queries available actions and returns a melee attack or
-  movement when possible.
+- `ExternalAIController`: marks a turn as owned by an out-of-process AI session;
+  the encounter stops and waits for session-authorized commands.
 - `AIAgentController`: delegates to an external turn runner once, then stops.
 
 `advance_until_player()` uses `controller_type` as a public contract. It runs
-AI/pass turns and stops when the current controller is `"human"` or `"codex"`.
+pass/agent turns and stops when the current controller is `"human"`, `"codex"`,
+or `"external_ai"`.
 
 Example EB-18-003:
 
@@ -269,59 +270,32 @@ assert not codex_controller.can_continue_turn(hero, context)
 assert codex_controller.get_next_action(hero, context) is None
 ```
 
-Example EB-18-028 proves the Codex orchestration boundary. The orchestrator
-builds `codex exec --json` subprocess commands, sends the combined prompt over
-stdin, and injects `--expect-entity` into the per-turn `cli.agent` command
-prefix. That guard rejects stale commands if buffered output from an older
-turn tries to execute after the active entity has changed. The book-integrity
-suite also scans active runtime source roots (`cli/`, `dnd/`, and `server/`) so
-Claude references cannot drift back into executable code:
+Example EB-18-021 proves the external-AI turn boundary. `ExternalAIController`
+does not choose a `BaseAction` in process. It leaves the turn open with
+`waiting_for_ai`, while the same actor still exposes normal engine-derived legal
+action rows for an external session to execute:
 
 ```python
-cmd, stdin_prompt = orchestrator.build_codex_exec_invocation(
-    slot,
-    "TURN PROMPT",
-    allow_write=False,
-    expected_entity_uuid="entity-uuid",
+result = encounter.advance_until_player()
+available = actor.get_available_actions()
+attack_info = next(
+    action for action in available.entity_actions
+    if action.template_name == "Attack_MELEE_MAIN"
 )
 
-assert cmd[0:2] == ["codex", "exec"]
-assert "python -m cli.agent --token abc123 --expect-entity entity-uuid <command>" in stdin_prompt
-assert "claude" not in " ".join(cmd).lower()
+assert result.status == "waiting_for_ai"
+assert controller.get_next_action(actor, context) is None
+assert attack_info.valid_targets[0].uuid == target.uuid
 ```
 
-Example EB-18-021 proves the `MeleeAIController` decision ladder with a
-melee-only skeleton fixture. The fixture starts from the base skeleton factory
-and unequips the ranged-main weapon so the example isolates melee AI behavior
-instead of ranged attack choice. Adjacent targets must produce a weapon attack,
-not another entity-targeted action such as Shove. Distant visible enemies
-produce a `Move` that reduces distance, and no visible enemies produce `None`:
-
-```python
-melee_actor = create_melee_only_skeleton(position=(1, 1), faction="monsters")
-attack_action = controller.get_next_action(melee_actor, adjacent_context)
-
-assert isinstance(attack_action, Attack)
-assert attack_action.name == "Attack_MELEE_MAIN"
-assert attack_action.target_entity_uuid == adjacent_target.uuid
-
-move_action = controller.get_next_action(melee_actor, distant_context)
-
-assert isinstance(move_action, Move)
-assert move_action.end_position is not None
-assert moved_distance < current_distance
-
-assert controller.get_next_action(lone_actor, empty_context) is None
-```
-
-Example EB-18-034 tightens the map-aware movement boundary. `MeleeAIController`
-does not compute paths directly; it asks `get_available_actions()` for legal
-Move targets and then instantiates a move to one of those positions. A
-directional movement border blocks the direct east transition out of the AI's
-starting tile, but the available-action pathfinder can still expose a legal
-route around that border. The chosen move must use the same path from the
-available-action target, avoid the blocked transition, validate every path step
-with `GridMap.can_transition()`, and still reduce distance to the visible enemy:
+Example EB-18-034 tightens the map-aware movement boundary below AI policy.
+External AI receives available-action rows produced by the engine, so those rows
+must already carry legal movement paths. A directional movement border blocks
+the direct east transition out of the actor's starting tile, but the
+available-action pathfinder can still expose legal routes around that border.
+The exposed target path must avoid the blocked transition, validate every path
+step with `GridMap.can_transition()`, and still offer distance-improving
+movement to the visible enemy:
 
 ```python
 grid.set_tile_directional_border((1, 1), "movement", "east", False)
@@ -331,22 +305,20 @@ move_info = next(
     action for action in melee_actor.get_available_actions().position_actions
     if action.template_name == "Move"
 )
-move_action = controller.get_next_action(melee_actor, context)
+chosen_target = min(improving_targets, key=lambda target: len(target.path or []))
 
-assert isinstance(move_action, Move)
-assert move_action.end_position in legal_move_targets
-assert move_action.path == legal_move_targets[move_action.end_position].path
-assert ((1, 1), (2, 1)) not in zip(move_action.path, move_action.path[1:])
+assert chosen_target.path[0] == melee_actor.position
+assert chosen_target.path[-1] == chosen_target.position
+assert ((1, 1), (2, 1)) not in zip(chosen_target.path, chosen_target.path[1:])
 ```
 
 Parity tests:
 
 - `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_003_run_turn_and_advance_until_player_respect_controller_types`
 - `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_020_codex_controller_stops_as_external_input_turn`
-- `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_028_codex_orchestrator_builds_guarded_codex_exec_invocation`
 - `tests/engine_book/test_book_integrity.py::test_active_runtime_sources_do_not_reference_claude`
-- `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_021_melee_ai_attacks_moves_or_passes_from_context`
-- `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_034_melee_ai_uses_available_move_paths_across_directional_blockers`
+- `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_021_external_ai_controller_waits_for_session_commands`
+- `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_034_available_move_paths_preserve_directional_blockers`
 - `tests/engine_book/test_chapter_18_encounters_apis.py`
 
 ## Action Execution And Combat Logs
@@ -994,41 +966,11 @@ assert envelopes[dash_log_index]["id"] == make_stream_id(
 )
 ```
 
-The CLI displays those same entries through `filter_combat_log()`. The filter
-applies temporal visibility from `perceiver_uuids`, then identity visibility
-from the caller's current visible-entity set. `revealed_entity_uuids` is treated
-as visible for the current log tree, so a hidden creature revealed during an
-AoE can be named in its descendant entries without exposing other hidden
-targets.
-
-Example EB-18-029 freezes that mixed AoE edge:
-
-```python
-parent_entry = {
-    "source_uuid": hero_uuid,
-    "source_name": "Hero Wizard",
-    "revealed_entity_uuids": [revealed_uuid],
-    "sub_entries": [
-        {"target_uuid": revealed_uuid, "target_name": "Revealed Rogue", ...},
-        {"target_uuid": still_hidden_uuid, "target_name": "Still Hidden", ...},
-    ],
-}
-
-filtered = filter_combat_log([parent_entry], [hero_uuid], {hero_uuid})
-
-assert filtered[0]["sub_entries"][0]["target_name"] == "Revealed Rogue"
-assert filtered[0]["sub_entries"][1]["target_name"] == "???"
-```
-
-The parent reveal set is inherited by descendants. It does not globally reveal
-other hidden targets that happened to be affected by the same AoE.
-
 Parity tests:
 
 - `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_007_event_history_and_sse_payloads_preserve_directional_spatial_fields`
 - `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_017_combat_log_endpoint_uses_since_cursor_without_duplication`
 - `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_018_combat_log_sse_follows_matching_completion_event`
-- `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_029_combat_log_filter_reveals_only_parent_marked_aoe_targets`
 - `tests/engine_book/test_chapter_18_encounters_apis.py`
 
 ## Mapeditor API
@@ -1150,9 +1092,10 @@ Chapter 18 adds executable coverage for:
 - `TurnContext` contents;
 - round advancement;
 - surprise reaction lockout until the skipped first turn ends;
-- `advance_until_player()` stopping on human- and Codex-controlled turns;
-- `MeleeAIController` attack, move-closer, pass, and directional-border legal
-  Move path decisions;
+- `advance_until_player()` stopping on human-, Codex-, and external-AI-controlled
+  turns;
+- external-AI controller wait state plus directional-border legal Move path
+  payloads for downstream policies;
 - API-style action execution and combat-log listener notifications;
 - death detection and faction-based encounter ending;
 - raw entity/encounter JSON compatibility;
@@ -1193,9 +1136,9 @@ Chapter 18 adds executable coverage for:
 ## Documentation Hygiene Notes
 
 The Chapter 18 pass reviewed encounter/controller/API surfaces from runtime
-code and executable examples. The active Codex orchestration path is guarded by
-both EB-18-028 and the book-integrity runtime scan, so Claude references cannot
-return to executable `cli/`, `dnd/`, or `server/` sources unnoticed.
+code and executable examples. The book-integrity runtime scan guards active
+runtime source roots, so Claude references cannot return to executable `dnd/`,
+`server/`, or `ai/` sources unnoticed.
 
 Server API hygiene is currently enforced at the structured-error and DTO
 contract boundaries:
@@ -1222,7 +1165,7 @@ Google-style class docstrings. The session-authority dataclasses in
 carry dataclass `metadata["description"]` for all 10 public fields, with
 matching Google-style class docstrings. Controller model hygiene is guarded for
 `dnd/controller.py`: `TurnContext`, `Controller`, `PassController`,
-`HumanController`, `CodexController`, `MeleeAIController`, and
+`HumanController`, `CodexController`, `ExternalAIController`, and
 `AIAgentController` expose all 21 reviewed public fields through described
 `Field(...)` metadata, carry Google-style `Attributes:` docstrings, and the
 module is token-scanned to stay comment-free. Encounter model hygiene is guarded

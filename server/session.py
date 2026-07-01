@@ -164,6 +164,12 @@ class GameSession:
         self.players[session_id].controlled_entities.add(entity_uuid)
         return True
 
+    def unassign_entity(self, entity_uuid: UUID) -> None:
+        """Remove any player ownership for one entity."""
+        old_owner = self.entity_to_player.pop(entity_uuid, None)
+        if old_owner and old_owner in self.players:
+            self.players[old_owner].controlled_entities.discard(entity_uuid)
+
     def get_entity_owner(self, entity_uuid: UUID) -> Optional[PlayerSession]:
         """Get the player who owns an entity."""
         session_id = self.entity_to_player.get(entity_uuid)
