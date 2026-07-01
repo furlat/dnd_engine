@@ -4732,7 +4732,7 @@ def test_arena_mode_chapter_examples_show_reader_visible_output() -> None:
         "readers: entity=True, objects=True, actions=True, inventory=True, equipment=True",
         "encounter: name=Arena Combat, state=not_started, combatants=4",
         "actors: hero=Hero/heroes@(2, 7), warrior=(12, 5), archer=(12, 7), warlock=(12, 9)",
-        "controllers: hero=human, warrior=melee_ai, archer=melee_ai, warlock=melee_ai",
+        "controllers: hero=human, warrior=external_ai, archer=external_ai, warlock=external_ai",
         "floor objects: walls=8, doors=1, potions=2, torches=2, levers=1",
         "fighter kit: melee=Shortsword+Dagger, ranged=Longbow, features=['Action Surge', 'Second Wind']",
         "sorcerer kit: spells=['Fire Bolt', 'Fireball', 'Magic Missile'], metamagic=['Quickened Spell', 'Twinned Spell']",
@@ -4787,11 +4787,11 @@ def test_controller_chapter_frontloads_turn_contract() -> None:
     assert "hands one complete turn to an agent runner" in normalized_text
     assert "Controllers are the game's decision-ownership layer." in text
     assert "| Product question | Controller-owned answer |" in text
-    assert "`controller_type` identifies human, Codex, pass, melee AI" in text
+    assert "`controller_type` identifies human, Codex, external AI, pass" in text
     assert "`TurnContext` carries the actor UUID, budgets" in text
     assert "Human and Codex controllers keep the turn open" in text
     assert "`PassController` makes pass behavior explicit" in text
-    assert "`MeleeAIController` chooses attacks, movement" in text
+    assert "`ExternalAIController` waits for an AI session command" in text
     assert "`AIAgentController` runs a bound turn runner once" in text
     assert "The encounter still owns turn start, action execution" in text
     assert "| D&D turn idea | Controller behavior |" in text
@@ -4800,7 +4800,7 @@ def test_controller_chapter_frontloads_turn_contract() -> None:
     assert "`TurnContext` carries actor UUID, round and turn indexes" in text
     assert "`advance_until_player()` keeps the turn waiting" in text
     assert "`PassController` returns the pass signal" in text
-    assert "Built-in controllers choose normal `BaseAction` instances" in text
+    assert "External AI controllers receive legal actions through the session API" in text
     assert "`AIAgentController` calls its bound `TurnRunner.run_turn()`" in text
     assert "Controller choices enter the ordinary action/event pipeline" in text
     assert "The examples build one controller-decision thread in seven moves:" in text
@@ -4808,9 +4808,7 @@ def test_controller_chapter_frontloads_turn_contract() -> None:
     assert "Import the controller catalogue." in text
     assert "Stop for human or Codex input." in text
     assert "Pass as the chosen turn behavior." in text
-    assert "Choose a weapon attack before other entity actions." in text
-    assert "Move toward a visible enemy." in text
-    assert "Pass with an empty target list." in text
+    assert "Stop for an external AI subprocess." in text
     assert "Delegate a full turn to an agent runner." in text
     assert "The controller turn contract turns initiative ownership" in text
     assert "Every controller rule answers eight questions:" in text
@@ -4818,9 +4816,7 @@ def test_controller_chapter_frontloads_turn_contract() -> None:
     assert "`controller_type` identifies whether the actor is owned" in text
     assert "`TurnContext` carries the actor UUID" in text
     assert "`advance_until_player()` return `waiting_for_human`" in text
-    assert "Automated controllers choose normal `BaseAction` instances" in text
-    assert "`MeleeAIController` attacks a visible target" in text
-    assert "returns the pass signal when its target list is empty" in text
+    assert "`ExternalAIController` waits for session-authorized API commands" in text
     assert "`AIAgentController` calls a bound `TurnRunner.run_turn()`" in text
     assert (
         "Author turn ownership by choosing the controller that matches the actor's "
@@ -4832,7 +4828,7 @@ def test_controller_chapter_frontloads_turn_contract() -> None:
     assert "Provide a turn context." in text
     assert "Use outside-input controllers for players." in text
     assert "Use pass controllers for passive actors." in text
-    assert "Use built-in AI for simple tactics." in text
+    assert "Use external AI for subprocess tactics." in text
     assert "Use agent controllers for full-turn delegation." in text
     assert "Keep execution inside the encounter." in text
     assert "assign one controller per combatant, give each turn a current context" in normalized_text
@@ -4864,27 +4860,23 @@ def test_controller_chapter_examples_show_reader_visible_output() -> None:
     ).read_text(encoding="utf-8")
 
     expected_phrases = [
-        "controllers: ['human', 'codex', 'pass', 'melee_ai', 'ai_agent']",
+        "controllers: ['human', 'codex', 'pass', 'ai_agent']",
         "runner: type=RecordingTurnRunner, run_count=0",
-        "catalogue functions: pair=True, melee_skeleton=True, context=True, encounter=True",
+        "catalogue functions: pair=True, context=True, encounter=True",
         "human wait: status=waiting_for_human, entity=Controller Hero, current=Controller Hero, turn_state=in_progress, can_continue=False",
         "human action: None",
         "codex wait: status=waiting_for_codex, entity=Controller Hero, current=Controller Hero, turn_state=in_progress, can_continue=False",
         "codex action: None",
+        "external ai wait: status=waiting_for_ai, entity=Controller Skeleton, current=Controller Skeleton, turn_state=in_progress, can_continue=False",
+        "external ai action: None",
         "pass turn: status=waiting_for_human, next=Controller Hero, monster_turns=1, acted=True",
         "current: actor=Controller Hero, turn_state=in_progress",
-        "attack choice: type=Attack, name=Attack_MELEE_MAIN, slot=MELEE_MAIN, target=Adjacent Hero",
-        "tactical context: visible_enemies=1, visible_allies=0, actor=AI Skeleton",
-        "move choice: type=Move, start=(1, 1), end=(4, 1), path=[(1, 1), (2, 1), (3, 1), (4, 1)]",
-        "distance: before=4, after=1, improved=True",
-        "target list: visible_enemies=0, visible_allies=0",
-        "pass signal: action=None, controller=melee_ai",
         "first delegation: runner=RecordingTurnRunner, run_count=1, monster_turns=1, current=Controller Hero",
         "second delegation: run_count=2, monster_turns=2, current=Controller Hero",
     ]
 
-    assert text.count("<p className=\"example-output-label\">Result</p>\n\n```text") == 7
-    assert text.count('print("\\n".join(readout_lines))') == 7
+    assert text.count("<p className=\"example-output-label\">Result</p>\n\n```text") == 5
+    assert text.count('print("\\n".join(readout_lines))') == 5
     assert "Expected output:" not in text
     for phrase in expected_phrases:
         assert phrase in text

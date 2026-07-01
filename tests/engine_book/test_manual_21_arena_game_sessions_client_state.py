@@ -8,6 +8,7 @@ warnings.filterwarnings(
 )
 
 from fastapi.testclient import TestClient
+import pytest
 
 from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
@@ -17,12 +18,20 @@ from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.utils import reset_combat_state
+from server import event_server
 from server.event_server import (
     _available_actions_cache,
     app,
     setup_arena_combat,
     sim,
 )
+
+
+@pytest.fixture(autouse=True)
+def stub_external_ai_processes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep arena-session tutorial checks from spawning real AI subprocesses."""
+    monkeypatch.setattr(event_server.ai_process_manager, "start_external_melee_agent", lambda *_args: None)
+    monkeypatch.setattr(event_server.ai_process_manager, "stop_all", lambda: None)
 
 
 def reset_live_game_tutorial_state() -> None:
@@ -124,10 +133,18 @@ def test_standard_arena_composes_map_hero_monsters_environment_and_controllers()
     assert archer.position == (12, 7)
     assert warlock.position == (12, 9)
 
-    assert encounter.get_controller_for(hero.uuid).controller_type == "human"
-    assert encounter.get_controller_for(warrior.uuid).controller_type == "melee_ai"
-    assert encounter.get_controller_for(archer.uuid).controller_type == "melee_ai"
-    assert encounter.get_controller_for(warlock.uuid).controller_type == "melee_ai"
+    hero_controller = encounter.get_controller_for(hero.uuid)
+    warrior_controller = encounter.get_controller_for(warrior.uuid)
+    archer_controller = encounter.get_controller_for(archer.uuid)
+    warlock_controller = encounter.get_controller_for(warlock.uuid)
+    assert hero_controller is not None
+    assert warrior_controller is not None
+    assert archer_controller is not None
+    assert warlock_controller is not None
+    assert hero_controller.controller_type == "human"
+    assert warrior_controller.controller_type == "external_ai"
+    assert archer_controller.controller_type == "external_ai"
+    assert warlock_controller.controller_type == "external_ai"
 
     assert equipped_item_name(hero, WeaponSlot.MELEE_MAIN) == "Shortsword"
     assert equipped_item_name(hero, WeaponSlot.MELEE_OFF) == "Dagger"
@@ -152,9 +169,13 @@ def test_pvp_arena_uses_codex_controllers_for_monster_side() -> None:
     monsters = [entity for entity in Entity.get_all_entities() if entity.faction == "monsters"]
 
     assert encounter.name == "PvP Arena"
-    assert encounter.get_controller_for(hero.uuid).controller_type == "human"
+    hero_controller = encounter.get_controller_for(hero.uuid)
+    monster_controllers = [encounter.get_controller_for(monster.uuid) for monster in monsters]
+    assert hero_controller is not None
+    assert all(controller is not None for controller in monster_controllers)
+    assert hero_controller.controller_type == "human"
     assert len(monsters) == 3
-    assert {encounter.get_controller_for(monster.uuid).controller_type for monster in monsters} == {"codex"}
+    assert {controller.controller_type for controller in monster_controllers if controller is not None} == {"codex"}
 
 
 def test_start_human_mode_creates_ai_session_and_waits_for_player_join() -> None:

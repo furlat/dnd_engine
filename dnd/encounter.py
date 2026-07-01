@@ -333,6 +333,26 @@ class Encounter(BaseObject):
         combatant = self.combatants.get(entity_uuid)
         return combatant.controller if combatant else None
 
+    def set_controller_for(self, entity_uuid: UUID, controller: Controller) -> UUID:
+        """Replace the controller assigned to one combatant.
+
+        Args:
+            entity_uuid: UUID of the combatant whose controller should change.
+            controller: New controller for the combatant.
+
+        Returns:
+            UUID of the previous controller.
+
+        Raises:
+            ValueError: If the entity is not part of this encounter.
+        """
+        combatant = self.combatants.get(entity_uuid)
+        if combatant is None:
+            raise ValueError(f"Entity {entity_uuid} is not in this encounter")
+        previous_controller_uuid = combatant.controller_uuid
+        combatant.controller_uuid = controller.uuid
+        return previous_controller_uuid
+
     def roll_initiative(self) -> None:
         """
         Roll initiative for all combatants and establish turn order.
@@ -1034,12 +1054,17 @@ class Encounter(BaseObject):
                     log_start_index=log_start
                 )
 
-            if controller.controller_type in ("human", "codex"):
+            if controller.controller_type in ("human", "codex", "external_ai"):
                 if self.turn_state != TurnState.IN_PROGRESS:
                     self.start_turn()
 
                 entity = self.get_current_entity()
-                status = "waiting_for_human" if controller.controller_type == "human" else "waiting_for_codex"
+                if controller.controller_type == "human":
+                    status = "waiting_for_human"
+                elif controller.controller_type == "codex":
+                    status = "waiting_for_codex"
+                else:
+                    status = "waiting_for_ai"
 
                 return AdvanceResult(
                     source_entity_uuid=self.uuid,

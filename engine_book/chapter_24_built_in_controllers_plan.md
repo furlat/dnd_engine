@@ -4,15 +4,15 @@
 
 Explain the controller catalogue as the videogame input contract. The reader
 should understand which controllers pause for outside decisions, which
-controllers end turns automatically, which controllers return engine actions,
-and which controllers delegate a full turn to an agent runner.
+controllers end turns automatically, which controller marks an out-of-process
+AI session turn, and which controllers delegate a full turn to an agent runner.
 
 ## Concepts Introduced
 
 - `controller_type` as the public turn-routing identifier.
 - `HumanController` and `CodexController` as external-input boundaries.
 - `PassController` as a deterministic no-action automated turn.
-- `MeleeAIController` as a built-in engine-action selector.
+- `ExternalAIController` as the out-of-process AI session boundary.
 - `AIAgentController` as a one-run delegation bridge for agent-owned turns.
 - `TurnContext` as the narrow controller view of action economy and visible
   opponents.
@@ -29,13 +29,13 @@ and which controllers delegate a full turn to an agent runner.
 ## Required Visual
 
 - Controller catalogue diagram: encounter current turn, controller type,
-  external-input controllers, pass controller, built-in melee AI, delegated
-  agent runner, and the return to the turn loop.
+  external-input controllers, pass controller, external AI session boundary,
+  delegated agent runner, and the return to the turn loop.
 
 ## Source Files Verified
 
 - `dnd/controller.py` for `Controller`, `TurnContext`, `HumanController`,
-  `CodexController`, `PassController`, `MeleeAIController`, `TurnRunner`, and
+  `CodexController`, `PassController`, `ExternalAIController`, `TurnRunner`, and
   `AIAgentController`.
 - `dnd/encounter.py` for `run_turn()`, `advance_until_player()`, and controller
   context construction.

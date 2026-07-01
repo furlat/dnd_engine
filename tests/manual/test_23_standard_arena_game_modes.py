@@ -86,9 +86,9 @@ def test_standard_arena_composes_environment_actors_and_ai_controllers(capsys) -
     assert warlock.position == (12, 9)
 
     assert encounter.get_controller_for(hero.uuid).controller_type == "human"
-    assert encounter.get_controller_for(warrior.uuid).controller_type == "melee_ai"
-    assert encounter.get_controller_for(archer.uuid).controller_type == "melee_ai"
-    assert encounter.get_controller_for(warlock.uuid).controller_type == "melee_ai"
+    assert encounter.get_controller_for(warrior.uuid).controller_type == "external_ai"
+    assert encounter.get_controller_for(archer.uuid).controller_type == "external_ai"
+    assert encounter.get_controller_for(warlock.uuid).controller_type == "external_ai"
 
     assert object_names.count("Directional Wall") == 8
     assert object_names.count("Door") == 1
@@ -130,7 +130,7 @@ def test_standard_arena_composes_environment_actors_and_ai_controllers(capsys) -
             "actors: hero=Hero/heroes@(2, 7), warrior=(12, 5), "
             "archer=(12, 7), warlock=(12, 9)"
         ),
-        "controllers: hero=human, warrior=melee_ai, archer=melee_ai, warlock=melee_ai",
+        "controllers: hero=human, warrior=external_ai, archer=external_ai, warlock=external_ai",
         "floor objects: walls=8, doors=1, potions=2, torches=2, levers=1",
     ]
 
