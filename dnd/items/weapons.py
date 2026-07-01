@@ -1,4 +1,4 @@
-"""Weapon factory functions for D&D 5e weapons."""
+"""Weapon factories and hook-bearing weapon test fixtures."""
 
 import random
 from typing import Optional
@@ -15,12 +15,15 @@ from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 
 
-# =============================================================================
-# SIMPLE MELEE WEAPONS
-# =============================================================================
-
 def create_club(source_id: UUID) -> Weapon:
-    """Club - 1d4 bludgeoning, light"""
+    """Create a club.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple melee weapon dealing 1d4 bludgeoning damage with Light.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Club",
@@ -39,7 +42,15 @@ def create_club(source_id: UUID) -> Weapon:
 
 
 def create_dagger(source_id: UUID) -> Weapon:
-    """Dagger - 1d4 piercing, finesse, light, thrown (20/60)"""
+    """Create a dagger.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple melee weapon dealing 1d4 piercing damage with Finesse, Light, and
+        Thrown metadata.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Dagger",
@@ -58,7 +69,14 @@ def create_dagger(source_id: UUID) -> Weapon:
 
 
 def create_handaxe(source_id: UUID) -> Weapon:
-    """Handaxe - 1d6 slashing, light, thrown (20/60)"""
+    """Create a handaxe.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple melee weapon dealing 1d6 slashing damage with Light and Thrown.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Handaxe",
@@ -77,7 +95,14 @@ def create_handaxe(source_id: UUID) -> Weapon:
 
 
 def create_javelin(source_id: UUID) -> Weapon:
-    """Javelin - 1d6 piercing, thrown (30/120)"""
+    """Create a javelin.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple melee weapon dealing 1d6 piercing damage with Thrown metadata.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Javelin",
@@ -96,7 +121,14 @@ def create_javelin(source_id: UUID) -> Weapon:
 
 
 def create_mace(source_id: UUID) -> Weapon:
-    """Mace - 1d6 bludgeoning"""
+    """Create a mace.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple melee weapon dealing 1d6 bludgeoning damage.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Mace",
@@ -115,7 +147,14 @@ def create_mace(source_id: UUID) -> Weapon:
 
 
 def create_quarterstaff(source_id: UUID) -> Weapon:
-    """Quarterstaff - 1d6 bludgeoning, versatile (1d8)"""
+    """Create a quarterstaff.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple melee weapon dealing 1d6 bludgeoning damage with Versatile.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Quarterstaff",
@@ -134,7 +173,15 @@ def create_quarterstaff(source_id: UUID) -> Weapon:
 
 
 def create_spear(source_id: UUID) -> Weapon:
-    """Spear - 1d6 piercing, thrown (20/60), versatile (1d8)"""
+    """Create a spear.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple melee weapon dealing 1d6 piercing damage with Thrown and
+        Versatile.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Spear",
@@ -151,13 +198,15 @@ def create_spear(source_id: UUID) -> Weapon:
         extra_damage_type=[]
     )
 
-
-# =============================================================================
-# SIMPLE RANGED WEAPONS
-# =============================================================================
-
 def create_light_crossbow(source_id: UUID) -> Weapon:
-    """Light crossbow - 1d8 piercing, ammunition (80/320), loading, two-handed"""
+    """Create a light crossbow.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple ranged weapon dealing 1d8 piercing damage at 80/320 feet.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Light Crossbow",
@@ -176,7 +225,14 @@ def create_light_crossbow(source_id: UUID) -> Weapon:
 
 
 def create_shortbow(source_id: UUID) -> Weapon:
-    """Shortbow - 1d6 piercing, ammunition (80/320), two-handed"""
+    """Create a shortbow.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Simple ranged weapon dealing 1d6 piercing damage at 80/320 feet.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Shortbow",
@@ -193,13 +249,15 @@ def create_shortbow(source_id: UUID) -> Weapon:
         extra_damage_type=[]
     )
 
-
-# =============================================================================
-# MARTIAL MELEE WEAPONS
-# =============================================================================
-
 def create_battleaxe(source_id: UUID) -> Weapon:
-    """Battleaxe - 1d8 slashing, versatile (1d10)"""
+    """Create a battleaxe.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 1d8 slashing damage with Versatile.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Battleaxe",
@@ -218,7 +276,15 @@ def create_battleaxe(source_id: UUID) -> Weapon:
 
 
 def create_greatsword(source_id: UUID) -> Weapon:
-    """Greatsword - 2d6 slashing, heavy, two-handed"""
+    """Create a greatsword.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 2d6 slashing damage with Heavy and
+        Two-Handed.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Greatsword",
@@ -237,7 +303,15 @@ def create_greatsword(source_id: UUID) -> Weapon:
 
 
 def create_greataxe(source_id: UUID) -> Weapon:
-    """Greataxe - 1d12 slashing, heavy, two-handed"""
+    """Create a greataxe.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 1d12 slashing damage with Heavy and
+        Two-Handed.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Greataxe",
@@ -256,7 +330,14 @@ def create_greataxe(source_id: UUID) -> Weapon:
 
 
 def create_longsword(source_id: UUID) -> Weapon:
-    """Longsword - 1d8 slashing, versatile (1d10)"""
+    """Create a longsword.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 1d8 slashing damage with Versatile.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Longsword",
@@ -275,7 +356,14 @@ def create_longsword(source_id: UUID) -> Weapon:
 
 
 def create_rapier(source_id: UUID) -> Weapon:
-    """Rapier - 1d8 piercing, finesse"""
+    """Create a rapier.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 1d8 piercing damage with Finesse.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Rapier",
@@ -294,7 +382,14 @@ def create_rapier(source_id: UUID) -> Weapon:
 
 
 def create_scimitar(source_id: UUID) -> Weapon:
-    """Scimitar - 1d6 slashing, finesse, light"""
+    """Create a scimitar.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 1d6 slashing damage with Finesse and Light.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Scimitar",
@@ -313,7 +408,14 @@ def create_scimitar(source_id: UUID) -> Weapon:
 
 
 def create_shortsword(source_id: UUID) -> Weapon:
-    """Shortsword - 1d6 piercing, finesse, light"""
+    """Create a shortsword.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 1d6 piercing damage with Finesse and Light.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Shortsword",
@@ -332,7 +434,14 @@ def create_shortsword(source_id: UUID) -> Weapon:
 
 
 def create_warhammer(source_id: UUID) -> Weapon:
-    """Warhammer - 1d8 bludgeoning, versatile (1d10)"""
+    """Create a warhammer.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial melee weapon dealing 1d8 bludgeoning damage with Versatile.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Warhammer",
@@ -349,13 +458,15 @@ def create_warhammer(source_id: UUID) -> Weapon:
         extra_damage_type=[]
     )
 
-
-# =============================================================================
-# MARTIAL RANGED WEAPONS
-# =============================================================================
-
 def create_longbow(source_id: UUID) -> Weapon:
-    """Longbow - 1d8 piercing, ammunition (150/600), heavy, two-handed"""
+    """Create a longbow.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial ranged weapon dealing 1d8 piercing damage at 150/600 feet.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Longbow",
@@ -374,7 +485,14 @@ def create_longbow(source_id: UUID) -> Weapon:
 
 
 def create_heavy_crossbow(source_id: UUID) -> Weapon:
-    """Heavy crossbow - 1d10 piercing, ammunition (100/400), heavy, loading, two-handed"""
+    """Create a heavy crossbow.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Martial ranged weapon dealing 1d10 piercing damage at 100/400 feet.
+    """
     return Weapon(
         source_entity_uuid=source_id,
         name="Heavy Crossbow",
@@ -391,13 +509,17 @@ def create_heavy_crossbow(source_id: UUID) -> Weapon:
         extra_damage_type=[]
     )
 
-
-# =============================================================================
-# SPECIAL WEAPONS
-# =============================================================================
-
 def unseen_strike_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """Add 1d6 piercing damage when attacker is unseen by target."""
+    """Add extra damage when the attacker is unseen by the target.
+
+    Args:
+        event: Event currently being processed.
+        source_entity_uuid: Entity UUID that owns the unseen-strike handler.
+
+    Returns:
+        Mutated damage-roll event when the target cannot see the attacker;
+        otherwise `None`.
+    """
     if not isinstance(event, DamageRollResultEvent):
         return None
     if event.source_entity_uuid != source_entity_uuid:
@@ -407,11 +529,9 @@ def unseen_strike_processor(event: Event, source_entity_uuid: UUID) -> Optional[
     if not target or not isinstance(target, Entity):
         return None
 
-    # Check if attacker is unseen by target (not in target's senses.entities)
     if source_entity_uuid in target.senses.entities:
-        return None  # Attacker is visible — no bonus
+        return None
 
-    # Roll 1d6 extra piercing damage
     result = random.randint(1, 6)
     extra_roll = DiceRoll(
         dice_uuid=uuid4(),
@@ -433,11 +553,16 @@ def unseen_strike_processor(event: Event, source_entity_uuid: UUID) -> Optional[
 
 
 class UnseenStrikeDagger(Weapon):
-    """Assassin's Dagger — deals +1d6 piercing when attacker is unseen by target.
-    Uses DAMAGE_ROLL_RESULT event handler to conditionally add extra dice."""
+    """Dagger that adds damage through a damage-roll-result handler."""
     _handler_uuid: Optional[UUID] = None
 
     def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Register the unseen-strike damage handler.
+
+        Args:
+            slot: Equipment slot receiving the dagger.
+            entity_uuid: Entity UUID equipping the dagger.
+        """
         entity = Entity.get(entity_uuid)
         if entity and isinstance(entity, Entity):
             handler = EventHandler(
@@ -456,6 +581,12 @@ class UnseenStrikeDagger(Weapon):
             self._handler_uuid = handler.uuid
 
     def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Remove the unseen-strike damage handler.
+
+        Args:
+            slot: Equipment slot releasing the dagger.
+            entity_uuid: Entity UUID unequipping the dagger.
+        """
         if self._handler_uuid:
             handler = EventHandler.get(self._handler_uuid)
             if handler and isinstance(handler, EventHandler):
@@ -466,13 +597,24 @@ class UnseenStrikeDagger(Weapon):
 
 
 def create_assassin_dagger(source_id: UUID) -> UnseenStrikeDagger:
-    """Assassin's Dagger - 1d4 piercing, finesse, light, +1d6 when unseen"""
+    """Create an assassin's dagger.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Hook-bearing dagger that adds 1d6 damage when the target cannot see the
+        attacker.
+    """
     return UnseenStrikeDagger(
         source_entity_uuid=source_id,
         name="Assassin's Dagger",
         visual_item_name="Dagger",
         visual_variant_id="10000004",
-        description="A shadowy blade that strikes harder when the target can't see you coming. +1d6 piercing when unseen.",
+        description=(
+            "A shadowy blade that strikes harder when the target can't see you coming. "
+            "+1d6 piercing when unseen."
+        ),
         damage_dice=4,
         dice_numbers=1,
         damage_type=DamageType.PIERCING,
@@ -485,18 +627,18 @@ def create_assassin_dagger(source_id: UUID) -> UnseenStrikeDagger:
         extra_damage_type=[]
     )
 
-
-# =============================================================================
-# ARCANE WEAPONS
-# =============================================================================
-
 class ArcaneStaff(Weapon):
-    """Arcane Staff — quarterstaff that grants +1 spell attack bonus when equipped.
-    Uses _on_equip/_on_unequip hooks to add/remove spell attack modifier."""
+    """Quarterstaff that grants a spell-attack modifier while equipped."""
     _spell_mod_uuid: Optional[UUID] = None
     _spell_mod_value_uuid: Optional[UUID] = None
 
     def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Add the staff's spell-attack modifier.
+
+        Args:
+            slot: Equipment slot receiving the staff.
+            entity_uuid: Entity UUID equipping the staff.
+        """
         entity = Entity.get(entity_uuid)
         if entity and isinstance(entity, Entity):
             modifier = NumericalModifier(
@@ -510,6 +652,12 @@ class ArcaneStaff(Weapon):
             self._spell_mod_value_uuid = entity.spellcasting.spell_attack_bonus.uuid
 
     def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        """Remove the staff's spell-attack modifier.
+
+        Args:
+            slot: Equipment slot releasing the staff.
+            entity_uuid: Entity UUID unequipping the staff.
+        """
         if self._spell_mod_uuid and self._spell_mod_value_uuid:
             entity = Entity.get(entity_uuid)
             if entity and isinstance(entity, Entity):
@@ -519,7 +667,15 @@ class ArcaneStaff(Weapon):
 
 
 def create_arcane_staff(source_id: UUID) -> ArcaneStaff:
-    """Arcane Staff - 1d6 bludgeoning, versatile, +1 spell attack bonus"""
+    """Create an arcane staff.
+
+    Args:
+        source_id: Entity UUID that owns the weapon item.
+
+    Returns:
+        Hook-bearing quarterstaff that grants +1 to spell attack rolls while
+        equipped.
+    """
     return ArcaneStaff(
         source_entity_uuid=source_id,
         name="Arcane Staff",

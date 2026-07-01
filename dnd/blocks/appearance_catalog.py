@@ -2,15 +2,23 @@
 
 from typing import Dict, Literal, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AppearanceOption(BaseModel):
-    key: str
-    slot: Literal["body", "head", "beard"]
-    description: str
-    tags: Tuple[str, ...] = ()
+    """Renderer taxonomy option exposed by the backend appearance catalog.
 
+    Attributes:
+        key: Stable renderer taxonomy key.
+        slot: Appearance slot that accepts this key.
+        description: Human-readable catalog summary.
+        tags: Search and grouping labels for tooling.
+    """
+
+    key: str = Field(description="Stable renderer taxonomy key.")
+    slot: Literal["body", "head", "beard"] = Field(description="Appearance slot that accepts this key.")
+    description: str = Field(description="Human-readable catalog summary.")
+    tags: Tuple[str, ...] = Field(default=(), description="Search and grouping labels for tooling.")
 
 BODY_OPTIONS: Dict[str, AppearanceOption] = {
     "NakedBody": AppearanceOption(
@@ -32,7 +40,6 @@ BODY_OPTIONS: Dict[str, AppearanceOption] = {
         tags=("body", "spirit", "ethereal"),
     ),
 }
-
 
 HEAD_OPTIONS: Dict[str, AppearanceOption] = {
     "Head1": AppearanceOption(
@@ -72,7 +79,6 @@ HEAD_OPTIONS: Dict[str, AppearanceOption] = {
         tags=("head", "hair"),
     ),
 }
-
 
 BEARD_OPTION = AppearanceOption(
     key="Head2",

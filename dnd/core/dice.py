@@ -1,16 +1,82 @@
-from pydantic import BaseModel, Field, computed_field, model_validator
-from typing import Any, List, Optional, Union, Tuple, Self, ClassVar, Dict, Literal
 import random
-from dnd.core.values import ModifiableValue, AdvantageStatus, CriticalStatus, AutoHitStatus, StaticValue,NumericalModifier, ContextualValue
+from collections import deque
+from contextlib import contextmanager
 from enum import Enum
-from uuid import UUID, uuid4
 from functools import cached_property
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    Self,
+    Tuple,
+    Union,
+)
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field, computed_field, model_validator
+
+from dnd.core.values import (
+    AdvantageStatus,
+    AutoHitStatus,
+    CriticalStatus,
+    ModifiableValue,
+)
+
+
+def _default_randint(low: int, high: int) -> int:
+    """Return a die face from Python's active random generator."""
+    return random.randint(low, high)
+
+_randint: Callable[[int, int], int] = _default_randint
+
+
+@contextmanager
+def fixed_dice_faces(*faces: int) -> Iterator[None]:
+    """Use predetermined die faces while resolving dice expressions.
+
+    Args:
+        faces: Die faces to return in order. Each face must fit the die being
+            rolled when it is consumed.
+
+    Raises:
+        RuntimeError: If the dice expression asks for more faces than were
+            provided.
+        ValueError: If a provided face is outside the requested die range.
+    """
+    global _randint
+
+    queued_faces = deque(faces)
+    previous_randint = _randint
+
+    def next_fixed_face(low: int, high: int) -> int:
+        if not queued_faces:
+            raise RuntimeError("No fixed dice face remains for this roll")
+
+        face = queued_faces.popleft()
+        if face < low or face > high:
+            raise ValueError(
+                f"Fixed dice face {face} is outside the requested range {low}-{high}"
+            )
+        return face
+
+    _randint = next_fixed_face
+    try:
+        yield
+    finally:
+        _randint = previous_randint
+
 
 class AttackOutcome(str, Enum):
     HIT = "Hit"
     MISS = "Miss"
     CRIT = "Crit"
     CRIT_MISS = "Crit Miss"
+
 
 class RollType(str, Enum):
     DAMAGE = "Damage"
@@ -19,86 +85,62 @@ class RollType(str, Enum):
     CHECK = "Check"
     HEAL = "Heal"
 
+
 class DiceRoll(BaseModel):
-    """
-    Represents the result of a dice roll.
-
-    This class stores information about a specific dice roll, including the roll type,
-    results, and various statuses that may affect the roll.
-
-    Attributes:
-        roll_uuid (UUID): Unique identifier for this roll. Automatically generated if not provided.
-        dice_uuid (UUID): Unique identifier of the Dice object that produced this roll.
-        roll_type (RollType): The type of roll (e.g., DAMAGE, ATTACK, SAVE, CHECK).
-        results (Union[List[int], int]): The individual die results or a single result.
-        total (int): The total value of the roll, including any bonuses.
-        bonus (int): Any additional bonus applied to the roll.
-        advantage_status (AdvantageStatus): The advantage status of the roll.
-        critical_status (CriticalStatus): The critical status of the roll.
-        auto_hit_status (AutoHitStatus): The auto-hit status of the roll.
-        source_entity_uuid (UUID): UUID of the entity that made the roll.
-        target_entity_uuid (Optional[UUID]): UUID of the target entity, if applicable.
-        attack_outcome (Optional[AttackOutcome]): The outcome of an attack roll, if applicable.
-
-    Class Attributes:
-        _registry (ClassVar[Dict[UUID, 'DiceRoll']]): A class-level registry to store all instances.
-
-    Methods:
-        get(cls, uuid: UUID) -> Optional['DiceRoll']:
-            Retrieve a DiceRoll instance from the registry by its UUID.
-        unregister(cls, uuid: UUID) -> None:
-            Remove a DiceRoll instance from the class registry.
-    """
+    """Stores one concrete roll result and the modifier state used for it."""
 
     _registry: ClassVar[Dict[UUID, 'DiceRoll']] = {}
 
     roll_uuid: UUID = Field(
         default_factory=uuid4,
-        description="Unique identifier for this roll. Automatically generated if not provided."
+        description="Unique identifier for this concrete roll result.",
     )
     dice_uuid: UUID = Field(
         ...,
-        description="Unique identifier of the Dice object that produced this roll."
+        description="Unique identifier of the dice expression that produced this result.",
     )
     roll_type: RollType = Field(
         ...,
-        description="The type of roll (e.g., DAMAGE, ATTACK, SAVE, CHECK)."
+        description="Rules category for the roll result.",
     )
     results: Union[List[int], int] = Field(
         ...,
-        description="The individual die results or a single result."
+        description=(
+            "Recorded dice values: selected d20 for normal rolls, both d20s for "
+            "advantage or disadvantage, or every die for damage and healing."
+        ),
     )
     total: int = Field(
         ...,
-        description="The total value of the roll, including any bonuses."
+        description="Final numeric roll total after adding the normalized bonus.",
     )
     bonus: int = Field(
         ...,
-        description="Any additional bonus applied to the roll."
+        description="Normalized modifier value applied to this roll.",
     )
     advantage_status: AdvantageStatus = Field(
         ...,
-        description="The advantage status of the roll."
+        description="Advantage state captured when the roll was created.",
     )
     critical_status: CriticalStatus = Field(
         ...,
-        description="The critical status of the roll."
+        description="Critical state captured when the roll was created.",
     )
     auto_hit_status: AutoHitStatus = Field(
         ...,
-        description="The auto-hit status of the roll."
+        description="Automatic hit or miss state captured when the roll was created.",
     )
     source_entity_uuid: UUID = Field(
         ...,
-        description="UUID of the entity that made the roll."
+        description="Entity that made the roll.",
     )
     target_entity_uuid: Optional[UUID] = Field(
         default=None,
-        description="UUID of the target entity, if applicable."
+        description="Target entity for contested or targeted rolls, when present.",
     )
     attack_outcome: Optional[AttackOutcome] = Field(
         default=None,
-        description="The outcome of an attack roll, if applicable."
+        description="Attack outcome associated with damage rolls, when applicable.",
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -106,84 +148,50 @@ class DiceRoll(BaseModel):
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['DiceRoll']:
-        """
-        Retrieve a DiceRoll instance from the registry by its UUID.
+        """Return the registered roll result for a UUID.
 
         Args:
-            uuid (UUID): The UUID of the DiceRoll to retrieve.
+            uuid: Roll result UUID to look up.
 
         Returns:
-            Optional[DiceRoll]: The DiceRoll instance if found, None otherwise.
+            The matching roll result, or ``None`` when no result is registered.
         """
         return cls._registry.get(uuid)
 
+
 class Dice(BaseModel):
-    """
-    Represents a set of dice used for rolling.
-
-    This class defines the properties of a set of dice, including the number of dice,
-    their value, and any modifiers or special conditions that apply to rolls made with these dice.
-
-    Attributes:
-        uuid (UUID): Unique identifier for this set of dice. Automatically generated if not provided.
-        count (int): The number of dice in this set.
-        value (int): The number of sides on each die (e.g., 6 for a d6, 20 for a d20).
-        bonus (ModifiableValue): Any modifiers or bonuses applied to rolls with these dice.
-        roll_type (RollType): The type of roll these dice are used for (default is ATTACK).
-        attack_outcome (Optional[AttackOutcome]): The outcome of an attack, if applicable.
-
-    Class Attributes:
-        _registry (ClassVar[Dict[UUID, 'Dice']]): A class-level registry to store all instances.
-
-    Methods:
-        get(cls, uuid: UUID) -> Optional['Dice']:
-            Retrieve a Dice instance from the registry by its UUID.
-        unregister(cls, uuid: UUID) -> None:
-            Remove a Dice instance from the class registry.
-        check_attack_outcome(self) -> Self:
-            Validate the attack_outcome based on the roll_type.
-        check_num_dice(self) -> Self:
-            Validate the number of dice based on the roll_type.
-        roll(self) -> DiceRoll:
-            Perform a roll using these dice and return a DiceRoll object.
-
-    Validators:
-        check_attack_outcome(self) -> Self:
-            Validate the attack_outcome based on the roll_type.
-        check_num_dice(self) -> Self:
-            Validate the number of dice based on the roll_type.
-    """
+    """Describes a dice expression and produces one cached ``DiceRoll``."""
 
     _registry: ClassVar[Dict[UUID, 'Dice']] = {}
 
     uuid: UUID = Field(
         default_factory=uuid4,
-        description="Unique identifier for this set of dice. Automatically generated if not provided."
+        description="Unique identifier for this dice expression.",
     )
     count: int = Field(
         ...,
-        description="The number of dice in this set.",
+        description="Number of dice in the base expression.",
         ge=1,
     )
     value: Literal[4, 6, 8, 10, 12, 20] = Field(
         ...,
-        description="The number of sides on each die (e.g., 6 for a d6, 20 for a d20)."
+        description="Number of sides on each die.",
     )
     bonus: ModifiableValue = Field(
         ...,
-        description="Any modifiers or bonuses applied to rolls with these dice."
+        description="Modifiable value that supplies score, advantage, critical, and auto-hit state.",
     )
     roll_type: RollType = Field(
         default=RollType.ATTACK,
-        description="The type of roll these dice are used for (default is ATTACK)."
+        description="Rules category for rolls produced by this dice expression.",
     )
     attack_outcome: Optional[AttackOutcome] = Field(
         default=None,
-        description="The outcome of an attack, if applicable."
+        description="Required attack outcome for damage rolls; absent for other roll types.",
     )
     crit_extra_dice: int = Field(
         default=0,
-        description="Extra dice to roll on critical hits (e.g., Brutal Critical). Added on top of doubled dice."
+        description="Extra critical-hit dice added after doubling the base dice count.",
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -191,27 +199,26 @@ class Dice(BaseModel):
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Dice']:
-        """
-        Retrieve a Dice instance from the registry by its UUID.
+        """Return the registered dice expression for a UUID.
 
         Args:
-            uuid (UUID): The UUID of the Dice to retrieve.
+            uuid: Dice expression UUID to look up.
 
         Returns:
-            Optional[Dice]: The Dice instance if found, None otherwise.
+            The matching dice expression, or ``None`` when no expression is registered.
         """
         return cls._registry.get(uuid)
 
     @model_validator(mode="after")
     def check_attack_outcome(self) -> Self:
-        """
-        Validate the attack_outcome based on the roll_type.
+        """Validate that only damage rolls carry an attack outcome.
 
         Returns:
-            Self: The validated Dice instance.
+            The validated dice expression.
 
         Raises:
-            ValueError: If the attack_outcome is invalid for the given roll_type.
+            ValueError: If a damage roll omits an outcome or a non-damage roll
+                provides one.
         """
         if self.roll_type == RollType.DAMAGE and self.attack_outcome is None:
             raise ValueError("Attack outcome must be provided for damage rolls")
@@ -221,14 +228,13 @@ class Dice(BaseModel):
 
     @model_validator(mode="after")
     def check_num_dice(self) -> Self:
-        """
-        Validate the number of dice based on the roll_type.
+        """Validate that non-damage d20-style rolls use a single die.
 
         Returns:
-            Self: The validated Dice instance.
+            The validated dice expression.
 
         Raises:
-            ValueError: If the number of dice is invalid for the given roll_type.
+            ValueError: If an attack, save, or check tries to roll more than one die.
         """
         if self.roll_type not in (RollType.DAMAGE, RollType.HEAL) and self.count > 1:
             raise ValueError("Cannot have more than one die for non-damage/heal rolls")
@@ -237,65 +243,51 @@ class Dice(BaseModel):
     @computed_field
     @property
     def source_entity_uuid(self) -> UUID:
-        """
-        Get the UUID of the source entity for these dice.
+        """Return the source entity from the dice bonus.
 
         Returns:
-            UUID: The UUID of the source entity.
+            Source entity UUID.
         """
         return self.bonus.source_entity_uuid
 
     @computed_field
     @property
     def target_entity_uuid(self) -> Optional[UUID]:
-        """
-        Get the UUID of the target entity for these dice, if applicable.
+        """Return the target entity from the dice bonus when present.
 
         Returns:
-            Optional[UUID]: The UUID of the target entity, or None if not applicable.
+            Target entity UUID, or ``None`` when the bonus has no target.
         """
         return self.bonus.target_entity_uuid
 
     def _roll_with_advantage(self) -> Tuple[int, List[int]]:
-        """
-        Perform a roll with advantage.
-
-        This method rolls the dice twice and returns the higher result.
+        """Roll two dice and select the higher result.
 
         Returns:
-            Tuple[int, List[int]]: A tuple containing the highest roll result and a list of all roll results.
+            Selected value and both raw rolls.
         """
-        # Always roll 2 dice for advantage, regardless of self.count
-        rolls = [random.randint(1, self.value) for _ in range(2)]
+        rolls = [_randint(1, self.value) for _ in range(2)]
         return max(rolls), rolls
 
     def _roll_with_disadvantage(self) -> Tuple[int, List[int]]:
-        """
-        Perform a roll with disadvantage.
-
-        This method rolls the dice twice and returns the lower result.
+        """Roll two dice and select the lower result.
 
         Returns:
-            Tuple[int, List[int]]: A tuple containing the lowest roll result and a list of all roll results.
+            Selected value and both raw rolls.
         """
-        # Always roll 2 dice for disadvantage, regardless of self.count
-        rolls = [random.randint(1, self.value) for _ in range(2)]
+        rolls = [_randint(1, self.value) for _ in range(2)]
         return min(rolls), rolls
 
     def _roll(self, crit: bool = False) -> List[Tuple[int, List[int]]]:
-        """
-        Perform a roll based on the current dice configuration.
-
-        This method handles normal rolls, advantage, disadvantage, and critical hits.
-        For critical hits, dice are doubled (2x) plus any crit_extra_dice added on top.
+        """Roll the configured dice with advantage and critical handling.
 
         Args:
-            crit (bool): Whether this is a critical hit roll. Defaults to False.
+            crit: Whether to double the base dice count and add critical extras.
 
         Returns:
-            List[Tuple[int, List[int]]]: A list of tuples, each containing the roll result and a list of all roll results.
+            One tuple per effective die. The tuple contains the selected value
+            and, for advantage or disadvantage, both raw rolls.
         """
-        # On crit: double the dice (count * 2) plus any extra dice from features like Brutal Critical
         count = self.count if not crit else (self.count * 2 + self.crit_extra_dice)
         advantage_status = self.bonus.advantage
         if advantage_status == AdvantageStatus.ADVANTAGE:
@@ -303,25 +295,27 @@ class Dice(BaseModel):
         elif advantage_status == AdvantageStatus.DISADVANTAGE:
             return [self._roll_with_disadvantage() for _ in range(count)]
         else:
-            return [(random.randint(1, self.value), []) for _ in range(count)]
+            return [(_randint(1, self.value), []) for _ in range(count)]
+
     @computed_field
     @cached_property
     def roll(self) -> DiceRoll:
-        """
-        Perform a roll using these dice and return a DiceRoll object.
+        """Produce and cache the concrete roll result.
 
         Returns:
-            DiceRoll: The result of the dice roll.
+            The dice roll result. Re-reading this property returns the same
+            object for the lifetime of this ``Dice`` instance.
         """
         if self.roll_type in (RollType.DAMAGE, RollType.HEAL):
-            results = [roll[0] for roll in self._roll(crit=(self.attack_outcome == AttackOutcome.CRIT))]
+            results = [
+                roll[0]
+                for roll in self._roll(crit=(self.attack_outcome == AttackOutcome.CRIT))
+            ]
             total = sum(results) + self.bonus.normalized_score
         else:
             roll_result = self._roll()[0]
-            # roll_result is (selected_value, [all_rolls]) for adv/disadv, or (value, []) for normal
             selected_value = roll_result[0]
             all_rolls = roll_result[1]
-            # Store all individual rolls if advantage/disadvantage, otherwise just the single roll
             results = all_rolls if all_rolls else [selected_value]
             total = selected_value + self.bonus.normalized_score
 
@@ -336,42 +330,5 @@ class Dice(BaseModel):
             auto_hit_status=self.bonus.auto_hit,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            attack_outcome=self.attack_outcome
+            attack_outcome=self.attack_outcome,
         )
-
-    
-if __name__ == "__main__":
-    
-    source_entity_uuid = uuid4()
-    target_entity_uuid = uuid4()
-    modifier_uuid = uuid4()
-    some_modifiable_value = ModifiableValue(source_entity_uuid=source_entity_uuid, 
-                                            target_entity_uuid=target_entity_uuid, 
-                                            self_static=StaticValue(name="example_static",
-                                                                    source_entity_uuid=source_entity_uuid,
-                                                                    value_modifiers={modifier_uuid: NumericalModifier(
-                                                                        uuid=modifier_uuid,
-                                                                        name="example_numerical_modifier",
-                                                                        value=10,
-                                                                        source_entity_uuid=source_entity_uuid,
-                                                                        target_entity_uuid=source_entity_uuid)},
-                                                                   ),
-                                            
-                                            self_contextual=ContextualValue(name="example_contextual",
-                                                                        source_entity_uuid=source_entity_uuid),
-                                            to_target_contextual=ContextualValue(name="example_to_target_contextual",
-                                                                        source_entity_uuid=source_entity_uuid,
-                                                                        target_entity_uuid=target_entity_uuid,is_outgoing_modifier=True),
-                                                                        
-
-                                            to_target_static=StaticValue(name="example_to_target_static",
-                                                                    source_entity_uuid=source_entity_uuid,is_outgoing_modifier=True)
-                                                                   
-                                            )
-    # Usage example:
-    d20 = Dice(count=1, value=20, bonus=some_modifiable_value, roll_type=RollType.ATTACK)
-    attack_roll = d20.roll
-
-    # Retrieving Dice and DiceRoll objects from registry
-    retrieved_dice = Dice.get(d20.uuid)
-    retrieved_roll = DiceRoll.get(attack_roll.roll_uuid)

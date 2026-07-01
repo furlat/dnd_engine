@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 import inspect
 import re
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type, cast
 from uuid import uuid4
 
 from dnd.actions import SpellAction
@@ -17,13 +17,16 @@ from dnd.core.naming import normalize_spell_id
 from dnd.spells import ALL_SPELLS
 
 from server.api_models import (
+    AoeCatalogShapeType,
+    ProjectileCatalogType,
     SpellCatalogEntry,
     SpellCatalogMultiTarget,
+    SpellCatalogRangeType,
     SpellCatalogResponse,
+    SpellCatalogRouteHint,
     SpellCatalogSavingThrow,
     SpellCatalogVfx,
 )
-
 
 CATALOG_VERSION = "2026-05-03.1"
 
@@ -157,19 +160,19 @@ def _get_source(spell_cls: Type[SpellAction]) -> str:
         return ""
 
 
-def _projectile_type(value: Optional[str]) -> Optional[str]:
+def _projectile_type(value: Optional[str]) -> Optional[ProjectileCatalogType]:
     if value is None:
         return None
     normalized = value.lower()
-    return normalized if normalized in PROJECTILE_TYPES else None
+    return cast(ProjectileCatalogType, normalized) if normalized in PROJECTILE_TYPES else None
 
 
-def _aoe_shape_type(spell: SpellAction) -> Optional[str]:
+def _aoe_shape_type(spell: SpellAction) -> Optional[AoeCatalogShapeType]:
     shape = spell.aoe_shape
     if shape is None or not shape.name:
         return None
     normalized = shape.name.lower()
-    return normalized if normalized in AOE_SHAPE_TYPES else None
+    return cast(AoeCatalogShapeType, normalized) if normalized in AOE_SHAPE_TYPES else None
 
 
 def _aoe_dimensions(spell: SpellAction) -> Tuple[Optional[int], Optional[int], Optional[int]]:
@@ -193,7 +196,7 @@ def _aoe_dimensions(spell: SpellAction) -> Tuple[Optional[int], Optional[int], O
     return radius, length, width
 
 
-def _range_type(spell: SpellAction) -> Optional[str]:
+def _range_type(spell: SpellAction) -> Optional[SpellCatalogRangeType]:
     if spell.spell_range.type == RangeType.SELF:
         return "self"
     if spell.spell_range.type == RangeType.REACH:
@@ -236,10 +239,10 @@ def _multi_target(spell: SpellAction) -> Optional[SpellCatalogMultiTarget]:
 
 def _route_hint(
     spell: SpellAction,
-    projectile_type: Optional[str],
-    aoe_shape_type: Optional[str],
+    projectile_type: Optional[ProjectileCatalogType],
+    aoe_shape_type: Optional[AoeCatalogShapeType],
     multi_target: Optional[SpellCatalogMultiTarget],
-) -> str:
+) -> SpellCatalogRouteHint:
     if spell.spell_range.type == RangeType.SELF and aoe_shape_type is None:
         return "self"
     if projectile_type == "beam":
@@ -261,8 +264,8 @@ def _route_hint(
 
 def _recommended_asset_tags(
     spell: SpellAction,
-    projectile_type: Optional[str],
-    aoe_shape_type: Optional[str],
+    projectile_type: Optional[ProjectileCatalogType],
+    aoe_shape_type: Optional[AoeCatalogShapeType],
     damage_types: List[str],
 ) -> List[str]:
     tags: List[str] = []

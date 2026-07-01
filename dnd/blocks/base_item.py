@@ -19,6 +19,8 @@ from dnd.core.base_actions import BaseAction
 
 
 class ItemRarity(str, Enum):
+    """Rarity labels used by item data."""
+
     COMMON = "common"
     UNCOMMON = "uncommon"
     RARE = "rare"
@@ -34,49 +36,55 @@ class BaseItem(BaseBlock):
     via optional Health composition.
     """
 
-    # Items CAN hold conditions (BaseBlock defaults to False)
-    allow_events_conditions: bool = Field(default=True)
-
-    # Identity
-    name: str = Field(default="Item")
-    description: Optional[str] = Field(default=None)
-
-    # Physical properties
+    allow_events_conditions: bool = Field(
+        default=True,
+        description="Whether this item can own event handlers and active conditions.",
+    )
+    name: str = Field(default="Item", description="Display name for this item.")
+    description: Optional[str] = Field(
+        default=None,
+        description="Optional rules or UI description for this item.",
+    )
     weight: float = Field(default=0.0, description="Weight in pounds")
     value: int = Field(default=0, description="Value in gold pieces")
-    rarity: ItemRarity = Field(default=ItemRarity.COMMON)
-
-    # Type flags
+    rarity: ItemRarity = Field(
+        default=ItemRarity.COMMON,
+        description="Rarity category for this item.",
+    )
     is_pickable: bool = Field(default=True, description="Can be picked up by entities")
     is_equippable: bool = Field(default=False, description="Can be equipped")
     is_usable: bool = Field(default=False, description="Can be used (activate effect)")
     is_consumable: bool = Field(default=False, description="Destroyed on use")
-
-    # Stacking
-    stack_count: int = Field(default=1, ge=1)
-    max_stack: int = Field(default=1, ge=1)
-    stack_id: Optional[str] = Field(default=None, description="Items with same stack_id merge into one stack. None = never stacks.")
-
-    # Display
+    stack_count: int = Field(
+        default=1,
+        ge=1,
+        description="Number of copies represented by this item stack.",
+    )
+    max_stack: int = Field(
+        default=1,
+        ge=1,
+        description="Maximum copies that can be merged into this stack.",
+    )
+    stack_id: Optional[str] = Field(
+        default=None,
+        description="Items with same stack_id merge into one stack. None = never stacks.",
+    )
     map_char: str = Field(default="\u03c6", description="Character to display on the map grid")
     visual_item_name: Optional[str] = Field(
         default=None,
-        description="Renderer item catalog key. Defaults to name when omitted."
+        description="Renderer item catalog key. Defaults to name when omitted.",
     )
     visual_variant_id: Optional[str] = Field(
         default=None,
-        description="Renderer sub-item variant id under visual_item_name."
+        description="Renderer sub-item variant id under visual_item_name.",
     )
-
-    # Tags for filtering/queries
-    tags: List[str] = Field(default_factory=list)
-
-    # Visibility/action discovery controls
+    tags: List[str] = Field(
+        default_factory=list,
+        description="Free-form tags used by item queries and filtering.",
+    )
     include_in_senses_objects: bool = Field(default=True, description="Whether entity senses should list this floor object")
     include_in_adjacent_senses_objects: bool = Field(default=False, description="Whether adjacent entities can sense this floor object without cell visibility")
     include_in_available_object_actions: bool = Field(default=True, description="Whether object/use action discovery should consider this floor object")
-
-    # Spatial properties (for floor items)
     blocks_movement: bool = Field(default=False, description="Blocks entity movement when on grid")
     blocks_vision_field: bool = Field(default=False, description="Blocks line of sight when on grid")
     blocks_movement_north: bool = Field(default=False, description="Blocks movement crossing north from this tile")
@@ -95,21 +103,13 @@ class BaseItem(BaseBlock):
     blocks_propagation_south: bool = Field(default=False, description="Blocks physical propagation crossing south from this tile")
     blocks_propagation_east: bool = Field(default=False, description="Blocks physical propagation crossing east from this tile")
     blocks_propagation_west: bool = Field(default=False, description="Blocks physical propagation crossing west from this tile")
-
-    # Breakable object support
     is_targetable: bool = Field(default=False, description="Can be targeted by attacks")
     health: Optional[Health] = Field(default=None, description="Health block for breakable items")
-
-    # Equip tracking
     is_equipped: bool = Field(default=False, description="Whether this item is currently equipped")
     equipped_slot: Optional[str] = Field(default=None, description="Slot this item is equipped in")
-
-    # Location tracking
     owner_uuid: Optional[UUID] = Field(default=None, description="UUID of the entity or item (e.g. chest) that owns this item")
     stored_in_uuid: Optional[UUID] = Field(default=None, description="UUID of the container block (Inventory, Equipment) holding this item")
     tile_uuid: Optional[UUID] = Field(default=None, description="UUID of tile at this item's grid position (set when on floor)")
-
-    # --- Spatial overrides (BaseBlock polymorphism) ---
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
@@ -121,16 +121,35 @@ class BaseItem(BaseBlock):
         return self.blocks_vision_field
 
     def get_map_char(self) -> Optional[str]:
+        """Return the glyph used to render this item on text maps."""
         return self.map_char
 
     def should_include_in_senses_objects(self) -> bool:
+        """Return whether senses should list this floor object."""
         return self.include_in_senses_objects
 
     def should_include_in_adjacent_senses_objects(self) -> bool:
+        """Return whether adjacent-object sensing may include this item."""
         return self.include_in_adjacent_senses_objects
 
     def should_include_in_available_object_actions(self) -> bool:
+        """Return whether object/action discovery may expose this item."""
         return self.include_in_available_object_actions
+
+    def is_exposed_flame(self) -> bool:
+        """Return whether this item currently presents an exposed flame."""
+        return False
+
+    def douse_exposed_flame(self, parent_event: Optional[UUID] = None) -> bool:
+        """Douse this item's exposed flame, if any.
+
+        Args:
+            parent_event: Optional parent event UUID for light-removal lineage.
+
+        Returns:
+            True if a flame was doused.
+        """
+        return False
 
     def _blocks_direction(self, channel: str, direction: str) -> bool:
         if channel == "movement":
@@ -292,7 +311,7 @@ class BaseItem(BaseBlock):
         grid = get_map()
         position = grid.get_object_position(self.uuid)
         if position is None:
-            return  # Not on grid
+            return
         vision_changed = self.blocks_vision_field != old_blocks_vision
         walking_changed = self.blocks_movement != old_blocks_movement
         directional_metadata = grid.recompute_tile_directional_blocking(position)
@@ -313,14 +332,11 @@ class BaseItem(BaseBlock):
             )
             grid._fire_spatial_event(event)
 
-    # --- Location ---
-
     def get_position(self) -> Optional[Tuple[int, int]]:
         """Get effective position of this item.
 
-        - Has owner → defer to owner's position
-        - On floor (tile_uuid set) → own position
-        - Nowhere → None
+        Owned items defer to the owner's position. Floor items use their own
+        position only while `tile_uuid` is set. Unplaced items return `None`.
         """
         if self.owner_uuid is not None:
             owner = BaseBlock.get(self.owner_uuid)
@@ -337,14 +353,23 @@ class BaseItem(BaseBlock):
         self.tile_uuid = tile.uuid if tile else None
         grid.place_object(self.uuid, position)
 
-    # --- Lifecycle hooks ---
+    def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True) -> None:
+        """Synchronize floor-location fields after GridMap removes this item.
+
+        Args:
+            position: Grid position the item occupied before removal.
+            clear_location: Whether the grid removal should clear item floor
+                authority. Internal object reindexing passes `False`.
+        """
+        if clear_location and self.tile_uuid is not None:
+            self.tile_uuid = None
 
     def loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
         """Called when item is picked up by an entity.
 
         Args:
-            entity_uuid: UUID of the entity picking up the item
-            inventory_uuid: UUID of the inventory receiving the item
+            entity_uuid: UUID of the entity picking up the item.
+            inventory_uuid: UUID of the inventory receiving the item.
         """
         self._on_loot(entity_uuid, inventory_uuid)
 
@@ -356,8 +381,8 @@ class BaseItem(BaseBlock):
         """Called when item is dropped from inventory.
 
         Args:
-            entity_uuid: UUID of the entity dropping the item
-            position: Grid position where the item was dropped
+            entity_uuid: UUID of the entity dropping the item.
+            position: Grid position where the item was dropped.
         """
         self._on_drop(entity_uuid, position)
 
@@ -366,14 +391,18 @@ class BaseItem(BaseBlock):
         pass
 
     def destroy(self) -> None:
-        """Destroy this item: fire hook, clean up conditions, remove from container, clear location, unregister."""
+        """Destroy this item and remove every owned runtime registration.
+
+        The destruction hook runs before cleanup while subclasses can still
+        inspect the item's container and floor location. After the hook, cleanup
+        removes attached light, active conditions, container membership, floor
+        placement, equipment flags, and registry state.
+        """
         self._on_destroy()
-        # Clean up any light sources attached to this item
         gridmap = get_map()
         gridmap.cleanup_block_light_sources(self.uuid)
         for cond_name in list(self.active_conditions.keys()):
             self.remove_condition(cond_name)
-        # Remove from container via proper polymorphism (BaseBlock.remove_contained_item)
         if self.stored_in_uuid is not None:
             container = BaseBlock.get(self.stored_in_uuid)
             if container is not None:
@@ -391,8 +420,6 @@ class BaseItem(BaseBlock):
     def _on_destroy(self) -> None:
         """Subclass override hook for destruction behavior."""
         pass
-
-    # --- Health delegation ---
 
     def is_breakable(self) -> bool:
         """Whether this item can be damaged and destroyed."""
@@ -434,8 +461,6 @@ class BaseItem(BaseBlock):
             self.destroy()
         return actual
 
-    # --- Factory helper ---
-
     @staticmethod
     def create_item_health(
         source_uuid: UUID,
@@ -447,12 +472,19 @@ class BaseItem(BaseBlock):
     ) -> Health:
         """Create a Health block for a breakable item.
 
-        Defaults: immune to poison and psychic damage.
-        Uses 'maximums' mode so HP = hit_dice_count * hit_dice_value exactly.
+        Args:
+            source_uuid: UUID to assign as the health block source.
+            hp: Desired item hit point total.
+            hit_dice_value: Die size used for maximum-mode hit dice.
+            immunities: Optional damage immunities. Defaults to poison and psychic.
+            resistances: Optional damage resistances.
+            vulnerabilities: Optional damage vulnerabilities.
+
+        Returns:
+            Health block configured with maximum-mode hit dice.
         """
         if immunities is None:
             immunities = [DamageType.POISON, DamageType.PSYCHIC]
-        # Calculate hit dice count to reach desired HP
         hit_dice_count = max(1, hp // hit_dice_value)
         dice_val = cast(Literal[4, 6, 8, 10, 12], hit_dice_value)
         config = HealthConfig(
@@ -470,8 +502,9 @@ class BaseItem(BaseBlock):
 
 class EquippableItem(BaseItem):
     """Base class for equippable items. Provides equip/unequip lifecycle hooks."""
-    is_equippable: bool = Field(default=True)
-    is_pickable: bool = Field(default=True)
+
+    is_equippable: bool = Field(default=True, description="Whether this item can be equipped.")
+    is_pickable: bool = Field(default=True, description="Whether this item can be picked up.")
 
     def equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
         """Called by Equipment.equip() after slot assignment.
@@ -481,7 +514,6 @@ class EquippableItem(BaseItem):
         """
         self.is_equipped = True
         self.equipped_slot = slot.value
-        # Clear floor placement if item was on ground (direct equip from floor)
         if self.tile_uuid is not None:
             gridmap = get_map()
             if gridmap.get_object_position(self.uuid) is not None:
@@ -492,10 +524,8 @@ class EquippableItem(BaseItem):
     def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
         """Override in subclasses for equip behavior.
 
-        Three valid approaches:
-        1. Direct modifiers on entity's ModifiableValues
-        2. Direct action registration on entity
-        3. Condition pattern (for complex effects with auto-cleanup)
+        Subclasses commonly install direct modifiers, register actions, or add
+        a condition with its own cleanup tree.
         """
         pass
 
@@ -517,21 +547,18 @@ class EquippableItem(BaseItem):
 class UsableItem(BaseItem):
     """Items that provide actions via get_use_actions().
 
-    Two usage patterns:
-    1. Default: populate use_action_templates field, get_use_actions() returns
-       them with owner_uuid injected. Good for simple items.
-    2. Override: subclass get_use_actions() for state-dependent/adaptive behavior.
-
-    Charges: -1 = unlimited. 0 = depleted (no actions returned).
+    The default pattern stores action templates on `use_action_templates`.
+    Subclasses can override `get_use_actions()` for state-dependent behavior.
+    Charges use `-1` for unlimited and `0` for depleted.
     """
-    is_usable: bool = Field(default=True)
 
-    # Charges
+    is_usable: bool = Field(default=True, description="Whether this item exposes use actions.")
     charges: int = Field(default=-1, description="Number of uses remaining (-1 = unlimited, 0 = depleted)")
     max_charges: int = Field(default=-1, description="Maximum charges (-1 = unlimited)")
-
-    # Stored action templates — default get_use_actions() returns these
-    use_action_templates: List[BaseAction] = Field(default_factory=list)
+    use_action_templates: List[BaseAction] = Field(
+        default_factory=list,
+        description="Action templates cloned and rebound when this item is used.",
+    )
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return action templates this item provides.
@@ -544,6 +571,8 @@ class UsableItem(BaseItem):
             return []
         result = []
         for template in self.use_action_templates:
+            if self.charges != -1 and self.charges < template.charge_cost:
+                continue
             action = template.model_copy(deep=True, update={
                 'uuid': uuid4(),
                 'source_entity_uuid': user_entity_uuid,
@@ -560,14 +589,14 @@ class UsableItem(BaseItem):
         Override for custom charge logic (e.g., recharge on rest).
         """
         if self.charges == -1:
-            return True  # Unlimited
+            return True
         if self.charges < amount:
             return False
         self.charges -= amount
         if self.charges == 0 and self.is_consumable:
             if self.stack_count > 1:
                 self.stack_count -= 1
-                self.charges = self.max_charges  # reset for next copy in stack
+                self.charges = self.max_charges
             else:
                 self.destroy()
         return True

@@ -1,12 +1,14 @@
-"""Illusion spells - deceiving the senses and mind.
+"""Illusion spells that deceive senses, alter perception, and obscure areas.
 
-Contains: Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage
+Implemented here: Blur, Fear, Hypnotic Pattern, Color Spray, Invisibility,
+Greater Invisibility, Mirror Image, and Silence.
 """
+
 import random
 from typing import Any, Dict, Optional, List, Set, Tuple
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 from typing import cast as type_cast
 
 from dnd.core.base_actions import TargetType
@@ -29,11 +31,19 @@ class BlurEffect(BaseCondition):
 
     Attackers have disadvantage on attack rolls against you.
     """
-    name: str = "Blur"
-    description: str = "Your body becomes blurred, giving attackers disadvantage"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Blur", description="Condition name.")
+    description: str = Field(default="Your body becomes blurred, giving attackers disadvantage", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply attacker disadvantage against the blurred target.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Modifier ownership entries and the condition effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -43,7 +53,6 @@ class BlurEffect(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Attackers have disadvantage - add to AC's to_target_static channel
         disadv_mod = AdvantageModifier(
             name="Blur",
             value=AdvantageStatus.DISADVANTAGE,
@@ -71,16 +80,16 @@ class Blur(SpellAction):
 
     Duration: Concentration, up to 1 minute.
     """
-    name: str = Field(default="Blur")
-    description: str = Field(default="Concentration. Attackers have disadvantage against you.")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="illusion")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.SELF)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    name: str = Field(default="Blur", description="Spell name.")
+    description: str = Field(default="Concentration. Attackers have disadvantage against you.", description="Spell description.")
+    spell_level: int = Field(default=2, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Self-targeting spell - minimal validation."""
+        """Validate that the caster exists for this self spell."""
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -92,7 +101,7 @@ class Blur(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Apply Blur effect to self."""
+        """Apply Blur to the caster and link it to concentration."""
 
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -103,17 +112,14 @@ class Blur(SpellAction):
             status_message=f"{caster.name} becomes blurred"
         )
 
-        # Apply BlurEffect condition
         blur_effect = BlurEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid
         )
         caster.add_condition(blur_effect, parent_event=effect_event)
 
-        # Apply Concentrating condition
         concentration = self.ensure_concentration(effect_event)
 
-        # Link effect to concentration
         concentration.add_linked_condition(caster.uuid, blur_effect.uuid)
 
         return effect_event.phase_to(
@@ -128,14 +134,22 @@ class FearEffect(BaseCondition):
     Target is Frightened of the caster and must Dash away on each turn.
     Repeat WIS save at end of each turn (only if can't see caster).
     """
-    name: str = "Fear"
-    description: str = "Frightened of the caster, must Dash away"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Fear", description="Condition name.")
+    description: str = Field(default="Frightened of the caster, must Dash away", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster that frightened the target.")
+    spell_dc: int = Field(default=10, description="Wisdom save DC used for repeat saves.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply Fear and register its conditional repeat-save handler.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Handler and sub-condition ownership entries plus the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -146,7 +160,6 @@ class FearEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        # Apply Frightened as sub-condition (with source being caster)
         frightened = Frightened(
             source_entity_uuid=self.caster_uuid or self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -157,7 +170,6 @@ class FearEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(frightened.uuid)
 
-        # Register repeat save handler (only when can't see caster)
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
             target.add_event_handler(handler)
@@ -170,7 +182,7 @@ class FearEffect(BaseCondition):
         return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
-        """WIS save at end of turn to end fear (only if can't see caster)."""
+        """Create the end-turn repeat save handler for Fear."""
         assert self.target_entity_uuid is not None
         assert self.caster_uuid is not None
 
@@ -187,23 +199,18 @@ class FearEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected by Fear
             fear_effect = target.active_conditions.get("Fear")
             if not fear_effect or fear_effect.uuid != effect_uuid:
                 return None
 
             caster = Entity.get(caster_uuid)
             if not caster:
-                # Caster gone, end the effect
                 target.remove_condition("Fear", parent_event=event)
                 return None
 
-            # Only save if target CAN'T see caster
             if caster_uuid in target.senses.entities:
-                # Can still see caster - no save this turn
                 return None
 
-            # Repeat WIS save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
@@ -240,21 +247,19 @@ class Fear(SpellAction):
 
     Duration: Concentration, up to 1 minute.
     """
-    name: str = Field(default="Fear")
-    description: str = Field(default="30ft cone, WIS save or Frightened + must Dash away")
-    spell_level: int = Field(default=3)
-    spell_school: str = Field(default="illusion")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
-
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="all")
+    name: str = Field(default="Fear", description="Spell name.")
+    description: str = Field(default="30ft cone, WIS save or Frightened + must Dash away", description="Spell description.")
+    spell_level: int = Field(default=3, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Cone area used by Fear.")
+    include_self: bool = Field(default=False, description="Whether the caster can be included in the area.")
+    valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
 
     def model_post_init(self, __context: Any) -> None:
+        """Initialize the default cone area when no custom shape is supplied."""
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
@@ -285,7 +290,6 @@ class Fear(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
@@ -313,7 +317,6 @@ class Fear(SpellAction):
                 status_message=f"{target.name} resists Fear"
             )
 
-        # Apply Fear effect
         fear_effect = FearEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -322,10 +325,8 @@ class Fear(SpellAction):
         )
         target.add_condition(fear_effect, parent_event=effect_event)
 
-        # Apply Concentrating (safe for convolution via ensure_concentration)
         concentration = self.ensure_concentration(effect_event)
 
-        # Link fear effect to concentration
         if fear_effect.applied:
             concentration.add_linked_condition(target.uuid, fear_effect.uuid)
 
@@ -341,11 +342,19 @@ class HypnoticPatternEffect(BaseCondition):
     Target is Charmed and Incapacitated (incapacitated + speed 0).
     Breaks when target takes damage or is shaken awake.
     """
-    name: str = "Hypnotic Pattern"
-    description: str = "Charmed and incapacitated by swirling pattern"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Hypnotic Pattern", description="Condition name.")
+    description: str = Field(default="Charmed and incapacitated by swirling pattern", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply the charmed/incapacitated condition tree and break handler.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Handler and sub-condition ownership entries plus the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -356,7 +365,6 @@ class HypnoticPatternEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        # Apply Charmed as sub-condition
         charmed = Charmed(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -367,7 +375,6 @@ class HypnoticPatternEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(charmed.uuid)
 
-        # Apply Incapacitated as sub-condition
         incapacitated = Incapacitated(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -378,7 +385,6 @@ class HypnoticPatternEffect(BaseCondition):
         if sub_event2 and sub_event2.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(incapacitated.uuid)
 
-        # Register handler to break on damage
         handler = self._create_damage_break_handler()
         target.add_event_handler(handler)
         handler_uuids.append(handler.uuid)
@@ -404,12 +410,10 @@ class HypnoticPatternEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected
             hp_effect = target.active_conditions.get("Hypnotic Pattern")
             if not hp_effect or hp_effect.uuid != effect_uuid:
                 return None
 
-            # Break the effect
             target.remove_condition("Hypnotic Pattern", parent_event=event)
             return None
 
@@ -436,22 +440,20 @@ class HypnoticPattern(SpellAction):
 
     Duration: Concentration, up to 1 minute.
     """
-    name: str = Field(default="Hypnotic Pattern")
-    description: str = Field(default="30ft cube, WIS save or Charmed + Incapacitated")
-    spell_level: int = Field(default=3)
-    spell_school: str = Field(default="illusion")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120))
-    projectile_type: Optional[str] = Field(default="orb")
-
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-
-    include_self: bool = Field(default=False)  # Caster can be hit if in area
-    valid_target_filter: str = Field(default="all")
+    name: str = Field(default="Hypnotic Pattern", description="Spell name.")
+    description: str = Field(default="30ft cube, WIS save or Charmed + Incapacitated", description="Spell description.")
+    spell_level: int = Field(default=3, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120), description="Spell range.")
+    projectile_type: Optional[str] = Field(default="orb", description="Client-facing projectile visual key.")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Cube area used by Hypnotic Pattern.")
+    include_self: bool = Field(default=False, description="Whether the caster can be included in the area.")
+    valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
 
     def model_post_init(self, __context: Any) -> None:
+        """Initialize the default cube area when no custom shape is supplied."""
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
@@ -491,7 +493,6 @@ class HypnoticPattern(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
@@ -519,17 +520,14 @@ class HypnoticPattern(SpellAction):
                 status_message=f"{target.name} resists Hypnotic Pattern"
             )
 
-        # Apply Hypnotic Pattern effect
         hp_effect = HypnoticPatternEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
         )
         target.add_condition(hp_effect, parent_event=effect_event)
 
-        # Apply Concentrating (safe for convolution via ensure_concentration)
         concentration = self.ensure_concentration(effect_event)
 
-        # Link effect to concentration
         if hp_effect.applied:
             concentration.add_linked_condition(target.uuid, hp_effect.uuid)
 
@@ -544,11 +542,19 @@ class ColorSprayEffect(BaseCondition):
 
     Target is Blinded for 1 round (until end of caster's next turn).
     """
-    name: str = "Color Spray"
-    description: str = "Blinded by dazzling colors"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Color Spray", description="Condition name.")
+    description: str = Field(default="Blinded by dazzling colors", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply Color Spray and its Blinded sub-condition.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Sub-condition ownership entries plus the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -558,7 +564,6 @@ class ColorSprayEffect(BaseCondition):
 
         sub_condition_uuids: List[UUID] = []
 
-        # Apply Blinded as sub-condition
         blinded = Blinded(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -582,28 +587,30 @@ class ColorSpray(SpellAction):
     Roll 6d10 HP pool. Creatures in 15ft cone are Blinded for 1 round
     in order of lowest HP until pool exhausted.
 
-    Skip: Unconscious creatures, already-blinded creatures
+    Skip: creatures that cannot currently see, creatures immune to Blinded
     Upcast: +2d10 per slot level above 1st.
     """
-    name: str = Field(default="Color Spray")
-    description: str = Field(default="Roll 6d10 HP pool. Affects creatures in order of lowest HP.")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="illusion")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
-
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-
-    # Target filtering - but we override get_all_targets for HP-pool logic
-    include_self: bool = Field(default=False)  # Cone emanates from caster
-    valid_target_filter: str = Field(default="all")
-
-    # HP pool tracking (set during get_all_targets)
-    hp_pool_rolled: int = Field(default=0)
-    hp_pool_remaining: int = Field(default=0)
+    name: str = Field(default="Color Spray", description="Spell name.")
+    description: str = Field(default="Roll 6d10 HP pool. Affects creatures in order of lowest HP.", description="Spell description.")
+    spell_level: int = Field(default=1, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Cone area used by Color Spray.")
+    include_self: bool = Field(default=False, description="Whether the caster can be included in the cone.")
+    valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
+    hp_pool_rolled: int = Field(
+        default=0,
+        description="Total hit point pool rolled for this Color Spray spell instance.",
+    )
+    hp_pool_remaining: int = Field(
+        default=0,
+        description="Hit point pool remaining after this Color Spray instance selects targets.",
+    )
+    _selected_hp_pool_targets: Optional[List[UUID]] = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
+        """Initialize the default cone area when no custom shape is supplied."""
         super().model_post_init(__context)
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
@@ -613,20 +620,20 @@ class ColorSpray(SpellAction):
             )
 
     def get_hp_pool_dice(self) -> Tuple[int, int]:
-        """Returns (dice_count, dice_value). 6d10 base + 2d10 per upcast."""
+        """Return the Color Spray HP-pool dice tuple."""
         base_dice = 6
         upcast_bonus = max(0, self.cast_at_level - self.spell_level) * 2
         return (base_dice + upcast_bonus, 10)
 
     def get_all_targets(self) -> List[UUID]:
-        """Override: Select targets by HP pool instead of all AoE targets.
+        """Select targets by HP pool instead of all AoE targets.
 
-        1. Get AoE candidates using parent logic
-        2. Filter: skip unconscious, skip already-blinded
-        3. Sort by current HP (ascending)
-        4. Select targets until HP pool exhausted
+        Returns:
+            Target UUIDs selected by current HP order and remaining HP pool.
         """
-        # 1. Get AoE candidates
+        if self._selected_hp_pool_targets is not None:
+            return list(self._selected_hp_pool_targets)
+
         if not (self.aoe_shape and self.end_position):
             return []
 
@@ -636,10 +643,8 @@ class ColorSpray(SpellAction):
 
         self.aoe_shape.compute_objective(caster.position)
 
-        # 2. Filter candidates
         candidates: List[Tuple[int, UUID]] = []
         for uid in self.aoe_shape.affected_entity_uuids:
-            # Skip caster (cone emanates from self)
             if uid == self.source_entity_uuid:
                 continue
 
@@ -647,25 +652,16 @@ class ColorSpray(SpellAction):
             if not entity or not entity.has_hp:
                 continue
 
-            # Color Spray skips unconscious creatures
-            if "Unconscious" in entity.active_conditions:
+            if not entity.can_see_visual_effects():
                 continue
 
-            # Skip already-blinded creatures (they can't be affected further)
-            if "Blinded" in entity.active_conditions:
-                continue
-
-            # Skip creatures immune to blindness
             if entity.check_condition_immunity("Blinded"):
                 continue
 
             candidates.append((entity.get_hp(), uid))
 
-        # 3. Sort by HP ascending (lowest first)
-        # Tie-breaker: UUID for deterministic ordering
         candidates.sort(key=lambda x: (x[0], str(x[1])))
 
-        # 4. Roll HP pool if not already rolled
         if self.hp_pool_rolled == 0:
             dice_count, dice_value = self.get_hp_pool_dice()
             roll_results = [random.randint(1, dice_value) for _ in range(dice_count)]
@@ -673,16 +669,16 @@ class ColorSpray(SpellAction):
             self.hp_pool_rolled = total
             self.hp_pool_remaining = total
 
-        # 5. Select targets until pool exhausted
         targets: List[UUID] = []
-        remaining = self.hp_pool_remaining
+        remaining = self.hp_pool_remaining if self.hp_pool_remaining > 0 else self.hp_pool_rolled
         for hp, uid in candidates:
             if hp <= remaining:
                 targets.append(uid)
                 remaining -= hp
 
         self.hp_pool_remaining = remaining
-        return targets
+        self._selected_hp_pool_targets = targets
+        return list(targets)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction. Self-range means no LOS check to target position."""
@@ -693,7 +689,6 @@ class ColorSpray(SpellAction):
         if not self.end_position:
             return declaration_event.cancel(status_message="No direction specified for cone")
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -711,8 +706,6 @@ class ColorSpray(SpellAction):
             status_message=f"Color Spray affecting {target.name} ({target.get_hp()} HP)"
         )
 
-        # Apply ColorSprayEffect condition (has Blinded as sub-condition)
-        # Duration: 1 round (ends at start of caster's next turn)
         color_spray_effect = ColorSprayEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -720,7 +713,7 @@ class ColorSpray(SpellAction):
                 duration=1,
                 duration_type=DurationType.ROUNDS,
                 source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid  # Duration tied to caster's turns
+                target_entity_uuid=caster.uuid
             )
         )
         target.add_condition(color_spray_effect, parent_event=effect_event)
@@ -742,15 +735,15 @@ class Invisibility(SpellAction):
     Duration: Concentration, up to 1 hour.
     Range: Touch (5ft).
     """
-    name: str = Field(default="Invisibility")
-    description: str = Field(default="Concentration. Touch target becomes invisible until attacking or casting.")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="illusion")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="all")
+    name: str = Field(default="Invisibility", description="Spell name.")
+    description: str = Field(default="Concentration. Touch target becomes invisible until attacking or casting.", description="Spell description.")
+    spell_level: int = Field(default=2, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
+    include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
+    valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate touch range (5ft)."""
@@ -762,7 +755,6 @@ class Invisibility(SpellAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        # Self-cast is always valid
         if target.uuid != caster.uuid:
             distance = caster.senses.get_feet_distance(target.position)
             if distance > self.effective_range:
@@ -790,7 +782,6 @@ class Invisibility(SpellAction):
             status_message=f"{caster.name} casts Invisibility on {target.name}"
         )
 
-        # Apply InvisibilityEffect condition (breaks on attack/cast)
         invis_effect = InvisibilityEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -798,10 +789,8 @@ class Invisibility(SpellAction):
         )
         target.add_condition(invis_effect, parent_event=effect_event)
 
-        # Apply Concentrating condition on caster
         concentration = self.ensure_concentration(effect_event)
 
-        # Link effect to concentration for cleanup
         if invis_effect.applied:
             concentration.add_linked_condition(target.uuid, invis_effect.uuid)
 
@@ -821,15 +810,15 @@ class GreaterInvisibility(SpellAction):
     Duration: Concentration, up to 10 rounds.
     Range: Touch (5ft).
     """
-    name: str = Field(default="Greater Invisibility")
-    description: str = Field(default="Concentration. Touch target becomes invisible, Stealth check to maintain on attack/cast.")
-    spell_level: int = Field(default=4)
-    spell_school: str = Field(default="illusion")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="all")
+    name: str = Field(default="Greater Invisibility", description="Spell name.")
+    description: str = Field(default="Concentration. Touch target becomes invisible, Stealth check to maintain on attack/cast.", description="Spell description.")
+    spell_level: int = Field(default=4, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
+    include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
+    valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate touch range (5ft)."""
@@ -841,7 +830,6 @@ class GreaterInvisibility(SpellAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        # Self-cast is always valid
         if target.uuid != caster.uuid:
             distance = caster.senses.get_feet_distance(target.position)
             if distance > self.effective_range:
@@ -869,7 +857,6 @@ class GreaterInvisibility(SpellAction):
             status_message=f"{caster.name} casts Greater Invisibility on {target.name}"
         )
 
-        # Apply GreaterInvisibilityEffect condition (stealth check to maintain)
         invis_effect = GreaterInvisibilityEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -877,10 +864,8 @@ class GreaterInvisibility(SpellAction):
         )
         target.add_condition(invis_effect, parent_event=effect_event)
 
-        # Apply Concentrating condition on caster
         concentration = self.ensure_concentration(effect_event)
 
-        # Link effect to concentration for cleanup
         if invis_effect.applied:
             concentration.add_linked_condition(target.uuid, invis_effect.uuid)
 
@@ -889,10 +874,6 @@ class GreaterInvisibility(SpellAction):
             status_message=f"{caster.name} casts Greater Invisibility on {target.name} (concentration)"
         )
 
-
-# =============================================================================
-# Mirror Image (2nd-level Illusion, NO Concentration) — BG3 Version
-# =============================================================================
 
 class MirrorImageEffect(BaseCondition):
     """Effect from Mirror Image spell (BG3 version).
@@ -906,19 +887,26 @@ class MirrorImageEffect(BaseCondition):
     - 1 duplicate:  +3 AC
     - 0 duplicates: condition ends
     """
-    name: str = "Mirror Image"
-    description: str = "Illusory duplicates increase AC by 3 each"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Mirror Image", description="Condition name.")
+    description: str = Field(default="Illusory duplicates increase AC by 3 each", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
     duplicates: int = Field(default=3, description="Number of remaining duplicates")
 
-    # Track the AC modifier UUID so we can update it when duplicates are destroyed
     _ac_modifier_uuid: Optional[UUID] = None
     _ac_mv_uuid: Optional[UUID] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        """Apply Mirror Image AC bonus and miss handler.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Modifier and handler ownership entries plus the effect event.
+        """
         target = Entity.get(type_cast(UUID, self.target_entity_uuid))
         if not target:
             return [], [], [], [], declaration_event.cancel(
@@ -927,14 +915,12 @@ class MirrorImageEffect(BaseCondition):
 
         self.duplicates = 3
 
-        # Duration: 10 rounds
         self.duration.duration_type = DurationType.ROUNDS
         self.duration.duration = 10
 
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
-        # +9 AC (3 duplicates × 3)
         ac_mod = NumericalModifier(
             name="Mirror Image",
             value=9,
@@ -946,7 +932,6 @@ class MirrorImageEffect(BaseCondition):
         self._ac_modifier_uuid = ac_mod.uuid
         self._ac_mv_uuid = target.equipment.ac_bonus.uuid
 
-        # Handler: on attack miss, destroy a duplicate
         miss_handler = self._create_miss_handler()
         target.add_event_handler(miss_handler)
         handler_uuids.append(miss_handler.uuid)
@@ -960,6 +945,7 @@ class MirrorImageEffect(BaseCondition):
         return outs, handler_uuids, [], [], effect_event
 
     def _post_removal_stats(self) -> Dict[str, Any]:
+        """Return target AC after Mirror Image cleanup."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target and isinstance(target, Entity):
             return {"resulting_ac": target.ac_bonus().normalized_score}
@@ -979,18 +965,15 @@ class MirrorImageEffect(BaseCondition):
             if event.attack_outcome is None:
                 return None
 
-            # Only trigger on misses (the attack was evaded thanks to high AC)
             if event.attack_outcome not in (AttackOutcome.MISS, AttackOutcome.CRIT_MISS):
                 return None
 
             if condition.duplicates <= 0:
                 return None
 
-            # Destroy one duplicate
             condition.duplicates -= 1
             remaining = condition.duplicates
 
-            # Update AC modifier: new value = remaining * 3
             if condition._ac_modifier_uuid and condition._ac_mv_uuid:
                 mv = ModifiableValue.get(condition._ac_mv_uuid)
                 if mv:
@@ -998,7 +981,6 @@ class MirrorImageEffect(BaseCondition):
                     if mod:
                         mod.value = remaining * 3
 
-            # Remove condition if no duplicates left
             if remaining <= 0:
                 target = Entity.get(target_uuid)
                 if target:
@@ -1029,16 +1011,16 @@ class MirrorImage(SpellAction):
 
     Duration: 10 turns. No concentration.
     """
-    name: str = Field(default="Mirror Image")
-    description: str = Field(default="3 duplicates, +3 AC each, lost on evade")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="illusion")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.SELF)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    name: str = Field(default="Mirror Image", description="Spell name.")
+    description: str = Field(default="3 duplicates, +3 AC each, lost on evade", description="Spell description.")
+    spell_level: int = Field(default=2, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Self-targeting spell — minimal validation."""
+        """Validate that the caster exists for this self spell."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
@@ -1071,33 +1053,31 @@ class MirrorImage(SpellAction):
         )
 
 
-# =============================================================================
-# Silence (Level 2, Illusion, Concentration)
-# =============================================================================
-
 class SilenceZone(ZoneControlCondition):
-    """Silence zone — blocks verbal spellcasting and deafens creatures inside.
+    """Silence zone that blocks verbal spells and deafens creatures inside.
 
     20ft radius sphere, concentration, 10 rounds.
     """
-    name: str = "Silence Zone"
-    description: str = "Area of magical silence - no sound, blocks verbal spells"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Silence Zone", description="Condition name.")
+    description: str = Field(default="Area of magical silence - no sound, blocks verbal spells", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=20)
+    zone_shape: str = Field(default="sphere", description="Zone shape key.")
+    zone_radius_feet: int = Field(default=20, description="Zone radius in feet.")
 
-    marker_name: Optional[str] = Field(default="Silence")
-    marker_hazard_filter: Optional[HazardFilter] = None
+    marker_name: Optional[str] = Field(default="Silence", description="Tile marker name.")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=None, description="Optional hazard visibility filter for the tile marker.")
 
-    spell_dc: int = Field(default=0)
+    spell_dc: int = Field(default=0, description="Spell save DC placeholder for zone contracts.")
     _deafened_uuids: List[UUID] = []
     _spell_block_handler_uuid: Optional[UUID] = None
 
     def _has_entry_effect(self) -> bool:
+        """Return whether entering the zone has an effect."""
         return True
 
     def _has_exit_effect(self) -> bool:
+        """Return whether leaving the zone has an effect."""
         return True
 
     def _create_zone_entry_handler(self) -> EventHandler:
@@ -1113,7 +1093,6 @@ class SilenceZone(ZoneControlCondition):
             if not entity:
                 return None
 
-            # Apply Deafened if not already deafened by this zone
             if "Silence Deafened" not in entity.active_conditions:
                 deafened = _SilenceDeafened(
                     source_entity_uuid=source_uuid,
@@ -1163,18 +1142,14 @@ class SilenceZone(ZoneControlCondition):
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply zone and register spell-blocking handler."""
-        # Let parent handle zone setup (terrain, markers, spatial handlers)
         result = super()._apply(declaration_event)
         outs, handler_uuids, sub_cond_uuids, spatial_uuids, effect_event = result
 
-        # Register CAST_SPELL blocking handler
         spell_block_handler = self._create_spell_block_handler()
-        # Use EventQueue directly since this isn't on an entity
         EventQueue.add_event_handler(spell_block_handler)
         handler_uuids.append(spell_block_handler.uuid)
         self._spell_block_handler_uuid = spell_block_handler.uuid
 
-        # Deafen entities already in the zone
         grid = get_map()
         for pos in self.affected_positions:
             entity_uuids = grid.get_entities_at(pos)
@@ -1198,7 +1173,6 @@ class SilenceZone(ZoneControlCondition):
         zone_uuid = self.uuid
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            # Check if caster is in the zone
             caster = Entity.get(event.source_entity_uuid) if event.source_entity_uuid else None
             if not caster:
                 return None
@@ -1206,7 +1180,6 @@ class SilenceZone(ZoneControlCondition):
             if caster.position not in zone_positions:
                 return None
 
-            # Check if the spell has verbal component (SpellEvent carries verbal field)
             if isinstance(event, SpellEvent) and event.verbal:
                 return event.cancel(status_message="Cannot cast verbal spell in Silence zone")
 
@@ -1240,16 +1213,25 @@ class SilenceZone(ZoneControlCondition):
 
 class _SilenceDeafened(BaseCondition):
     """Deafened condition specifically from Silence zone.
+
     Uses a unique name so it doesn't conflict with regular Deafened.
     """
-    name: str = "Silence Deafened"
-    description: str = "Deafened by Silence spell"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    zone_uuid: Optional[UUID] = None
+    name: str = Field(default="Silence Deafened", description="Condition name.")
+    description: str = Field(default="Deafened by Silence spell", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
+    zone_uuid: Optional[UUID] = Field(default=None, description="Silence zone condition UUID that owns this deafened condition.")
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        """Apply the underlying Deafened sub-condition.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Sub-condition ownership entry plus the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
 
@@ -1259,7 +1241,6 @@ class _SilenceDeafened(BaseCondition):
 
         sub_conditions_uuids: List[UUID] = []
 
-        # Apply actual Deafened as sub-condition
         deafened = Deafened(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
@@ -1287,15 +1268,23 @@ class Silence(SpellAction):
 
     Duration: Concentration, up to 10 minutes (10 rounds).
     """
-    name: str = Field(default="Silence")
-    description: str = Field(default="20ft sphere: no sound, blocks verbal spells, deafens (concentration)")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="illusion")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.POSITION)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120))
+    name: str = Field(default="Silence", description="Spell name.")
+    description: str = Field(default="20ft sphere: no sound, blocks verbal spells, deafens (concentration)", description="Spell description.")
+    spell_level: int = Field(default=2, description="Spell slot level.")
+    spell_school: str = Field(default="illusion", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120), description="Spell range.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate the Silence target position.
+
+        Args:
+            declaration_event: Spell declaration event.
+
+        Returns:
+            Execution-ready or canceled spell event.
+        """
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
@@ -1306,6 +1295,14 @@ class Silence(SpellAction):
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Create the Silence zone and link it to concentration.
+
+        Args:
+            execution_event: Spell execution event.
+
+        Returns:
+            Completed spell event, or a canceled event when setup fails.
+        """
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return execution_event.cancel(status_message="Caster not found")

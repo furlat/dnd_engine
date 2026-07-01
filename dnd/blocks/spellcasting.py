@@ -1,15 +1,4 @@
-"""
-Spellcasting block for D&D 5e spell system.
-
-This module provides the minimal SpellcastingBlock that holds spell-specific modifiers.
-Spell slots are tracked in ActionEconomy (not here) to avoid redundancy.
-Known spells are tracked via Entity.registered_actions (not here) to use existing pattern.
-
-Import Structure:
-- This module imports ONLY from core modules (no Entity import)
-- Entity imports this module and provides spell convenience methods
-- SpellAction (in actions.py) imports Entity and uses Entity.spell_attack_bonus()
-"""
+"""Spell-specific modifier block for the D&D spell system."""
 
 from typing import Optional, List, Tuple, Literal, Self
 from uuid import UUID
@@ -25,13 +14,14 @@ class SpellcastingConfig(BaseModel):
     """Configuration for the SpellcastingBlock.
 
     Attributes:
-        spellcasting_ability: The ability used for spellcasting ("charisma", "intelligence", "wisdom")
-        spell_attack_modifiers: Additional modifiers to spell attack rolls (e.g., Wand of the War Mage)
-        spell_damage_modifiers: Additional modifiers to spell damage (e.g., Elemental Affinity)
-        spell_dc_modifiers: Additional modifiers to spell save DC (e.g., magic items)
-        spell_crit_threshold_modifiers: Modifiers to spell critical hit threshold (spell-specific, stacks with Equipment)
-        spell_crit_extra_dice_modifiers: Modifiers to extra dice on spell crits (spell-specific, stacks with Equipment)
+        spellcasting_ability: Ability used for spellcasting.
+        spell_attack_modifiers: Additional modifiers to spell attack rolls.
+        spell_damage_modifiers: Additional modifiers to spell damage.
+        spell_dc_modifiers: Additional modifiers to spell save DC.
+        spell_crit_threshold_modifiers: Modifiers to spell critical hit threshold.
+        spell_crit_extra_dice_modifiers: Modifiers to extra dice on spell crits.
     """
+
     spellcasting_ability: AbilityName = Field(
         default="charisma",
         description="The ability used for spellcasting"
@@ -56,8 +46,6 @@ class SpellcastingConfig(BaseModel):
         default_factory=list,
         description="(name, value) pairs for spell-specific crit extra dice modifiers"
     )
-    # Extra spell damage (parallel to Equipment.extra_attack_damage_*)
-    # Used for features like Elemental Affinity ("add CHA to fire spell damage")
     extra_spell_damage_dices: List[Literal[4, 6, 8, 10, 12, 20]] = Field(
         default_factory=list,
         description="Dice sides for extra spell damage (e.g., [6] for 1d6)"
@@ -77,35 +65,15 @@ class SpellcastingConfig(BaseModel):
 
 
 class SpellcastingBlock(BaseBlock):
+    """Spell-specific modifiers that are always present on an entity.
+
+    This block stores spellcasting ability, spell attack/damage/DC modifiers,
+    spell-specific critical modifiers, and extra spell damage payloads. Spell
+    slots live on `ActionEconomy`, known spells live in registered actions, and
+    proficiency/generic attack modifiers live on their own entity blocks.
     """
-    Spell-specific modifiers block. Always present on Entity (non-optional).
 
-    NOT stored here (to avoid redundancy):
-    - Spell slots: Live in ActionEconomy.spell_slot_X
-    - Known spells: Live in Entity.registered_actions
-    - Proficiency bonus: Live in Entity.proficiency_bonus
-    - Generic attack modifiers (Blinded, Poisoned): Live in Equipment.attack_bonus
-
-    Stored here:
-    - Spellcasting ability (CHA/INT/WIS)
-    - Spell-specific attack bonus (Wand of the War Mage adds to spell attacks only)
-    - Spell-specific damage bonus (Elemental Affinity adds to certain spell damage)
-    - Spell-specific DC bonus (magic items that increase spell save DC)
-    - Spell-specific crit threshold (stacks with Equipment.crit_threshold)
-    - Spell-specific crit extra dice (stacks with Equipment.crit_extra_dice)
-
-    Entity.spell_attack_bonus() combines:
-    - proficiency_bonus
-    - ability modifier (from spellcasting_ability)
-    - Equipment.attack_bonus (generic - Blinded, Poisoned apply here!)
-    - SpellcastingBlock.spell_attack_bonus (spell-specific)
-
-    Critical threshold stacking:
-    - Equipment.crit_threshold affects ALL attacks (including spells)
-    - spell_crit_threshold adds ONLY for spell attacks
-    - Final spell crit = 20 - (Equipment.crit_threshold + spell_crit_threshold)
-    """
-    name: str = Field(default="Spellcasting")
+    name: str = Field(default="Spellcasting", description="Display name for this spellcasting block.")
     spellcasting_ability: AbilityName = Field(
         default="charisma",
         description="The ability used for spellcasting (charisma, intelligence, wisdom)"
@@ -151,8 +119,6 @@ class SpellcastingBlock(BaseBlock):
         description="Spell-specific extra dice on critical hits (stacks with Equipment.crit_extra_dice)"
     )
 
-    # Extra spell damage (parallel to Equipment.extra_attack_damage_*)
-    # Used for features like "add 1d6 radiant to all spell damage"
     extra_spell_damage_dices: List[Literal[4, 6, 8, 10, 12, 20]] = Field(
         default_factory=list,
         description="Dice sides for extra spell damage"
@@ -172,7 +138,7 @@ class SpellcastingBlock(BaseBlock):
 
     @model_validator(mode="after")
     def check_extra_damage_consistency(self) -> Self:
-        """Ensure all extra damage lists have same length (mirrors Equipment pattern)."""
+        """Ensure all extra spell damage payload lists have matching length."""
         targets = [
             self.extra_spell_damage_dices,
             self.extra_spell_damage_dices_numbers,
@@ -186,7 +152,7 @@ class SpellcastingBlock(BaseBlock):
         return self
 
     def get_extra_spell_damage(self) -> List[Damage]:
-        """Get list of extra Damage objects for all spells (parallel to Equipment.get_extra_attack_damage)."""
+        """Return extra damage payloads that apply to spell damage."""
         damages: List[Damage] = []
         for i in range(len(self.extra_spell_damage_dices)):
             damages.append(Damage(
@@ -209,23 +175,22 @@ class SpellcastingBlock(BaseBlock):
         target_entity_uuid: Optional[UUID] = None,
         target_entity_name: Optional[str] = None,
     ) -> 'SpellcastingBlock':
-        """Create a new SpellcastingBlock instance.
+        """Create a SpellcastingBlock from optional configuration.
 
         Args:
-            source_entity_uuid: UUID of the entity this block belongs to
-            config: Configuration for the spellcasting block
-            name: Name of the block
-            source_entity_name: Name of the source entity
-            target_entity_uuid: UUID of the target entity (if any)
-            target_entity_name: Name of the target entity (if any)
+            source_entity_uuid: UUID of the entity this block belongs to.
+            config: Configuration for the spellcasting block.
+            name: Name of the block.
+            source_entity_name: Name of the source entity.
+            target_entity_uuid: UUID of the target entity, if any.
+            target_entity_name: Name of the target entity, if any.
 
         Returns:
-            A new SpellcastingBlock instance
+            A new spellcasting block instance.
         """
         if config is None:
             config = SpellcastingConfig()
 
-        # Create ModifiableValues with proper source_entity_uuid
         spell_attack_bonus = ModifiableValue.create(
             source_entity_uuid=source_entity_uuid,
             base_value=0,
@@ -296,7 +261,6 @@ class SpellcastingBlock(BaseBlock):
                 )
             )
 
-        # Create extra spell damage ModifiableValues
         extra_spell_damage_bonus: List[ModifiableValue] = []
         for i, modifiers in enumerate(config.extra_spell_damage_bonus_modifiers):
             bonus = ModifiableValue.create(
@@ -311,10 +275,9 @@ class SpellcastingBlock(BaseBlock):
                         name=mod_name,
                         value=mod_value
                     )
-                )
+            )
             extra_spell_damage_bonus.append(bonus)
 
-        # Convert damage type strings to DamageType enum
         extra_spell_damage_type = [DamageType(t) for t in config.extra_spell_damage_types]
 
         return cls(
@@ -329,7 +292,6 @@ class SpellcastingBlock(BaseBlock):
             spell_dc_bonus=spell_dc_bonus,
             spell_crit_threshold=spell_crit_threshold,
             spell_crit_extra_dice=spell_crit_extra_dice,
-            # Extra spell damage fields
             extra_spell_damage_dices=list(config.extra_spell_damage_dices),
             extra_spell_damage_dices_numbers=list(config.extra_spell_damage_dices_numbers),
             extra_spell_damage_bonus=extra_spell_damage_bonus,

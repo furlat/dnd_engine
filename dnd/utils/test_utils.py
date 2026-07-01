@@ -25,8 +25,8 @@ def reset_combat_state():
     EventQueue.reset()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
-    GridMap.reset()  # Reset spatial data
-    SpellProtectionRegistry.reset()  # Reset globe-like protections
+    GridMap.reset()
+    SpellProtectionRegistry.reset()
 
 
 def setup_combat_arena(
@@ -47,12 +47,10 @@ def setup_combat_arena(
     Returns:
         Encounter object with both combatants, initiative rolled
     """
-    _ = grid_size  # Reserved for future GridMap integration
+    _ = grid_size
 
-    # Ensure senses are updated for line of sight
     Entity.update_all_entities_senses()
 
-    # Create encounter with HumanControllers (for manual/test control)
     encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
     ctrl_a = HumanController(source_entity_uuid=entity_a.uuid)
     ctrl_b = HumanController(source_entity_uuid=entity_b.uuid)
@@ -85,7 +83,7 @@ def force_attack_hit(entity: Entity) -> UUID:
 
 def force_attack_miss(entity: Entity) -> UUID:
     """
-    Add -100 attack penalty to guarantee misses (barring auto-hit).
+    Add AUTOMISS modifier to guarantee misses.
 
     Args:
         entity: The attacker entity
@@ -93,12 +91,13 @@ def force_attack_miss(entity: Entity) -> UUID:
     Returns:
         UUID of the modifier for later cleanup via remove_attack_modifier()
     """
-    modifier = NumericalModifier.create(
-        source_entity_uuid=entity.uuid,
+    modifier = AutoHitModifier(
         name="Forced Miss",
-        value=-100
+        value=AutoHitStatus.AUTOMISS,
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid
     )
-    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_value_modifier(modifier)
+    mod_uuid = entity.equipment.melee_attack_bonus.self_static.add_auto_hit_modifier(modifier)
     return mod_uuid
 
 
@@ -195,12 +194,9 @@ def run_turn_until_end(encounter: Encounter, entity: Entity):
         encounter: The active encounter
         entity: The entity whose turn to manage
     """
-    # Start the entity's turn
+
     entity.on_turn_start()
 
-    # Note: Caller should execute actions between start and end
-
-    # End the entity's turn
     entity.on_turn_end()
 
 
@@ -227,9 +223,8 @@ def deal_damage_to(
         Actual damage taken after resistances
     """
     if source_uuid is None:
-        source_uuid = entity.uuid  # Self-damage if no source
+        source_uuid = entity.uuid
 
-    # Apply damage through receive_damage which fires TakeDamageEvent
     actual = entity.receive_damage(amount, damage_type, source_uuid)
     return actual
 
@@ -252,7 +247,7 @@ def get_hp(entity: Entity) -> int:
 
 def get_max_hp(entity: Entity) -> int:
     """Get the maximum HP of an entity."""
-    # Max HP = hit dice HP + CON mod * hit dice count + bonuses
+
     con_mod = entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
     base_max = entity.health.get_max_hit_dices_points(constitution_modifier=con_mod)
     bonus = entity.health.max_hit_points_bonus.normalized_score
@@ -270,7 +265,7 @@ def set_hp(entity: Entity, hp: int):
     """
     max_hp = get_max_hp(entity)
     if hp > max_hp:
-        # Boost max HP so heal can reach the target value
+
         entity.health.max_hit_points_bonus.self_static.add_value_modifier(
             NumericalModifier.create(
                 source_entity_uuid=entity.uuid,
@@ -281,11 +276,11 @@ def set_hp(entity: Entity, hp: int):
 
     current = entity.get_hp()
     if hp < current:
-        # Need to deal damage
+
         diff = current - hp
         entity.health.take_damage(diff, DamageType.FORCE, entity.uuid)
     elif hp > current:
-        # Need to heal
+
         diff = hp - current
         entity.health.heal(diff)
 
@@ -307,14 +302,12 @@ def move_entity(entity: Entity, new_position: Tuple[int, int]):
     entity.position = new_position
     entity.senses.position = new_position
 
-    # Update position registries
     if entity.uuid in Entity._entity_by_position.get(old_pos, []):
         Entity._entity_by_position[old_pos].remove(entity)
     if new_position not in Entity._entity_by_position:
         Entity._entity_by_position[new_position] = []
     Entity._entity_by_position[new_position].append(entity)
 
-    # Update senses
     Entity.update_all_entities_senses()
 
 
@@ -339,11 +332,11 @@ def get_save_natural_roll(log_data: Dict[str, Any]) -> int:
     Returns the d20 value that was actually used (handles advantage/disadvantage).
     """
     save_roll = log_data.get('save_roll', {})
-    # d20_used is set when advantage/disadvantage applies
+
     d20_used = save_roll.get('d20_used')
     if d20_used is not None:
         return d20_used
-    # Fall back to first result
+
     results = save_roll.get('results', [])
     if results:
         return results[0]
@@ -363,11 +356,6 @@ def print_combat_state(entity_a: Entity, entity_b: Entity):
         cond_names = list(entity_b.active_conditions.keys())
         print(f"    Conditions: {cond_names}")
     print()
-
-
-# =============================================================================
-# EXPORTS
-# =============================================================================
 
 __all__ = [
     "reset_combat_state",

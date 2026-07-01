@@ -23,8 +23,8 @@ from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.modifiers import DamageType, CreatureType
 from dnd.core.values import ModifiableValue
 from dnd.core.base_block import SenseMode, SensesType
+from dnd.actions import Hide, Disengage
 
-# Import weapons and armor from items module
 from dnd.items import (
     create_scimitar,
     create_shortsword,
@@ -36,7 +36,6 @@ from dnd.items import (
     create_crown,
 )
 
-# Import spellcasting and spells for sorcerer
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.spells.evocation import (
     FireBolt, Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
@@ -54,6 +53,8 @@ from dnd.spells.abjuration import register_shield_reaction
 from dnd.spells.necromancy import NecroticBless
 from dnd.monsters.skeleton_abilities import MarkTargetAction
 
+GOBLIN_NIMBLE_HIDE_ACTION = "Nimble Escape: Hide"
+GOBLIN_NIMBLE_DISENGAGE_ACTION = "Nimble Escape: Disengage"
 
 GOBLIN_APPEARANCE = AppearanceConfig(
     body_category="NakedBody",
@@ -83,8 +84,41 @@ CASTER_APPEARANCE = AppearanceConfig(
 )
 
 
+def register_goblin_nimble_escape(entity: Entity) -> None:
+    """Register goblin bonus-action Hide and Disengage templates.
+
+    Args:
+        entity: Goblin entity receiving the Nimble Escape actions.
+    """
+    entity.register_action(
+        Hide(
+            source_entity_uuid=entity.uuid,
+            template=True,
+            name=GOBLIN_NIMBLE_HIDE_ACTION,
+            description="Take the Hide action as a bonus action.",
+            alt_cost_type="bonus_actions",
+        )
+    )
+    entity.register_action(
+        Disengage(
+            source_entity_uuid=entity.uuid,
+            template=True,
+            name=GOBLIN_NIMBLE_DISENGAGE_ACTION,
+            description="Take the Disengage action as a bonus action.",
+            alt_cost_type="bonus_actions",
+        )
+    )
+
+
 def create_armor_scraps(source_id: UUID) -> BodyArmor:
-    """Creates armor scraps - AC 13 (like skeleton's natural armor)"""
+    """Create skeleton armor scraps with AC 13.
+
+    Args:
+        source_id: Entity UUID used as the item source.
+
+    Returns:
+        Armor scraps body armor.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Armor Scraps",
@@ -98,7 +132,7 @@ def create_armor_scraps(source_id: UUID) -> BodyArmor:
         ),
         max_dex_bonus=ModifiableValue.create(
             source_entity_uuid=source_id,
-            base_value=0,  # No dex bonus for this armor type
+            base_value=0,
             value_name="Max Dex Bonus"
         )
     )
@@ -135,7 +169,6 @@ def create_goblin(
     if source_id is None:
         source_id = uuid4()
 
-    # Ability scores
     ability_scores_config = AbilityScoresConfig(
         strength=AbilityConfig(ability_score=8),
         dexterity=AbilityConfig(ability_score=14),
@@ -145,12 +178,10 @@ def create_goblin(
         charisma=AbilityConfig(ability_score=8)
     )
 
-    # Skills - Stealth proficiency
     skill_set_config = SkillSetConfig(
-        stealth=SkillConfig(proficiency=True, expertise=True)  # +6 total
+        stealth=SkillConfig(proficiency=True, expertise=True)
     )
 
-    # Health: 2d6 = 7 average HP
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=6,
@@ -160,13 +191,10 @@ def create_goblin(
         )]
     )
 
-    # Equipment config (base values)
     equipment_config = EquipmentConfig()
 
-    # Action economy (standard)
     action_economy_config = ActionEconomyConfig()
 
-    # Entity config
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         skill_set=skill_set_config,
@@ -180,7 +208,6 @@ def create_goblin(
         appearance=GOBLIN_APPEARANCE
     )
 
-    # Create entity
     entity = Entity.create(
         name=name,
         source_entity_uuid=source_id,
@@ -188,16 +215,20 @@ def create_goblin(
         config=entity_config
     )
 
-    # Set up action templates (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
+    entity.senses.sense_modes.append(
+        SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
+    )
+    register_goblin_nimble_escape(entity)
 
-    # Equip weapons and armor (this triggers event handlers to register attack templates)
     scimitar = create_scimitar(entity.uuid)
+    shortbow = create_shortbow(entity.uuid)
     leather_armor = create_leather_armor(entity.uuid)
     shield = create_wooden_shield(entity.uuid)
 
     entity.equipment.equip(leather_armor)
     entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
     entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
     return entity
@@ -209,34 +240,35 @@ def create_skeleton(
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
     weight: int = 120,
-    darkvision: bool = False
+    darkvision: bool = True
 ) -> Entity:
-    """
-    Creates a Skeleton (CR 1/4).
+    """Create a Skeleton (CR 1/4).
 
     Stats:
     - STR 10 (+0), DEX 14 (+2), CON 15 (+2), INT 6 (-2), WIS 8 (-1), CHA 5 (-3)
     - HP: 13 (2d8+4)
     - AC: 13 (armor scraps)
     - Speed: 30ft
-    - Weapon: Shortsword (1d6+2 piercing)
+    - Weapons: Shortsword (1d6+2 piercing), shortbow (1d6+2 piercing)
     - Vulnerabilities: Bludgeoning
-    - Immunities: Poison
+    - Immunities: poison damage, Poisoned, Exhaustion
+    - Senses: darkvision 60 ft. by default
     - Proficiency bonus: +2
 
     Args:
-        source_id: UUID for the entity (generated if not provided)
-        name: Name for the skeleton
-        position: Starting grid position
-        faction: Optional faction identifier
+        source_id: UUID for the entity, generated when omitted.
+        name: Name for the skeleton.
+        position: Starting grid position.
+        faction: Optional faction identifier.
+        weight: Weight in pounds.
+        darkvision: Whether to grant darkvision 60 ft.
 
     Returns:
-        Entity: A configured skeleton entity
+        A configured skeleton entity.
     """
     if source_id is None:
         source_id = uuid4()
 
-    # Ability scores
     ability_scores_config = AbilityScoresConfig(
         strength=AbilityConfig(ability_score=10),
         dexterity=AbilityConfig(ability_score=14),
@@ -246,8 +278,6 @@ def create_skeleton(
         charisma=AbilityConfig(ability_score=5)
     )
 
-    # Health: 2d8+4 = 13 average HP
-    # CON modifier (+2) * 2 hit dice = +4
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=8,
@@ -259,13 +289,9 @@ def create_skeleton(
         immunities=[DamageType.POISON]
     )
 
-    # Equipment config (base values)
     equipment_config = EquipmentConfig()
-
-    # Action economy (standard)
     action_economy_config = ActionEconomyConfig()
 
-    # Entity config
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         health=health_config,
@@ -279,7 +305,6 @@ def create_skeleton(
         appearance=SKELETON_APPEARANCE
     )
 
-    # Create entity
     entity = Entity.create(
         name=name,
         source_entity_uuid=source_id,
@@ -287,21 +312,22 @@ def create_skeleton(
         config=entity_config
     )
 
-    # Set up action templates (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
 
-    # Add darkvision 60ft (SRD: skeletons have darkvision)
     if darkvision:
         entity.senses.sense_modes.append(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    # Equip weapons and armor (this triggers event handlers to register attack templates)
     shortsword = create_shortsword(entity.uuid)
+    shortbow = create_shortbow(entity.uuid)
     armor_scraps = create_armor_scraps(entity.uuid)
 
+    entity.add_condition_immunity("Poisoned", immunity_name="Skeleton")
+    entity.add_condition_immunity("Exhaustion", immunity_name="Skeleton")
     entity.equipment.equip(armor_scraps)
     entity.equipment.equip(shortsword, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
 
     return entity
 
@@ -339,7 +365,6 @@ def create_goblin_archer(
     if source_id is None:
         source_id = uuid4()
 
-    # Ability scores
     ability_scores_config = AbilityScoresConfig(
         strength=AbilityConfig(ability_score=8),
         dexterity=AbilityConfig(ability_score=14),
@@ -349,12 +374,10 @@ def create_goblin_archer(
         charisma=AbilityConfig(ability_score=8)
     )
 
-    # Skills - Stealth proficiency
     skill_set_config = SkillSetConfig(
-        stealth=SkillConfig(proficiency=True, expertise=True)  # +6 total
+        stealth=SkillConfig(proficiency=True, expertise=True)
     )
 
-    # Health: 2d6 = 7 average HP
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=6,
@@ -364,13 +387,10 @@ def create_goblin_archer(
         )]
     )
 
-    # Equipment config (base values)
     equipment_config = EquipmentConfig()
 
-    # Action economy (standard)
     action_economy_config = ActionEconomyConfig()
 
-    # Entity config
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         skill_set=skill_set_config,
@@ -384,7 +404,6 @@ def create_goblin_archer(
         appearance=GOBLIN_APPEARANCE
     )
 
-    # Create entity
     entity = Entity.create(
         name=name,
         source_entity_uuid=source_id,
@@ -392,19 +411,17 @@ def create_goblin_archer(
         config=entity_config
     )
 
-    # Set up action templates (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
 
-    # Equip weapons and armor - dual wield melee + ranged backup
     shortbow = create_shortbow(entity.uuid)
     scimitar = create_scimitar(entity.uuid)
     dagger = create_dagger(entity.uuid)
     leather_armor = create_leather_armor(entity.uuid)
 
     entity.equipment.equip(leather_armor)
-    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)  # Ranged weapon
-    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)   # Main melee weapon
-    entity.equipment.equip(dagger, WeaponSlot.MELEE_OFF)      # Off-hand (two-weapon fighting)
+    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
+    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
 
     return entity
 
@@ -440,47 +457,41 @@ def create_caster(
     if source_id is None:
         source_id = uuid4()
 
-    # Ability scores - CHA primary
     ability_scores_config = AbilityScoresConfig(
         strength=AbilityConfig(ability_score=8),
         dexterity=AbilityConfig(ability_score=14),
         constitution=AbilityConfig(ability_score=14),
         intelligence=AbilityConfig(ability_score=10),
         wisdom=AbilityConfig(ability_score=10),
-        charisma=AbilityConfig(ability_score=18),  # Sorcerer casting stat
+        charisma=AbilityConfig(ability_score=18),
     )
 
-    # Health: level d6 hit dice
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=6,
             hit_dice_count=level,
-            mode="maximums"  # Better HP for testing
+            mode="maximums"
         )]
     )
 
-    # Action economy with spell slots (generous for testing high-level spells)
     action_economy_config = ActionEconomyConfig(
         spell_slots={1: 4, 2: 3, 3: 3, 4: 2, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1}
     )
 
-    # Equipment config (base values)
     equipment_config = EquipmentConfig()
 
-    # Entity config
     entity_config = EntityConfig(
         ability_scores=ability_scores_config,
         health=health_config,
         equipment=equipment_config,
         action_economy=action_economy_config,
         spellcasting=SpellcastingConfig(spellcasting_ability="charisma"),
-        proficiency_bonus=3,  # Level 5+
+        proficiency_bonus=3,
         position=position,
         faction=faction,
         appearance=CASTER_APPEARANCE
     )
 
-    # Create entity
     entity = Entity.create(
         name=name,
         source_entity_uuid=source_id,
@@ -488,32 +499,26 @@ def create_caster(
         config=entity_config
     )
 
-    # Set up action templates (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
 
-    # Register spells - cantrips and AoE
-    register_spell(entity, FireBolt, caster_level=level)      # Cantrip attack
-    register_spell(entity, MagicMissile, caster_level=level)  # Multi-entity
-    register_spell(entity, Fireball, caster_level=level)      # AoE sphere
-    register_spell(entity, BurningHands, caster_level=level)  # AoE cone
-    register_spell(entity, LightningBolt, caster_level=level) # AoE line
-    register_spell(entity, Shatter, caster_level=level)       # AoE sphere
-    register_spell(entity, Thunderwave, caster_level=level)   # AoE cube + push
-    register_spell(entity, Invisibility, caster_level=level)          # Stealth utility (L2)
-    register_spell(entity, GreaterInvisibility, caster_level=level)  # BG3-style (L4)
+    register_spell(entity, FireBolt, caster_level=level)
+    register_spell(entity, MagicMissile, caster_level=level)
+    register_spell(entity, Fireball, caster_level=level)
+    register_spell(entity, BurningHands, caster_level=level)
+    register_spell(entity, LightningBolt, caster_level=level)
+    register_spell(entity, Shatter, caster_level=level)
+    register_spell(entity, Thunderwave, caster_level=level)
+    register_spell(entity, Invisibility, caster_level=level)
+    register_spell(entity, GreaterInvisibility, caster_level=level)
 
-    # Register Shield reaction
     register_shield_reaction(entity)
 
-    # Equip a dagger for melee
     dagger = create_dagger(entity.uuid)
     entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
 
-    # Add Greater Invisibility potions to inventory
     potion = create_potion_of_greater_invisibility(entity.uuid)
     entity.loot_item(potion)
 
-    # Add Potion of Haste to inventory
     haste_potion = create_potion_of_haste(entity.uuid)
     entity.loot_item(haste_potion)
 
@@ -553,7 +558,6 @@ def create_skeleton_warrior(
         charisma=AbilityConfig(ability_score=5)
     )
 
-    # 4d8+8 = 26 average, but we'll use 4 hit dice with CON +2 each
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=8,
@@ -595,7 +599,6 @@ def create_skeleton_warrior(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    # Equip weapons and armor
     longsword = create_longsword(entity.uuid)
     shield = create_wooden_shield(entity.uuid)
     armor_scraps = create_armor_scraps(entity.uuid)
@@ -604,7 +607,6 @@ def create_skeleton_warrior(
     entity.equipment.equip(longsword, WeaponSlot.MELEE_MAIN)
     entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
-    # Add acid flask to inventory
     acid_flask = create_acid_flask(entity.uuid)
     entity.loot_item(acid_flask)
 
@@ -643,7 +645,6 @@ def create_skeleton_archer(
         charisma=AbilityConfig(ability_score=5)
     )
 
-    # 3d8+6 = 19.5 ≈ 20
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=8,
@@ -685,7 +686,6 @@ def create_skeleton_archer(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    # Equip weapons and armor
     shortbow = create_shortbow(entity.uuid)
     dagger1 = create_dagger(entity.uuid)
     dagger2 = create_dagger(entity.uuid)
@@ -696,7 +696,6 @@ def create_skeleton_archer(
     entity.equipment.equip(dagger1, WeaponSlot.MELEE_MAIN)
     entity.equipment.equip(dagger2, WeaponSlot.MELEE_OFF)
 
-    # Register Mark Target ability as template action
     mark_action = MarkTargetAction(
         source_entity_uuid=entity.uuid,
         template=True
@@ -741,7 +740,6 @@ def create_skeleton_warlock(
         charisma=AbilityConfig(ability_score=14)
     )
 
-    # Standard 2d8+4 = 13 HP
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=8,
@@ -786,7 +784,6 @@ def create_skeleton_warlock(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    # Equip arcane staff
     staff = create_arcane_staff(entity.uuid)
     armor_scraps = create_armor_scraps(entity.uuid)
     crown = create_crown(entity.uuid)
@@ -795,24 +792,20 @@ def create_skeleton_warlock(
     entity.equipment.equip(crown)
     entity.equipment.equip(staff, WeaponSlot.MELEE_MAIN)
 
-    # Register spells
     register_spell(entity, EldritchBlast, caster_level=1)
     register_spell(entity, BurningHands, caster_level=1)
     register_spell(entity, Thunderwave, caster_level=1)
     register_spell(entity, NecroticBless, caster_level=1)
 
-    # Register Shield reaction
     register_shield_reaction(entity)
 
-    # Add Scroll of Invisibility to inventory
     scroll = create_scroll_of_invisibility(entity.uuid)
     entity.loot_item(scroll)
 
     return entity
 
-
 if __name__ == "__main__":
-    # Quick test of creature creation
+
     goblin = create_goblin(name="Test Goblin", position=(0, 0))
     skeleton = create_skeleton(name="Test Skeleton", position=(1, 0))
 

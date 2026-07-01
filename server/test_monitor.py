@@ -5,7 +5,7 @@ This tests the EventMonitor directly without needing a websocket connection.
 Useful for debugging the event capture mechanism.
 
 Usage:
-    python -m server.test_monitor
+    uv run python -m server.test_monitor
 """
 
 import asyncio
@@ -16,7 +16,6 @@ from dnd.core.gridmap import get_map, reset_map
 from dnd.core.events import EventQueue, EventType
 from dnd.entity import Entity, EntityConfig
 
-# Import the monitor
 from server.event_server import EventMonitor
 
 
@@ -25,7 +24,7 @@ def clear_state():
     reset_map()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
-    # Clear event queue
+
     EventQueue._events_by_lineage.clear()
     EventQueue._events_by_uuid.clear()
     EventQueue._events_by_type.clear()
@@ -48,21 +47,17 @@ async def test_event_monitor():
 
     clear_state()
 
-    # Create monitor and listener queue
     monitor = EventMonitor()
     event_queue: asyncio.Queue = asyncio.Queue()
     monitor.add_listener(event_queue)
 
-    # Start monitoring
     monitor.start()
     print(f"\n✓ Monitor started")
 
-    # Create grid
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 10)
     print("✓ Created 10x10 grid")
 
-    # Create entity (should generate spatial events)
     entity_uuid = uuid4()
     entity = Entity.create(
         source_entity_uuid=entity_uuid,
@@ -71,10 +66,8 @@ async def test_event_monitor():
     )
     print("✓ Created entity at (2, 2)")
 
-    # Give async queue time to receive
     await asyncio.sleep(0.1)
 
-    # Check what events were captured
     captured_events: List[Dict[str, Any]] = []
     while not event_queue.empty():
         event_data = event_queue.get_nowait()
@@ -84,7 +77,6 @@ async def test_event_monitor():
     for event in captured_events:
         print(f"  - {event['event_type']}: {event.get('position', 'N/A')}")
 
-    # Move entity (should generate more events)
     captured_events.clear()
 
     Entity.update_entity_position(entity, (3, 3))
@@ -103,7 +95,6 @@ async def test_event_monitor():
         old_pos = event.get('old_position', 'N/A')
         print(f"  - {et}: pos={pos}, old_pos={old_pos}")
 
-    # Move again
     captured_events.clear()
 
     Entity.update_entity_position(entity, (5, 5))
@@ -121,11 +112,9 @@ async def test_event_monitor():
         pos = event.get('position', 'N/A')
         print(f"  - {et}: pos={pos}")
 
-    # Stop monitoring
     monitor.stop()
     print("\n✓ Monitor stopped")
 
-    # Summary
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
@@ -149,7 +138,6 @@ async def test_multiple_listeners():
 
     monitor = EventMonitor()
 
-    # Create multiple listener queues
     queues = [asyncio.Queue() for _ in range(3)]
     for q in queues:
         monitor.add_listener(q)
@@ -158,7 +146,6 @@ async def test_multiple_listeners():
 
     monitor.start()
 
-    # Create grid and entity
     grid = get_map()
     grid.create_rectangle(0, 0, 5, 5)
 
@@ -170,7 +157,6 @@ async def test_multiple_listeners():
 
     await asyncio.sleep(0.1)
 
-    # Check each queue received events
     counts = []
     for i, q in enumerate(queues):
         count = 0
@@ -182,7 +168,6 @@ async def test_multiple_listeners():
 
     monitor.stop()
 
-    # All listeners should receive same number of events
     if len(set(counts)) == 1 and counts[0] > 0:
         print("✓ All listeners received same events")
         return True
@@ -204,7 +189,6 @@ async def test_event_data_structure():
     monitor.add_listener(event_queue)
     monitor.start()
 
-    # Generate an event
     grid = get_map()
     grid.create_rectangle(0, 0, 5, 5)
 
@@ -216,7 +200,6 @@ async def test_event_data_structure():
 
     await asyncio.sleep(0.1)
 
-    # Get first event and inspect
     if not event_queue.empty():
         event_data = event_queue.get_nowait()
 
@@ -224,7 +207,6 @@ async def test_event_data_structure():
         print(f"  Type: {type(event_data)}")
         print(f"  Keys: {list(event_data.keys())}")
 
-        # Check required fields
         required = ['uuid', 'event_type', 'phase', 'timestamp', 'source_entity_uuid']
         for field in required:
             if field in event_data:
@@ -232,7 +214,6 @@ async def test_event_data_structure():
             else:
                 print(f"  ✗ {field}: MISSING")
 
-        # Check it's JSON serializable
         import json
         try:
             json_str = json.dumps(event_data)
@@ -260,7 +241,6 @@ async def main():
     print(f"{passed}/{total} tests passed")
 
     return all(results)
-
 
 if __name__ == "__main__":
     success = asyncio.run(main())

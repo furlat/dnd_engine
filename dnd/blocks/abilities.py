@@ -13,9 +13,6 @@ def ability_score_normalizer(score: int) -> int:
     return (score - 10) // 2
 abilities = Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']
 
-# Define abilities as a proper string literal type
-
-
 
 class AbilityConfig(BaseModel):
     """
@@ -81,7 +78,7 @@ class Ability(BaseBlock):
     """
 
     name: AbilityName = Field(
-        default="strength", 
+        default="strength",
         description="The name of the ability (Strength, Dexterity, Constitution, Intelligence, Wisdom, or Charisma)"
     )
     ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
@@ -107,23 +104,35 @@ class Ability(BaseBlock):
     @computed_field
     @property
     def modifier(self) -> int:
-        """
-        Combines the ability score, normalized with: (score - 10) // 2, and the modifier bonus.
+        """Compute the D&D ability modifier from the aggregated raw score.
 
         Returns:
-            int: The calculated ability modifier.
+            Ability modifier plus direct modifier bonuses.
         """
-        return self.ability_score.normalized_score + self.modifier_bonus.score
-    
+        return ability_score_normalizer(self.ability_score.score) + self.modifier_bonus.normalized_score
+
     def get_combined_values(self) -> ModifiableValue:
+        """Build a modifiable value representing this ability's modifier.
+
+        Returns:
+            Modifiable value whose normalized score is derived from the raw
+            aggregate ability score plus direct modifier bonuses.
         """
-        Combines the ability score and the modifier bonus.
-        """
-        return self.ability_score.combine_values([self.modifier_bonus])
-    
+        ability_modifier = ModifiableValue.create(
+            source_entity_uuid=self.source_entity_uuid,
+            source_entity_name=self.source_entity_name,
+            target_entity_uuid=self.target_entity_uuid,
+            target_entity_name=self.target_entity_name,
+            base_value=self.ability_score.score,
+            value_name=f"{self.name} Ability Modifier",
+            score_normalizer=ability_score_normalizer,
+        )
+        ability_modifier.generated_from.append(self.ability_score.uuid)
+        return ability_modifier.combine_values([self.modifier_bonus])
+
     @classmethod
-    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
-                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                 name: Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] = 'strength', config: Optional[AbilityConfig] = None) -> 'Ability':
         """
         Create a new BaseBlock instance with the given parameters. Subclasses should override this method to add their own attributes and handle the modifiable values initialization in the method.
@@ -150,7 +159,7 @@ class Ability(BaseBlock):
                 for modifier in config.modifier_bonus_modifiers:
                     modifier_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name=name, ability_score=ability_score, modifier_bonus=modifier_bonus)
-        
+
 class AbilityScoresConfig(BaseModel):
     """
     Configuration for an AbilityScores block.
@@ -270,7 +279,7 @@ class AbilityScores(BaseBlock):
             Dict[UUID, abilities]: A dictionary mapping ability UUIDs to their names.
         """
         return{ability.uuid:ability.name for ability in self.abilities_list}
-    
+
     def get_modifier(self, ability_uuid: UUID) -> int:
         """
         Get the modifier for a specific ability by its UUID.
@@ -331,10 +340,10 @@ class AbilityScores(BaseBlock):
             Ability: The corresponding Ability instance.
         """
         return getattr(self, ability_name)
-    
+
     @classmethod
-    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
-               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                config: Optional[AbilityScoresConfig] = None) -> 'AbilityScores':
         """
         Create a new AbilityScores instance with the given parameters.

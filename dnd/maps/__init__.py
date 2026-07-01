@@ -1,2 +1,1 @@
 """Reusable map layout helpers."""
-

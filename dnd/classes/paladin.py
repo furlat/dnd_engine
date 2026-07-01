@@ -11,23 +11,30 @@ from dnd.core.events import (
     WeaponSlot, Damage, DamageRollResultEvent,
 )
 from dnd.core.dice import AttackOutcome
-from dnd.core.modifiers import DamageType
+from dnd.core.modifiers import CreatureType, DamageType
 from dnd.core.values import ModifiableValue
 
 from dnd.entity import Entity
 
-
-# =============================================================================
-# DIVINE SMITE (Paladin Feature)
-# =============================================================================
-
-# Maximum smite dice (before crit doubling): 5d8
 MAX_SMITE_DICE = 5
+MAX_SMITE_DICE_VS_UNDEAD_OR_FIEND = 6
 
 
 def _is_melee_weapon_slot(weapon_slot: WeaponSlot) -> bool:
     """Check if weapon slot is a melee slot."""
     return weapon_slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
+
+
+def _target_grants_extra_smite_die(target_entity_uuid: Optional[UUID]) -> bool:
+    """Return whether Divine Smite gains its creature-type bonus die."""
+    if target_entity_uuid is None:
+        return False
+
+    target = Entity.get(target_entity_uuid)
+    if not isinstance(target, Entity):
+        return False
+
+    return target.creature_type in (CreatureType.UNDEAD, CreatureType.FIEND)
 
 
 def create_divine_smite_processor(slot_level: int):
@@ -41,27 +48,21 @@ def create_divine_smite_processor(slot_level: int):
     """
     def divine_smite_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
         """Divine Smite: on melee weapon hit, add radiant damage dice and consume spell slot."""
-        # Must be a DamageRollResultEvent
         if not isinstance(event, DamageRollResultEvent):
             return None
 
-        # Only trigger on own attacks
         if event.source_entity_uuid != source_entity_uuid:
             return None
 
-        # Must be a melee weapon hit
         if not _is_melee_weapon_slot(event.weapon_slot):
             return None
 
-        # Must be a hit or crit (not miss)
         if event.attack_outcome not in (AttackOutcome.HIT, AttackOutcome.CRIT):
             return None
 
-        # Check if smite already applied this attack (flag in context)
         if event.context.get("divine_smite_applied"):
             return None
 
-        # Check spell slot availability
         entity = Entity.get(source_entity_uuid)
         if not entity or not isinstance(entity, Entity):
             return None
@@ -69,15 +70,14 @@ def create_divine_smite_processor(slot_level: int):
         if not entity.action_economy.can_afford(spell_slot_cost_type(slot_level), 1):
             return None
 
-        # All checks passed — apply Divine Smite!
+        creature_type_bonus = 1 if _target_grants_extra_smite_die(event.target_entity_uuid) else 0
+        dice_count = min(
+            min(1 + slot_level, MAX_SMITE_DICE) + creature_type_bonus,
+            MAX_SMITE_DICE_VS_UNDEAD_OR_FIEND,
+        )
 
-        # Calculate dice: 1 base + slot_level, capped at MAX_SMITE_DICE
-        dice_count = min(1 + slot_level, MAX_SMITE_DICE)
-
-        # Consume spell slot
         entity.action_economy.consume(spell_slot_cost_type(slot_level), 1)
 
-        # Create smite damage
         smite_damage_bonus = ModifiableValue(
             source_entity_uuid=source_entity_uuid,
             name="Divine Smite Damage Bonus"
@@ -92,21 +92,19 @@ def create_divine_smite_processor(slot_level: int):
             damage_type=DamageType.RADIANT
         )
 
-        # Roll the smite dice (crit auto-doubles via get_dice)
         smite_dice = smite_damage.get_dice(
             attack_outcome=event.attack_outcome,
             crit_extra_dice=0
         )
         smite_roll = smite_dice.roll
 
-        # Append to damages and final_rolls
         event.damages.append(smite_damage)
         event.final_rolls.append(smite_roll)
 
-        # Set flag to prevent lower-level handlers from also firing
         event.context["divine_smite_applied"] = True
         event.context["divine_smite_slot_level"] = slot_level
         event.context["divine_smite_dice_count"] = dice_count
+        event.context["divine_smite_creature_type_bonus"] = creature_type_bonus
 
         entity_name = entity.name if entity else "Unknown"
         return event.model_copy(update={
@@ -154,7 +152,6 @@ def register_divine_smite(entity: Entity, max_slot_level: int = 5) -> List[Event
         List of registered EventHandler objects.
     """
     handlers: List[EventHandler] = []
-    # Register highest first so it fires first
     for level in range(max_slot_level, 0, -1):
         handler = create_divine_smite_handler(entity.uuid, level)
         entity.add_event_handler(handler)

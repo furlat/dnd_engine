@@ -1,10 +1,6 @@
-"""D&D 5e Item Factories
-
-This module provides factory functions for creating D&D 5e weapons and armor.
-"""
+"""Item factory exports and lookup tables."""
 
 from dnd.items.weapons import (
-    # Simple Melee
     create_club,
     create_dagger,
     create_handaxe,
@@ -12,10 +8,8 @@ from dnd.items.weapons import (
     create_mace,
     create_quarterstaff,
     create_spear,
-    # Simple Ranged
     create_light_crossbow,
     create_shortbow,
-    # Martial Melee
     create_battleaxe,
     create_greataxe,
     create_greatsword,
@@ -24,37 +18,30 @@ from dnd.items.weapons import (
     create_scimitar,
     create_shortsword,
     create_warhammer,
-    # Martial Ranged
     create_longbow,
     create_heavy_crossbow,
-    # Arcane
     create_arcane_staff,
 )
 
 from dnd.items.armors import (
-    # Light
     create_padded_armor,
     create_leather_armor,
     create_studded_leather,
-    # Medium
     create_hide_armor,
     create_chain_shirt,
     create_scale_mail,
     create_breastplate,
     create_half_plate,
-    # Heavy
     create_ring_mail,
     create_chain_mail,
     create_splint_armor,
     create_plate_armor,
-    # Clothing / footwear
     create_robes,
     create_cloth_shoes,
     create_leather_boots,
     create_iron_helmet,
     create_wizard_hat,
     create_crown,
-    # Shield
     create_shield,
     create_wooden_shield,
 )
@@ -66,9 +53,12 @@ from dnd.items.environment import (
     CloseDirectionalDoorAction,
 )
 
-# Weapon lookup by name (for presets)
+from dnd.items.test_items import (
+    HealingPotion,
+    create_healing_potion,
+)
+
 WEAPONS = {
-    # Simple Melee
     "club": create_club,
     "dagger": create_dagger,
     "handaxe": create_handaxe,
@@ -76,10 +66,8 @@ WEAPONS = {
     "mace": create_mace,
     "quarterstaff": create_quarterstaff,
     "spear": create_spear,
-    # Simple Ranged
     "light_crossbow": create_light_crossbow,
     "shortbow": create_shortbow,
-    # Martial Melee
     "battleaxe": create_battleaxe,
     "greataxe": create_greataxe,
     "greatsword": create_greatsword,
@@ -88,23 +76,19 @@ WEAPONS = {
     "scimitar": create_scimitar,
     "shortsword": create_shortsword,
     "warhammer": create_warhammer,
-    # Martial Ranged
     "longbow": create_longbow,
     "heavy_crossbow": create_heavy_crossbow,
 }
 
 ARMORS = {
-    # Light
     "padded": create_padded_armor,
     "leather": create_leather_armor,
     "studded_leather": create_studded_leather,
-    # Medium
     "hide": create_hide_armor,
     "chain_shirt": create_chain_shirt,
     "scale_mail": create_scale_mail,
     "breastplate": create_breastplate,
     "half_plate": create_half_plate,
-    # Heavy
     "ring_mail": create_ring_mail,
     "chain_mail": create_chain_mail,
     "splint": create_splint_armor,
@@ -121,7 +105,6 @@ SHIELDS = {
 }
 
 __all__ = [
-    # Simple Melee
     "create_club",
     "create_dagger",
     "create_handaxe",
@@ -129,10 +112,8 @@ __all__ = [
     "create_mace",
     "create_quarterstaff",
     "create_spear",
-    # Simple Ranged
     "create_light_crossbow",
     "create_shortbow",
-    # Martial Melee
     "create_battleaxe",
     "create_greataxe",
     "create_greatsword",
@@ -141,42 +122,35 @@ __all__ = [
     "create_scimitar",
     "create_shortsword",
     "create_warhammer",
-    # Martial Ranged
     "create_longbow",
     "create_heavy_crossbow",
-    # Arcane
     "create_arcane_staff",
-    # Light Armor
     "create_padded_armor",
     "create_leather_armor",
     "create_studded_leather",
-    # Medium Armor
     "create_hide_armor",
     "create_chain_shirt",
     "create_scale_mail",
     "create_breastplate",
     "create_half_plate",
-    # Heavy Armor
     "create_ring_mail",
     "create_chain_mail",
     "create_splint_armor",
     "create_plate_armor",
-    # Clothing / footwear
     "create_robes",
     "create_cloth_shoes",
     "create_leather_boots",
     "create_iron_helmet",
     "create_wizard_hat",
     "create_crown",
-    # Shields
     "create_shield",
     "create_wooden_shield",
-    # Environment
     "DirectionalDoor",
     "DirectionalWall",
     "OpenDirectionalDoorAction",
     "CloseDirectionalDoorAction",
-    # Lookup dicts
+    "HealingPotion",
+    "create_healing_potion",
     "WEAPONS",
     "ARMORS",
     "SHIELDS",

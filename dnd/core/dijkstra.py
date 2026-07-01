@@ -1,18 +1,45 @@
 import heapq
-from typing import Dict, Tuple, List, Optional, Callable
+from typing import Callable, Dict, List, Optional, Tuple
 
-def get_neighbors(position: Tuple[int, int], diagonal: bool, width: int, height: int) -> List[Tuple[int, int]]:
+
+def get_neighbors(
+    position: Tuple[int, int],
+    diagonal: bool,
+    width: int,
+    height: int,
+    min_x: int = 0,
+    min_y: int = 0,
+) -> List[Tuple[int, int]]:
+    """Return neighboring coordinates inside an origin-aware bound.
+
+    Args:
+        position: Position whose neighbors should be inspected.
+        diagonal: Whether diagonal neighbors are allowed.
+        width: Bound width in cells.
+        height: Bound height in cells.
+        min_x: Minimum x coordinate included in the bound.
+        min_y: Minimum y coordinate included in the bound.
+
+    Returns:
+        Neighbor coordinates that fall inside the bound.
+    """
+    if width <= 0 or height <= 0:
+        return []
+
     x, y = position
     directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
     if diagonal:
         directions += [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
+    max_x = min_x + width - 1
+    max_y = min_y + height - 1
     neighbors = []
     for dx, dy in directions:
         nx, ny = x + dx, y + dy
-        if 0 <= nx < width and 0 <= ny < height:
+        if min_x <= nx <= max_x and min_y <= ny <= max_y:
             neighbors.append((nx, ny))
     return neighbors
+
 
 def dijkstra(
     start: Tuple[int, int],
@@ -23,32 +50,32 @@ def dijkstra(
     max_distance: Optional[int] = None,
     cost_func: Optional[Callable[[int, int], float]] = None,
     can_enter: Optional[Callable[[Tuple[int, int], Tuple[int, int]], bool]] = None,
-    epsilon: float = 0.001  # Small cost added for diagonal moves
+    epsilon: float = 0.001,
+    min_x: int = 0,
+    min_y: int = 0,
 ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
-    """
-    Compute shortest paths from start position using Dijkstra's algorithm.
+    """Compute shortest paths from start position using Dijkstra's algorithm.
 
     Args:
-        start: Starting position
-        is_walkable: Function (x, y) -> bool checking if a tile is walkable
-        width: Grid width
-        height: Grid height
-        diagonal: Allow diagonal movement
-        max_distance: Maximum distance to search (in movement cost units)
-        cost_func: Optional function (x, y) -> float returning movement cost for a tile.
-                   If not provided, all walkable tiles cost 1.
-                   If returns <= 0, tile is impassable.
-        can_enter: Optional function (from_pos, to_pos) -> bool checking if entry
-                   from from_pos to to_pos is allowed (for directional borders).
-        epsilon: Small cost added to diagonal moves for tie-breaking
+        start: Starting position.
+        is_walkable: Callback checking whether a tile can be entered.
+        width: Search bound width in cells.
+        height: Search bound height in cells.
+        diagonal: Whether diagonal movement is allowed.
+        max_distance: Maximum movement cost to search.
+        cost_func: Optional movement-cost callback. Costs less than or equal to
+            zero are impassable.
+        can_enter: Optional transition callback for directional borders.
+        epsilon: Small priority cost added to diagonal moves for tie-breaking.
+        min_x: Minimum x coordinate included in the search bound.
+        min_y: Minimum y coordinate included in the search bound.
 
     Returns:
-        Tuple of (distances_dict, paths_dict) where:
-        - distances_dict maps position -> integer distance (movement cost units)
-        - paths_dict maps position -> list of positions forming the path
+        `(distances, paths)` where distances are movement costs and paths are
+        position lists from start to each reachable destination.
     """
     distances: Dict[Tuple[int, int], float] = {start: 0}
-    true_distances: Dict[Tuple[int, int], int] = {start: 0}  # Distances without epsilon for final return
+    true_distances: Dict[Tuple[int, int], int] = {start: 0}
     paths: Dict[Tuple[int, int], List[Tuple[int, int]]] = {start: [start]}
     pq: List[Tuple[float, Tuple[int, int]]] = [(float(0), start)]
     visited: set[Tuple[int, int]] = set()
@@ -60,35 +87,31 @@ def dijkstra(
             continue
         visited.add(current_position)
 
-        for neighbor in get_neighbors(current_position, diagonal, width, height):
-            # Check basic walkability
+        for neighbor in get_neighbors(current_position, diagonal, width, height, min_x, min_y):
             if not is_walkable(*neighbor):
                 continue
 
-            # Check directional border (can we enter neighbor from current position?)
             if can_enter is not None and not can_enter(current_position, neighbor):
                 continue
 
-            # Get tile cost
             if cost_func is not None:
                 tile_cost = cost_func(neighbor[0], neighbor[1])
-                if tile_cost <= 0:  # Impassable (e.g., max_constraint set to 0)
+                if tile_cost <= 0:
                     continue
             else:
                 tile_cost = 1
 
-            # Calculate distance: add epsilon for diagonal moves
             is_diagonal = (neighbor[0] != current_position[0]) and (neighbor[1] != current_position[1])
             additional_cost = epsilon if is_diagonal else 0
             distance = current_distance + tile_cost + additional_cost
+            true_distance = true_distances[current_position] + tile_cost
 
-            if max_distance is not None and distance > max_distance:
+            if max_distance is not None and true_distance > max_distance:
                 continue
 
             if neighbor not in distances or distance < distances[neighbor]:
                 distances[neighbor] = distance
-                # True distance tracks actual movement cost (without epsilon)
-                true_distances[neighbor] = int(true_distances[current_position] + tile_cost)
+                true_distances[neighbor] = int(true_distance)
                 paths[neighbor] = paths[current_position] + [neighbor]
                 heapq.heappush(pq, (distance, neighbor))
 

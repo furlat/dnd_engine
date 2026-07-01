@@ -1,8 +1,7 @@
-"""
-Combat log data models for automatic event-based combat log generation.
+"""Combat-log data models and display helpers.
 
-Events generate their own combat log entries at COMPLETION phase,
-eliminating post-hoc extraction and coupling between display layer and engine internals.
+Events generate their own combat-log entries at completion, which keeps
+display payloads near the event data that produced them.
 """
 
 from enum import Enum
@@ -12,10 +11,11 @@ from pydantic import BaseModel, Field
 
 
 class CombatLogEntryType(str, Enum):
-    """Types of combat log entries."""
+    """Combat-log entry categories emitted by engine events."""
+
     ATTACK = "attack"
     MOVEMENT = "movement"
-    ACTION = "action"  # Dash, Dodge, Disengage
+    ACTION = "action"
     SAVING_THROW = "saving_throw"
     SKILL_CHECK = "skill_check"
     CONDITION_APPLIED = "condition_applied"
@@ -25,51 +25,78 @@ class CombatLogEntryType(str, Enum):
     DEATH = "death"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
-    MULTI_ENTITY_ACTION = "multi_entity_action"  # Fireball, Magic Missile, etc.
-    SPELL_SAVE = "spell_save"  # Save-based spell effect on single target
-    SPELL_DAMAGE = "spell_damage"  # Auto-hit spell damage (Magic Missile dart)
-    ENTITY_SPOTTED = "entity_spotted"  # Observer spots a hiding entity
-    HAZARD_DETECTED = "hazard_detected"  # Observer detects a previously hidden hazard
+    MULTI_ENTITY_ACTION = "multi_entity_action"
+    SPELL_SAVE = "spell_save"
+    SPELL_DAMAGE = "spell_damage"
+    ENTITY_SPOTTED = "entity_spotted"
+    HAZARD_DETECTED = "hazard_detected"
 
 
 class CombatLogVerbosity(str, Enum):
-    """Verbosity levels for combat log display."""
-    COMPACT = "compact"    # One-line summary only
-    VERBOSE = "verbose"    # Summary + key details
-    DETAILED = "detailed"  # Full breakdown with all modifiers
+    """Verbosity levels for combat-log display text."""
+
+    COMPACT = "compact"
+    VERBOSE = "verbose"
+    DETAILED = "detailed"
 
 
 class ModifierBreakdown(BaseModel):
-    """A single modifier contributing to a roll or value."""
+    """A single modifier contributing to a roll or value.
+
+    Attributes:
+        name: Human-readable modifier name.
+        value: Numerical modifier value.
+        source: Description of where the modifier originated.
+    """
+
     name: str = Field(description="Human-readable modifier name (e.g., 'Prof', 'DEX')")
     value: int = Field(description="The modifier value (+2, -1, etc.)")
     source: str = Field(default="self", description="Where the modifier comes from")
 
 
 class DiceRollDisplay(BaseModel):
-    """Display information for a dice roll."""
+    """Display information for a dice roll.
+
+    Attributes:
+        dice_str: Dice notation for the roll.
+        results: Individual die results.
+        bonus: Total numerical bonus applied to the roll.
+        total: Final roll total.
+        all_d20_rolls: All d20 values rolled for advantage or disadvantage.
+        d20_used: D20 value used for the final result.
+        advantage_status: Advantage state captured for the roll.
+    """
+
     dice_str: str = Field(description="Dice notation (e.g., '1d6', 'd20')")
     results: List[int] = Field(default_factory=list, description="Individual die results")
     bonus: int = Field(default=0, description="Total bonus applied to roll")
     total: int = Field(description="Final total of roll")
-
-    # For advantage/disadvantage on d20 rolls
     all_d20_rolls: Optional[List[int]] = Field(
         default=None,
-        description="All d20 rolls when advantage/disadvantage applies"
+        description="All d20 rolls when advantage or disadvantage applies.",
     )
     d20_used: Optional[int] = Field(
         default=None,
-        description="Which d20 result was used (for adv/dis)"
+        description="D20 result used for the final roll total.",
     )
     advantage_status: Optional[str] = Field(
         default=None,
-        description="'advantage', 'disadvantage', or None"
+        description="Advantage state: advantage, disadvantage, or None.",
     )
 
 
 class DamageRollDisplay(BaseModel):
-    """Display information for a damage roll."""
+    """Display information for a damage roll.
+
+    Attributes:
+        dice_str: Dice notation for the damage roll.
+        dice_results: Individual damage die results.
+        bonus: Total damage bonus.
+        total: Final damage total.
+        damage_type: Damage type label.
+        bonus_breakdown: Modifier breakdown for the damage bonus.
+    """
+
     dice_str: str = Field(description="Dice notation (e.g., '1d6', '2d8')")
     dice_results: List[int] = Field(default_factory=list, description="Individual die results")
     bonus: int = Field(default=0, description="Damage bonus")
@@ -77,244 +104,366 @@ class DamageRollDisplay(BaseModel):
     damage_type: str = Field(description="Type of damage (slashing, fire, etc.)")
     bonus_breakdown: List[ModifierBreakdown] = Field(
         default_factory=list,
-        description="Breakdown of damage bonus modifiers"
+        description="Breakdown of damage bonus modifiers",
     )
 
 
 class AttackLogData(BaseModel):
-    """Structured attack data for programmatic access."""
-    attacker_name: str
-    attacker_uuid: str
-    target_name: str
-    target_uuid: str
-    weapon_name: str
-    weapon_slot: Optional[str] = None
+    """Structured attack data for programmatic access.
 
-    # Attack roll details
-    attack_roll: DiceRollDisplay
-    attack_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
+    Attributes:
+        attacker_name: Display name of the attacking entity.
+        attacker_uuid: UUID string of the attacking entity.
+        target_name: Display name of the attacked entity.
+        target_uuid: UUID string of the attacked entity.
+        weapon_name: Display name of the weapon used.
+        weapon_slot: Equipment slot used for the attack, if known.
+        attack_roll: Attack roll display data.
+        attack_breakdown: Modifiers contributing to the attack roll.
+        target_ac: Armor Class used as the attack DC.
+        ac_breakdown: Modifiers contributing to the target Armor Class.
+        outcome: Attack outcome label.
+        is_hit: Whether the attack hit.
+        is_crit: Whether the attack was a critical hit.
+        damage_rolls: Damage rolls produced by the hit.
+        total_damage: Total damage dealt by the attack.
+        target_hp: Target HP after damage resolution, if known.
+        advantage_breakdown: Advantage and disadvantage sources.
+        is_opportunity_attack: Whether the attack was an opportunity attack.
+        is_long_range: Whether the attack used long-range penalties.
+        is_threatened: Whether the attacker was threatened while attacking.
+    """
 
-    # Target AC
-    target_ac: int
-    ac_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-
-    # Outcome
-    outcome: str  # "hit", "miss", "crit", "crit_miss"
-    is_hit: bool
-    is_crit: bool
-
-    # Damage (only on hit)
-    damage_rolls: List[DamageRollDisplay] = Field(default_factory=list)
-    total_damage: int = 0
-
-    # Target HP after attack
-    target_hp: Optional[int] = None
-
-    # Advantage/disadvantage breakdown
-    advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-
-    # Flags
-    is_opportunity_attack: bool = False
-    is_long_range: bool = False
-    is_threatened: bool = False
+    attacker_name: str = Field(description="Display name of the attacking entity.")
+    attacker_uuid: str = Field(description="UUID string of the attacking entity.")
+    target_name: str = Field(description="Display name of the attacked entity.")
+    target_uuid: str = Field(description="UUID string of the attacked entity.")
+    weapon_name: str = Field(description="Display name of the weapon used.")
+    weapon_slot: Optional[str] = Field(default=None, description="Equipment slot used for the attack, if known.")
+    attack_roll: DiceRollDisplay = Field(description="Attack roll display data.")
+    attack_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Modifiers contributing to the attack roll.",
+    )
+    target_ac: int = Field(description="Armor Class used as the attack DC.")
+    ac_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Modifiers contributing to the target Armor Class.",
+    )
+    outcome: str = Field(description="Attack outcome label: hit, miss, crit, or crit_miss.")
+    is_hit: bool = Field(description="Whether the attack hit.")
+    is_crit: bool = Field(description="Whether the attack was a critical hit.")
+    damage_rolls: List[DamageRollDisplay] = Field(default_factory=list, description="Damage rolls produced by the hit.")
+    total_damage: int = Field(default=0, description="Total damage dealt by the attack.")
+    target_hp: Optional[int] = Field(default=None, description="Target HP after damage resolution, if known.")
+    advantage_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Advantage and disadvantage sources.",
+    )
+    is_opportunity_attack: bool = Field(default=False, description="Whether the attack was an opportunity attack.")
+    is_long_range: bool = Field(default=False, description="Whether the attack used long-range penalties.")
+    is_threatened: bool = Field(default=False, description="Whether the attacker was threatened while attacking.")
 
 
 class MovementLogData(BaseModel):
-    """Structured movement data for programmatic access."""
-    entity_name: str
-    entity_uuid: str
-    start_position: Tuple[int, int]
-    end_position: Tuple[int, int]
-    path: List[Tuple[int, int]] = Field(default_factory=list)
-    distance_feet: int = 0
-    movement_cost: int = 0
+    """Structured movement data for programmatic access.
+
+    Attributes:
+        entity_name: Display name of the moving entity.
+        entity_uuid: UUID string of the moving entity.
+        start_position: Starting grid position.
+        end_position: Ending grid position.
+        path: Path cells traversed by the movement.
+        distance_feet: Movement distance in feet.
+        movement_cost: Action-economy movement cost in feet.
+    """
+
+    entity_name: str = Field(description="Display name of the moving entity.")
+    entity_uuid: str = Field(description="UUID string of the moving entity.")
+    start_position: Tuple[int, int] = Field(description="Starting grid position.")
+    end_position: Tuple[int, int] = Field(description="Ending grid position.")
+    path: List[Tuple[int, int]] = Field(default_factory=list, description="Path cells traversed by the movement.")
+    distance_feet: int = Field(default=0, description="Movement distance in feet.")
+    movement_cost: int = Field(default=0, description="Action-economy movement cost in feet.")
 
 
 class SavingThrowLogData(BaseModel):
-    """Structured saving throw data."""
-    entity_name: str
-    entity_uuid: str
-    ability: str  # "strength", "dexterity", etc.
-    dc: int
-    roll: DiceRollDisplay
-    bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-    advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-    success: bool
-    source_name: Optional[str] = None  # What caused the save
+    """Structured saving throw data.
+
+    Attributes:
+        entity_name: Display name of the saving entity.
+        entity_uuid: UUID string of the saving entity.
+        ability: Ability used for the saving throw.
+        dc: Difficulty Class for the save.
+        roll: Saving throw roll display data.
+        bonus_breakdown: Modifiers contributing to the save.
+        advantage_breakdown: Advantage and disadvantage sources.
+        success: Whether the save succeeded.
+        source_name: Display name of the effect that requested the save.
+    """
+
+    entity_name: str = Field(description="Display name of the saving entity.")
+    entity_uuid: str = Field(description="UUID string of the saving entity.")
+    ability: str = Field(description="Ability used for the saving throw.")
+    dc: int = Field(description="Difficulty Class for the save.")
+    roll: DiceRollDisplay = Field(description="Saving throw roll display data.")
+    bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list, description="Modifiers contributing to the save.")
+    advantage_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Advantage and disadvantage sources.",
+    )
+    success: bool = Field(description="Whether the save succeeded.")
+    source_name: Optional[str] = Field(default=None, description="Display name of the effect that requested the save.")
 
 
 class SpellSaveLogData(BaseModel):
-    """Structured data for save-based spell effects (single target)."""
-    caster_name: str
-    caster_uuid: str
-    target_name: str
-    target_uuid: str
-    spell_name: str
-    spell_level: int = 0
+    """Structured data for a single save-based spell target.
 
-    # Save info
-    save_ability: str  # "dexterity", "wisdom", etc.
-    save_dc: int
-    save_roll: DiceRollDisplay
-    save_bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-    save_advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-    save_success: bool
+    Attributes:
+        caster_name: Display name of the spellcaster.
+        caster_uuid: UUID string of the spellcaster.
+        target_name: Display name of the spell target.
+        target_uuid: UUID string of the spell target.
+        spell_name: Display name of the spell.
+        spell_level: Slot level or spell level used for display.
+        save_ability: Ability used for the saving throw.
+        save_dc: Difficulty Class for the spell save.
+        save_roll: Saving throw roll display data.
+        save_bonus_breakdown: Modifiers contributing to the save.
+        save_advantage_breakdown: Advantage and disadvantage sources.
+        save_success: Whether the target succeeded on the save.
+        damage_rolls: Damage rolls before save adjustment.
+        base_damage: Damage before save-based reduction.
+        final_damage: Damage after save-based reduction.
+        damage_type: Damage type label.
+        target_hp_after: Target HP after spell resolution, if known.
+    """
 
-    # Damage info
-    damage_rolls: List[DamageRollDisplay] = Field(default_factory=list)
-    base_damage: int = 0  # Before save halving
-    final_damage: int = 0  # After save halving
-    damage_type: str = ""
-
-    # Target state after
-    target_hp_after: Optional[int] = None
+    caster_name: str = Field(description="Display name of the spellcaster.")
+    caster_uuid: str = Field(description="UUID string of the spellcaster.")
+    target_name: str = Field(description="Display name of the spell target.")
+    target_uuid: str = Field(description="UUID string of the spell target.")
+    spell_name: str = Field(description="Display name of the spell.")
+    spell_level: int = Field(default=0, description="Slot level or spell level used for display.")
+    save_ability: str = Field(description="Ability used for the saving throw.")
+    save_dc: int = Field(description="Difficulty Class for the spell save.")
+    save_roll: DiceRollDisplay = Field(description="Saving throw roll display data.")
+    save_bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list, description="Modifiers contributing to the save.")
+    save_advantage_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Advantage and disadvantage sources.",
+    )
+    save_success: bool = Field(description="Whether the target succeeded on the save.")
+    damage_rolls: List[DamageRollDisplay] = Field(default_factory=list, description="Damage rolls before save adjustment.")
+    base_damage: int = Field(default=0, description="Damage before save-based reduction.")
+    final_damage: int = Field(default=0, description="Damage after save-based reduction.")
+    damage_type: str = Field(default="", description="Damage type label.")
+    target_hp_after: Optional[int] = Field(default=None, description="Target HP after spell resolution, if known.")
 
 
 class SkillCheckLogData(BaseModel):
-    """Structured skill check data."""
-    entity_name: str
-    entity_uuid: str
-    skill: str  # "perception", "stealth", etc.
-    dc: Optional[int] = None  # May not have a DC
-    roll: DiceRollDisplay
-    bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-    advantage_breakdown: List[ModifierBreakdown] = Field(default_factory=list)
-    success: Optional[bool] = None  # Only set if there's a DC
+    """Structured skill check data.
+
+    Attributes:
+        entity_name: Display name of the checking entity.
+        entity_uuid: UUID string of the checking entity.
+        skill: Skill used for the check.
+        dc: Difficulty Class, when the check has one.
+        roll: Skill check roll display data.
+        bonus_breakdown: Modifiers contributing to the check.
+        advantage_breakdown: Advantage and disadvantage sources.
+        success: Whether the check succeeded, when a DC exists.
+    """
+
+    entity_name: str = Field(description="Display name of the checking entity.")
+    entity_uuid: str = Field(description="UUID string of the checking entity.")
+    skill: str = Field(description="Skill used for the check.")
+    dc: Optional[int] = Field(default=None, description="Difficulty Class, when the check has one.")
+    roll: DiceRollDisplay = Field(description="Skill check roll display data.")
+    bonus_breakdown: List[ModifierBreakdown] = Field(default_factory=list, description="Modifiers contributing to the check.")
+    advantage_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Advantage and disadvantage sources.",
+    )
+    success: Optional[bool] = Field(default=None, description="Whether the check succeeded, when a DC exists.")
 
 
 class EntitySpottedLogData(BaseModel):
-    """Structured data for when an observer spots a hiding entity."""
-    observer_name: str
-    observer_uuid: str
-    target_name: str
-    target_uuid: str
-    target_position: Tuple[int, int]
-    passive_perception: int
-    stealth_dc: int
+    """Structured data for when an observer spots a hiding entity.
+
+    Attributes:
+        observer_name: Display name of the observer.
+        observer_uuid: UUID string of the observer.
+        target_name: Display name of the spotted entity.
+        target_uuid: UUID string of the spotted entity.
+        target_position: Grid position where the entity was spotted.
+        passive_perception: Passive Perception score that detected the entity.
+        stealth_dc: Stealth DC that was beaten.
+    """
+
+    observer_name: str = Field(description="Display name of the observer.")
+    observer_uuid: str = Field(description="UUID string of the observer.")
+    target_name: str = Field(description="Display name of the spotted entity.")
+    target_uuid: str = Field(description="UUID string of the spotted entity.")
+    target_position: Tuple[int, int] = Field(description="Grid position where the entity was spotted.")
+    passive_perception: int = Field(description="Passive Perception score that detected the entity.")
+    stealth_dc: int = Field(description="Stealth DC that was beaten.")
 
 
 class HazardDetectedLogData(BaseModel):
-    """Structured data for when an observer detects a hidden hazard."""
-    observer_name: str
-    observer_uuid: str
-    hazard_name: str
-    position: Tuple[int, int]
-    passive_perception: int
-    stealth_dc: int
+    """Structured data for when an observer detects a hidden hazard.
+
+    Attributes:
+        observer_name: Display name of the observer.
+        observer_uuid: UUID string of the observer.
+        hazard_name: Display name of the detected hazard.
+        position: Grid position of the hazard.
+        passive_perception: Passive Perception score that detected the hazard.
+        stealth_dc: Stealth DC that was beaten.
+    """
+
+    observer_name: str = Field(description="Display name of the observer.")
+    observer_uuid: str = Field(description="UUID string of the observer.")
+    hazard_name: str = Field(description="Display name of the detected hazard.")
+    position: Tuple[int, int] = Field(description="Grid position of the hazard.")
+    passive_perception: int = Field(description="Passive Perception score that detected the hazard.")
+    stealth_dc: int = Field(description="Stealth DC that was beaten.")
 
 
 class HealLogData(BaseModel):
-    """Structured data for healing events."""
-    entity_name: str
-    entity_uuid: str
-    amount: int
-    source_description: str
+    """Structured data for healing events.
+
+    Attributes:
+        entity_name: Display name of the healed entity.
+        entity_uuid: UUID string of the healed entity.
+        amount: Healing amount.
+        source_description: Description of the healing source.
+    """
+
+    entity_name: str = Field(description="Display name of the healed entity.")
+    entity_uuid: str = Field(description="UUID string of the healed entity.")
+    amount: int = Field(description="Healing amount.")
+    source_description: str = Field(description="Description of the healing source.")
 
 
 class SelfActionLogData(BaseModel):
-    """Structured data for self-targeting actions."""
-    entity_name: str
-    entity_uuid: str
-    action_name: str
-    effect_description: str
+    """Structured data for self-targeting actions.
+
+    Attributes:
+        entity_name: Display name of the acting entity.
+        entity_uuid: UUID string of the acting entity.
+        action_name: Display name of the self-targeting action.
+        effect_description: Description of the action effect.
+    """
+
+    entity_name: str = Field(description="Display name of the acting entity.")
+    entity_uuid: str = Field(description="UUID string of the acting entity.")
+    action_name: str = Field(description="Display name of the self-targeting action.")
+    effect_description: str = Field(description="Description of the action effect.")
 
 
 class TurnLogData(BaseModel):
-    """Structured data for turn start/end events."""
-    entity_name: str
-    entity_uuid: str
-    round_number: int
-    turn_index: int
+    """Structured data for turn start and end events.
+
+    Attributes:
+        entity_name: Display name of the turn entity.
+        entity_uuid: UUID string of the turn entity.
+        round_number: Encounter round number.
+        turn_index: Encounter initiative index.
+    """
+
+    entity_name: str = Field(description="Display name of the turn entity.")
+    entity_uuid: str = Field(description="UUID string of the turn entity.")
+    round_number: int = Field(description="Encounter round number.")
+    turn_index: int = Field(description="Encounter initiative index.")
 
 
 class MultiEntityLogData(BaseModel):
-    """Structured data for multi-target actions (AoE spells, Magic Missile, etc.)."""
-    action_name: str
-    caster_name: str
+    """Structured data for multi-target actions.
 
-    # Targeting info
-    total_targets: int = 0
-    target_names: List[str] = Field(default_factory=list)
+    Attributes:
+        action_name: Display name of the action.
+        caster_name: Display name of the action source.
+        total_targets: Number of targets affected.
+        target_names: Display names of affected targets.
+        total_damage: Total damage across all targets.
+        per_target_damage: Damage totals per target.
+        saves_succeeded: Count of successful target saves.
+        saves_failed: Count of failed target saves.
+        per_target_logs: Structured per-target log payloads.
+        aoe_shape: Area-of-effect shape label, if applicable.
+        aoe_center: Area-of-effect origin or center, if applicable.
+    """
 
-    # Damage aggregation
-    total_damage: int = 0
-    per_target_damage: List[int] = Field(default_factory=list)
-
-    # Save info (for save-based spells)
-    saves_succeeded: int = 0
-    saves_failed: int = 0
-
-    # Per-target logs for detailed/programmatic access
-    per_target_logs: List[Optional[Dict[str, Any]]] = Field(default_factory=list)
-
-    # AoE-specific (optional)
-    aoe_shape: Optional[str] = None  # "Sphere", "Cone", "Line", "Cube"
-    aoe_center: Optional[Tuple[int, int]] = None
-
+    action_name: str = Field(description="Display name of the action.")
+    caster_name: str = Field(description="Display name of the action source.")
+    total_targets: int = Field(default=0, description="Number of targets affected.")
+    target_names: List[str] = Field(default_factory=list, description="Display names of affected targets.")
+    total_damage: int = Field(default=0, description="Total damage across all targets.")
+    per_target_damage: List[int] = Field(default_factory=list, description="Damage totals per target.")
+    saves_succeeded: int = Field(default=0, description="Count of successful target saves.")
+    saves_failed: int = Field(default=0, description="Count of failed target saves.")
+    per_target_logs: List[Optional[Dict[str, Any]]] = Field(
+        default_factory=list,
+        description="Structured per-target log payloads.",
+    )
+    aoe_shape: Optional[str] = Field(default=None, description="Area-of-effect shape label, if applicable.")
+    aoe_center: Optional[Tuple[int, int]] = Field(default=None, description="Area-of-effect origin or center, if applicable.")
 
 
 class CombatLogEntry(BaseModel):
-    """
-    A single combat log entry that can be generated by any event.
+    """A single combat-log entry generated by an event.
 
     Contains human-readable text at three verbosity levels and structured data
-    for programmatic access.
+    for programmatic access. Text fields support Rich-style markdown such as
+    bold spans and `{color:text}` color tags.
 
-    Text fields support markdown-style formatting for Rich rendering:
-    - **text** -> bold
-    - *text* -> italic
-    - {color:text} -> colored text (e.g., {cyan:Hero}, {red:MISS})
+    Attributes:
+        entry_type: Category of combat-log entry.
+        source_name: Display name of the acting entity or source.
+        source_uuid: UUID string of the acting entity or source.
+        target_name: Display name of the target, if any.
+        target_uuid: UUID string of the target, if any.
+        compact: One-line markdown summary.
+        verbose: Summary plus key details.
+        detailed: Full breakdown text.
+        data: Type-specific structured payload.
+        success: Success indicator for attacks, saves, and checks.
+        sub_entries: Nested combat-log entries from child events.
+        perceiver_uuids: Entity UUID strings that could perceive the event.
+        revealed_entity_uuids: Entity UUID strings revealed during the event chain.
     """
-    entry_type: CombatLogEntryType
 
-    # Actor info
-    source_name: str
-    source_uuid: str
-    target_name: Optional[str] = None
-    target_uuid: Optional[str] = None
-
-    # Three verbosity levels - contain markdown for rich formatting
+    entry_type: CombatLogEntryType = Field(description="Category of combat-log entry.")
+    source_name: str = Field(description="Display name of the acting entity or source.")
+    source_uuid: str = Field(description="UUID string of the acting entity or source.")
+    target_name: Optional[str] = Field(default=None, description="Display name of the target, if any.")
+    target_uuid: Optional[str] = Field(default=None, description="UUID string of the target, if any.")
     compact: str = Field(
-        description="One-line summary with markdown (e.g., '{cyan:Hero} hits {yellow:Skeleton}')"
+        description="One-line summary with markdown (e.g., '{cyan:Hero} hits {yellow:Skeleton}')",
     )
     verbose: str = Field(
-        description="Summary + key details with markdown"
+        description="Summary plus key details with markdown.",
     )
     detailed: str = Field(
-        description="Full breakdown with all modifiers"
+        description="Full breakdown with all modifiers.",
     )
-
-    # Structured data - type depends on entry_type
-    # Using Dict for flexibility, cast to specific types as needed
     data: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Type-specific structured data (AttackLogData, MovementLogData, etc.)"
+        description="Type-specific structured data (AttackLogData, MovementLogData, etc.).",
     )
-
-    # Success indicator (for attacks, saves, checks)
-    success: Optional[bool] = None
-
-    # Hierarchical sub-entries (for parent events that have children)
-    # Supports recursive nesting (sub-entries can have sub-entries)
+    success: Optional[bool] = Field(default=None, description="Success indicator for attacks, saves, and checks.")
     sub_entries: List["CombatLogEntry"] = Field(
         default_factory=list,
-        description="Combat log entries from child events, in order"
+        description="Combat-log entries from child events, in order.",
     )
-
-    # Temporal visibility: which entity UUIDs could perceive this event
-    # at the time it happened (stamped at COMPLETION phase).
-    # Empty set = legacy entry (show to everyone).
     perceiver_uuids: Set[str] = Field(
         default_factory=set,
-        description="Entity UUIDs that could perceive this event when it happened"
+        description="Entity UUIDs that could perceive this event when it happened.",
     )
-
-    # Entities revealed (Hidden/Invisible removed) during this event chain.
-    # Used by CLI log_filter to avoid anonymizing entities that were revealed
-    # mid-event (e.g., AoE damage breaks Hidden on a target).
     revealed_entity_uuids: Set[str] = Field(
         default_factory=set,
-        description="Entity UUIDs revealed (Hidden/Invisible removed) during this event chain"
+        description="Entity UUIDs revealed during this event chain.",
     )
 
     def get_text(self, verbosity: CombatLogVerbosity) -> str:
@@ -323,8 +472,7 @@ class CombatLogEntry(BaseModel):
             return self.compact
         elif verbosity == CombatLogVerbosity.VERBOSE:
             return self.verbose
-        else:  # DETAILED
-            return self.detailed
+        return self.detailed
 
     def get_text_with_children(
         self,
@@ -349,7 +497,6 @@ class CombatLogEntry(BaseModel):
         lines = [prefix + text_field]
 
         for sub_entry in self.sub_entries:
-            # Recursive call handles nested sub-entries
             lines.append(sub_entry.get_text_with_children(verbosity, indent_str, depth + 1))
 
         return "\n".join(lines)
@@ -359,10 +506,6 @@ class CombatLogEntry(BaseModel):
         return self.model_dump(mode='json')
 
 
-# =============================================================================
-# Helper Functions for Building Log Entries
-# =============================================================================
-
 def format_attack_roll_line(
     roll: DiceRollDisplay,
     attack_breakdown: List[ModifierBreakdown],
@@ -370,11 +513,18 @@ def format_attack_roll_line(
     ac_breakdown: List[ModifierBreakdown],
     outcome: str
 ) -> str:
+    """Format an attack roll line.
+
+    Args:
+        roll: Attack roll display data.
+        attack_breakdown: Modifiers contributing to the attack roll.
+        target_ac: Target Armor Class.
+        ac_breakdown: Modifiers contributing to the target Armor Class.
+        outcome: Attack outcome label.
+
+    Returns:
+        Text like `d20(15) +4 [Prof +2] = 19 vs AC 13 -> HIT`.
     """
-    Format the attack roll line:
-    d20(15) +4 [Prof +2, DEX +2] = 19 vs AC 13 [Armor +13] → HIT
-    """
-    # Build d20 roll string
     if roll.advantage_status == "advantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
         d20_str = f"ADV d20({roll.all_d20_rolls[0]},{roll.all_d20_rolls[1]}→{roll.d20_used})"
     elif roll.advantage_status == "disadvantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
@@ -383,10 +533,8 @@ def format_attack_roll_line(
         d20_val = roll.d20_used if roll.d20_used is not None else (roll.results[0] if roll.results else "?")
         d20_str = f"d20({d20_val})"
 
-    # Build bonus string
     bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
 
-    # Build attack breakdown
     if attack_breakdown:
         atk_breakdown_str = " [" + ", ".join(
             f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in attack_breakdown
@@ -394,7 +542,6 @@ def format_attack_roll_line(
     else:
         atk_breakdown_str = ""
 
-    # Build AC breakdown
     if ac_breakdown:
         ac_breakdown_str = " [" + ", ".join(
             f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in ac_breakdown
@@ -402,7 +549,6 @@ def format_attack_roll_line(
     else:
         ac_breakdown_str = ""
 
-    # Outcome string
     outcome_map = {
         "hit": "HIT",
         "miss": "MISS",
@@ -415,9 +561,13 @@ def format_attack_roll_line(
 
 
 def format_damage_line(damage_rolls: List[DamageRollDisplay]) -> str:
-    """
-    Format the damage line:
-    1d6(5) +2 [DEX +2] = 7 slashing
+    """Format a damage roll summary line.
+
+    Args:
+        damage_rolls: Damage rolls to summarize.
+
+    Returns:
+        Text like `1d6(5) +2 [DEX +2] = 7 slashing`.
     """
     if not damage_rolls:
         return ""
@@ -449,11 +599,18 @@ def format_d20_roll_line(
     success: bool,
     label: str = ""
 ) -> str:
+    """Format a generic d20 roll line.
+
+    Args:
+        roll: D20 roll display data.
+        bonus_breakdown: Modifiers contributing to the roll.
+        dc: Difficulty Class.
+        success: Whether the check succeeded.
+        label: Optional prefix label.
+
+    Returns:
+        Text like `d20(8) +2 [DEX +2] = 10 vs DC 14 -> FAIL`.
     """
-    Format a generic d20 roll line:
-    d20(8) +2 [DEX +2] = 10 vs DC 14 → FAIL
-    """
-    # Build d20 roll string
     if roll.advantage_status == "advantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
         d20_str = f"ADV d20({roll.all_d20_rolls[0]},{roll.all_d20_rolls[1]}→{roll.d20_used})"
     elif roll.advantage_status == "disadvantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
@@ -462,10 +619,8 @@ def format_d20_roll_line(
         d20_val = roll.d20_used if roll.d20_used is not None else (roll.results[0] if roll.results else "?")
         d20_str = f"d20({d20_val})"
 
-    # Build bonus string
     bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
 
-    # Build breakdown
     if bonus_breakdown:
         breakdown_str = " [" + ", ".join(
             f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in bonus_breakdown
@@ -478,10 +633,6 @@ def format_d20_roll_line(
     prefix = f"{label}: " if label else ""
     return f"{prefix}{d20_str} {bonus_str}{breakdown_str} = {roll.total} vs DC {dc} → {result_str}"
 
-
-# =============================================================================
-# Markdown Formatting Helpers for Verbosity Levels
-# =============================================================================
 
 def md_color(text: str, color: str) -> str:
     """Wrap text in color markdown: {color:text}"""
@@ -582,7 +733,6 @@ def format_attack_verbose(
     """
     lines = []
 
-    # Header line
     header = f"{md_color(source_name, 'cyan')} → {md_color(target_name, 'yellow')} ({weapon_name})"
     if attack_roll.advantage_status == "advantage":
         header += f" {md_color('ADV', 'green')}"
@@ -590,14 +740,12 @@ def format_attack_verbose(
         header += f" {md_color('DIS', 'red')}"
     lines.append(header)
 
-    # Attack line
     attack_label = "Attack (OA)" if is_opportunity_attack else "Attack"
     d20_str = md_d20_roll(attack_roll)
     bonus_str = f"+{attack_roll.bonus}" if attack_roll.bonus >= 0 else str(attack_roll.bonus)
     outcome_md = md_outcome(outcome)
     lines.append(f"  {attack_label}: {d20_str} {bonus_str} = {attack_roll.total} vs AC {target_ac} → {outcome_md}")
 
-    # Damage line (only on hit)
     outcome_lower = outcome.lower()
     if outcome_lower in ("hit", "crit") and damage_rolls and total_damage > 0:
         dr = damage_rolls[0]
@@ -631,7 +779,6 @@ def format_attack_detailed(
     """
     lines = []
 
-    # Header line
     header = f"{md_color(source_name, 'cyan')} → {md_color(target_name, 'yellow')} ({weapon_name})"
     if attack_roll.advantage_status == "advantage":
         header += f" {md_color('ADV', 'green')}"
@@ -639,7 +786,6 @@ def format_attack_detailed(
         header += f" {md_color('DIS', 'red')}"
     lines.append(header)
 
-    # Attack line with breakdowns
     attack_label = "Attack (OA)" if is_opportunity_attack else "Attack"
     d20_str = md_d20_roll(attack_roll)
     bonus_str = f"+{attack_roll.bonus}" if attack_roll.bonus >= 0 else str(attack_roll.bonus)
@@ -656,7 +802,6 @@ def format_attack_detailed(
     atk_line += f" → {outcome_md}"
     lines.append(atk_line)
 
-    # Damage line with breakdown (only on hit)
     outcome_lower = outcome.lower()
     if outcome_lower in ("hit", "crit") and damage_rolls and total_damage > 0:
         dr = damage_rolls[0]

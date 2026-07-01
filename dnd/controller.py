@@ -1,11 +1,7 @@
-"""
-Controller - Base class for entity control during encounters.
+"""Controller classes for entity turns during encounters.
 
-Controllers determine what actions an entity takes during their turn.
-Subclass this for different control modes:
-- HumanController: Waits for UI/input
-- AIController: Computes actions via AI/heuristics
-- ScriptedController: Follows a predefined action sequence
+Controllers decide whether an encounter turn should run autonomously or wait for
+external input, and may provide actions while the encounter owns turn flow.
 """
 
 from typing import Any, Optional, Dict, List, ClassVar, Protocol, runtime_checkable
@@ -14,7 +10,7 @@ __all__ = [
     "TurnContext",
     "Controller",
     "HumanController",
-    "ClaudeController",
+    "CodexController",
     "MeleeAIController",
     "TurnRunner",
     "AIAgentController",
@@ -23,51 +19,61 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_object import BaseObject
-from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import ActionCategory, BaseAction
 from dnd.actions_functional import get_available_actions
 from dnd.entity import Entity
 
 
 class TurnContext(BaseObject):
-    """
-    Context passed to controller during a turn.
+    """Context passed to a controller during a turn.
 
     Contains all the information a controller needs to make decisions
     without needing a reference to the Encounter itself.
+
+    Attributes:
+        entity_uuid: UUID of the entity whose turn it is.
+        round_number: Current encounter round number.
+        turn_index: Position in initiative order.
+        actions_remaining: Action count remaining.
+        bonus_actions_remaining: Bonus action count remaining.
+        reactions_remaining: Reaction count remaining.
+        movement_remaining: Movement remaining in feet.
+        visible_enemies: Visible enemy UUIDs mapped to positions.
+        visible_allies: Visible ally UUIDs mapped to positions.
     """
 
-    entity_uuid: UUID = Field(description="UUID of the entity whose turn it is")
-    round_number: int = Field(default=1, description="Current round number")
-    turn_index: int = Field(default=0, description="Position in initiative order")
-
-    # Action economy remaining
-    actions_remaining: int = Field(default=1)
-    bonus_actions_remaining: int = Field(default=1)
-    reactions_remaining: int = Field(default=1)
-    movement_remaining: int = Field(default=30)
-
-    # Visible entities (UUID -> position)
-    visible_enemies: Dict[UUID, tuple] = Field(default_factory=dict)
-    visible_allies: Dict[UUID, tuple] = Field(default_factory=dict)
-
+    entity_uuid: UUID = Field(description="UUID of the entity whose turn it is.")
+    round_number: int = Field(default=1, description="Current encounter round number.")
+    turn_index: int = Field(default=0, description="Position in initiative order.")
+    actions_remaining: int = Field(default=1, description="Action count remaining.")
+    bonus_actions_remaining: int = Field(default=1, description="Bonus action count remaining.")
+    reactions_remaining: int = Field(default=1, description="Reaction count remaining.")
+    movement_remaining: int = Field(default=30, description="Movement remaining in feet.")
+    visible_enemies: Dict[UUID, tuple] = Field(
+        default_factory=dict,
+        description="Visible enemy UUIDs mapped to positions.",
+    )
+    visible_allies: Dict[UUID, tuple] = Field(
+        default_factory=dict,
+        description="Visible ally UUIDs mapped to positions.",
+    )
 
 
 class Controller(BaseObject):
-    """
-    Base controller class for managing entity actions during encounters.
+    """Base controller for managing entity actions during encounters.
 
-    Controllers are responsible for:
-    1. Deciding what action an entity should take
-    2. Responding to turn lifecycle events
+    The base implementation returns ``None`` from ``get_next_action()``, which
+    signals that the turn should end.
 
-    The base implementation returns None from get_next_action,
-    which signals "end turn". Subclass to implement actual behavior.
+    Attributes:
+        name: Display name of this controller.
+        controller_type: Stable controller type identifier.
     """
 
     _controller_registry: ClassVar[Dict[UUID, 'Controller']] = {}
 
-    name: str = Field(default="Controller", description="Name of this controller")
-    controller_type: str = Field(default="base", description="Type identifier")
+    name: str = Field(default="Controller", description="Display name of this controller.")
+    controller_type: str = Field(default="base", description="Stable controller type identifier.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -75,17 +81,17 @@ class Controller(BaseObject):
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Controller']:
-        """Get a controller by UUID."""
+        """Return a controller by UUID."""
         return cls._controller_registry.get(uuid)
 
     @classmethod
     def get_all(cls) -> List['Controller']:
-        """Get all registered controllers."""
+        """Return all registered controllers."""
         return list(cls._controller_registry.values())
 
     @classmethod
     def clear_registry(cls) -> None:
-        """Clear the controller registry (for testing)."""
+        """Clear the controller registry."""
         cls._controller_registry.clear()
 
     def get_next_action(
@@ -93,53 +99,79 @@ class Controller(BaseObject):
         entity: Entity,
         context: TurnContext
     ) -> Optional[BaseAction]:
-        """
-        Get the next action for the entity to take.
+        """Return the next action for an entity.
 
         Called repeatedly during an entity's turn until:
-        - Returns None (signals end turn)
-        - Entity has no more action economy
-        - Turn is forcibly ended
+        - this method returns ``None``;
+        - the entity has no remaining action economy;
+        - the turn is forcibly ended.
 
         Args:
-            entity: The entity whose turn it is
-            context: Turn context with action economy, visible entities, etc.
+            entity: Entity whose turn it is.
+            context: Turn context with action economy and visible entities.
 
         Returns:
-            BaseAction to execute, or None to end the turn
+            Action to execute, or ``None`` to end the turn.
         """
         return None
 
     def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
-        """Called when the entity's turn starts."""
+        """Handle turn start notification.
+
+        Args:
+            entity: Entity whose turn started.
+            context: Turn context at start.
+        """
         pass
 
     def on_turn_end(self, entity: Entity, context: TurnContext) -> None:
-        """Called when the entity's turn ends."""
+        """Handle turn end notification.
+
+        Args:
+            entity: Entity whose turn ended.
+            context: Turn context at end.
+        """
         pass
 
     def on_encounter_start(self, entities: List[Entity]) -> None:
-        """Called when an encounter starts with entities this controller manages."""
+        """Handle encounter start notification.
+
+        Args:
+            entities: Entities controlled by this controller in the encounter.
+        """
         pass
 
     def on_encounter_end(self, entities: List[Entity]) -> None:
-        """Called when an encounter ends."""
+        """Handle encounter end notification.
+
+        Args:
+            entities: Entities controlled by this controller in the encounter.
+        """
         pass
 
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
-        """
-        Check if the controller wants to continue the turn.
+        """Return whether this controller wants to continue the turn.
 
-        Default: True (let encounter check action economy).
+        Args:
+            entity: Entity whose turn is running.
+            context: Current turn context.
+
+        Returns:
+            ``True`` when the encounter should ask for another action.
         """
         return True
 
 
 class PassController(Controller):
-    """A controller that always passes (ends turn immediately)."""
+    """Controller that always ends its turn immediately.
 
-    name: str = Field(default="Pass Controller")
-    controller_type: str = Field(default="pass")
+    Attributes:
+        name: Display name of this controller.
+        controller_type: Stable controller type identifier.
+    """
+
+    name: str = Field(default="Pass Controller", description="Display name of this controller.")
+    controller_type: str = Field(default="pass", description="Stable controller type identifier.")
 
     def get_next_action(
         self,
@@ -153,98 +185,105 @@ class PassController(Controller):
 
 
 class HumanController(Controller):
-    """
-    Controller for human-controlled entities.
+    """Controller for human-controlled entities.
 
     Actions come via external API calls, not from get_next_action.
     This controller immediately exits the run_turn loop so the server
     can wait for human input.
+
+    Attributes:
+        name: Display name of this controller.
+        controller_type: Stable controller type identifier.
     """
 
-    name: str = Field(default="Human Player")
-    controller_type: str = Field(default="human")
+    name: str = Field(default="Human Player", description="Display name of this controller.")
+    controller_type: str = Field(default="human", description="Stable controller type identifier.")
 
     def get_next_action(
         self,
         entity: Entity,
         context: TurnContext
     ) -> Optional[BaseAction]:
-        # Never returns actions - humans provide actions via API
         return None
 
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
-        # Always return False to exit run_turn loop immediately
-        # Server will handle human turn via API endpoints
         return False
 
 
-class ClaudeController(Controller):
-    """
-    Controller for Claude-controlled entities.
+class CodexController(Controller):
+    """Controller for Codex-controlled entities.
 
     Like HumanController, actions come via external API calls.
     Has its own controller_type for proper identification and debugging.
+
+    Attributes:
+        name: Display name of this controller.
+        controller_type: Stable controller type identifier.
     """
 
-    name: str = Field(default="Claude Controller")
-    controller_type: str = Field(default="claude")
+    name: str = Field(default="Codex Controller", description="Display name of this controller.")
+    controller_type: str = Field(default="codex", description="Stable controller type identifier.")
 
     def get_next_action(
         self,
         entity: Entity,
         context: TurnContext
     ) -> Optional[BaseAction]:
-        # Actions come via API, not from this method
         return None
 
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
-        # Return False to exit run_turn loop - server handles via API
         return False
 
 
 class MeleeAIController(Controller):
-    """
-    Simple AI that moves toward enemies and attacks in melee.
+    """Simple AI that moves toward enemies and attacks in melee.
 
-    Priority:
-    1. If enemy in weapon range -> Attack
-    2. If can still attack after moving -> Move closer, then Attack
-    3. Otherwise -> End turn
+    Priority order is attack when affordable, move closer when an action is
+    still available for a later attack, otherwise end the turn.
+
+    Attributes:
+        name: Display name of this controller.
+        controller_type: Stable controller type identifier.
     """
 
-    name: str = Field(default="Melee AI")
-    controller_type: str = Field(default="melee_ai")
+    name: str = Field(default="Melee AI", description="Display name of this controller.")
+    controller_type: str = Field(default="melee_ai", description="Stable controller type identifier.")
 
     def get_next_action(
         self,
         entity: Entity,
         context: TurnContext
     ) -> Optional[BaseAction]:
-        """Pick the next action based on available options."""
+        """Return the next attack or movement action based on visible enemies.
+
+        Args:
+            entity: Entity controlled by this AI.
+            context: Turn context containing visible enemy positions.
+
+        Returns:
+            Attack, movement action, or ``None`` when the AI should pass.
+        """
         available = get_available_actions(entity)
 
-        # Priority 1: Attack if we can
         for attack_info in available.entity_actions:
+            if attack_info.action_category != ActionCategory.ATTACK:
+                continue
             if attack_info.can_afford and attack_info.valid_targets:
                 target = attack_info.valid_targets[0]
                 if target.target_uuid is None:
                     continue
-                # Use the template to create an instance
                 template = entity.get_action_template(attack_info.template_name)
                 if template:
                     return template.instantiate(target_entity_uuid=target.target_uuid)
 
-        # Priority 2: Move toward enemy if we can still attack afterward
         can_still_attack = entity.action_economy.can_afford("actions", 1)
         if can_still_attack and available.position_actions:
             move_info = available.position_actions[0]
 
-            # Find closest position to any enemy
             closest_pos = None
             closest_dist = float('inf')
             current_min_dist = float('inf')
 
-            # Current distance to nearest enemy
             for enemy_uuid, enemy_pos in context.visible_enemies.items():
                 if enemy_uuid == entity.uuid:
                     continue
@@ -252,8 +291,6 @@ class MeleeAIController(Controller):
                 if dist < current_min_dist:
                     current_min_dist = dist
 
-            # Find position that gets us closer
-            # (valid_targets already excludes occupied cells via GridMap.compute_paths)
             for enemy_uuid, enemy_pos in context.visible_enemies.items():
                 if enemy_uuid == entity.uuid:
                     continue
@@ -271,7 +308,6 @@ class MeleeAIController(Controller):
                 if template:
                     return template.instantiate(end_position=closest_pos)
 
-        # No good action, end turn
         return None
 
 
@@ -286,10 +322,14 @@ class AIAgentController(Controller):
 
     The agent handles the entire turn internally via GameInterface,
     so this controller runs the agent once then signals turn end.
+
+    Attributes:
+        name: Display name of this controller.
+        controller_type: Stable controller type identifier.
     """
 
-    name: str = Field(default="AI Agent")
-    controller_type: str = Field(default="ai_agent")
+    name: str = Field(default="AI Agent", description="Display name of this controller.")
+    controller_type: str = Field(default="ai_agent", description="Stable controller type identifier.")
 
     _agents: ClassVar[Dict[UUID, TurnRunner]] = {}
     _has_run: ClassVar[Dict[UUID, bool]] = {}
@@ -299,6 +339,12 @@ class AIAgentController(Controller):
         self._agents[self.uuid] = agent
 
     def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
+        """Reset the delegated-run marker at turn start.
+
+        Args:
+            entity: Entity whose turn started.
+            context: Turn context at start.
+        """
         self._has_run[self.uuid] = False
 
     def get_next_action(
@@ -306,6 +352,15 @@ class AIAgentController(Controller):
         entity: Entity,
         context: TurnContext
     ) -> Optional[BaseAction]:
+        """Run the delegated agent once, then end the turn.
+
+        Args:
+            entity: Entity controlled by this controller.
+            context: Current turn context.
+
+        Returns:
+            Always ``None`` because the agent owns any turn actions.
+        """
         agent = self._agents.get(self.uuid)
         if agent:
             agent.run_turn()
@@ -313,4 +368,5 @@ class AIAgentController(Controller):
         return None
 
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
+        """Return whether the delegated agent has not yet run this turn."""
         return not self._has_run.get(self.uuid, False)

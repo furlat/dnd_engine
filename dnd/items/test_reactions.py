@@ -1,69 +1,91 @@
-"""Homebrew reaction definitions for testing the incremental senses / _paths_dirty system.
+"""Reaction fixtures for action setup and passive movement responses.
 
-Contains: Intercept (action-setup reaction) and Dodge Roll (passive reaction).
-These are NOT SRD rules — they're proof-of-concept reactions that validate
-per-cell walkability checks at reaction time, proving the _paths_dirty pattern works.
-
-Pattern examples, not final game mechanics.
+These engine extensions are not SRD rules. They exercise two reaction patterns:
+Prepare Intercept spends an action and movement to arm a one-round handler, and
+Dodge Roll installs a persistent handler that retreats from an incoming attack.
+Both validate path walkability when the reaction fires, so current grid state is
+authoritative after terrain or door changes.
 """
 
-from typing import Optional, List, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 from pydantic import Field
 
-from dnd.core.base_actions import BaseAction, ActionEvent, BaseCost, TargetType, Cost
+from dnd.core.base_actions import (
+    BaseAction,
+    ActionCategory,
+    ActionEvent,
+    BaseCost,
+    TargetType,
+    Cost,
+)
 from dnd.core.base_conditions import BaseCondition, DurationType
 from dnd.core.events import (
-    Event, EventPhase, EventType,
-    EventHandler, Trigger,
-    WeaponSlot, StepMovementEvent,
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+    WeaponSlot,
+    StepMovementEvent,
 )
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.actions import Attack, AttackEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
+from dnd.actions import (
+    Attack,
+    AttackEvent,
+    entity_action_economy_cost_evaluator,
+    entity_action_economy_cost_applier,
+)
 
-
-# =============================================================================
-# INTERCEPT — Action-Setup Reaction
-# =============================================================================
-# Pattern: Player spends 1 action + movement to declare a charge destination.
-# When an enemy steps INTO that cell, the interceptor charges there first,
-# occupying the cell and making a melee attack against the enemy (who is
-# still at from_position, one cell away). The step is canceled — the enemy
-# stops with remaining movement but can't enter the blocked cell.
 
 def create_intercept_processor(charge_destination: Tuple[int, int]):
-    """Create a closure-based processor that knows the declared charge destination."""
+    """Create a step-movement processor for a prepared intercept.
 
-    def intercept_processor(event: StepMovementEvent, source_entity_uuid: UUID) -> Optional[StepMovementEvent]:
+    Args:
+        charge_destination: Grid cell the interceptor attempts to occupy before
+            the mover enters it.
+
+    Returns:
+        Event processor that may cancel the triggering step movement.
+    """
+
+    def intercept_processor(
+        event: StepMovementEvent,
+        source_entity_uuid: UUID,
+    ) -> Optional[StepMovementEvent]:
+        """Resolve an intercept reaction against a single step movement event.
+
+        Args:
+            event: Step movement event currently being processed.
+            source_entity_uuid: Entity UUID that owns the prepared handler.
+
+        Returns:
+            The original event, or a canceled copy when the intercept blocks the
+            destination cell.
+        """
         interceptor = Entity.get(source_entity_uuid)
         mover = Entity.get(event.source_entity_uuid)
         if not interceptor or not mover:
             return event
 
-        # Don't intercept self or allies
         if interceptor.uuid == mover.uuid or interceptor.is_ally(mover):
             return event
 
-        # Already at destination (e.g., triggered earlier in same movement)
         if interceptor.position == charge_destination:
             return event
 
-        # Trigger: enemy stepping directly INTO the charge destination cell
         if event.to_position != charge_destination:
             return event
 
-        # Check reaction available
         if not interceptor.action_economy.can_afford("reactions", 1):
             return event
 
-        # Check we have a melee weapon
         weapon = interceptor.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)
         if weapon is None:
             return event
 
-        # Charge: straight line from current position toward charge_destination
         cdx = charge_destination[0] - interceptor.position[0]
         cdy = charge_destination[1] - interceptor.position[1]
         if cdx != 0:
@@ -75,20 +97,15 @@ def create_intercept_processor(charge_destination: Tuple[int, int]):
         current_pos = interceptor.position
         for _ in range(5):
             if current_pos == charge_destination:
-                break  # Arrived
+                break
             next_pos = (current_pos[0] + cdx, current_pos[1] + cdy)
-            # Per-step transition check reflects environment changes via _paths_dirty system.
             if not grid.can_transition(current_pos, next_pos, interceptor.uuid):
-                break  # Path blocked (e.g., door closed between preparation and trigger)
+                break
             Entity.update_entity_position(interceptor, next_pos, parent_event=event.uuid)
             current_pos = next_pos
 
-        # Refresh senses after charge so Attack's LOS validation sees the enemy
         interceptor.update_entity_senses()
 
-        # Enemy is at from_position (their current cell). Since a step is exactly
-        # 1 cell, from_position is always adjacent to to_position = charge_destination.
-        # If interceptor reached charge_destination, distance to from_position is 5ft.
         dist_after = interceptor.senses.get_feet_distance(event.from_position)
         if dist_after <= 5:
             reaction_attack = Attack(
@@ -98,74 +115,104 @@ def create_intercept_processor(charge_destination: Tuple[int, int]):
                 weapon_slot=WeaponSlot.MELEE_MAIN,
                 parent_event=event,
                 use_register=False,
-                costs=[Cost(
-                    name="Intercept Attack Cost",
-                    cost_type="reactions",
-                    cost=1,
-                    evaluator=entity_action_economy_cost_evaluator
-                )]
+                costs=[
+                    Cost(
+                        name="Intercept Attack Cost",
+                        cost_type="reactions",
+                        cost=1,
+                        evaluator=entity_action_economy_cost_evaluator,
+                    )
+                ],
             )
             if reaction_attack.pre_validate():
                 reaction_attack.add_to_register()
                 reaction_attack.apply(parent_event=event)
         else:
-            # Charged but couldn't reach — consume reaction anyway (attempt was made)
             interceptor.action_economy.consume("reactions", 1)
 
-        # Remove Intercepting condition (and its handler) after firing.
-        # Charge was attempted — whether it reached the destination or not, intercept is spent.
         if "Intercepting" in interceptor.active_conditions:
             interceptor.remove_condition("Intercepting")
 
-        # If interceptor reached the charge destination, cancel the step so the enemy
-        # stays at from_position. The cancel propagates through EventQueue.register() →
-        # post() → processed_step.canceled check in Move._apply().
         if interceptor.position == charge_destination:
-            return event.cancel(status_message="Intercepted — path blocked")
+            return event.cancel(status_message="Intercepted: path blocked")
         return event
 
     return intercept_processor
 
 
 def create_intercept_handler(source_entity_uuid: UUID, charge_destination: Tuple[int, int]) -> EventHandler:
-    """Create an intercept handler that triggers on STEP_MOVEMENT events."""
+    """Create a handler that reacts to step movement entering the prepared cell.
+
+    Args:
+        source_entity_uuid: Entity UUID that owns the handler.
+        charge_destination: Grid cell that triggers the intercept attempt.
+
+    Returns:
+        Toggleable event handler bound to `STEP_MOVEMENT` effect events.
+    """
     return EventHandler(
         name="Intercept",
         source_entity_uuid=source_entity_uuid,
-        trigger_conditions=[Trigger(
-            name="Intercept Trigger",
-            event_type=EventType.STEP_MOVEMENT,
-            event_phase=EventPhase.EFFECT
-        )],
+        trigger_conditions=[
+            Trigger(
+                name="Intercept Trigger",
+                event_type=EventType.STEP_MOVEMENT,
+                event_phase=EventPhase.EFFECT,
+            )
+        ],
         event_processor=create_intercept_processor(charge_destination),
-        player_toggleable=True
+        player_toggleable=True,
     )
 
 
 class Intercepting(BaseCondition):
     """Prepared to intercept approaching enemies at a declared charge destination.
 
-    Applied by PrepareIntercept action. Costs 1 reaction when triggered.
-    1-round duration (expires at start of next turn).
+    Attributes:
+        name: Condition registry key.
+        description: Short player-facing summary.
+        charge_destination: Grid cell the owner attempts to occupy when the
+            handler fires.
     """
-    name: str = "Intercepting"
-    description: str = "Ready to charge and attack approaching enemies"
-    charge_destination: Tuple[int, int] = Field(description="Declared charge target cell")
+    name: str = Field(
+        default="Intercepting",
+        description="Condition registry key for a prepared intercept.",
+    )
+    description: str = Field(
+        default="Ready to charge and attack approaching enemies",
+        description="Player-facing summary for the prepared intercept condition.",
+    )
+    charge_destination: Tuple[int, int] = Field(
+        description="Grid cell the owner attempts to occupy when the intercept fires.",
+    )
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Install the intercept movement handler.
+
+        Args:
+            declaration_event: Condition application event in progress.
+
+        Returns:
+            Condition application bookkeeping and the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID is not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [], [], [], [], declaration_event.cancel(
+                status_message=f"Target entity {self.target_entity_uuid} not found",
+            )
 
         handler = create_intercept_handler(target.uuid, self.charge_destination)
         target.add_event_handler(handler)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"Applied Intercepting to {target.name} (destination: {self.charge_destination})"
+            status_message=f"Applied Intercepting to {target.name} (destination: {self.charge_destination})",
         )
         return [], [handler.uuid], [], [], effect_event
 
@@ -173,19 +220,56 @@ class Intercepting(BaseCondition):
 class PrepareIntercept(BaseAction):
     """Prepare to intercept enemies near a declared position.
 
-    Costs 1 action + movement (distance to charge destination in feet).
-    Player selects a cell up to 5 cells away in a straight line (cardinal or diagonal).
-    All cells on the path must be walkable. Applies Intercepting condition (1 round).
+    Attributes:
+        name: Action discovery and combat-log label.
+        description: Short player-facing summary.
+        target_type: Position targeting mode used by discovery.
+        action_category: Broad action classification.
+        costs: Action economy costs paid by the preparatory action.
     """
-    name: str = Field(default="Prepare Intercept")
-    description: str = Field(default="Declare a charge destination to intercept approaching enemies")
-    target_type: TargetType = Field(default=TargetType.POSITION_LOS)
-    action_category: str = "ability"
-    costs: List[Cost] = Field(default_factory=lambda: [
-        Cost(name="Intercept Action Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    name: str = Field(
+        default="Prepare Intercept",
+        description="Action discovery and combat-log label.",
+    )
+    description: str = Field(
+        default="Declare a charge destination to intercept approaching enemies",
+        description="Player-facing summary for preparing an intercept.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.POSITION_LOS,
+        description="Position targeting mode used to choose the charge destination.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ABILITY,
+        description="Broad action classification for discovery and UI layers.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=lambda: [
+            Cost(
+                name="Intercept Action Cost",
+                cost_type="actions",
+                cost=1,
+                evaluator=entity_action_economy_cost_evaluator,
+            )
+        ],
+        description="Action economy costs paid when preparing an intercept.",
+    )
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
+    def _create_declaration_event(
+        self,
+        parent_event: Optional[Event] = None,
+        use_register: bool = True,
+    ) -> Optional[ActionEvent]:
+        """Build the action declaration event for the preparation step.
+
+        Args:
+            parent_event: Optional parent event for event-tree nesting.
+            use_register: Whether the declaration should register with the
+                event queue.
+
+        Returns:
+            Declaration event targeting the preparing entity.
+        """
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -198,25 +282,31 @@ class PrepareIntercept(BaseAction):
             target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
             use_register=use_register,
-            source_entity_name=source_name
+            source_entity_name=source_name,
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        """Validate the requested charge destination and prepaid movement.
+
+        Args:
+            declaration_event: Declaration event to advance or cancel.
+
+        Returns:
+            Execution event when the declared line is legal, otherwise a
+            canceled declaration event.
+        """
         entity = Entity.get(self.source_entity_uuid)
         if not entity or not self.end_position:
             return declaration_event.cancel(status_message="Entity not found or no target position")
 
-        # Validate: straight line, max 5 cells
         dx = self.end_position[0] - entity.position[0]
         dy = self.end_position[1] - entity.position[1]
-        # Must be a straight line (cardinal or diagonal)
         if dx != 0 and dy != 0 and abs(dx) != abs(dy):
             return declaration_event.cancel(status_message="Must be a straight line")
         distance_cells = max(abs(dx), abs(dy))
         if distance_cells > 5 or distance_cells == 0:
             return declaration_event.cancel(status_message="Must be 1-5 cells away")
 
-        # Check all cells in the line are walkable
         grid = get_map()
         step_dx = (1 if dx > 0 else -1) if dx != 0 else 0
         step_dy = (1 if dy > 0 else -1) if dy != 0 else 0
@@ -227,7 +317,6 @@ class PrepareIntercept(BaseAction):
                 return declaration_event.cancel(status_message=f"Path blocked at {next_pos}")
             current = next_pos
 
-        # Check enough movement
         distance_feet = distance_cells * 5
         remaining = entity.action_economy.movement.normalized_score
         if remaining < distance_feet:
@@ -235,22 +324,29 @@ class PrepareIntercept(BaseAction):
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+            status_message=f"Validated {self.name}",
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        """Apply movement prepayment and install the one-round condition.
+
+        Args:
+            execution_event: Validated execution event.
+
+        Returns:
+            Completion event when the condition is installed, otherwise a
+            canceled event.
+        """
         entity = Entity.get(self.source_entity_uuid)
         if not entity or not self.end_position:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Consume movement cost (pre-pay the charge distance)
         distance_cells = max(
             abs(self.end_position[0] - entity.position[0]),
-            abs(self.end_position[1] - entity.position[1])
+            abs(self.end_position[1] - entity.position[1]),
         )
         entity.action_economy.consume("movement", distance_cells * 5)
 
-        # Apply Intercepting condition with the declared destination
         intercepting = Intercepting(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
@@ -263,35 +359,42 @@ class PrepareIntercept(BaseAction):
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            status_message=f"Prepared Intercept at {self.end_position}"
+            status_message=f"Prepared Intercept at {self.end_position}",
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Spend the action cost after successful completion.
+
+        Args:
+            completion_event: Completed action event.
+
+        Returns:
+            Completion event after action-economy cost application.
+        """
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
-# =============================================================================
-# DODGE ROLL — Passive Reaction
-# =============================================================================
-# Pattern: Permanent condition applied via entity setup. When attacked,
-# moves up to 2 cells away from attacker and imposes disadvantage.
-
 def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """When attacked, move up to 2 cells away from attacker and impose disadvantage."""
+    """Move a defender away from an incoming attack and impose disadvantage.
+
+    Args:
+        event: Event currently being processed.
+        source_entity_uuid: Defender UUID that owns the dodge-roll handler.
+
+    Returns:
+        The original event after any movement and attack-bonus mutation.
+    """
     defender = Entity.get(source_entity_uuid)
     attacker = Entity.get(event.source_entity_uuid)
     if not defender or not attacker:
         return event
 
-    # Only when WE are the target
     if event.target_entity_uuid != source_entity_uuid:
         return event
 
-    # Check reaction available
     if not defender.action_economy.can_afford("reactions", 1):
         return event
 
-    # Calculate flee direction (away from attacker)
     dx = defender.position[0] - attacker.position[0]
     dy = defender.position[1] - attacker.position[1]
     if dx != 0:
@@ -299,7 +402,6 @@ def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
     if dy != 0:
         dy = 1 if dy > 0 else -1
 
-    # Edge case: attacker and defender on same position
     if dx == 0 and dy == 0:
         return event
 
@@ -307,18 +409,15 @@ def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
     moved_cells = 0
     current_pos = defender.position
 
-    # Straight-line retreat — if blocked, dodge stops
     for _ in range(2):
         next_pos = (current_pos[0] + dx, current_pos[1] + dy)
-        # Per-step transition check reflects environment changes.
         if not grid.can_transition(current_pos, next_pos, defender.uuid):
-            break  # Blocked
+            break
         Entity.update_entity_position(defender, next_pos, parent_event=event.uuid)
         current_pos = next_pos
         moved_cells += 1
 
     if moved_cells > 0:
-        # Impose disadvantage on the attack
         if isinstance(event, AttackEvent) and event.attack_bonus is not None:
             attack_bonus = event.attack_bonus
             attack_bonus.self_static.add_advantage_modifier(
@@ -326,51 +425,80 @@ def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
                     name="Dodge Roll",
                     value=AdvantageStatus.DISADVANTAGE,
                     source_entity_uuid=defender.uuid,
-                    target_entity_uuid=event.source_entity_uuid
+                    target_entity_uuid=event.source_entity_uuid,
                 )
             )
-        # Consume reaction
         defender.action_economy.consume("reactions", 1)
 
     return event
 
 
 def create_dodge_roll_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create a dodge roll handler that triggers on ATTACK events."""
+    """Create a handler that reacts to incoming attack execution events.
+
+    Args:
+        source_entity_uuid: Defender UUID that owns the dodge-roll handler.
+
+    Returns:
+        Toggleable event handler bound to attack execution events.
+    """
     return EventHandler(
         name="Dodge Roll",
         source_entity_uuid=source_entity_uuid,
-        trigger_conditions=[Trigger(
-            name="Dodge Roll Trigger",
-            event_type=EventType.ATTACK,
-            event_phase=EventPhase.EXECUTION
-        )],
+        trigger_conditions=[
+            Trigger(
+                name="Dodge Roll Trigger",
+                event_type=EventType.ATTACK,
+                event_phase=EventPhase.EXECUTION,
+            )
+        ],
         event_processor=dodge_roll_processor,
-        player_toggleable=True
+        player_toggleable=True,
     )
 
 
 class DodgeRollFeature(BaseCondition):
     """Passive: can dodge roll when attacked, moving away and imposing disadvantage.
 
-    Permanent duration. Applied via entity setup or item equip.
+    Attributes:
+        name: Condition registry key.
+        description: Short player-facing summary.
     """
-    name: str = "Dodge Roll"
-    description: str = "Reaction: roll away when attacked, imposing disadvantage"
+    name: str = Field(
+        default="Dodge Roll",
+        description="Condition registry key for the dodge-roll feature.",
+    )
+    description: str = Field(
+        default="Reaction: roll away when attacked, imposing disadvantage",
+        description="Player-facing summary for the dodge-roll feature.",
+    )
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Install the dodge-roll attack handler.
+
+        Args:
+            declaration_event: Condition application event in progress.
+
+        Returns:
+            Condition application bookkeeping and the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID is not set")
 
         target = Entity.get(self.target_entity_uuid)
         if not target:
-            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
+            return [], [], [], [], declaration_event.cancel(
+                status_message=f"Target entity {self.target_entity_uuid} not found",
+            )
 
         handler = create_dodge_roll_handler(target.uuid)
         target.add_event_handler(handler)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"Applied Dodge Roll feature to {target.name}"
+            status_message=f"Applied Dodge Roll feature to {target.name}",
         )
         return [], [handler.uuid], [], [], effect_event
